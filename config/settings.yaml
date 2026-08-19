@@ -1,0 +1,8 @@
+# settings.yaml — GeoFREA
+#
+# Operational and infrastructure parameters only. Scientific/technology
+# parameters belong in parameters.json, validated through a Pydantic
+# schema in src/geofrea/core/ (see docs/CONVENTIONS.md).
+#
+# Empty skeleton — populated as modules are migrated from the legacy
+# GeoWorld pipeline (see docs/architecture/).
