@@ -1,0 +1,245 @@
+Não corresponde a uma fase específica — inventário do baseline de regressão do GeoWorld legado, referenciado por todos os módulos de arquitetura.
+
+# Baseline Manifest
+
+## ⚠️ Divergência em relação ao solicitado — reportando antes de prosseguir
+
+O Passo 4 pedia checksums de outputs congelados de **PRT e BRA**. Verificação em `$GEOWORLD_BASELINE_DIR/outputs_baseline/`:
+
+```
+outputs_baseline/
+└── PRT_baseline/     ← existe, 179 arquivos, 64 MB
+    (nenhum BRA_baseline/)
+```
+
+**Só existe baseline congelado para PRT.** Não há `BRA_baseline/` nem qualquer diretório equivalente em `outputs_baseline/`. Existe `outputs/BRA/` (mutável, gitignored, não é um snapshot congelado — sujeito a sobrescrita a qualquer novo `python main.py Brazil`) mas isso **não é** o mesmo tipo de artefato que `outputs_baseline/PRT_baseline/` representa.
+
+Prossegui documentando o que existe (PRT) e sinalizando explicitamente a ausência do BRA, em vez de adivinhar ou fabricar um baseline para BRA. **Pergunta para Douglas**: (a) um baseline de BRA nunca foi congelado, ou (b) existe em outro lugar não verificado por esta auditoria (ex. outro disco/backup)? Se (a), vale gerar um `BRA_baseline/` formalmente antes de começar a reconstrução no GeoFREA, já que o `SPRINT.md`/sessões anteriores mencionam validações rodadas para PRT **e** BRA (CHECKPOINT-1/2, BLOCKER-013's BRA Phase 3 run) — sugerindo que BRA foi processado, só não congelado como snapshot formal do jeito que PRT foi.
+
+---
+
+## ⚠️ Segunda correção — commit gerador não é `fc7b43d`
+
+A instrução original assumia `fc7b43d` (HEAD atual de `main`/`OLD` em `geoworld-framework-backup`) como o commit gerador, "salvo indicação em contrário". **Encontrei indicação em contrário, documentada abaixo.**
+
+### Evidência
+
+`outputs_baseline/PRT_baseline/pipeline_state.json` registra os timestamps exatos de cada fase da execução que gerou este baseline:
+
+| Fase | Timestamp |
+|---|---|
+| criteria | 2026-08-06T16:21:45 |
+| suitability | 2026-08-06T16:22:15 |
+| potential | 2026-08-06T16:22:35 |
+| lcoe | 2026-08-06T16:23:03 |
+| results | 2026-08-06T16:23:22 |
+| abatement | 2026-08-06T16:23:31 |
+| sensitivity | 2026-08-06T16:24:38 |
+
+Cruzando com `git log` do repositório (`geoworld_framework`, mesmo histórico de `geoworld-framework-backup:OLD` — `153a1cc` é ancestral confirmado de `fc7b43d`):
+
+```
+153a1cc  2026-08-06 16:48:57 -03:00  "Snapshot working tree as a restore point before cleanup"  ← commit mais próximo, ~24min após o run
+  parent: 52a9a0f  "feat: add main.py framework implementation"                                    ← estado do código durante o run (16:21–16:24)
+79b962a  2026-08-06 17:08:43 -03:00  "Fix cf_renewable being structurally inert in SA-5 Sobol GHG function"  ← primeiro fix pós-baseline
+```
+
+O run que gerou este baseline (16:21:45–16:24:38) ocorreu **antes** do commit `153a1cc` (16:48:57) e **muito antes** de `79b962a` (17:08:43, primeiro de toda a série BLOCKER-001…020 que viria a seguir). Ou seja: o código que produziu este baseline estava no estado de `52a9a0f` (pai de `153a1cc`), e `153a1cc` foi criado ~24 minutos depois especificamente para congelar esse estado ("restore point before cleanup") antes da sessão de correções em massa começar.
+
+**Conclusão**: o baseline em `outputs_baseline/PRT_baseline/` corresponde ao código em **`52a9a0f`** (execução real) / **`153a1cc`** (commit-snapshot imediatamente posterior que preserva esse estado exato) — **não** a `fc7b43d`. Isso significa que **nenhuma** das correções BLOCKER-001 em diante (incluindo BLOCKER-001/002/003/006/011/013/016/017/018, todas commitadas depois de `153a1cc`) está refletida neste baseline. Qualquer comparação futura de regressão contra este baseline precisa levar isso em conta — ele reflete o pipeline *antes* da campanha inteira de correções documentada em `TASKS.md`/`archive/backlog-full-2026-08.md`.
+
+---
+
+## Inventário — PRT_baseline
+
+- **Caminho**: `$GEOWORLD_BASELINE_DIR/outputs_baseline/PRT_baseline/`
+- **Commit gerador**: `52a9a0f` (execução) / `153a1cc` (snapshot, ancestral confirmado de `fc7b43d` na branch `OLD`)
+- **Data/hora de geração**: 2026-08-06, 16:21:45–16:24:38 (ver tabela acima)
+- **Total**: 179 arquivos, 64 MB
+- **Fases cobertas**: criteria_builder, suitability, potential, lcoe, results, abatement, sensitivity (7 de 8 fases documentadas — Fase 1/Audit não inclusa neste snapshot, que começa em `outputs/reports/`, fora de `outputs_baseline/`)
+
+### Checksums SHA256 (todos os 179 arquivos, caminho relativo a `PRT_baseline/`)
+
+```
+493148db1876deb461e85020fd36a457f47df81227aaadd5f57afdc0bade8cd0  abatement/figures/PRT_abatement_maps.png
+07e1406e55cadafae6b8dd87ec042ea5f36d9d769a2b1f32fb657d286faac08e  abatement/figures/PRT_carbon_intensity.png
+49034dcb7032f77ffa47f422461c1e4260b07e7f15136286a6710500c7c83d3d  abatement/figures/PRT_macc_curve.png
+69fd19954a88e683928bc99252f2499154808039cb64f055738c4ee9e1cfcda2  abatement/figures/PRT_net_zero.png
+dc67a4fb3470101af9c9272bb58dd61d76cf0fe8e618a9ab37997b6e8f7e9ea7  abatement/figures/PRT_substitution_curves.png
+209dc1151337aa17d77f9e91a85e67face43e02246b49d175117916f997ffe76  abatement/manifest.json
+f961c9565396a7f2f5684a9258d17b86a373f00b86fd39988d5d9ff6966b75b9  abatement/reports/PRT_abatement_20260702_134819.txt
+9c4eed299c9df404937e9bd24b726c0ae619ed03fe5d6134b95748243ec424f9  abatement/reports/PRT_abatement_20260702_160923.txt
+637a2740b27dba811bad2869b5147d1210d7607141d40ace47ec648ed7949a4b  abatement/reports/PRT_abatement_20260702_162709.txt
+c75fd33b678e05cb3eaeb4f5e3f668346210dfbcca20da2df78b48b143dff2de  abatement/reports/PRT_abatement_20260806_162322.txt
+9fec7e1512394f6d7a1269a3b7e52f9c9906cac5bd4f99f41f1f4c042a3f20bd  abatement/result.pkl
+daad2f8dd3697c7a2850624700c4e82907672b97b779d59b4750653f7903ab70  criteria_builder/figures/biomass_resource.png
+9aaad78e7018ade736da1f5d56b6fc5dcf29bd777dbd92df4ef44fb1dd81ddac  criteria_builder/figures/grid_suitability.png
+6431621a33a1f0028275de8c209025cd8eb54a750208c47c08b563a2f7f841c3  criteria_builder/figures/lakes_exclusion.png
+29d11572671838f2b4eb2af43286e7cf110089f19aab54932db5eff7225d1f37  criteria_builder/figures/lc_biomass.png
+3debf5db9700a2ff6faf68a8e77712fecf7df4a156acc7cc068973e341d8dedb  criteria_builder/figures/pop_suitability.png
+c11442dc22cc4e8d43074ce9770c416e54a5e8a32dbbe98113f67b2d9eb6d3b8  criteria_builder/figures/power_plants.png
+60115445fcff79e81b946ebb4ad6d52d2f1b401cd4994ae34b338243a0574fd9  criteria_builder/figures/protected_areas.png
+6e1dfe99d627d15c53fd7ec8145f98fdd762481f3beea75d0cc95630105763cb  criteria_builder/figures/proximity_plants.png
+07c1b5868629fccf077877811699b614e9cb8aa8b5dbb2f1c8b3dbe0173264b0  criteria_builder/figures/river_biomass.png
+ce0403106db7587080d814ff1985d239dd141f9c1787afb183bff2b563d10124  criteria_builder/figures/river_solar.png
+6fc7ee042d9b3a12b0b9565efc1bb71e9f9fa7fb8113bed37712593ed4041d86  criteria_builder/figures/river_wind.png
+729b3b486b85d2c529f5e37703391735d75366bbe0e81ab467e48b3a8648edd4  criteria_builder/figures/road_suitability.png
+708c512d636a2a59c3c02db11dced236a52079b99c6be845c493734da35d74ba  criteria_builder/figures/seismic_suitability.png
+7369222a1b535be3609db1c6966779cf1f7880beef8f036ed451e2b35b303981  criteria_builder/figures/slope_degrees.png
+51ac521998966cde2ef25c0ee32ccd7fe90c744e195857ebecdafb010c09307c  criteria_builder/figures/solar_resource.png
+047f722b7499fc3a25c3c41de36c48ada8b77eca95529d77e038b036275afa25  criteria_builder/figures/terrain_score.png
+4bb37eb7747a89ac82f6f6ffa89217153e6938a7e126c880f572d3351a6ab66c  criteria_builder/figures/wind_resource.png
+3ef0a061cb87e0391cf82886d1dd810a47e1144f9d34b7586e6bd99be87b89e8  criteria_builder/manifest.json
+8fbe6ed6e3098225ed970b5e756f3281f9a032efb970d1dcd743d5bbce95eb37  criteria_builder/reports/criteria_summary_PRT.txt
+f04a066fdac4ee2ead015f33ef05f7d6e121af0dcee15e00e6f505b55b29b892  criteria_builder/result.pkl
+111fb8e788ae505b9d3031d564d0ddb0b619d6de696a1f02c8ec61eb06d5f3bc  criteria_builder/tif/biomass_resource.tif
+3262f1fec1311216ff8349a30b550fe36c0cf4fbe5426ba747fc8b27192a94e3  criteria_builder/tif/grid_suitability.tif
+e6f2bc1001e742e64493133d49bd713e148caf9e21f2a1156f65b50fe7c4e952  criteria_builder/tif/lakes_exclusion.tif
+7b498a76480562e4c0b503a718ae3cc5189ab552b600bb786f56cac33cfe28af  criteria_builder/tif/lc_biomass.tif
+0c131b7a0ae50fa31899542450a084160b37c18486276f384d037d878b075488  criteria_builder/tif/pop_suitability.tif
+9550bcd2412986d06f3aa40cc63fb739afdf414e5136574c976d9946b86d2d6d  criteria_builder/tif/protected_areas.tif
+d1df36ed75056272888dea415558e7c2315b244ccc6bd46129a78ad87c3d319b  criteria_builder/tif/proximity_plants.tif
+d200f63899b5d81878ae8c617e0091959a2a63414d353ccc57e0a09885f1ab6e  criteria_builder/tif/river_biomass.tif
+244c867610cd7a402141fa853043816aa81258fde87013150b299f2b0ada90a8  criteria_builder/tif/river_solar.tif
+244c867610cd7a402141fa853043816aa81258fde87013150b299f2b0ada90a8  criteria_builder/tif/river_wind.tif   ⚠ hash idêntico ao river_solar.tif — esperado (compute_river_suitability usa a mesma fórmula de riparian setback para solar/wind com o mesmo buffer_km, ver suitability_criteria.md §b)
+d0071c3286a3230de2d3b919bad3d632ddb2827ad4c98480897a87f43832821d  criteria_builder/tif/road_suitability.tif
+14e71357b5350cedcfdea326ab36821631ce367f6dc53aa054960c6dc7db2a57  criteria_builder/tif/seismic_suitability.tif
+4266b5d9067590e6907a93adcc2fd2d8155c033cd85552d272e94844c478db7c  criteria_builder/tif/slope_degrees.tif
+9820342573956218ecf0d0fd9d62db4516c4369f4e3dac8579dd592dd5dc5874  criteria_builder/tif/solar_resource.tif
+7e180d1f1a2529bc0513ce5038ec73d1e29b4aed425a6786ee7f1f558c836dd0  criteria_builder/tif/terrain_score.tif
+0c73efba97962ed7f2fdf3c79cf429d4c3c158b30a2b2585863e9a701b6d5b93  criteria_builder/tif/wind_resource.tif
+82bf97ed70abe61e3ff46657815038d2bf8ccd3234088aa5db0939599e38b5d6  lcoe/data/PRT_biomass_lcoe_zonal.csv
+f174201ed7fda1e0a412aee54f3c0bf2dc56786f003632bf47a93b017d66e593  lcoe/data/PRT_solar_lcoe_zonal.csv
+2f917935083db9223fdedad36b366c67e6d17d55c2d6b255099c0907ddf2aa8f  lcoe/data/PRT_wind_lcoe_zonal.csv
+745c9739bbc82df635bdb665415300c8e6e716ff4744d4a4316f404d2cde9921  lcoe/figures/PRT_biomass_lcoe_map.png
+5fd4c04aad46bfd0bd6f6ac44248f70f325269e078d1cf1658c05e08ae13beb8  lcoe/figures/PRT_biomass_supply_curve.png
+c6ccb4971f7da5a4180002d82393cb5124b0c633a00070d3290ef3396ac17d12  lcoe/figures/PRT_lcoe_comparison.png
+d08ebcde05590763ea40c974c836328d24d620ee1e535af5cbe2d093cc57be15  lcoe/figures/PRT_solar_lcoe_map.png
+850eaf69f20814c65626b8dd5f6468450b15e7caf64e179a605d8b2416a63e5f  lcoe/figures/PRT_solar_supply_curve.png
+d3f93a6ffe2ba8ab24f4703d51c858f4674007b4e13d27c985e4ab9f4f7e4dda  lcoe/figures/PRT_wind_lcoe_map.png
+93c063eed8536c295a37e98e9dc5b9e53005077dc2f477d06151f24753d3446b  lcoe/figures/PRT_wind_supply_curve.png
+d7151ac3c73ff72b33e98269d9d9a94e2eef9f87b0f376c36c7e0e7859386622  lcoe/manifest.json
+300b10d52a5881e787ab78e46d6995a82668b488c4605773cb6605219f4e9ae4  lcoe/reports/PRT_lcoe_20260702_134733.txt
+2db7b0e230e59a43a7152fe4e286f9fa5c974bf95772ff2e7c74043d6f182f26  lcoe/reports/PRT_lcoe_20260702_160836.txt
+cd05ab1cd9338595423f371d0b66a6a7e0633c86049aab03b283b332540d6be4  lcoe/reports/PRT_lcoe_20260702_162623.txt
+3d11dfddddc9c24d06657b56e9fb31f08a8aea753c9a68996a883d1bd9e41041  lcoe/reports/PRT_lcoe_20260702_163346.txt
+dd80282e6813bd41894849f762ed4ff0d5e7c6daded35e779d9f9150397e64dd  lcoe/reports/PRT_lcoe_20260702_165027.txt
+3e0aabca4688e9de57994e3ca4e4385637285a10f30d39674826a26d7856d25b  lcoe/reports/PRT_lcoe_20260806_162235.txt
+60f1c42bfea86962b6bfe04a6408986d2313ab855456f56ad04f820e70d210d7  lcoe/result.pkl
+47cf80e464facf207f77b153a52a0def6ea90a5990edc1027ddc370fd5643359  lcoe/tif/PRT_biomass_lcoe_usd_mwh.tif
+be094fbcc2e7729d5af62ad86c37195a48bab9677e901c2b7b4b4f215ece4eea  lcoe/tif/PRT_solar_lcoe_usd_mwh.tif
+5a5bdb800017446c8f1027d8bfda794ab674f7940602095e825c07655b07c92e  lcoe/tif/PRT_wind_lcoe_usd_mwh.tif
+9755ead363679346a9a556e125a67dd4a004cd14ea28ad2a9a5a48e6178fba52  pipeline_state.json
+e2b3ac855308fb6d29aa399fe7f3334993905aae6922be33e13b664928017742  potential/data/PRT_biomass_balanced_zonal.csv
+fdf4f29966144b3f0d9a71769707cb715b65a7f5134c9ec9aa2c1cebf1322c99  potential/data/PRT_biomass_conservative_zonal.csv
+1541f4dd9ff7d67f0cce0730b79db86e5c9ccda5a9fd4fa65d5b828091f22f38  potential/data/PRT_biomass_optimistic_zonal.csv
+7fae1f9415eb35613c0f8dcf8f2b04f4001a96f1ea704a142b2555aaf8852cc1  potential/data/PRT_solar_balanced_zonal.csv
+a863902d603b357073e8cd2cd2ad843c7208d7d1b3fcdcec13b0ffa254431041  potential/data/PRT_solar_conservative_zonal.csv
+2a51359bef7f1b373e0c3f492d8120d6f37b532b95f9ce251086a837b23a6ed2  potential/data/PRT_solar_optimistic_zonal.csv
+e61998abf86b180930f54b612b7645f61a3804842386121778427a34cc5583c4  potential/data/PRT_wind_balanced_zonal.csv
+6a52ae9f1bb17e13466ff7fbdd904742c8fdbe4e23e7a7d1ad4679863f1120e0  potential/data/PRT_wind_conservative_zonal.csv
+41c1ca8beb178500532e5c20bb8e30fa8e8974c19401ce724a53447c48dab3af  potential/data/PRT_wind_optimistic_zonal.csv
+1d57039214acd6aff7943005de8d52c2e923e1a33e4abe4821ca836a9740f570  potential/figures/PRT_biomass_potential_map.png
+5d408cd76355b16ca447077de1fbd6ee7cc34ad1cbbd9326655710150b7335bf  potential/figures/PRT_biomass_potential_stats.png
+2b63d99d0a6f6435d33cc690a3ccea8665db18f233b69782421b90af2d1d0765  potential/figures/PRT_potential_comparison.png
+531049b3d8517a5def3f6c63ce6d452634ab1cc74f5026b4e39f4249813f1dcb  potential/figures/PRT_potential_scenarios.png
+eb02e2b87cc829d9d69dddf798004dd29caa9ee163d60366550cb00189b94c04  potential/figures/PRT_solar_potential_map.png
+8213141e60ae90760e913becb924e5ab152ce4f91cd26a96bb675ea048afa53d  potential/figures/PRT_solar_potential_stats.png
+ac9f5c45b5766aa05b44c7ae5916381d6e91662e81917f25680823a8150ff219  potential/figures/PRT_wind_potential_map.png
+c337a76ae90627476621ae399e9d481efed07970e6045d7df1520b76157a4032  potential/figures/PRT_wind_potential_stats.png
+7479b3183cc1bff75150dfc207b02a47e313ff88db930fcd54fceb0ea4ce7880  potential/manifest.json
+bf9fc6ca383dec837c8045560888d23cdd81e88d66316be4648c0c90641d6ab9  potential/reports/PRT_potential_20260702_134714.txt
+f55799fd1de8e3c509ddc744f60a1ef3ca2e1081833a189bd47af10aafa1110d  potential/reports/PRT_potential_20260702_160817.txt
+4e986aeec9ff29b20f85fb54106b7b1a173ac60af6fe6939589559456a54f7e6  potential/reports/PRT_potential_20260702_162604.txt
+ba4e45eb36eec54e4450bc99b7fb49ebc7ba7f7f2c4a5bb39ba658f480260fef  potential/reports/PRT_potential_20260702_163327.txt
+4651bfefdff6bd5362195bfebc537dbd1b5d361f291937e21f1960a16c5fc97d  potential/reports/PRT_potential_20260702_165007.txt
+be1c704f7fca0b2586f014f29ce87474194719524ecd461c422e8ee4cca65b2c  potential/reports/PRT_potential_20260806_162215.txt
+e75152d96b7536f7945dde26042caf1e3e0f5c52d49a04a9c62f0fc3fc396c66  potential/result.pkl
+46fd659e6612e5b4e4c3a5984e546a9552a2df4c0a3e34463e9ba942ac4e17f2  potential/tifs/PRT_biomass_suitable_balanced.tif
+04ace4fb18823e85693ad46e3493f866eadccd024538a68578adb301e782a6a5  potential/tifs/PRT_biomass_suitable_conservative.tif
+eb7b7006657e01743a3c5386fd73bbc1badb048cc30cc1538241aa128aa8f310  potential/tifs/PRT_biomass_suitable_optimistic.tif
+8d7fc2c9c0f60b5d78153d24b079c578a9ca0aa1d2590bfdcd23af024408ead0  potential/tifs/PRT_solar_suitable_balanced.tif
+8b1c1139bd98e7a8284b3bbba38e0710b4e96af4ac3dda562356f83517f9de63  potential/tifs/PRT_solar_suitable_conservative.tif
+33ea6f9b356ef10252a5501f810ece22e98874ea1c4f69d1ecdbc8acaf2cfe1a  potential/tifs/PRT_solar_suitable_optimistic.tif
+953d33da1054a10dd3ea4384bdf2b9dbe2e38013542624ed38154d4bdc8e5001  potential/tifs/PRT_wind_suitable_balanced.tif
+7d1b4d9a112ea48e4777b32d883b0dc16209ebd5333fd7830d62331bdc3c2769  potential/tifs/PRT_wind_suitable_conservative.tif
+178033e83d0c4b099c02bf42ae6c3c68fd53807cd33c03ab9a508f65c5115a3a  potential/tifs/PRT_wind_suitable_optimistic.tif
+158bfb208a3a4ee86843124a2a95e64dd67cb88a3a4f893226c0cb96239a5c3a  results/figures/PRT_dominance_lcoe.png
+7781909495e2990a2d2158aafd34515314ff87b50403503376f0837edbc2f4f3  results/figures/PRT_dominance_suitability.png
+13f02f7855ec1bb3588f187d1ca12a6aafe968ed04426c0bf29c14e648c77843  results/figures/PRT_executive_dashboard.png
+e84b498eb4bf21fe671d73be1b6d69284b6f5645520df3bedcf54af166311c29  results/manifest.json
+5b0d71f23d5c09fec79758a65cfb0f01ade7483c57174cba614fc532254d607c  results/reports/PRT_results_20260702_134802.txt
+80353a394678480af029a9b4c1b87fb80bbf73a2c75b4374869bb797c82d5bca  results/reports/PRT_results_20260702_160905.txt
+b9c4a7c7313a17b71ca89d7ca8daa7aba1f838e595cd833e295b792a1e8fe5ac  results/reports/PRT_results_20260702_162651.txt
+35d47df43224e1528980ba6e6c9488ac6510af02e5b85824d53b21577fc22d0d  results/reports/PRT_results_20260702_163415.txt
+da9425332fbea51e730229ed61016c59c62112a891d8bd18bd2ab3613c095f84  results/reports/PRT_results_20260702_165054.txt
+fde8a9e99d40068a797df9d077c702aab6bd1d1eed9ef27c7c7b0c79b339cf8d  results/reports/PRT_results_20260806_162303.txt
+6349d9c55ace3045115e092e82a6ed2711841b7c67b11b6a8a277d1343fee3c8  results/result.pkl
+d3ae30f631c7a21beb20414d8c104efcf72ef807f1f0e9cbfae70ee4d6b03716  results/tif/PRT_dominance_lcoe.tif
+f2fba1bdfb91cd30a9512cbb847d4497417b4ba6f555157324dda5b70c7c9525  results/tif/PRT_dominance_suitability.tif
+129da98498f57b1cf91cdf47a554b47c3d9b1bbcc1f92841b4c91e7d3de1c158  sensitivity/PRT_biomass_dashboard.png
+002405ee36d2af07e927d71fde01c7813e95daae440cc637fc723586c58730ee  sensitivity/PRT_biomass_sa1_heatmap.png
+6c7394777897f6292610e0cff9a3f94ad891f7759e6ba8884867a6c7bd7d0975  sensitivity/PRT_biomass_sa1_oat.csv
+1ac99ad88926507b0166151a3b2942f0db5172a29ec04aa068ffe26b4d0d1343  sensitivity/PRT_biomass_sa1_tornado.png
+64cd3cad766f7a226bc029de793fa16c692224a851c3b269232cbe2692f3b966  sensitivity/PRT_biomass_sa2_cv_dist.png
+8a826bf803d645f2dfafa2c7e0cadadb6fa4aac9d633f822d938086150f23b7e  sensitivity/PRT_biomass_sa3_curve.png
+bd9d093a8052468fcae05d0fdfb84b01aea66f298ec1e6c64e7b2b72c05f3401  sensitivity/PRT_biomass_sa3_threshold_sweep.csv
+382ec4c19b7020fcbfe8afaf56cfbb871742f64521308553c5a8e1b913366bdb  sensitivity/PRT_biomass_sa4_lcoe_hist.png
+0da6b77178a7f63ae0199afa0067fe93b714b086612b2a52ee252b7a44c616e0  sensitivity/PRT_biomass_sa4_lcoe_mc.csv
+24c0dd5777f3015a2f83baa5ba2c1bf72df9e282b2abf15f64ad84717ca3e1fc  sensitivity/PRT_biomass_sa6_potential.png
+ac2b2a659a5362380698210cdddc850170280268d937e7ce17b7d492c99c0059  sensitivity/PRT_biomass_sa6_potential_oat.csv
+2fbc8493bbb006bea6db9ad9c6ab7371c0f594294d3035ab58dc99059f3901ca  sensitivity/PRT_sa5_sobol_barplot.png
+e76d55ef739b05cfb3b0ce93eb84be26d49ca2fbcb76a8ff457163a418073f24  sensitivity/PRT_sa5_sobol_ghg.csv
+0e07c2edaefcfc2e3101ab834735b3e77103700bba8fa03a047c06c6d762f508  sensitivity/PRT_sensitivity_report.txt
+18f1508517196aa5da469d026a373d74c16815dc4dafbb55c0849cdb1fa9f3b6  sensitivity/PRT_solar_dashboard.png
+b27a3c5bb3f8575ff172fb3e99deafdd73faf394d32a69f8918535ecacef23fe  sensitivity/PRT_solar_sa1_heatmap.png
+2c308b1e9970ce0a0432b5e6860148be8600a211e96b4ecdf7e41919a72053ea  sensitivity/PRT_solar_sa1_oat.csv
+552fbd1732d91e61aa27a522c7729778045d8500404de0c49e0fbea26de1eb36  sensitivity/PRT_solar_sa1_tornado.png
+7ce17f09b1ef224c481d697a29309a26f26481035e04e02bbe0d341a9f19466c  sensitivity/PRT_solar_sa2_cv_dist.png
+025263dbe46b1828da0422e49a5ddeea2c1e270e47443d48cb876baec9e59788  sensitivity/PRT_solar_sa3_curve.png
+9d648267cbfccc444287f23c9076f37feaaae5a72f4f3e7e2462917a4d06567e  sensitivity/PRT_solar_sa3_threshold_sweep.csv
+5655e88b848f6a0c6467077b99789b94505d3111549372c1d5b1e507ace0f8f2  sensitivity/PRT_solar_sa4_lcoe_hist.png
+218bfab2878370938fc11254ca4bfc886174ceebf1cb3660cea1daa7c269756f  sensitivity/PRT_solar_sa4_lcoe_mc.csv
+c8d1203c39110c59b291c0d3ce8b9ef5a09025ceae294071d4b558a423f5b8c8  sensitivity/PRT_solar_sa6_potential.png
+6dd3e18c99f1797fd6d91a6cec96f3d82ac43c1205a66d8ec7be896411207991  sensitivity/PRT_solar_sa6_potential_oat.csv
+08032ff8a6c1c24bddd77427f91e04014e5492739d83695a27920a3337742c30  sensitivity/PRT_wind_dashboard.png
+c6e0fed703f89eeba8e579b51985f7e933955473feed34d18d6f5c7e0c0979e4  sensitivity/PRT_wind_sa1_heatmap.png
+d27dda77cd7c36cea7cddb770e000116accb81c15c96eb4fc6e088d3f3ac670e  sensitivity/PRT_wind_sa1_oat.csv
+d07f6a6051f629b4f67c1c921f07fd28219ab4116ac53b14c6928a257f0d7ef9  sensitivity/PRT_wind_sa1_tornado.png
+5df1417e56b0594fa05f32ea6545ce11e22ba506b23bf2805fb64f86dae090aa  sensitivity/PRT_wind_sa2_cv_dist.png
+261b62e1aabf6f5e848bf5a18c1616c4200f0034325288e378c4318e544e3ab2  sensitivity/PRT_wind_sa3_curve.png
+84d0698d61a9183081382fbe7c70bf49fdd3a978ed1e9605a8129fa1174e1f11  sensitivity/PRT_wind_sa3_threshold_sweep.csv
+3af6a904d69908362dbf63bb8ab710d68c93122667d20db67ca7a7c02fadd15c  sensitivity/PRT_wind_sa4_lcoe_hist.png
+6e17ec96bbf4349edb2798621f4e72ef277472b8065b9dc7b4f598a13482586d  sensitivity/PRT_wind_sa4_lcoe_mc.csv
+562525230c0f383decebe784a4dfe2c81d049f884ab31fa3ec2bfbb08d3e3204  sensitivity/PRT_wind_sa6_potential.png
+daf0245df74a4a77fea3e99a1f408a26d344c2d81ce4c7bd0341646f7403ff47  sensitivity/PRT_wind_sa6_potential_oat.csv
+77b1c378d8c5202459dce7a6922506011c0d43eb3b34d83242d2ecc46081243f  sensitivity/manifest.json
+701dccd4749597d69f468d9d6a706fc4673c9ddcc39d1081ba420c7c06d89dac  sensitivity/result.pkl
+5d377432678cba6524c85a8312d15f8e3a8097fdbebb64dd9a6904a500db65ce  suitability/figures/PRT_biomass_suitability.png
+fe7da867a5aa8e75dbd2f465c8b9624d74d7b7b96a008c175f5f865ed75a6963  suitability/figures/PRT_solar_suitability.png
+ebf7582b9b6c2a29bab731c689aa7abdca7085647cb88605ebfcdb9e1fd04e36  suitability/figures/PRT_suitability_comparison.png
+f929ed300a5a460ea1adf68d9561eba0f4739efaf1a2775f70afa4f6ffd2012d  suitability/figures/PRT_wind_suitability.png
+3263bdb12ec2a23a897b8d6be3f8a8e64c505f0e2a9ed756b2e108e0129eb723  suitability/manifest.json
+9de69f52d2fb06aaca5812104d9e4cbadeb21b5210029051948833aeb8f67513  suitability/reports/PRT_suitability_20260702_134644.txt
+29e64f014822350b791a2a6476c685ba332e4d6ad7ac5e0f2ef33dd6962877b3  suitability/reports/PRT_suitability_20260702_160745.txt
+37527706197e80de3c504ba3bd15b0986d407d0798220b096a0288c5dd738848  suitability/reports/PRT_suitability_20260702_162535.txt
+8f6ed158f967bb00d53fb6bb50f408a953fc258d02e51d316da6e1bb6135717d  suitability/reports/PRT_suitability_20260806_162145.txt
+49d9ae96a66a7e5c21e5a4051559c208f8ec9a74c7b07687f94ec2c0a69573f9  suitability/result.pkl
+a661b1cf4d3a024e26e34bf1846658fcc49e0ed5d0f45c806899d2400938d156  suitability/tif/PRT_biomass_suitability.tif
+16ab0bb90c20745b86f2c572af6b688efcc63905d4116c74f04a7507c586355e  suitability/tif/PRT_biomass_suitability_owa_balanced.tif
+fed0cfdb683447ee6dae78da0ad4c86bbf0b7ba771e7fa21ed8693265db5f2ce  suitability/tif/PRT_biomass_suitability_owa_conservative.tif
+a24b1a90a0573b7215cf8cb09e162d67c9f6377697408f9762e4197fa880a2d3  suitability/tif/PRT_biomass_suitability_owa_optimistic.tif
+42f199256c1998f394acc1fde5c8364ac5cb349a6b53f79037e9f2953e6358de  suitability/tif/PRT_biomass_weights.json
+00b6f5bdeed17082f6501d34396de61a95c600658eebf2550b4f29977af34cfd  suitability/tif/PRT_solar_suitability.tif
+f675b43cb39fc7355284449742ef73aa942ecdaa88dea68eaee223b2d0208ae9  suitability/tif/PRT_solar_suitability_owa_balanced.tif
+0aa103eb796d59ae2d06474da4184d92f33ba4f13afa5baeec4b18d0e67a6238  suitability/tif/PRT_solar_suitability_owa_conservative.tif
+0a3db3feb9fdefca510f5af999e8e46c159575206242558b0b07b560a6609de1  suitability/tif/PRT_solar_suitability_owa_optimistic.tif
+79336508921a0b159cafda1a6234fb581d32a42b625a233697126c154dd78f33  suitability/tif/PRT_solar_weights.json
+7b679cc08527c6aef3013fcfc780c3321333d613b8703e52f44a5dc483d231a4  suitability/tif/PRT_wind_suitability.tif
+f4d22b40483f685525dda19a14775a21a8bbe3ff244ae7bcb10709cb0d05acbc  suitability/tif/PRT_wind_suitability_owa_balanced.tif
+1fa8645eb3171ec941e0799810ade168953368897debe9c9eabea08efe809c73  suitability/tif/PRT_wind_suitability_owa_conservative.tif
+cd5ccd94ac0e6e9b855f63beaeca8d8204f75d3f9edb16abc39033557f77ac6a  suitability/tif/PRT_wind_suitability_owa_optimistic.tif
+d0b3ae9229afaf28fdf5b8e6b2d4fd48fac2f7b51ecf0d05572e81a7b55fc347  suitability/tif/PRT_wind_weights.json
+```
+
+**Nota sobre múltiplos relatórios de texto por fase**: cada fase tem 4-6 arquivos `reports/*.txt` com timestamps diferentes (ex. `20260702_134819`, `20260702_160923`, ..., `20260806_162322`) — evidência de que o pipeline rodou repetidamente para PRT entre 2026-07-02 e 2026-08-06 durante o desenvolvimento, e `outputs_baseline/` preserva **todo o histórico de relatórios acumulado no diretório `outputs/` no momento em que o snapshot foi copiado**, não só a última execução. Os artefatos binários (`.tif`, `.pkl`, `.csv`, `.png`) refletem apenas a execução mais recente (2026-08-06), já que são sobrescritos a cada run; os `.txt` acumulam porque cada nome de arquivo inclui o timestamp.

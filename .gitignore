@@ -1,0 +1,30 @@
+# Segredos e configuração local
+.env
+
+# Dados e outputs (vivem fora do repo)
+data/
+outputs/
+outputs_baseline_fc7b43d/
+GeoFREA_data/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Concorrência de sessões (Claude Code)
+.session-lock
+.claude/settings.local.json
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
