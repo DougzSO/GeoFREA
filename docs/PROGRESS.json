@@ -37,5 +37,13 @@
     { "nome": "results_synthesis", "fase_legado": 6, "status": "documentado_nao_construido" },
     { "nome": "ghg_abatement", "fase_legado": 7, "status": "documentado_nao_construido" },
     { "nome": "sensitivity_analysis", "fase_legado": 8, "status": "documentado_nao_construido" }
+  ],
+  "excluded_modules": [
+    {
+      "nome": "transport_decarbonization",
+      "fase_legado": 9,
+      "status": "excluido_permanente",
+      "referencia": "docs/DECISIONS.md 2026-08-20 - Transport Decarbonisation phase - exclusao permanente"
+    }
   ]
 }

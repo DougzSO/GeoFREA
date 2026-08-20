@@ -116,4 +116,15 @@ Referência (literatura/discussão, se aplicável): geoworld_framework/configs/s
 
 ---
 
+## [2026-08-20] - Transport Decarbonisation phase - exclusão permanente
+Tipo: STRUCTURAL_PRESERVE
+Descrição: o `geoworld_framework` legado (`main.py`) orquestra uma 10ª fase, "Phase 9 — Transport Decarbonisation" (`TransportDecarbonizationCalculator`, flag `skip_transport`), executada por último, após Sensitivity Analysis. Esta fase está ausente do array `modulos` de `docs/PROGRESS.json` — lacuna de documentação identificada em 2026-08-20, durante a auditoria de `main.py`/`PipelineOrchestrator` realizada nesta sessão. Douglas decidiu que o GeoFREA NÃO incluirá este módulo — exclusão permanente, não adiada, não a ser reconsiderada sem uma nova decisão explícita que sobreponha esta.
+
+This exclusion is final. Do not re-add a transport phase to RunConfig.phases, PROGRESS.json's modulos array, or any orchestrator code without an explicit new DECISIONS.md entry overriding this one — its prior absence from PROGRESS.json should NOT be read as an oversight to fix.
+
+Justificativa: decisão de escopo de Douglas — não é uma correção de lacuna, é uma exclusão deliberada. A ausência prévia da fase Transport em `PROGRESS.json` (antes desta entrada) não deve ser lida como um erro a corrigir; esta entrada é o que torna a exclusão explícita e permanente.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/main.py`, `PipelineOrchestrator` — achados da auditoria desta sessão (2026-08-20).
+
+---
+
 (fim das decisões registradas até o momento)

@@ -67,6 +67,12 @@ structural behavior must be logged as an entry in `docs/DECISIONS.md`
 Code that implements a decision recorded this way should reference it,
 e.g. `# See DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values`.
 
+## Excluded modules
+
+GeoFREA does not include a Transport Decarbonisation phase (see
+`DECISIONS.md` 2026-08-20 - Transport phase permanently excluded). This
+is a deliberate scope decision, not a gap.
+
 ## Referencing DECISIONS.md addenda
 
 `DECISIONS.md` is append-only: a decision entry is never edited, even
