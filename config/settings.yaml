@@ -1,8 +1,16 @@
 # settings.yaml — GeoFREA
 #
-# Operational and infrastructure parameters only. Scientific/technology
-# parameters belong in parameters.json, validated through a Pydantic
-# schema in src/geofrea/core/ (see docs/CONVENTIONS.md).
+# Scope: operational / pipeline-control configuration only — e.g. which
+# phases run in a given execution, infrastructure paths, run-mode flags.
+# Mirrors the legacy geoworld_framework's phase true/false toggles
+# (skip_* flags in its own settings.yaml).
 #
-# Empty skeleton — populated as modules are migrated from the legacy
-# GeoWorld pipeline (see docs/architecture/).
+# This file does NOT hold scientific/technology parameters (CAPEX, OPEX,
+# capacity factors, discount rates, etc.) — those belong exclusively in
+# parameters.json, validated through the Pydantic schemas in
+# src/geofrea/core/ (see docs/CONVENTIONS.md, "Parameters" and
+# "Parameter verification metadata").
+#
+# Empty skeleton — no phase-toggle keys added yet. Those are introduced
+# once Etapa 2+ modules are migrated and need to be individually
+# runnable, not invented ahead of that work.
