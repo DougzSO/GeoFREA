@@ -25,6 +25,34 @@ not a style preference, since hardcoded fallbacks silently diverging
 from the canonical config was a recurring bug class in the legacy
 pipeline (see `docs/architecture/sensitivity_analysis.md` §c).
 
+## Parameter verification metadata
+
+Every parameter entry in `parameters.json` must carry a standard
+verification block alongside its value:
+
+```json
+{
+    "value": 2720.0,
+    "source": "IRENA 2024",
+    "verified": true,
+    "verified_by": "Douglas",
+    "verified_date": "2026-08-20",
+    "verification_method": "manual_cross_check"
+}
+```
+
+- `verified_by` and `verified_date` are `null` when `verified` is `false`.
+- `verification_method` is one of `"manual_cross_check"`, `"automated"`,
+  or `"unverified"`.
+
+A parameter with `verified: false` is **not** blocked from use — the
+pipeline may run with unverified values. What's required is that the
+schema exposes this metadata (not just the bare value) and that it is
+testable: a test must be able to assert, for any given parameter, what
+its current verification status is. See `docs/DECISIONS.md` for the
+provenance narrative behind a given `source`/verification (e.g. the
+2026-08-19/2026-08-20 biomass CAPEX/OPEX/lifetime entries).
+
 ## STRUCTURAL_PRESERVE vs. METHODOLOGY_REVISION
 
 Any decision that preserves or changes the legacy pipeline's scientific/
@@ -38,6 +66,24 @@ structural behavior must be logged as an entry in `docs/DECISIONS.md`
 
 Code that implements a decision recorded this way should reference it,
 e.g. `# See DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values`.
+
+## Referencing DECISIONS.md addenda
+
+`DECISIONS.md` is append-only: a decision entry is never edited, even
+when a later addendum updates its verification status or narrows its
+scope. When a decision has been superseded *in part* by a later
+addendum (not replaced outright), code comments referencing that
+decision must point to the addendum date, not the original entry's
+date — the addendum is what's current.
+
+```python
+# See DECISIONS.md 2026-08-20 (addendum to 2026-08-19) - biomass CAPEX/OPEX/lifetime
+```
+
+This is the fixed convention going forward: always cite the most recent
+addendum that touches the specific point the code depends on, and name
+the original entry's date in parentheses for traceability back through
+the append-only log.
 
 ## Docstring template
 
