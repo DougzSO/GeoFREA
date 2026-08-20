@@ -1,1 +1,134 @@
-{}
+{
+  "countries": {
+    "PRT": {
+      "discount_rate": {
+        "value": 0.07,
+        "source": null,
+        "verified": false,
+        "verified_by": null,
+        "verified_date": null,
+        "verification_method": "unverified"
+      },
+      "technologies": {
+        "biomass": {
+          "capex_usd_per_kw": {
+            "value": 3606,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.04,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "0.04 is the midpoint of IRENA 2025's reported fixed O&M range of 2-6% of total installed cost, chosen considering the mean value in the range in the IRENA report. Not a directly reported single figure."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": 0.004,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "capacity_factor": {
+            "value": 0.81,
+            "source": "IRENA 2025, Fig 8.7 (Europe regional proxy)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "lifetime_years": {
+            "value": 20,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Optional technology-specific risk premium over the country base discount_rate. Concept is literature-supported (technology-specific WACC / hurdle rates), but no number has been chosen yet for GeoFREA. See DECISIONS.md 2026-08-20 - biomass parameters restructure (IRENA 2025)."
+          }
+        }
+      }
+    },
+    "BRA": {
+      "discount_rate": {
+        "value": 0.07,
+        "source": null,
+        "verified": false,
+        "verified_by": null,
+        "verified_date": null,
+        "verification_method": "unverified"
+      },
+      "technologies": {
+        "biomass": {
+          "capex_usd_per_kw": {
+            "value": 3606,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.04,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "0.04 is the midpoint of IRENA 2025's reported fixed O&M range of 2-6% of total installed cost, chosen considering the mean value in the range in the IRENA report. Not a directly reported single figure."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": 0.004,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "capacity_factor": {
+            "value": 0.63,
+            "source": "IRENA 2025, Fig 8.7 (Brazil-specific)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "lifetime_years": {
+            "value": 20,
+            "source": "IRENA 2025",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Optional technology-specific risk premium over the country base discount_rate. Concept is literature-supported (technology-specific WACC / hurdle rates), but no number has been chosen yet for GeoFREA. See DECISIONS.md 2026-08-20 - biomass parameters restructure (IRENA 2025)."
+          }
+        }
+      }
+    }
+  }
+}

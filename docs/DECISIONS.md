@@ -40,4 +40,25 @@ Fonte: IRENA 2024, verificação manual direta por Douglas em 2026-08-20 (não a
 
 ---
 
+## [2026-08-20] - biomass parameters restructure (IRENA 2025)
+Tipo: METHODOLOGY_REVISION
+Descrição: `config/parameters.json` foi reestruturado para ter país como chave de topo (`countries.{PRT,BRA}.discount_rate`, `countries.{PRT,BRA}.technologies.biomass.*`), cada valor-folha envolto no bloco de verification metadata definido em `docs/CONVENTIONS.md`. Apenas o domínio `biomass` foi populado nesta etapa — `solar`/`wind`/outras tecnologias não têm stubs criados ainda (trabalho futuro separado).
+
+Os parâmetros de biomassa foram atualizados de IRENA "Renewable Power Generation Costs in 2024" (fonte da entrada de 2026-08-19) para IRENA "Renewable Power Generation Costs in 2025":
+- `capex_usd_per_kw`: 2720 → 3606 USD/kW (mesmo valor para PRT e BRA — IRENA reporta uma figura global, sem quebra por país). Esta **não é** uma atualização direta de edição 2024→2025: o valor 2720 carregado na entrada de 2026-08-19 foi confirmado pelo próprio Douglas em 2026-08-20 como **incorreto/desatualizado em si**, não apenas superado por uma edição mais nova. 3606 USD/kW é o valor correto da edição IRENA 2025, confirmado contra a fonte primária. A variação ano-a-ano global de TIC (Total Installed Cost) de bioenergia reportada pela própria IRENA na edição 2025 é de +9% — essa estatística **não corresponde** ao delta 2720→3606 mostrado aqui, já que 2720 já estava errado; os dois números não devem ser lidos como representando a mesma comparação. Nenhuma correção adicional é feita na entrada de 2026-08-19 (regra append-only); esta entrada documenta a correção conforme apurada em 2026-08-20.
+- OPEX deixou de ser um único valor (109 USD/kW/ano em 2024) e passou a ter dois componentes, conforme a estrutura da edição 2025: `opex_fixed_pct_of_capex` = 0.04 (ponto escolhido dentro da faixa reportada pela IRENA de 2-6% do custo total instalado — não é um número único diretamente reportado, é uma escolha de julgamento, documentada como tal no campo `note` do parâmetro) e `opex_variable_usd_per_kwh` = 0.004 (mesmo valor para PRT e BRA).
+- `capacity_factor`: parâmetro novo, não existia na entrada de 2026-08-19 nem no legado GeoWorld como valor por-país canônico neste nível — diferenciado por país pela primeira vez: PRT = 0.81 (proxy regional Europa, IRENA 2025 Fig 8.7), BRA = 0.63 (específico do Brasil, mesma figura).
+- `lifetime_years`: mantido em 20 anos, sem mudança em relação a 2024.
+
+Todos os valores acima marcados `verified: true` (verified_by: Douglas, verified_date: 2026-08-20, verification_method: manual_cross_check, source: "IRENA 2025"), exceto `opex_fixed_pct_of_capex`, que também é `verified: true` mas carrega uma nota explícita de que é um ponto escolhido dentro de uma faixa, não um valor único da fonte.
+
+**Pendências registradas nesta mesma entrada** (não inventadas, deixadas explicitamente em aberto):
+- `discount_rate` (taxa base por país): valor placeholder 0.07 para PRT e BRA, `verified: false`, sem fonte associada ainda.
+- `discount_rate_increment` (prêmio de risco específico de tecnologia sobre a taxa base do país): `value: null`, `status: "pending_research"`. O conceito é sustentado pela literatura de custo de capital específico por tecnologia (ex. Steffen, B. (2020). "Estimating the cost of capital for renewable energy projects." Energy Economics / ScienceDirect), mas nenhum valor numérico foi escolhido para o GeoFREA ainda.
+
+Justificativa (se METHODOLOGY_REVISION): atualizar para a edição mais recente da fonte primária (IRENA 2025) e introduzir capacity_factor diferenciado por país, que a versão anterior não tinha. A reestruturação de OPEX em fixo+variável segue a mudança de metodologia da própria IRENA entre as edições 2024 e 2025, não uma escolha arbitrária do GeoFREA.
+Referência (literatura/discussão, se aplicável): IRENA, Renewable Power Generation Costs in 2025 (verificação manual por Douglas, 2026-08-20). Steffen, B. (2020), "Estimating the cost of capital for renewable energy projects", Energy Economics (referência conceitual para discount_rate_increment, ainda sem valor aplicado).
+
+---
+
 (fim das decisões registradas até o momento)
