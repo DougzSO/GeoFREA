@@ -1,17 +1,21 @@
 """Pydantic schemas for GeoFREA's parameters.json.
 
-Only the "biomass" technology domain is modeled so far, reflecting the
-current content of config/parameters.json (see docs/DECISIONS.md
-2026-08-20 - biomass parameters restructure). Everything lives in one
-module because there is currently only one populated domain; splitting
-by domain (e.g. biomass.py, solar.py) is deferred until a second
-technology is actually populated in parameters.json, per
-docs/CONVENTIONS.md "Parameters" (no schemas against data that doesn't
-exist yet).
+"biomass", "solar", and "wind" are all modeled and populated in
+config/parameters.json (see docs/DECISIONS.md 2026-08-20 entries).
+Everything lives in one module because the three technology models
+share one common shape; splitting by domain is deferred until that
+stops being true, per docs/CONVENTIONS.md "Parameters" (no schemas
+against data that doesn't exist yet).
 
 All models forbid extra fields (model_config = ConfigDict(extra=
 "forbid")): an unexpected or misspelled key in parameters.json must
 raise ValidationError, not be silently dropped.
+
+discount_rate lives on each technology's params model, not on
+CountryParams: IRENA's benchmark tool gives genuinely different rates
+per technology for the same country (e.g. PRT: biomass=5%, solar=4.2%,
+wind=3.7%), so a single country-level field cannot represent it. See
+DECISIONS.md 2026-08-20 - discount_rate architecture fix.
 """
 
 from __future__ import annotations
@@ -43,7 +47,9 @@ class VerifiedValue(BaseModel, Generic[T]):
 
     Args:
         value: The parameter value itself. May be None for parameters
-            that are pending research (e.g. discount_rate_increment).
+            that are pending research (e.g. an unpopulated
+            opex_variable_usd_per_kwh for a technology whose source
+            doesn't split fixed/variable O&M).
         source: Citation for where the value comes from (e.g.
             "IRENA 2025"), or None if unverified.
         verified: Whether the value has been independently confirmed
@@ -71,33 +77,33 @@ class VerifiedValue(BaseModel, Generic[T]):
     status: str | None = None
 
 
-class BiomassParams(BaseModel):
-    """Biomass technology parameters for a single country.
-
-    See docs/DECISIONS.md 2026-08-20 - biomass parameters restructure
-    (IRENA 2025) for provenance of every field's current value.
+class _TechnologyEconomicParams(BaseModel):
+    """Shared shape for per-technology economic/performance parameters.
 
     Args:
         capex_usd_per_kw: Capital expenditure, USD per kW installed.
-        opex_fixed_pct_of_capex: Fixed O&M cost, as a fraction of total
-            installed cost (e.g. 0.04 = 4% of CAPEX per year).
-            Constrained to [0, 1].
+        opex_fixed_pct_of_capex: O&M cost as a fraction of total
+            installed cost. For biomass this is genuinely the fixed-
+            only component (source splits fixed/variable); for solar
+            and wind, the source reports only a combined/total O&M
+            figure, so this field holds that total instead — see the
+            "note" on each concrete technology's field for the exact
+            caveat. Constrained to [0, 1].
         opex_variable_usd_per_kwh: Variable O&M cost, USD per kWh
-            generated.
+            generated. Populated (float) for biomass; left as an
+            unverified/null placeholder for solar and wind, whose
+            source doesn't split fixed/variable O&M.
         capacity_factor: Dimensionless ratio of actual to nameplate
             generation, country-specific. Constrained to [0, 1].
         lifetime_years: Asset operational lifetime, in years. Must be
             positive.
-        discount_rate_increment: Optional technology-specific risk
-            premium added to the country's base discount_rate. May be
-            None (pending_research) until a value is chosen. Left
-            unconstrained on purpose: technology-specific risk premiums
-            over a base discount rate vary widely across the literature
-            (e.g. Steffen, B. (2020), "Estimating the cost of capital
-            for renewable energy projects", Energy Economics) and no
-            canonical range has been established for GeoFREA yet —
-            adding a numeric bound now would be an arbitrary guess, not
-            a documented decision. See DECISIONS.md 2026-08-20.
+        discount_rate: Technology-specific discount rate for this
+            country (IRENA benchmark tool output, or the OECD/non-OECD
+            default for technologies the benchmark tool doesn't cover).
+            Constrained to >= 0.
+        discount_rate_increment: Optional additional risk premium on
+            top of discount_rate. Meaning differs by technology — see
+            each concrete class's docstring.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -107,40 +113,86 @@ class BiomassParams(BaseModel):
     opex_variable_usd_per_kwh: VerifiedValue[float]
     capacity_factor: VerifiedValue[UnitInterval]
     lifetime_years: VerifiedValue[PositiveInt]
+    discount_rate: VerifiedValue[NonNegativeFloat]
     discount_rate_increment: VerifiedValue[float | None]
+
+
+class BiomassParams(_TechnologyEconomicParams):
+    """Biomass technology parameters for a single country.
+
+    See docs/DECISIONS.md 2026-08-20 - biomass parameters restructure
+    (IRENA 2025) and - biomass discount_rate and discount_rate_increment
+    - resolucao das pendencias, for provenance of every field's value.
+
+    discount_rate_increment here is 0.0 because bioenergy is NOT
+    covered by IRENA's technology-specific WACC benchmark tool (which
+    only differentiates onshore wind/offshore wind/solar PV) — it uses
+    the flat OECD/non-OECD default directly, with no separate
+    technology premium layered on top.
+    """
+
+
+class SolarParams(_TechnologyEconomicParams):
+    """Solar PV technology parameters for a single country.
+
+    See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
+    populated (IRENA 2024/2025) for provenance of every field's value.
+
+    opex_variable_usd_per_kwh is an unpopulated placeholder (value=
+    None, verified=False, status="pending_research"): IRENA's source
+    data reports only a combined/total O&M figure for solar, not split
+    into fixed+variable components like biomass — opex_fixed_pct_of_capex
+    actually carries the full O&M burden here despite its name.
+
+    discount_rate_increment is 0.0 because discount_rate above is
+    already the final technology-specific value from IRENA's benchmark
+    tool, not a base+premium construction — kept at 0.0 for schema
+    symmetry with biomass, not because a premium was computed and found
+    to be zero.
+    """
+
+    opex_variable_usd_per_kwh: VerifiedValue[float | None]
+
+
+class WindParams(_TechnologyEconomicParams):
+    """Onshore wind technology parameters for a single country.
+
+    See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
+    populated (IRENA 2024/2025) for provenance of every field's value.
+    Same opex_variable_usd_per_kwh and discount_rate_increment caveats
+    as SolarParams apply here.
+    """
+
+    opex_variable_usd_per_kwh: VerifiedValue[float | None]
 
 
 class TechnologyParams(BaseModel):
     """Per-technology parameters for a single country.
 
-    Only "biomass" is populated in config/parameters.json today. Future
-    technologies (solar, wind, ...) slot in here as additional fields
-    once their parameters.json domains are actually populated — see
-    docs/architecture/module-mapping.md for the legacy phases they'd
-    correspond to. Not built speculatively ahead of that data existing.
-
     Args:
         biomass: Biomass technology parameters.
+        solar: Solar PV technology parameters.
+        wind: Onshore wind technology parameters.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     biomass: BiomassParams
+    solar: SolarParams
+    wind: WindParams
 
 
 class CountryParams(BaseModel):
     """Top-level parameters for a single country.
 
     Args:
-        discount_rate: Country base discount rate (verification-
-            wrapped). Currently a placeholder (verified=False) pending
-            a country-specific source. Constrained to >= 0.
         technologies: Per-technology parameter sets for this country.
+            There is no country-level discount_rate: each technology
+            carries its own (see _TechnologyEconomicParams).
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    discount_rate: VerifiedValue[NonNegativeFloat]
     technologies: TechnologyParams
 
 

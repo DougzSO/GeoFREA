@@ -77,4 +77,30 @@ Fonte: IRENA, Renewable Power Generation Costs in 2024, seção de custo de capi
 
 ---
 
+## [2026-08-20] - discount_rate architecture fix
+Tipo: METHODOLOGY_REVISION
+Descrição: `discount_rate` foi movido de `CountryParams` (um valor por país) para o modelo de parâmetros de cada tecnologia (`_TechnologyEconomicParams`, herdado por `BiomassParams`/`SolarParams`/`WindParams`) — um valor por tecnologia, por país. `schemas.py`: campo `discount_rate` removido de `CountryParams`; adicionado a `_TechnologyEconomicParams` (base compartilhada), constrangido a `>= 0` via o alias `NonNegativeFloat`. `parameters.json`: cada bloco `countries.{PRT,BRA}.discount_rate` (com todos os metadados/notas já existentes) foi movido para `technologies.biomass.discount_rate`; a chave de topo `countries.{PRT,BRA}.discount_rate` foi removida.
+
+Testes atualizados: `test_country_params_missing_required_field_raises` não inclui mais "discount_rate" como campo obrigatório de `CountryParams` (agora só "technologies"); `discount_rate` passou a ser um dos 7 campos obrigatórios testados para `BiomassParams`/`SolarParams`/`WindParams` via `test_tech_economic_params_missing_required_field_raises` (parametrizado por tecnologia × campo).
+
+Justificativa (se METHODOLOGY_REVISION): a ferramenta de benchmark da IRENA retorna taxas de desconto genuinamente diferentes por tecnologia para o mesmo país (ex. PRT: biomassa=5%, solar=4.2%, eólica=3.7% — não é uma relação base+incremento, são saídas independentes do benchmark tool por tecnologia). Um único campo `discount_rate` em nível de país estava, na prática, guardando o valor da biomassa rotulado incorretamente como taxa do país inteiro — factualmente errado assim que mais de uma tecnologia existisse (como passou a ser o caso nesta mesma etapa, com solar/wind).
+Referência (literatura/discussão, se aplicável): IRENA 2024, metodologia da ferramenta de benchmark de custo de capital (mesma fonte já citada na resolução do discount_rate de biomassa).
+
+---
+
+## [2026-08-20] - solar and wind parameters populated (IRENA 2024/2025)
+Tipo: METHODOLOGY_REVISION
+Descrição: `SolarParams` e `WindParams` adicionados a `schemas.py`, com a mesma forma de `BiomassParams` (herdando de `_TechnologyEconomicParams`), exceto `opex_variable_usd_per_kwh`, que em ambos é `VerifiedValue[float | None]` (não `VerifiedValue[float]` como em biomassa) — a fonte IRENA não separa O&M fixo/variável para solar/eólica, só reporta um valor total combinado. `TechnologyParams` passou a exigir `solar`/`wind` como campos obrigatórios (não opcionais), populados com dados reais nesta etapa, seguindo a mesma política já usada para biomassa de "não criar stub sem dado real".
+
+`config/parameters.json` populado para PRT e BRA, ambas as tecnologias, fonte IRENA "Renewable Power Generation Costs in 2025" (CAPEX/OPEX/capacity_factor/lifetime) + IRENA 2024 (metodologia de custo de capital, para discount_rate/discount_rate_increment) — mesmas fontes já usadas para biomassa. Detalhamento campo a campo, incluindo todas as ressalvas de proxy regional/global, está nos campos `note` do próprio `parameters.json`.
+
+**Dois pontos fracos sinalizados explicitamente**:
+- **CAPEX de eólica não tem valor específico por país para nenhum dos dois países** — usa a mesma figura global (976 USD/kW) para PRT e BRA, por ausência de quebra por país nas fontes revisadas nesta sessão.
+- **OPEX de eólica para o Brasil usa a figura de O&M global de SOLAR como substituto não validado**, não uma fonte específica de eólica — é o valor com sourcing mais fraco de todo o dataset até agora. Sinalizado no campo `note` correspondente com o texto "PROXY QUALITY: WEAK", distinguindo-o explicitamente das demais combinações tecnologia/país do dataset, que usam proxies regionais mas com fontes tecnologicamente compatíveis. Nenhum campo novo de schema foi criado para essa distinção (ex. `proxy_quality`) — usei o campo `note` já existente, mesma abordagem da distinção "CONFIRMED CLAIM"/"UNCONFIRMED ASSUMPTION" do `discount_rate` do BRA (entrada anterior). Deve ser revisitado se uma fonte melhor for encontrada.
+
+Justificativa (se METHODOLOGY_REVISION): popular os domínios solar/eólica era necessário para a Fase 2+ do GeoFREA avançar além de biomassa; os dois pontos fracos acima são sinalizados deliberadamente como dívida de dados a ser paga depois, não escondidos atrás de um `verified: true` genérico.
+Referência (literatura/discussão, se aplicável): IRENA, Renewable Power Generation Costs in 2025 (CAPEX/OPEX/capacity_factor/lifetime). IRENA, Renewable Power Generation Costs in 2024, metodologia da ferramenta de benchmark de custo de capital (discount_rate/discount_rate_increment) — verificação manual por Douglas, 2026-08-20.
+
+---
+
 (fim das decisões registradas até o momento)

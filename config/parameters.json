@@ -1,15 +1,6 @@
 {
   "countries": {
     "PRT": {
-      "discount_rate": {
-        "value": 0.05,
-        "source": "IRENA 2024, Table A1 default (OECD/China bioenergy WACC)",
-        "verified": true,
-        "verified_by": "Douglas",
-        "verified_date": "2026-08-20",
-        "verification_method": "manual_cross_check",
-        "note": "Portugal is OECD. IRENA's technology-specific WACC benchmark tool (2022+) only covers onshore wind, offshore wind, and solar PV for 100 countries — bioenergy, geothermal, and hydropower use this simpler OECD/non-OECD default instead, per IRENA 2024 methodology."
-      },
       "technologies": {
         "biomass": {
           "capex_usd_per_kw": {
@@ -53,6 +44,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check"
           },
+          "discount_rate": {
+            "value": 0.05,
+            "source": "IRENA 2024, Table A1 default (OECD/China bioenergy WACC)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Portugal is OECD. IRENA's technology-specific WACC benchmark tool (2022+) only covers onshore wind, offshore wind, and solar PV for 100 countries — bioenergy, geothermal, and hydropower use this simpler OECD/non-OECD default instead, per IRENA 2024 methodology."
+          },
           "discount_rate_increment": {
             "value": 0.0,
             "source": "IRENA 2024, cost-of-capital methodology section",
@@ -62,19 +62,138 @@
             "verification_method": "manual_cross_check",
             "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
           }
+        },
+        "solar": {
+          "capex_usd_per_kw": {
+            "value": 823,
+            "source": "IRENA 2025, Table 3.1, Europe weighted-average TIC",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No PRT-specific figure in source; Europe regional weighted average used as proxy."
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0092,
+            "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 823 CAPEX",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "NAMING CAVEAT: this is TOTAL O&M as a % of CAPEX, not a fixed-only component like BiomassParams' field of the same name — IRENA's source does not split fixed/variable O&M for solar. The field name is kept for schema consistency across technologies; interpret this value as 'total O&M % of CAPEX' for solar, not 'fixed-only' as for biomass."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "IRENA 2025 reports only a combined/total O&M figure for solar (see opex_fixed_pct_of_capex, which actually carries the full O&M burden), not split into fixed+variable components like biomass. This field is a structural placeholder for schema consistency across technologies, not a real data gap requiring further sourcing in the near term."
+          },
+          "capacity_factor": {
+            "value": 0.12,
+            "source": "IRENA 2025 narrative text, Europe range 11-14%, midpoint used",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No PRT-specific point value in source; midpoint of IRENA's stated Europe range used as proxy."
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Solar PV",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate": {
+            "value": 0.042,
+            "source": "IRENA benchmark tool / Douglas's figure extraction, Europe average, technology-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero."
+          }
+        },
+        "wind": {
+          "capex_usd_per_kw": {
+            "value": 976,
+            "source": "IRENA 2025, global average figure",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No country-specific onshore wind TIC found in sources reviewed this session; the global average is used as a proxy for both PRT and BRA."
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0348,
+            "source": "IRENA 2025, Fig 2.9, approximate regional Europe O&M average ~34 USD/kW/yr divided by 976 CAPEX",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "PRECISION CAVEAT: this value was read approximately off a chart (Fig 2.9), not a stated table figure — a rougher estimate than the biomass/solar OPEX figures, which came from stated numbers. Same naming caveat as solar's field of the same name: this is total O&M as % of CAPEX, not a fixed-only component; IRENA does not split fixed/variable O&M for wind either."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "IRENA 2025 reports only a combined/total O&M figure for wind (see opex_fixed_pct_of_capex), not split into fixed+variable components like biomass. Structural placeholder for schema consistency, same as solar."
+          },
+          "capacity_factor": {
+            "value": 0.34,
+            "source": "IRENA 2025, Table 2.2, Europe weighted average",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Regional proxy for PRT; no PRT-specific figure found in sources reviewed this session."
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Onshore Wind",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate": {
+            "value": 0.037,
+            "source": "IRENA benchmark tool, Europe average, technology-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+          }
         }
       }
     },
     "BRA": {
-      "discount_rate": {
-        "value": 0.075,
-        "source": "IRENA 2024, Table A1 default (rest-of-world bioenergy WACC)",
-        "verified": true,
-        "verified_by": "Douglas",
-        "verified_date": "2026-08-20",
-        "verification_method": "manual_cross_check",
-        "note": "CONFIRMED CLAIM: Brazil is non-OECD, so the 7.5% rest-of-world default applies per IRENA 2024 Table A1 — this numeric default value is verified. UNCONFIRMED ASSUMPTION (a separate claim, NOT verified): IRENA describes a 'minimum WACC floor' override for high-risk countries (e.g. Argentina, Moody's Caa1) where the flat default would underestimate real cost of capital. Brazil's Moody's rating in IRENA's own Figure S7 is Ba2 (moderate, well above Argentina's Caa1/Ghana's Caa3) — Douglas's judgment is that the floor override likely does not apply here, but this has NOT been computed (requires global risk-free rate, Brazil's country default spread, lender margin, and equity risk premium inputs not available in this session). verified=true above reflects only that 0.075 is the correct IRENA default value as documented — it does NOT mean the floor-non-applicability has been verified or calculated."
-      },
       "technologies": {
         "biomass": {
           "capex_usd_per_kw": {
@@ -118,6 +237,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check"
           },
+          "discount_rate": {
+            "value": 0.075,
+            "source": "IRENA 2024, Table A1 default (rest-of-world bioenergy WACC)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "CONFIRMED CLAIM: Brazil is non-OECD, so the 7.5% rest-of-world default applies per IRENA 2024 Table A1 — this numeric default value is verified. UNCONFIRMED ASSUMPTION (a separate claim, NOT verified): IRENA describes a 'minimum WACC floor' override for high-risk countries (e.g. Argentina, Moody's Caa1) where the flat default would underestimate real cost of capital. Brazil's Moody's rating in IRENA's own Figure S7 is Ba2 (moderate, well above Argentina's Caa1/Ghana's Caa3) — Douglas's judgment is that the floor override likely does not apply here, but this has NOT been computed (requires global risk-free rate, Brazil's country default spread, lender margin, and equity risk premium inputs not available in this session). verified=true above reflects only that 0.075 is the correct IRENA default value as documented — it does NOT mean the floor-non-applicability has been verified or calculated."
+          },
           "discount_rate_increment": {
             "value": 0.0,
             "source": "IRENA 2024, cost-of-capital methodology section",
@@ -126,6 +254,132 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
+          }
+        },
+        "solar": {
+          "capex_usd_per_kw": {
+            "value": 672,
+            "source": "IRENA 2025, Table 3.1, Brazil-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0112,
+            "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 672 CAPEX",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Same naming caveat as PRT's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component — IRENA's source does not split fixed/variable O&M for solar."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for solar, not split into fixed+variable components. Structural placeholder for schema consistency."
+          },
+          "capacity_factor": {
+            "value": 0.17,
+            "source": "IRENA 2025 narrative, global average 16-18%",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No Brazil-specific solar capacity factor found in sources reviewed this session; global average range midpoint-adjacent value used as proxy."
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Solar PV",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate": {
+            "value": 0.077,
+            "source": "IRENA benchmark tool, South America average, technology-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+          }
+        },
+        "wind": {
+          "capex_usd_per_kw": {
+            "value": 976,
+            "source": "IRENA 2025, global average figure",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Same global figure as PRT; no country-specific breakdown available."
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0077,
+            "source": "IRENA 2025, Fig 3.5 — SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 976 wind CAPEX",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "PROXY QUALITY: WEAK. No wind-specific O&M data for Brazil (or wind generally, beyond PRT's chart-read Fig 2.9 estimate) was found in sources reviewed this session. This value borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in — it is NOT a wind-specific source, unlike every other technology/country combination in this dataset, which use regional proxies but with technology-matched sources. verification_method=manual_cross_check here only confirms the arithmetic (7.54/976), not that this is a sound wind O&M estimate. Weakest-sourced value in the dataset so far — revisit if a better source is found."
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for wind (and here, not even a wind-specific one — see opex_fixed_pct_of_capex's proxy-quality caveat). Structural placeholder for schema consistency."
+          },
+          "capacity_factor": {
+            "value": 0.50,
+            "source": "IRENA 2025, Table 2.2, Brazil-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Onshore Wind",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate": {
+            "value": 0.077,
+            "source": "IRENA benchmark tool, South America average, technology-specific",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check"
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium."
           }
         }
       }

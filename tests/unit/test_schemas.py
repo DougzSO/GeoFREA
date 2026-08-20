@@ -5,7 +5,9 @@ parametrized case per field, not a single "missing fields in general"
 test) by removing exactly that field from an otherwise-valid payload
 and asserting pydantic raises ValidationError. The same per-case
 pattern is used for the extra="forbid" and range-constraint tests
-below.
+below. BiomassParams/SolarParams/WindParams share required-field,
+extra="forbid", and range-constraint tests via TECH_MODELS, since they
+share the same shape (_TechnologyEconomicParams).
 """
 
 import copy
@@ -17,8 +19,10 @@ from geofrea.core.schemas import (
     BiomassParams,
     CountryParams,
     ParametersFile,
+    SolarParams,
     TechnologyParams,
     VerifiedValue,
+    WindParams,
 )
 
 VALID_VERIFIED_VALUE = {
@@ -30,38 +34,68 @@ VALID_VERIFIED_VALUE = {
     "verification_method": "manual_cross_check",
 }
 
+VALID_PENDING_VALUE = {
+    "value": None,
+    "source": None,
+    "verified": False,
+    "verified_by": None,
+    "verified_date": None,
+    "verification_method": "unverified",
+    "status": "pending_research",
+}
+
 VALID_BIOMASS = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 3606},
     "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.04},
     "opex_variable_usd_per_kwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
     "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.81},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
-    "discount_rate_increment": {
-        "value": None,
-        "source": None,
-        "verified": False,
-        "verified_by": None,
-        "verified_date": None,
-        "verification_method": "unverified",
-        "status": "pending_research",
-    },
+    "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
+    "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
 }
 
-VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS}
-
-VALID_COUNTRY = {
-    "discount_rate": {
-        "value": 0.07,
-        "source": None,
-        "verified": False,
-        "verified_by": None,
-        "verified_date": None,
-        "verification_method": "unverified",
-    },
-    "technologies": VALID_TECHNOLOGIES,
+VALID_SOLAR = {
+    "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 823},
+    "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0092},
+    "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
+    "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.12},
+    "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
+    "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
+    "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
 }
+
+VALID_WIND = {
+    "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 976},
+    "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0348},
+    "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
+    "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.34},
+    "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
+    "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
+    "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+}
+
+VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS, "solar": VALID_SOLAR, "wind": VALID_WIND}
+
+VALID_COUNTRY = {"technologies": VALID_TECHNOLOGIES}
 
 VALID_PARAMETERS_FILE = {"countries": {"PRT": VALID_COUNTRY, "BRA": copy.deepcopy(VALID_COUNTRY)}}
+
+# tech_name -> (model class, valid payload) - shared across the tech-model tests below.
+TECH_MODELS = {
+    "biomass": (BiomassParams, VALID_BIOMASS),
+    "solar": (SolarParams, VALID_SOLAR),
+    "wind": (WindParams, VALID_WIND),
+}
+
+REQUIRED_TECH_FIELDS = [
+    "capex_usd_per_kw",
+    "opex_fixed_pct_of_capex",
+    "opex_variable_usd_per_kwh",
+    "capacity_factor",
+    "lifetime_years",
+    "discount_rate",
+    "discount_rate_increment",
+]
 
 
 # ─── Valid-payload smoke tests ──────────────────────────────────────────
@@ -78,20 +112,40 @@ def test_verified_value_accepts_valid_payload():
 def test_biomass_params_accepts_valid_payload():
     result = BiomassParams.model_validate(VALID_BIOMASS)
     assert result.capex_usd_per_kw.value == 3606
-    assert result.discount_rate_increment.value is None
-    assert result.discount_rate_increment.status == "pending_research"
+    assert result.discount_rate.value == 0.05
+    assert result.opex_variable_usd_per_kwh.value == 0.004
+
+
+@pytest.mark.unit
+def test_solar_params_accepts_valid_payload():
+    result = SolarParams.model_validate(VALID_SOLAR)
+    assert result.capex_usd_per_kw.value == 823
+    assert result.discount_rate.value == 0.042
+    # solar's source doesn't split fixed/variable OPEX - variable stays unpopulated.
+    assert result.opex_variable_usd_per_kwh.value is None
+    assert result.opex_variable_usd_per_kwh.status == "pending_research"
+
+
+@pytest.mark.unit
+def test_wind_params_accepts_valid_payload():
+    result = WindParams.model_validate(VALID_WIND)
+    assert result.capex_usd_per_kw.value == 976
+    assert result.discount_rate.value == 0.037
+    assert result.opex_variable_usd_per_kwh.value is None
+    assert result.opex_variable_usd_per_kwh.status == "pending_research"
 
 
 @pytest.mark.unit
 def test_technology_params_accepts_valid_payload():
     result = TechnologyParams.model_validate(VALID_TECHNOLOGIES)
     assert result.biomass.capacity_factor.value == 0.81
+    assert result.solar.capacity_factor.value == 0.12
+    assert result.wind.capacity_factor.value == 0.34
 
 
 @pytest.mark.unit
 def test_country_params_accepts_valid_payload():
     result = CountryParams.model_validate(VALID_COUNTRY)
-    assert result.discount_rate.value == 0.07
     assert result.technologies.biomass.lifetime_years.value == 20
 
 
@@ -114,26 +168,18 @@ def test_verified_value_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    "field",
-    [
-        "capex_usd_per_kw",
-        "opex_fixed_pct_of_capex",
-        "opex_variable_usd_per_kwh",
-        "capacity_factor",
-        "lifetime_years",
-        "discount_rate_increment",
-    ],
-)
-def test_biomass_params_missing_required_field_raises(field):
-    data = copy.deepcopy(VALID_BIOMASS)
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("field", REQUIRED_TECH_FIELDS)
+def test_tech_economic_params_missing_required_field_raises(tech_name, field):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
     del data[field]
     with pytest.raises(ValidationError):
-        BiomassParams.model_validate(data)
+        model_cls.model_validate(data)
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["biomass"])
+@pytest.mark.parametrize("field", ["biomass", "solar", "wind"])
 def test_technology_params_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_TECHNOLOGIES)
     del data[field]
@@ -142,7 +188,7 @@ def test_technology_params_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["discount_rate", "technologies"])
+@pytest.mark.parametrize("field", ["technologies"])
 def test_country_params_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_COUNTRY)
     del data[field]
@@ -170,15 +216,19 @@ def test_verified_value_rejects_unexpected_field():
 
 
 @pytest.mark.unit
-def test_biomass_params_rejects_unexpected_field():
-    data = {**copy.deepcopy(VALID_BIOMASS), "unexpected_key": "typo"}
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_tech_economic_params_rejects_unexpected_field(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = {**copy.deepcopy(valid), "unexpected_key": "typo"}
     with pytest.raises(ValidationError):
-        BiomassParams.model_validate(data)
+        model_cls.model_validate(data)
 
 
 @pytest.mark.unit
 def test_technology_params_rejects_unexpected_field():
-    data = {**copy.deepcopy(VALID_TECHNOLOGIES), "solar": "not a real domain yet"}
+    # "solar"/"wind" are now legitimate required fields (not unexpected
+    # keys), so the injected bogus key must be something else.
+    data = {**copy.deepcopy(VALID_TECHNOLOGIES), "unexpected_key": "typo"}
     with pytest.raises(ValidationError):
         TechnologyParams.model_validate(data)
 
@@ -197,36 +247,44 @@ def test_parameters_file_rejects_unexpected_field():
         ParametersFile.model_validate(data)
 
 
-# ─── Range-constraint tests: one case per new Field() constraint ────────
+# ─── Range-constraint tests: one parametrized case per constraint, per tech ──
 
 
 @pytest.mark.unit
-def test_capacity_factor_out_of_range_raises():
-    data = copy.deepcopy(VALID_BIOMASS)
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_capacity_factor_out_of_range_raises(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
     data["capacity_factor"]["value"] = -0.1
     with pytest.raises(ValidationError):
-        BiomassParams.model_validate(data)
+        model_cls.model_validate(data)
 
 
 @pytest.mark.unit
-def test_opex_fixed_pct_of_capex_out_of_range_raises():
-    data = copy.deepcopy(VALID_BIOMASS)
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_opex_fixed_pct_of_capex_out_of_range_raises(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
     data["opex_fixed_pct_of_capex"]["value"] = 1.5
     with pytest.raises(ValidationError):
-        BiomassParams.model_validate(data)
+        model_cls.model_validate(data)
 
 
 @pytest.mark.unit
-def test_lifetime_years_out_of_range_raises():
-    data = copy.deepcopy(VALID_BIOMASS)
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_lifetime_years_out_of_range_raises(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
     data["lifetime_years"]["value"] = 0
     with pytest.raises(ValidationError):
-        BiomassParams.model_validate(data)
+        model_cls.model_validate(data)
 
 
 @pytest.mark.unit
-def test_discount_rate_out_of_range_raises():
-    data = copy.deepcopy(VALID_COUNTRY)
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_discount_rate_out_of_range_raises(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
     data["discount_rate"]["value"] = -0.01
     with pytest.raises(ValidationError):
-        CountryParams.model_validate(data)
+        model_cls.model_validate(data)
