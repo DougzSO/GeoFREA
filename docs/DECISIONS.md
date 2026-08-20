@@ -61,4 +61,20 @@ Referência (literatura/discussão, se aplicável): IRENA, Renewable Power Gener
 
 ---
 
+## [2026-08-20] - biomass discount_rate e discount_rate_increment — resolução das pendências
+Tipo: VERIFICATION_UPDATE
+Descrição: Resolve as duas pendências deixadas em aberto na entrada "biomass parameters restructure (IRENA 2025)" (mesmo dia). Não revisa a decisão de reestruturação em si — apenas preenche valores/fontes que antes estavam `verified: false`/`pending_research`.
+
+- `discount_rate` (taxa base por país), fonte IRENA "Renewable Power Generation Costs in 2024" (seção de custo de capital / Table A1), mesma família de relatório já usada para CAPEX/OPEX/capacity_factor:
+  - PRT = 0.05 — Portugal é OECD; a ferramenta de benchmark de WACC específico por tecnologia da IRENA (2022+) só cobre eólica onshore/offshore e solar PV para 100 países — bioenergia, geotérmica e hidrelétrica usam este default OECD/não-OECD mais simples, conforme metodologia IRENA 2024.
+  - BRA = 0.075 — Brasil é não-OECD, então o default "resto do mundo" de 7,5% se aplica. **Duas afirmações distintas, deliberadamente não confundidas**: (1) o valor-padrão 0.075 está `verified: true` — confirmado contra a Table A1; (2) a IRENA descreve um "piso mínimo de WACC" para países de alto risco (ex. Argentina, Moody's Caa1) que substituiria esse default flat — o rating do Brasil na própria Figura S7 da IRENA é Ba2 (moderado, bem acima de Caa1/Caa3), e o julgamento de Douglas é que esse piso provavelmente não se aplica, **mas isso não foi calculado** (exigiria taxa livre de risco global, spread de default soberano do Brasil, margem de credor e prêmio de risco de equity, indisponíveis nesta sessão). Essa segunda afirmação **não** está coberta pelo `verified: true` do campo — distinção registrada explicitamente no campo `note` do JSON (duas frases rotuladas "CONFIRMED CLAIM" / "UNCONFIRMED ASSUMPTION"), não como campo novo de schema.
+- `discount_rate_increment` (biomassa, ambos os países) = 0.0, fonte IRENA 2024 (seção de metodologia de custo de capital), `status: "pending_research"` removido. Bioenergia não é coberta pela ferramenta de benchmark de WACC específico por tecnologia da IRENA (que só diferencia eólica onshore/offshore/solar PV) — usa o default OECD/não-OECD diretamente, sem prêmio de tecnologia adicional. `0.0` reflete que a própria metodologia da IRENA não adiciona incremento específico para bioenergia — **não** significa que não exista prêmio de risco na realidade, apenas que nenhum está documentado nesta fonte.
+
+Nenhuma mudança estrutural em `src/geofrea/core/schemas.py` foi necessária — `note` e `status` já eram campos opcionais existentes em `VerifiedValue`, suficientes para representar as duas afirmações distintas do `discount_rate` do BRA sem novo campo de schema.
+
+Justificativa (se METHODOLOGY_REVISION): n/a — VERIFICATION_UPDATE, não altera a decisão de reestruturação de 2026-08-20 (biomass parameters restructure), apenas resolve pendências que aquela entrada deixou explicitamente em aberto.
+Fonte: IRENA, Renewable Power Generation Costs in 2024, seção de custo de capital / Table A1 (verificação manual por Douglas, 2026-08-20). A não-aplicabilidade do piso de WACC para o Brasil é uma suposição registrada, não um cálculo verificado — ver `note` do campo `discount_rate` do BRA em `parameters.json`.
+
+---
+
 (fim das decisões registradas até o momento)

@@ -2,12 +2,13 @@
   "countries": {
     "PRT": {
       "discount_rate": {
-        "value": 0.07,
-        "source": null,
-        "verified": false,
-        "verified_by": null,
-        "verified_date": null,
-        "verification_method": "unverified"
+        "value": 0.05,
+        "source": "IRENA 2024, Table A1 default (OECD/China bioenergy WACC)",
+        "verified": true,
+        "verified_by": "Douglas",
+        "verified_date": "2026-08-20",
+        "verification_method": "manual_cross_check",
+        "note": "Portugal is OECD. IRENA's technology-specific WACC benchmark tool (2022+) only covers onshore wind, offshore wind, and solar PV for 100 countries — bioenergy, geothermal, and hydropower use this simpler OECD/non-OECD default instead, per IRENA 2024 methodology."
       },
       "technologies": {
         "biomass": {
@@ -53,26 +54,26 @@
             "verification_method": "manual_cross_check"
           },
           "discount_rate_increment": {
-            "value": null,
-            "source": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "status": "pending_research",
-            "note": "Optional technology-specific risk premium over the country base discount_rate. Concept is literature-supported (technology-specific WACC / hurdle rates), but no number has been chosen yet for GeoFREA. See DECISIONS.md 2026-08-20 - biomass parameters restructure (IRENA 2025)."
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital methodology section",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
           }
         }
       }
     },
     "BRA": {
       "discount_rate": {
-        "value": 0.07,
-        "source": null,
-        "verified": false,
-        "verified_by": null,
-        "verified_date": null,
-        "verification_method": "unverified"
+        "value": 0.075,
+        "source": "IRENA 2024, Table A1 default (rest-of-world bioenergy WACC)",
+        "verified": true,
+        "verified_by": "Douglas",
+        "verified_date": "2026-08-20",
+        "verification_method": "manual_cross_check",
+        "note": "CONFIRMED CLAIM: Brazil is non-OECD, so the 7.5% rest-of-world default applies per IRENA 2024 Table A1 — this numeric default value is verified. UNCONFIRMED ASSUMPTION (a separate claim, NOT verified): IRENA describes a 'minimum WACC floor' override for high-risk countries (e.g. Argentina, Moody's Caa1) where the flat default would underestimate real cost of capital. Brazil's Moody's rating in IRENA's own Figure S7 is Ba2 (moderate, well above Argentina's Caa1/Ghana's Caa3) — Douglas's judgment is that the floor override likely does not apply here, but this has NOT been computed (requires global risk-free rate, Brazil's country default spread, lender margin, and equity risk premium inputs not available in this session). verified=true above reflects only that 0.075 is the correct IRENA default value as documented — it does NOT mean the floor-non-applicability has been verified or calculated."
       },
       "technologies": {
         "biomass": {
@@ -118,14 +119,13 @@
             "verification_method": "manual_cross_check"
           },
           "discount_rate_increment": {
-            "value": null,
-            "source": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "status": "pending_research",
-            "note": "Optional technology-specific risk premium over the country base discount_rate. Concept is literature-supported (technology-specific WACC / hurdle rates), but no number has been chosen yet for GeoFREA. See DECISIONS.md 2026-08-20 - biomass parameters restructure (IRENA 2025)."
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital methodology section",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
           }
         }
       }
