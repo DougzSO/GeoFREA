@@ -1,12 +1,12 @@
 """Unit tests for geofrea.core.config_loader.
 
-No key-overlap test between parameters.json and settings.yaml is
-included: settings.yaml currently has no keys at all (only the
-scope-documenting header comment added in Stage 3b — see
-docs/DECISIONS.md 2026-08-20 and config/settings.yaml itself), so there
-is nothing to overlap with parameters.json's "countries" key. Stating
-this explicitly here instead of writing a vacuous overlap test, per
-Stage 3's acceptance criteria.
+No key-overlap test between parameters.json and settings.yaml: the two
+files don't hold conflicting/duplicated data under the same key.
+settings.yaml's run.countries is a subset *selector* referencing
+parameters.json's countries key by code — not a redeclaration of any
+per-country data — so there's no precedence rule to test, just a
+(currently unenforced) cross-file reference. See docs/DECISIONS.md
+2026-08-20 - settings.yaml phase toggles.
 
 Legacy-value comparison scope (acceptance criterion 5): only
 capex_usd_per_kw and lifetime_years for biomass have a direct legacy
@@ -39,7 +39,7 @@ from pathlib import Path
 import pytest
 
 from geofrea.core.config_loader import load_parameters, load_settings
-from geofrea.core.schemas import ParametersFile
+from geofrea.core.schemas import ParametersFile, SettingsFile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
@@ -62,10 +62,25 @@ def test_load_real_parameters_json_validates():
 
 
 @pytest.mark.unit
-def test_load_real_settings_yaml_is_empty():
-    """Criterion 2: the REAL config/settings.yaml must load (no keys yet)."""
+def test_load_real_settings_yaml_validates():
+    """The REAL config/settings.yaml must validate against SettingsFile."""
     result = load_settings(SETTINGS_YAML)
-    assert result == {}
+    assert isinstance(result, SettingsFile)
+    # Empty = run every country in parameters.json, per RunConfig's contract.
+    assert result.run.countries == []
+    # No phase runner exists yet - every module flag is off.
+    assert set(result.run.phases.keys()) == {
+        "data_quality_audit",
+        "grid_alignment",
+        "suitability_criteria",
+        "suitability_analysis",
+        "potential_analysis",
+        "lcoe_modeling",
+        "results_synthesis",
+        "ghg_abatement",
+        "sensitivity_analysis",
+    }
+    assert all(enabled is False for enabled in result.run.phases.values())
 
 
 @pytest.mark.unit

@@ -19,6 +19,8 @@ from geofrea.core.schemas import (
     BiomassParams,
     CountryParams,
     ParametersFile,
+    RunConfig,
+    SettingsFile,
     SolarParams,
     TechnologyParams,
     VerifiedValue,
@@ -79,6 +81,13 @@ VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS, "solar": VALID_SOLAR, "wind": VA
 VALID_COUNTRY = {"technologies": VALID_TECHNOLOGIES}
 
 VALID_PARAMETERS_FILE = {"countries": {"PRT": VALID_COUNTRY, "BRA": copy.deepcopy(VALID_COUNTRY)}}
+
+VALID_RUN_CONFIG = {
+    "countries": [],
+    "phases": {"data_quality_audit": False, "grid_alignment": False},
+}
+
+VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG}
 
 # tech_name -> (model class, valid payload) - shared across the tech-model tests below.
 TECH_MODELS = {
@@ -155,6 +164,19 @@ def test_parameters_file_accepts_valid_payload():
     assert set(result.countries.keys()) == {"PRT", "BRA"}
 
 
+@pytest.mark.unit
+def test_run_config_accepts_valid_payload():
+    result = RunConfig.model_validate(VALID_RUN_CONFIG)
+    assert result.countries == []
+    assert result.phases["grid_alignment"] is False
+
+
+@pytest.mark.unit
+def test_settings_file_accepts_valid_payload():
+    result = SettingsFile.model_validate(VALID_SETTINGS_FILE)
+    assert result.run.countries == []
+
+
 # ─── Required-field tests: one parametrized case per field ──────────────
 
 
@@ -205,6 +227,24 @@ def test_parameters_file_missing_required_field_raises(field):
         ParametersFile.model_validate(data)
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["countries", "phases"])
+def test_run_config_missing_required_field_raises(field):
+    data = copy.deepcopy(VALID_RUN_CONFIG)
+    del data[field]
+    with pytest.raises(ValidationError):
+        RunConfig.model_validate(data)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["run"])
+def test_settings_file_missing_required_field_raises(field):
+    data = copy.deepcopy(VALID_SETTINGS_FILE)
+    del data[field]
+    with pytest.raises(ValidationError):
+        SettingsFile.model_validate(data)
+
+
 # ─── extra="forbid" tests: one case per model ────────────────────────────
 
 
@@ -245,6 +285,20 @@ def test_parameters_file_rejects_unexpected_field():
     data = {**copy.deepcopy(VALID_PARAMETERS_FILE), "unexpected_key": "typo"}
     with pytest.raises(ValidationError):
         ParametersFile.model_validate(data)
+
+
+@pytest.mark.unit
+def test_run_config_rejects_unexpected_field():
+    data = {**copy.deepcopy(VALID_RUN_CONFIG), "unexpected_key": "typo"}
+    with pytest.raises(ValidationError):
+        RunConfig.model_validate(data)
+
+
+@pytest.mark.unit
+def test_settings_file_rejects_unexpected_field():
+    data = {**copy.deepcopy(VALID_SETTINGS_FILE), "unexpected_key": "typo"}
+    with pytest.raises(ValidationError):
+        SettingsFile.model_validate(data)
 
 
 # ─── Range-constraint tests: one parametrized case per constraint, per tech ──

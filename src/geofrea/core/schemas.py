@@ -1,4 +1,4 @@
-"""Pydantic schemas for GeoFREA's parameters.json.
+"""Pydantic schemas for GeoFREA's parameters.json and settings.yaml.
 
 "biomass", "solar", and "wind" are all modeled and populated in
 config/parameters.json (see docs/DECISIONS.md 2026-08-20 entries).
@@ -16,6 +16,12 @@ CountryParams: IRENA's benchmark tool gives genuinely different rates
 per technology for the same country (e.g. PRT: biomass=5%, solar=4.2%,
 wind=3.7%), so a single country-level field cannot represent it. See
 DECISIONS.md 2026-08-20 - discount_rate architecture fix.
+
+SettingsFile (settings.yaml) is a separate, much simpler schema: plain
+operational values (which countries/phases to run), no verification-
+metadata wrapper — that wrapper exists for scientific parameters.json
+values with a citable source, which operational toggles aren't. See
+DECISIONS.md 2026-08-20 - settings.yaml phase toggles.
 """
 
 from __future__ import annotations
@@ -207,3 +213,42 @@ class ParametersFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     countries: dict[str, CountryParams]
+
+
+class RunConfig(BaseModel):
+    """Which countries/phases a pipeline execution should cover.
+
+    Args:
+        countries: ISO-3166-alpha-3 codes to run. Empty list means "run
+            every country present in parameters.json's 'countries' key"
+            — resolved dynamically by the (future) phase runner, not
+            hardcoded here. See config_loader.py::load_settings().
+        phases: One flag per pipeline module, keyed by the same names
+            used in docs/PROGRESS.json's "modulos" array and the
+            src/geofrea/<name>/ package layout. True = phase runs for
+            this execution, False = disabled (mirrors the legacy
+            geoworld_framework's skip_* toggles, inverted for a
+            non-double-negative reading).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    countries: list[str]
+    phases: dict[str, bool]
+
+
+class SettingsFile(BaseModel):
+    """Root schema for config/settings.yaml.
+
+    No VerifiedValue wrapper here: that metadata block exists for
+    scientific parameters.json values with a citable source (see
+    docs/CONVENTIONS.md, "Parameter verification metadata") — it
+    doesn't apply to operational settings like phase toggles.
+
+    Args:
+        run: Country/phase selection for a pipeline execution.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    run: RunConfig

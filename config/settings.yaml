@@ -3,14 +3,37 @@
 # Scope: operational / pipeline-control configuration only — e.g. which
 # phases run in a given execution, infrastructure paths, run-mode flags.
 # Mirrors the legacy geoworld_framework's phase true/false toggles
-# (skip_* flags in its own settings.yaml).
+# (skip_* flags in its own settings.yaml) — here, "phases.<name>: true"
+# means the phase RUNS (not "skip"), to avoid double-negative reading;
+# false means it is disabled for this run.
 #
 # This file does NOT hold scientific/technology parameters (CAPEX, OPEX,
 # capacity factors, discount rates, etc.) — those belong exclusively in
 # parameters.json, validated through the Pydantic schemas in
 # src/geofrea/core/ (see docs/CONVENTIONS.md, "Parameters" and
 # "Parameter verification metadata").
-#
-# Empty skeleton — no phase-toggle keys added yet. Those are introduced
-# once Etapa 2+ modules are migrated and need to be individually
-# runnable, not invented ahead of that work.
+
+run:
+  # Empty = run every country present in parameters.json's "countries"
+  # key. Non-empty = run only this subset. Deliberately NOT hardcoded
+  # to PRT/BRA here: those are just what parameters.json currently has
+  # data for, not a fixed pipeline limit — the pipeline itself is
+  # country-generic. See config_loader.py::load_settings() for the note
+  # on how this resolves once a phase runner exists.
+  countries: []
+
+  # One flag per module, matching the "nome" values in
+  # docs/PROGRESS.json's "modulos" array (and the src/geofrea/<name>/
+  # package layout from Fase 1). All false: no phase runner exists yet
+  # (every module is still "documentado_nao_construido" per
+  # PROGRESS.json) — there is nothing to enable.
+  phases:
+    data_quality_audit: false
+    grid_alignment: false
+    suitability_criteria: false
+    suitability_analysis: false
+    potential_analysis: false
+    lcoe_modeling: false
+    results_synthesis: false
+    ghg_abatement: false
+    sensitivity_analysis: false

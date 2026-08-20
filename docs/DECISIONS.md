@@ -103,4 +103,17 @@ Referência (literatura/discussão, se aplicável): IRENA, Renewable Power Gener
 
 ---
 
+## [2026-08-20] - settings.yaml phase toggles
+Tipo: STRUCTURAL_PRESERVE
+Descrição: `config/settings.yaml` populado com a estrutura `run.countries` (lista de códigos ISO-3166-alpha-3 a rodar; vazia = todos os países presentes em `parameters.json`) e `run.phases` (um booleano por módulo, todos `false` por ora — nenhum runner de fase existe ainda). A lista de nomes de fase em `phases` vem de `docs/PROGRESS.json`, campo `modulos[].nome` (data_quality_audit, grid_alignment, suitability_criteria, suitability_analysis, potential_analysis, lcoe_modeling, results_synthesis, ghg_abatement, sensitivity_analysis) — mesmos nomes usados no layout `src/geofrea/<nome>/` criado na Fase 1.
+
+Isto espelha o padrão `skip_*` do `geoworld_framework` legado (um flag por fase, controlando o que roda numa execução), mas com a semântica invertida: `phases.<nome>: true` significa "esta fase RODA" (não "pular"), para evitar leitura de dupla negativa. `run.countries` não é hardcoded para PRT/BRA — a lista vazia (comportamento padrão: rodar todos os países presentes em `parameters.json`) é resolvida dinamicamente por um futuro executor de pipeline, não fixada aqui; isso está documentado como nota/docstring em `config_loader.py::load_settings()`, já que nenhum executor existe ainda para implementar de fato.
+
+Schema: `RunConfig` (`countries: list[str]`, `phases: dict[str, bool]`) e `SettingsFile` (`run: RunConfig`) adicionados a `schemas.py`, ambos com `extra="forbid"`. Sem o wrapper `VerifiedValue` — esse metadado de verificação existe para valores científicos de `parameters.json` com fonte citável; não se aplica a toggles operacionais de `settings.yaml`. `config_loader.py::load_settings()` agora valida contra `SettingsFile` e retorna uma instância validada, em vez de um dict cru.
+
+Justificativa: n/a — STRUCTURAL_PRESERVE, replica o padrão de toggle por fase já usado no legado, não é uma revisão metodológica.
+Referência (literatura/discussão, se aplicável): geoworld_framework/configs/settings.yaml (padrão `skip_*` legado); docs/PROGRESS.json (fonte da lista de nomes de módulo).
+
+---
+
 (fim das decisões registradas até o momento)
