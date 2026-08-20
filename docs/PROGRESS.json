@@ -1,0 +1,41 @@
+{
+  "fase_atual": "0.5",
+  "ultima_atualizacao": "2026-08-19",
+  "contradicoes_pendentes": [
+    {
+      "id": "iucn_categorias",
+      "descricao": "criteria_builder.py exclui categorias IUCN Ia/Ib/II; docs/memory/03-pipeline.md (legado) documenta só Ia/Ib",
+      "referencia": "GeoFREA/docs/architecture/suitability_criteria.md secao e.1",
+      "status": "resolvido_ver_decisions_md"
+    },
+    {
+      "id": "capex_opex_fallback_fase8",
+      "descricao": "_SA4_DEFAULTS (sensitivity_analyzer.py) diverge numericamente de DEFAULT_LCOE_PARAMS (lcoe_calculator.py), incluindo vida util de biomassa (30 vs 20 anos)",
+      "referencia": "GeoFREA/docs/architecture/sensitivity_analysis.md secao c",
+      "status": "resolvido_ver_decisions_md"
+    }
+  ],
+  "baseline": {
+    "PRT": {
+      "status": "atualizado_fc7b43d",
+      "commit": "fc7b43d",
+      "observacao": "regenerado em 2026-08-19, 164 arquivos, ver docs/architecture/baseline-manifest.md. Baseline anterior (52a9a0f/153a1cc) preservado como nota historica no mesmo documento."
+    },
+    "BRA": {
+      "status": "atualizado_fc7b43d",
+      "commit": "fc7b43d",
+      "observacao": "gerado pela primeira vez em 2026-08-19 (nao existia antes), 164 arquivos, ver docs/architecture/baseline-manifest.md"
+    }
+  },
+  "modulos": [
+    { "nome": "data_quality_audit", "fase_legado": 1, "status": "documentado_nao_construido" },
+    { "nome": "grid_alignment", "fase_legado": 2, "status": "documentado_nao_construido" },
+    { "nome": "suitability_criteria", "fase_legado": 2, "status": "documentado_nao_construido" },
+    { "nome": "suitability_analysis", "fase_legado": 3, "status": "documentado_nao_construido" },
+    { "nome": "potential_analysis", "fase_legado": 4, "status": "documentado_nao_construido" },
+    { "nome": "lcoe_modeling", "fase_legado": 5, "status": "documentado_nao_construido" },
+    { "nome": "results_synthesis", "fase_legado": 6, "status": "documentado_nao_construido" },
+    { "nome": "ghg_abatement", "fase_legado": 7, "status": "documentado_nao_construido" },
+    { "nome": "sensitivity_analysis", "fase_legado": 8, "status": "documentado_nao_construido" }
+  ]
+}
