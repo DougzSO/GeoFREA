@@ -123,12 +123,38 @@ class _TechnologyEconomicParams(BaseModel):
     discount_rate_increment: VerifiedValue[float | None]
 
 
-class BiomassParams(_TechnologyEconomicParams):
+class _TechnologySitingParams(BaseModel):
+    """Shared shape for per-technology physical siting-constraint parameters.
+
+    Kept separate from _TechnologyEconomicParams deliberately: these
+    values feed suitability/audit checks (e.g. the slope-inactivity
+    diagnostic in data_quality_audit), not LCOE — a different domain
+    that happens to also be per-technology-per-country. Splitting the
+    base keeps _TechnologyEconomicParams's name accurate and lets more
+    siting constraints be added later (e.g. a wind setback distance)
+    without touching the economic base. See docs/DECISIONS.md
+    2026-08-20 - slope_threshold_deg moved to parameters.json.
+
+    Args:
+        slope_threshold_deg: Maximum terrain slope, in degrees, above
+            which a pixel is excluded as unsuitable for this
+            technology. Used by data_quality_audit's slope-inactivity
+            check and (in a later phase) suitability_criteria's hard
+            exclusion. Constrained to >= 0.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slope_threshold_deg: VerifiedValue[NonNegativeFloat]
+
+
+class BiomassParams(_TechnologyEconomicParams, _TechnologySitingParams):
     """Biomass technology parameters for a single country.
 
     See docs/DECISIONS.md 2026-08-20 - biomass parameters restructure
-    (IRENA 2025) and - biomass discount_rate and discount_rate_increment
-    - resolucao das pendencias, for provenance of every field's value.
+    (IRENA 2025), - biomass discount_rate and discount_rate_increment
+    - resolucao das pendencias, and - slope_threshold_deg moved to
+    parameters.json, for provenance of every field's value.
 
     discount_rate_increment here is 0.0 because bioenergy is NOT
     covered by IRENA's technology-specific WACC benchmark tool (which
@@ -138,11 +164,12 @@ class BiomassParams(_TechnologyEconomicParams):
     """
 
 
-class SolarParams(_TechnologyEconomicParams):
+class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     """Solar PV technology parameters for a single country.
 
     See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
-    populated (IRENA 2024/2025) for provenance of every field's value.
+    populated (IRENA 2024/2025) and - slope_threshold_deg moved to
+    parameters.json, for provenance of every field's value.
 
     opex_variable_usd_per_kwh is an unpopulated placeholder (value=
     None, verified=False, status="pending_research"): IRENA's source
@@ -160,13 +187,14 @@ class SolarParams(_TechnologyEconomicParams):
     opex_variable_usd_per_kwh: VerifiedValue[float | None]
 
 
-class WindParams(_TechnologyEconomicParams):
+class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     """Onshore wind technology parameters for a single country.
 
     See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
-    populated (IRENA 2024/2025) for provenance of every field's value.
-    Same opex_variable_usd_per_kwh and discount_rate_increment caveats
-    as SolarParams apply here.
+    populated (IRENA 2024/2025) and - slope_threshold_deg moved to
+    parameters.json, for provenance of every field's value. Same
+    opex_variable_usd_per_kwh and discount_rate_increment caveats as
+    SolarParams apply here.
     """
 
     opex_variable_usd_per_kwh: VerifiedValue[float | None]

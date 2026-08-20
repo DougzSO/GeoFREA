@@ -54,6 +54,7 @@ VALID_BIOMASS = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 8.5},
 }
 
 VALID_SOLAR = {
@@ -64,6 +65,7 @@ VALID_SOLAR = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 5.0},
 }
 
 VALID_WIND = {
@@ -74,6 +76,7 @@ VALID_WIND = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 8.5},
 }
 
 VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS, "solar": VALID_SOLAR, "wind": VALID_WIND}
@@ -104,6 +107,7 @@ REQUIRED_TECH_FIELDS = [
     "lifetime_years",
     "discount_rate",
     "discount_rate_increment",
+    "slope_threshold_deg",
 ]
 
 
@@ -123,6 +127,7 @@ def test_biomass_params_accepts_valid_payload():
     assert result.capex_usd_per_kw.value == 3606
     assert result.discount_rate.value == 0.05
     assert result.opex_variable_usd_per_kwh.value == 0.004
+    assert result.slope_threshold_deg.value == 8.5
 
 
 @pytest.mark.unit
@@ -133,6 +138,7 @@ def test_solar_params_accepts_valid_payload():
     # solar's source doesn't split fixed/variable OPEX - variable stays unpopulated.
     assert result.opex_variable_usd_per_kwh.value is None
     assert result.opex_variable_usd_per_kwh.status == "pending_research"
+    assert result.slope_threshold_deg.value == 5.0
 
 
 @pytest.mark.unit
@@ -142,6 +148,8 @@ def test_wind_params_accepts_valid_payload():
     assert result.discount_rate.value == 0.037
     assert result.opex_variable_usd_per_kwh.value is None
     assert result.opex_variable_usd_per_kwh.status == "pending_research"
+    # Same value as biomass: no wind-specific slope-threshold source found.
+    assert result.slope_threshold_deg.value == 8.5
 
 
 @pytest.mark.unit
@@ -340,5 +348,15 @@ def test_discount_rate_out_of_range_raises(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = copy.deepcopy(valid)
     data["discount_rate"]["value"] = -0.01
+    with pytest.raises(ValidationError):
+        model_cls.model_validate(data)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+def test_slope_threshold_deg_out_of_range_raises(tech_name):
+    model_cls, valid = TECH_MODELS[tech_name]
+    data = copy.deepcopy(valid)
+    data["slope_threshold_deg"]["value"] = -1.0
     with pytest.raises(ValidationError):
         model_cls.model_validate(data)

@@ -61,6 +61,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
+          },
+          "slope_threshold_deg": {
+            "value": 8.5,
+            "source": "Agrivoltaic/agricultural-land-suitability literature: 15% slope (~8.5 deg) is the commonly cited upper limit for perennial-crop mechanized agriculture.",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Proxy from agricultural slope literature, not a bioenergy-specific source — same caveat pattern as biomass capacity_factor's regional proxies. Used here because biomass feedstock harvesting has similar mechanized-access constraints."
           }
         },
         "solar": {
@@ -125,6 +134,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero."
+          },
+          "slope_threshold_deg": {
+            "value": 5.0,
+            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value — a reasonable starting point, not a definitive figure."
           }
         },
         "wind": {
@@ -189,6 +207,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+          },
+          "slope_threshold_deg": {
+            "value": 8.5,
+            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, per Douglas's instruction.",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
           }
         }
       }
@@ -254,6 +281,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
+          },
+          "slope_threshold_deg": {
+            "value": 8.5,
+            "source": "Agrivoltaic/agricultural-land-suitability literature: 15% slope (~8.5 deg) is the commonly cited upper limit for perennial-crop mechanized agriculture.",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Proxy from agricultural slope literature, not a bioenergy-specific source — same caveat pattern as biomass capacity_factor's regional proxies. Used here because biomass feedstock harvesting has similar mechanized-access constraints."
           }
         },
         "solar": {
@@ -317,6 +353,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+          },
+          "slope_threshold_deg": {
+            "value": 5.0,
+            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value — a reasonable starting point, not a definitive figure. Same value/source used for both PRT and BRA (no country-specific slope-suitability source found this session)."
           }
         },
         "wind": {
@@ -380,6 +425,15 @@
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
             "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium."
+          },
+          "slope_threshold_deg": {
+            "value": 8.5,
+            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, per Douglas's instruction.",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-08-20",
+            "verification_method": "manual_cross_check",
+            "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
           }
         }
       }
