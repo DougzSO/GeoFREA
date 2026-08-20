@@ -8,13 +8,27 @@ version = "0.1.0"
 description = "Reconstruction of the GeoWorld renewable-energy siting pipeline"
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2",
+    "pydantic>=2.7,<3",
+    "PyYAML>=6",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = [
+    "unit: fast tests with no external data dependency",
+    "regression: compares GeoFREA output against outputs_baseline_fc7b43d/, requires local baseline data",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
