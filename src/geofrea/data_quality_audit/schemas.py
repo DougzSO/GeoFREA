@@ -41,9 +41,30 @@ class AuditInputs(BaseModel):
             first, if any, is inspected — matches legacy's wind_files[0]).
         seismic_path: Seismic hazard raster path.
         land_cover_tiles: ESA WorldCover tile paths.
-        lakes_path: HydroLAKES vector path (presence/size only, no
-            per-feature inspection).
-        rivers_path: HydroRIVERS vector path (presence/size only).
+        lakes_path: HydroLAKES vector path (global — clipped to
+            country_gdf during inspection, see vector_inspection.py).
+        rivers_path: HydroRIVERS vector path (global — clipped, same
+            as lakes_path).
+        protected_path: WDPA protected-areas vector path (global —
+            clipped, same as lakes_path). Added 2026-08-24 — see
+            DECISIONS.md same date, "vector layer audit depth". Note
+            this is a NEW AuditInputs field with no AuditResult
+            consumer beyond `vectors["protected"]`'s own inspection —
+            it does not feed a suitability/exclusion calculation here
+            (see DECISIONS.md 2026-08-24 "protected (WDPA): decisão de
+            onde entra no GeoFREA fica pendente").
+        borders_path: Raw country-boundary vector path (all polygons —
+            mainland, islands, enclaves), inspected as-is, NOT clipped
+            (already scoped to one country at the source). Distinct
+            from `country_gdf` below, which is the mainland-only
+            polygon DERIVED from this same file and used purely as a
+            clip mask for every other layer.
+        admin1_path: Admin level-1 boundaries vector path (same GADM
+            download as borders_path in legacy — not clipped).
+        grid_path: Power-grid (transmission lines) vector path, from
+            OSM Overpass — country-scoped at the source, not clipped.
+        roads_path: Road network vector path, from OSM Overpass —
+            country-scoped at the source, not clipped.
         plants_df: Existing power-plant records.
         country_gdf: Country polygon (mainland-filtered) used to mask
             every raster to the real country boundary, not a bounding box.
@@ -61,6 +82,11 @@ class AuditInputs(BaseModel):
     land_cover_tiles: list[Path] = []
     lakes_path: Path | None = None
     rivers_path: Path | None = None
+    protected_path: Path | None = None
+    borders_path: Path | None = None
+    admin1_path: Path | None = None
+    grid_path: Path | None = None
+    roads_path: Path | None = None
     plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame | None = None
     skip_land_cover: bool = False
@@ -118,14 +144,58 @@ class LandCoverInspection(BaseModel):
     errors: list[str] = []
 
 
+class VectorAttributeStat(BaseModel):
+    """Count/area and percentage for one categorical value within a
+    vector layer's attribute breakdown (e.g. one IUCN category).
+
+    `area_km2` is populated only for polygon layers where an area
+    breakdown makes sense (protected areas by IUCN category); left None
+    for layers where it wasn't computed (see VectorLayerInspection's
+    `attribute_breakdown` — currently populated only for `protected`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    count: int
+    area_km2: float | None = None
+    pct: float
+
+
 class VectorLayerInspection(BaseModel):
-    """Presence/size check for a global vector layer (lakes, rivers)."""
+    """Structural/geometric inspection for a single vector layer.
+
+    Extended 2026-08-24 (see DECISIONS.md same date, "vector layer
+    audit depth") from a presence/size-only check (the original
+    lakes/rivers behavior) to the same inspection depth rasters already
+    get via RasterInspection — CRS, feature count, geometry types,
+    bbox, area/length, and (for `protected` only) an IUCN-category
+    attribute breakdown. `found=False` covers both "no path resolved"
+    and "file does not exist" (unchanged meaning); a resolved-but-
+    unopenable file is captured via `error`, mirroring RasterInspection
+    (inspect_vector_layer() catches broadly, like inspect_raster()) —
+    a deliberate choice to keep a single corrupt vector file from
+    failing the whole audit phase, even though the analogous loaders in
+    data_acquisition/adapter.py are NOT (yet) defensive this way (see
+    that module's "THIRD KNOWN GAP" docstring note) — the two live in
+    different places for different reasons: adapter.py has nowhere
+    in AuditInputs to put an error today, this schema does.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     found: bool
     name: str | None = None
     size_mb: float | None = None
+    crs: str | None = None
+    n_features: int | None = None
+    geometry_types: list[str] = []
+    bbox: tuple[float, float, float, float] | None = None
+    total_area_km2: float | None = None
+    total_length_km: float | None = None
+    clipped_to_country: bool = False
+    attribute_breakdown: dict[str, VectorAttributeStat] | None = None
+    error: str | None = None
 
 
 class PowerPlantsInspection(BaseModel):
@@ -203,8 +273,12 @@ class AuditResult(BaseModel):
             (solar, elevation, slope, population, wind, seismic).
         land_cover: ESA WorldCover aggregate statistics.
         power_plants: Existing power-plant aggregate statistics.
-        lakes: HydroLAKES presence/size check.
-        rivers: HydroRIVERS presence/size check.
+        vectors: One VectorLayerInspection per inspected vector layer
+            (borders, admin1, grid, roads, protected, lakes, rivers —
+            see DECISIONS.md 2026-08-24 "vector layer audit depth").
+            Follows the same dict-keyed-by-layer-name pattern already
+            used by `rasters`, replacing the earlier flat `lakes`/
+            `rivers` top-level fields.
         alerts: Consistency/quality warnings raised during the audit
             (divergent CRS, unexpected resolution, PVOUT unit mismatch,
             inactive slope criterion per technology, island-nation
@@ -227,8 +301,7 @@ class AuditResult(BaseModel):
     rasters: dict[str, RasterInspection]
     land_cover: LandCoverInspection
     power_plants: PowerPlantsInspection
-    lakes: VectorLayerInspection
-    rivers: VectorLayerInspection
+    vectors: dict[str, VectorLayerInspection]
     alerts: list[str]
     slope_threshold_check: dict[str, SlopeThresholdCheck]
     summary: AuditSummary

@@ -80,8 +80,8 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
         assert result.rasters[layer].error == "File not found"
     assert result.land_cover.error == "Tiles not found"
     assert result.power_plants.error is not None
-    assert result.lakes.found is False
-    assert result.rivers.found is False
+    for vname in ("borders", "admin1", "grid", "roads", "protected", "lakes", "rivers"):
+        assert result.vectors[vname].found is False
     assert result.summary.layers_ok == []
     assert set(result.summary.layers_missing) == {
         "solar",
@@ -208,12 +208,88 @@ def test_run_audit_phase_inspects_power_plants(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_lakes_and_rivers_presence(tmp_path):
+    # Extended 2026-08-24 (see DECISIONS.md same date, "vector layer
+    # audit depth"): lakes/rivers now open the file, not just
+    # stat()/exists() — a corrupted file is caught and reported via
+    # `error`, not silently treated as "found with no other data".
     lakes_path = tmp_path / "lakes.gpkg"
     lakes_path.write_bytes(b"not a real geopackage, presence-only check")
 
     inputs = AuditInputs(lakes_path=lakes_path)
     result = run_audit_phase(_context(tmp_path), inputs)
 
-    assert result.lakes.found is True
-    assert result.lakes.name == "lakes.gpkg"
-    assert result.rivers.found is False
+    assert result.vectors["lakes"].found is True
+    assert result.vectors["lakes"].name == "lakes.gpkg"
+    assert result.vectors["lakes"].error is not None
+    assert result.vectors["rivers"].found is False
+
+
+@pytest.mark.unit
+def test_run_audit_phase_inspects_a_valid_global_vector_layer_clipped(tmp_path):
+    mainland = box(_ORIGIN_LON, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.05, _ORIGIN_LAT)
+    country_gdf = gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326")
+
+    lake_inside = box(_ORIGIN_LON, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.01)
+    lake_outside = box(50.0, 50.0, 50.1, 50.1)
+    lakes_path = tmp_path / "lakes.geojson"
+    gpd.GeoDataFrame(geometry=[lake_inside, lake_outside], crs="EPSG:4326").to_file(
+        lakes_path, driver="GeoJSON"
+    )
+
+    inputs = AuditInputs(lakes_path=lakes_path, country_gdf=country_gdf)
+    result = run_audit_phase(_context(tmp_path), inputs)
+
+    lakes = result.vectors["lakes"]
+    assert lakes.found is True
+    assert lakes.error is None
+    assert lakes.clipped_to_country is True
+    assert lakes.n_features == 1
+    assert lakes.total_area_km2 is not None
+    assert lakes.geometry_types == ["Polygon"]
+
+
+@pytest.mark.unit
+def test_run_audit_phase_protected_areas_iucn_breakdown(tmp_path):
+    mainland = box(_ORIGIN_LON, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.05, _ORIGIN_LAT)
+    country_gdf = gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326")
+
+    park_ii = box(_ORIGIN_LON, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.01)
+    reserve_iv = box(_ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.02, _ORIGIN_LAT - 0.01)
+    protected_path = tmp_path / "protected.geojson"
+    gpd.GeoDataFrame(
+        {"IUCN_CAT": ["II", "IV"]},
+        geometry=[park_ii, reserve_iv],
+        crs="EPSG:4326",
+    ).to_file(protected_path, driver="GeoJSON")
+
+    inputs = AuditInputs(protected_path=protected_path, country_gdf=country_gdf)
+    result = run_audit_phase(_context(tmp_path), inputs)
+
+    protected = result.vectors["protected"]
+    assert protected.found is True
+    assert protected.attribute_breakdown is not None
+    assert set(protected.attribute_breakdown) == {"II", "IV"}
+    assert protected.attribute_breakdown["II"].count == 1
+
+
+@pytest.mark.unit
+def test_run_audit_phase_borders_and_admin1_are_not_clipped(tmp_path):
+    # borders/admin1/grid/roads are already scoped to one country at
+    # the acquisition source (GADM/OSM) — clip=False, see
+    # vector_inspection.py's module docstring and DECISIONS.md
+    # 2026-08-24 "vector layer audit depth". No country_gdf is passed
+    # here at all, to prove clipping does not happen / is not required.
+    borders_path = tmp_path / "borders.geojson"
+    admin1_a = box(_ORIGIN_LON, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.02, _ORIGIN_LAT)
+    admin1_b = box(_ORIGIN_LON + 0.02, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.05, _ORIGIN_LAT)
+    gpd.GeoDataFrame(geometry=[admin1_a, admin1_b], crs="EPSG:4326").to_file(
+        borders_path, driver="GeoJSON"
+    )
+
+    inputs = AuditInputs(borders_path=borders_path)
+    result = run_audit_phase(_context(tmp_path), inputs)
+
+    borders = result.vectors["borders"]
+    assert borders.found is True
+    assert borders.clipped_to_country is False
+    assert borders.n_features == 2

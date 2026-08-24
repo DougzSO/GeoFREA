@@ -1,6 +1,6 @@
 {
   "fase_atual": "0.5",
-  "ultima_atualizacao": "2026-08-19",
+  "ultima_atualizacao": "2026-08-24",
   "contradicoes_pendentes": [
     {
       "id": "iucn_categorias",
@@ -13,6 +13,18 @@
       "descricao": "_SA4_DEFAULTS (sensitivity_analyzer.py) diverge numericamente de DEFAULT_LCOE_PARAMS (lcoe_calculator.py), incluindo vida util de biomassa (30 vs 20 anos)",
       "referencia": "GeoFREA/docs/architecture/sensitivity_analysis.md secao c",
       "status": "resolvido_ver_decisions_md"
+    },
+    {
+      "id": "protected_pendente_fase",
+      "descricao": "Camada 'protected' (WDPA) agora TEM entrada em AuditInputs/AuditResult (protected_path, result.vectors['protected'], desde docs/DECISIONS.md 2026-08-24 - vector layer audit depth) — inspecionada com CRS/n_features/breakdown por categoria IUCN, igual a lakes/rivers. O que fica pendente e mais estreito: o EQUIVALENTE ao calculo de exclusao/score de compute_protected_areas() (Fase 2b legada) ainda nao existe em nenhuma fase do GeoFREA — a inspecao desta etapa e so estatistica descritiva, nao alimenta nenhum criterio de aptidao. Decisao de onde essa logica de exclusao entra no GeoFREA fica pendente ate suitability_criteria ser projetada.",
+      "referencia": "docs/DECISIONS.md 2026-08-24 - protected (WDPA): decisao de onde entra no GeoFREA fica pendente; docs/DECISIONS.md 2026-08-24 - vector layer audit depth",
+      "status": "pendente"
+    },
+    {
+      "id": "audit_summary_vector_refactor_proposta",
+      "descricao": "AuditSummary permanece com a lista flat de campos original (sem nenhum rollup para os 7 layers vetoriais novos: borders/admin1/grid/roads/protected/lakes/rivers). Duas opcoes de refatoracao foram propostas em texto (campos flat novos vs. trocar por dict chaveado por layer, uniforme com AuditResult.rasters/vectors) mas nenhuma foi implementada — aguardando revisao de Douglas antes de tocar em AuditSummary/_format_report.",
+      "referencia": "docs/DECISIONS.md 2026-08-24 - vector layer audit depth",
+      "status": "pendente"
     }
   ],
   "baseline": {
@@ -28,7 +40,12 @@
     }
   },
   "modulos": [
-    { "nome": "data_quality_audit", "fase_legado": 1, "status": "documentado_nao_construido" },
+    {
+      "nome": "data_quality_audit",
+      "fase_legado": 1,
+      "status": "construido",
+      "observacao": "logica de auditoria completa (orchestrator + schemas + testes), incluindo inspecao vetorial profunda dos 7 layers vetoriais (borders/admin1/grid/roads/protected/lakes/rivers, ver docs/DECISIONS.md 2026-08-24 - vector layer audit depth), mas roda com AuditInputs() vazio ate data_acquisition ser conectado — ver docs/DECISIONS.md 2026-08-24 - data_acquisition skeleton."
+    },
     { "nome": "grid_alignment", "fase_legado": 2, "status": "documentado_nao_construido" },
     { "nome": "suitability_criteria", "fase_legado": 2, "status": "documentado_nao_construido" },
     { "nome": "suitability_analysis", "fase_legado": 3, "status": "documentado_nao_construido" },
@@ -44,6 +61,15 @@
       "fase_legado": 9,
       "status": "excluido_permanente",
       "referencia": "docs/DECISIONS.md 2026-08-20 - Transport Decarbonisation phase - exclusao permanente"
+    }
+  ],
+  "modulos_extra": [
+    {
+      "nome": "data_acquisition",
+      "fase_legado": null,
+      "status": "esqueleto_implementado",
+      "observacao": "sem logica de fetch/download real ainda (sem HTTP, SDK ou leitura de .env); nao corresponde a nenhuma das 9 fases legadas de 'modulos' — e infraestrutura pre-Fase-1, consolidando o que no legado ficava dividido entre main.py e DataOrchestrator.",
+      "referencia": "docs/DECISIONS.md 2026-08-24 - data_acquisition skeleton"
     }
   ]
 }

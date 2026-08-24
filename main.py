@@ -3,19 +3,28 @@
 Loads config/parameters.json + config/settings.yaml, resolves which
 countries to run (RunConfig.countries empty = every country present in
 parameters.json), and runs the orchestrator's registered phases for
-each. Only data_quality_audit is registered — the orchestrator itself
-(src/geofrea/core/orchestrator.py) is generic and does not need
-redesigning when phase 2 (grid_alignment) is added; it will be appended
-to _PHASE_SPECS below.
+each. The orchestrator itself (src/geofrea/core/orchestrator.py) is
+generic and does not need redesigning as phases are added.
 
-No data acquisition layer exists yet in GeoFREA (legacy's
-DataFetcher/DataManager/DataOrchestrator are not ported — out of scope
-for this stage; see src/geofrea/data_quality_audit/schemas.py's
-AuditInputs docstring). This main.py therefore runs the audit phase
-with empty inputs: every raster will report "File not found", which is
-the same defensive path the phase already takes for genuinely missing
-files, not new/fabricated behavior. Real auditing becomes possible once
-a data acquisition module is built and wired in here.
+data_acquisition (registered first, below) is a STRUCTURE-ONLY skeleton
+— see src/geofrea/data_acquisition/phase.py's module docstring. It has
+no fetch/download logic yet and always returns placeholder
+(path=None) layers, so it isn't wired to feed data_quality_audit's
+AuditInputs here: the audit PhaseSpec below still runs with AuditInputs()
+empty, exactly as before. Wiring them together needs
+_build_phase_specs() to change from eager functools.partial(inputs=...)
+to a per-context closure that reads
+context.prior_results["data_acquisition"].output at call time (partial
+binds inputs before any phase has run, so it can't reference
+prior_results yet) — a real change to the audit registration itself,
+not just an addition, so it's flagged here rather than done as a side
+effect of adding data_acquisition. See
+src/geofrea/data_acquisition/adapter.py, which is ready to be called
+from that future closure once it exists.
+
+Also: settings.yaml's run.phases has no "data_acquisition" key yet
+(out of scope for this skeleton stage) — until it's added, this phase
+is skipped by Orchestrator.run() like any other unlisted phase name.
 
 Usage:
     python main.py
@@ -30,6 +39,8 @@ from pathlib import Path
 
 from geofrea.core.config_loader import load_parameters, load_settings
 from geofrea.core.orchestrator import Orchestrator, PhaseExecutionError, PhaseSpec
+from geofrea.data_acquisition.phase import run_acquisition_phase
+from geofrea.data_acquisition.schemas import AcquisitionResult
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
 
@@ -42,15 +53,58 @@ SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 OUTPUTS_DIR = REPO_ROOT / "outputs"
 
 
-def _build_phase_specs() -> list[PhaseSpec]:
+class UnwiredPhasesError(RuntimeError):
+    """Raised when enabling both phases together would silently misbehave.
+
+    data_acquisition and data_quality_audit are not wired together yet
+    (see module docstring) — data_quality_audit still runs with a
+    hardcoded empty AuditInputs() regardless of what data_acquisition
+    produced. Enabling both in settings.yaml's run.phases today would
+    silently run an audit against nothing, looking superficially like a
+    real end-to-end run. This is raised at phase_specs construction
+    time — before Orchestrator.run() executes anything — rather than
+    left as a log warning easy to miss.
+    """
+
+
+def _build_phase_specs(phases_enabled: dict[str, bool]) -> list[PhaseSpec]:
     """Registered phases, in execution order.
 
-    Only data_quality_audit exists so far (see module docstring). Adding
-    grid_alignment next means appending one more PhaseSpec here — the
-    Orchestrator itself does not change.
+    data_acquisition MUST come before data_quality_audit: the
+    Orchestrator enforces no ordering or dependency between phases on
+    its own (RunConfig.phases is a flat enabled/disabled toggle map,
+    with no ordering semantics) — this list's order is the only thing
+    that determines execution order. See module docstring for why
+    data_quality_audit's inputs are not yet wired to data_acquisition's
+    output despite both being registered here.
+
+    Args:
+        phases_enabled: RunConfig.phases for this run — checked here
+            (not just later, per-phase) so an unwired combination is
+            rejected before any phase executes.
+
+    Raises:
+        UnwiredPhasesError: If both data_acquisition and
+            data_quality_audit are enabled together (see that class's
+            docstring).
     """
+    if phases_enabled.get("data_acquisition", False) and phases_enabled.get(
+        "data_quality_audit", False
+    ):
+        raise UnwiredPhasesError(
+            "settings.yaml's run.phases enables both 'data_acquisition' and "
+            "'data_quality_audit', but they are not wired together yet — "
+            "data_quality_audit would still run with AuditInputs() empty, "
+            "not data_acquisition's output (see main.py's module "
+            "docstring and geofrea.data_acquisition.adapter). Disable one "
+            "of the two in settings.yaml until the wiring is implemented."
+        )
+
     audit_run = functools.partial(run_audit_phase, inputs=AuditInputs())
     return [
+        PhaseSpec(
+            name="data_acquisition", output_model=AcquisitionResult, run=run_acquisition_phase
+        ),
         PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=audit_run),
     ]
 
@@ -77,7 +131,7 @@ def run_geofrea(country_code: str, phases_enabled: dict[str, bool]) -> bool:
     )
 
     try:
-        orchestrator.run(_build_phase_specs())
+        orchestrator.run(_build_phase_specs(phases_enabled))
     except PhaseExecutionError as exc:
         logger.error("Run aborted for %s: %s", country_code, exc)
         return False

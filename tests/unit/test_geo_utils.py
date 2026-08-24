@@ -4,7 +4,12 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon
 
-from geofrea.core.geo_utils import detect_island_nation, get_local_utm_crs, get_mainland_gdf
+from geofrea.core.geo_utils import (
+    clip_vector_to_country,
+    detect_island_nation,
+    get_local_utm_crs,
+    get_mainland_gdf,
+)
 
 
 def _square(cx: float, cy: float, half_side: float) -> Polygon:
@@ -62,3 +67,34 @@ def test_detect_island_nation_false_for_a_single_polygon_country():
     gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 1.0)], crs="EPSG:4326")
 
     assert detect_island_nation(gdf) is False
+
+
+@pytest.mark.unit
+def test_clip_vector_to_country_drops_features_outside_and_cuts_crossing_ones():
+    country_gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 1.0)], crs="EPSG:4326")
+
+    inside = _square(0.0, 0.0, 0.2)
+    crossing = _square(0.9, 0.0, 0.3)  # centered near the country's edge
+    far_away = _square(10.0, 10.0, 0.1)
+    gdf = gpd.GeoDataFrame(geometry=[inside, crossing, far_away], crs="EPSG:4326")
+
+    clipped = clip_vector_to_country(gdf, country_gdf)
+
+    assert len(clipped) == 2
+    # The crossing feature must be cut down, not kept whole.
+    crossing_result = clipped.geometry.iloc[
+        clipped.geometry.apply(lambda g: g.centroid.x > 0.5).to_numpy().argmax()
+    ]
+    assert crossing_result.area < crossing.area
+
+
+@pytest.mark.unit
+def test_clip_vector_to_country_reprojects_when_crs_differs():
+    country_gdf = gpd.GeoDataFrame(geometry=[_square(-8.0, 39.0, 1.0)], crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame(geometry=[_square(-8.0, 39.0, 0.2)], crs="EPSG:4326").to_crs(
+        "EPSG:3857"
+    )
+
+    clipped = clip_vector_to_country(gdf, country_gdf)
+
+    assert len(clipped) == 1

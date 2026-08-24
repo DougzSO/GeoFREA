@@ -6,6 +6,21 @@ and src/processors/data_auditor.py (get_mainland_gdf, detect_island_nation)
 rather than in data_quality_audit/ (grid_alignment and later phases will
 also need mainland/UTM handling). See DECISIONS.md 2026-08-20 -
 orchestrator + data_quality_audit phase.
+
+clip_vector_to_country() was added 2026-08-24 (see DECISIONS.md same
+date - vector layer audit depth). It is a fresh implementation, not a
+literal extraction from raster_inspection.py::inspect_land_cover_tiles:
+that function's bbox-prefilter + intersection is tightly coupled to
+raster windowed reads and per-class pixel accounting, not reusable for
+vector data as-is. What IS reused is the *pattern* — bbox prefilter
+before an exact geometry intersection — which both
+inspect_land_cover_tiles() and geoworld_framework's
+criteria_builder.py::compute_protected_areas() already use independently
+(the latter via gdf.intersects(mainland_union) then
+geometry.intersection(mainland_union), without an explicit bbox
+prefilter step). clip_vector_to_country() adds the bbox prefilter
+(gdf.cx[]) as a fast first pass, matching inspect_land_cover_tiles()'s
+two-step shape more closely than compute_protected_areas() does.
 """
 
 from __future__ import annotations
@@ -107,3 +122,42 @@ def detect_island_nation(gdf: gpd.GeoDataFrame, threshold_pct: float = 0.60) -> 
 
     except Exception:  # noqa: BLE001 — diagnostic-only helper, never fatal (matches legacy)
         return False
+
+
+def clip_vector_to_country(
+    gdf: gpd.GeoDataFrame, country_gdf: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Clip a GeoDataFrame's geometries to a country polygon.
+
+    Two-step strategy: a fast bounding-box prefilter (gdf.cx[]) before
+    the exact geometry intersection, so a huge global file (HydroLAKES,
+    HydroRIVERS, WDPA) is not intersected feature-by-feature against
+    the full country geometry when most features are nowhere near it.
+    See module docstring for how this relates to
+    inspect_land_cover_tiles() and compute_protected_areas().
+
+    Args:
+        gdf: Vector layer to clip, any CRS.
+        country_gdf: Country polygon(s) to clip against — reprojected
+            to gdf's CRS internally if they differ.
+
+    Returns:
+        A new GeoDataFrame with geometries intersected against the
+        country polygon; features with no overlap are dropped, and
+        boundary-crossing features are cut to the country's extent.
+    """
+    country_in_gdf_crs = (
+        country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
+    )
+    country_geom = (
+        country_in_gdf_crs.geometry.union_all()
+        if hasattr(country_in_gdf_crs.geometry, "union_all")
+        else country_in_gdf_crs.geometry.unary_union
+    )
+
+    minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
+    prefiltered = gdf.cx[minx:maxx, miny:maxy]
+
+    clipped = prefiltered[prefiltered.intersects(country_geom)].copy()
+    clipped["geometry"] = clipped.geometry.intersection(country_geom)
+    return clipped[~clipped.geometry.is_empty]

@@ -51,6 +51,7 @@ from geofrea.data_quality_audit.schemas import (
     SlopeThresholdCheck,
     VectorLayerInspection,
 )
+from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
 
 logger = logging.getLogger("geofrea.data_quality_audit.audit")
 
@@ -131,15 +132,28 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
             rasters[layer] = {"error": "File not found"}
             timings[layer] = 0.0
 
-    # ── Vector layers (lakes/rivers): presence and size only ──────────
-    vector_layers: dict[str, dict] = {}
-    for vname, vpath in [("lakes", inputs.lakes_path), ("rivers", inputs.rivers_path)]:
-        if vpath and Path(vpath).exists():
-            size_mb = round(Path(vpath).stat().st_size / 1e6, 1)
-            vector_layers[vname] = {"found": True, "name": Path(vpath).name, "size_mb": size_mb}
-        else:
-            vector_layers[vname] = {"found": False}
-        timings[vname] = 0.0
+    # ── Vector layers ───────────────────────────────────────────────
+    # clip=True: single global file spanning many countries (protected,
+    # lakes, rivers). clip=False: already scoped to one country at the
+    # acquisition source (borders, admin1, grid, roads). See
+    # vector_inspection.py's module docstring and DECISIONS.md
+    # 2026-08-24 - vector layer audit depth.
+    _VECTOR_SPECS: tuple[tuple[str, Path | None, bool, bool], ...] = (
+        ("borders", inputs.borders_path, False, False),
+        ("admin1", inputs.admin1_path, False, False),
+        ("grid", inputs.grid_path, False, False),
+        ("roads", inputs.roads_path, False, False),
+        ("protected", inputs.protected_path, True, True),
+        ("lakes", inputs.lakes_path, True, False),
+        ("rivers", inputs.rivers_path, True, False),
+    )
+
+    vectors: dict[str, dict] = {}
+    for vname, vpath, clip, iucn_breakdown in _VECTOR_SPECS:
+        with timer(vname, timings):
+            vectors[vname] = inspect_vector_layer(
+                vpath, country_gdf=inputs.country_gdf, clip=clip, iucn_breakdown=iucn_breakdown
+            )
 
     # ── Land cover ──────────────────────────────────────────────────
     if inputs.skip_land_cover:
@@ -205,8 +219,7 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         rasters={k: RasterInspection.model_validate(v) for k, v in rasters.items()},
         land_cover=LandCoverInspection.model_validate(land_cover),
         power_plants=PowerPlantsInspection.model_validate(power_plants),
-        lakes=VectorLayerInspection.model_validate(vector_layers["lakes"]),
-        rivers=VectorLayerInspection.model_validate(vector_layers["rivers"]),
+        vectors={k: VectorLayerInspection.model_validate(v) for k, v in vectors.items()},
         alerts=alerts,
         slope_threshold_check=slope_threshold_check,
         summary=summary,
@@ -328,19 +341,46 @@ def _format_report(result: AuditResult) -> str:
         blank()
 
     sep("-")
-    lines.append("  HYDROLOGY (VECTORS)")
+    lines.append("  VECTOR LAYERS")
     sep("-")
-    for vname, label, layer in [
-        ("lakes", "HydroLAKES", result.lakes),
-        ("rivers", "HydroRIVERS", result.rivers),
-    ]:
-        if layer.found:
-            lines.append(f"  [OK] {label}")
-            row("File", layer.name or "—")
-            row("Size", f"{layer.size_mb} MB  (global — crop in a later phase)")
-        else:
-            lines.append(f"  [MISSING] {label:<12}: not found")
-    blank()
+    _VECTOR_LABELS = {
+        "borders": "Borders (GADM)",
+        "admin1": "Admin-1 (GADM)",
+        "grid": "Power grid (OSM)",
+        "roads": "Roads (OSM)",
+        "protected": "Protected areas (WDPA)",
+        "lakes": "HydroLAKES",
+        "rivers": "HydroRIVERS",
+    }
+    for vname, label in _VECTOR_LABELS.items():
+        layer = result.vectors.get(vname)
+        if layer is None or not layer.found:
+            lines.append(f"  [MISSING] {label:<24}: not found")
+            continue
+        if layer.error:
+            lines.append(f"  [ERROR] {label:<24}: {layer.error}")
+            continue
+
+        t = result.timings.get(vname, 0)
+        lines.append(f"  [OK] {label}  [{t:.1f}s]")
+        row("File", layer.name or "—")
+        row("Size", f"{layer.size_mb} MB")
+        row("CRS", layer.crs or "—")
+        row("Features", layer.n_features if layer.n_features is not None else "—")
+        row("Geometry types", ", ".join(layer.geometry_types) or "—")
+        row("Clipped to country", layer.clipped_to_country)
+        if layer.total_area_km2 is not None:
+            row("Total area", f"{layer.total_area_km2:>10,.1f} km²")
+        if layer.total_length_km is not None:
+            row("Total length", f"{layer.total_length_km:>10,.1f} km")
+        if layer.attribute_breakdown:
+            blank()
+            lines.append("    Category                        |  Count  |    km²     |    %")
+            lines.append("    " + "-" * 66)
+            for cat, stat in sorted(layer.attribute_breakdown.items()):
+                area = f"{stat.area_km2:>10,.1f}" if stat.area_km2 is not None else f"{'—':>10}"
+                lines.append(f"    {cat:<32}| {stat.count:>7} | {area} | {stat.pct:>5.1f}%")
+        blank()
 
     sep("-")
     lc = result.land_cover
@@ -419,8 +459,9 @@ def _format_report(result: AuditResult) -> str:
         if value:
             row(label, fmt.format(*value))
 
-    row("HydroLAKES", "[OK] found" if result.lakes.found else "[--] missing")
-    row("HydroRIVERS", "[OK] found" if result.rivers.found else "[--] missing")
+    for vname, label in _VECTOR_LABELS.items():
+        found = result.vectors.get(vname) is not None and result.vectors[vname].found
+        row(label, "[OK] found" if found else "[--] missing")
     row("Power plants", s.total_plants)
     row("Installed capacity", f"{s.total_cap_mw:,.0f} MW")
     row("Alerts", s.n_alerts)
