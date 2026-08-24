@@ -40,7 +40,12 @@ iucn_cat/IUCN/DESIGNATION) — not reinvented. Only descriptive stats
 (count/area/pct per category) are computed here; the IUCN_SCORES
 suitability-score mapping itself belongs to a future suitability_criteria
 phase, not this audit (see DECISIONS.md 2026-08-24 "protected (WDPA):
-decisão de onde entra no GeoFREA fica pendente").
+decisão de onde entra no GeoFREA fica pendente"). Category values are
+normalized with `.str.lower().str.strip()` before grouping, replicating
+compute_protected_areas()'s own normalization — see
+_iucn_category_breakdown()'s docstring for the "Not Reported"/"Not
+Applicable"/"Not Assigned" and NaN-handling details (DECISIONS.md
+2026-08-24 "IUCN category normalization fix").
 """
 
 from __future__ import annotations
@@ -162,12 +167,39 @@ def _iucn_category_breakdown(
     Column detection mirrors geoworld_framework's
     criteria_builder.py::compute_protected_areas() exactly — this only
     computes descriptive stats, not the IUCN_SCORES suitability mapping.
+
+    Category normalization (`.str.lower().str.strip()`) replicates
+    compute_protected_areas()'s own normalization before it looks values
+    up in IUCN_SCORES, added 2026-08-24 (see DECISIONS.md same date,
+    "IUCN category normalization fix") to fix a real gap: without it,
+    "Not Reported" and "not reported" (or "II" and "ii") would land in
+    separate buckets here even though the legacy scoring logic treats
+    them as identical. Bucket keys/`name` values are therefore always
+    lowercase, e.g. "ii", "not reported" — not the raw column casing.
+
+    "Not Reported"/"Not Applicable"/"Not Assigned" are NOT special-cased
+    here — confirmed against the legacy source (criteria_builder.py) that
+    they are ordinary entries in IUCN_SCORES (own dedicated scores, not
+    the IUCN_SCORE_DEFAULT fallback), not values legacy drops, groups
+    into an "other" bucket, or errors on. They flow through this
+    function like any other category string and get their own bucket.
+
+    NaN/missing category values are labeled "unknown" here — a GeoFREA-
+    only convention with no legacy equivalent: compute_protected_areas()
+    never names a missing value at all, it just lets `.str` accessor
+    calls produce NaN and IUCN_SCORES.get(nan, IUCN_SCORE_DEFAULT) fall
+    through to the same default score used for any unrecognized string,
+    silently and without a label. This function's "unknown" label exists
+    only because it needs *some* dict key to group by — not a scoring
+    decision, and not necessarily the label suitability_criteria (the
+    future phase that will port IUCN_SCORES) should use. Left as-is,
+    flagged for that future design, not decided here.
     """
     iucn_col = next((c for c in _IUCN_CATEGORY_COLUMNS if c in gdf.columns), None)
     if iucn_col is None:
         return None
 
-    categories = gdf[iucn_col].fillna("unknown").astype(str).str.strip()
+    categories = gdf[iucn_col].fillna("unknown").astype(str).str.lower().str.strip()
     total_area = float(gdf_proj.geometry.area.sum())
 
     breakdown: dict[str, dict] = {}

@@ -260,4 +260,19 @@ Referência (literatura/discussão, se aplicável): instrução explícita de Do
 
 ---
 
+## [2026-08-24] - IUCN category normalization fix
+Tipo: METHODOLOGY_REVISION
+Descrição: `vector_inspection.py::_iucn_category_breakdown` (auditoria de `protected`, ver `2026-08-24 - vector layer audit depth`) agrupava categorias IUCN por valor bruto da coluna, só com `.str.strip()` — sem normalizar case. Isso divergia do legado: `criteria_builder.py::compute_protected_areas()` normaliza com `.str.lower().str.strip()` antes de consultar `IUCN_SCORES`, então `"Not Reported"`/`"not reported"`/`"NOT REPORTED"` sempre foram tratados como a mesma categoria lá. No GeoFREA, sem essa normalização, dados reais (WDPA não é case-consistente) fragmentariam a mesma categoria em múltiplos buckets no `attribute_breakdown`. Corrigido: `.str.lower().str.strip()`, replicando o legado exatamente. Chaves do `attribute_breakdown` (e o campo `name` de cada `VectorAttributeStat`) agora são sempre minúsculas (`"ii"`, `"not reported"`), não a capitalização bruta da coluna.
+
+**Verificação feita antes da correção (relatório, sem código) — achados confirmados contra o legado**:
+- `"Not Reported"`/`"Not Applicable"`/`"Not Assigned"` **não são descartados nem agrupados em "outros" nem geram erro** no legado — são entradas próprias em `IUCN_SCORES` (`core/constants.py:179-193`), cada uma com score dedicado (0.25/0.45/0.25), não caem no fallback `IUCN_SCORE_DEFAULT`. O breakdown do GeoFREA já não descartava essas três (isso não mudou nesta correção) — o gap era só a normalização de case.
+- Valor de categoria vazio/`NaN` no legado cai silenciosamente em `IUCN_SCORE_DEFAULT` via `dict.get(nan, default)`, sem receber rótulo nenhum. O GeoFREA rotula como `"unknown"` (`.fillna("unknown")`) — uma convenção própria do GeoFREA, sem equivalente direto no legado, mantida como estava (não é uma decisão de score, só a chave necessária para agrupar). Documentado explicitamente no docstring de `_iucn_category_breakdown` para rastreabilidade quando `suitability_criteria` for desenhada — pode não ser o rótulo que essa fase futura vai querer usar.
+
+**Não portado nesta correção**: `IUCN_SCORES`/`IUCN_SCORE_DEFAULT`/`IUCN_FREE_SCORE` continuam fora do GeoFREA — `attribute_breakdown` permanece só estatística descritiva (`count`/`area_km2`/`pct`), sem nenhum campo de score. `VectorAttributeStat` (schema) não foi alterado. O mapeamento de score/exclusão fica para a futura fase `suitability_criteria`, mesma decisão já registrada em `2026-08-24 - protected (WDPA): decisão de onde entra no GeoFREA fica pendente`.
+
+Justificativa (se METHODOLOGY_REVISION): sem a normalização de case, o breakdown por categoria produziria contagens/áreas fragmentadas incorretamente assim que dados WDPA reais (tipicamente inconsistentes em capitalização) forem carregados — um bug latente que só não apareceu ainda porque nenhum fetch real existe. Corrigido antes que dados reais cheguem, não depois.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py::compute_protected_areas` e `core/constants.py::IUCN_SCORES` (fonte da normalização replicada); instrução explícita de Douglas nesta sessão (2026-08-24, verificação prévia + correção).
+
+---
+
 (fim das decisões registradas até o momento)

@@ -92,7 +92,58 @@ def test_inspect_vector_layer_iucn_breakdown_groups_by_category(tmp_path):
     result = inspect_vector_layer(path, clip=False, iucn_breakdown=True)
 
     assert result["attribute_breakdown"] is not None
-    assert result["attribute_breakdown"]["II"]["count"] == 2
+    # Bucket keys are lowercase since 2026-08-24 (see DECISIONS.md same
+    # date, "IUCN category normalization fix") — "II" normalizes to "ii".
+    assert result["attribute_breakdown"]["ii"]["count"] == 2
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_iucn_breakdown_normalizes_roman_numeral_case(tmp_path):
+    # Added 2026-08-24 (see DECISIONS.md same date, "IUCN category
+    # normalization fix"): case-varied roman-numeral category codes
+    # ("II"/"ii"/"Ii") are the most likely real-world case in WDPA data
+    # — more so than "Not Reported" varying case — and must collapse
+    # into a single "ii" bucket, same as the designation-text case.
+    a = box(0, 0, 1, 1)
+    b = box(2, 2, 3, 3)
+    c = box(4, 4, 5, 5)
+    path = tmp_path / "protected.geojson"
+    gpd.GeoDataFrame(
+        {"IUCN_CAT": ["II", "ii", "Ii"]},
+        geometry=[a, b, c],
+        crs="EPSG:4326",
+    ).to_file(path, driver="GeoJSON")
+
+    result = inspect_vector_layer(path, clip=False, iucn_breakdown=True)
+
+    assert result["attribute_breakdown"] is not None
+    assert set(result["attribute_breakdown"]) == {"ii"}
+    assert result["attribute_breakdown"]["ii"]["count"] == 3
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_iucn_breakdown_normalizes_case_before_grouping(tmp_path):
+    # Added 2026-08-24 (see DECISIONS.md same date, "IUCN category
+    # normalization fix"): "Not Reported" and "not reported" must
+    # collapse into one bucket, replicating compute_protected_areas()'s
+    # own .str.lower().str.strip() normalization in the legacy pipeline
+    # — without it, real WDPA data (which is not case-consistent) would
+    # fragment identical categories into separate buckets.
+    a = box(0, 0, 1, 1)
+    b = box(2, 2, 3, 3)
+    c = box(4, 4, 5, 5)
+    path = tmp_path / "protected.geojson"
+    gpd.GeoDataFrame(
+        {"IUCN_CAT": ["Not Reported", "not reported", "NOT REPORTED"]},
+        geometry=[a, b, c],
+        crs="EPSG:4326",
+    ).to_file(path, driver="GeoJSON")
+
+    result = inspect_vector_layer(path, clip=False, iucn_breakdown=True)
+
+    assert result["attribute_breakdown"] is not None
+    assert set(result["attribute_breakdown"]) == {"not reported"}
+    assert result["attribute_breakdown"]["not reported"]["count"] == 3
 
 
 @pytest.mark.unit

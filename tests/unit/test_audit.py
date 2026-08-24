@@ -268,8 +268,12 @@ def test_run_audit_phase_protected_areas_iucn_breakdown(tmp_path):
     protected = result.vectors["protected"]
     assert protected.found is True
     assert protected.attribute_breakdown is not None
-    assert set(protected.attribute_breakdown) == {"II", "IV"}
-    assert protected.attribute_breakdown["II"].count == 1
+    # Bucket keys are lowercase since 2026-08-24 (see DECISIONS.md same
+    # date, "IUCN category normalization fix") — "II"/"IV" normalize to
+    # "ii"/"iv", replicating compute_protected_areas()'s own
+    # .str.lower().str.strip() before it looks values up in IUCN_SCORES.
+    assert set(protected.attribute_breakdown) == {"ii", "iv"}
+    assert protected.attribute_breakdown["ii"].count == 1
 
 
 @pytest.mark.unit
