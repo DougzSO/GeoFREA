@@ -140,6 +140,76 @@ def test_adapter_maps_protected_admin1_grid_roads_paths():
 
 
 @pytest.mark.unit
+def test_adapter_maps_all_five_new_path_fields_from_one_complete_result(tmp_path):
+    # Dedicated happy-path test for the 5 fields added 2026-08-24 (see
+    # DECISIONS.md same date, "vector layer audit depth"): protected_path,
+    # borders_path, admin1_path, grid_path, roads_path — all populated
+    # together from a single simulated AcquisitionResult, not split
+    # across separate tests each covering a subset. `borders` uses a
+    # real file (its AcquiredLayer.path IS opened here, by
+    # _load_mainland_boundary) — the other four use fake nonexistent
+    # paths (never opened in this module, see module docstring).
+    mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    boundary_path = tmp_path / "borders.geojson"
+    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(
+        boundary_path, driver="GeoJSON"
+    )
+
+    fake_paths = {
+        "protected": Path("/fake/wdpa.shp"),
+        "admin1": Path("/fake/admin1.geojson"),
+        "grid": Path("/fake/grid.geojson"),
+        "roads": Path("/fake/roads.geojson"),
+    }
+    result = _result(
+        [
+            AcquiredLayer(
+                layer_name="borders",
+                provenance="fetched",
+                auth_required=False,
+                path=boundary_path,
+            ),
+            *(
+                AcquiredLayer(
+                    layer_name=name,
+                    provenance="local_only",
+                    auth_required=False,
+                    path=path,
+                )
+                for name, path in fake_paths.items()
+            ),
+        ]
+    )
+
+    audit_inputs = acquisition_result_to_audit_inputs(result)
+
+    assert audit_inputs.borders_path == boundary_path
+    assert audit_inputs.protected_path == fake_paths["protected"]
+    assert audit_inputs.admin1_path == fake_paths["admin1"]
+    assert audit_inputs.grid_path == fake_paths["grid"]
+    assert audit_inputs.roads_path == fake_paths["roads"]
+
+
+@pytest.mark.unit
+def test_adapter_all_five_new_path_fields_are_none_when_layer_missing():
+    # Confirms CURRENT behavior for a layer absent from the
+    # AcquisitionResult entirely (not just path=None on a present
+    # layer) — the field-comprehension in acquisition_result_to_audit_inputs
+    # (`if layer_name in layers`) simply omits the kwarg, so AuditInputs'
+    # own field default (None) applies. Not a new guarantee, just made
+    # explicit for the 5 fields added 2026-08-24.
+    result = _result([])
+
+    audit_inputs = acquisition_result_to_audit_inputs(result)
+
+    assert audit_inputs.protected_path is None
+    assert audit_inputs.borders_path is None
+    assert audit_inputs.admin1_path is None
+    assert audit_inputs.grid_path is None
+    assert audit_inputs.roads_path is None
+
+
+@pytest.mark.unit
 def test_adapter_wind_path_is_wrapped_into_a_single_element_list():
     # Resolved 2026-08-24 (DECISIONS.md same date): wind stays on
     # AcquiredLayer.path (AuditInputs only ever inspects the first wind

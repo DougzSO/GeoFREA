@@ -22,9 +22,9 @@
     },
     {
       "id": "audit_summary_vector_refactor_proposta",
-      "descricao": "AuditSummary permanece com a lista flat de campos original (sem nenhum rollup para os 7 layers vetoriais novos: borders/admin1/grid/roads/protected/lakes/rivers). Duas opcoes de refatoracao foram propostas em texto (campos flat novos vs. trocar por dict chaveado por layer, uniforme com AuditResult.rasters/vectors) mas nenhuma foi implementada — aguardando revisao de Douglas antes de tocar em AuditSummary/_format_report.",
-      "referencia": "docs/DECISIONS.md 2026-08-24 - vector layer audit depth",
-      "status": "pendente"
+      "descricao": "RESOLVIDO: AuditSummary trocou os campos flat (layers_ok/layers_missing/n_wind_files/*_range) por um unico campo layers: dict[str, RasterLayerSummary | VectorLayerSummary] (uniao discriminada, design (a)), cobrindo as 13 chaves de AuditResult.rasters+vectors combinadas. land_cover/power_plants continuam como campos dedicados, fora de layers. Migracao limpa, sem alias/campo depreciado (grep de consumidores confirmou zero uso externo ao modulo data_quality_audit).",
+      "referencia": "docs/DECISIONS.md 2026-08-24 - AuditSummary refactor to layer-keyed dict",
+      "status": "resolvido"
     }
   ],
   "baseline": {

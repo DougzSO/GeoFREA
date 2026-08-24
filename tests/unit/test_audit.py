@@ -82,15 +82,75 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
     assert result.power_plants.error is not None
     for vname in ("borders", "admin1", "grid", "roads", "protected", "lakes", "rivers"):
         assert result.vectors[vname].found is False
-    assert result.summary.layers_ok == []
-    assert set(result.summary.layers_missing) == {
-        "solar",
-        "elevation",
-        "population",
-        "slope",
-        "wind",
-        "seismic",
+    # AuditSummary.layers replaced the flat layers_ok/layers_missing
+    # fields 2026-08-24 (see DECISIONS.md same date, "AuditSummary
+    # refactor to layer-keyed dict") — now spans all 13 raster+vector
+    # names, not just rasters.
+    assert all(ls.status != "ok" for ls in result.summary.layers.values())
+    missing_rasters = {
+        name
+        for name, ls in result.summary.layers.items()
+        if ls.kind == "raster" and ls.status == "missing"
     }
+    assert missing_rasters == {"solar", "elevation", "population", "slope", "wind", "seismic"}
+    missing_vectors = {
+        name
+        for name, ls in result.summary.layers.items()
+        if ls.kind == "vector" and ls.status == "missing"
+    }
+    assert missing_vectors == {
+        "borders",
+        "admin1",
+        "grid",
+        "roads",
+        "protected",
+        "lakes",
+        "rivers",
+    }
+
+
+@pytest.mark.unit
+def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_path):
+    # Confirms the actual FORMATTED report text (not just AuditSummary.
+    # layers' shape) for one raster and one vector layer — 2026-08-24
+    # (see DECISIONS.md same date, "AuditSummary refactor to
+    # layer-keyed dict"), covering _format_report()'s rewritten SUMMARY
+    # section end to end, not just the schema behind it.
+    elevation_path = tmp_path / "elevation.tif"
+    data = np.full((_SIZE, _SIZE), 100.0, dtype=np.float32)
+    data[0, 0] = 300.0
+    _write_raster(elevation_path, data)
+
+    lake = box(_ORIGIN_LON, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.01)
+    lakes_path = tmp_path / "lakes.geojson"
+    gpd.GeoDataFrame(geometry=[lake], crs="EPSG:4326").to_file(lakes_path, driver="GeoJSON")
+
+    inputs = AuditInputs(
+        elevation_path=elevation_path,
+        lakes_path=lakes_path,
+        country_gdf=_covering_gdf(),
+    )
+    result = run_audit_phase(_context(tmp_path), inputs)
+    report_text = Path(result.report_path).read_text(encoding="utf-8")
+    summary_section = report_text.split("  SUMMARY")[1].split("TIME PER STEP")[0]
+    summary_lines = summary_section.splitlines()
+
+    # Raster: value_range surfaces in the SUMMARY footer with the
+    # existing label/format string.
+    elevation_line = next(line for line in summary_lines if "Elevation (m)" in line)
+    assert "100" in elevation_line
+    assert "300" in elevation_line
+
+    # Vector: HydroLAKES shows [OK] found in the footer, now sourced
+    # from AuditSummary.layers (not result.vectors read directly).
+    lakes_line = next(line for line in summary_lines if "HydroLAKES" in line)
+    assert "[OK] found" in lakes_line
+
+    # The consolidated "Layers OK" row spans both kinds — a raster
+    # name and a vector name on the same line.
+    layers_ok_line = next(line for line in summary_lines if "Layers OK" in line)
+    assert "elevation" in layers_ok_line
+    assert "lakes" in layers_ok_line
 
 
 @pytest.mark.unit
@@ -114,9 +174,11 @@ def test_run_audit_phase_inspects_a_present_raster(tmp_path):
 
     assert result.rasters["elevation"].error is None
     assert result.rasters["elevation"].mean == pytest.approx(250.0)
-    assert "elevation" in result.summary.layers_ok
+    assert result.summary.layers["elevation"].status == "ok"
+    assert result.summary.layers["elevation"].value_range == pytest.approx((250.0, 250.0))
     # Everything else is still genuinely absent.
     assert result.rasters["solar"].error == "File not found"
+    assert result.summary.layers["solar"].status == "missing"
 
 
 @pytest.mark.unit

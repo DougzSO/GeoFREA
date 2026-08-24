@@ -13,10 +13,11 @@ core/schemas.py.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated, Literal
 
 import geopandas as gpd
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuditInputs(BaseModel):
@@ -209,23 +210,81 @@ class PowerPlantsInspection(BaseModel):
     error: str | None = None
 
 
-class AuditSummary(BaseModel):
-    """Concise cross-section of the full audit, used for the report footer."""
+class RasterLayerSummary(BaseModel):
+    """Concise per-layer status for one audited raster (see AuditSummary.layers).
+
+    `value_range` mirrors the pre-2026-08-24 flat `*_range` fields
+    (solar_range, elev_range, slope_range, pop_range, seismic_range) —
+    populated only for those 5 layers, same as before. `wind` never got
+    a range in the flat schema either (its own `range_map` in
+    audit.py's `_build_summary()` never included "wind") — that
+    asymmetry is preserved here, not fixed, since fixing it was out of
+    scope for this refactor. `file_count` is the direct replacement for
+    the old standalone `n_wind_files` field — populated only for `wind`
+    (AuditInputs.wind_paths' length; only the first path is ever
+    inspected, see AuditInputs' own docstring), None for every other
+    raster layer.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    layers_ok: list[str]
-    layers_missing: list[str]
-    n_wind_files: int
+    kind: Literal["raster"] = "raster"
+    status: Literal["ok", "missing"]
+    error: str | None = None
+    value_range: tuple[float, float] | None = None
+    file_count: int | None = None
+
+
+class VectorLayerSummary(BaseModel):
+    """Concise per-layer status for one audited vector layer (see AuditSummary.layers).
+
+    Mirrors _format_report()'s own pre-existing tri-state distinction
+    for vector layers (missing / error / ok) — VectorLayerInspection
+    already separates "not found" from "found but failed to open"
+    (`found` + `error` fields), unlike RasterInspection's raster
+    counterpart, which only distinguishes ok/missing in the flat schema
+    this replaces. Not invented here — replicates behavior
+    _format_report()'s VECTOR LAYERS section already had.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["vector"] = "vector"
+    status: Literal["ok", "missing", "error"]
+    error: str | None = None
+    n_features: int | None = None
+
+
+LayerSummary = Annotated[
+    RasterLayerSummary | VectorLayerSummary, Field(discriminator="kind")
+]
+
+
+class AuditSummary(BaseModel):
+    """Concise cross-section of the full audit, used for the report footer.
+
+    `layers` replaced the flat per-raster-layer fields (layers_ok,
+    layers_missing, n_wind_files, solar_range, elev_range, slope_range,
+    pop_range, seismic_range) 2026-08-24 (see DECISIONS.md same date,
+    "AuditSummary refactor to layer-keyed dict") — one dict, keyed by
+    layer name, covering the same 13 names as AuditResult.rasters
+    (6) + AuditResult.vectors (7) combined (confirmed disjoint — no
+    name collision between the two namespaces). land_cover and
+    power_plants deliberately stay OUT of `layers`, as their own
+    dedicated fields below — they are aggregates over many files/
+    records, not a single-file "layer" in the same sense as the other
+    13, and AuditResult itself already keeps them as separate top-level
+    fields rather than folding them into `rasters`/`vectors` — `layers`
+    mirrors that same structural split, not a new one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    layers: dict[str, LayerSummary]
     lc_tiles_used: int
     lc_tiles_total: int
     lc_total_area_km2: float
     lc_classes: int
-    solar_range: tuple[float, float] | None = None
-    elev_range: tuple[float, float] | None = None
-    slope_range: tuple[float, float] | None = None
-    pop_range: tuple[float, float] | None = None
-    seismic_range: tuple[float, float] | None = None
     total_plants: int
     total_cap_mw: float
     n_alerts: int

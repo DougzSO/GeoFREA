@@ -48,8 +48,10 @@ from geofrea.data_quality_audit.schemas import (
     LandCoverInspection,
     PowerPlantsInspection,
     RasterInspection,
+    RasterLayerSummary,
     SlopeThresholdCheck,
     VectorLayerInspection,
+    VectorLayerSummary,
 )
 from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
 
@@ -210,7 +212,7 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
 
     # ── Assemble + validate ─────────────────────────────────────────
     n_wind = len(inputs.wind_paths)
-    summary = _build_summary(rasters, land_cover, power_plants, alerts, n_wind)
+    summary = _build_summary(rasters, vectors, land_cover, power_plants, alerts, n_wind)
     elapsed_total = round((datetime.now(UTC) - started_at).total_seconds(), 1)
 
     result = AuditResult(
@@ -237,46 +239,64 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
     return result.model_copy(update={"report_path": str(report_path)})
 
 
+# Layers that report a value_range in AuditSummary.layers — same set
+# the old flat schema's range_map covered. "wind" is deliberately
+# excluded (it never had a *_range field in the flat schema either,
+# despite going through the same inspect_raster() pipeline as these
+# five) — preserved as-is, not fixed, out of scope for this refactor.
+_RASTER_LAYERS_WITH_RANGE = frozenset({"solar", "elevation", "slope", "population", "seismic"})
+
+
 def _build_summary(
     rasters: dict[str, dict],
+    vectors: dict[str, dict],
     land_cover: dict,
     power_plants: dict,
     alerts: list[str],
     n_wind: int,
 ) -> AuditSummary:
-    """Build a concise summary from the raw audit dicts."""
+    """Build a concise summary from the raw audit dicts.
+
+    `layers` covers AuditResult.rasters + AuditResult.vectors' combined
+    13 names (see AuditSummary.layers' docstring for why land_cover/
+    power_plants stay separate) — added 2026-08-24 (see DECISIONS.md
+    same date, "AuditSummary refactor to layer-keyed dict"), replacing
+    the flat layers_ok/layers_missing/n_wind_files/*_range fields.
+    """
     lc = land_cover or {}
     pp = power_plants or {}
 
-    layers_ok: list[str] = []
-    layers_missing: list[str] = []
-    range_by_layer: dict[str, tuple[float, float] | None] = {
-        "solar_range": None,
-        "elev_range": None,
-        "slope_range": None,
-        "pop_range": None,
-        "seismic_range": None,
-    }
-    range_map = {
-        "solar": "solar_range",
-        "elevation": "elev_range",
-        "slope": "slope_range",
-        "population": "pop_range",
-        "seismic": "seismic_range",
-    }
+    layers: dict[str, RasterLayerSummary | VectorLayerSummary] = {}
 
     for layer, meta in rasters.items():
-        if meta.get("error"):
-            layers_missing.append(layer)
+        error = meta.get("error")
+        value_range = None
+        if not error and layer in _RASTER_LAYERS_WITH_RANGE and meta.get("min") is not None:
+            value_range = (meta["min"], meta["max"])
+        layers[layer] = RasterLayerSummary(
+            status="missing" if error else "ok",
+            error=error,
+            value_range=value_range,
+            file_count=n_wind if layer == "wind" else None,
+        )
+
+    for layer, meta in vectors.items():
+        found = meta.get("found", False)
+        error = meta.get("error")
+        if not found:
+            status = "missing"
+        elif error:
+            status = "error"
         else:
-            layers_ok.append(layer)
-            if meta.get("min") is not None and layer in range_map:
-                range_by_layer[range_map[layer]] = (meta["min"], meta["max"])
+            status = "ok"
+        layers[layer] = VectorLayerSummary(
+            status=status,
+            error=error,
+            n_features=meta.get("n_features"),
+        )
 
     return AuditSummary(
-        layers_ok=layers_ok,
-        layers_missing=layers_missing,
-        n_wind_files=n_wind,
+        layers=layers,
         lc_tiles_used=lc.get("tiles_used", 0),
         lc_tiles_total=lc.get("n_tiles", 0),
         lc_total_area_km2=lc.get("total_area_km2", 0),
@@ -284,7 +304,6 @@ def _build_summary(
         total_plants=pp.get("total_plants", 0),
         total_cap_mw=pp.get("total_capacity_mw", 0),
         n_alerts=len(alerts),
-        **range_by_layer,
     )
 
 
@@ -440,28 +459,59 @@ def _format_report(result: AuditResult) -> str:
     lines.append("  SUMMARY")
     sep("-")
     s = result.summary
-    row("Layers OK", ", ".join(s.layers_ok) or "none")
-    row("Missing layers", ", ".join(s.layers_missing) or "none")
+
+    # "Layers OK"/"Layers missing" now spans all 13 names in s.layers
+    # (raster + vector combined) — 2026-08-24 (see DECISIONS.md same
+    # date, "AuditSummary refactor to layer-keyed dict"). Before this
+    # refactor these two rows were raster-only (built from
+    # layers_ok/layers_missing, which _build_summary() only ever
+    # populated from the rasters dict); vector status had its own
+    # separate found/missing rows further below. A vector's "error"
+    # status (found but unreadable) counts as "missing" here — this
+    # pair of rows has never distinguished error from missing on either
+    # side, raster or vector; that distinction is still visible in the
+    # per-vector-layer rows immediately below and in the full VECTOR
+    # LAYERS section earlier in the report.
+    layers_ok = sorted(name for name, ls in s.layers.items() if ls.status == "ok")
+    layers_not_ok = sorted(name for name, ls in s.layers.items() if ls.status != "ok")
+    row("Layers OK", ", ".join(layers_ok) or "none")
+    row("Layers missing", ", ".join(layers_not_ok) or "none")
+
     row("LC tiles (used)", f"{s.lc_tiles_used} / {s.lc_tiles_total}")
     row("Land cover area", f"{s.lc_total_area_km2:,.0f} km²")
     row("LC classes", s.lc_classes)
-    row("Wind files", s.n_wind_files)
 
-    range_labels = {
-        "solar_range": ("Solar PVOUT (kWh/m²/d)", "{0} – {1}"),
-        "elev_range": ("Elevation (m)", "{0:.0f} – {1:.0f}"),
-        "slope_range": ("Slope (°)", "{0:.1f} – {1:.1f}"),
-        "pop_range": ("Population (people/pixel)", "{0:.1f} – {1:.1f}"),
-        "seismic_range": ("Seismicity (hazard)", "{0:.4f} – {1:.4f}"),
+    _RASTER_RANGE_LABELS = {
+        "solar": ("Solar PVOUT (kWh/m²/d)", "{0} – {1}"),
+        "elevation": ("Elevation (m)", "{0:.0f} – {1:.0f}"),
+        "slope": ("Slope (°)", "{0:.1f} – {1:.1f}"),
+        "population": ("Population (people/pixel)", "{0:.1f} – {1:.1f}"),
+        "seismic": ("Seismicity (hazard)", "{0:.4f} – {1:.4f}"),
     }
-    for key, (label, fmt) in range_labels.items():
-        value = getattr(s, key)
-        if value:
-            row(label, fmt.format(*value))
+    for layer_name, (label, fmt) in _RASTER_RANGE_LABELS.items():
+        layer_summary = s.layers.get(layer_name)
+        if layer_summary is not None and layer_summary.value_range is not None:
+            row(label, fmt.format(*layer_summary.value_range))
 
+    wind_summary = s.layers.get("wind")
+    row("Wind files", wind_summary.file_count if wind_summary and wind_summary.file_count else 0)
+
+    # First time these rows are sourced from result.summary.layers
+    # instead of reading result.vectors directly — see DECISIONS.md
+    # 2026-08-24 "AuditSummary refactor to layer-keyed dict" for why
+    # this is a source/granularity change, not vectors appearing in
+    # the footer for the first time (they already did, since "vector
+    # layer audit depth", 2026-08-24 earlier the same day).
+    _VECTOR_STATUS_DISPLAY = {
+        "ok": "[OK] found",
+        "missing": "[--] missing",
+        "error": "[ERROR] found (unreadable)",
+    }
     for vname, label in _VECTOR_LABELS.items():
-        found = result.vectors.get(vname) is not None and result.vectors[vname].found
-        row(label, "[OK] found" if found else "[--] missing")
+        vector_summary = s.layers.get(vname)
+        status = vector_summary.status if vector_summary is not None else "missing"
+        row(label, _VECTOR_STATUS_DISPLAY[status])
+
     row("Power plants", s.total_plants)
     row("Installed capacity", f"{s.total_cap_mw:,.0f} MW")
     row("Alerts", s.n_alerts)
