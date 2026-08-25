@@ -28,11 +28,41 @@ countries (PRT, BRA); adding a new country requires adding its region
 code here (see the 9 codes in the module docstring above) — flagged
 explicitly rather than silently limited, since a KeyError on an
 unmapped country is intentional (see fetch_rivers()'s docstring).
+
+Zip internal layout — discovered live 2026-08-25 while validating
+clip_vector_to_country() against real downloaded data (see
+docs/DECISIONS.md same date, "data_acquisition activation"), NOT
+something the earlier curl-only verification could have caught: both
+zips nest their shapefile one directory level deep (e.g.
+"HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp") alongside unrelated
+top-level files (a tech-doc PDF). GDAL's vsizip auto-detection — what a
+plain gpd.read_file(zip_path) relies on, and what
+data_quality_audit/vector_inspection.py's inspect_vector_layer() does —
+does NOT reliably find a shapefile nested this way: confirmed live that
+gpd.read_file() raised pyogrio.errors.DataSourceError
+("not recognized as being in a supported file format") for BOTH the
+real HydroLAKES and HydroRIVERS downloads. This was a latent bug in the
+previous stage's fetchers (2026-08-25 "real fetchers for power_plants/
+wind/lakes/rivers") — invisible until real data existed to test
+against, since every prior test/inspection used non-zip fixtures for
+lakes/rivers.
+
+Fixed here by extracting the zip once at fetch time
+(_fetch_and_extract_shapefile below) and returning a direct path to the
+.shp file — not a zip:// or /vsizip/ internal-path string, which would
+just move the same nested-layout knowledge into every downstream reader
+(inspect_vector_layer() is generic across 7 vector layers; it should
+not need to know HydroSHEDS' internal zip structure). Idempotency now
+checks for the already-extracted .shp, not just the .zip, so a rerun
+after a successful extraction does no I/O at all; a rerun after a
+download that succeeded but crashed before extraction reuses the
+already-downloaded zip instead of re-fetching it.
 """
 
 from __future__ import annotations
 
 import logging
+import zipfile
 from pathlib import Path
 
 from geofrea.core.http_retry import get_with_retry
@@ -54,6 +84,69 @@ _COUNTRY_TO_REGION: dict[str, str] = {
 }
 
 
+def _fetch_and_extract_shapefile(
+    url: str, zip_path: Path, *, timeout: int, label: str
+) -> Path | None:
+    """Download `url` to `zip_path` if needed, then extract its shapefile.
+
+    Shared by fetch_lakes()/fetch_rivers() — both HydroSHEDS zips have
+    the same nested-shapefile-plus-extra-files layout (see module
+    docstring, "Zip internal layout"), so the download/extract/
+    idempotency logic is identical; only the URL and destination naming
+    differ per caller.
+
+    Args:
+        url: Source zip URL.
+        zip_path: Where to save the downloaded zip. Extraction target
+            is a sibling directory, `zip_path.parent / zip_path.stem`.
+        timeout: Per-request timeout in seconds (rivers tiles are
+            smaller than the lakes global file, so callers use
+            different values).
+        label: Human-readable name for log messages (e.g. "HydroLAKES").
+
+    Returns:
+        Path to the extracted .shp file, or None if the fetch,
+        extraction, or the extracted content itself failed/was
+        malformed (logged, not raised — same graceful-degradation
+        contract every other fetcher in this package follows).
+    """
+    extract_dir = zip_path.parent / zip_path.stem
+
+    already_extracted = sorted(extract_dir.rglob("*.shp")) if extract_dir.exists() else []
+    if len(already_extracted) == 1:
+        return already_extracted[0]
+
+    if not zip_path.exists():
+        try:
+            resp = get_with_retry(url, timeout=timeout)
+        except Exception as exc:  # noqa: BLE001 — one bad fetch must not abort acquisition
+            logger.warning("Failed to fetch %s: %s", label, exc)
+            return None
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+        zip_path.write_bytes(resp.content)
+
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(extract_dir)
+    except Exception as exc:  # noqa: BLE001 — malformed/corrupt zip must not abort acquisition
+        logger.warning("Failed to extract %s zip %s: %s", label, zip_path, exc)
+        return None
+
+    shp_matches = sorted(extract_dir.rglob("*.shp"))
+    if len(shp_matches) != 1:
+        logger.warning(
+            "Expected exactly one .shp under %s after extracting %s, found %d: %s",
+            extract_dir,
+            label,
+            len(shp_matches),
+            shp_matches,
+        )
+        return None
+
+    logger.info("%s extracted: %s", label, shp_matches[0])
+    return shp_matches[0]
+
+
 def fetch_lakes(outputs_dir: Path) -> Path | None:
     """Download the HydroLAKES global shapefile (820 MB), once.
 
@@ -66,25 +159,15 @@ def fetch_lakes(outputs_dir: Path) -> Path | None:
         outputs_dir: Root outputs directory (PhaseContext.outputs_dir).
 
     Returns:
-        Path to the saved ZIP, or None if the fetch failed (logged,
-        not raised).
+        Path to the extracted .shp file, or None if the fetch/extraction
+        failed (logged, not raised — see _fetch_and_extract_shapefile()).
     """
     dest_dir = Path(outputs_dir) / "_global" / "raw"
-    dest_path = dest_dir / "HydroLAKES_polys_v10_shp.zip"
+    zip_path = dest_dir / "HydroLAKES_polys_v10_shp.zip"
 
-    if dest_path.exists():
-        return dest_path
-
-    try:
-        resp = get_with_retry(_LAKES_GLOBAL_URL, timeout=300)
-    except Exception as exc:  # noqa: BLE001 — one bad fetch must not abort acquisition
-        logger.warning("Failed to fetch HydroLAKES: %s", exc)
-        return None
-
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest_path.write_bytes(resp.content)
-    logger.info("HydroLAKES saved: %s", dest_path)
-    return dest_path
+    return _fetch_and_extract_shapefile(
+        _LAKES_GLOBAL_URL, zip_path, timeout=300, label="HydroLAKES"
+    )
 
 
 def fetch_rivers(outputs_dir: Path, country_code: str) -> Path | None:
@@ -100,8 +183,8 @@ def fetch_rivers(outputs_dir: Path, country_code: str) -> Path | None:
             below does.
 
     Returns:
-        Path to the saved regional-tile ZIP, or None if the fetch
-        failed (logged, not raised).
+        Path to the extracted .shp file, or None if the fetch/extraction
+        failed (logged, not raised — see _fetch_and_extract_shapefile()).
 
     Raises:
         KeyError: If country_code is not in _COUNTRY_TO_REGION.
@@ -109,20 +192,9 @@ def fetch_rivers(outputs_dir: Path, country_code: str) -> Path | None:
     region = _COUNTRY_TO_REGION[country_code]
 
     dest_dir = Path(outputs_dir) / country_code / "raw"
-    dest_path = dest_dir / f"HydroRIVERS_v10_{region}_shp.zip"
-
-    if dest_path.exists():
-        return dest_path
-
+    zip_path = dest_dir / f"HydroRIVERS_v10_{region}_shp.zip"
     url = _RIVERS_TILE_URL_TEMPLATE.format(region=region)
 
-    try:
-        resp = get_with_retry(url, timeout=180)
-    except Exception as exc:  # noqa: BLE001 — one bad fetch must not abort acquisition
-        logger.warning("Failed to fetch HydroRIVERS tile '%s' for %s: %s", region, country_code, exc)
-        return None
-
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest_path.write_bytes(resp.content)
-    logger.info("HydroRIVERS tile '%s' saved: %s", region, dest_path)
-    return dest_path
+    return _fetch_and_extract_shapefile(
+        url, zip_path, timeout=180, label=f"HydroRIVERS tile '{region}' for {country_code}"
+    )

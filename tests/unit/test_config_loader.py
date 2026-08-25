@@ -68,8 +68,11 @@ def test_load_real_settings_yaml_validates():
     assert isinstance(result, SettingsFile)
     # Empty = run every country in parameters.json, per RunConfig's contract.
     assert result.run.countries == []
-    # No phase runner exists yet - every module flag is off.
+    # data_acquisition/data_quality_audit have real phase runners now
+    # (see docs/DECISIONS.md 2026-08-25 - data_acquisition activation);
+    # every flag is still off by default.
     assert set(result.run.phases.keys()) == {
+        "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
         "suitability_criteria",

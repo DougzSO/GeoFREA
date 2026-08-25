@@ -21,13 +21,118 @@ geometry.intersection(mainland_union), without an explicit bbox
 prefilter step). clip_vector_to_country() adds the bbox prefilter
 (gdf.cx[]) as a fast first pass, matching inspect_land_cover_tiles()'s
 two-step shape more closely than compute_protected_areas() does.
+
+read_clipped_to_country() was added 2026-08-25 (see DECISIONS.md same
+date - data_acquisition activation, its clip performance-validation
+finding): clip_vector_to_country() alone still requires the ENTIRE
+source file loaded into memory first (its own gdf.cx[] prefilter runs
+on an already-fully-read GeoDataFrame) — fine for the small synthetic
+fixtures every existing caller was tested against, but real HydroLAKES
+(820 MB, ~1.4M features) makes that first full read itself the
+bottleneck, independent of how fast the clip step is afterward.
+read_clipped_to_country() pushes the bbox filter down to the read
+itself (gpd.read_file(path, bbox=...)), which GDAL/OGR can satisfy
+using the file's own spatial index (confirmed live: shapefiles here
+report `fast_spatial_filter: True` via pyogrio.read_info()) without
+materializing out-of-bbox features in Python at all — clip_vector_to_
+country() still runs afterward for the exact (non-rectangular)
+intersection, on the now much smaller bbox-prefiltered result. This
+does not replace clip_vector_to_country() — callers that already have
+an in-memory GeoDataFrame (e.g. from a source that isn't a lazily-
+opened file) still use it directly.
+
+clip_vector_to_country()'s exact-intersection step was rewritten
+2026-08-25 to use shapely.STRtree instead of a plain vectorized
+.intersects() call (see DECISIONS.md same date, "clip_vector_to_
+country() exact-intersection bottleneck (STRtree fix)" for the full
+profiling that led here). Confirmed live against real HydroRIVERS/BRA
+data + the real GADM Brazil boundary (311,499 vertices after
+get_mainland_gdf()): the rectangular gdf.cx[] prefilter alone barely
+helps for a geometrically large/irregular country like Brazil (its
+bounding box alone captured 74% of ALL features in the South-America
+tile) — what actually made the naive approach catastrophically slow
+was testing every remaining candidate's .intersects() against that
+one large, complex polygon with no spatial index: measured ~150
+features/s. shapely.prepare() on the polygon did NOT help (same rate —
+the GEOS vectorized ufunc path does not appear to benefit from a
+pre-prepared scalar operand the way a per-row prepared-geometry loop
+would). shapely.STRtree(candidates).query(country_geom,
+predicate="intersects") measured ~300,000 features/s on the same real
+data — roughly a 2000x difference — because STRtree's own internal
+indexed traversal (not just a single bounding-box prefilter) prunes
+candidates BEFORE running the expensive exact predicate, whereas the
+naive approach ran the expensive predicate against literally every
+bbox-surviving candidate. The subsequent .intersection() (computing
+the actual cut geometry, not just yes/no) still runs on the
+STRtree-matched subset only — much smaller than the full candidate
+set, and prepared geometries don't accelerate geometry-producing ops
+the way they do predicates, so no further indexing was applied there.
+
+country_geom simplification, 2026-08-25 (same session as the STRtree
+fix above, added right after it): the STRtree fix made the membership
+*test* fast (seconds, not hours) but did not fix a second, independent
+cost — computing the actual `.intersection()` geometry for every
+matched feature. Confirmed live this was NOT a bug: real Brazil
+legitimately matches ~772,870 of the ~1.2M bbox-prefiltered HydroRIVERS
+`sa`-tile candidates (~48% of the whole continental tile) — verified
+by checking country_geom's own computed area (8,711,743 km2 vs
+Brazil's real ~8,515,767 km2, a normal ~2.3% GADM-vs-official
+difference, not an accidental South-America-wide geometry) and its
+bounds (matching Brazil's real extent, not the continent's). Real
+country boundaries can be extremely vertex-dense (Brazil: 311,499
+vertices after get_mainland_gdf()) — measured live that .intersection()
+against the unsimplified polygon ran at ~40 features/s, which at
+~772,870 matches would be ~5.4 hours, an order of magnitude worse than
+the STRtree fix's own 300,000 features/s for the predicate check alone.
+shapely.simplify(country_geom, tolerance=0.001, preserve_topology=True)
+— applied only to the clip boundary, never to the candidate features'
+own geometries (that would alter real returned data, not just the
+exclusion mask) — measured live: 311,499 -> 19,758 vertices (6.34% of
+original), .intersection() speed 40 -> 851 features/s (~21x), computed
+area distortion 0.0005% (8,711,743 vs 8,711,785 km2) — negligible for
+country-scale statistics/exclusion masks, not a meaningful precision
+loss for this use case. 0.001 degrees (~111m at the equator) is applied
+for geographic CRSs; an equivalent ~100m tolerance is applied for
+projected CRSs (meters), via _simplify_for_intersection()'s
+crs.is_geographic check — clip_vector_to_country() itself still accepts
+"any CRS" per its own docstring, so a fixed degrees-only tolerance would
+have been wrong for a projected-CRS caller.
+
+Threaded .intersection(), 2026-08-25 (same session, added right after
+the simplification fix above): even simplified, .intersection() on
+Brazil's real ~772,846 matched rivers features measured 1223s (~20.4
+min, ~632 features/s) — simplification made it ~21x faster than
+unsimplified, but a large/complex country's worst case was still
+minutes, not seconds. Confirmed live (not assumed) that shapely 2.0
+releases the GIL during its GEOS C calls: splitting the same real
+matched-feature array into N chunks and running shapely.intersection()
+on each chunk in a separate Python thread (concurrent.futures.
+ThreadPoolExecutor — threads, not processes: geometries are complex
+Python/GEOS objects, expensive to pickle across a process boundary,
+and threads need no such serialization since they share memory)
+measured near-linear speedup up to the machine's physical core count:
+4 workers -> 3.83x, 8 workers (= physical cores here) -> 7.08x, 16
+workers (= logical/hyperthreaded) -> 8.93x, diminishing past 8 as
+expected for CPU-bound work sharing physical cores. Every threaded run
+produced results identical to the single-threaded baseline (verified
+geometry-by-geometry, not just row counts). _intersection_threaded()
+below is only used above a minimum candidate count
+(_THREADED_INTERSECTION_MIN_FEATURES) — thread-pool setup/chunking
+overhead is not worth it for the small candidate counts every existing
+non-Brazil-scale caller and test fixture actually has.
 """
 
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
+import numpy as np
+import pyogrio
+import shapely
 
 
 def get_local_utm_crs(geometry: Any) -> str:
@@ -124,6 +229,92 @@ def detect_island_nation(gdf: gpd.GeoDataFrame, threshold_pct: float = 0.60) -> 
         return False
 
 
+# ~111m at the equator (geographic CRSs) / ~100m (projected CRSs, in
+# CRS units, assumed meters) — see module docstring, "country_geom
+# simplification, 2026-08-25", for the measured speed/precision
+# trade-off this specific value was chosen from (21x faster
+# .intersection(), 0.0005% area distortion on real Brazil data).
+_SIMPLIFY_TOLERANCE_DEG = 0.001
+_SIMPLIFY_TOLERANCE_M = 100.0
+
+
+def _simplify_for_intersection(geom: Any, crs: Any) -> Any:
+    """Simplify a clip-boundary geometry before using it in `.intersection()`.
+
+    Only ever applied to the COUNTRY polygon (the clip boundary), never
+    to the candidate features being clipped — simplifying the data
+    itself would silently alter what's returned, not just how fast the
+    exclusion mask is computed. See module docstring for the full
+    rationale and the real-data measurements behind the tolerance
+    values.
+
+    Args:
+        geom: The (already unioned) country geometry.
+        crs: The CRS `geom` is in — determines whether the degrees or
+            meters tolerance applies. `clip_vector_to_country()`
+            accepts "any CRS", so this cannot hardcode one unit.
+
+    Returns:
+        A simplified, topology-preserving version of `geom`. Invalid
+        input is repaired (`buffer(0)`) before simplification — GEOS
+        simplification of an invalid geometry can itself produce
+        invalid or unexpected output.
+    """
+    if not shapely.is_valid(geom):
+        geom = geom.buffer(0)
+
+    is_geographic = crs is not None and crs.is_geographic
+    tolerance = _SIMPLIFY_TOLERANCE_DEG if is_geographic else _SIMPLIFY_TOLERANCE_M
+    return shapely.simplify(geom, tolerance=tolerance, preserve_topology=True)
+
+
+# Below this many candidate geometries, thread-pool setup/chunking
+# overhead is not worth it — every existing non-Brazil-scale caller and
+# test fixture stays well under this and just takes the plain
+# single-threaded path. See module docstring, "Threaded .intersection(),
+# 2026-08-25".
+_THREADED_INTERSECTION_MIN_FEATURES = 10_000
+
+# Cap on thread-pool workers, 2026-08-25 (Douglas's explicit adjustment
+# after reviewing the real numbers): the measured speedup saturates
+# past physical core count — on the dev machine (8 physical / 16
+# logical cores), 4->8 workers gained +1.85x, but 8->16 only gained a
+# further +1.26x. os.cpu_count() returns LOGICAL cores, which on a
+# shared/CI environment can overstate real available parallelism (and
+# is what earlier let this default to 16 on the dev machine). There is
+# no portable, dependency-free way to query physical core count alone
+# (that needs e.g. psutil, not currently a project dependency) — a
+# fixed cap of 8 is the simple fallback Douglas asked for instead:
+# min(os.cpu_count(), 8) rather than os.cpu_count() unconditionally.
+_MAX_INTERSECTION_WORKERS = 8
+
+
+def _intersection_threaded(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
+    """Compute `shapely.intersection(geoms, clip_geom)`, parallelized across threads.
+
+    Falls back to the plain single-threaded vectorized call below
+    _THREADED_INTERSECTION_MIN_FEATURES. See module docstring for the
+    real-data speedup measurements (near-linear up to physical core
+    count, diminishing beyond it) and why threads, not processes.
+
+    Args:
+        geoms: Array of candidate geometries (already STRtree-matched —
+            this does no membership filtering itself).
+        clip_geom: The (already simplified) clip boundary.
+
+    Returns:
+        Array of intersection geometries, same order/length as `geoms`.
+    """
+    if len(geoms) < _THREADED_INTERSECTION_MIN_FEATURES:
+        return shapely.intersection(geoms, clip_geom)
+
+    n_workers = min(os.cpu_count() or 1, _MAX_INTERSECTION_WORKERS)
+    chunks = np.array_split(geoms, n_workers)
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        results = list(executor.map(lambda chunk: shapely.intersection(chunk, clip_geom), chunks))
+    return np.concatenate(results)
+
+
 def clip_vector_to_country(
     gdf: gpd.GeoDataFrame, country_gdf: gpd.GeoDataFrame
 ) -> gpd.GeoDataFrame:
@@ -136,6 +327,35 @@ def clip_vector_to_country(
     See module docstring for how this relates to
     inspect_land_cover_tiles() and compute_protected_areas().
 
+    The exact-intersection membership test uses shapely.STRtree, not a
+    plain vectorized `.intersects(country_geom)` — see module
+    docstring ("clip_vector_to_country()'s exact-intersection step was
+    rewritten 2026-08-25") for why: the bbox prefilter above alone is
+    not enough for a geometrically large/irregular country (a
+    rectangle is a loose bound), and the naive vectorized predicate
+    against one large complex polygon measured ~150 features/s on real
+    data (Brazil) versus ~300,000 features/s via STRtree — confirmed,
+    not assumed.
+
+    `country_geom` is also simplified (shapely.simplify(),
+    preserve_topology=True) before being used in `.intersection()` —
+    see module docstring ("country_geom simplification, 2026-08-25")
+    for why STRtree alone was not enough: real Brazil boundary data has
+    311,499 vertices, and a large/complex country like Brazil legitimately
+    matches a large fraction of a continental river dataset (confirmed,
+    not a bug — ~48% of the whole HydroRIVERS `sa` tile), so even after
+    STRtree cuts the *membership test* to seconds, computing the actual
+    cut geometry (`.intersection()`, which does not benefit from
+    STRtree/prepared-geometry the way a yes/no predicate does) for
+    hundreds of thousands of matched features against an unsimplified
+    311K-vertex polygon remained a real bottleneck on its own.
+
+    Above _THREADED_INTERSECTION_MIN_FEATURES matched candidates, the
+    final `.intersection()` call itself is parallelized across threads
+    (see module docstring, "Threaded .intersection(), 2026-08-25") —
+    confirmed near-linear speedup with real data, since shapely 2.0
+    releases the GIL during its GEOS calls.
+
     Args:
         gdf: Vector layer to clip, any CRS.
         country_gdf: Country polygon(s) to clip against — reprojected
@@ -143,8 +363,9 @@ def clip_vector_to_country(
 
     Returns:
         A new GeoDataFrame with geometries intersected against the
-        country polygon; features with no overlap are dropped, and
-        boundary-crossing features are cut to the country's extent.
+        (simplified) country polygon; features with no overlap are
+        dropped, and boundary-crossing features are cut to the
+        country's extent.
     """
     country_in_gdf_crs = (
         country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
@@ -158,6 +379,49 @@ def clip_vector_to_country(
     minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
     prefiltered = gdf.cx[minx:maxx, miny:maxy]
 
-    clipped = prefiltered[prefiltered.intersects(country_geom)].copy()
-    clipped["geometry"] = clipped.geometry.intersection(country_geom)
+    simplified_country_geom = _simplify_for_intersection(country_geom, gdf.crs)
+
+    tree = shapely.STRtree(prefiltered.geometry.values)
+    matched_positions = tree.query(simplified_country_geom, predicate="intersects")
+
+    clipped = prefiltered.iloc[matched_positions].copy()
+    clipped["geometry"] = gpd.GeoSeries(
+        _intersection_threaded(clipped.geometry.values, simplified_country_geom),
+        index=clipped.index,
+        crs=clipped.crs,
+    )
     return clipped[~clipped.geometry.is_empty]
+
+
+def read_clipped_to_country(
+    path: str | Path, country_gdf: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Read a vector file pre-filtered to a country's bbox, then exactly clip it.
+
+    See module docstring ("read_clipped_to_country() was added
+    2026-08-25") for why this exists alongside clip_vector_to_country()
+    rather than replacing it: this is for the common case of clipping a
+    large file that hasn't been read into memory yet (e.g. HydroLAKES),
+    where the read itself — not the clip — is the bottleneck.
+
+    Args:
+        path: Vector file to read. Any format geopandas/pyogrio
+            supports; the read-time bbox filter is fastest when the
+            format has its own spatial index (e.g. a shapefile's
+            .sbn/.sbx sidecars — GDAL reports this via
+            pyogrio.read_info()'s `fast_spatial_filter` capability, not
+            checked explicitly here since the bbox filter is still
+            correct, just not accelerated, without one).
+        country_gdf: Country polygon(s) to clip against.
+
+    Returns:
+        The same result clip_vector_to_country(gpd.read_file(path),
+        country_gdf) would produce — just without ever materializing
+        far-away features in memory.
+    """
+    file_crs = pyogrio.read_info(str(path))["crs"]
+    country_in_file_crs = country_gdf.to_crs(file_crs) if file_crs else country_gdf
+    bbox = tuple(country_in_file_crs.total_bounds)
+
+    gdf = gpd.read_file(str(path), bbox=bbox)
+    return clip_vector_to_country(gdf, country_gdf)

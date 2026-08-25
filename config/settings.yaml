@@ -23,11 +23,15 @@ run:
   countries: []
 
   # One flag per module, matching the "nome" values in
-  # docs/PROGRESS.json's "modulos" array (and the src/geofrea/<name>/
-  # package layout from Fase 1). All false: no phase runner exists yet
-  # (every module is still "documentado_nao_construido" per
-  # PROGRESS.json) — there is nothing to enable.
+  # docs/PROGRESS.json's "modulos"/"modulos_extra" arrays (and the
+  # src/geofrea/<name>/ package layout from Fase 1). data_acquisition
+  # and data_quality_audit have real phase runners, wired together
+  # (main.py, see docs/DECISIONS.md 2026-08-25 - data_acquisition
+  # activation) — both false here by default; the rest are still
+  # "documentado_nao_construido" per PROGRESS.json, nothing to enable
+  # yet.
   phases:
+    data_acquisition: false
     data_quality_audit: false
     grid_alignment: false
     suitability_criteria: false

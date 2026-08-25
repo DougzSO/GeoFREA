@@ -152,9 +152,23 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
 
     vectors: dict[str, dict] = {}
     for vname, vpath, clip, iucn_breakdown in _VECTOR_SPECS:
+        # Clip-result cache (2026-08-25, see DECISIONS.md same date -
+        # data_acquisition activation): only meaningful for clip=True
+        # layers (protected/lakes/rivers) — see vector_inspection.py's
+        # module docstring, "cache_path". clip=False layers pass
+        # cache_path=None, which inspect_vector_layer() simply ignores.
+        cache_path = (
+            context.outputs_dir / context.country_code / "processed" / f"{vname}_clipped.gpkg"
+            if clip
+            else None
+        )
         with timer(vname, timings):
             vectors[vname] = inspect_vector_layer(
-                vpath, country_gdf=inputs.country_gdf, clip=clip, iucn_breakdown=iucn_breakdown
+                vpath,
+                country_gdf=inputs.country_gdf,
+                clip=clip,
+                iucn_breakdown=iucn_breakdown,
+                cache_path=cache_path,
             )
 
     # ── Land cover ──────────────────────────────────────────────────

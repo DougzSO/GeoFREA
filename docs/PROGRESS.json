@@ -28,15 +28,15 @@
     },
     {
       "id": "solar_fetch_per_country_nao_confirmado",
-      "descricao": "Global Solar Atlas tem API real sem auth (api.globalsolaratlas.info), confirmada ao vivo para o arquivo mundial de PVOUT (curl, 2026-08-24). Padrao de URL POR PAIS nao foi decifrado — varias tentativas de nomenclatura retornaram vazio/404; precisaria inspecionar trafego real de navegador (DevTools), fora do que da pra fazer so com curl. Nao e um 'sem fonte', e um 'fonte confirmada, mecanismo por pais nao decifrado ainda'. solar continua local_only, sem fetch implementado.",
-      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers",
-      "status": "pendente"
+      "descricao": "RESOLVIDO (investigacao): padrao de URL por pais decifrado ao vivo 2026-08-25 — api.globalsolaratlas.info/download/{NomeDoPaisEmIngles} retorna catalogo JSON real por pais; .../download/{Pais}/{filename} redireciona (302) para S3 assinado, sem auth. Confirmado com download real de Portugal e PVOUT.tif valido dentro do zip (rasterio) do produto 'YearlyMonthlyTotals' (kWh/kWp/ANO). Verificacao de unidade feita em seguida: o arquivo JA EM USO localmente (database/raw/solar_potential/.../AvgDailyTotals/PVOUT.tif, produto DIFERENTE do catalogo) foi inspecionado via rasterio e confere com o que audit.py espera (3.30-4.83 sobre Portugal, dentro de _SOLAR_PVOUT_SANITY_RANGE=(1.0,10.0)) — SEM risco de inconsistencia nos resultados/baseline ja existentes. Achado de risco fica para uma FUTURA implementacao de fetch: o catalogo oferece os dois produtos (AvgDailyTotals vs YearlyMonthlyTotals) sem distincao obvia alem do nome do arquivo — usar o produto errado introduziria mismatch de unidade (~365x). NENHUM fetch foi implementado (instrucao explicita) — solar continua local_only. Implementacao e uma decisao separada, ainda pendente de autorizacao.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - solar (Global Solar Atlas): padrao de URL per-country decifrado; docs/DECISIONS.md 2026-08-25 - solar: unidade do PVOUT — arquivo ja em uso confere, achado de risco para fetch futuro",
+      "status": "resolvido_ver_decisions_md"
     },
     {
       "id": "seismic_fonte_nao_identificada",
-      "descricao": "Nenhuma fonte real foi identificada para 'seismic' em lugar nenhum do legado alem do nome de arquivo esperado (seismic_hazard_global.tif) e uma citacao vaga em README.md ('GAR / USGS source', sem URL). Diferente de solar (fonte confirmada, mecanismo incerto), aqui nem a fonte exata esta confirmada — investigar API antes de saber a fonte seria perda de tempo (instrucao explicita de Douglas). seismic continua local_only, sem fetch implementado, sem pesquisa de fonte feita ainda.",
-      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers",
-      "status": "pendente"
+      "descricao": "FECHADO — status final, nao uma pendencia em aberto. Fonte identificada 2026-08-25 via README.txt/LICENSE.txt encontrados junto ao arquivo raw local ja em uso pelo legado (database/raw/risks/seismic_hazard_global.tif) — GEM (Global Earthquake Model) Foundation, 'Global Seismic Hazard Map' v2023.1, PGA (10% prob. excedencia em 50 anos, Vs30 760-800m/s), licenca CC BY-NC-SA 4.0 (NAO comercial). Confirmado tecnicamente via rasterio (EPSG:4326, ~0.05 grau, extensao global). Decisao de Douglas: identificada MAS NAO automatizada, por restricao de licenca (nao-comercial) — nao por falta de caminho tecnico (existe, via Zenodo). seismic continua sendo usado localmente/manualmente, como ja era, sem mudanca de codigo. Isto e definitivo para esta fonte, nao uma pendencia de implementacao futura como solar/protected.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - seismic: fonte identificada (GEM Global Seismic Hazard Map v2023.1); docs/DECISIONS.md 2026-08-25 - seismic: fetch automatizado descartado por restricao de licenca",
+      "status": "resolvido_ver_decisions_md"
     }
   ],
   "baseline": {
@@ -56,7 +56,7 @@
       "nome": "data_quality_audit",
       "fase_legado": 1,
       "status": "construido",
-      "observacao": "logica de auditoria completa (orchestrator + schemas + testes), incluindo inspecao vetorial profunda dos 7 layers vetoriais (borders/admin1/grid/roads/protected/lakes/rivers, ver docs/DECISIONS.md 2026-08-24 - vector layer audit depth), mas roda com AuditInputs() vazio ate data_acquisition ser conectado — ver docs/DECISIONS.md 2026-08-24 - data_acquisition skeleton."
+      "observacao": "logica de auditoria completa (orchestrator + schemas + testes), incluindo inspecao vetorial profunda dos 7 layers vetoriais (borders/admin1/grid/roads/protected/lakes/rivers, ver docs/DECISIONS.md 2026-08-24 - vector layer audit depth). Wiring real com data_acquisition ativado 2026-08-25 (main.py's _audit_run le context.prior_results['data_acquisition'] de verdade) — ver docs/DECISIONS.md 2026-08-25 - data_acquisition activation. Continua funcionando standalone (data_acquisition desabilitado) com AuditInputs() vazio, comportamento preservado."
     },
     { "nome": "grid_alignment", "fase_legado": 2, "status": "documentado_nao_construido" },
     { "nome": "suitability_criteria", "fase_legado": 2, "status": "documentado_nao_construido" },
@@ -80,8 +80,24 @@
       "nome": "data_acquisition",
       "fase_legado": null,
       "status": "parcialmente_implementado",
-      "observacao": "4 de 14 camadas (power_plants, wind, lakes, rivers) tem fetch real implementado e verificado ao vivo, provenance='fetched' — power_plants (WRI/GPPD, commit SHA fixado), wind (Global Wind Atlas, por pais), lakes (HydroLAKES, arquivo global unico), rivers (HydroRIVERS, tile regional). protected tem fetcher completo e testado (fetchers/protected_planet.py) mas provenance continua 'local_only' — gated por token manual (PROTECTED_PLANET_API_TOKEN), nao ativado. borders/admin1/land_cover/elevation/population/grid/roads seguem esqueleto (sem fetch, herdado da etapa anterior). solar e seismic seguem local_only sem fetch, ver contradicoes_pendentes. settings.yaml/main.py wiring (passo 5) continua bloqueado ate esta etapa ser revisada.",
-      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers"
+      "observacao": "4 de 14 camadas (power_plants, wind, lakes, rivers) tem fetch real implementado e verificado ao vivo, provenance='fetched' — power_plants (WRI/GPPD, commit SHA fixado), wind (Global Wind Atlas, por pais), lakes (HydroLAKES, arquivo global unico), rivers (HydroRIVERS, tile regional). protected tem fetcher completo e testado (fetchers/protected_planet.py) mas provenance continua 'local_only' — gated por token manual (PROTECTED_PLANET_API_TOKEN), nao ativado. borders/admin1/land_cover/elevation/population/grid/roads seguem esqueleto (sem fetch, herdado da etapa anterior). solar e seismic seguem local_only sem fetch, ver contradicoes_pendentes. Wiring com data_quality_audit ATIVADO 2026-08-25 (settings.yaml tem a chave 'data_acquisition' em run.phases; main.py's _audit_run le o output real; UnwiredPhasesError removido, nao apenas relaxado — justificativa completa em DECISIONS.md). Validacao com dados reais (2026-08-25) encontrou e corrigiu um bug real: os zips do HydroSHEDS (lakes/rivers) aninham o shapefile numa subpasta + arquivo extra (PDF), o que quebrava gpd.read_file() direto no zip (confirmado ao vivo para os dois); fetchers/hydrosheds.py agora extrai o zip e retorna o .shp direto. Tambem adicionado, por decisao explicita de Douglas: leitura com filtro bbox em tempo de leitura (geo_utils.read_clipped_to_country()) + cache em disco do resultado ja clipado por pais/camada (vector_inspection.py's cache_path) — combinacao a ser reaplicada em qualquer camada futura com arquivo global grande, nao so lakes/rivers/protected. Validacao real de rivers/BRA encontrou e corrigiu um segundo bug real: clip_vector_to_country() travava (2h21min sem terminar) por falta de indice espacial no predicate de intersecao + intersection() contra poligono de pais nao-simplificado (Brasil, 311.499 vertices). Corrigido com shapely.STRtree (predicate) + shapely.simplify() no poligono do pais (nunca nas feicoes) + paralelizacao com ThreadPoolExecutor no passo de intersection() (cap de 8 workers, ajustado por Douglas de os.cpu_count() logico para um fallback de nucleos fisicos). Reteste real fim-a-fim: 191,63s (~3,19min), vs. 2h21min+ travado originalmente. Ver DECISIONS.md para o diagnostico completo e o desvio de instrução registrado (paralelizacao foi implementada antes de autorizacao explicita, corrigido nesta mesma etapa).",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers; docs/DECISIONS.md 2026-08-25 - data_acquisition activation; docs/DECISIONS.md 2026-08-25 - clip_vector_to_country() exact-intersection bottleneck (STRtree + simplify + threading)"
+    }
+  ],
+  "modulos_futuros_backlog": [
+    {
+      "id": "biomassa_mitigacao_transporte",
+      "titulo": "Biomassa como vetor de mitigacao de CO2 para demanda do setor de transportes (biometano, biodiesel)",
+      "estagio": "ideia_registrada",
+      "observacao": "Sem desenho metodologico ainda, sem prioridade definida. Distinto da fase 'Transport Decarbonisation' excluida permanentemente (docs/DECISIONS.md 2026-08-20) — aquela era sobre eletrificacao de frota/demanda; esta e sobre biomassa como fonte de mitigacao (producao de biometano/biodiesel). Ver docs/DECISIONS.md 2026-08-25 para a distincao explicita.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - biomassa como mitigacao de CO2 para transporte e resposta a curtailment — novas ideias de roadmap"
+    },
+    {
+      "id": "biomassa_resposta_curtailment",
+      "titulo": "Biomassa como resposta a curtailment de solar/eolica com aumento de penetracao renovavel",
+      "estagio": "ideia_registrada",
+      "observacao": "Sem desenho metodologico ainda, sem prioridade definida. Sobreposicao conceitual com artigo academico de Douglas em desenvolvimento (curtailment como deficit de mitigacao de CO2 no Brasil, dados ONS, cenarios EPE/PTE 2050) — trabalho relacionado, fora do GeoFREA. Ao desenhar este modulo, considerar que em grid hidro-dominado o emissor marginal pode ser hidreletrico quase-zero-emissao, nao necessariamente fossil (discussao ja validada nesse outro trabalho).",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - biomassa como mitigacao de CO2 para transporte e resposta a curtailment — novas ideias de roadmap"
     }
   ]
 }

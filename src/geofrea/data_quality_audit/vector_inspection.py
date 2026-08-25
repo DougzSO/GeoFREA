@@ -46,6 +46,25 @@ compute_protected_areas()'s own normalization — see
 _iucn_category_breakdown()'s docstring for the "Not Reported"/"Not
 Applicable"/"Not Assigned" and NaN-handling details (DECISIONS.md
 2026-08-24 "IUCN category normalization fix").
+
+`cache_path` (2026-08-25, see DECISIONS.md same date - data_acquisition
+activation): added after a real-data validation run measured
+gpd.read_file() on the real 820 MB HydroLAKES file as the actual
+bottleneck for `clip=True` layers, independent of the clip step itself
+— see core/geo_utils.py's read_clipped_to_country() for the read-time
+bbox-filter half of the fix. `cache_path` is the second half: when
+given (and `clip=True`, `country_gdf` is not None), the ALREADY-clipped
+result is saved to (and, on a later call, loaded straight back from)
+one on-disk file per country/layer, so a huge global source file is
+read at most once per country ever, not once per audit run. Cache
+invalidation is manual (delete the file) — the same convention
+data_acquisition's own fetchers already use for their own idempotency
+checks, not a new one invented here. A cache-WRITE failure is logged
+and swallowed, not raised: caching is a pure optimization, so failing
+to persist one must not turn an otherwise-successful inspection into an
+error result. Only wired in for `clip=True` layers (protected/lakes/
+rivers) by audit.py — `clip=False` layers are already country-scoped
+small files at the source, nothing there is large enough to need it.
 """
 
 from __future__ import annotations
@@ -56,7 +75,7 @@ from typing import Any
 
 import geopandas as gpd
 
-from geofrea.core.geo_utils import clip_vector_to_country, get_local_utm_crs
+from geofrea.core.geo_utils import get_local_utm_crs, read_clipped_to_country
 
 logger = logging.getLogger("geofrea.data_quality_audit.vector_inspection")
 
@@ -65,12 +84,36 @@ logger = logging.getLogger("geofrea.data_quality_audit.vector_inspection")
 _IUCN_CATEGORY_COLUMNS = ("IUCN_CAT", "iucn_cat", "IUCN", "DESIGNATION")
 
 
+def _read_clipped_with_cache(
+    path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path | None
+) -> gpd.GeoDataFrame:
+    """read_clipped_to_country(), backed by an on-disk cache keyed by cache_path.
+
+    See module docstring, "cache_path", for the full rationale. On a
+    cache hit, `path` (the large source file) is never read at all.
+    """
+    if cache_path is not None and Path(cache_path).exists():
+        return gpd.read_file(str(cache_path))
+
+    clipped = read_clipped_to_country(path, country_gdf)
+
+    if cache_path is not None:
+        try:
+            Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+            clipped.to_file(cache_path, driver="GPKG")
+        except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail the inspection
+            logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
+
+    return clipped
+
+
 def inspect_vector_layer(
     path: Path | None,
     country_gdf: gpd.GeoDataFrame | None = None,
     *,
     clip: bool = True,
     iucn_breakdown: bool = False,
+    cache_path: Path | None = None,
 ) -> dict[str, Any]:
     """Read metadata and structural statistics from a single vector file.
 
@@ -92,6 +135,10 @@ def inspect_vector_layer(
         iucn_breakdown: If True, populate attribute_breakdown by
             grouping features on whichever IUCN category column is
             present. Only meaningful for `protected`.
+        cache_path: Where to persist/read back the already-clipped
+            result, or None to skip caching entirely (always re-derive
+            from `path`). Only consulted when clip=True and
+            country_gdf is given — see module docstring, "cache_path".
 
     Returns:
         Dict matching VectorLayerInspection's fields.
@@ -120,11 +167,11 @@ def inspect_vector_layer(
     result["size_mb"] = round(path.stat().st_size / 1e6, 1)
 
     try:
-        gdf = gpd.read_file(str(path))
-
-        if clip and country_gdf is not None and not gdf.empty:
-            gdf = clip_vector_to_country(gdf, country_gdf)
+        if clip and country_gdf is not None:
+            gdf = _read_clipped_with_cache(path, country_gdf, cache_path)
             result["clipped_to_country"] = True
+        else:
+            gdf = gpd.read_file(str(path))
 
         result["crs"] = str(gdf.crs) if gdf.crs else None
         result["n_features"] = len(gdf)

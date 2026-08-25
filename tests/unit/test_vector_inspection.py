@@ -156,3 +156,79 @@ def test_inspect_vector_layer_iucn_breakdown_none_when_no_category_column(tmp_pa
     result = inspect_vector_layer(path, clip=False, iucn_breakdown=True)
 
     assert result["attribute_breakdown"] is None
+
+
+# ─── cache_path (2026-08-25, see DECISIONS.md same date -
+# data_acquisition activation) ───
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_writes_cache_on_first_call(tmp_path):
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    path = tmp_path / "polygons.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(
+        path, driver="GeoJSON"
+    )
+    cache_path = tmp_path / "cache" / "lakes_clipped.gpkg"
+
+    result = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+
+    assert result["n_features"] == 1
+    assert cache_path.exists()
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_uses_cache_without_touching_source_on_second_call(tmp_path):
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    path = tmp_path / "polygons.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(
+        path, driver="GeoJSON"
+    )
+    cache_path = tmp_path / "cache" / "lakes_clipped.gpkg"
+
+    first = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    assert cache_path.exists()
+
+    # Corrupt the source file — a second call must not need to read it
+    # at all if the cache is used, so this must still succeed cleanly.
+    path.write_text("this is not valid geojson", encoding="utf-8")
+
+    second = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+
+    assert second["error"] is None
+    assert second["n_features"] == first["n_features"] == 1
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_cache_path_none_never_writes_a_cache(tmp_path):
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    path = tmp_path / "polygons.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(
+        path, driver="GeoJSON"
+    )
+
+    inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=None)
+
+    # No cache directory should have been created anywhere under tmp_path.
+    assert list(tmp_path.rglob("*.gpkg")) == []
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_cache_write_failure_does_not_fail_the_inspection(tmp_path):
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    path = tmp_path / "polygons.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(
+        path, driver="GeoJSON"
+    )
+    # A file (not a directory) where the cache's parent directory needs
+    # to be — mkdir(parents=True) will fail, exercising the swallowed
+    # cache-write-failure path without needing to mock anything.
+    blocking_file = tmp_path / "cache_parent_is_a_file"
+    blocking_file.write_text("not a directory", encoding="utf-8")
+    cache_path = blocking_file / "lakes_clipped.gpkg"
+
+    result = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+
+    assert result["error"] is None
+    assert result["n_features"] == 1
+    assert not cache_path.exists()
