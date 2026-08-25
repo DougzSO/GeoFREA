@@ -1,8 +1,16 @@
-"""Unit tests for geofrea.data_acquisition.phase (structure-only skeleton).
+"""Unit tests for geofrea.data_acquisition.phase.
 
-No fetch/download logic exists yet (see phase.py's module docstring),
-so these tests only confirm the structural contract: a valid
-AcquisitionResult with the expected layer registry, all paths None.
+As of 2026-08-25 (see docs/DECISIONS.md same date, "real fetchers for
+power_plants/wind/lakes/rivers"), run_acquisition_phase() calls real
+fetcher functions for 4 layers — every test in this file must NOT hit
+the real network. The `_no_network_fetchers` autouse fixture below
+monkeypatches all 4 fetcher names in the `phase` module to return None
+by default (matching these functions' own documented behavior when a
+real fetch fails — see fetchers/*.py), so every existing structural
+test keeps working unchanged: "no real fetch happens in this test"
+looks identical to "the fetch failed" from run_acquisition_phase()'s
+point of view. Tests that specifically exercise the wiring itself
+override individual fetchers to return a real value.
 """
 
 from pathlib import Path
@@ -11,11 +19,20 @@ import pytest
 
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import PhaseContext
+from geofrea.data_acquisition import phase as phase_module
 from geofrea.data_acquisition.phase import _LAYER_REGISTRY, run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
+
+_FETCHER_NAMES = ("fetch_power_plants", "fetch_wind", "fetch_lakes", "fetch_rivers")
+
+
+@pytest.fixture(autouse=True)
+def _no_network_fetchers(monkeypatch):
+    for name in _FETCHER_NAMES:
+        monkeypatch.setattr(phase_module, name, lambda *args, **kwargs: None)
 
 
 def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
@@ -38,7 +55,11 @@ def test_run_acquisition_phase_returns_valid_result(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_every_layer_path_is_none(tmp_path):
+def test_run_acquisition_phase_every_layer_path_is_none_when_fetchers_fail(tmp_path):
+    # With every real fetcher mocked to return None (the
+    # _no_network_fetchers default — matches how these functions
+    # actually behave on a real network failure, see fetchers/*.py),
+    # every AcquiredLayer.path stays None regardless of provenance.
     result = run_acquisition_phase(_context(tmp_path))
 
     assert all(layer.path is None for layer in result.layers)
@@ -92,12 +113,14 @@ def test_run_acquisition_phase_reads_country_code_from_context(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_provenance_split_matches_legacy_download_methods(tmp_path):
-    # geoworld_framework's DataFetcher has exactly 6 download_* methods
-    # (gadm, land_cover, elevation, worldpop, osm_grid, osm_roads) —
-    # borders/admin1 share the GADM download, so that's 6 distinct
-    # fetched layers here (admin1 reuses the same download as borders,
-    # not a 7th method) plus 8 local_only layers with no fetch method.
+def test_run_acquisition_phase_provenance_split_2026_08_25(tmp_path):
+    # Updated 2026-08-25 (see DECISIONS.md same date, "real fetchers
+    # for power_plants/wind/lakes/rivers"): power_plants/wind/lakes/
+    # rivers moved from local_only to fetched — real, live-verified
+    # fetchers now exist for them. protected keeps a real fetcher too
+    # (fetchers/protected_planet.py) but its provenance stays
+    # local_only, gated behind a manual API token — not activated.
+    # solar/seismic stay local_only, no confirmed automatable source.
     result = run_acquisition_phase(_context(tmp_path))
 
     fetched = {layer.layer_name for layer in result.layers if layer.provenance == "fetched"}
@@ -105,13 +128,68 @@ def test_run_acquisition_phase_provenance_split_matches_legacy_download_methods(
         layer.layer_name for layer in result.layers if layer.provenance == "local_only"
     }
 
-    assert fetched == {"borders", "admin1", "land_cover", "elevation", "population", "grid", "roads"}
-    assert local_only == {
+    assert fetched == {
+        "borders",
+        "admin1",
+        "land_cover",
+        "elevation",
+        "population",
+        "grid",
+        "roads",
         "wind",
-        "protected",
-        "solar",
         "lakes",
         "rivers",
-        "seismic",
         "power_plants",
     }
+    assert local_only == {"protected", "solar", "seismic"}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("layer_name", ["power_plants", "wind", "lakes", "rivers"])
+def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
+    tmp_path, monkeypatch, layer_name
+):
+    fake_path = tmp_path / f"{layer_name}.fake"
+    handler_name = {
+        "power_plants": "fetch_power_plants",
+        "wind": "fetch_wind",
+        "lakes": "fetch_lakes",
+        "rivers": "fetch_rivers",
+    }[layer_name]
+    monkeypatch.setattr(phase_module, handler_name, lambda *args, **kwargs: fake_path)
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    layers_by_name = {layer.layer_name: layer for layer in result.layers}
+    assert layers_by_name[layer_name].path == fake_path
+    assert result.summary.layers_resolved == 1
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_does_not_call_fetchers_for_unrelated_layers(tmp_path, monkeypatch):
+    # Only power_plants/wind/lakes/rivers should ever invoke a fetcher
+    # — every other layer_name, including protected (fetcher exists,
+    # not wired in), must never trigger a call.
+    called = []
+    monkeypatch.setattr(
+        phase_module, "fetch_power_plants", lambda *a, **k: called.append("power_plants") or None
+    )
+
+    run_acquisition_phase(_context(tmp_path))
+
+    assert called == ["power_plants"]
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_path, monkeypatch):
+    # hydrosheds.fetch_rivers() deliberately raises KeyError for a
+    # country outside _COUNTRY_TO_REGION (a configuration gap, not a
+    # transient failure — see phase.py's _FETCHED_LAYER_HANDLERS
+    # comment) — this phase must NOT swallow it.
+    def _raise_unmapped(*args, **kwargs):
+        raise KeyError("XXX")
+
+    monkeypatch.setattr(phase_module, "fetch_rivers", _raise_unmapped)
+
+    with pytest.raises(KeyError):
+        run_acquisition_phase(_context(tmp_path))

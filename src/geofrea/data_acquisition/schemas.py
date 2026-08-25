@@ -1,10 +1,14 @@
-"""Pydantic schemas for the data_acquisition phase — STRUCTURE ONLY.
+"""Pydantic schemas for the data_acquisition phase.
 
 This module defines the acquisition contract; it contains no fetch/
-download logic (see phase.py). Every AcquiredLayer produced by this
-stage's run_acquisition_phase() has path=None — nothing is actually
-resolved yet. See docs/DECISIONS.md 2026-08-24 (data_acquisition
-skeleton) for the rationale and the open gaps flagged below.
+download logic itself (see phase.py and fetchers/). As of 2026-08-25
+(see docs/DECISIONS.md same date, "real fetchers for power_plants/
+wind/lakes/rivers"), 4 of the 14 AcquiredLayer entries
+run_acquisition_phase() produces can have a real `path` — the other
+10 still always have path=None/paths=[] (see phase.py's module
+docstring for exactly which and why). See docs/DECISIONS.md
+2026-08-24 (data_acquisition skeleton) for the original rationale and
+the open gaps flagged below, most still unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT

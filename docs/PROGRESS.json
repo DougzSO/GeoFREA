@@ -1,6 +1,6 @@
 {
   "fase_atual": "0.5",
-  "ultima_atualizacao": "2026-08-24",
+  "ultima_atualizacao": "2026-08-25",
   "contradicoes_pendentes": [
     {
       "id": "iucn_categorias",
@@ -25,6 +25,18 @@
       "descricao": "RESOLVIDO: AuditSummary trocou os campos flat (layers_ok/layers_missing/n_wind_files/*_range) por um unico campo layers: dict[str, RasterLayerSummary | VectorLayerSummary] (uniao discriminada, design (a)), cobrindo as 13 chaves de AuditResult.rasters+vectors combinadas. land_cover/power_plants continuam como campos dedicados, fora de layers. Migracao limpa, sem alias/campo depreciado (grep de consumidores confirmou zero uso externo ao modulo data_quality_audit).",
       "referencia": "docs/DECISIONS.md 2026-08-24 - AuditSummary refactor to layer-keyed dict",
       "status": "resolvido"
+    },
+    {
+      "id": "solar_fetch_per_country_nao_confirmado",
+      "descricao": "Global Solar Atlas tem API real sem auth (api.globalsolaratlas.info), confirmada ao vivo para o arquivo mundial de PVOUT (curl, 2026-08-24). Padrao de URL POR PAIS nao foi decifrado — varias tentativas de nomenclatura retornaram vazio/404; precisaria inspecionar trafego real de navegador (DevTools), fora do que da pra fazer so com curl. Nao e um 'sem fonte', e um 'fonte confirmada, mecanismo por pais nao decifrado ainda'. solar continua local_only, sem fetch implementado.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers",
+      "status": "pendente"
+    },
+    {
+      "id": "seismic_fonte_nao_identificada",
+      "descricao": "Nenhuma fonte real foi identificada para 'seismic' em lugar nenhum do legado alem do nome de arquivo esperado (seismic_hazard_global.tif) e uma citacao vaga em README.md ('GAR / USGS source', sem URL). Diferente de solar (fonte confirmada, mecanismo incerto), aqui nem a fonte exata esta confirmada — investigar API antes de saber a fonte seria perda de tempo (instrucao explicita de Douglas). seismic continua local_only, sem fetch implementado, sem pesquisa de fonte feita ainda.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers",
+      "status": "pendente"
     }
   ],
   "baseline": {
@@ -67,9 +79,9 @@
     {
       "nome": "data_acquisition",
       "fase_legado": null,
-      "status": "esqueleto_implementado",
-      "observacao": "sem logica de fetch/download real ainda (sem HTTP, SDK ou leitura de .env); nao corresponde a nenhuma das 9 fases legadas de 'modulos' — e infraestrutura pre-Fase-1, consolidando o que no legado ficava dividido entre main.py e DataOrchestrator.",
-      "referencia": "docs/DECISIONS.md 2026-08-24 - data_acquisition skeleton"
+      "status": "parcialmente_implementado",
+      "observacao": "4 de 14 camadas (power_plants, wind, lakes, rivers) tem fetch real implementado e verificado ao vivo, provenance='fetched' — power_plants (WRI/GPPD, commit SHA fixado), wind (Global Wind Atlas, por pais), lakes (HydroLAKES, arquivo global unico), rivers (HydroRIVERS, tile regional). protected tem fetcher completo e testado (fetchers/protected_planet.py) mas provenance continua 'local_only' — gated por token manual (PROTECTED_PLANET_API_TOKEN), nao ativado. borders/admin1/land_cover/elevation/population/grid/roads seguem esqueleto (sem fetch, herdado da etapa anterior). solar e seismic seguem local_only sem fetch, ver contradicoes_pendentes. settings.yaml/main.py wiring (passo 5) continua bloqueado ate esta etapa ser revisada.",
+      "referencia": "docs/DECISIONS.md 2026-08-25 - real fetchers for power_plants/wind/lakes/rivers"
     }
   ]
 }
