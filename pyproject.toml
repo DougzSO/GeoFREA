@@ -23,6 +23,13 @@ dev = [
     "pytest",
     "ruff",
 ]
+# Soft dependency — raster_inspection.py's inspect_land_cover_tiles()
+# uses tqdm for a progress bar when it's installed and falls back to a
+# no-op passthrough otherwise (see that module's docstring). Not in
+# `dependencies`: nothing breaks without it, so it stays opt-in.
+progress = [
+    "tqdm",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
