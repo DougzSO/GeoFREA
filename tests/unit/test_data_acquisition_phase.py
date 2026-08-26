@@ -145,6 +145,44 @@ def test_run_acquisition_phase_provenance_split_2026_08_25(tmp_path):
 
 
 @pytest.mark.unit
+def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
+    # fetch_status (AcquiredLayer, schemas.py — a computed field, not
+    # stored) answers "is there real fetch code wired in today", which
+    # provenance deliberately does not (see the test above and
+    # docs/DECISIONS.md 2026-08-26, "fetch_status computed field").
+    # implemented: the 4 layers with a real handler in
+    # _FETCHED_LAYER_HANDLERS. implemented_not_activated: protected
+    # only — fetcher complete and tested (fetchers/protected_planet.py)
+    # but gated behind a manual API token. not_implemented: the other
+    # 9 — the 7 skeleton layers (still no fetch code at all) plus
+    # solar/seismic (no confirmed automatable source, decided not to
+    # pursue).
+    result = run_acquisition_phase(_context(tmp_path))
+
+    by_status: dict[str, set[str]] = {
+        "implemented": set(),
+        "implemented_not_activated": set(),
+        "not_implemented": set(),
+    }
+    for layer in result.layers:
+        by_status[layer.fetch_status].add(layer.layer_name)
+
+    assert by_status["implemented"] == {"power_plants", "wind", "lakes", "rivers"}
+    assert by_status["implemented_not_activated"] == {"protected"}
+    assert by_status["not_implemented"] == {
+        "borders",
+        "admin1",
+        "land_cover",
+        "elevation",
+        "population",
+        "grid",
+        "roads",
+        "solar",
+        "seismic",
+    }
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("layer_name", ["power_plants", "wind", "lakes", "rivers"])
 def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     tmp_path, monkeypatch, layer_name

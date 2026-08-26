@@ -49,7 +49,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 # Single source of truth for which layers are genuinely multi-file (see
 # AcquiredLayer's module/field docstrings, "wind vs. land_cover").
@@ -57,6 +57,27 @@ from pydantic import BaseModel, ConfigDict, model_validator
 # redundant per-registry-entry flag (see DECISIONS.md 2026-08-24 -
 # path/paths source-of-truth consolidation).
 MULTI_FILE_LAYER_NAMES: frozenset[str] = frozenset({"land_cover"})
+
+# Single source of truth for AcquiredLayer.fetch_status (see that
+# field's docstring). Canonically this is "which layer_names does
+# phase.py's _FETCHED_LAYER_HANDLERS dispatch to a real fetcher" — but
+# that dict lives in phase.py, which already imports this module, so
+# mirroring it here (rather than importing phase.py from schemas.py)
+# avoids a circular import. phase.py asserts at import time that
+# set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, so the
+# two cannot silently drift apart.
+IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
+    {"power_plants", "wind", "lakes", "rivers"}
+)
+
+# protected (WDPA) has a complete, tested fetcher
+# (fetchers/protected_planet.py) that is deliberately not wired into
+# _FETCHED_LAYER_HANDLERS — gated behind a manual API token, not a
+# missing implementation (see that module's docstring and
+# docs/DECISIONS.md 2026-08-25). It is neither "implemented" (no
+# handler dispatches to it) nor plain "not_implemented" (the fetcher
+# exists and is tested) — hence the third fetch_status value.
+IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES: frozenset[str] = frozenset({"protected"})
 
 
 class CrsMetadata(BaseModel):
@@ -105,6 +126,9 @@ class AcquiredLayer(BaseModel):
             download_* methods (gadm, land_cover, elevation, worldpop,
             osm_grid, osm_roads); solar/lakes/rivers/seismic/protected/
             power_plants have none and must be pre-placed on disk.
+            Deliberately unchanged in meaning by fetch_status below —
+            provenance is about intended/eventual source, not today's
+            execution state (see fetch_status for that).
         auth_required: Whether the (future) fetch for this layer needs
             credentials. True only for land_cover (Terrascope) per the
             legacy audit — every other fetched source (GADM, Copernicus
@@ -130,6 +154,19 @@ class AcquiredLayer(BaseModel):
             MULTI_FILE_LAYER_NAMES — enforced by this model's
             validator. Always [] in this skeleton.
         crs_metadata: Reserved for future CRS/reprojection bookkeeping.
+        fetch_status: Computed, not stored — "implemented" if
+            layer_name has a real fetcher wired into phase.py's
+            _FETCHED_LAYER_HANDLERS (power_plants/wind/lakes/rivers
+            today); "implemented_not_activated" if a complete, tested
+            fetcher exists but is deliberately not wired in (protected
+            only, see IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES); otherwise
+            "not_implemented". Orthogonal to provenance: provenance
+            says where a layer would come from if fetched, fetch_status
+            says whether that fetch actually happens today. A computed
+            property rather than a constructor field so existing
+            AcquiredLayer(...) call sites (tests, adapter.py) don't need
+            to pass it — see docs/DECISIONS.md 2026-08-26 "fetch_status
+            computed field".
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -142,6 +179,18 @@ class AcquiredLayer(BaseModel):
     path: Path | None = None
     paths: list[Path] = []
     crs_metadata: CrsMetadata | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def fetch_status(
+        self,
+    ) -> Literal["implemented", "implemented_not_activated", "not_implemented"]:
+        """See the field docstring above — derived from layer_name alone."""
+        if self.layer_name in IMPLEMENTED_FETCH_LAYER_NAMES:
+            return "implemented"
+        if self.layer_name in IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES:
+            return "implemented_not_activated"
+        return "not_implemented"
 
     @model_validator(mode="after")
     def _check_path_paths_match_layer_kind(self) -> AcquiredLayer:

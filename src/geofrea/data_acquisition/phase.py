@@ -61,6 +61,7 @@ from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rive
 from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
 from geofrea.data_acquisition.fetchers.wind import fetch_wind
 from geofrea.data_acquisition.schemas import (
+    IMPLEMENTED_FETCH_LAYER_NAMES,
     MULTI_FILE_LAYER_NAMES,
     AcquiredLayer,
     AcquisitionResult,
@@ -85,6 +86,18 @@ _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
     "lakes": lambda ctx: fetch_lakes(ctx.outputs_dir),
     "rivers": lambda ctx: fetch_rivers(ctx.outputs_dir, ctx.country_code),
 }
+
+# AcquiredLayer.fetch_status (schemas.py, a computed field) mirrors
+# this dict's keys via IMPLEMENTED_FETCH_LAYER_NAMES rather than
+# importing this dict directly (schemas.py is imported by this module,
+# so the reverse import would be circular). Asserted here, at import
+# time, so the two cannot silently drift apart — same rationale as the
+# MULTI_FILE_LAYER_NAMES consolidation (see DECISIONS.md 2026-08-24,
+# "path/paths source-of-truth consolidation").
+assert set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, (
+    "_FETCHED_LAYER_HANDLERS and schemas.IMPLEMENTED_FETCH_LAYER_NAMES "
+    "have drifted apart — update both together."
+)
 
 
 class _LayerSpec(NamedTuple):
@@ -122,8 +135,12 @@ class _LayerSpec(NamedTuple):
 # fetchers for power_plants/wind/lakes/rivers") — real, live-verified
 # fetchers now exist for these 4 (fetchers/power_plants.py,
 # fetchers/wind.py, fetchers/hydrosheds.py), wired below via
-# _FETCHED_LAYER_HANDLERS. `protected` stays local_only even though a
-# real fetcher exists for it too (fetchers/protected_planet.py) —
+# _FETCHED_LAYER_HANDLERS. provenance is NOT a proxy for "has a real
+# fetcher today" — 7 other layers below also say "fetched" while having
+# no handler at all (see AcquiredLayer.fetch_status, schemas.py, for
+# the field that actually answers that question). `protected` stays
+# local_only even though a real fetcher exists for it too
+# (fetchers/protected_planet.py) —
 # gated behind a manual API token, not activated here (see that
 # module's docstring). `solar`/`seismic` stay local_only — no
 # confirmed automatable source this stage.
