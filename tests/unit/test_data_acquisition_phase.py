@@ -1,16 +1,17 @@
 """Unit tests for geofrea.data_acquisition.phase.
 
-As of 2026-08-25 (see docs/DECISIONS.md same date, "real fetchers for
-power_plants/wind/lakes/rivers"), run_acquisition_phase() calls real
-fetcher functions for 4 layers — every test in this file must NOT hit
-the real network. The `_no_network_fetchers` autouse fixture below
-monkeypatches all 4 fetcher names in the `phase` module to return None
-by default (matching these functions' own documented behavior when a
-real fetch fails — see fetchers/*.py), so every existing structural
-test keeps working unchanged: "no real fetch happens in this test"
-looks identical to "the fetch failed" from run_acquisition_phase()'s
-point of view. Tests that specifically exercise the wiring itself
-override individual fetchers to return a real value.
+As of 2026-08-26 (2026-08-25 "real fetchers for power_plants/wind/
+lakes/rivers" + 2026-08-26 "real fetcher for borders/admin1", both
+docs/DECISIONS.md), run_acquisition_phase() calls real fetcher
+functions for 6 layers — every test in this file must NOT hit the real
+network. The `_no_network_fetchers` autouse fixture below monkeypatches
+all 6 fetcher names in the `phase` module to return None by default
+(matching these functions' own documented behavior when a real fetch
+fails — see fetchers/*.py), so every existing structural test keeps
+working unchanged: "no real fetch happens in this test" looks identical
+to "the fetch failed" from run_acquisition_phase()'s point of view.
+Tests that specifically exercise the wiring itself override individual
+fetchers to return a real value.
 """
 
 from pathlib import Path
@@ -26,7 +27,14 @@ from geofrea.data_acquisition.schemas import AcquisitionResult
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 
-_FETCHER_NAMES = ("fetch_power_plants", "fetch_wind", "fetch_lakes", "fetch_rivers")
+_FETCHER_NAMES = (
+    "fetch_power_plants",
+    "fetch_wind",
+    "fetch_lakes",
+    "fetch_rivers",
+    "fetch_borders",
+    "fetch_admin1",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -150,13 +158,14 @@ def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
     # stored) answers "is there real fetch code wired in today", which
     # provenance deliberately does not (see the test above and
     # docs/DECISIONS.md 2026-08-26, "fetch_status computed field").
-    # implemented: the 4 layers with a real handler in
-    # _FETCHED_LAYER_HANDLERS. implemented_not_activated: protected
-    # only — fetcher complete and tested (fetchers/protected_planet.py)
-    # but gated behind a manual API token. not_implemented: the other
-    # 9 — the 7 skeleton layers (still no fetch code at all) plus
-    # solar/seismic (no confirmed automatable source, decided not to
-    # pursue).
+    # implemented: the 6 layers with a real handler in
+    # _FETCHED_LAYER_HANDLERS (borders/admin1 added 2026-08-26, see
+    # DECISIONS.md same date "real fetcher for borders/admin1").
+    # implemented_not_activated: protected only — fetcher complete and
+    # tested (fetchers/protected_planet.py) but gated behind a manual
+    # API token. not_implemented: the other 7 — the 5 remaining skeleton
+    # layers (still no fetch code at all) plus solar/seismic (no
+    # confirmed automatable source, decided not to pursue).
     result = run_acquisition_phase(_context(tmp_path))
 
     by_status: dict[str, set[str]] = {
@@ -167,11 +176,16 @@ def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
     for layer in result.layers:
         by_status[layer.fetch_status].add(layer.layer_name)
 
-    assert by_status["implemented"] == {"power_plants", "wind", "lakes", "rivers"}
-    assert by_status["implemented_not_activated"] == {"protected"}
-    assert by_status["not_implemented"] == {
+    assert by_status["implemented"] == {
+        "power_plants",
+        "wind",
+        "lakes",
+        "rivers",
         "borders",
         "admin1",
+    }
+    assert by_status["implemented_not_activated"] == {"protected"}
+    assert by_status["not_implemented"] == {
         "land_cover",
         "elevation",
         "population",
@@ -183,7 +197,9 @@ def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("layer_name", ["power_plants", "wind", "lakes", "rivers"])
+@pytest.mark.parametrize(
+    "layer_name", ["power_plants", "wind", "lakes", "rivers", "borders", "admin1"]
+)
 def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     tmp_path, monkeypatch, layer_name
 ):
@@ -193,6 +209,8 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
         "wind": "fetch_wind",
         "lakes": "fetch_lakes",
         "rivers": "fetch_rivers",
+        "borders": "fetch_borders",
+        "admin1": "fetch_admin1",
     }[layer_name]
     monkeypatch.setattr(phase_module, handler_name, lambda *args, **kwargs: fake_path)
 
@@ -205,9 +223,9 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
 
 @pytest.mark.unit
 def test_run_acquisition_phase_does_not_call_fetchers_for_unrelated_layers(tmp_path, monkeypatch):
-    # Only power_plants/wind/lakes/rivers should ever invoke a fetcher
-    # — every other layer_name, including protected (fetcher exists,
-    # not wired in), must never trigger a call.
+    # Only the 6 layers in _FETCHED_LAYER_HANDLERS should ever invoke a
+    # fetcher — every other layer_name, including protected (fetcher
+    # exists, not wired in), must never trigger a call.
     called = []
     monkeypatch.setattr(
         phase_module, "fetch_power_plants", lambda *a, **k: called.append("power_plants") or None

@@ -6,7 +6,10 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import LineString, box
 
-from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
+from geofrea.data_quality_audit.vector_inspection import (
+    ClipRequiresCountryGdfError,
+    inspect_vector_layer,
+)
 
 
 @pytest.mark.unit
@@ -27,11 +30,29 @@ def test_inspect_vector_layer_corrupted_file_reports_error_not_raise(tmp_path):
     path = tmp_path / "corrupt.geojson"
     path.write_text("this is not valid geojson", encoding="utf-8")
 
-    result = inspect_vector_layer(path)
+    # clip=False: this test is about corrupted-file resilience, not the
+    # clip=True/country_gdf=None guard (test below) — clip defaults to
+    # True, which would now raise ClipRequiresCountryGdfError before
+    # ever attempting to read the file.
+    result = inspect_vector_layer(path, clip=False)
 
     assert result["found"] is True
     assert result["error"] is not None
     assert result["n_features"] is None
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_raises_when_clip_true_and_no_country_gdf(tmp_path):
+    # Real incident, 2026-08-26 (see ClipRequiresCountryGdfError's
+    # docstring): clip=True + country_gdf=None used to silently read
+    # the WHOLE unclipped source file — for a real global/continental
+    # layer like lakes/rivers/protected, that's gigabytes. Must fail
+    # loudly instead, before ever opening the file.
+    path = tmp_path / "lakes.geojson"
+    gpd.GeoDataFrame(geometry=[box(0, 0, 1, 1)], crs="EPSG:4326").to_file(path, driver="GeoJSON")
+
+    with pytest.raises(ClipRequiresCountryGdfError):
+        inspect_vector_layer(path, country_gdf=None, clip=True)
 
 
 @pytest.mark.unit

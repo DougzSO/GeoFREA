@@ -274,10 +274,16 @@ def test_run_audit_phase_lakes_and_rivers_presence(tmp_path):
     # audit depth"): lakes/rivers now open the file, not just
     # stat()/exists() — a corrupted file is caught and reported via
     # `error`, not silently treated as "found with no other data".
+    # country_gdf is required here since 2026-08-26 (clip=True + no
+    # country_gdf now raises ClipRequiresCountryGdfError instead of
+    # falling back to an unclipped full-file read — see that class's
+    # docstring) — this test is about corrupted-file handling, not that
+    # guard, so a real (if unused, given the file never parses)
+    # country_gdf is supplied to reach the code path being tested.
     lakes_path = tmp_path / "lakes.gpkg"
     lakes_path.write_bytes(b"not a real geopackage, presence-only check")
 
-    inputs = AuditInputs(lakes_path=lakes_path)
+    inputs = AuditInputs(lakes_path=lakes_path, country_gdf=_covering_gdf())
     result = run_audit_phase(_context(tmp_path), inputs)
 
     assert result.vectors["lakes"].found is True

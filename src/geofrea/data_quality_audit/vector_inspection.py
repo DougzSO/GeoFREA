@@ -84,6 +84,28 @@ logger = logging.getLogger("geofrea.data_quality_audit.vector_inspection")
 _IUCN_CATEGORY_COLUMNS = ("IUCN_CAT", "iucn_cat", "IUCN", "DESIGNATION")
 
 
+class ClipRequiresCountryGdfError(ValueError):
+    """Raised when clip=True is requested without a real country_gdf.
+
+    Added 2026-08-26 after a real incident: running the actual wired
+    data_acquisition -> data_quality_audit pipeline end-to-end for the
+    first time (not the standalone-audit-with-empty-AuditInputs path
+    every existing test used), country_gdf was None for both PRT and
+    BRA — `borders` has no real fetcher yet, so adapter.py's
+    _load_mainland_boundary() has nothing to build it from. Before this
+    guard, `inspect_vector_layer()` silently fell back to
+    `gpd.read_file(str(path))` on the WHOLE unclipped source file — for
+    `lakes` that is HydroLAKES' global 1.1 GB .shp (every lake on
+    Earth). Reprojecting and summing area over that drove free system
+    RAM from several GB down to ~1 GB in well under an hour, before the
+    run was killed. This is a configuration/wiring gap, not a
+    per-file data problem — it must fail loudly (propagate out of this
+    function), not degrade into result["error"] like a corrupt file
+    would, so it cannot be silently ignored in a JSON blob. See
+    docs/DECISIONS.md 2026-08-26 for the full incident writeup.
+    """
+
+
 def _read_clipped_with_cache(
     path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path | None
 ) -> gpd.GeoDataFrame:
@@ -120,10 +142,14 @@ def inspect_vector_layer(
     Args:
         path: Path to the vector file, or None if unresolved.
         country_gdf: Country polygon (mainland-filtered) to clip
-            against. Required for clip=True to actually clip (if None,
-            the full file's statistics are reported instead, same
-            defensive fallback inspect_raster() uses for its own
-            country_gdf=None case).
+            against. Required for clip=True — unlike inspect_raster()'s
+            own country_gdf=None case, this does NOT fall back to
+            reading the full file: see ClipRequiresCountryGdfError
+            (raised instead, 2026-08-26). A raster's "full file" is one
+            bounded per-country tile; a clip=True vector layer's "full
+            file" is a global/continental source, so the same fallback
+            that is harmless for rasters is what caused a real near-OOM
+            incident here.
         clip: True for layers that are a single global file spanning
             many countries (protected, lakes, rivers) — see module
             docstring and DECISIONS.md 2026-08-24 for why `protected`
@@ -165,6 +191,22 @@ def inspect_vector_layer(
     result["found"] = True
     result["name"] = path.name
     result["size_mb"] = round(path.stat().st_size / 1e6, 1)
+
+    if clip and country_gdf is None:
+        # Raised BEFORE the try/except below, deliberately — must
+        # propagate, not degrade into result["error"] like the broad
+        # except further down does for a bad file. See
+        # ClipRequiresCountryGdfError's docstring for the incident this
+        # guards against.
+        raise ClipRequiresCountryGdfError(
+            f"inspect_vector_layer({path.name!r}): clip=True but "
+            "country_gdf is None. Refusing to fall back to reading the "
+            "whole unclipped global/continental source file (see "
+            "ClipRequiresCountryGdfError's docstring for why). Resolve "
+            "a real country boundary before calling this layer, or "
+            "pass clip=False if reading the full file is genuinely "
+            "intended."
+        )
 
     try:
         if clip and country_gdf is not None:

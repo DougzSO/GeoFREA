@@ -1,14 +1,15 @@
 """Pydantic schemas for the data_acquisition phase.
 
 This module defines the acquisition contract; it contains no fetch/
-download logic itself (see phase.py and fetchers/). As of 2026-08-25
-(see docs/DECISIONS.md same date, "real fetchers for power_plants/
-wind/lakes/rivers"), 4 of the 14 AcquiredLayer entries
-run_acquisition_phase() produces can have a real `path` — the other
-10 still always have path=None/paths=[] (see phase.py's module
-docstring for exactly which and why). See docs/DECISIONS.md
-2026-08-24 (data_acquisition skeleton) for the original rationale and
-the open gaps flagged below, most still unresolved.
+download logic itself (see phase.py and fetchers/). As of 2026-08-26
+(2026-08-25 "real fetchers for power_plants/wind/lakes/rivers" +
+2026-08-26 "real fetcher for borders/admin1", both docs/DECISIONS.md),
+6 of the 14 AcquiredLayer entries run_acquisition_phase() produces can
+have a real `path` — the other 8 still always have path=None/paths=[]
+(see phase.py's module docstring for exactly which and why). See
+docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for the
+original rationale and the open gaps flagged below, most still
+unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT
@@ -67,7 +68,7 @@ MULTI_FILE_LAYER_NAMES: frozenset[str] = frozenset({"land_cover"})
 # set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, so the
 # two cannot silently drift apart.
 IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
-    {"power_plants", "wind", "lakes", "rivers"}
+    {"power_plants", "wind", "lakes", "rivers", "borders", "admin1"}
 )
 
 # protected (WDPA) has a complete, tested fetcher

@@ -17,19 +17,19 @@ before this stage — EXCEPT "slope", deliberately excluded (see
 schemas.py's module docstring: it's derived from elevation, not fetched
 or bundled, so it doesn't fit either provenance value).
 
-Real fetch logic (2026-08-25, see docs/DECISIONS.md same date —
-"real fetchers for power_plants/wind/lakes/rivers"): 4 of the 14
-layers (power_plants, wind, lakes, rivers) now call a real fetcher
-from data_acquisition/fetchers/ instead of always leaving path=None.
-The other 10 remain structural placeholders — either genuinely
-unimplemented (borders/admin1/land_cover/elevation/population/grid/
-roads, still skeleton) or implemented-but-not-activated (protected —
-see fetchers/protected_planet.py's module docstring for why) or
-explicitly out of scope this stage (solar, seismic — no confirmed
-per-country/automatable source, see DECISIONS.md same date).
-_FETCHED_LAYER_HANDLERS below is the only place this phase knows about
-individual fetcher modules — everything else in this file is unchanged
-from the skeleton.
+Real fetch logic: 2026-08-25 (see docs/DECISIONS.md same date — "real
+fetchers for power_plants/wind/lakes/rivers") wired 4 of the 14 layers
+(power_plants, wind, lakes, rivers) to a real fetcher instead of always
+leaving path=None. 2026-08-26 (see DECISIONS.md same date) added
+borders + admin1 (fetchers/gadm.py) — 6 of 14 now call a real fetcher.
+The other 8 remain structural placeholders — either genuinely
+unimplemented (land_cover/elevation/population/grid/roads, still
+skeleton) or implemented-but-not-activated (protected — see
+fetchers/protected_planet.py's module docstring for why) or explicitly
+out of scope (solar, seismic — no confirmed per-country/automatable
+source, see DECISIONS.md 2026-08-25). _FETCHED_LAYER_HANDLERS below is
+the only place this phase knows about individual fetcher modules —
+everything else in this file is unchanged from the skeleton.
 
 Orchestrator wiring note: the Orchestrator enforces NO ordering or
 dependency between phases on its own — RunConfig.phases (settings.yaml)
@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from geofrea.core.orchestrator import PhaseContext
+from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
 from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
 from geofrea.data_acquisition.fetchers.wind import fetch_wind
@@ -70,8 +71,8 @@ from geofrea.data_acquisition.schemas import (
 
 logger = logging.getLogger("geofrea.data_acquisition.phase")
 
-# layer_name -> fetch function, for the 4 layers with a real fetcher
-# wired in as of 2026-08-25 (see module docstring). Each fetcher
+# layer_name -> fetch function, for the 6 layers with a real fetcher
+# wired in as of 2026-08-26 (see module docstring). Each fetcher
 # already catches its own network/parsing failures internally and
 # returns None rather than raising (see fetchers/*.py) — the one
 # deliberate exception is hydrosheds.fetch_rivers() raising KeyError
@@ -85,6 +86,8 @@ _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
     "wind": lambda ctx: fetch_wind(ctx.outputs_dir, ctx.country_code),
     "lakes": lambda ctx: fetch_lakes(ctx.outputs_dir),
     "rivers": lambda ctx: fetch_rivers(ctx.outputs_dir, ctx.country_code),
+    "borders": lambda ctx: fetch_borders(ctx.outputs_dir, ctx.country_code),
+    "admin1": lambda ctx: fetch_admin1(ctx.outputs_dir, ctx.country_code),
 }
 
 # AcquiredLayer.fetch_status (schemas.py, a computed field) mirrors
@@ -134,13 +137,17 @@ class _LayerSpec(NamedTuple):
 # local_only to fetched 2026-08-25 (see DECISIONS.md same date, "real
 # fetchers for power_plants/wind/lakes/rivers") — real, live-verified
 # fetchers now exist for these 4 (fetchers/power_plants.py,
-# fetchers/wind.py, fetchers/hydrosheds.py), wired below via
-# _FETCHED_LAYER_HANDLERS. provenance is NOT a proxy for "has a real
-# fetcher today" — 7 other layers below also say "fetched" while having
-# no handler at all (see AcquiredLayer.fetch_status, schemas.py, for
-# the field that actually answers that question). `protected` stays
-# local_only even though a real fetcher exists for it too
-# (fetchers/protected_planet.py) —
+# fetchers/wind.py, fetchers/hydrosheds.py). borders/admin1 already
+# said "fetched" from the original skeleton (see AcquiredLayer's own
+# provenance docstring, "fetched" means "comes OR WOULD come from a
+# live external source") — 2026-08-26 gave them a real handler too
+# (fetchers/gadm.py), with no provenance value change needed since it
+# was already correct. All 6 wired below via _FETCHED_LAYER_HANDLERS.
+# provenance is NOT a proxy for "has a real fetcher today" — 5 other
+# layers below also say "fetched" while having no handler at all (see
+# AcquiredLayer.fetch_status, schemas.py, for the field that actually
+# answers that question). `protected` stays local_only even though a
+# real fetcher exists for it too (fetchers/protected_planet.py) —
 # gated behind a manual API token, not activated here (see that
 # module's docstring). `solar`/`seismic` stay local_only — no
 # confirmed automatable source this stage.
@@ -172,7 +179,7 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
 def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     """Build an AcquisitionResult for one country.
 
-    4 layers (power_plants, wind, lakes, rivers — see
+    6 layers (power_plants, wind, lakes, rivers, borders, admin1 — see
     _FETCHED_LAYER_HANDLERS) call a real fetcher and may have a real
     `path` populated. Every other layer is still a structural
     placeholder — path=None, paths=[] — either because no fetcher
