@@ -229,6 +229,29 @@ def detect_island_nation(gdf: gpd.GeoDataFrame, threshold_pct: float = 0.60) -> 
         return False
 
 
+def load_mainland_boundary(path: str | Path) -> gpd.GeoDataFrame:
+    """Read a country-boundary vector file and reduce it to its mainland polygon.
+
+    Mechanical read + get_mainland_gdf() only — no None-handling, no
+    fallback. Extracted 2026-09-08 (see docs/DECISIONS.md same date,
+    grid_alignment orchestrator wiring) from
+    data_acquisition/adapter.py's `_load_mainland_boundary()`, which
+    grid_alignment/adapter.py now also needs — the two callers differ
+    on what to do when the boundary is MISSING (data_acquisition's
+    adapter degrades to country_gdf=None; grid_alignment's raises,
+    see GridAlignmentRequiresBordersError), so that decision stays in
+    each caller; this function only does the part both share.
+
+    Args:
+        path: Path to the country-boundary vector file (all polygons —
+            mainland, islands, enclaves).
+
+    Returns:
+        Single-row GeoDataFrame with the largest polygon, in EPSG:4326.
+    """
+    return get_mainland_gdf(gpd.read_file(path))
+
+
 # ~111m at the equator (geographic CRSs) / ~100m (projected CRSs, in
 # CRS units, assumed meters) — see module docstring, "country_geom
 # simplification, 2026-08-25", for the measured speed/precision

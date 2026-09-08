@@ -5,7 +5,7 @@ no SDK — see adapter.py's module docstring), so these tests exercise it
 with actual small CSV/GeoJSON fixtures on disk, not just empty inputs.
 
 The "malformed" tests below are CHARACTERIZATION tests: they document
-current (non-defensive) behavior — _load_power_plants()/
+current (non-defensive) behavior — load_power_plants_df()/
 _load_mainland_boundary() have no try/except, per adapter.py's module
 docstring, third known gap — not a spec for how failures *should* be
 handled. If that gap is ever fixed (pending Douglas's authorization),

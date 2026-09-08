@@ -32,7 +32,7 @@ staying single-path and land_cover getting a list field were each a
 deliberate call, not the same fix applied twice.
 
 THIRD KNOWN GAP, NOT defensive by design (flagged, not fixed — see
-DECISIONS.md 2026-08-24): _load_power_plants()/_load_mainland_boundary()
+DECISIONS.md 2026-08-24): load_power_plants_df()/_load_mainland_boundary()
 below have no try/except. A malformed CSV either silently parses into
 garbage (pandas does not always raise) or raises pandas.errors.
 EmptyDataError; a corrupted/non-geospatial file at the boundary path
@@ -42,7 +42,7 @@ adapter today — unlike data_quality_audit's inspect_raster() and (as of
 report {"error": str(exc)} instead of raising. Left as-is pending
 authorization — see tests/unit/test_data_acquisition_adapter.py's
 characterization tests for the exact exceptions each failure mode
-raises. Note this gap is specific to _load_power_plants()/
+raises. Note this gap is specific to load_power_plants_df()/
 _load_mainland_boundary() — the plain pass-through Path fields added
 2026-08-24 (protected_path, admin1_path, grid_path, roads_path,
 borders_path) never open the file here at all, so there is nothing to
@@ -55,7 +55,7 @@ from __future__ import annotations
 import geopandas as gpd
 import pandas as pd
 
-from geofrea.core.geo_utils import get_mainland_gdf
+from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
 from geofrea.data_quality_audit.schemas import AuditInputs
 
@@ -125,7 +125,7 @@ def acquisition_result_to_audit_inputs(
     land_cover_layer = layers.get("land_cover")
     land_cover_tiles = land_cover_layer.paths if land_cover_layer else []
 
-    plants_df = _load_power_plants(layers.get("power_plants"))
+    plants_df = load_power_plants_df(layers.get("power_plants"))
     country_gdf = _load_mainland_boundary(layers.get("borders"))
 
     return AuditInputs(
@@ -138,8 +138,17 @@ def acquisition_result_to_audit_inputs(
     )
 
 
-def _load_power_plants(layer: AcquiredLayer | None) -> pd.DataFrame | None:
-    """Load the power-plants CSV, if a path was resolved for it."""
+def load_power_plants_df(layer: AcquiredLayer | None) -> pd.DataFrame | None:
+    """Load the power-plants CSV, if a path was resolved for it.
+
+    Public (not `_`-prefixed, unlike the rest of this module's small
+    per-field loaders): grid_alignment/adapter.py needs the identical
+    logic for its own plants_df field and imports this directly rather
+    than duplicating it — see docs/DECISIONS.md 2026-09-08,
+    grid_alignment orchestrator wiring, for why (same "don't
+    mechanically duplicate" care already applied to the mainland-
+    boundary derivation below).
+    """
     if layer is None or layer.path is None:
         return None
     return pd.read_csv(layer.path)
@@ -148,11 +157,16 @@ def _load_power_plants(layer: AcquiredLayer | None) -> pd.DataFrame | None:
 def _load_mainland_boundary(layer: AcquiredLayer | None) -> gpd.GeoDataFrame | None:
     """Load the country boundary and reduce it to its mainland polygon.
 
-    Mirrors main.py's own get_mainland_gdf() usage upstream of the
-    audit phase in the prior stage — done here instead once
-    data_acquisition owns boundary resolution.
+    The None-handling (falls back to None, not an error) is specific to
+    this adapter: data_quality_audit has a degraded-but-useful mode
+    when country_gdf is missing (AuditInputs.country_gdf is Optional —
+    see that field's docstring). The mechanical read+mainland-filter
+    itself is shared via core.geo_utils.load_mainland_boundary() (
+    extracted 2026-09-08, see docs/DECISIONS.md same date) —
+    grid_alignment/adapter.py calls the SAME shared function but
+    raises instead of returning None when borders is missing, since it
+    has no equivalent degraded mode.
     """
     if layer is None or layer.path is None:
         return None
-    full_gdf = gpd.read_file(layer.path)
-    return get_mainland_gdf(full_gdf)
+    return load_mainland_boundary(layer.path)

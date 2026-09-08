@@ -22,9 +22,11 @@ from shapely.geometry import Polygon
 
 import main
 from geofrea.core.config_loader import load_parameters
-from geofrea.core.orchestrator import PhaseContext, PhaseResult
+from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseResult, PhaseSpec
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
-from geofrea.data_quality_audit.schemas import AuditInputs
+from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
+from geofrea.grid_alignment.adapter import GridAlignmentRequiresBordersError
+from geofrea.grid_alignment.schemas import GridAlignmentResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
@@ -71,9 +73,13 @@ def _acquisition_phase_result(layers: list[AcquiredLayer]) -> PhaseResult[Acquis
 
 
 @pytest.mark.unit
-def test_build_phase_specs_returns_both_phases_in_order():
+def test_build_phase_specs_returns_all_three_phases_in_order():
     specs = main._build_phase_specs()
-    assert [spec.name for spec in specs] == ["data_acquisition", "data_quality_audit"]
+    assert [spec.name for spec in specs] == [
+        "data_acquisition",
+        "data_quality_audit",
+        "grid_alignment",
+    ]
 
 
 @pytest.mark.unit
@@ -158,3 +164,148 @@ def test_audit_run_with_no_prior_acquisition_matches_standalone_behavior(tmp_pat
     result = main._audit_run(_context(tmp_path, prior_results={}))
     assert result.vectors["borders"].found is False
     assert result.rasters["elevation"].error == "File not found"
+
+
+# ─── grid_alignment wiring (2026-09-08, see DECISIONS.md same date) ───
+
+
+@pytest.mark.unit
+def test_build_grid_alignment_inputs_raises_when_acquisition_did_not_run(tmp_path):
+    # Unlike _build_audit_inputs(), there is no empty-inputs fallback —
+    # grid_alignment cannot run at all without a real AcquisitionResult.
+    with pytest.raises(RuntimeError, match="data_acquisition"):
+        main._build_grid_alignment_inputs(_context(tmp_path, prior_results={}))
+
+
+@pytest.mark.unit
+def test_build_grid_alignment_inputs_raises_when_acquisition_output_is_none(tmp_path):
+    failed = PhaseResult(
+        phase="data_acquisition",
+        status="failed",
+        output=None,
+        error="boom",
+        started_at="2026-09-08T00:00:00+00:00",
+        finished_at="2026-09-08T00:00:01+00:00",
+    )
+    with pytest.raises(RuntimeError, match="data_acquisition"):
+        main._build_grid_alignment_inputs(
+            _context(tmp_path, prior_results={"data_acquisition": failed})
+        )
+
+
+@pytest.mark.unit
+def test_build_grid_alignment_inputs_raises_when_borders_missing_from_real_output(tmp_path):
+    # data_acquisition DID run, but never resolved a borders layer —
+    # the adapter's own GridAlignmentRequiresBordersError, reached
+    # through main.py's real wiring, not just unit-tested in isolation.
+    prior_results = {
+        "data_acquisition": _acquisition_phase_result(
+            [
+                AcquiredLayer(
+                    layer_name="elevation",
+                    provenance="fetched",
+                    auth_required=False,
+                    path=Path("/fake/elevation.tif"),
+                )
+            ]
+        )
+    }
+    with pytest.raises(GridAlignmentRequiresBordersError):
+        main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results))
+
+
+@pytest.mark.unit
+def test_build_grid_alignment_inputs_adapts_real_acquisition_output(tmp_path):
+    mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    boundary_path = tmp_path / "borders.geojson"
+    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(boundary_path, driver="GeoJSON")
+
+    prior_results = {
+        "data_acquisition": _acquisition_phase_result(
+            [
+                AcquiredLayer(
+                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                )
+            ]
+        )
+    }
+
+    inputs = main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results))
+
+    assert len(inputs.country_gdf) == 1
+
+
+@pytest.mark.unit
+def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
+    mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    boundary_path = tmp_path / "borders.geojson"
+    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(boundary_path, driver="GeoJSON")
+
+    prior_results = {
+        "data_acquisition": _acquisition_phase_result(
+            [
+                AcquiredLayer(
+                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                )
+            ]
+        )
+    }
+
+    result = main._grid_alignment_run(_context(tmp_path, prior_results=prior_results))
+
+    assert isinstance(result, GridAlignmentResult)
+    assert result.country_code == "PRT"
+    assert result.elevation is None
+    assert result.grid_metadata.n_valid_pixels > 0
+
+
+@pytest.mark.unit
+def test_orchestrator_runs_grid_alignment_with_data_quality_audit_disabled(tmp_path):
+    # The point of this test: prove the independence Passo 1 designed
+    # for actually holds through the REAL Orchestrator + main.py
+    # closures, not just "grid_alignment's adapter doesn't import
+    # AuditResult" in isolation. data_acquisition uses a stub run
+    # function (no real fetch/network — out of scope for a unit test);
+    # data_quality_audit and grid_alignment use main.py's REAL closures.
+    mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
+    boundary_path = tmp_path / "country" / "borders.geojson"
+    boundary_path.parent.mkdir(parents=True)
+    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(boundary_path, driver="GeoJSON")
+
+    def _stub_acquisition_run(context):
+        return _acquisition_phase_result(
+            [
+                AcquiredLayer(
+                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                )
+            ]
+        ).output
+
+    outputs_dir = tmp_path / "outputs"
+    orchestrator = Orchestrator(
+        outputs_dir=outputs_dir,
+        country_code="PRT",
+        country_params=_country_params("PRT"),
+        phases_enabled={
+            "data_acquisition": True,
+            "data_quality_audit": False,
+            "grid_alignment": True,
+        },
+    )
+
+    specs = [
+        PhaseSpec(
+            name="data_acquisition", output_model=AcquisitionResult, run=_stub_acquisition_run
+        ),
+        PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=main._audit_run),
+        PhaseSpec(
+            name="grid_alignment", output_model=GridAlignmentResult, run=main._grid_alignment_run
+        ),
+    ]
+
+    results = orchestrator.run(specs)
+
+    assert list(results.keys()) == ["data_acquisition", "grid_alignment"]
+    assert "data_quality_audit" not in results  # disabled: never attempted, no PhaseResult at all
+    assert results["grid_alignment"].status == "success"
+    assert results["grid_alignment"].output.grid_metadata.n_valid_pixels > 0

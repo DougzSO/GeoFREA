@@ -29,6 +29,27 @@ as `None`/missing in the audit report (inspect_raster()/
 inspect_vector_layer() already handle that gracefully), which is the
 audit doing its job, not a misleading run.
 
+grid_alignment wiring (2026-09-08, see DECISIONS.md same date - grid_
+alignment orchestrator wiring): registered as the THIRD PhaseSpec, but
+its `run` closure reads ONLY context.prior_results["data_acquisition"]
+— never data_quality_audit's. This was a deliberate design decision
+closed in an earlier stage of this same session (Passo 1 of the
+grid_alignment port): grid_alignment must keep working with
+data_quality_audit disabled in settings.yaml, paying at most a cold
+clip-cache cost, never failing outright. List position (third, after
+data_quality_audit) is about readable pipeline ordering only — it does
+NOT imply a data dependency the same way data_acquisition ->
+data_quality_audit's position does. Same per-context-closure pattern as
+_audit_run below, not a functools.partial with eagerly-bound inputs —
+that eager-binding shape is exactly what UnwiredPhasesError was
+protecting against in 2026-08-25 (see that DECISIONS.md entry): a
+partial can only bind inputs that already exist when
+_build_phase_specs() runs, before ANY phase has executed, which is
+correct for data_acquisition (no phase-specific inputs at all) but
+would be wrong here — grid_alignment's inputs (AcquisitionResult) only
+exist once the orchestrator has actually run that phase for this
+country.
+
 Usage:
     python main.py
 """
@@ -51,6 +72,9 @@ from geofrea.data_acquisition.phase import run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
+from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_inputs
+from geofrea.grid_alignment.alignment import run_grid_alignment_phase
+from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("geofrea.main")
@@ -91,6 +115,48 @@ def _audit_run(context: PhaseContext) -> AuditResult:
     return run_audit_phase(context, inputs=_build_audit_inputs(context))
 
 
+def _build_grid_alignment_inputs(context: PhaseContext) -> GridAlignmentInputs:
+    """Build GridAlignmentInputs from data_acquisition's output.
+
+    Unlike _build_audit_inputs(), there is NO empty-inputs fallback:
+    grid_alignment has no degraded mode (see GridAlignmentInputs'
+    docstring in schemas.py, and GridAlignmentRequiresBordersError) —
+    it cannot produce anything meaningful without a real
+    AcquisitionResult to adapt. If data_acquisition did not run this
+    pipeline (disabled in settings.yaml, or a hypothetical standalone
+    grid_alignment-only run), this raises immediately rather than
+    silently building a request GridAlignmentInputs could never
+    satisfy — same "fail loud at construction time" philosophy as
+    GridAlignmentRequiresBordersError itself (see adapter.py).
+
+    Args:
+        context: The grid_alignment phase's PhaseContext, as passed by
+            Orchestrator.run().
+
+    Returns:
+        Real GridAlignmentInputs adapted from data_acquisition's output.
+
+    Raises:
+        RuntimeError: If data_acquisition did not run (or failed) in
+            this pipeline — grid_alignment has nothing to adapt from.
+        GridAlignmentRequiresBordersError: If data_acquisition ran but
+            its AcquisitionResult has no usable `borders` layer (see
+            grid_alignment/adapter.py).
+    """
+    acquisition_result = context.prior_results.get("data_acquisition")
+    if acquisition_result is None or acquisition_result.output is None:
+        raise RuntimeError(
+            "grid_alignment requires data_acquisition to have run in this "
+            "same pipeline (see settings.yaml's run.phases) — it has no "
+            "degraded/empty-inputs mode, unlike data_quality_audit."
+        )
+    return acquisition_result_to_grid_alignment_inputs(acquisition_result.output)
+
+
+def _grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
+    return run_grid_alignment_phase(context, inputs=_build_grid_alignment_inputs(context))
+
+
 def _build_phase_specs() -> list[PhaseSpec]:
     """Registered phases, in execution order.
 
@@ -103,19 +169,32 @@ def _build_phase_specs() -> list[PhaseSpec]:
     by the time _audit_run() executes (see module docstring for the
     wiring itself).
 
+    grid_alignment is registered THIRD (2026-09-08, see DECISIONS.md
+    same date), matching the readable pipeline order
+    (acquisition -> audit -> alignment, same as legacy's Fase 1/2a
+    numbering) — but its closure (_grid_alignment_run) only reads
+    context.prior_results["data_acquisition"], never
+    ["data_quality_audit"]. List position here governs execution order
+    only; it does not imply grid_alignment depends on
+    data_quality_audit having run (see module docstring's "grid_
+    alignment wiring" section for why that independence matters).
+
     No longer takes phases_enabled (see module docstring —
     UnwiredPhasesError, the only reason this function inspected it, was
     removed 2026-08-25): which phases actually execute is decided by
     Orchestrator.run() itself, per phase, via Orchestrator.phases_enabled.
 
     Returns:
-        The two registered PhaseSpecs, in execution order.
+        The three registered PhaseSpecs, in execution order.
     """
     return [
         PhaseSpec(
             name="data_acquisition", output_model=AcquisitionResult, run=run_acquisition_phase
         ),
         PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=_audit_run),
+        PhaseSpec(
+            name="grid_alignment", output_model=GridAlignmentResult, run=_grid_alignment_run
+        ),
     ]
 
 
