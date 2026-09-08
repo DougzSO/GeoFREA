@@ -63,8 +63,9 @@ checks, not a new one invented here. A cache-WRITE failure is logged
 and swallowed, not raised: caching is a pure optimization, so failing
 to persist one must not turn an otherwise-successful inspection into an
 error result. Only wired in for `clip=True` layers (protected/lakes/
-rivers) by audit.py — `clip=False` layers are already country-scoped
-small files at the source, nothing there is large enough to need it.
+rivers, and roads since 2026-09-08) by audit.py — `clip=False` layers
+are already country-scoped small files at the source, nothing there is
+large enough to need it.
 """
 
 from __future__ import annotations
@@ -150,14 +151,20 @@ def inspect_vector_layer(
             file" is a global/continental source, so the same fallback
             that is harmless for rasters is what caused a real near-OOM
             incident here.
-        clip: True for layers that are a single global file spanning
-            many countries (protected, lakes, rivers) — see module
-            docstring and DECISIONS.md 2026-08-24 for why `protected`
-            is clip=True despite data_acquisition's _LAYER_REGISTRY
-            entry being corrected from country_specific=True to False
-            this same stage. False for layers already scoped to one
-            country at the acquisition source (borders, admin1, grid,
-            roads — GADM/OSM downloads bounded to the target country).
+        clip: True for layers that are a single global/regional file
+            spanning many countries (protected, lakes, rivers, and —
+            since 2026-09-08, see DECISIONS.md same date, "wire das 5
+            camadas restantes a partir do banco local, Fase 2 - roads"
+            — roads, now sourced from a single GRIP4 regional
+            shapefile instead of a per-country OSM download). See
+            module docstring and DECISIONS.md 2026-08-24 for why
+            `protected` is clip=True despite data_acquisition's
+            _LAYER_REGISTRY entry being corrected from
+            country_specific=True to False that same stage — roads'
+            country_specific flip 2026-09-08 mirrors the same
+            reasoning. False for layers still scoped to one country at
+            the acquisition source (borders, admin1, grid — GADM/OSM
+            downloads bounded to the target country).
         iucn_breakdown: If True, populate attribute_breakdown by
             grouping features on whichever IUCN category column is
             present. Only meaningful for `protected`.

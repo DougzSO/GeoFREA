@@ -64,8 +64,13 @@ class AuditInputs(BaseModel):
             download as borders_path in legacy — not clipped).
         grid_path: Power-grid (transmission lines) vector path, from
             OSM Overpass — country-scoped at the source, not clipped.
-        roads_path: Road network vector path, from OSM Overpass —
-            country-scoped at the source, not clipped.
+        roads_path: Road network vector path. Since 2026-09-08 (see
+            DECISIONS.md same date, "wire das 5 camadas restantes a
+            partir do banco local, Fase 2 - roads") this is a GRIP4
+            regional shapefile spanning many countries, clipped by
+            data_quality_audit at inspection time (clip=True) — no
+            longer the country-scoped, unclipped OSM Overpass file the
+            original skeleton assumed.
         plants_df: Existing power-plant records.
         country_gdf: Country polygon (mainland-filtered) used to mask
             every raster to the real country boundary, not a bounding box.

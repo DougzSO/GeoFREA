@@ -19,12 +19,15 @@ import numpy as np
 import pandas as pd
 import pytest
 import rasterio
+from rasterio.errors import WindowError
 from rasterio.transform import from_origin
 from shapely.geometry import Polygon, box
 
 from geofrea.core.constants import MASK_FILL
 from geofrea.data_quality_audit import raster_inspection
 from geofrea.data_quality_audit.raster_inspection import (
+    _country_window,
+    _mask_raster_by_polygon,
     _nodata_mask,
     _stats_chunked,
     diagnose_consistency,
@@ -519,6 +522,14 @@ def test_stats_chunked_matches_expected_stats_across_multiple_chunks(tmp_path, m
 
 @pytest.mark.unit
 def test_stats_chunked_returns_zero_stats_when_polygon_does_not_overlap(tmp_path):
+    # total_px == 0 here, not _SIZE * _SIZE — changed 2026-09-08 (see
+    # docs/DECISIONS.md same date and _stats_chunked()'s own docstring,
+    # "total_px scoping fixed"): total_px now reflects the country-bbox
+    # window's own pixel count (zero, since there is no overlap at all),
+    # not the full raster's, matching _mask_raster_by_polygon()'s
+    # scoping. No end-user-visible effect either way — inspect_raster()
+    # already guards valid_pct with `if total_px > 0 else 0.0`, so both
+    # the old (100) and new (0) denominators produced the same 0.0%.
     data = np.ones((_SIZE, _SIZE), dtype=np.float32)
     path = tmp_path / "no_overlap.tif"
     _write_raster(path, data)
@@ -533,10 +544,50 @@ def test_stats_chunked_returns_zero_stats_when_polygon_does_not_overlap(tmp_path
         "max": None,
         "mean": None,
         "valid_px": 0,
-        "total_px": _SIZE * _SIZE,
+        "total_px": 0,
         "area_km2": 0.0,
     }
     assert transform is not None
+
+
+@pytest.mark.unit
+def test_stats_chunked_total_px_scoped_to_country_window_not_full_raster(tmp_path, monkeypatch):
+    # The real bug (see docs/DECISIONS.md 2026-09-08 and
+    # _stats_chunked()'s own docstring, "total_px scoping fixed"): a
+    # raster file bigger than the country's own bbox used to make
+    # total_px (and therefore valid_pct) reflect the WHOLE file, not
+    # just the country-relevant window — live-verified via BRA
+    # population (45.8% windowed vs 39.7% chunked for the exact same
+    # data). Reproduced here at unit scale: a 20x20 raster where the
+    # country_gdf only covers the top-left 10x10 quadrant.
+    big_size = 20
+    data = np.ones((big_size, big_size), dtype=np.float32)
+    path = tmp_path / "bigger_than_country.tif"
+    _write_raster(path, data)
+
+    # Forces _stats_chunked (not the windowed path) regardless of size —
+    # this test is about total_px scoping, not the memory-budget guard.
+    monkeypatch.setattr(raster_inspection, "_CHUNK_ROWS", 4)
+
+    quadrant_gdf = gpd.GeoDataFrame(
+        geometry=[
+            box(
+                _ORIGIN_LON,
+                _ORIGIN_LAT - _SIZE * _RES,
+                _ORIGIN_LON + _SIZE * _RES,
+                _ORIGIN_LAT,
+            )
+        ],
+        crs="EPSG:4326",
+    )
+
+    with rasterio.open(path) as src:
+        stats, _transform = _stats_chunked(src, quadrant_gdf)
+
+    # Country window is _SIZE x _SIZE (100 px), NOT big_size x big_size
+    # (400 px) — the whole point of this fix.
+    assert stats["total_px"] == _SIZE * _SIZE
+    assert stats["valid_px"] == _SIZE * _SIZE
 
 
 @pytest.mark.unit
@@ -558,6 +609,114 @@ def test_stats_chunked_returns_none_when_country_gdf_has_no_crs(tmp_path):
 
 
 # ===========================================================================
+# _country_window — single source of truth for the country-bbox window,
+# extracted 2026-09-08 (see docs/DECISIONS.md same date) after
+# _mask_raster_by_polygon() and _stats_chunked() were found to have
+# silently diverged on this exact computation (the total_px bug above).
+# ===========================================================================
+
+
+@pytest.mark.unit
+def test_country_window_matches_country_bbox(tmp_path):
+    path = tmp_path / "window.tif"
+    _write_raster(path, np.ones((_SIZE, _SIZE), dtype=np.float32))
+
+    # Top-left half of the raster only.
+    half_gdf = gpd.GeoDataFrame(
+        geometry=[
+            box(_ORIGIN_LON, _ORIGIN_LAT - 5 * _RES, _ORIGIN_LON + 10 * _RES, _ORIGIN_LAT)
+        ],
+        crs="EPSG:4326",
+    )
+
+    with rasterio.open(path) as src:
+        bounds = half_gdf.to_crs(src.crs).total_bounds
+        window = _country_window(bounds, src.transform, src.width, src.height)
+
+    assert round(window.col_off) == 0
+    assert round(window.row_off) == 0
+    assert round(window.width) == 10
+    assert round(window.height) == 5
+
+
+@pytest.mark.unit
+def test_country_window_raises_windowerror_when_no_overlap(tmp_path):
+    path = tmp_path / "window_no_overlap.tif"
+    _write_raster(path, np.ones((_SIZE, _SIZE), dtype=np.float32))
+
+    far_gdf = gpd.GeoDataFrame(geometry=[box(100.0, 100.0, 101.0, 101.0)], crs="EPSG:4326")
+
+    with rasterio.open(path) as src:
+        bounds = far_gdf.to_crs(src.crs).total_bounds
+        with pytest.raises(WindowError):
+            _country_window(bounds, src.transform, src.width, src.height)
+
+
+# ===========================================================================
+# _mask_raster_by_polygon — the proactive window-size budget check added
+# 2026-09-08 after a real near-OOM incident (see raster_inspection.py's
+# _WINDOWED_READ_MAX_BYTES docstring: free system RAM dropped to 0.14 GB
+# of 15.84 GB reading population/BRA's real ~8.8 GB window). Verified
+# with a REAL (not mocked) MemoryError this time — lowering the budget
+# via monkeypatch makes even this file's tiny 10x10 synthetic raster
+# exceed it, without needing a multi-GB fixture.
+# ===========================================================================
+
+
+@pytest.mark.unit
+def test_mask_raster_by_polygon_raises_memory_error_when_window_exceeds_budget(
+    tmp_path, monkeypatch
+):
+    data = np.ones((_SIZE, _SIZE), dtype=np.float32)
+    path = tmp_path / "budget.tif"
+    _write_raster(path, data)
+
+    # _SIZE*_SIZE*4 bytes = 400 bytes for the real fixture above — set
+    # the budget just under that so the real estimate trips it for
+    # real, not simulated.
+    monkeypatch.setattr(raster_inspection, "_WINDOWED_READ_MAX_BYTES", 399)
+
+    with rasterio.open(path) as src, pytest.raises(MemoryError, match="Windowed read would allocate"):
+        _mask_raster_by_polygon(src, _covering_gdf())
+
+
+@pytest.mark.unit
+def test_mask_raster_by_polygon_reads_normally_under_budget(tmp_path):
+    # Sanity check the check itself doesn't false-positive at the
+    # library's real default budget (_WINDOWED_READ_MAX_BYTES,
+    # untouched here) for an ordinary small raster.
+    data = np.arange(_SIZE * _SIZE, dtype=np.float32).reshape(_SIZE, _SIZE)
+    path = tmp_path / "under_budget.tif"
+    _write_raster(path, data)
+
+    with rasterio.open(path) as src:
+        result_data, transform = _mask_raster_by_polygon(src, _covering_gdf())
+
+    assert result_data.shape == (_SIZE, _SIZE)
+    assert transform is not None
+
+
+@pytest.mark.unit
+def test_mask_raster_by_polygon_propagates_windowerror_when_no_overlap(tmp_path):
+    # Locks in the DOCUMENTED policy (see this function's own
+    # docstring, 2026-09-08): unlike _stats_chunked(), which treats a
+    # non-overlapping country/raster pairing as a legitimate empty
+    # result, this function lets WindowError propagate — the caller,
+    # inspect_raster(), surfaces it via result["error"], same as a
+    # corrupt file. A future edit that silently swallowed this instead
+    # (e.g. while "simplifying" _country_window() error handling) would
+    # break this test, not just this docstring.
+    data = np.ones((_SIZE, _SIZE), dtype=np.float32)
+    path = tmp_path / "no_overlap.tif"
+    _write_raster(path, data)
+
+    far_gdf = gpd.GeoDataFrame(geometry=[box(100.0, 100.0, 101.0, 101.0)], crs="EPSG:4326")
+
+    with rasterio.open(path) as src, pytest.raises(WindowError):
+        _mask_raster_by_polygon(src, far_gdf)
+
+
+# ===========================================================================
 # inspect_raster — the MemoryError -> chunked-read fallback wiring
 # (previously 0% covered, l.278-306), plus the smaller uncovered branches
 # in its non-fallback path (l.318, l.334-335).
@@ -567,9 +726,9 @@ def test_stats_chunked_returns_none_when_country_gdf_has_no_crs(tmp_path):
 @pytest.mark.unit
 def test_inspect_raster_falls_back_to_chunked_stats_on_memory_error(tmp_path, monkeypatch):
     # The documented real trigger is a multi-GB WorldPop tile
-    # (_stats_chunked's own docstring); provoking a genuine MemoryError
-    # with a real allocation isn't practical in a unit test, so only the
-    # trigger is mocked — _stats_chunked itself runs for real below.
+    # (_stats_chunked's own docstring); this test exercises the
+    # fallback WIRING generically with a mocked trigger — the dedicated
+    # test above verifies the real, unmocked trigger itself.
     data = np.arange(_SIZE * _SIZE, dtype=np.float32).reshape(_SIZE, _SIZE)
     path = tmp_path / "large.tif"
     _write_raster(path, data)

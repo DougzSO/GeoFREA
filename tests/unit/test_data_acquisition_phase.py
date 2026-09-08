@@ -125,8 +125,19 @@ def test_run_acquisition_phase_global_layers_have_no_country_code(tmp_path):
 
     # protected moved into this list 2026-08-24 (was incorrectly
     # country_specific=True — see phase.py's _LAYER_REGISTRY comment
-    # and DECISIONS.md 2026-08-24 "vector layer audit depth").
-    for name in ("solar", "lakes", "rivers", "seismic", "power_plants", "protected"):
+    # and DECISIONS.md 2026-08-24 "vector layer audit depth"). roads
+    # moved into this list 2026-09-08 for the same reason — its source
+    # is now a single GRIP4 regional file shared across countries, not
+    # a per-country download (see DECISIONS.md same date, Fase 2).
+    for name in (
+        "solar",
+        "lakes",
+        "rivers",
+        "seismic",
+        "power_plants",
+        "protected",
+        "roads",
+    ):
         assert layers_by_name[name].country_code is None
 
     for name in ("borders", "elevation", "wind", "land_cover"):
@@ -145,15 +156,15 @@ def test_run_acquisition_phase_reads_country_code_from_context(tmp_path):
 def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
     # Updated 2026-08-25 (real fetchers for power_plants/wind/lakes/
     # rivers) then again 2026-09-08 (see DECISIONS.md same date, "wire
-    # das 5 camadas restantes a partir do banco local, Fase 1"):
-    # land_cover/elevation/population/grid REVERTED from fetched to
-    # local_only — not a bug fix, an explicit scope reversal now that
-    # they resolve from the local database instead. `roads` is
-    # deliberately NOT part of that revert (stays fetched — see that
-    # DECISIONS.md entry). protected keeps a real fetcher too
-    # (fetchers/protected_planet.py) but its provenance stays
-    # local_only, gated behind a manual API token — not activated.
-    # solar/seismic stay local_only, no confirmed automatable source.
+    # das 5 camadas restantes a partir do banco local", Fase 1 for
+    # land_cover/elevation/population/grid, Fase 2 for roads):
+    # land_cover/elevation/population/grid/roads all REVERTED from
+    # fetched to local_only — not a bug fix, an explicit scope reversal
+    # now that they resolve from the local database instead. protected
+    # keeps a real fetcher too (fetchers/protected_planet.py) but its
+    # provenance stays local_only, gated behind a manual API token —
+    # not activated. solar/seismic stay local_only, no confirmed
+    # automatable source.
     result = run_acquisition_phase(_context(tmp_path))
 
     fetched = {layer.layer_name for layer in result.layers if layer.provenance == "fetched"}
@@ -164,7 +175,6 @@ def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
     assert fetched == {
         "borders",
         "admin1",
-        "roads",
         "wind",
         "lakes",
         "rivers",
@@ -175,6 +185,7 @@ def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
         "elevation",
         "population",
         "grid",
+        "roads",
         "protected",
         "solar",
         "seismic",
@@ -281,7 +292,7 @@ def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_p
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid"])
+@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid", "roads"])
 def test_run_acquisition_phase_populates_path_from_local_resolver(
     tmp_path, monkeypatch, layer_name
 ):
@@ -290,6 +301,7 @@ def test_run_acquisition_phase_populates_path_from_local_resolver(
         "elevation": "resolve_elevation_path",
         "population": "resolve_population_path",
         "grid": "resolve_grid_path",
+        "roads": "resolve_roads_path",
     }[layer_name]
     monkeypatch.setattr(phase_module, handler_name, lambda country_code: fake_path)
 
@@ -365,15 +377,32 @@ def test_run_acquisition_phase_elevation_unmapped_country_propagates_keyerror(
 
 
 @pytest.mark.unit
+def test_run_acquisition_phase_roads_unmapped_country_propagates_keyerror(tmp_path, monkeypatch):
+    # local_layers.py's resolve_roads_path() has its own independent
+    # lookup table (_ROADS_COUNTRY_REGION_DIRS, deliberately BRA/PRT
+    # only — see that module's docstring) — same KeyError-on-unmapped-
+    # country contract as resolve_elevation_path()/
+    # resolve_land_cover_tiles(), verified separately since it is a
+    # separate table that could independently regress.
+    def _raise_unmapped(country_code):
+        raise KeyError(country_code)
+
+    monkeypatch.setattr(phase_module, "resolve_roads_path", _raise_unmapped)
+
+    with pytest.raises(KeyError):
+        run_acquisition_phase(_context(tmp_path))
+
+
+@pytest.mark.unit
 def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir(tmp_path):
     # With GEOFREA_RAW_DATA_DIR unset (the _no_raw_data_dir autouse
     # fixture's default) and no monkeypatched resolver, elevation/
-    # population/grid/land_cover fall back to the real local_layers.py
-    # resolvers, which gracefully return None/[] rather than raising —
-    # same contract as a real fetcher failing.
+    # population/grid/roads/land_cover fall back to the real
+    # local_layers.py resolvers, which gracefully return None/[] rather
+    # than raising — same contract as a real fetcher failing.
     result = run_acquisition_phase(_context(tmp_path))
 
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
-    for name in ("elevation", "population", "grid"):
+    for name in ("elevation", "population", "grid", "roads"):
         assert layers_by_name[name].path is None
     assert layers_by_name["land_cover"].paths == []

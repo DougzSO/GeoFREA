@@ -135,16 +135,19 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
             timings[layer] = 0.0
 
     # ── Vector layers ───────────────────────────────────────────────
-    # clip=True: single global file spanning many countries (protected,
-    # lakes, rivers). clip=False: already scoped to one country at the
-    # acquisition source (borders, admin1, grid, roads). See
-    # vector_inspection.py's module docstring and DECISIONS.md
-    # 2026-08-24 - vector layer audit depth.
+    # clip=True: single global/regional file spanning many countries
+    # (protected, lakes, rivers, and — since 2026-09-08, see
+    # DECISIONS.md same date, "wire das 5 camadas restantes a partir do
+    # banco local, Fase 2 - roads" — roads, now a GRIP4 regional
+    # shapefile instead of a per-country OSM download). clip=False:
+    # still scoped to one country at the acquisition source (borders,
+    # admin1, grid). See vector_inspection.py's module docstring and
+    # DECISIONS.md 2026-08-24 - vector layer audit depth.
     _VECTOR_SPECS: tuple[tuple[str, Path | None, bool, bool], ...] = (
         ("borders", inputs.borders_path, False, False),
         ("admin1", inputs.admin1_path, False, False),
         ("grid", inputs.grid_path, False, False),
-        ("roads", inputs.roads_path, False, False),
+        ("roads", inputs.roads_path, True, False),
         ("protected", inputs.protected_path, True, True),
         ("lakes", inputs.lakes_path, True, False),
         ("rivers", inputs.rivers_path, True, False),
@@ -380,7 +383,7 @@ def _format_report(result: AuditResult) -> str:
         "borders": "Borders (GADM)",
         "admin1": "Admin-1 (GADM)",
         "grid": "Power grid (OSM)",
-        "roads": "Roads (OSM)",
+        "roads": "Roads (GRIP4)",
         "protected": "Protected areas (WDPA)",
         "lakes": "HydroLAKES",
         "rivers": "HydroRIVERS",

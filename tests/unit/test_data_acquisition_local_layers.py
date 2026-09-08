@@ -18,6 +18,7 @@ from geofrea.data_acquisition.local_layers import (
     resolve_grid_path,
     resolve_land_cover_tiles,
     resolve_population_path,
+    resolve_roads_path,
 )
 
 
@@ -188,3 +189,48 @@ def test_resolve_land_cover_tiles_unmapped_country_raises_keyerror(tmp_path, mon
 @pytest.mark.unit
 def test_resolve_land_cover_tiles_no_env_var_returns_empty_list(tmp_path):
     assert resolve_land_cover_tiles("PRT") == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("country_code", "region_dir", "region_file"),
+    [
+        ("BRA", "Region_2_Central_South_America", "GRIP4_region2.shp"),
+        ("PRT", "Region_4_Europe", "GRIP4_region4.shp"),
+    ],
+)
+def test_resolve_roads_path_found(tmp_path, monkeypatch, country_code, region_dir, region_file):
+    raw = _make_raw_dir(tmp_path)
+    (raw / "infrastructure" / "roads" / region_dir).mkdir(parents=True)
+    expected = raw / "infrastructure" / "roads" / region_dir / region_file
+    expected.write_bytes(b"")
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_roads_path(country_code) == expected
+
+
+@pytest.mark.unit
+def test_resolve_roads_path_missing_file_returns_none(tmp_path, monkeypatch):
+    raw = _make_raw_dir(tmp_path)
+    (raw / "infrastructure" / "roads" / "Region_2_Central_South_America").mkdir(parents=True)
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_roads_path("BRA") is None
+
+
+@pytest.mark.unit
+def test_resolve_roads_path_unmapped_country_raises_keyerror(tmp_path, monkeypatch):
+    # _ROADS_COUNTRY_REGION_DIRS is deliberately BRA/PRT only — see
+    # local_layers.py's module docstring for why extending it to other
+    # countries is blocked on a regions_lookup.json numbering conflict,
+    # not just unstarted work. Any other country must raise, not guess.
+    raw = _make_raw_dir(tmp_path)
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    with pytest.raises(KeyError):
+        resolve_roads_path("CHN")
+
+
+@pytest.mark.unit
+def test_resolve_roads_path_no_env_var_returns_none(tmp_path):
+    assert resolve_roads_path("BRA") is None

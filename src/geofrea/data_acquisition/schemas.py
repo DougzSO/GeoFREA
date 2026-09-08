@@ -6,15 +6,16 @@ resolution logic either (see phase.py, fetchers/, and
 local_layers.py). As of 2026-09-08 (2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
 borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
-banco local, Fase 1", all docs/DECISIONS.md), 10 of the 14 AcquiredLayer
-entries run_acquisition_phase() produces can have a real `path`/`paths`
-— 6 via a real fetcher (power_plants, wind, lakes, rivers, borders,
-admin1) and 4 via local-database resolution (elevation, population,
-grid, land_cover) — the other 4 (roads, protected, solar, seismic)
-still always have path=None/paths=[] (see phase.py's module docstring
-for exactly which and why). See docs/DECISIONS.md 2026-08-24
-(data_acquisition skeleton) for the original rationale and the open
-gaps flagged below, most still unresolved.
+banco local" (Fase 1 + Fase 2), all docs/DECISIONS.md), 11 of the 14
+AcquiredLayer entries run_acquisition_phase() produces can have a real
+`path`/`paths` — 6 via a real fetcher (power_plants, wind, lakes,
+rivers, borders, admin1) and 5 via local-database resolution
+(elevation, population, grid, roads, land_cover) — the other 3
+(protected, solar, seismic) still always have path=None/paths=[] (see
+phase.py's module docstring for exactly which and why). See
+docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for the
+original rationale and the open gaps flagged below, most still
+unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT
@@ -153,7 +154,11 @@ class AcquiredLayer(BaseModel):
             — see geoworld_framework's DataOrchestrator.global_layers.
             Protected/WDPA was corrected from country_specific=True to
             False 2026-08-24 — see phase.py's _LAYER_REGISTRY comment
-            and DECISIONS.md same date, "vector layer audit depth").
+            and DECISIONS.md same date, "vector layer audit depth".
+            Roads joined this set 2026-09-08 for the same reason: its
+            source became a single GRIP4 regional file shared across
+            many countries, clipped per-country downstream, not a
+            per-country download — see DECISIONS.md same date).
         path: Resolved path once acquired, for single-file layers only
             (always None in this skeleton). Must be None when
             layer_name is in MULTI_FILE_LAYER_NAMES — enforced by this

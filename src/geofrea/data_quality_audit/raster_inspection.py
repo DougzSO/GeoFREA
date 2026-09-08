@@ -28,6 +28,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+from rasterio.errors import WindowError
 from rasterio.features import geometry_mask
 from rasterio.windows import from_bounds as window_from_bounds
 from shapely.geometry import box, mapping
@@ -45,6 +46,27 @@ except ImportError:
 logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 
 _CHUNK_ROWS = 4_000
+
+# Real incident, 2026-09-08 (see docs/DECISIONS.md same date, "wire das 5
+# camadas restantes a partir do banco local, Fase 2 - roads", RAM finding):
+# running the real end-to-end pipeline for BRA, _mask_raster_by_polygon()'s
+# single float32 read of the country-bbox window for `population`
+# (window (46813, 47036) px, WorldPop ~93m resolution over Brazil) drove
+# free system RAM from a healthy baseline down to 0.14 GB of 15.84 GB —
+# a near-OOM, not a crash, because numpy's allocation succeeded (the OS
+# paged rather than raising) instead of tripping the existing
+# `except MemoryError: pass` fallback to _stats_chunked() below.
+# ~46,813 * 47,036 * 4 bytes (float32) ≈ 8.8 GB for that one array alone,
+# before the boolean poly_mask and rasterio's own internal read buffer.
+# This is a pre-existing risk in the windowed-read path, only exposed now
+# that `population` got a real path for a country BRA's size for the
+# first time (Fase 1, same DECISIONS.md date) — nothing about `roads`
+# itself. Fixed here by ESTIMATING the allocation from the window's own
+# pixel count before ever calling src.read(), and raising MemoryError
+# proactively when it would exceed this budget — reusing inspect_raster()'s
+# existing MemoryError -> _stats_chunked() fallback wiring rather than
+# adding a second, parallel fallback path.
+_WINDOWED_READ_MAX_BYTES = 1_500_000_000  # ~1.5 GB, conservative
 
 
 @contextmanager
@@ -123,6 +145,47 @@ def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarr
     return (km_x * km_y).astype(np.float64)
 
 
+def _country_window(
+    bounds: tuple[float, float, float, float],
+    transform: rasterio.Affine,
+    width: int,
+    height: int,
+) -> rasterio.windows.Window:
+    """Compute the raster window covering a country's bbox, clipped to the raster's own extent.
+
+    Single source of truth for this computation, added 2026-09-08 (see
+    docs/DECISIONS.md same date) after _mask_raster_by_polygon() and
+    _stats_chunked() were found to have silently diverged: each
+    computed this window independently (or, for _stats_chunked(),
+    didn't compute it at all — it used to chunk over the FULL raster
+    extent instead), which is exactly how their total_px denominators
+    drifted apart undetected. Extracting the math here does NOT decide
+    what "no overlap" means for a caller — see the "Raises" section and
+    each caller's own docstring for why they deliberately differ on
+    that.
+
+    Args:
+        bounds: Country geometry bounds (minx, miny, maxx, maxy),
+            already reprojected into the raster's own CRS.
+        transform: The raster's affine transform (src.transform).
+        width: Raster width in pixels (src.width).
+        height: Raster height in pixels (src.height).
+
+    Returns:
+        The bbox window, intersected with (0, 0, width, height).
+
+    Raises:
+        rasterio.errors.WindowError: If the country bbox does not
+            overlap the raster's own extent at all. Deliberately NOT
+            caught here — this function only computes the window, it
+            does not decide whether a non-overlapping pairing is an
+            error or a legitimate empty result. That policy differs by
+            caller (see _mask_raster_by_polygon() and _stats_chunked()).
+    """
+    window = window_from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], transform=transform)
+    return window.intersection(rasterio.windows.Window(0, 0, width, height))
+
+
 def _mask_raster_by_polygon(
     src: rasterio.DatasetReader,
     country_gdf: gpd.GeoDataFrame,
@@ -130,16 +193,40 @@ def _mask_raster_by_polygon(
     """Clip a raster to a country polygon using a windowed read strategy.
 
     Raises:
-        MemoryError: If the windowed read exceeds available memory
-            (caller falls back to _stats_chunked()).
+        rasterio.errors.WindowError: If the country bbox does not
+            overlap the raster at all — propagated, not caught here.
+            This is this function's PRE-EXISTING policy (unchanged by
+            the 2026-09-08 _country_window() extraction, only made
+            explicit by it): a country/raster pairing with zero overlap
+            surfaces as inspect_raster()'s own result["error"] (via its
+            broad except Exception), the same way a corrupt file would
+            — treated as worth flagging, not silently swallowed.
+            _stats_chunked() deliberately makes the OPPOSITE choice for
+            the identical condition (see that function's docstring) —
+            not an oversight that the two agree here, a considered
+            per-caller policy documented explicitly this same session.
+        MemoryError: If the window's pixel count alone would allocate
+            more than _WINDOWED_READ_MAX_BYTES as float32 — estimated
+            BEFORE reading, not caught after the fact (see that
+            constant's docstring for the real incident this guards
+            against: relying on numpy/rasterio's own allocation to
+            raise MemoryError was not reliable enough on Windows, which
+            can page instead of raising). Caller falls back to
+            _stats_chunked().
     """
     geom_in_src_crs = country_gdf.to_crs(src.crs)
     bounds = geom_in_src_crs.total_bounds
 
-    window = window_from_bounds(
-        bounds[0], bounds[1], bounds[2], bounds[3], transform=src.transform
-    )
-    window = window.intersection(rasterio.windows.Window(0, 0, src.width, src.height))
+    window = _country_window(bounds, src.transform, src.width, src.height)
+
+    estimated_bytes = round(window.width) * round(window.height) * np.dtype(np.float32).itemsize
+    if estimated_bytes > _WINDOWED_READ_MAX_BYTES:
+        raise MemoryError(
+            f"Windowed read would allocate ~{estimated_bytes / 1e9:.2f} GB "
+            f"(window {round(window.height)}x{round(window.width)} px as float32), "
+            f"over the {_WINDOWED_READ_MAX_BYTES / 1e9:.1f} GB budget — "
+            "falling back to a chunked read instead."
+        )
 
     win_transform = src.window_transform(window)
     data = src.read(1, window=window).astype(np.float32)
@@ -159,14 +246,60 @@ def _stats_chunked(
 
     Fallback for rasters too large to mask in one windowed read (e.g. a
     ~3.4 GB WorldPop 100m tile for Brazil).
+
+    total_px scoping fixed 2026-09-08 (see docs/DECISIONS.md same date):
+    this function used to chunk over the FULL raster extent
+    (src.height/src.width) regardless of country_gdf, while
+    _mask_raster_by_polygon() (the windowed-read strategy this falls
+    back FROM) scopes to the country's own bbox window — live-verified
+    to silently diverge (BRA population: 45.8% valid via the windowed
+    path vs. 39.7% via this one, exactly explained by the ~15% larger
+    full-raster pixel count used as this function's total_px
+    denominator). min/max/mean/area_km2 were never affected — those
+    come from valid_px directly, not total_px — only valid_pct
+    (computed by the caller, inspect_raster(), as valid_px/total_px)
+    was inconsistent depending on which strategy actually ran. Now
+    chunks over the same country-bbox window _mask_raster_by_polygon()
+    would have used (both now go through the shared _country_window()),
+    so total_px means the same thing regardless of which strategy
+    handled a given raster.
+
+    WindowError policy DELIBERATELY differs from _mask_raster_by_polygon()
+    for the identical "no overlap at all" condition — not an oversight,
+    a considered choice made explicit 2026-09-08 when the two functions'
+    window computation was unified into _country_window(): this
+    function catches it and returns zero stats, because that has always
+    been its own pre-existing contract (see
+    test_stats_chunked_returns_zero_stats_when_polygon_does_not_overlap,
+    which predates this session — before 2026-09-08 this function never
+    computed a window at all, it just iterated real pixel data via
+    geometry_mask(), which naturally produces zero valid pixels for a
+    non-overlapping polygon without ever raising). Preserving that
+    behavior through the shared helper, not changing it, is the point.
     """
     try:
         geom_in_src_crs = country_gdf.to_crs(src.crs)
         shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
         transform = src.transform
         nodata = src.nodata
-        height = src.height
-        width = src.width
+
+        bounds = geom_in_src_crs.total_bounds
+        try:
+            country_window = _country_window(bounds, transform, src.width, src.height)
+        except WindowError:
+            return {
+                "min": None,
+                "max": None,
+                "mean": None,
+                "valid_px": 0,
+                "total_px": 0,
+                "area_km2": 0.0,
+            }, transform
+
+        row_off = round(country_window.row_off)
+        col_off = round(country_window.col_off)
+        win_height = round(country_window.height)
+        win_width = round(country_window.width)
 
         g_min = np.inf
         g_max = -np.inf
@@ -175,11 +308,11 @@ def _stats_chunked(
         g_total_px = 0
         g_area_km2 = 0.0
 
-        for row_start in range(0, height, _CHUNK_ROWS):
-            row_end = min(row_start + _CHUNK_ROWS, height)
-            chunk_h = row_end - row_start
+        for chunk_start in range(0, win_height, _CHUNK_ROWS):
+            chunk_end = min(chunk_start + _CHUNK_ROWS, win_height)
+            chunk_h = chunk_end - chunk_start
 
-            window = rasterio.windows.Window(0, row_start, width, chunk_h)
+            window = rasterio.windows.Window(col_off, row_off + chunk_start, win_width, chunk_h)
             win_tf = src.window_transform(window)
             block = src.read(1, window=window).astype(np.float32)
 
@@ -203,7 +336,7 @@ def _stats_chunked(
                 g_max = max(g_max, float(vals.max()))
                 g_sum += float(vals.sum())
 
-            row_areas = row_area_km2((chunk_h, width), win_tf)
+            row_areas = row_area_km2((chunk_h, win_width), win_tf)
             valid_per_row = valid_mask.sum(axis=1)
             g_area_km2 += float((row_areas * valid_per_row).sum())
 
@@ -238,7 +371,11 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
     """Read metadata and statistics from a single raster file.
 
     Adaptive memory strategy: try a windowed polygon-masked read first;
-    on MemoryError, fall back to a chunked read.
+    on MemoryError, fall back to a chunked read. Since 2026-09-08 (see
+    _WINDOWED_READ_MAX_BYTES's docstring — a real near-OOM incident),
+    that MemoryError can come from _mask_raster_by_polygon() estimating
+    the window's allocation size upfront and refusing it proactively,
+    not only from an actual failed allocation.
 
     Args:
         path: Path to the raster file.

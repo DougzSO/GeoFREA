@@ -346,11 +346,15 @@ def test_run_audit_phase_protected_areas_iucn_breakdown(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_borders_and_admin1_are_not_clipped(tmp_path):
-    # borders/admin1/grid/roads are already scoped to one country at
-    # the acquisition source (GADM/OSM) — clip=False, see
+    # borders/admin1/grid are already scoped to one country at the
+    # acquisition source (GADM/OSM) — clip=False, see
     # vector_inspection.py's module docstring and DECISIONS.md
-    # 2026-08-24 "vector layer audit depth". No country_gdf is passed
-    # here at all, to prove clipping does not happen / is not required.
+    # 2026-08-24 "vector layer audit depth". `roads` used to be in this
+    # group too but flipped to clip=True 2026-09-08 (GRIP4 regional
+    # file, see DECISIONS.md same date, Fase 2) — see
+    # test_run_audit_phase_roads_is_clipped below instead. No
+    # country_gdf is passed here at all, to prove clipping does not
+    # happen / is not required for borders.
     borders_path = tmp_path / "borders.geojson"
     admin1_a = box(_ORIGIN_LON, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.02, _ORIGIN_LAT)
     admin1_b = box(_ORIGIN_LON + 0.02, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.05, _ORIGIN_LAT)
@@ -365,3 +369,31 @@ def test_run_audit_phase_borders_and_admin1_are_not_clipped(tmp_path):
     assert borders.found is True
     assert borders.clipped_to_country is False
     assert borders.n_features == 2
+
+
+@pytest.mark.unit
+def test_run_audit_phase_roads_is_clipped(tmp_path):
+    # roads flipped from clip=False (per-country OSM download) to
+    # clip=True (GRIP4 regional shapefile, shared across countries)
+    # 2026-09-08 — see DECISIONS.md same date, "wire das 5 camadas
+    # restantes a partir do banco local, Fase 2 - roads". Mirrors
+    # test_run_audit_phase_inspects_a_valid_global_vector_layer_clipped
+    # above (same pattern already proven for lakes).
+    mainland = box(_ORIGIN_LON, _ORIGIN_LAT - 0.05, _ORIGIN_LON + 0.05, _ORIGIN_LAT)
+    country_gdf = gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326")
+
+    road_inside = box(_ORIGIN_LON, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.01)
+    road_outside = box(50.0, 50.0, 50.1, 50.1)
+    roads_path = tmp_path / "roads.geojson"
+    gpd.GeoDataFrame(geometry=[road_inside, road_outside], crs="EPSG:4326").to_file(
+        roads_path, driver="GeoJSON"
+    )
+
+    inputs = AuditInputs(roads_path=roads_path, country_gdf=country_gdf)
+    result = run_audit_phase(_context(tmp_path), inputs)
+
+    roads = result.vectors["roads"]
+    assert roads.found is True
+    assert roads.error is None
+    assert roads.clipped_to_country is True
+    assert roads.n_features == 1

@@ -76,6 +76,67 @@ currently only runs PRT/BRA, so the other 5 are unexercised head start
 for a future scope expansion, not dead code to prune. Adding an 8th
 country requires adding its directory name to both tables (elevation
 and land_cover independently, since they don't share a convention).
+
+roads (added 2026-09-08, Fase 2 of "wire das 5 camadas restantes a
+partir do banco local" — see docs/DECISIONS.md same date): resolves to
+the GRIP4 (Global Roads Inventory Project) regional shapefile covering
+one country, UNCLIPPED — unlike elevation/population/grid/land_cover
+above, this file spans many countries (GRIP4's own continental region
+split, not a per-country product), so it is resolved the same way
+lakes/rivers/protected already are: point AcquiredLayer.path at the
+raw regional source, and let data_quality_audit's existing
+inspect_vector_layer(clip=True) + read_clipped_to_country() +
+cache_path machinery (vector_inspection.py, core/geo_utils.py) do the
+actual per-country clip at inspection time, not here. This module does
+no clipping itself — same boundary as every other resolver in this
+file, "locate a path, don't process it."
+
+_ROADS_COUNTRY_REGION_DIRS is DELIBERATELY restricted to BRA/PRT only,
+not all 7 countries like the tables above — GEOFREA_RAW_DATA_DIR also
+ships a regions_lookup.json meant to map every country to its GRIP4
+region, but it was found (2026-09-08) to DISAGREE with the actual
+region number embedded in each shapefile's own `gp_gripreg` attribute
+for every region except the two this stage needs: regions_lookup.json
+labels official region 1 as Africa, 5 as South Asia, 6 as East/
+Southeast Asia, 7 as Central/West Asia, but the folders physically on
+disk (Region_3_Africa, Region_5_Middle_East_Central_Asia,
+Region_6_Central_East_Asia) contain data whose own gp_gripreg field
+reads 3, 5, 6 respectively — confirmed by sampling 5,000 rows per file,
+not assumed. For BRA (Region_2_Central_South_America, gp_gripreg=2)
+and PRT (Region_4_Europe, gp_gripreg=4), every source agrees — folder
+number, folder descriptive name, regions_lookup.json's key, and the
+shapefile's own gp_gripreg column all point to the same file, so there
+is no ambiguity for either country actually in parameters.json today.
+Extending this table to CHN/EGY/IND/RUS/ZAF requires first resolving
+which numbering regions_lookup.json actually intended — NOT guessed
+here. Two of the 8 official GRIP4 regions (1-Africa, 7-Central/West
+Asia per regions_lookup.json's own labels) are additionally still
+zipped (GRIP4_Region1_vector_shp.zip, GRIP4_Region7_vector_shp.zip),
+not extracted, on disk — unusable without an extraction step regardless
+of the numbering question.
+
+GRIP4_Region1/7_vector_shp.zip are NOT the same files as the
+`Region_3_Africa`/etc. directories despite the "Region_N" naming
+overlap being confusing — the zips retain their original download
+numbering (matching regions_lookup.json's official scheme), the
+extracted directories do not (see above). Left unresolved and
+unextracted; flagged, not touched, this stage.
+
+Also found under GEOFREA_RAW_DATA_DIR/infrastructure/roads/, NOT used
+by this module: `<ISO3>_roads_osm.geojson` files for CHN/EGY/IND/ZAF
+(not BRA/PRT) — leftovers from an earlier OSM-based roads acquisition
+attempt, orphaned now that GRIP4 is the designated source for `roads`.
+Left in place, not deleted (out of scope), see DECISIONS.md 2026-09-08.
+
+Live-verified 2026-09-08 (isolated script, real GADM boundary +
+read_clipped_to_country(), not assumed to scale linearly from the
+smaller HydroRIVERS precedent per Douglas's explicit instruction): cold
+clip took 17.5s for PRT (178,986 features, 63,475 km) and 184.4s
+(~3.1 min) for BRA (548,287 features, 694,571 km) — both faster than
+the historical rivers/BRA benchmark (191.63s isolated / 348.8s
+production, DECISIONS.md 2026-08-25/26) despite GRIP4's regional files
+being larger on disk than HydroRIVERS' tiles; system RAM stayed healthy
+throughout both runs (never dropped below ~5.2 GB free of 15.8 GB).
 """
 
 from __future__ import annotations
@@ -115,6 +176,24 @@ _LAND_COVER_COUNTRY_DIRS: dict[str, str] = {
 
 _LAND_COVER_TILE_GLOB = "ESA_WorldCover_10m_2020_v100_*_Map.tif"
 
+# Deliberately BRA/PRT only — see module docstring, "roads (added
+# 2026-09-08...)", for why this is NOT extended to the other 5
+# countries the two tables above cover (regions_lookup.json's region
+# numbering conflicts with the shapefiles' own gp_gripreg attribute for
+# every region except these two, confirmed by sampling, not guessed).
+# Cross-validated against gp_gripreg 2026-09-08: folder number, folder
+# name, regions_lookup.json key, and each file's own gp_gripreg column
+# all agree for BRA (2) and PRT (4).
+_ROADS_COUNTRY_REGION_DIRS: dict[str, str] = {
+    "BRA": "Region_2_Central_South_America",
+    "PRT": "Region_4_Europe",
+}
+
+_ROADS_COUNTRY_REGION_FILES: dict[str, str] = {
+    "BRA": "GRIP4_region2.shp",
+    "PRT": "GRIP4_region4.shp",
+}
+
 
 def _raw_data_dir() -> Path | None:
     """Resolve GEOFREA_RAW_DATA_DIR, or None if unset/empty.
@@ -128,7 +207,7 @@ def _raw_data_dir() -> Path | None:
     if not raw:
         logger.warning(
             "%s is not set — local-only layers (elevation/population/grid/"
-            "land_cover) cannot be resolved this run.",
+            "roads/land_cover) cannot be resolved this run.",
             RAW_DATA_DIR_ENV_VAR,
         )
         return None
@@ -254,3 +333,46 @@ def resolve_land_cover_tiles(country_code: str) -> list[Path]:
     if not tiles:
         logger.warning("No local land_cover tiles found for %s under %s", country_code, tiles_dir)
     return tiles
+
+
+def resolve_roads_path(country_code: str) -> Path | None:
+    """Resolve the local GRIP4 regional roads shapefile covering one country.
+
+    UNCLIPPED — this is the same shape of resolver as
+    resolve_elevation_path() etc. (locate a path, do not process it),
+    but the file itself spans many countries (GRIP4's continental
+    region split), same as lakes/rivers/protected's global/continental
+    source files. The per-country clip happens downstream, at
+    inspection time, via data_quality_audit's existing
+    inspect_vector_layer(clip=True) + read_clipped_to_country() +
+    cache_path machinery — see module docstring.
+
+    Args:
+        country_code: ISO-3166-alpha-3 code. Must be a key in
+            _ROADS_COUNTRY_REGION_DIRS — deliberately BRA/PRT only this
+            stage (see module docstring for why extending this is
+            blocked on a regions_lookup.json numbering conflict, not
+            just unstarted work).
+
+    Returns:
+        Path to `<raw>/infrastructure/roads/<region_dir>/<region_file>.shp`,
+        or None if GEOFREA_RAW_DATA_DIR is unset or the file is
+        genuinely absent on disk (logged, not raised).
+
+    Raises:
+        KeyError: If country_code is not in _ROADS_COUNTRY_REGION_DIRS —
+            a configuration gap, not a runtime condition (see module
+            docstring; same treatment as elevation/land_cover above).
+    """
+    region_dir = _ROADS_COUNTRY_REGION_DIRS[country_code]
+    region_file = _ROADS_COUNTRY_REGION_FILES[country_code]
+
+    raw_data_dir = _raw_data_dir()
+    if raw_data_dir is None:
+        return None
+
+    path = raw_data_dir / "infrastructure" / "roads" / region_dir / region_file
+    if not path.exists():
+        logger.warning("Local GRIP4 roads file not found for %s: %s", country_code, path)
+        return None
+    return path
