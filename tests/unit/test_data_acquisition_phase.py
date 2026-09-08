@@ -12,6 +12,18 @@ working unchanged: "no real fetch happens in this test" looks identical
 to "the fetch failed" from run_acquisition_phase()'s point of view.
 Tests that specifically exercise the wiring itself override individual
 fetchers to return a real value.
+
+2026-09-08 (see docs/DECISIONS.md same date, "wire das 5 camadas
+restantes a partir do banco local, Fase 1"): run_acquisition_phase()
+also resolves elevation/population/grid/land_cover from the local
+database (local_layers.py) unconditionally on every call. The
+`_no_raw_data_dir` autouse fixture below clears GEOFREA_RAW_DATA_DIR so
+every existing structural test keeps passing unchanged, exactly like
+`_no_network_fetchers` above — an unset env var makes those 4 resolvers
+gracefully return None/[] (see local_layers.py's module docstring, "two
+different failure modes"), the same as a fetcher returning None. Tests
+that specifically exercise this new wiring monkeypatch the resolver
+functions themselves, same pattern as the fetcher tests below.
 """
 
 from pathlib import Path
@@ -21,6 +33,7 @@ import pytest
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_acquisition import phase as phase_module
+from geofrea.data_acquisition.local_layers import RAW_DATA_DIR_ENV_VAR
 from geofrea.data_acquisition.phase import _LAYER_REGISTRY, run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 
@@ -36,11 +49,15 @@ _FETCHER_NAMES = (
     "fetch_admin1",
 )
 
-
 @pytest.fixture(autouse=True)
 def _no_network_fetchers(monkeypatch):
     for name in _FETCHER_NAMES:
         monkeypatch.setattr(phase_module, name, lambda *args, **kwargs: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_raw_data_dir(monkeypatch):
+    monkeypatch.delenv(RAW_DATA_DIR_ENV_VAR, raising=False)
 
 
 def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
@@ -86,15 +103,19 @@ def test_run_acquisition_phase_slope_is_not_in_the_registry(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_only_land_cover_requires_auth(tmp_path):
+def test_run_acquisition_phase_no_layer_requires_auth_2026_09_08(tmp_path):
+    # Until 2026-09-08, land_cover was the one layer with
+    # auth_required=True (Terrascope). It reverted to local_only this
+    # stage (see docs/DECISIONS.md 2026-09-08, "wire das 5 camadas
+    # restantes a partir do banco local, Fase 1") — the local ESA
+    # WorldCover tiles need no credentials, so no layer requires auth
+    # anymore.
     result = run_acquisition_phase(_context(tmp_path))
-    layers_by_name = {layer.layer_name: layer for layer in result.layers}
 
-    assert layers_by_name["land_cover"].auth_required is True
     auth_required_names = {
         layer.layer_name for layer in result.layers if layer.auth_required
     }
-    assert auth_required_names == {"land_cover"}
+    assert auth_required_names == set()
 
 
 @pytest.mark.unit
@@ -121,11 +142,15 @@ def test_run_acquisition_phase_reads_country_code_from_context(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_provenance_split_2026_08_25(tmp_path):
-    # Updated 2026-08-25 (see DECISIONS.md same date, "real fetchers
-    # for power_plants/wind/lakes/rivers"): power_plants/wind/lakes/
-    # rivers moved from local_only to fetched — real, live-verified
-    # fetchers now exist for them. protected keeps a real fetcher too
+def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
+    # Updated 2026-08-25 (real fetchers for power_plants/wind/lakes/
+    # rivers) then again 2026-09-08 (see DECISIONS.md same date, "wire
+    # das 5 camadas restantes a partir do banco local, Fase 1"):
+    # land_cover/elevation/population/grid REVERTED from fetched to
+    # local_only — not a bug fix, an explicit scope reversal now that
+    # they resolve from the local database instead. `roads` is
+    # deliberately NOT part of that revert (stays fetched — see that
+    # DECISIONS.md entry). protected keeps a real fetcher too
     # (fetchers/protected_planet.py) but its provenance stays
     # local_only, gated behind a manual API token — not activated.
     # solar/seismic stay local_only, no confirmed automatable source.
@@ -139,17 +164,21 @@ def test_run_acquisition_phase_provenance_split_2026_08_25(tmp_path):
     assert fetched == {
         "borders",
         "admin1",
-        "land_cover",
-        "elevation",
-        "population",
-        "grid",
         "roads",
         "wind",
         "lakes",
         "rivers",
         "power_plants",
     }
-    assert local_only == {"protected", "solar", "seismic"}
+    assert local_only == {
+        "land_cover",
+        "elevation",
+        "population",
+        "grid",
+        "protected",
+        "solar",
+        "seismic",
+    }
 
 
 @pytest.mark.unit
@@ -249,3 +278,102 @@ def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_p
 
     with pytest.raises(KeyError):
         run_acquisition_phase(_context(tmp_path))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid"])
+def test_run_acquisition_phase_populates_path_from_local_resolver(
+    tmp_path, monkeypatch, layer_name
+):
+    fake_path = tmp_path / f"{layer_name}.fake"
+    handler_name = {
+        "elevation": "resolve_elevation_path",
+        "population": "resolve_population_path",
+        "grid": "resolve_grid_path",
+    }[layer_name]
+    monkeypatch.setattr(phase_module, handler_name, lambda country_code: fake_path)
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    layers_by_name = {layer.layer_name: layer for layer in result.layers}
+    assert layers_by_name[layer_name].path == fake_path
+    assert result.summary.layers_resolved == 1
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_populates_paths_from_land_cover_resolver(tmp_path, monkeypatch):
+    fake_tiles = [tmp_path / "tile_a.tif", tmp_path / "tile_b.tif"]
+    monkeypatch.setattr(
+        phase_module, "resolve_land_cover_tiles", lambda country_code: fake_tiles
+    )
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    layers_by_name = {layer.layer_name: layer for layer in result.layers}
+    assert layers_by_name["land_cover"].paths == fake_tiles
+    assert layers_by_name["land_cover"].path is None
+    assert result.summary.layers_resolved == 1
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_local_resolvers_receive_country_code(tmp_path, monkeypatch):
+    received = []
+    monkeypatch.setattr(
+        phase_module,
+        "resolve_elevation_path",
+        lambda country_code: received.append(country_code) or None,
+    )
+
+    run_acquisition_phase(_context(tmp_path, country_code="BRA"))
+
+    assert received == ["BRA"]
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_does_not_call_local_resolvers_for_unrelated_layers(
+    tmp_path, monkeypatch
+):
+    called = []
+    monkeypatch.setattr(
+        phase_module,
+        "resolve_elevation_path",
+        lambda country_code: called.append("elevation") or None,
+    )
+
+    run_acquisition_phase(_context(tmp_path))
+
+    assert called == ["elevation"]
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_elevation_unmapped_country_propagates_keyerror(
+    tmp_path, monkeypatch
+):
+    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror
+    # above: local_layers.py's resolve_elevation_path()/
+    # resolve_land_cover_tiles() deliberately raise KeyError for a
+    # country outside their lookup tables (a configuration gap, not a
+    # transient failure — see local_layers.py's module docstring) —
+    # this phase must NOT swallow it either.
+    def _raise_unmapped(country_code):
+        raise KeyError(country_code)
+
+    monkeypatch.setattr(phase_module, "resolve_elevation_path", _raise_unmapped)
+
+    with pytest.raises(KeyError):
+        run_acquisition_phase(_context(tmp_path))
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir(tmp_path):
+    # With GEOFREA_RAW_DATA_DIR unset (the _no_raw_data_dir autouse
+    # fixture's default) and no monkeypatched resolver, elevation/
+    # population/grid/land_cover fall back to the real local_layers.py
+    # resolvers, which gracefully return None/[] rather than raising —
+    # same contract as a real fetcher failing.
+    result = run_acquisition_phase(_context(tmp_path))
+
+    layers_by_name = {layer.layer_name: layer for layer in result.layers}
+    for name in ("elevation", "population", "grid"):
+        assert layers_by_name[name].path is None
+    assert layers_by_name["land_cover"].paths == []

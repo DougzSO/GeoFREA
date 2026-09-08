@@ -1,15 +1,20 @@
 """Pydantic schemas for the data_acquisition phase.
 
 This module defines the acquisition contract; it contains no fetch/
-download logic itself (see phase.py and fetchers/). As of 2026-08-26
-(2026-08-25 "real fetchers for power_plants/wind/lakes/rivers" +
-2026-08-26 "real fetcher for borders/admin1", both docs/DECISIONS.md),
-6 of the 14 AcquiredLayer entries run_acquisition_phase() produces can
-have a real `path` — the other 8 still always have path=None/paths=[]
-(see phase.py's module docstring for exactly which and why). See
-docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for the
-original rationale and the open gaps flagged below, most still
-unresolved.
+download logic itself, and (as of 2026-09-08) no local-database
+resolution logic either (see phase.py, fetchers/, and
+local_layers.py). As of 2026-09-08 (2026-08-25 "real fetchers for
+power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
+borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
+banco local, Fase 1", all docs/DECISIONS.md), 10 of the 14 AcquiredLayer
+entries run_acquisition_phase() produces can have a real `path`/`paths`
+— 6 via a real fetcher (power_plants, wind, lakes, rivers, borders,
+admin1) and 4 via local-database resolution (elevation, population,
+grid, land_cover) — the other 4 (roads, protected, solar, seismic)
+still always have path=None/paths=[] (see phase.py's module docstring
+for exactly which and why). See docs/DECISIONS.md 2026-08-24
+(data_acquisition skeleton) for the original rationale and the open
+gaps flagged below, most still unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT
@@ -131,10 +136,15 @@ class AcquiredLayer(BaseModel):
             provenance is about intended/eventual source, not today's
             execution state (see fetch_status for that).
         auth_required: Whether the (future) fetch for this layer needs
-            credentials. True only for land_cover (Terrascope) per the
-            legacy audit — every other fetched source (GADM, Copernicus
-            DEM S3, WorldPop, OSM Overpass) is public. Never holds the
-            credential itself — this is a capability flag, not a secret.
+            credentials. Always False today (2026-09-08): land_cover was
+            the one case where this was True (Terrascope, per the
+            legacy audit) until it reverted to local_only — it now
+            resolves from pre-placed tiles needing no auth at all, same
+            as every other fetched source (GADM, Copernicus DEM S3,
+            WorldPop, OSM Overpass), all public (see DECISIONS.md
+            2026-09-08, "wire das 5 camadas restantes a partir do banco
+            local, Fase 1"). Never holds the credential itself — this is
+            a capability flag, not a secret.
         source_name: Human-readable source identifier (e.g. "GADM 4.1",
             "Terrascope ESA WorldCover"), or None if undetermined.
         country_code: ISO-3166-alpha-3 code this layer was/would be

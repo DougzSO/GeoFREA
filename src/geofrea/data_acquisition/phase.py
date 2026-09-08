@@ -22,14 +22,26 @@ fetchers for power_plants/wind/lakes/rivers") wired 4 of the 14 layers
 (power_plants, wind, lakes, rivers) to a real fetcher instead of always
 leaving path=None. 2026-08-26 (see DECISIONS.md same date) added
 borders + admin1 (fetchers/gadm.py) — 6 of 14 now call a real fetcher.
-The other 8 remain structural placeholders — either genuinely
-unimplemented (land_cover/elevation/population/grid/roads, still
-skeleton) or implemented-but-not-activated (protected — see
-fetchers/protected_planet.py's module docstring for why) or explicitly
-out of scope (solar, seismic — no confirmed per-country/automatable
-source, see DECISIONS.md 2026-08-25). _FETCHED_LAYER_HANDLERS below is
-the only place this phase knows about individual fetcher modules —
-everything else in this file is unchanged from the skeleton.
+_FETCHED_LAYER_HANDLERS below is the only place this phase knows about
+individual fetcher modules.
+
+Local-database resolution: 2026-09-08 (see docs/DECISIONS.md same date
+— "wire das 5 camadas restantes a partir do banco local, Fase 1") wired
+elevation/population/grid/land_cover to resolve a pre-placed path from
+the local database (local_layers.py) instead of always leaving
+path=None/paths=[] — no fetch/download logic involved, just locating
+files already on disk. _LOCAL_PATH_HANDLERS / _LOCAL_MULTI_PATH_HANDLERS
+below are the only places this phase knows about local_layers.py.
+`roads` (the 5th remaining layer from that same DECISIONS.md entry) is
+NOT covered here — see that entry for why it is a separate stage — and
+`protected` remains implemented-but-not-activated (see
+fetchers/protected_planet.py's module docstring). `solar`/`seismic`
+remain out of scope (no confirmed automatable source, see DECISIONS.md
+2026-08-25). fetch_status is UNCHANGED by any of this — none of the 4
+local-resolved layer_names are in IMPLEMENTED_FETCH_LAYER_NAMES, so they
+keep reporting "not_implemented" (resolving a local path is not the same
+as GeoFREA's own code fetching one — see local_layers.py's module
+docstring).
 
 Orchestrator wiring note: the Orchestrator enforces NO ordering or
 dependency between phases on its own — RunConfig.phases (settings.yaml)
@@ -61,6 +73,12 @@ from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
 from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
 from geofrea.data_acquisition.fetchers.wind import fetch_wind
+from geofrea.data_acquisition.local_layers import (
+    resolve_elevation_path,
+    resolve_grid_path,
+    resolve_land_cover_tiles,
+    resolve_population_path,
+)
 from geofrea.data_acquisition.schemas import (
     IMPLEMENTED_FETCH_LAYER_NAMES,
     MULTI_FILE_LAYER_NAMES,
@@ -102,6 +120,47 @@ assert set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, (
     "have drifted apart — update both together."
 )
 
+# layer_name -> local-database resolver, for the 4 single-path layers
+# wired 2026-09-08 (see module docstring, "Local-database resolution").
+# Deliberately a SEPARATE dict from _FETCHED_LAYER_HANDLERS, not merged
+# into it: these resolvers do no fetch/download at all (local_layers.py
+# is not a fetcher module), and none of these layer_names belong in
+# IMPLEMENTED_FETCH_LAYER_NAMES/fetch_status — see that module's
+# docstring for why "resolved locally" and "fetched by GeoFREA's own
+# code" are deliberately different facts.
+_LOCAL_PATH_HANDLERS: dict[str, Callable[[str], Path | None]] = {
+    "elevation": lambda country_code: resolve_elevation_path(country_code),
+    "population": lambda country_code: resolve_population_path(country_code),
+    "grid": lambda country_code: resolve_grid_path(country_code),
+}
+
+# land_cover is multi-file (MULTI_FILE_LAYER_NAMES) — kept in its own
+# dict rather than _LOCAL_PATH_HANDLERS since it returns list[Path], not
+# Path | None, same path/paths split as elsewhere in this module.
+#
+# Every handler above and below is a lambda that calls the resolver by
+# name, not a direct function reference — same pattern
+# _FETCHED_LAYER_HANDLERS already uses (module docstring's lambdas call
+# fetch_power_plants() etc. by name). This is not stylistic: a direct
+# reference would bind the function object at dict-construction time,
+# so a test's monkeypatch.setattr(phase_module, "resolve_elevation_path", ...)
+# would silently miss it — the lambda instead looks the name up in this
+# module's globals on every call, which is what makes that monkeypatch
+# pattern work at all (confirmed by the test suite, not assumed).
+_LOCAL_MULTI_PATH_HANDLERS: dict[str, Callable[[str], list[Path]]] = {
+    "land_cover": lambda country_code: resolve_land_cover_tiles(country_code),
+}
+
+assert not set(_LOCAL_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
+    "_LOCAL_PATH_HANDLERS and _FETCHED_LAYER_HANDLERS overlap — a layer_name "
+    "should resolve from exactly one of a real fetcher or the local database, "
+    "not both."
+)
+assert not set(_LOCAL_MULTI_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
+    "_LOCAL_MULTI_PATH_HANDLERS and _FETCHED_LAYER_HANDLERS overlap — same "
+    "requirement as _LOCAL_PATH_HANDLERS above."
+)
+
 
 class _LayerSpec(NamedTuple):
     layer_name: str
@@ -121,11 +180,21 @@ class _LayerSpec(NamedTuple):
 # Per the legacy audit (geoworld_framework's DataFetcher/DataManager/
 # DataOrchestrator): only 6 download_* methods exist in the whole
 # codebase (gadm, land_cover, elevation, worldpop, osm_grid,
-# osm_roads); every other layer has no fetch mechanism whatsoever and
-# must be a pre-placed local file. Only Land Cover (Terrascope) needs
-# credentials — confirmed via geoworld_framework's
-# ConfigLoader.credentials, which exposes exactly
-# terrascope_username/terrascope_password and nothing else.
+# osm_roads) — the original skeleton (DECISIONS.md 2026-08-24) treated
+# all 6 as "fetched" on that basis, since a fetch mechanism existed in
+# legacy even where GeoFREA had not yet ported it.
+#
+# REVERTED 2026-08-24 -> 2026-09-08 for land_cover/elevation/population/
+# grid (see DECISIONS.md 2026-09-08, "wire das 5 camadas restantes a
+# partir do banco local, Fase 1" — NOT a bug fix, an explicit scope
+# reversal): these 4 now resolve from pre-placed files in the local
+# database (local_layers.py) instead, same as solar/seismic/protected
+# always have — so they are local_only now, matching how they are
+# actually acquired today, not how legacy could in principle acquire
+# them. land_cover in particular reverses the original skeleton's
+# auth_required=True (Terrascope credentials) — the local tiles need no
+# auth at all. `roads` (still OSM/Overpass, still "fetched") is
+# deliberately NOT part of this revert — see that DECISIONS.md entry.
 #
 # land_cover is multi-file (see schemas.py's MULTI_FILE_LAYER_NAMES,
 # the single source of truth — not repeated here as a flag): wind is
@@ -143,8 +212,8 @@ class _LayerSpec(NamedTuple):
 # live external source") — 2026-08-26 gave them a real handler too
 # (fetchers/gadm.py), with no provenance value change needed since it
 # was already correct. All 6 wired below via _FETCHED_LAYER_HANDLERS.
-# provenance is NOT a proxy for "has a real fetcher today" — 5 other
-# layers below also say "fetched" while having no handler at all (see
+# provenance is NOT a proxy for "has a real fetcher today" — `roads`
+# below also says "fetched" while having no handler at all (see
 # AcquiredLayer.fetch_status, schemas.py, for the field that actually
 # answers that question). `protected` stays local_only even though a
 # real fetcher exists for it too (fetchers/protected_planet.py) —
@@ -154,10 +223,31 @@ class _LayerSpec(NamedTuple):
 _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("borders", "fetched", False, "GADM 4.1 (fallback: NaturalEarth)", True),
     _LayerSpec("admin1", "fetched", False, "GADM 4.1 (level-1, same download as borders)", True),
-    _LayerSpec("land_cover", "fetched", True, "Terrascope (ESA WorldCover 10m)", True),
-    _LayerSpec("elevation", "fetched", False, "Copernicus DEM 30m (public S3)", True),
-    _LayerSpec("population", "fetched", False, "WorldPop", True),
-    _LayerSpec("grid", "fetched", False, "OpenStreetMap (Overpass API)", True),
+    _LayerSpec(
+        "land_cover",
+        "local_only",
+        False,
+        "ESA WorldCover 10m (local bundled tiles, pre-downloaded — "
+        "reverted from Terrascope live fetch, see DECISIONS.md 2026-09-08)",
+        True,
+    ),
+    _LayerSpec(
+        "elevation",
+        "local_only",
+        False,
+        "Copernicus DEM 30m (local bundled file, pre-downloaded)",
+        True,
+    ),
+    _LayerSpec(
+        "population", "local_only", False, "WorldPop (local bundled file, pre-downloaded)", True
+    ),
+    _LayerSpec(
+        "grid",
+        "local_only",
+        False,
+        "OpenStreetMap (local bundled file, pre-downloaded via Overpass)",
+        True,
+    ),
     _LayerSpec("roads", "fetched", False, "OpenStreetMap (Overpass API)", True),
     _LayerSpec("wind", "fetched", False, "Global Wind Atlas 3.0 (globalwindatlas.info/api)", True),
     # country_specific corrected 2026-08-24 (see DECISIONS.md same date,
@@ -181,10 +271,14 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
 
     6 layers (power_plants, wind, lakes, rivers, borders, admin1 — see
     _FETCHED_LAYER_HANDLERS) call a real fetcher and may have a real
-    `path` populated. Every other layer is still a structural
-    placeholder — path=None, paths=[] — either because no fetcher
-    exists yet, or because one exists but is deliberately not wired in
-    (see module docstring).
+    `path` populated. 4 more (elevation, population, grid, land_cover —
+    see _LOCAL_PATH_HANDLERS / _LOCAL_MULTI_PATH_HANDLERS) resolve a
+    pre-placed path/paths from the local database instead — no
+    fetch/download involved (see local_layers.py's module docstring).
+    Every other layer is still a structural placeholder — path=None,
+    paths=[] — either because no fetcher/resolver exists yet, or
+    because one exists but is deliberately not wired in (see module
+    docstring).
 
     Args:
         context: Shared phase context (country_code, outputs_dir, ...).
@@ -199,13 +293,22 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     for spec in _LAYER_REGISTRY:
         # MULTI_FILE_LAYER_NAMES (schemas.py) is the single source of
         # truth for path vs. paths (see DECISIONS.md 2026-08-24,
-        # "path/paths source-of-truth consolidation") — none of the 4
-        # real fetchers wired in below produce a multi-file layer, so
-        # `paths` stays [] unconditionally here; only `path` varies.
+        # "path/paths source-of-truth consolidation").
         is_multi_file = spec.layer_name in MULTI_FILE_LAYER_NAMES
 
-        handler = _FETCHED_LAYER_HANDLERS.get(spec.layer_name)
-        path = handler(context) if handler else None
+        fetch_handler = _FETCHED_LAYER_HANDLERS.get(spec.layer_name)
+        local_handler = _LOCAL_PATH_HANDLERS.get(spec.layer_name)
+        # Disjoint by construction (asserted above at import time), so
+        # at most one of these two ever applies to a given layer_name.
+        if fetch_handler:
+            path = fetch_handler(context)
+        elif local_handler:
+            path = local_handler(context.country_code)
+        else:
+            path = None
+
+        local_multi_handler = _LOCAL_MULTI_PATH_HANDLERS.get(spec.layer_name)
+        paths = local_multi_handler(context.country_code) if local_multi_handler else []
 
         layers.append(
             AcquiredLayer(
@@ -215,7 +318,7 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 source_name=spec.source_name,
                 country_code=context.country_code if spec.country_specific else None,
                 path=None if is_multi_file else path,
-                paths=[],
+                paths=paths,
                 crs_metadata=None,
             )
         )
