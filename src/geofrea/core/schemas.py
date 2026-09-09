@@ -41,6 +41,7 @@ VerificationMethod = Literal["manual_cross_check", "automated", "unverified"]
 UnitInterval = Annotated[float, Field(ge=0, le=1)]
 PositiveInt = Annotated[int, Field(gt=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0)]
+PositiveFloat = Annotated[float, Field(gt=0)]
 
 
 class VerifiedValue(BaseModel, Generic[T]):
@@ -265,6 +266,76 @@ class RunConfig(BaseModel):
     phases: dict[str, bool]
 
 
+class AdaptiveResolutionConfig(BaseModel):
+    """Fallback knobs for grid_alignment's adaptive-resolution mode.
+
+    Only consulted when ResolutionsConfig.suitability == "adaptive".
+    Ported as-is from legacy's own fallback dict (grid_aligner.py's
+    `adaptive_cfg` default) — see docs/DECISIONS.md 2026-09-09,
+    grid_alignment Passo 4 item 3: this mode is NOT what generated the
+    frozen PRT/BRA baseline (that used a fixed 0.01 degrees, see
+    ResolutionsConfig.suitability's own docstring), and `target_pixels`
+    has no found calibration basis anywhere in legacy — confirmed to
+    have ZERO effect on large countries in practice (BRA's unclamped
+    ideal resolution would be ~0.175 deg, so it always saturates at
+    `max_deg` regardless of `target_pixels`). Kept available as an
+    explicit opt-in for whoever needs it, not the default.
+
+    Args:
+        target_pixels: Target total grid pixel count the adaptive
+            formula solves for. Uncalibrated (no documented basis —
+            processing time, minimum siting resolution, or otherwise).
+        min_deg: Lower clamp on the computed resolution, in degrees.
+        max_deg: Upper clamp on the computed resolution, in degrees —
+            the value that actually controls large-country output in
+            practice (see class docstring).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_pixels: PositiveInt = 50000
+    min_deg: PositiveFloat = 0.001
+    max_deg: PositiveFloat = 0.05
+
+
+class ResolutionsConfig(BaseModel):
+    """geospatial.resolutions section — grid_alignment's target grid resolution.
+
+    Args:
+        suitability: Either a fixed resolution in decimal degrees, or
+            the literal string "adaptive" to compute it dynamically
+            from country area (see AdaptiveResolutionConfig). Default
+            0.01 (~1km) matches legacy's own actual configured value
+            ("~1 km — consistent with global climate datasets",
+            configs/settings.yaml) — the one that generated the frozen
+            PRT/BRA baseline (docs/architecture/baseline-manifest.md).
+            Legacy's "adaptive" code path existed but was never the
+            configured value in the run that produced that baseline —
+            see docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4
+            item 3, for the measured divergence (BRA: baseline
+            3920x3902px @ 0.01deg vs. adaptive's 785x781px @ 0.05deg,
+            ~25x fewer pixels).
+        adaptive: Fallback knobs used only when suitability=="adaptive".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    suitability: PositiveFloat | Literal["adaptive"] = 0.01
+    adaptive: AdaptiveResolutionConfig = AdaptiveResolutionConfig()
+
+
+class GeospatialConfig(BaseModel):
+    """geospatial section of settings.yaml.
+
+    Args:
+        resolutions: grid_alignment's target-resolution configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    resolutions: ResolutionsConfig = ResolutionsConfig()
+
+
 class SettingsFile(BaseModel):
     """Root schema for config/settings.yaml.
 
@@ -275,8 +346,11 @@ class SettingsFile(BaseModel):
 
     Args:
         run: Country/phase selection for a pipeline execution.
+        geospatial: Spatial processing configuration (currently just
+            grid_alignment's target resolution).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     run: RunConfig
+    geospatial: GeospatialConfig = GeospatialConfig()

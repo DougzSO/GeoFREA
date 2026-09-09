@@ -41,3 +41,28 @@ run:
     results_synthesis: false
     ghg_abatement: false
     sensitivity_analysis: false
+
+# grid_alignment's target grid resolution. Added 2026-09-09 (see
+# docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
+geospatial:
+  resolutions:
+    # Fixed degrees, or the literal string "adaptive" to compute it
+    # dynamically from country area (see the "adaptive" block below).
+    # 0.01 (~1km) matches legacy's own actual configured value — "~1 km,
+    # consistent with global climate datasets" — and is what generated
+    # the frozen PRT/BRA baseline this project regression-tests against
+    # (docs/architecture/baseline-manifest.md). Legacy's "adaptive" code
+    # path existed but was never the value legacy's own settings.yaml
+    # actually used.
+    suitability: 0.01
+
+    # Only consulted if suitability: "adaptive" above. Ported as-is from
+    # legacy's fallback dict — target_pixels has no documented
+    # calibration and, for large countries, has no effect in practice
+    # (max_deg saturates first; e.g. BRA's unclamped ideal resolution is
+    # ~0.175deg, far past max_deg). Not the default — see suitability's
+    # own comment above.
+    adaptive:
+      target_pixels: 50000
+      min_deg: 0.001
+      max_deg: 0.05

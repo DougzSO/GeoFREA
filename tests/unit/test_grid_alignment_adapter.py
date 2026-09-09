@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
+from geofrea.core.schemas import AdaptiveResolutionConfig, ResolutionsConfig
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
 from geofrea.grid_alignment.adapter import (
     GridAlignmentRequiresBordersError,
@@ -161,3 +162,50 @@ def test_adapter_loads_power_plants_csv(tmp_path):
 
     assert isinstance(inputs.plants_df, pd.DataFrame)
     assert len(inputs.plants_df) == 1
+
+
+# ─── resolutions threading (2026-09-09, grid_alignment Passo 4 item 3) ───
+
+
+@pytest.mark.unit
+def test_adapter_defaults_resolution_to_fixed_0_01_when_no_resolutions_given(tmp_path):
+    # No `resolutions` argument at all — falls back to ResolutionsConfig()'s
+    # own default (0.01 fixed, matching the frozen PRT/BRA baseline), not
+    # "adaptive".
+    boundary_path = _boundary_path(tmp_path)
+    result = _result([_layer("borders", boundary_path)])
+
+    inputs = acquisition_result_to_grid_alignment_inputs(result)
+
+    assert inputs.resolution_deg == 0.01
+
+
+@pytest.mark.unit
+def test_adapter_threads_fixed_resolution_from_resolutions_config(tmp_path):
+    boundary_path = _boundary_path(tmp_path)
+    result = _result([_layer("borders", boundary_path)])
+
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.02)
+    )
+
+    assert inputs.resolution_deg == 0.02
+
+
+@pytest.mark.unit
+def test_adapter_threads_adaptive_resolution_and_its_fallback_knobs(tmp_path):
+    boundary_path = _boundary_path(tmp_path)
+    result = _result([_layer("borders", boundary_path)])
+
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result,
+        ResolutionsConfig(
+            suitability="adaptive",
+            adaptive=AdaptiveResolutionConfig(target_pixels=1000, min_deg=0.002, max_deg=0.03),
+        ),
+    )
+
+    assert inputs.resolution_deg == "adaptive"
+    assert inputs.adaptive_target_pixels == 1000
+    assert inputs.adaptive_min_deg == 0.002
+    assert inputs.adaptive_max_deg == 0.03

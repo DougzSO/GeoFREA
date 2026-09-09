@@ -71,6 +71,7 @@ from shapely.geometry import mapping
 from shapely.strtree import STRtree
 
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
+from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.raster_io import safe_raster_write
 from geofrea.grid_alignment.reference_grid import GridContext
 
@@ -122,14 +123,12 @@ def calculate_wgs84_isotropic_distance(feature_mask_inv: np.ndarray, grid: GridC
     """Compute Euclidean distance with a WGS84 ellipsoid correction.
 
     Converts a pixel-space distance transform to kilometres using
-    Bowring-series scale factors at the grid's centroid latitude.
-
-    # TODO: pending Passo 4 methodological review — this is one of
-    # three differently-truncated variants of the same geodesic
-    # correction found across the legacy codebase (see
-    # docs/architecture/grid_alignment.md sec b — this one keeps terms
-    # up to cos(4*phi)/cos(5*phi)). Ported as-is, not centralized/
-    # reconciled with the other two variants here.
+    core.geodesy.wgs84_km_per_degree() at the grid's centroid latitude
+    — centralized 2026-09-09 (see docs/DECISIONS.md same date,
+    grid_alignment Passo 4 item 1; this function previously carried its
+    own 3-term-truncated copy of the same Bowring-series formula, one
+    of three independently-truncated variants found across the
+    codebase — see docs/architecture/grid_alignment.md sec b).
 
     Args:
         feature_mask_inv: Binary array, 0=feature, 1=background.
@@ -141,14 +140,7 @@ def calculate_wgs84_isotropic_distance(feature_mask_inv: np.ndarray, grid: GridC
     dist_pixels = ndimage.distance_transform_edt(feature_mask_inv)
 
     lat_center = grid.transform.f + grid.transform.e * (grid.height / 2)
-    lat_rad = math.radians(lat_center)
-
-    lat_km_deg = (
-        111132.92 - 559.82 * math.cos(2 * lat_rad) + 1.175 * math.cos(4 * lat_rad)
-    ) / 1000.0
-    lon_km_deg = (
-        111412.84 * math.cos(lat_rad) - 93.50 * math.cos(3 * lat_rad) + 0.118 * math.cos(5 * lat_rad)
-    ) / 1000.0
+    lat_km_deg, lon_km_deg = wgs84_km_per_degree(lat_center)
 
     px_scale_km = math.sqrt(abs(grid.transform.a) * lon_km_deg * abs(grid.transform.e) * lat_km_deg)
     return (dist_pixels * px_scale_km).astype(np.float32)
@@ -178,15 +170,18 @@ def rasterize_linear_distance(
             `mainland_geometry`).
         grid: Target GridContext.
         label: Feature-type label for logging.
-        max_dist_km: Maximum distance to encode, in kilometres.
-            # TODO: pending Passo 4 methodological review — legacy
-            # hardcodes 100.0 for both roads and grid
-            # (_align_linear_features()'s own default), diverging from
-            # rivers' separately-hardcoded 50.0 (see align_rivers()
-            # below) with no documented justification for either value
-            # or the difference between them (grid_alignment.md sec c
-            # item 4). Callers must pass this explicitly (no default
-            # here) so the pending value is visible at every call site.
+        max_dist_km: Maximum distance to encode, in kilometres. Unified
+            to 100.0 across roads/grid/rivers 2026-09-09 (see
+            docs/DECISIONS.md same date, grid_alignment Passo 4 item 2)
+            — legacy diverged here (100.0 for roads/grid, a separately
+            hardcoded 50.0 for rivers, align_rivers() below) with no
+            documented justification. Confirmed functionally inert
+            either way: downstream criteria_builder.py applies its own,
+            much smaller proximity-decay distances (roads 5-15km, grid
+            20km, rivers 5-30km) well below both former caps — no
+            output ever depended on which of the two values was used.
+            No default here so the value stays visible at every call
+            site, same as before.
 
     Returns:
         Path to the output distance raster, or None if gdf is empty/None
@@ -292,20 +287,27 @@ def align_lakes(
 
 
 def align_rivers(
-    rivers_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext
+    rivers_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext, max_dist_km: float
 ) -> object | None:
     """Rasterize river networks and compute a geodesic distance-to-river raster.
 
-    Deliberately NOT unified with rasterize_linear_distance() — see
-    module docstring for the structural asymmetry this preserves
-    (no STRtree intersects-prefilter; the rasterized mask is not ANDed
-    with grid.country_mask before the distance transform).
+    Deliberately NOT unified with rasterize_linear_distance() on the
+    STRtree-prefilter/country-mask structural asymmetry — see module
+    docstring for that. The distance CAP, however, was unified 2026-09-09
+    (see docs/DECISIONS.md same date, grid_alignment Passo 4 item 2):
+    this used to hardcode a separate 50km inline, diverging from roads/
+    grid's 100km with no documented reason; callers now pass the same
+    value used for roads/grid, same "explicit, no default" convention
+    as rasterize_linear_distance().
 
     Args:
         rivers_gdf: Already-clipped rivers GeoDataFrame (via
             read_clipped_to_country(), see module docstring), or None.
         out_path: Output path for the river distance raster.
         grid: Target GridContext.
+        max_dist_km: Maximum distance to encode, in kilometres — see
+            rasterize_linear_distance()'s own docstring for the
+            unification rationale.
 
     Returns:
         Path to the output distance raster, or None if no rivers were found.
@@ -330,11 +332,7 @@ def align_rivers(
     )
 
     dist_km = calculate_wgs84_isotropic_distance((river_mask == 0).astype(np.uint8), grid)
-    # TODO: pending Passo 4 methodological review — hardcoded 50km cap,
-    # undocumented, diverges from roads/grid's 100km default (see
-    # rasterize_linear_distance()'s own TODO and grid_alignment.md sec
-    # c item 4). Ported as-is from legacy.
-    dist_km = np.clip(dist_km, 0, 50)
+    dist_km = np.clip(dist_km, 0, max_dist_km)
     dist_km[~grid.country_mask] = NODATA_FLOAT
 
     profile = {

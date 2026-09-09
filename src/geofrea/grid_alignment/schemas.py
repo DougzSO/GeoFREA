@@ -25,31 +25,29 @@ and writes to the same path. This preserves PhaseContext.prior_results'
 read-only contract (core/orchestrator.py) — no phase mutates or
 implicitly depends on another phase's internal artifact.
 
-Deliberately NOT included in this schema (see docs/DECISIONS.md
-2026-09-08, grid_alignment audit — pending methodological verdicts,
-not decided yet):
-  - resolution_deg / adaptive resolution config (target_pixels/min_deg/
-    max_deg in legacy) — legacy's target_pixels=50000 fallback has no
-    documented calibration (grid_alignment.md sec e.3); baking an
-    unreviewed default into this schema would silently repeat the
-    exact fallback pattern INVAR-003 already flags as a latent bug in
-    the legacy code, not port a validated default.
-  - road/grid/river max_dist_km (100km for roads/grid, an undocumented
-    inline 50km for rivers — grid_alignment.md sec c item 4) — same
-    reasoning, awaiting an explicit verdict before any value is ported.
-  Once decided, these will land as CountryParams/settings.yaml fields,
-  same precedent as slope_threshold_deg (DECISIONS.md 2026-08-20 -
-  slope_threshold_deg movido para parameters.json) — not as silent
-  Pydantic defaults here.
+Resolution and max_dist_km, decided 2026-09-09 (see docs/DECISIONS.md
+same date, grid_alignment Passo 4): resolution_deg/adaptive_* below are
+resolved from settings.yaml's new `geospatial.resolutions` section
+(config_loader.py/schemas.py's ResolutionsConfig) by main.py, then
+passed through into GridAlignmentInputs by
+adapter.py::acquisition_result_to_grid_alignment_inputs() — same
+precedent as slope_threshold_deg (DECISIONS.md 2026-08-20), landing as
+a settings.yaml field once a verdict was reached, not baked in as a
+silent Pydantic default here. max_dist_km is unified across roads/grid/
+rivers (core.constants.LINEAR_FEATURE_MAX_DIST_KM), confirmed
+functionally inert either way (see that constant's own docstring).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import geopandas as gpd
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
+
+from geofrea.core.constants import LINEAR_FEATURE_MAX_DIST_KM
 
 
 class GridAlignmentInputs(BaseModel):
@@ -108,6 +106,17 @@ class GridAlignmentInputs(BaseModel):
             grid. Without country_gdf there is no reference grid to
             align anything to, so the field being required is not a
             style choice, it is the phase's one true precondition.
+        resolution_deg: Fixed resolution in decimal degrees, or the
+            literal string "adaptive" — resolved from settings.yaml's
+            `geospatial.resolutions.suitability` by main.py/adapter.py.
+            Default 0.01 matches the value that generated the frozen
+            PRT/BRA baseline (see module docstring).
+        adaptive_target_pixels/adaptive_min_deg/adaptive_max_deg: Only
+            consulted when resolution_deg == "adaptive" — from
+            settings.yaml's `geospatial.resolutions.adaptive`.
+        max_dist_km: Maximum distance (km) encoded in the roads/grid/
+            rivers distance rasters before clipping — unified value,
+            see core.constants.LINEAR_FEATURE_MAX_DIST_KM.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -125,6 +134,11 @@ class GridAlignmentInputs(BaseModel):
     seismic_path: Path | None = None
     plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame
+    resolution_deg: float | Literal["adaptive"] = 0.01
+    adaptive_target_pixels: int = 50000
+    adaptive_min_deg: float = 0.001
+    adaptive_max_deg: float = 0.05
+    max_dist_km: float = LINEAR_FEATURE_MAX_DIST_KM
 
 
 class GridMetadata(BaseModel):

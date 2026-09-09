@@ -23,6 +23,7 @@ from shapely.geometry import Polygon
 import main
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseResult, PhaseSpec
+from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
 from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
 from geofrea.grid_alignment.adapter import GridAlignmentRequiresBordersError
@@ -74,7 +75,7 @@ def _acquisition_phase_result(layers: list[AcquiredLayer]) -> PhaseResult[Acquis
 
 @pytest.mark.unit
 def test_build_phase_specs_returns_all_three_phases_in_order():
-    specs = main._build_phase_specs()
+    specs = main._build_phase_specs(ResolutionsConfig())
     assert [spec.name for spec in specs] == [
         "data_acquisition",
         "data_quality_audit",
@@ -174,7 +175,7 @@ def test_build_grid_alignment_inputs_raises_when_acquisition_did_not_run(tmp_pat
     # Unlike _build_audit_inputs(), there is no empty-inputs fallback —
     # grid_alignment cannot run at all without a real AcquisitionResult.
     with pytest.raises(RuntimeError, match="data_acquisition"):
-        main._build_grid_alignment_inputs(_context(tmp_path, prior_results={}))
+        main._build_grid_alignment_inputs(_context(tmp_path, prior_results={}), ResolutionsConfig())
 
 
 @pytest.mark.unit
@@ -189,7 +190,7 @@ def test_build_grid_alignment_inputs_raises_when_acquisition_output_is_none(tmp_
     )
     with pytest.raises(RuntimeError, match="data_acquisition"):
         main._build_grid_alignment_inputs(
-            _context(tmp_path, prior_results={"data_acquisition": failed})
+            _context(tmp_path, prior_results={"data_acquisition": failed}), ResolutionsConfig()
         )
 
 
@@ -211,7 +212,7 @@ def test_build_grid_alignment_inputs_raises_when_borders_missing_from_real_outpu
         )
     }
     with pytest.raises(GridAlignmentRequiresBordersError):
-        main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results))
+        main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results), ResolutionsConfig())
 
 
 @pytest.mark.unit
@@ -230,7 +231,9 @@ def test_build_grid_alignment_inputs_adapts_real_acquisition_output(tmp_path):
         )
     }
 
-    inputs = main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results))
+    inputs = main._build_grid_alignment_inputs(
+        _context(tmp_path, prior_results=prior_results), ResolutionsConfig()
+    )
 
     assert len(inputs.country_gdf) == 1
 
@@ -251,7 +254,9 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
         )
     }
 
-    result = main._grid_alignment_run(_context(tmp_path, prior_results=prior_results))
+    specs = main._build_phase_specs(ResolutionsConfig())
+    grid_alignment_run = next(s.run for s in specs if s.name == "grid_alignment")
+    result = grid_alignment_run(_context(tmp_path, prior_results=prior_results))
 
     assert isinstance(result, GridAlignmentResult)
     assert result.country_code == "PRT"
@@ -293,13 +298,16 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_disabled(tmp_p
         },
     )
 
+    real_grid_alignment_run = next(
+        s.run for s in main._build_phase_specs(ResolutionsConfig()) if s.name == "grid_alignment"
+    )
     specs = [
         PhaseSpec(
             name="data_acquisition", output_model=AcquisitionResult, run=_stub_acquisition_run
         ),
         PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=main._audit_run),
         PhaseSpec(
-            name="grid_alignment", output_model=GridAlignmentResult, run=main._grid_alignment_run
+            name="grid_alignment", output_model=GridAlignmentResult, run=real_grid_alignment_run
         ),
     ]
 

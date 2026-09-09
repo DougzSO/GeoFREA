@@ -40,18 +40,24 @@ country_gdf (not the raw multi-polygon borders), there is no
 meaningful input here to run that check against — calling it on an
 already-single-polygon GeoDataFrame would be vacuous. Not invoked here.
 
-Resolution (# TODO: pending Passo 4 methodological review): legacy
-reads `cfg.geospatial.resolutions.suitability` ("adaptive" or a fixed
-degree value) plus an `adaptive` fallback dict
-(target_pixels/min_deg/max_deg) from settings.yaml. GeoFREA's
-config/settings.yaml has no `geospatial.resolutions` section yet
-(confirmed absent during the audit preceding this port) — this module
-hardcodes legacy's exact "adaptive" behavior and its exact fallback
-constants (50000/0.001/0.05) rather than inventing a new config-wiring
-path that was not authorized. Once Passo 4 settles this (and a
-CountryParams/settings.yaml field exists — same precedent as
-slope_threshold_deg, DECISIONS.md 2026-08-20), this hardcoding should
-be replaced by reading that field, not by picking new numbers here.
+Resolution (DECIDED 2026-09-09, see docs/DECISIONS.md same date,
+grid_alignment Passo 4 item 3): `inputs.resolution_deg` (populated by
+the adapter from settings.yaml's new `geospatial.resolutions.
+suitability` — "adaptive" or a fixed degree value, config_loader.py/
+schemas.py's ResolutionsConfig) drives this, not a hardcoded value.
+Default is 0.01 fixed (~1km), matching legacy's own actual configured
+value ("~1 km, consistent with global climate datasets") — the one
+that generated the frozen PRT/BRA baseline
+(docs/architecture/baseline-manifest.md). Legacy's "adaptive" code path
+existed but was never the value legacy's real settings.yaml used;
+GeoFREA had ported that unused code path as its only, hardcoded
+behavior until this fix — measured divergence from the baseline before
+this fix: BRA rendered at 785x781px (0.05deg, adaptive's max_deg
+ceiling) vs. the baseline's 3920x3902px (0.01deg fixed), ~25x fewer
+pixels. "adaptive" is preserved as an explicit opt-in (its
+target_pixels/min_deg/max_deg fallback constants ported unchanged, see
+inputs.adaptive_target_pixels/adaptive_min_deg/adaptive_max_deg), not
+the default.
 
 land_cover cache filename mismatch (FIXED 2026-09-09, see
 docs/DECISIONS.md same date — Passo 6 land_cover cache fix): legacy's
@@ -91,6 +97,7 @@ import numpy as np
 from rasterio.enums import Resampling
 
 from geofrea.core.geo_utils import read_clipped_to_country
+from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
@@ -278,18 +285,24 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         cache_path = processed_dir / f"{layer_name}_clipped.gpkg"
         return _read_clipped_with_cache(source_path, inputs.country_gdf, cache_path)
 
-    # TODO: pending Passo 4 methodological review — see module docstring
-    # ("Resolution"). Hardcoded "adaptive" behavior + legacy's exact
-    # fallback constants, ported as-is.
-    minx, miny, maxx, maxy = inputs.country_gdf.total_bounds
-    lat_mid_rad = math.radians((miny + maxy) / 2.0)
-    lat_km = (111132.92 - 559.82 * math.cos(2 * lat_mid_rad)) / 1000.0
-    lon_km = (111412.84 * math.cos(lat_mid_rad) - 93.50 * math.cos(3 * lat_mid_rad)) / 1000.0
-    area_km2 = (maxx - minx) * lon_km * (maxy - miny) * lat_km
-    target_pixels = 50000  # TODO: pending Passo 4 methodological review
-    min_deg, max_deg = 0.001, 0.05  # TODO: pending Passo 4 methodological review
-    computed_res = math.sqrt(area_km2 / target_pixels) / math.sqrt(lat_km * lon_km)
-    resolution_deg = float(np.clip(computed_res, min_deg, max_deg))
+    # Resolution decided 2026-09-09 (see docs/DECISIONS.md same date,
+    # grid_alignment Passo 4 item 3): inputs.resolution_deg comes from
+    # settings.yaml's geospatial.resolutions.suitability, default 0.01
+    # (fixed, matching the frozen PRT/BRA baseline) — "adaptive" is an
+    # explicit opt-in, not the default, computed here exactly as legacy
+    # did (same formula, now via core.geodesy.wgs84_km_per_degree() for
+    # the WGS84 scale factors — see that module's docstring).
+    if inputs.resolution_deg == "adaptive":
+        minx, miny, maxx, maxy = inputs.country_gdf.total_bounds
+        lat_mid = (miny + maxy) / 2.0
+        lat_km, lon_km = wgs84_km_per_degree(lat_mid)
+        area_km2 = (maxx - minx) * lon_km * (maxy - miny) * lat_km
+        computed_res = math.sqrt(area_km2 / inputs.adaptive_target_pixels) / math.sqrt(lat_km * lon_km)
+        resolution_deg = float(
+            np.clip(computed_res, inputs.adaptive_min_deg, inputs.adaptive_max_deg)
+        )
+    else:
+        resolution_deg = float(inputs.resolution_deg)
 
     grid = build_reference_grid(inputs.country_gdf, resolution_deg)
     aligned: dict[str, Path | None] = {}
@@ -352,7 +365,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 inputs.country_gdf,
                 grid,
                 "grid",
-                100.0,  # TODO: pending Passo 4 methodological review
+                inputs.max_dist_km,
             ),
             _exists(inputs.grid_source),
         )
@@ -366,7 +379,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 inputs.country_gdf,
                 grid,
                 "roads",
-                100.0,  # TODO: pending Passo 4 methodological review
+                inputs.max_dist_km,
             ),
             _exists(inputs.roads_source),
         )
@@ -381,7 +394,9 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     with timer("rivers", timings):
         aligned["rivers"] = _execute_or_load(
             "rivers",
-            lambda: align_rivers(_clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid),
+            lambda: align_rivers(
+                _clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid, inputs.max_dist_km
+            ),
             _exists(inputs.rivers_path),
         )
 

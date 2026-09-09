@@ -50,6 +50,7 @@ a data_acquisition-schema change, not an adapter concern).
 from __future__ import annotations
 
 from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.adapter import load_power_plants_df
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
 from geofrea.grid_alignment.schemas import GridAlignmentInputs
@@ -87,11 +88,17 @@ def _layers_by_name(result: AcquisitionResult) -> dict[str, AcquiredLayer]:
     return {layer.layer_name: layer for layer in result.layers}
 
 
-def acquisition_result_to_grid_alignment_inputs(result: AcquisitionResult) -> GridAlignmentInputs:
+def acquisition_result_to_grid_alignment_inputs(
+    result: AcquisitionResult, resolutions: ResolutionsConfig | None = None
+) -> GridAlignmentInputs:
     """Build GridAlignmentInputs from an AcquisitionResult.
 
     Args:
         result: The data_acquisition phase's output for one country.
+        resolutions: settings.yaml's `geospatial.resolutions` (see
+            docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
+            None (default) falls back to ResolutionsConfig()'s own
+            defaults — 0.01 fixed, matching the frozen baseline.
 
     Returns:
         A GridAlignmentInputs instance.
@@ -100,6 +107,7 @@ def acquisition_result_to_grid_alignment_inputs(result: AcquisitionResult) -> Gr
         GridAlignmentRequiresBordersError: If `result` has no `borders`
             layer, or that layer's `path` is None — see module docstring.
     """
+    resolutions = resolutions or ResolutionsConfig()
     layers = _layers_by_name(result)
 
     source_paths = {
@@ -131,4 +139,8 @@ def acquisition_result_to_grid_alignment_inputs(result: AcquisitionResult) -> Gr
         land_cover_tiles=land_cover_tiles,
         plants_df=plants_df,
         country_gdf=country_gdf,
+        resolution_deg=resolutions.suitability,
+        adaptive_target_pixels=resolutions.adaptive.target_pixels,
+        adaptive_min_deg=resolutions.adaptive.min_deg,
+        adaptive_max_deg=resolutions.adaptive.max_deg,
     )

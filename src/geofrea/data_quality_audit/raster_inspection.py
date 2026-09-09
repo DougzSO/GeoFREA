@@ -34,6 +34,7 @@ from rasterio.windows import from_bounds as window_from_bounds
 from shapely.geometry import box, mapping
 
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
+from geofrea.core.geodesy import wgs84_km_per_degree
 
 try:
     from tqdm import tqdm
@@ -114,9 +115,11 @@ def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarr
     """Compute geodetic area per pixel row in km², corrected by latitude.
 
     Returns a 1D array (height,) rather than a full 2D grid to avoid
-    memory issues with large tiles (see
-    docs/architecture/data_quality_audit.md sec b, formula 1, for the
-    exact WGS84 meridian/parallel-arc approximation used).
+    memory issues with large tiles. WGS84 scale factors come from
+    core.geodesy.wgs84_km_per_degree() — centralized 2026-09-09 (see
+    docs/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
+    was the most complete of three previously-divergent truncations,
+    now the shared one).
     """
     height, _ = shape
     res_x = abs(transform.a)
@@ -126,19 +129,8 @@ def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarr
     y_top = transform.f + rows * transform.e
     y_bottom = transform.f + (rows + 1) * transform.e
     lat_mid = (y_top + y_bottom) / 2.0
-    lat_rad = np.radians(lat_mid)
 
-    lat_km = (
-        111132.92
-        - 559.82 * np.cos(2 * lat_rad)
-        + 1.175 * np.cos(4 * lat_rad)
-        - 0.0023 * np.cos(6 * lat_rad)
-    ) / 1000.0
-    lon_km = (
-        111412.84 * np.cos(lat_rad)
-        - 93.50 * np.cos(3 * lat_rad)
-        + 0.118 * np.cos(5 * lat_rad)
-    ) / 1000.0
+    lat_km, lon_km = wgs84_km_per_degree(lat_mid)
 
     km_x = res_x * lon_km
     km_y = res_y * lat_km

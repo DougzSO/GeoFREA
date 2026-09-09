@@ -67,6 +67,7 @@ from geofrea.core.orchestrator import (
     PhaseExecutionError,
     PhaseSpec,
 )
+from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
@@ -115,7 +116,9 @@ def _audit_run(context: PhaseContext) -> AuditResult:
     return run_audit_phase(context, inputs=_build_audit_inputs(context))
 
 
-def _build_grid_alignment_inputs(context: PhaseContext) -> GridAlignmentInputs:
+def _build_grid_alignment_inputs(
+    context: PhaseContext, resolutions: ResolutionsConfig
+) -> GridAlignmentInputs:
     """Build GridAlignmentInputs from data_acquisition's output.
 
     Unlike _build_audit_inputs(), there is NO empty-inputs fallback:
@@ -132,6 +135,8 @@ def _build_grid_alignment_inputs(context: PhaseContext) -> GridAlignmentInputs:
     Args:
         context: The grid_alignment phase's PhaseContext, as passed by
             Orchestrator.run().
+        resolutions: settings.yaml's `geospatial.resolutions` (see
+            docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
 
     Returns:
         Real GridAlignmentInputs adapted from data_acquisition's output.
@@ -150,14 +155,10 @@ def _build_grid_alignment_inputs(context: PhaseContext) -> GridAlignmentInputs:
             "same pipeline (see settings.yaml's run.phases) — it has no "
             "degraded/empty-inputs mode, unlike data_quality_audit."
         )
-    return acquisition_result_to_grid_alignment_inputs(acquisition_result.output)
+    return acquisition_result_to_grid_alignment_inputs(acquisition_result.output, resolutions)
 
 
-def _grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
-    return run_grid_alignment_phase(context, inputs=_build_grid_alignment_inputs(context))
-
-
-def _build_phase_specs() -> list[PhaseSpec]:
+def _build_phase_specs(resolutions: ResolutionsConfig) -> list[PhaseSpec]:
     """Registered phases, in execution order.
 
     data_acquisition MUST come before data_quality_audit: the
@@ -172,7 +173,7 @@ def _build_phase_specs() -> list[PhaseSpec]:
     grid_alignment is registered THIRD (2026-09-08, see DECISIONS.md
     same date), matching the readable pipeline order
     (acquisition -> audit -> alignment, same as legacy's Fase 1/2a
-    numbering) — but its closure (_grid_alignment_run) only reads
+    numbering) — but its closure only reads
     context.prior_results["data_acquisition"], never
     ["data_quality_audit"]. List position here governs execution order
     only; it does not imply grid_alignment depends on
@@ -184,26 +185,45 @@ def _build_phase_specs() -> list[PhaseSpec]:
     removed 2026-08-25): which phases actually execute is decided by
     Orchestrator.run() itself, per phase, via Orchestrator.phases_enabled.
 
+    Args:
+        resolutions: settings.yaml's `geospatial.resolutions`, closed
+            over by grid_alignment's run closure (2026-09-09, see
+            docs/DECISIONS.md same date, grid_alignment Passo 4 item 3
+            — same per-context-closure pattern as _audit_run, not a
+            functools.partial with eagerly-bound inputs, see module
+            docstring's "grid_alignment wiring" section for why).
+
     Returns:
         The three registered PhaseSpecs, in execution order.
     """
+
+    def grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
+        return run_grid_alignment_phase(
+            context, inputs=_build_grid_alignment_inputs(context, resolutions)
+        )
+
     return [
         PhaseSpec(
             name="data_acquisition", output_model=AcquisitionResult, run=run_acquisition_phase
         ),
         PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=_audit_run),
         PhaseSpec(
-            name="grid_alignment", output_model=GridAlignmentResult, run=_grid_alignment_run
+            name="grid_alignment", output_model=GridAlignmentResult, run=grid_alignment_run
         ),
     ]
 
 
-def run_geofrea(country_code: str, phases_enabled: dict[str, bool]) -> bool:
+def run_geofrea(
+    country_code: str, phases_enabled: dict[str, bool], resolutions: ResolutionsConfig
+) -> bool:
     """Run every enabled, registered phase for a single country.
 
     Args:
         country_code: ISO-3166-alpha-3 code, must be a key in parameters.json.
         phases_enabled: RunConfig.phases for this run.
+        resolutions: settings.yaml's `geospatial.resolutions`, threaded
+            through to grid_alignment's PhaseSpec (see
+            _build_phase_specs()).
 
     Returns:
         True if every attempted phase succeeded (or none were enabled),
@@ -220,7 +240,7 @@ def run_geofrea(country_code: str, phases_enabled: dict[str, bool]) -> bool:
     )
 
     try:
-        orchestrator.run(_build_phase_specs())
+        orchestrator.run(_build_phase_specs(resolutions))
     except PhaseExecutionError as exc:
         logger.error("Run aborted for %s: %s", country_code, exc)
         return False
@@ -249,7 +269,7 @@ def main() -> int:
 
     all_ok = True
     for country_code in countries:
-        ok = run_geofrea(country_code, settings.run.phases)
+        ok = run_geofrea(country_code, settings.run.phases, settings.geospatial.resolutions)
         all_ok = all_ok and ok
 
     return 0 if all_ok else 1

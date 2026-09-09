@@ -185,35 +185,37 @@ def test_align_rivers_includes_features_outside_country_mask_unlike_rasterize_li
     grid = _grid()
     line_outside = _line_in_bbox_corner_outside_diamond()
 
-    out_path = align_rivers(line_outside, tmp_path / "rivers.tif", grid)
+    out_path = align_rivers(line_outside, tmp_path / "rivers.tif", grid, 100.0)
 
     assert out_path is not None
     with rasterio.open(out_path) as src:
         data = src.read(1)
     # In-country pixels near the diamond's corner (closest to the
-    # outside river) must show a distance well below the 50km cap,
-    # proving the outside feature was NOT excluded.
+    # outside river) must show a distance well below the cap, proving
+    # the outside feature was NOT excluded.
     in_country = data[grid.country_mask]
-    assert in_country.min() < 50.0
+    assert in_country.min() < 100.0
 
 
 @pytest.mark.unit
 def test_align_rivers_returns_none_for_empty_or_none_gdf(tmp_path):
-    assert align_rivers(None, tmp_path / "out.tif", _grid()) is None
+    assert align_rivers(None, tmp_path / "out.tif", _grid(), 100.0) is None
     empty = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
-    assert align_rivers(empty, tmp_path / "out.tif", _grid()) is None
+    assert align_rivers(empty, tmp_path / "out.tif", _grid(), 100.0) is None
 
 
 @pytest.mark.unit
-def test_align_rivers_caps_distance_at_50km(tmp_path):
+def test_align_rivers_caps_distance_at_max_dist_km(tmp_path):
+    # Unified to 100km 2026-09-09 (was a separate hardcoded 50km — see
+    # docs/DECISIONS.md same date, grid_alignment Passo 4 item 2).
     grid = _grid()
     line = gpd.GeoDataFrame(geometry=[LineString([(0.0, -0.2), (0.0, 0.2)])], crs="EPSG:4326")
 
-    out_path = align_rivers(line, tmp_path / "rivers.tif", grid)
+    out_path = align_rivers(line, tmp_path / "rivers.tif", grid, 100.0)
 
     with rasterio.open(out_path) as src:
         data = src.read(1)
-    assert data[grid.country_mask].max() <= 50.0 + 1e-3
+    assert data[grid.country_mask].max() <= 100.0 + 1e-3
 
 
 @pytest.mark.unit
@@ -249,7 +251,7 @@ def test_align_lakes_returns_none_when_every_geometry_is_empty(tmp_path):
 def test_align_rivers_returns_none_when_every_geometry_is_empty(tmp_path):
     gdf = gpd.GeoDataFrame(geometry=[Polygon()], crs="EPSG:4326")
     assert not gdf.empty
-    assert align_rivers(gdf, tmp_path / "rivers.tif", _grid()) is None
+    assert align_rivers(gdf, tmp_path / "rivers.tif", _grid(), 100.0) is None
 
 
 @pytest.mark.unit

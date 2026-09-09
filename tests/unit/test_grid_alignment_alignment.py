@@ -505,3 +505,118 @@ def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(
     # check and skips recomputation entirely, so mosaic_land_cover() is
     # only ever called once.
     assert call_count["n"] == 1
+
+
+# ─── resolution mode: fixed default vs. "adaptive" opt-in (2026-09-09, grid_alignment Passo 4 item 3) ───
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_defaults_to_fixed_0_01_resolution(tmp_path):
+    # GridAlignmentInputs.resolution_deg defaults to 0.01 (not
+    # "adaptive") — matches the value that generated the frozen PRT/BRA
+    # baseline. No target_pixels/min_deg/max_deg formula involved when
+    # this default is used.
+    country_gdf = _country_gdf()
+    inputs = GridAlignmentInputs(country_gdf=country_gdf)
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert result.grid_metadata.resolution_deg == pytest.approx(0.01)
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_honors_explicit_fixed_resolution(tmp_path):
+    country_gdf = _country_gdf()
+    inputs = GridAlignmentInputs(country_gdf=country_gdf, resolution_deg=0.02)
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert result.grid_metadata.resolution_deg == pytest.approx(0.02)
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_adaptive_mode_computes_resolution_from_area(tmp_path):
+    # "adaptive" is an explicit opt-in (not the default) — when
+    # selected, reproduces legacy's own formula: sqrt(area/target_pixels)
+    # / sqrt(lat_km*lon_km), clipped to [min_deg, max_deg]. Using an
+    # unrealistically small target_pixels forces the clip to max_deg,
+    # giving a value independent of the exact WGS84 scale-factor
+    # arithmetic (covered separately by test_core_geodesy.py) and
+    # trivial to assert on.
+    country_gdf = _country_gdf()
+    inputs = GridAlignmentInputs(
+        country_gdf=country_gdf,
+        resolution_deg="adaptive",
+        adaptive_target_pixels=1,
+        adaptive_min_deg=0.001,
+        adaptive_max_deg=0.03,
+    )
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert result.grid_metadata.resolution_deg == pytest.approx(0.03)
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_adaptive_mode_respects_min_deg_clip(tmp_path):
+    # Symmetric case: an unrealistically large target_pixels forces the
+    # clip to min_deg instead.
+    country_gdf = _country_gdf()
+    inputs = GridAlignmentInputs(
+        country_gdf=country_gdf,
+        resolution_deg="adaptive",
+        adaptive_target_pixels=10_000_000_000,
+        adaptive_min_deg=0.005,
+        adaptive_max_deg=0.05,
+    )
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert result.grid_metadata.resolution_deg == pytest.approx(0.005)
+
+
+# ─── max_dist_km unification (2026-09-09, grid_alignment Passo 4 item 2) ───
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_passes_inputs_max_dist_km_to_roads_and_rivers(tmp_path):
+    # roads/grid/rivers all used to hardcode their own max_dist_km
+    # (100.0 for roads/grid, an inline 50.0 for rivers). Both now read
+    # inputs.max_dist_km — confirmed here with a non-default value,
+    # captured via mocks rather than assumed.
+    country_gdf = _country_gdf()
+    roads_source = tmp_path / "roads_source.shp"
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        crs="EPSG:4326",
+    ).to_file(roads_source)
+    rivers_source = tmp_path / "rivers_source.shp"
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        crs="EPSG:4326",
+    ).to_file(rivers_source)
+    inputs = GridAlignmentInputs(
+        roads_source=roads_source, rivers_path=rivers_source, country_gdf=country_gdf, max_dist_km=77.0
+    )
+
+    real_rasterize = alignment_module.rasterize_linear_distance
+    real_align_rivers = alignment_module.align_rivers
+    captured: dict[str, float] = {}
+
+    def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, max_dist_km):
+        if label == "roads":
+            captured["roads"] = max_dist_km
+        return real_rasterize(gdf, out_path, country_gdf_arg, grid, label, max_dist_km)
+
+    def spy_align_rivers(gdf, out_path, grid, max_dist_km):
+        captured["rivers"] = max_dist_km
+        return real_align_rivers(gdf, out_path, grid, max_dist_km)
+
+    with (
+        patch.object(alignment_module, "rasterize_linear_distance", side_effect=spy_rasterize),
+        patch.object(alignment_module, "align_rivers", side_effect=spy_align_rivers),
+    ):
+        run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert captured["roads"] == 77.0
+    assert captured["rivers"] == 77.0

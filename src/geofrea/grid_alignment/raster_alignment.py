@@ -7,10 +7,13 @@ with no logic changes — see docs/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3.
 
 `_compute_ahp_weights()`/`_combine_wind_layers()` consume
-WIND_AHP_MATRIX/AHP_RANDOM_INDEX (core/constants.py) as-is, ported
-without reviewing the pairwise-comparison judgments themselves — see
-that module's docstring and docs/DECISIONS.md 2026-09-08, grid_alignment
-Passo 4 (pending methodological review, not decided yet).
+WIND_AHP_MATRIX/AHP_RANDOM_INDEX (core/constants.py) as-is. Reviewed in
+detail 2026-09-09 (see that module's own comment block and
+docs/DECISIONS.md same date, grid_alignment Passo 4 item 4) — kept
+STRUCTURAL_PRESERVE: the RC/0.10-threshold machinery is
+literature-grounded (Saaty, 1980), the specific pairwise judgments are
+unsourced but plausible, flagged as an open question for when
+suitability_criteria (Phase 3) is designed, not a blocker here.
 """
 
 from __future__ import annotations
@@ -112,8 +115,9 @@ def compute_ahp_weights(matrix: np.ndarray) -> tuple[np.ndarray, float]:
     lam_max = float((matrix @ weights / weights).mean())
     n = matrix.shape[0]
     ci = (lam_max - n) / (n - 1)
-    # TODO: pending Passo 4 methodological review — AHP_RANDOM_INDEX
-    # ported as-is from legacy, not independently verified here.
+    # AHP_RANDOM_INDEX (Saaty, 1980) confirmed literature-standard, not
+    # arbitrary — see docs/DECISIONS.md 2026-09-09, grid_alignment
+    # Passo 4 item 4.
     ri = AHP_RANDOM_INDEX.get(n, 1.12)
     rc = ci / ri if ri > 0 else 0.0
     return weights, rc
@@ -172,8 +176,9 @@ def combine_wind_layers(wind_paths: list, out_path, grid: GridContext):
 
     present = list(mapped.keys())
 
-    # TODO: pending Passo 4 methodological review — WIND_AHP_MATRIX's
-    # pairwise judgments ported as-is from legacy, not reviewed here.
+    # WIND_AHP_MATRIX reviewed 2026-09-09 (see core/constants.py's own
+    # comment block) — kept as-is, STRUCTURAL_PRESERVE, pairwise
+    # judgments unsourced but flagged as an open question, not a blocker.
     if len(present) == 3:
         matrix = np.array(WIND_AHP_MATRIX, dtype=np.float64)
         w_arr, rc = compute_ahp_weights(matrix)
