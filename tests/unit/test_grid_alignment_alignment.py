@@ -461,18 +461,22 @@ def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp
     assert result.rivers is not None and result.rivers.exists()
 
 
-# ─── Known-but-not-fixed land_cover cache filename mismatch ───
+# ─── land_cover cache filename mismatch (fixed 2026-09-09) ───
 
 
 @pytest.mark.unit
-def test_run_grid_alignment_phase_land_cover_never_hits_alignment_cache(tmp_path):
-    # Documents the finding reported in Passo 3 (see alignment.py's
-    # module docstring): _execute_or_load("land_cover", ...) checks for
-    # "{code}_land_cover_aligned.tif" but mosaic_land_cover() writes
-    # "{code}_lc_aligned.tif" — the check can never find a match, so
-    # land_cover recomputes on every call. This test locks in the
-    # CURRENT (buggy, ported-as-is) behavior so a silent fix doesn't go
-    # unnoticed — flip this assertion if/when Douglas authorizes the fix.
+def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(tmp_path):
+    # Was test_run_grid_alignment_phase_land_cover_never_hits_alignment_cache,
+    # documenting the finding reported in Passo 3 (see alignment.py's
+    # module docstring): _execute_or_load("land_cover", ...) checked for
+    # "{code}_land_cover_aligned.tif" but mosaic_land_cover() wrote
+    # "{code}_lc_aligned.tif" — the two never matched, so land_cover
+    # recomputed on every call. Fixed 2026-09-09 (Passo 6, authorized
+    # after live PRT+BRA validation measured the real cost: 529.7s
+    # recomputed every grid_alignment run for BRA). Flipped from
+    # call_count == 2 to == 1 — this now locks in the FIXED behavior;
+    # without the fix in alignment.py, this assertion fails (confirmed
+    # by running it against the pre-fix source: call_count == 2).
     country_gdf = _country_gdf()
     context = _context(tmp_path)
 
@@ -497,6 +501,7 @@ def test_run_grid_alignment_phase_land_cover_never_hits_alignment_cache(tmp_path
         run_grid_alignment_phase(context, inputs)
         run_grid_alignment_phase(context, inputs)
 
-    # If the cache worked, the second call would skip recomputation and
-    # this would be 1. It is 2 — the known, ported-as-is mismatch.
-    assert call_count["n"] == 2
+    # Cache now works: the second call hits _execute_or_load's cache
+    # check and skips recomputation entirely, so mosaic_land_cover() is
+    # only ever called once.
+    assert call_count["n"] == 1

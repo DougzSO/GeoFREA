@@ -1,6 +1,6 @@
 {
   "fase_atual": "0.5",
-  "ultima_atualizacao": "2026-09-08",
+  "ultima_atualizacao": "2026-09-09",
   "contradicoes_pendentes": [
     {
       "id": "iucn_categorias",
@@ -58,7 +58,12 @@
       "status": "construido",
       "observacao": "logica de auditoria completa (orchestrator + schemas + testes), incluindo inspecao vetorial profunda dos 7 layers vetoriais (borders/admin1/grid/roads/protected/lakes/rivers, ver docs/DECISIONS.md 2026-08-24 - vector layer audit depth). Wiring real com data_acquisition ativado 2026-08-25 (main.py's _audit_run le context.prior_results['data_acquisition'] de verdade) — ver docs/DECISIONS.md 2026-08-25 - data_acquisition activation. Continua funcionando standalone (data_acquisition desabilitado) com AuditInputs() vazio, comportamento preservado."
     },
-    { "nome": "grid_alignment", "fase_legado": 2, "status": "documentado_nao_construido" },
+    {
+      "nome": "grid_alignment",
+      "fase_legado": 2,
+      "status": "construido",
+      "observacao": "Portado do legado (docs/DECISIONS.md 2026-09-08 - grid_alignment (Fase 2a) portado do legado), registrado como terceiro PhaseSpec no orchestrator (docs/DECISIONS.md 2026-09-08 - grid_alignment orchestrator wiring), e validado ao vivo end-to-end para PRT+BRA junto com data_acquisition+data_quality_audit no Passo 6 (docs/DECISIONS.md 2026-09-09), com RAM monitorada continuamente (sem risco em nenhum pais) e sem RuntimeError de _verify_alignment(). Achado real do Passo 6: mismatch de cache de land_cover (_execute_or_load checava um filename, mosaic_land_cover() escrevia outro) custava 529.7s recalculados a cada execucao para BRA (155 tiles); corrigido na mesma sessao (nome canonico 'land_cover'), confirmado ao vivo com dados reais de BRA (2a chamada: 0.0s, cache hit). 4 pontos metodologicos ainda pendentes de decisao (Passo 4, marcados # TODO no codigo): formula de Bowring, raios de busca, target_pixels, matriz AHP do wind. Nota separada, nao endereçada: inspecao de land_cover no data_quality_audit custou 2199.9s (~36.7min) para BRA no Passo 6, sem relacao com o bug acima, candidato a otimizacao futura (cache por-tile) sem prioridade definida."
+    },
     { "nome": "suitability_criteria", "fase_legado": 2, "status": "documentado_nao_construido" },
     { "nome": "suitability_analysis", "fase_legado": 3, "status": "documentado_nao_construido" },
     { "nome": "potential_analysis", "fase_legado": 4, "status": "documentado_nao_construido" },

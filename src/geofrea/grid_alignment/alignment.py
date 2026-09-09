@@ -53,21 +53,26 @@ CountryParams/settings.yaml field exists — same precedent as
 slope_threshold_deg, DECISIONS.md 2026-08-20), this hardcoding should
 be replaced by reading that field, not by picking new numbers here.
 
-NEW finding surfaced while porting, not present in the Passo 4 list
-(informational only, not fixed): legacy's land_cover step has a
-filename mismatch between GridAligner.run()'s own cache-check and the
-path it actually writes to — `_execute_or_load("land_cover", ...)`
-checks for `{code}_land_cover_aligned.tif` (derived from the `label`
-argument, "land_cover"), but the lambda calls
-`_mosaic_land_cover(..., _path("lc"), ...)`, which writes
-`{code}_lc_aligned.tif` instead. The cache-check can therefore never
-find a match, so land_cover is silently recomputed on every run
-instead of being skipped when already aligned — performance-only (the
-returned path is still correct), but real, and ported here AS-IS
-(same mismatched filenames, same behavior) rather than silently fixed,
-since correcting it was not authorized. See this module's
-`_execute_or_load` calls for "land_cover" below, and report to Douglas
-for an explicit decision.
+land_cover cache filename mismatch (FIXED 2026-09-09, see
+docs/DECISIONS.md same date — Passo 6 land_cover cache fix): legacy's
+land_cover step had a filename mismatch between GridAligner.run()'s own
+cache-check and the path it actually wrote to —
+`_execute_or_load("land_cover", ...)` checks for
+`{code}_land_cover_aligned.tif` (derived from the `label` argument,
+"land_cover"), but the mosaic lambda used to call
+`mosaic_land_cover(..., _path("lc"), ...)`, writing
+`{code}_lc_aligned.tif` instead. The cache-check could therefore never
+find a match, so land_cover was silently recomputed on every run
+instead of being skipped when already aligned. Ported AS-IS (same
+mismatched filenames) during the initial port per Passo 3, then
+surfaced to Douglas as a real-execution finding during Passo 6's live
+PRT+BRA validation (BRA cost: 529.7s recomputed every single
+grid_alignment run, purely from this mismatch). Authorized and fixed
+same day: the lambda now calls `_path("land_cover")`, matching the
+cache-check — "land_cover" (not "lc") is the canonical name, same
+convention every other layer in this module already follows (the
+`_execute_or_load` label IS the on-disk suffix). Performance-only fix,
+no change to the mosaic's output content, no METHODOLOGY_REVISION.
 """
 
 from __future__ import annotations
@@ -318,15 +323,15 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         )
 
     with timer("land_cover", timings):
-        # NEW finding (see module docstring) preserved AS-IS: this
-        # cache-check looks for "{code}_land_cover_aligned.tif" but
-        # the lambda below writes "{code}_lc_aligned.tif" — the two
-        # never match, so land_cover is always recomputed. Not fixed
-        # here, ported faithfully from legacy's own mismatch.
+        # Cache filename mismatch fixed 2026-09-09 (see module
+        # docstring) — writes to _path("land_cover") now, matching
+        # _execute_or_load("land_cover", ...)'s own cache-check, so a
+        # second run for the same country hits the cache instead of
+        # always recomputing.
         aligned["land_cover"] = _execute_or_load(
             "land_cover",
             lambda: mosaic_land_cover(
-                inputs.land_cover_tiles, _path("lc"), grid, inputs.country_gdf
+                inputs.land_cover_tiles, _path("land_cover"), grid, inputs.country_gdf
             ),
             bool(inputs.land_cover_tiles),
         )
