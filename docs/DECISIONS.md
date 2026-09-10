@@ -915,5 +915,23 @@ Referência (literatura/discussão, se aplicável): Lei 12.651/2012 (Código Flo
 `src/geofrea/suitability_criteria/criteria_functions.py::compute_river_suitability` (ramo `else`).
 
 ---
+## [2026-09-11] - data_acquisition: solar (PVOUT) ganha resolver local
+Tipo: STRUCTURAL_PRESERVE (fechamento de dependência — sem ambiguidade de método)
+
+Descrição: `resolve_solar_path()` (`local_layers.py`) espelha `resolve_elevation_path()`
+e aponta para o único arquivo global do Global Solar Atlas v2 em disco
+(`<raw>/solar_potential/World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/PVOUT.tif`),
+registrado em `_LOCAL_PATH_HANDLERS`. `solar` ∈ `REQUIRED_ALIGNED_LAYERS` da
+`suitability_criteria`; sem ele o pipeline 2a→2b não roda end-to-end
+(`_check_required_layers` levanta `RuntimeError`). Diferente de
+elevation/population/grid, solar NÃO é country-split — é um raster global,
+recortado/reprojetado por país dentro de `grid_alignment`; o `country_code` do
+resolver é aceito só para assinatura uniforme e ignorado. `provenance` segue
+`local_only` e `fetch_status` segue `not_implemented` — resolver um path local
+pré-colocado não é fetch (mesma distinção já registrada em 2026-09-08 para as
+outras 5 camadas locais). `seismic`/`protected` deliberadamente não tocados.
+Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-08 "wire das 5 camadas restantes a partir do banco local"; `src/geofrea/suitability_criteria/schemas.py::REQUIRED_ALIGNED_LAYERS`; instrução explícita de Douglas 2026-09-11 ("sem ambiguidade metodológica, pode seguir direto").
+
+---
 
 (fim das decisões registradas até o momento)

@@ -164,7 +164,8 @@ def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
     # keeps a real fetcher too (fetchers/protected_planet.py) but its
     # provenance stays local_only, gated behind a manual API token —
     # not activated. solar/seismic stay local_only, no confirmed
-    # automatable source.
+    # automatable source (solar gained a local-path resolver 2026-09-11,
+    # provenance unchanged — resolving a bundled path is not fetching).
     result = run_acquisition_phase(_context(tmp_path))
 
     fetched = {layer.layer_name for layer in result.layers if layer.provenance == "fetched"}
@@ -292,7 +293,7 @@ def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_p
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid", "roads"])
+@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid", "roads", "solar"])
 def test_run_acquisition_phase_populates_path_from_local_resolver(
     tmp_path, monkeypatch, layer_name
 ):
@@ -302,6 +303,7 @@ def test_run_acquisition_phase_populates_path_from_local_resolver(
         "population": "resolve_population_path",
         "grid": "resolve_grid_path",
         "roads": "resolve_roads_path",
+        "solar": "resolve_solar_path",
     }[layer_name]
     monkeypatch.setattr(phase_module, handler_name, lambda country_code: fake_path)
 

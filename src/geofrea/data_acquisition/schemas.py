@@ -43,12 +43,13 @@ phase.py reads MULTI_FILE_LAYER_NAMES directly.
 Known gaps still open, flagged rather than silently patched (per this
 stage's instructions — do not improvise past what was asked):
   - "slope" is deliberately NOT in the layer registry (see phase.py):
-    legacy never fetches or bundles slope, it derives it from the
-    elevation raster (RasterProcessor.calculate_slope(), called in
-    main.py after acquisition finishes) — it doesn't fit either
-    provenance value ("fetched" implies an external source,
-    "local_only" implies a pre-placed file). Where slope derivation
-    belongs in GeoFREA's architecture is undecided; out of scope here.
+    it is neither fetched nor bundled. GeoFREA derives it inside
+    grid_alignment (raster_alignment.derive_slope_from_dem(), 2026-09-11
+    — see docs/DECISIONS.md), from the aligned-phase's elevation input,
+    at the DEM's native resolution and then reprojected onto the grid.
+    That is a change from where the legacy did it (its own main.py, glue
+    code between acquisition and alignment); data_acquisition has no part
+    in it either way.
 """
 
 from __future__ import annotations

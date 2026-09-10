@@ -19,7 +19,10 @@ from geofrea.data_acquisition.local_layers import (
     resolve_land_cover_tiles,
     resolve_population_path,
     resolve_roads_path,
+    resolve_solar_path,
 )
+
+_SOLAR_SUBDIR = "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF"
 
 
 @pytest.fixture(autouse=True)
@@ -118,6 +121,43 @@ def test_resolve_population_path_no_lookup_table_needed(tmp_path, monkeypatch):
     monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
 
     assert resolve_population_path("XXX") == expected
+
+
+@pytest.mark.unit
+def test_resolve_solar_path_found(tmp_path, monkeypatch):
+    raw = _make_raw_dir(tmp_path)
+    (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
+    expected = raw / "solar_potential" / _SOLAR_SUBDIR / "PVOUT.tif"
+    expected.write_bytes(b"")
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_solar_path("BRA") == expected
+
+
+@pytest.mark.unit
+def test_resolve_solar_path_is_global_not_country_split(tmp_path, monkeypatch):
+    # solar is one global file — the country_code argument is ignored,
+    # every country resolves to the same PVOUT.tif.
+    raw = _make_raw_dir(tmp_path)
+    (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
+    (raw / "solar_potential" / _SOLAR_SUBDIR / "PVOUT.tif").write_bytes(b"")
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_solar_path("BRA") == resolve_solar_path("PRT") == resolve_solar_path("XXX")
+
+
+@pytest.mark.unit
+def test_resolve_solar_path_missing_file_returns_none(tmp_path, monkeypatch):
+    raw = _make_raw_dir(tmp_path)
+    (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_solar_path("BRA") is None
+
+
+@pytest.mark.unit
+def test_resolve_solar_path_no_env_var_returns_none(tmp_path):
+    assert resolve_solar_path("BRA") is None
 
 
 @pytest.mark.unit

@@ -14,8 +14,10 @@ functools.partial.
 _LAYER_REGISTRY enumerates every raw layer geoworld_framework's
 DataOrchestrator.acquire_all() handles, per the legacy audit performed
 before this stage — EXCEPT "slope", deliberately excluded (see
-schemas.py's module docstring: it's derived from elevation, not fetched
-or bundled, so it doesn't fit either provenance value).
+schemas.py's module docstring): it is neither fetched nor bundled, and
+GeoFREA derives it inside grid_alignment
+(raster_alignment.derive_slope_from_dem(), 2026-09-11), from that
+phase's elevation input — not here.
 
 Real fetch logic: 2026-08-25 (see docs/DECISIONS.md same date — "real
 fetchers for power_plants/wind/lakes/rivers") wired 4 of the 14 layers
@@ -35,14 +37,18 @@ files already on disk. Fase 2 (same date, "...Fase 2 - roads") added
 UNCLIPPED — unlike the 4 Fase-1 layers, the per-country clip for `roads`
 happens downstream in data_quality_audit (inspect_vector_layer(clip=
 True), same as lakes/rivers/protected), not in this phase; see
-local_layers.py's module docstring. _LOCAL_PATH_HANDLERS /
+local_layers.py's module docstring. `solar` was
+added 2026-09-11 the same way (single global Global Solar Atlas PVOUT
+file, resolve_solar_path) — hard-required by suitability_criteria, which
+could not run end-to-end without it. _LOCAL_PATH_HANDLERS /
 _LOCAL_MULTI_PATH_HANDLERS below are the only places this phase knows
 about local_layers.py. `protected` remains implemented-but-not-activated
-(see fetchers/protected_planet.py's module docstring). `solar`/`seismic`
-remain out of scope (no confirmed automatable source, see DECISIONS.md
-2026-08-25). fetch_status is UNCHANGED by any of this — none of the 5
-local-resolved layer_names are in IMPLEMENTED_FETCH_LAYER_NAMES, so they
-keep reporting "not_implemented" (resolving a local path is not the same
+(see fetchers/protected_planet.py's module docstring). `seismic` remains
+out of scope (no confirmed automatable source and no local resolver yet,
+see DECISIONS.md 2026-08-25). fetch_status is UNCHANGED by any of this —
+none of the 6 local-resolved layer_names are in
+IMPLEMENTED_FETCH_LAYER_NAMES, so they keep reporting "not_implemented"
+(resolving a local path is not the same
 as GeoFREA's own code fetching one — see local_layers.py's module
 docstring).
 
@@ -82,6 +88,7 @@ from geofrea.data_acquisition.local_layers import (
     resolve_land_cover_tiles,
     resolve_population_path,
     resolve_roads_path,
+    resolve_solar_path,
 )
 from geofrea.data_acquisition.schemas import (
     IMPLEMENTED_FETCH_LAYER_NAMES,
@@ -137,6 +144,7 @@ _LOCAL_PATH_HANDLERS: dict[str, Callable[[str], Path | None]] = {
     "population": lambda country_code: resolve_population_path(country_code),
     "grid": lambda country_code: resolve_grid_path(country_code),
     "roads": lambda country_code: resolve_roads_path(country_code),
+    "solar": lambda country_code: resolve_solar_path(country_code),
 }
 
 # land_cover is multi-file (MULTI_FILE_LAYER_NAMES) — kept in its own
@@ -227,8 +235,9 @@ class _LayerSpec(NamedTuple):
 # answers that question. `protected` stays local_only even though a
 # real fetcher exists for it too (fetchers/protected_planet.py) —
 # gated behind a manual API token, not activated here (see that
-# module's docstring). `solar`/`seismic` stay local_only — no
-# confirmed automatable source this stage.
+# module's docstring). `solar` stays local_only but now has a local
+# resolver (resolve_solar_path, 2026-09-11); `seismic` stays local_only
+# with no resolver yet — no confirmed automatable source.
 _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("borders", "fetched", False, "GADM 4.1 (fallback: NaturalEarth)", True),
     _LayerSpec("admin1", "fetched", False, "GADM 4.1 (level-1, same download as borders)", True),

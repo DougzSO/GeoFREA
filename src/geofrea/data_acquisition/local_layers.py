@@ -1,14 +1,20 @@
-"""Local-database path resolution for elevation/population/grid/land_cover.
+"""Local-database path resolution for elevation/population/grid/land_cover/roads/solar.
 
-NOT a fetcher module — nothing here performs an HTTP request. These 4
+NOT a fetcher module — nothing here performs an HTTP request. These
 layers have no automatable source today (see phase.py's _LAYER_REGISTRY
 and schemas.py's AcquiredLayer.provenance docstring: "local_only" means
 "no fetch mechanism exists for it at all ... must be pre-placed on
 disk"). This module's only job is locating files that were already
 placed on disk by hand, under GEOFREA_RAW_DATA_DIR, and handing back a
 Path/list[Path] — the same shape run_acquisition_phase() would get from
-a real fetcher, so phase.py's wiring for these 4 layers is a thin
+a real fetcher, so phase.py's wiring for these layers is a thin
 "resolve instead of download" swap, not a new code path.
+
+`solar` was added 2026-09-11 (resolve_solar_path): a single global
+Global Solar Atlas v2 PVOUT raster, hard-required by suitability_criteria
+(REQUIRED_ALIGNED_LAYERS) — the phase could not run end-to-end without
+it. Unlike elevation/population/grid it is not country-split; the
+country_code argument is accepted only for a uniform handler signature.
 
 Phase 1 of "wire das 5 camadas restantes a partir do banco local" (see
 docs/DECISIONS.md, same title) — elevation/population/grid/land_cover.
@@ -265,6 +271,43 @@ def resolve_population_path(country_code: str) -> Path | None:
     path = raw_data_dir / "population" / f"{country_code.lower()}_pop_2020.tif"
     if not path.exists():
         logger.warning("Local population raster not found for %s: %s", country_code, path)
+        return None
+    return path
+
+
+# Single GLOBAL file (Global Solar Atlas v2 long-term-average PVOUT),
+# not a per-country raster — grid_alignment clips/reprojects it to each
+# country's target grid. Confirmed 2026-09-11 by listing
+# GEOFREA_RAW_DATA_DIR/solar_potential/. The sibling `World_TEMP_...`
+# bundle (air temperature) is deliberately not matched — it is not a
+# suitability_criteria input.
+_SOLAR_PVOUT_RELPATH = Path(
+    "solar_potential"
+) / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF" / "PVOUT.tif"
+
+
+def resolve_solar_path(country_code: str) -> Path | None:
+    """Resolve the local Global Solar Atlas PVOUT raster.
+
+    Args:
+        country_code: ISO-3166-alpha-3 code. Accepted for a uniform
+            handler signature with the other resolvers, but UNUSED —
+            solar is one global file, not country-split (unlike
+            elevation/population/grid). grid_alignment clips and
+            reprojects it to each country's grid downstream.
+
+    Returns:
+        Path to `<raw>/solar_potential/World_PVOUT_.../PVOUT.tif`, or None
+        if GEOFREA_RAW_DATA_DIR is unset or the file is genuinely absent
+        on disk (logged, not raised — same as resolve_elevation_path).
+    """
+    raw_data_dir = _raw_data_dir()
+    if raw_data_dir is None:
+        return None
+
+    path = raw_data_dir / _SOLAR_PVOUT_RELPATH
+    if not path.exists():
+        logger.warning("Local solar PVOUT raster not found: %s", path)
         return None
     return path
 
