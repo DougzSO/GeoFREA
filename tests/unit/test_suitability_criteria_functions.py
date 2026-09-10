@@ -419,3 +419,56 @@ def test_compute_protected_areas_directory_input_resolves_polygon_shp(tmp_path):
     )
     assert source == "wdpa"
     assert (score == 0.0).any()
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_empty_directory_is_assumed_free(tmp_path):
+    # A directory that exists but holds NO shapefile is a genuine absence
+    # (same as a missing token) -> assumed_free, NOT an error.
+    from rasterio.transform import from_origin
+
+    d = tmp_path / "wdpa_empty"
+    d.mkdir()
+
+    score, _t, _c, source = compute_protected_areas(
+        d, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
+    )
+    assert source == "assumed_free"
+    assert np.array_equal(np.unique(score[score != NODATA_FLOAT]), np.array([1.0], dtype=np.float32))
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_corrupted_shapefile_raises_not_assumed_free(tmp_path):
+    # A WDPA file that IS present but is truncated/unreadable is a
+    # data-integrity error — fail loud, do NOT fall back to assumed_free
+    # (DECISIONS.md 2026-09-11). Distinct from the missing-file case above.
+    from rasterio.transform import from_origin
+
+    bad = tmp_path / "WDPA_broken_shp-polygons.shp"
+    bad.write_bytes(b"\x00\x01\x02 this is not a valid ESRI shapefile \xff\xfe" * 4)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        compute_protected_areas(
+            bad, _mainland_gdf(),
+            from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"],
+        )
+
+    msg = str(excinfo.value)
+    assert "protected_areas" in msg
+    assert "present but could not be read" in msg
+    assert bad.name in msg  # names the offending file for diagnosis
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_corrupted_shapefile_in_directory_also_raises(tmp_path):
+    from rasterio.transform import from_origin
+
+    d = tmp_path / "wdpa_dir" / "shp_0"
+    d.mkdir(parents=True)
+    (d / "WDPA_x_shp-polygons.shp").write_bytes(b"truncated garbage, not a shapefile")
+
+    with pytest.raises(RuntimeError, match="could not be read"):
+        compute_protected_areas(
+            tmp_path / "wdpa_dir", _mainland_gdf(),
+            from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"],
+        )

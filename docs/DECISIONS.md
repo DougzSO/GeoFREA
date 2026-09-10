@@ -1023,5 +1023,46 @@ Teste dedicado: `test_derive_slope_valid_pixel_next_to_nodata_is_not_contaminate
 Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/raster_processor.py` L82-83 (mask só pós-gradiente); `docs/DECISIONS.md` 2026-09-10 "compute_solar_resource guards NODATA_FLOAT" e "compute_biomass_resource exclui land_cover == 255"; instrução explícita de Douglas 2026-09-11.
 
 ---
+## [2026-09-11] - suitability_criteria: protected_areas distingue WDPA ausente de WDPA corrompido
+Tipo: METHODOLOGY_REVISION (fail-loud para falha de integridade; caminho assumed_free preservado para ausência genuína)
+
+Descrição: `compute_protected_areas` tratava duas situações diferentes com o mesmo
+fallback silencioso (`score[mainland] = 1.0`, `source = "assumed_free"`, só um
+`logger.warning`) — herança do legado `criteria_builder.py` L511-513. A partir de
+agora elas divergem:
+
+- **WDPA genuinamente ausente** (diretório/arquivo não existe, ou diretório sem
+  nenhum `.shp` — a camada é gated por um token manual do Protected Planet e falta
+  de rotina): **situação operacional conhecida**. Continua `assumed_free` — todo o
+  mainland = 1.0, `source = "assumed_free"`. Inalterado. A ausência de token nunca
+  muda a ciência silenciosamente (já era a justificativa da decisão de 2026-09-10).
+- **WDPA presente mas ilegível** (arquivo truncado, corrompido, sidecars `.shx`/
+  `.dbf` faltando — qualquer falha em ler/recortar/rasterizar um arquivo que
+  existe): **erro de integridade de dado**. Agora levanta `RuntimeError` com
+  mensagem diagnóstica que nomeia o arquivo ofensor e o tipo da exceção original
+  (encadeada via `raise ... from exc`), em vez de continuar como se o país não
+  tivesse áreas protegidas.
+- WDPA lido OK mas sem feição intersectando o mainland após o clip: continua
+  `assumed_free` — é um "este país não tem WDPA mapeada" legítimo, não erro.
+
+Veredito ratificado por Douglas (2026-09-11): um arquivo presente e corrompido não
+deve receber o mesmo fallback silencioso da ausência de token. Consistente com a
+filosofia fail-loud já aplicada em
+`run_suitability_criteria_phase._check_required_layers` (RuntimeError se falta
+elevation/slope/solar/land_cover) e `grid_alignment._verify_alignment` (RuntimeError
+em mismatch de dimensão). Exceção escolhida: `RuntimeError` puro — o projeto não
+tem exceção de domínio dedicada para falha de integridade de camada em runtime
+(as classes `*RequiresBordersError(ValueError)` são para lacunas de wiring em tempo
+de construção do adapter, não corrupção de dado). Propaga para
+`PhaseExecutionError` via orquestrador, como os outros dois pontos fail-loud.
+
+Testes: `test_compute_protected_areas_corrupted_shapefile_raises_not_assumed_free`
+e `..._in_directory_also_raises` (shapefile truncado, confirmam mensagem clara);
+`test_compute_protected_areas_empty_directory_is_assumed_free` (fixa a distinção —
+diretório sem `.shp` continua `assumed_free`). O caso WDPA-ausente
+(`test_compute_protected_areas_no_wdpa_is_all_free`) segue passando inalterado.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py` L511-513 (swallow do legado); `docs/architecture/suitability_criteria_audit.md` §5 item 10; `docs/DECISIONS.md` 2026-09-10 "pacote 4 fecha os 14 critérios" (fallback assumed_free para ausência de token); `src/geofrea/suitability_criteria/phase.py::_check_required_layers` e `src/geofrea/grid_alignment/alignment.py::_verify_alignment` (precedente fail-loud); instrução explícita de Douglas 2026-09-11.
+
+---
 
 (fim das decisões registradas até o momento)

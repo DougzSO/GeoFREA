@@ -5,6 +5,7 @@ separate regression test.
 """
 
 import copy
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -13,13 +14,25 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import Polygon
 
+from geofrea.core.config_loader import load_parameters
 from geofrea.core.constants import NODATA_FLOAT
-from geofrea.core.orchestrator import PhaseContext
+from geofrea.core.orchestrator import (
+    Orchestrator,
+    PhaseContext,
+    PhaseExecutionError,
+    PhaseSpec,
+    RunManifest,
+)
 from geofrea.core.schemas import CriteriaParams
 from geofrea.grid_alignment.schemas import GridMetadata
 from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
-from geofrea.suitability_criteria.schemas import SuitabilityCriteriaInputs
+from geofrea.suitability_criteria.schemas import (
+    SuitabilityCriteriaInputs,
+    SuitabilityCriteriaResult,
+)
 from tests.unit.test_schemas import VALID_CRITERIA
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 HEIGHT, WIDTH = 4, 5
 TRANSFORM = from_origin(-9.5, 42.15, 0.01, 0.01)
@@ -221,7 +234,49 @@ def test_phase_raises_on_topology_mismatch(tmp_path):
 @pytest.mark.unit
 def test_phase_result_round_trips_through_output_model(tmp_path):
     result = run_suitability_criteria_phase(_context(tmp_path), _inputs(tmp_path))
-    from geofrea.suitability_criteria.schemas import SuitabilityCriteriaResult
-
     reloaded = SuitabilityCriteriaResult.model_validate(result.model_dump(mode="json"))
     assert reloaded == result
+
+
+@pytest.mark.unit
+def test_corrupted_wdpa_error_message_survives_to_orchestrator_output(tmp_path):
+    # The RuntimeError from compute_protected_areas (WDPA file present but
+    # unreadable — DECISIONS.md 2026-09-11) must reach a production
+    # operator WITHOUT them opening a traceback: its text has to survive
+    # verbatim into (a) the PhaseExecutionError message main.py logs and
+    # (b) the persisted manifest's `error` field.
+    bad_wdpa = tmp_path / "WDPA_broken_shp-polygons.shp"
+    bad_wdpa.write_bytes(b"\x00 not a shapefile \xff" * 8)
+    inp = _inputs(tmp_path).model_copy(update={"wdpa_path": bad_wdpa})
+
+    spec = PhaseSpec(
+        name="suitability_criteria",
+        output_model=SuitabilityCriteriaResult,
+        run=lambda ctx: run_suitability_criteria_phase(ctx, inp),
+    )
+    orchestrator = Orchestrator(
+        outputs_dir=tmp_path / "out",
+        country_code="PRT",
+        country_params=load_parameters(_REPO_ROOT / "config" / "parameters.json").countries["PRT"],
+        phases_enabled={"suitability_criteria": True},
+    )
+
+    with pytest.raises(PhaseExecutionError) as excinfo:
+        orchestrator.run([spec])
+
+    # (a) the exception the CLI logs, one line, no traceback needed
+    final_msg = str(excinfo.value)
+    assert "Phase 'suitability_criteria' failed" in final_msg
+    assert "protected_areas: WDPA shapefile" in final_msg
+    assert "present but could not be read" in final_msg
+    assert bad_wdpa.name in final_msg
+    # a generic I/O failure in another layer would NOT contain these
+
+    # (b) the same diagnostic, persisted to manifest.json on disk
+    on_disk = RunManifest.model_validate_json(
+        orchestrator.manifest_path.read_text(encoding="utf-8")
+    )
+    entry = on_disk.phases["suitability_criteria"]
+    assert entry.status == "failed"
+    assert "protected_areas: WDPA shapefile" in entry.error
+    assert "present but could not be read" in entry.error

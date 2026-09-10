@@ -476,10 +476,19 @@ def compute_protected_areas(
              unprotected land — they are indistinguishable to Fase 3).
     Pixels outside the mainland polygon stay NODATA_FLOAT.
 
-    No WDPA file (the layer is gated behind a manual Protected Planet
-    token and is often absent): the whole mainland scores 1.0 and the
-    returned source is "assumed_free" — the legacy's L458-459 behaviour,
-    so a missing token never silently changes the science.
+    Two very different absences, handled differently (DECISIONS.md
+    2026-09-11):
+      - No WDPA file at all (missing directory / no shapefile — the
+        layer is gated behind a manual Protected Planet token and is
+        routinely absent): a KNOWN operational state. The whole mainland
+        scores 1.0 and source is "assumed_free" — legacy L458-459, so a
+        missing token never silently changes the science.
+      - A WDPA file that IS present but cannot be read / clipped /
+        rasterized (truncated, corrupted, missing sidecars): a
+        data-integrity error, NOT the assumed_free fallback. Raises
+        RuntimeError — same fail-loud philosophy as
+        run_suitability_criteria_phase._check_required_layers and
+        grid_alignment._verify_alignment. Fix or remove the file.
 
     This criterion has NO bit-exact parity with outputs_baseline_fc7b43d
     (the frozen baseline is graded; this is binary — a deliberate
@@ -500,6 +509,12 @@ def compute_protected_areas(
     Returns:
         (score, transform, crs, source) where source is "wdpa" if a WDPA
         file drove the mask, else "assumed_free".
+
+    Raises:
+        RuntimeError: If `wdpa_path` resolves to a shapefile that exists
+            but cannot be read, clipped, or rasterized (data-integrity
+            failure). A genuinely absent file returns "assumed_free"
+            instead.
     """
     strict = {c.lower().strip() for c in strict_categories}
 
@@ -515,40 +530,55 @@ def compute_protected_areas(
 
     shapefile = _resolve_wdpa_shapefile(wdpa_path)
     if shapefile is None:
+        # Genuinely absent (no token / no file) — a known operational
+        # state, not an error. Legacy L458-459.
         score[mainland_mask > 0] = _IUCN_FREE_SCORE
         return score, transform, crs, "assumed_free"
 
+    # The file IS present. A failure to read / clip / rasterize it now is
+    # a data-integrity error, NOT the assumed_free fallback (DECISIONS.md
+    # 2026-09-11). The legacy swallowed it here (L511-513) and continued
+    # as if the country had no protected areas — GeoFREA fails loud
+    # instead, matching _check_required_layers / _verify_alignment.
     try:
         gdf = read_clipped_to_country(shapefile, mainland_gdf)
         if gdf.crs is not None and str(gdf.crs) != crs:
             gdf = gdf.to_crs(crs)
         gdf = gdf[~gdf.geometry.is_empty]
-        if gdf.empty:
-            score[mainland_mask > 0] = _IUCN_FREE_SCORE
-            return score, transform, crs, "assumed_free"
 
-        iucn_col = next(
-            (c for c in ("IUCN_CAT", "iucn_cat", "IUCN", "DESIGNATION") if c in gdf.columns),
-            None,
-        )
-        if iucn_col is not None:
-            cats = gdf[iucn_col].astype("string").str.lower().str.strip()
-            feature_scores = np.where(cats.isin(strict), 0.0, _IUCN_FREE_SCORE)
-        else:
-            feature_scores = np.full(len(gdf), _IUCN_FREE_SCORE)
+        if not gdf.empty:
+            iucn_col = next(
+                (c for c in ("IUCN_CAT", "iucn_cat", "IUCN", "DESIGNATION") if c in gdf.columns),
+                None,
+            )
+            if iucn_col is not None:
+                cats = gdf[iucn_col].astype("string").str.lower().str.strip()
+                feature_scores = np.where(cats.isin(strict), 0.0, _IUCN_FREE_SCORE)
+            else:
+                feature_scores = np.full(len(gdf), _IUCN_FREE_SCORE)
 
-        # Rasterize free (1.0) first, strict (0.0) last so exclusions win.
-        order = np.argsort(-feature_scores, kind="stable")
-        shapes = [
-            (mapping(geom), float(sv))
-            for geom, sv in zip(gdf.geometry.to_numpy()[order], feature_scores[order])
-        ]
-        temp = np.full((height, width), _IUCN_FREE_SCORE, dtype=np.float32)
-        rasterize(shapes, out_shape=(height, width), transform=transform, out=temp)
-        score[mainland_mask > 0] = temp[mainland_mask > 0]
-        return score, transform, crs, "wdpa"
+            # Rasterize free (1.0) first, strict (0.0) last so exclusions win.
+            order = np.argsort(-feature_scores, kind="stable")
+            shapes = [
+                (mapping(geom), float(sv))
+                for geom, sv in zip(gdf.geometry.to_numpy()[order], feature_scores[order])
+            ]
+            temp = np.full((height, width), _IUCN_FREE_SCORE, dtype=np.float32)
+            rasterize(shapes, out_shape=(height, width), transform=transform, out=temp)
+            score[mainland_mask > 0] = temp[mainland_mask > 0]
+            return score, transform, crs, "wdpa"
+    except Exception as exc:
+        # Any read/clip/rasterize failure on a file that IS present ->
+        # re-raise with a diagnostic message (not a blind swallow).
+        raise RuntimeError(
+            f"protected_areas: WDPA shapefile {str(shapefile)!r} is present but could "
+            f"not be read/clipped/rasterized ({type(exc).__name__}: {exc}). A truncated "
+            f"or corrupted layer file is a data-integrity error and must not be silently "
+            f"treated as 'no protected areas' — fix or remove the file."
+        ) from exc
 
-    except Exception as exc:  # noqa: BLE001 — legacy degrades to "all free" here (L511-513)
-        logger.warning("  Protected-areas rasterization failed, assuming free: %s", exc)
-        score[mainland_mask > 0] = _IUCN_FREE_SCORE
-        return score, transform, crs, "assumed_free"
+    # File read fine but nothing intersects the mainland after clipping —
+    # a legitimate "this country has no mapped WDPA areas", same result
+    # as a missing file.
+    score[mainland_mask > 0] = _IUCN_FREE_SCORE
+    return score, transform, crs, "assumed_free"

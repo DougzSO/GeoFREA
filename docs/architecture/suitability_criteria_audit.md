@@ -142,7 +142,7 @@ Exclusões **puramente da Fase 3** (herdam parâmetros da família de params, ma
 7. **Se `as_exclusion`:** `_score = 0.0` onde categoria ∈ `{"ia","ib","ii"}` (L493-495).
 8. Sem coluna IUCN → `_score = 0.25` para todos (L497).
 9. Ordena por `_score desc`, rasteriza sobre base `1.0` (L499-509).
-10. `score[mainland] = temp[mainland]`. Exceção → fallback `1.0` + warning (L511-514).
+10. `score[mainland] = temp[mainland]`. Exceção no legado → fallback `1.0` + warning (L511-514). **GeoFREA (DECISIONS 2026-09-11):** só o caso WDPA genuinamente ausente cai em `assumed_free`; um arquivo WDPA **presente mas ilegível** (truncado/corrompido) levanta `RuntimeError` — fail-loud, como `_check_required_layers` / `_verify_alignment`.
 
 **`IUCN_SCORES` (`constants.py` L179-193):** `ia`/`ib`=0.00, `ii`=0.10, `iii`=0.25, `iv`=0.30, `v`=0.45, `vi`=0.55, `not reported`/`not assigned`=0.25, `not applicable`=0.45. `IUCN_SCORE_DEFAULT`=0.25, `IUCN_FREE_SCORE`=1.00.
 
