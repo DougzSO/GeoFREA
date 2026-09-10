@@ -2,7 +2,9 @@
 
 ## Projeto e propósito
 
-GeoFREA é a reconstrução do zero do **GeoWorld Framework**, um pipeline geoespacial de 9 fases (Audit → Grid Alignment → Criteria → Suitability → Potential → LCOE → Results → GHG Abatement → Sensitivity Analysis) para análise de aptidão de sítios de energia renovável (solar/wind/biomass), desenvolvido como parte da pesquisa de doutorado de Douglas na UFMG.
+GeoFREA é a reconstrução do zero do **GeoWorld Framework**, um pipeline geoespacial de 9 módulos organizados em 8 fases numeradas — **Fase 1** (`data_acquisition` + `data_quality_audit`) → **Fase 2a** (`grid_alignment`) → **Fase 2b** (`suitability_criteria`) → **Fase 3** (`suitability_builder`) → **Fase 4** (`potential_analysis`) → **Fase 5** (`lcoe_modeling`) → **Fase 6** (`results_synthesis`) → **Fase 7** (`ghg_abatement`) → **Fase 8** (`sensitivity_analysis`) — para análise de aptidão de sítios de energia renovável (solar/wind/biomass), desenvolvido como parte da pesquisa de doutorado de Douglas na UFMG.
+
+A numeração canônica das fases é definida em `docs/CONVENTIONS.md` § "Phase numbering". Nunca escrever "Fase 2" sem sufixo: `grid_alignment` é **2a** e `suitability_criteria` é **2b**, fases distintas. O campo `fase_legado` em `docs/PROGRESS.json` (que mapeia ambos para o legado `2`) é metadado de proveniência, não o número de fase do GeoFREA.
 
 O objetivo não é portar o código legado linha a linha, mas reconstruir a lógica científica com uma arquitetura limpa, corrigindo problemas estruturais já identificados no legado (ver `docs/architecture/module-mapping.md`) e preservando (ou revisando deliberadamente, com justificativa) o comportamento científico validado.
 
@@ -18,6 +20,7 @@ A variável de ambiente `GEOWORLD_BASELINE_DIR` (definida em `.env`) aponta para
 
 - **No início de toda sessão**, ler `docs/PROGRESS.json` antes de qualquer outra ação, para determinar o que já foi feito e o que falta antes de propor próximos passos.
 - **Ao final de toda sessão que alterar código ou documentos de arquitetura**, atualizar `docs/PROGRESS.json` (campos `fase_atual`, `ultima_atualizacao`, status dos módulos afetados, contradições resolvidas/novas) antes de encerrar.
+  - `fase_atual` usa a numeração de **marcos de reconstrução do projeto** (`0`, `0.5`, depois o rótulo de fase do pipeline do módulo em construção), que é um eixo separado dos números de fase do pipeline. A convenção completa está em `docs/CONVENTIONS.md` § "Phase numbering" → "Project-milestone numbering".
 
 ## Convenções do projeto
 

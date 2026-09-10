@@ -67,6 +67,54 @@ structural behavior must be logged as an entry in `docs/DECISIONS.md`
 Code that implements a decision recorded this way should reference it,
 e.g. `# See DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values`.
 
+## Phase numbering
+
+The pipeline has **nine modules** grouped into **eight numbered phases**.
+This is the canonical numbering — use it in code comments, docstrings,
+commit messages, `docs/PROGRESS.json`, and architecture docs.
+
+| Phase | Module(s) (`src/geofrea/<name>/`)        | Legacy origin |
+|-------|-----------------------------------------|---------------|
+| 1     | `data_acquisition` + `data_quality_audit` | Legacy Phase 1 (Audit); `data_acquisition` is a GeoFREA-only split of raw-data fetching out of the audit |
+| 2a    | `grid_alignment`                         | Legacy Phase 2a |
+| 2b    | `suitability_criteria`                   | Legacy Phase 2b (Criteria) |
+| 3     | `suitability_builder`                    | Legacy Phase 3 (Suitability / MCDA) |
+| 4     | `potential_analysis`                     | Legacy Phase 4 (Potential) |
+| 5     | `lcoe_modeling`                          | Legacy Phase 5 (LCOE) |
+| 6     | `results_synthesis`                      | Legacy Phase 6 (Results) |
+| 7     | `ghg_abatement`                          | Legacy Phase 7 (GHG Abatement) |
+| 8     | `sensitivity_analysis`                   | Legacy Phase 8 (Sensitivity) |
+
+Rules:
+
+- **Never write an unqualified "Phase 2".** `grid_alignment` is `2a` and
+  `suitability_criteria` is `2b` — distinct phases that merely share the
+  legacy's Phase 2 lineage. Always write `2a` or `2b`.
+- Transport Decarbonisation (legacy Phase 9) is permanently excluded and
+  has no GeoFREA phase number (see "Excluded modules" below).
+- `fase_legado` in `docs/PROGRESS.json` records each module's legacy
+  phase of origin and is intentionally coarser (both `grid_alignment`
+  and `suitability_criteria` carry `fase_legado: 2`). It is provenance
+  metadata, not the GeoFREA phase number.
+
+### Project-milestone numbering (`fase_atual`)
+
+`docs/PROGRESS.json`'s `fase_atual` field is a **separate axis** from the
+pipeline phase numbers above. It tracks GeoFREA *reconstruction*
+milestones, not the pipeline:
+
+| `fase_atual` | Milestone |
+|--------------|-----------|
+| `0`   | Legacy audit complete and all `docs/architecture/*.md` written (2026-08-19) |
+| `0.5` | Regression baseline (PRT + BRA) regenerated at legacy commit `fc7b43d` (2026-08-20, commit `d6def9c` — "Fase 0.5: regenerate regression baseline") |
+| `1`+  | Module construction under way — carry the **pipeline phase label** of the module currently being built (e.g. `2b` while `suitability_criteria` is being implemented) |
+
+The fractional `0.5` is real: it names the baseline-regeneration
+milestone that sits between the audit (`0`) and the first module build.
+It is not a placeholder. Once construction is under way, keep
+`fase_atual` set to the pipeline phase label of the work in progress, and
+update it at end of session (see `CLAUDE.md` § "Início e fim de sessão").
+
 ## Excluded modules
 
 GeoFREA does not include a Transport Decarbonisation phase (see
