@@ -92,7 +92,7 @@ Validado por `CriteriaResult` (`schemas.py` L516). Invariante `n_criteria == len
 |---|---|---|---|
 | E1 | `compute_lakes_exclusion` (L536) | estritamente `{0.0, 1.0}` (0=lago) | Fase 3: `hard_exclusions["lakes_exclusion"] = 0.5` → pixel `< 0.5` excluído. `CountryParams` deliberadamente sem campo (L392-395). |
 | E2 | `compute_protected_areas` (L435), `as_exclusion=True` | IUCN Ia/Ib/II → `0.0`; demais categorias → `IUCN_SCORES[cat]` (0.10–0.55); território livre → `1.0` | Fase 3: `hard_exclusions["protected_areas"] = protected_areas_threshold` (**default `0.99`**) → **tudo abaixo de 0.99 é excluído**. Como o único valor `≥ 0.99` que a função emite é `1.0`, na prática **toda feição WDPA (qualquer categoria) é hard-excluída** — os scores fracionários e a tabela `IUCN_SCORES` são valores mortos sob o default. **→ RESOLVIDO** (DECISIONS 2026-09-10): GeoFREA usa máscara binária, tabela graduada descartada. |
-| E3 | `compute_river_suitability`, ramo `else` → `river_solar`, `river_wind` (L573-576) | setback ripário: `d < river_safety_buffer_km (0.5)` → `0.0`; senão `1.0` | Legado: **não** estão em `hard_exclusions` — entram só no `priority_order` do AHP como score `{0,1}` degenerado. **→ RESOLVIDO** (DECISIONS 2026-09-10): promovidos a hard exclusion (adicionados a `common_exclusions` na Fase 3), pois representam setback de segurança, não preferência. |
+| E3 | `compute_river_suitability`, ramo `else` → `river_solar`, `river_wind` (L573-576) | setback ripário: `d < river_safety_buffer_km (0.5)` → `0.0`; senão `1.0` | Legado: **não** estão em `hard_exclusions` — entram só no `priority_order` do AHP como score `{0,1}` degenerado. **→ RESOLVIDO** (DECISIONS 2026-09-10 ponto 7; mecanismo fixado 2026-09-11): promovidos a hard exclusion — os rasters `river_solar`/`river_wind` {0,1} da Fase 2b são reusados diretamente como entradas de `common_exclusions` (threshold 0.5) na Fase 3, sem máscara adicional. Ver §8d. |
 
 Exclusões **puramente da Fase 3** (herdam parâmetros da família de params, mas o gate é lá, não na 2b):
 - `proximity_plants < proximity_plants_threshold (0.01)` — exclui pixel *em cima* de usina existente.
@@ -367,19 +367,39 @@ suitability_criteria consome:
 
 ### 8d. `common_exclusions` da Fase 3 (documentado aqui, implementar só em `suitability_builder`)
 
-`DECISIONS.md` 2026-09-10 ponto 7: adicionar `river_solar` e `river_wind` à lista existente. Lista-alvo da Fase 3:
+**Nada de `common_exclusions` nem de código de exclusão é implementado na Fase 2b.** A camada `suitability_analysis`/`suitability_builder` (Fase 3) hoje é um stub vazio (`src/geofrea/suitability_analysis/__init__.py`, 0 bytes). O que segue é o alvo, materializado quando a Fase 3 for construída por inteiro (junto com `apply_hard_exclusions`, `TechnologyConfig` e a regressão contra `outputs_baseline_fc7b43d/{PRT,BRA}/suitability_builder/`).
+
+**Legado — 3 entradas, rio nunca excluído** (`suitability_builder.py` L181-192):
 
 ```
 common_exclusions = {
-    "lakes_exclusion":   0.5,     # legado (inerte, critério já {0,1})
+    "lakes_exclusion":   0.5,
+    "protected_areas":   float(cp.get("protected_areas_threshold", 0.99)),
+    "proximity_plants":  float(cp.get("proximity_plants_threshold", 0.01)),
+}
+```
+
+`river_solar` / `river_wind` / `river_biomass` no legado aparecem **só** no `priority_order` de cada `TechnologyConfig` (critérios do AHP/TOPSIS) — nunca em `hard_exclusions`. O setback ripário de segurança, portanto, no legado **não exclui nada**: entra no AHP como score `{0,1}` degenerado e pode ser compensado por outros critérios.
+
+**GeoFREA — 5 entradas** (`DECISIONS.md` 2026-09-10 ponto 7 + 2026-09-11):
+
+```
+common_exclusions = {
+    "lakes_exclusion":   0.5,     # legado (inerte — critério já {0,1})
     "protected_areas":   0.99,    # legado — com máscara binária, exclui toda feição WDPA
     "proximity_plants":  0.01,    # legado
-    "river_solar":       0.5,     # NOVO — setback de segurança, era só priority_order
+    "river_solar":       0.5,     # NOVO — hard exclusion do setback de segurança
     "river_wind":        0.5,     # NOVO — idem
 }
 ```
 
-`river_biomass` **não** entra em `common_exclusions` (continua critério contínuo — acesso, não setback). O gate de slope na Fase 3 passa a usar `SLOPE_MAX_DEG_{SOLAR,WIND,BIOMASS}` direto (sem `base + offset`).
+**Mecanismo do buffer de segurança de rio — reuso direto, não máscara adicional.** `river_safety_buffer_km = 0.5` (fixo, todos os países; teto do Código Florestal, Lei 12.651/2012) já é aplicado na Fase 2b por `compute_river_suitability` (ramo `else`), que produz os rasters `river_solar.tif` e `river_wind.tif` como máscaras `{0.0, 1.0}` (`0.0` dentro de 0,5 km de um rio, `1.0` além). A Fase 3 **reusa esses mesmos dois rasters** como entradas de `common_exclusions` com threshold `0.5` — `apply_hard_exclusions` (`exclusion.py` L120-124) faz `excl_mask = isfinite(crit_arr) & (crit_arr < 0.5)`, ou seja, exclui exatamente os pixels `0.0` (dentro do buffer). **Não há máscara de exclusão de rio separada/adicional**: seria contagem dupla do mesmo setback.
+
+Consequência: `river_solar` e `river_wind` **deixam de ser critérios AHP puros** no contrato GeoFREA — cada um passa a ter dois papéis simultâneos: (1) hard exclusion em `common_exclusions` (novo) e (2) entrada em `priority_order` do `TechnologyConfig` de solar / wind (herança do legado, mantida). Um pixel dentro do buffer é removido do domínio elegível antes do AHP; um pixel fora entra no AHP com score `1.0` nesse critério.
+
+`river_biomass` **permanece critério suave** — nenhuma entrada em `common_exclusions`. É score de acesso linear contínuo (`clip(1 − d/river_max_dist_biomass_km, 0, 1)`, `d_max = 30 km`), não setback: proximidade a rio é preferência para biomassa (transporte fluvial de matéria-prima), não risco. Fica só no `priority_order` de biomass, como no legado.
+
+O gate de slope na Fase 3 passa a usar `SLOPE_MAX_DEG_{SOLAR,WIND,BIOMASS}` direto (sem `base + offset`).
 
 ---
 

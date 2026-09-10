@@ -863,5 +863,57 @@ Referência (literatura/discussão, se aplicável): `geoworld_framework/src/proc
 regressão `tests/regression/test_suitability_criteria_regression.py` (`seismic_suitability`, `pop_suitability`, `test_protected_areas_footprint_matches_frozen`).
 
 ---
+## [2026-09-11] - suitability_builder (Fase 3): mecanismo final do buffer de segurança de rio em common_exclusions
+Tipo: STRUCTURAL_PRESERVE (esclarecimento de mecanismo — nenhum código nesta passagem)
+
+Descrição: fixa COMO a promoção de `river_safety_buffer_km` a hard exclusion
+(decidida em 2026-09-10 ponto 7) se materializa na Fase 3, para não haver
+ambiguidade quando `suitability_builder`/`suitability_analysis` for construído
+(hoje stub vazio). Nenhum `common_exclusions` nem código de exclusão é
+implementado agora — isso fica para a construção completa da Fase 3.
+
+Antes (legado, `suitability_builder.py` L181-192) — `common_exclusions` tem
+**3 entradas**, rio nunca excluído:
+- `lakes_exclusion`: 0.5
+- `protected_areas`: 0.99 (via `protected_areas_threshold`)
+- `proximity_plants`: 0.01 (via `proximity_plants_threshold`)
+`river_solar` / `river_wind` / `river_biomass` aparecem só no `priority_order` de
+cada `TechnologyConfig` (critérios AHP/TOPSIS), nunca em `hard_exclusions`. O
+setback ripário no legado, portanto, não exclui nada — entra no AHP como score
+`{0,1}` degenerado, compensável por outros critérios.
+
+Depois (GeoFREA) — `common_exclusions` tem **5 entradas**:
+- as 3 do legado, mais
+- `river_solar`: 0.5 (NOVO — hard exclusion)
+- `river_wind`: 0.5 (NOVO — hard exclusion)
+
+Mecanismo — reuso direto, NÃO máscara adicional: `river_safety_buffer_km = 0.5`
+(fixo, todos os países; teto do Código Florestal, Lei 12.651/2012) já é aplicado
+na Fase 2b por `compute_river_suitability` (ramo `else`), que emite `river_solar.tif`
+e `river_wind.tif` como máscaras `{0.0, 1.0}` (`0.0` dentro de 0,5 km de rio,
+`1.0` além). A Fase 3 reusa esses MESMOS dois rasters como entradas de
+`common_exclusions` com threshold 0.5 — `apply_hard_exclusions` (`exclusion.py`
+L120-124) faz `excl_mask = isfinite(crit_arr) & (crit_arr < 0.5)`, excluindo
+exatamente os pixels `0.0`. Não haverá máscara de exclusão de rio separada:
+seria contagem dupla do mesmo setback.
+
+Consequência: `river_solar` e `river_wind` deixam de ser critérios AHP puros no
+contrato GeoFREA — cada um ganha dois papéis simultâneos: (1) hard exclusion em
+`common_exclusions` (novo) e (2) entrada em `priority_order` do `TechnologyConfig`
+de solar/wind (herança do legado, mantida). Pixel dentro do buffer sai do domínio
+elegível antes do AHP; pixel fora entra no AHP com score `1.0` nesse critério.
+
+`river_biomass` permanece critério suave — nenhuma entrada em `common_exclusions`.
+É score de acesso linear contínuo (`clip(1 − d/30, 0, 1)`), não setback:
+proximidade de rio é preferência para biomassa (transporte fluvial de
+matéria-prima), não risco. Fica só no `priority_order` de biomass, como no legado.
+
+Referência (literatura/discussão, se aplicável): Lei 12.651/2012 (Código Florestal, faixas de APP ripária — 30 m para cursos d'água < 10 m de largura é o piso; `river_safety_buffer_km` usa 0,5 km como teto conservador cross-country, ver DECISIONS.md 2026-09-10 "suitability_criteria parameter calibration");
+`geoworld_framework/src/processors/suitability_builder.py` L181-192 (`common_exclusions`), `src/utils/exclusion.py` L120-124 (`apply_hard_exclusions`);
+`docs/architecture/suitability_criteria_audit.md` §3a (E3), §8d;
+`docs/DECISIONS.md` 2026-09-10 ponto 7 (promoção) e "pacote 4 fecha os 14 critérios" (river_solar/river_wind produzidos pela Fase 2b);
+`src/geofrea/suitability_criteria/criteria_functions.py::compute_river_suitability` (ramo `else`).
+
+---
 
 (fim das decisões registradas até o momento)
