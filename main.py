@@ -67,7 +67,7 @@ from geofrea.core.orchestrator import (
     PhaseExecutionError,
     PhaseSpec,
 )
-from geofrea.core.schemas import ResolutionsConfig
+from geofrea.core.schemas import CriteriaParams, ResolutionsConfig
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
@@ -76,6 +76,12 @@ from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
 from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_inputs
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
+from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
+from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
+from geofrea.suitability_criteria.schemas import (
+    SuitabilityCriteriaInputs,
+    SuitabilityCriteriaResult,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("geofrea.main")
@@ -158,7 +164,53 @@ def _build_grid_alignment_inputs(
     return acquisition_result_to_grid_alignment_inputs(acquisition_result.output, resolutions)
 
 
-def _build_phase_specs(resolutions: ResolutionsConfig) -> list[PhaseSpec]:
+def _build_suitability_criteria_inputs(
+    context: PhaseContext, criteria: CriteriaParams
+) -> SuitabilityCriteriaInputs:
+    """Build suitability_criteria's input from grid_alignment + data_acquisition.
+
+    Two-phase dependency (audit sec 8c): the aligned rasters come from
+    grid_alignment's PhaseResult, the WDPA path / plants DataFrame /
+    mainland boundary from data_acquisition's. Neither has a degraded
+    mode here — same fail-loud-at-construction philosophy as
+    _build_grid_alignment_inputs().
+
+    Args:
+        context: The suitability_criteria phase's PhaseContext.
+        criteria: The global CriteriaParams block from parameters.json,
+            closed over by the phase spec (same per-context-closure
+            pattern as `resolutions` for grid_alignment).
+
+    Returns:
+        Real SuitabilityCriteriaInputs.
+
+    Raises:
+        RuntimeError: If grid_alignment or data_acquisition did not run
+            (or failed) in this pipeline.
+    """
+    grid_result = context.prior_results.get("grid_alignment")
+    acquisition_result = context.prior_results.get("data_acquisition")
+    if grid_result is None or grid_result.output is None:
+        raise RuntimeError(
+            "suitability_criteria requires grid_alignment to have run in this "
+            "same pipeline (see settings.yaml's run.phases)."
+        )
+    if acquisition_result is None or acquisition_result.output is None:
+        raise RuntimeError(
+            "suitability_criteria requires data_acquisition to have run in this "
+            "same pipeline (for the WDPA path, plants, and mainland boundary)."
+        )
+    return build_suitability_criteria_inputs(
+        grid_result.output,
+        acquisition_result.output,
+        criteria,
+        context.country_params.criteria,
+    )
+
+
+def _build_phase_specs(
+    resolutions: ResolutionsConfig, criteria: CriteriaParams
+) -> list[PhaseSpec]:
     """Registered phases, in execution order.
 
     data_acquisition MUST come before data_quality_audit: the
@@ -194,12 +246,17 @@ def _build_phase_specs(resolutions: ResolutionsConfig) -> list[PhaseSpec]:
             docstring's "grid_alignment wiring" section for why).
 
     Returns:
-        The three registered PhaseSpecs, in execution order.
+        The registered PhaseSpecs, in execution order.
     """
 
     def grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
         return run_grid_alignment_phase(
             context, inputs=_build_grid_alignment_inputs(context, resolutions)
+        )
+
+    def suitability_criteria_run(context: PhaseContext) -> SuitabilityCriteriaResult:
+        return run_suitability_criteria_phase(
+            context, inputs=_build_suitability_criteria_inputs(context, criteria)
         )
 
     return [
@@ -209,6 +266,11 @@ def _build_phase_specs(resolutions: ResolutionsConfig) -> list[PhaseSpec]:
         PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=_audit_run),
         PhaseSpec(
             name="grid_alignment", output_model=GridAlignmentResult, run=grid_alignment_run
+        ),
+        PhaseSpec(
+            name="suitability_criteria",
+            output_model=SuitabilityCriteriaResult,
+            run=suitability_criteria_run,
         ),
     ]
 
@@ -240,7 +302,7 @@ def run_geofrea(
     )
 
     try:
-        orchestrator.run(_build_phase_specs(resolutions))
+        orchestrator.run(_build_phase_specs(resolutions, parameters.criteria))
     except PhaseExecutionError as exc:
         logger.error("Run aborted for %s: %s", country_code, exc)
         return False

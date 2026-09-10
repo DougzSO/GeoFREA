@@ -37,6 +37,10 @@ def _country_params(country_code: str = "PRT"):
     return load_parameters(PARAMETERS_JSON).countries[country_code]
 
 
+def _criteria():
+    return load_parameters(PARAMETERS_JSON).criteria
+
+
 def _context(tmp_path: Path, prior_results: dict, country_code: str = "PRT") -> PhaseContext:
     return PhaseContext(
         country_code=country_code,
@@ -74,12 +78,13 @@ def _acquisition_phase_result(layers: list[AcquiredLayer]) -> PhaseResult[Acquis
 
 
 @pytest.mark.unit
-def test_build_phase_specs_returns_all_three_phases_in_order():
-    specs = main._build_phase_specs(ResolutionsConfig())
+def test_build_phase_specs_returns_all_phases_in_order():
+    specs = main._build_phase_specs(ResolutionsConfig(), _criteria())
     assert [spec.name for spec in specs] == [
         "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
+        "suitability_criteria",
     ]
 
 
@@ -254,7 +259,7 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
         )
     }
 
-    specs = main._build_phase_specs(ResolutionsConfig())
+    specs = main._build_phase_specs(ResolutionsConfig(), _criteria())
     grid_alignment_run = next(s.run for s in specs if s.name == "grid_alignment")
     result = grid_alignment_run(_context(tmp_path, prior_results=prior_results))
 
@@ -299,7 +304,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_disabled(tmp_p
     )
 
     real_grid_alignment_run = next(
-        s.run for s in main._build_phase_specs(ResolutionsConfig()) if s.name == "grid_alignment"
+        s.run for s in main._build_phase_specs(ResolutionsConfig(), _criteria()) if s.name == "grid_alignment"
     )
     specs = [
         PhaseSpec(

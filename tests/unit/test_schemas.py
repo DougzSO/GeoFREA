@@ -17,7 +17,10 @@ from pydantic import ValidationError
 
 from geofrea.core.schemas import (
     BiomassParams,
+    CountryCriteriaParams,
     CountryParams,
+    CriteriaParams,
+    LandCoverSuitability,
     ParametersFile,
     RunConfig,
     SettingsFile,
@@ -81,9 +84,76 @@ VALID_WIND = {
 
 VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS, "solar": VALID_SOLAR, "wind": VALID_WIND}
 
-VALID_COUNTRY = {"technologies": VALID_TECHNOLOGIES}
+VALID_YIELD_BY_LAND_COVER = {
+    **VALID_VERIFIED_VALUE,
+    "value": {"10": 8.0, "20": 3.0, "30": 5.0, "40": 6.0, "90": 0.0, "95": 0.0},
+    "verified": False,
+    "verified_by": None,
+    "verified_date": None,
+    "verification_method": "unverified",
+}
 
-VALID_PARAMETERS_FILE = {"countries": {"PRT": VALID_COUNTRY, "BRA": copy.deepcopy(VALID_COUNTRY)}}
+VALID_LAND_SUITABILITY = {
+    **VALID_VERIFIED_VALUE,
+    "value": {
+        "10": {"solar": 0.0, "wind": 0.0, "biomass": 0.0, "description": "Tree cover"},
+        "30": {"solar": 0.8, "wind": 0.8, "biomass": 0.9},
+    },
+    "verified": False,
+    "verified_by": None,
+    "verified_date": None,
+    "verification_method": "unverified",
+}
+
+
+def _cv(value):
+    """A minimal valid VerifiedValue payload wrapping `value`."""
+    return {**VALID_VERIFIED_VALUE, "value": value}
+
+
+VALID_CRITERIA = {
+    "slope_threshold_deg_solar": _cv(5.0),
+    "slope_threshold_deg_wind": _cv(25.0),
+    "slope_threshold_deg_biomass": _cv(15.0),
+    "river_safety_buffer_km": _cv(0.5),
+    "pop_density_threshold": _cv(200.0),
+    "road_max_dist_km": _cv(15.0),
+    "river_max_dist_biomass_km": _cv(30.0),
+    "grid_max_dist_km": _cv(20.0),
+    "normalization_min_percentile": _cv(5.0),
+    "normalization_max_percentile": _cv(95.0),
+    "seismic_percentile_low": _cv(2.0),
+    "seismic_percentile_high": _cv(98.0),
+    "linear_proximity_percentile_low": _cv(5.0),
+    "linear_proximity_percentile_high": _cv(95.0),
+    "terrain_slope_weight": _cv(0.6),
+    "terrain_tri_weight": _cv(0.4),
+    "tri_threshold_m": _cv(50.0),
+    "proximity_decay_sigma_km": _cv(10.0),
+    "proximity_smooth_sigma_px": _cv(2.0),
+    "proximity_plants_neutral_score": _cv(0.3),
+    "biomass_smooth_sigma": _cv(1.0),
+    "solar_pvout_weight": _cv(1.0),
+    "renewable_fuel_labels": _cv(["solar", "wind", "biomass", "waste"]),
+    "protected_as_exclusion": _cv(True),
+    "iucn_strict_categories": _cv(["ia", "ib", "ii"]),
+    "land_suitability": dict(VALID_LAND_SUITABILITY),
+}
+
+VALID_COUNTRY_CRITERIA = {
+    "yield_by_land_cover": dict(VALID_YIELD_BY_LAND_COVER),
+    "terrain_slope_threshold_deg": _cv(10.0),
+}
+
+VALID_COUNTRY = {
+    "technologies": VALID_TECHNOLOGIES,
+    "criteria": copy.deepcopy(VALID_COUNTRY_CRITERIA),
+}
+
+VALID_PARAMETERS_FILE = {
+    "countries": {"PRT": VALID_COUNTRY, "BRA": copy.deepcopy(VALID_COUNTRY)},
+    "criteria": copy.deepcopy(VALID_CRITERIA),
+}
 
 VALID_RUN_CONFIG = {
     "countries": [],
@@ -218,7 +288,7 @@ def test_technology_params_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["technologies"])
+@pytest.mark.parametrize("field", ["technologies", "criteria"])
 def test_country_params_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_COUNTRY)
     del data[field]
@@ -227,7 +297,7 @@ def test_country_params_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["countries"])
+@pytest.mark.parametrize("field", ["countries", "criteria"])
 def test_parameters_file_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_PARAMETERS_FILE)
     del data[field]
@@ -360,3 +430,146 @@ def test_slope_threshold_deg_out_of_range_raises(tech_name):
     data["slope_threshold_deg"]["value"] = -1.0
     with pytest.raises(ValidationError):
         model_cls.model_validate(data)
+
+
+# ─── CriteriaParams / LandCoverSuitability (Fase 2b, added 2026-09-10) ───
+
+
+@pytest.mark.unit
+def test_land_cover_suitability_accepts_valid_payload():
+    result = LandCoverSuitability.model_validate(
+        {"solar": 0.8, "wind": 0.8, "biomass": 0.9, "description": "Grassland"}
+    )
+    assert result.biomass == 0.9
+    assert result.description == "Grassland"
+
+
+@pytest.mark.unit
+def test_land_cover_suitability_description_is_optional():
+    result = LandCoverSuitability.model_validate({"solar": 0.0, "wind": 0.0, "biomass": 0.0})
+    assert result.description is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["solar", "wind", "biomass"])
+def test_land_cover_suitability_missing_required_field_raises(field):
+    data = {"solar": 0.5, "wind": 0.5, "biomass": 0.5}
+    del data[field]
+    with pytest.raises(ValidationError):
+        LandCoverSuitability.model_validate(data)
+
+
+@pytest.mark.unit
+def test_land_cover_suitability_score_out_of_range_raises():
+    with pytest.raises(ValidationError):
+        LandCoverSuitability.model_validate({"solar": 1.5, "wind": 0.0, "biomass": 0.0})
+
+
+@pytest.mark.unit
+def test_criteria_params_accepts_valid_payload():
+    result = CriteriaParams.model_validate(copy.deepcopy(VALID_CRITERIA))
+    assert result.road_max_dist_km.value == 15.0
+    assert result.slope_threshold_deg_wind.value == 25.0
+    assert result.iucn_strict_categories.value == ["ia", "ib", "ii"]
+    assert result.land_suitability.value[30].biomass == 0.9
+    assert result.protected_as_exclusion.value is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", sorted(VALID_CRITERIA))
+def test_criteria_params_missing_required_field_raises(field):
+    data = copy.deepcopy(VALID_CRITERIA)
+    del data[field]
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_criteria_params_rejects_unexpected_field():
+    data = {**copy.deepcopy(VALID_CRITERIA), "unexpected_key": _cv(1.0)}
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_criteria_params_slope_threshold_out_of_range_raises():
+    data = copy.deepcopy(VALID_CRITERIA)
+    data["slope_threshold_deg_wind"]["value"] = 95.0
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_criteria_params_percentile_out_of_range_raises():
+    data = copy.deepcopy(VALID_CRITERIA)
+    data["seismic_percentile_high"]["value"] = 120.0
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_criteria_params_rejects_inverted_percentile_bounds():
+    data = copy.deepcopy(VALID_CRITERIA)
+    data["normalization_min_percentile"]["value"] = 95.0
+    data["normalization_max_percentile"]["value"] = 5.0
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_criteria_params_rejects_terrain_weights_not_summing_to_one():
+    data = copy.deepcopy(VALID_CRITERIA)
+    data["terrain_slope_weight"]["value"] = 0.6
+    data["terrain_tri_weight"]["value"] = 0.5
+    with pytest.raises(ValidationError):
+        CriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_country_criteria_params_accepts_valid_payload():
+    result = CountryCriteriaParams.model_validate(copy.deepcopy(VALID_COUNTRY_CRITERIA))
+    assert result.yield_by_land_cover.value[10] == 8.0  # string keys coerced to int
+    assert result.terrain_slope_threshold_deg.value == 10.0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["yield_by_land_cover", "terrain_slope_threshold_deg"])
+def test_country_criteria_params_missing_required_field_raises(field):
+    data = copy.deepcopy(VALID_COUNTRY_CRITERIA)
+    del data[field]
+    with pytest.raises(ValidationError):
+        CountryCriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_country_criteria_params_terrain_threshold_out_of_range_raises():
+    data = copy.deepcopy(VALID_COUNTRY_CRITERIA)
+    data["terrain_slope_threshold_deg"]["value"] = 95.0
+    with pytest.raises(ValidationError):
+        CountryCriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_country_criteria_params_rejects_unexpected_field():
+    data = {**copy.deepcopy(VALID_COUNTRY_CRITERIA), "unexpected_key": _cv(1.0)}
+    with pytest.raises(ValidationError):
+        CountryCriteriaParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_real_parameters_json_criteria_block_validates():
+    """The real config/parameters.json must carry valid criteria blocks."""
+    from pathlib import Path
+
+    from geofrea.core.config_loader import load_parameters
+
+    repo_root = Path(__file__).resolve().parents[2]
+    result = load_parameters(repo_root / "config" / "parameters.json")
+    assert result.criteria.road_max_dist_km.value == 15.0
+    assert result.criteria.road_max_dist_km.verified is True
+    assert result.criteria.terrain_slope_weight.value + result.criteria.terrain_tri_weight.value == 1.0
+    assert set(result.countries) == {"PRT", "BRA"}
+    assert result.countries["PRT"].criteria.yield_by_land_cover.value[20] == 3.0
+    assert result.countries["BRA"].criteria.yield_by_land_cover.value[20] == 4.0
+    assert result.countries["PRT"].criteria.terrain_slope_threshold_deg.value == 10.0
+    assert result.countries["BRA"].criteria.terrain_slope_threshold_deg.value == 12.0

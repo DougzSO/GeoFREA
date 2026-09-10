@@ -9,6 +9,7 @@ informative message in that case, rather than failing with
 FileNotFoundError.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -70,3 +71,67 @@ def baseline_dir() -> Path:
     if not _baseline_available():
         pytest.skip(f"{BASELINE_DIRNAME}/ not found at {root}")
     return root
+
+
+def _legacy_baseline_root() -> Path | None:
+    """Locate the read-only legacy geoworld_framework checkout.
+
+    GEOWORLD_BASELINE_DIR (from the developer's .env) is the canonical
+    pointer; fall back to a sibling `geoworld_framework/` next to this
+    repo. Returns None if neither resolves to a real directory.
+    """
+    env = os.environ.get("GEOWORLD_BASELINE_DIR")
+    candidates = []
+    if env:
+        candidates.append(Path(env))
+    candidates.append(Path(__file__).resolve().parents[3] / "geoworld_framework")
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return None
+
+
+@pytest.fixture
+def raw_data_root() -> Path:
+    """The local raw-data database (GEOFREA_RAW_DATA_DIR from .env).
+
+    Holds the GADM country boundaries (countries_borders/<Country>/) and
+    the WDPA protected-areas shapefiles (protected_areas/<Country>/shp_*/)
+    that the legacy compute_protected_areas consumed. Read-only; skips
+    when the env var is unset or the directory is absent.
+    """
+    env = os.environ.get("GEOFREA_RAW_DATA_DIR")
+    candidates = []
+    if env:
+        candidates.append(Path(env))
+    candidates.append(Path(__file__).resolve().parents[3] / "database" / "raw")
+    for root in candidates:
+        if root.is_dir():
+            return root
+    pytest.skip(
+        "GEOFREA_RAW_DATA_DIR not set and no sibling database/raw/ found — "
+        "cannot locate GADM/WDPA raw inputs."
+    )
+    raise AssertionError  # unreachable, for type-checkers
+
+
+@pytest.fixture
+def legacy_processed_root() -> Path:
+    """The legacy `data/processed/` directory (frozen Fase 2a outputs).
+
+    Per-country subdirs (PRT/, BRA/) hold the `<ISO>_<layer>_aligned.tif`
+    rasters the frozen criteria_builder baseline was computed from —
+    matching outputs_baseline_fc7b43d/<ISO> exactly. Used to
+    regression-test suitability_criteria in isolation from GeoFREA's own
+    grid_alignment (Bloqueio 3 decision (a), 2026-09-10). Read-only.
+    """
+    root = _legacy_baseline_root()
+    if root is None:
+        pytest.skip(
+            "GEOWORLD_BASELINE_DIR not set and no sibling geoworld_framework/ found — "
+            "cannot locate the legacy aligned rasters."
+        )
+    processed = root / "data" / "processed"
+    if not processed.is_dir():
+        pytest.skip(f"legacy aligned rasters not found at {processed}")
+    return processed

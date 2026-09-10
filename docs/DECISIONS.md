@@ -720,4 +720,148 @@ comparison is missing).
 
 ---
 
+## [2026-09-10] - suitability_criteria: compute_solar_resource guards NODATA_FLOAT under solar_pvout_weight
+
+Tipo: METHODOLOGY_REVISION
+
+Descrição: legacy `criteria_builder.py::compute_solar_resource` (L140-144), when
+`solar_pvout_weight != 1.0`, does `score = np.where(np.isfinite(score), score * weight, score)`.
+`NODATA_FLOAT` (-9999.0) is finite, so every invalid pixel would be multiplied by
+the weight (e.g. -9999.0 -> -4999.5 at weight 0.5), corrupting the NoData sentinel
+in the output raster. GeoFREA's port guards it: the multiplication mask is
+`np.isfinite(score) & (score != NODATA_FLOAT)`, so invalid pixels keep the sentinel.
+
+Justificativa: `solar_pvout_weight` defaults to 1.0, at which the branch never runs,
+so this has ZERO effect on the frozen PRT/BRA baseline or its regression tests
+(confirmed: `solar_resource` is pixel-exact vs `outputs_baseline_fc7b43d/PRT`,
+`max|delta|=0`, with the guard in place). The revision only changes behaviour for a
+non-default weight, where the legacy result was unambiguously wrong (a NoData
+sentinel is not a score to be scaled). No literature reference — this is a
+correctness fix, not a scientific-method change. Authorised by Douglas 2026-09-10
+as a guard (not STRUCTURAL_PRESERVE).
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py::compute_solar_resource`;
+`docs/architecture/suitability_criteria_audit.md` sec 3b / M-item table; unit test
+`test_compute_solar_pvout_weight_preserves_nodata`.
+
+---
+
+## [2026-09-10] - suitability_criteria: terrain_score denominator is per-country (4th slope_threshold use)
+
+Tipo: STRUCTURAL_PRESERVE (correção da auditoria, não revisão de método)
+
+Descrição: a auditoria original (`docs/architecture/suitability_criteria_audit.md`
+sec 8a, 2026-09-10) tratou TODO `slope_threshold_deg` como cross-country e listou
+três usos: (1) `technologies.{tech}.slope_threshold_deg` = 8.5/5/8.5, o diagnóstico
+de inatividade de slope do `data_quality_audit`; (2) `criteria.slope_threshold_deg_{tech}`
+= 5/25/15, o portão de exclusão de siting fixo cross-country da Fase 2b/3; (3) o
+fallback literal `7.0` na assinatura de `compute_terrain_score` (código morto, não
+portado). A implementação do pacote terrain_score/slope_degrees/lc_biomass/
+biomass_resource revelou um QUARTO uso: `compute_terrain_score`'s denominador do
+sub-score contínuo de slope (`clip(1 - slope/threshold, 0, 1)`) lê o campo
+**country-level** `slope_threshold_deg` do legado, cujo valor real varia por país —
+PRT=10, BRA=12 (EGY=5, CHN/RUS/IND/ZAF=12). É um score contínuo tech-agnóstico,
+distinto do portão de exclusão; nenhum dos valores 5/25/15 o reproduz.
+
+Correção, não omissão: a auditoria foi feita antes de implementar e não abriu
+`compute_terrain_score` linha a linha (só a fórmula). GeoFREA cria
+`CountryParams.criteria` (sub-model `CountryCriteriaParams`, o nome que a §8a havia
+RESERVADO "para quando aparecer um segundo parâmetro per-country de critério" — ele
+apareceu), contendo `yield_by_land_cover` (movido de `CountryParams` direto) +
+`terrain_slope_threshold_deg` (novo). Valores portados verbatim do legado @ fc7b43d.
+
+Justificativa: preserva o comportamento científico do legado exatamente — a
+regressão pixel-a-pixel de `terrain_score` contra `outputs_baseline_fc7b43d`
+confere `max|delta|=0` para PRT (denominador 10) E BRA (denominador 12); os
+`terrain_slope_threshold_deg` foram promovidos a `verified: true / automated /
+2026-09-10` em `parameters.json` na sequência. `slope_degrees`, `lc_biomass`,
+`biomass_resource` (o resto do pacote) também conferem `max|delta|=0` para PRT e
+BRA. Os três usos de `slope_threshold_deg` já documentados continuam válidos e
+NÃO são unificados com este quarto — cada um tem propósito e números distintos.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py::compute_terrain_score` (L167-220, `_param(params, "slope_threshold_deg", 7.0)`);
+`geoworld_framework/configs/parameters.json` (`countries.<ISO>.slope_threshold_deg`: PRT 10, BRA 12);
+`docs/architecture/suitability_criteria_audit.md` sec 8a; `docs/DECISIONS.md`
+2026-08-20 - slope_threshold_deg moved to parameters.json (uso 1) e 2026-09-10 -
+suitability_criteria parameter calibration (uso 2); regressão
+`tests/regression/test_suitability_criteria_regression.py`.
+
+---
+## [2026-09-10] - suitability_criteria: compute_biomass_resource exclui land_cover == 255 explicitamente
+Tipo: STRUCTURAL_PRESERVE (correção de guard — mesma classe do fix de `solar_pvout_weight`)
+
+Descrição: `compute_biomass_resource` (porte de `criteria_builder.py::compute_biomass_resource`,
+L388-432) usava `valid_base = (lc != nodata) & (lc > 0)`, SEM excluir a classe 255
+explicitamente — ao contrário de `compute_lc_biomass`, que sempre teve
+`& (lc != 255)`. No legado isso era inofensivo apenas porque o raster de land-cover
+alinhado é sempre escrito com `nodata == 255` (`NODATA_UINT8`): `lc != nodata` já
+dropava esses pixels. GeoFREA torna a exclusão explícita
+(`valid_base &= lc_data != 255`), fechando a dependência implícita entre
+`compute_biomass_resource` e a convenção de `nodata=255` do `grid_alignment`
+(`raster_alignment.py::mosaic_land_cover`). Não é decisão de valor sem fonte nem
+calibração — é fechamento de dependência implícita, mesma natureza do guard de
+`solar_pvout_weight` (2026-09-10).
+
+Comportamento diagnosticado antes do fix (array sintético, `nodata` variando):
+com `nodata == 255` (todos os dados reais) os pixels 255 já eram excluídos e
+ficavam `NODATA_FLOAT`; com `nodata != 255` eles virariam terra válida com yield
+0.0 via a linha catch-all `raw[(raw == NODATA_FLOAT) & valid_base] = 0.0` (não via
+`.get()` com default), depois suavizados e normalizados — score válido baixo
+espúrio. Sem exceção, sem NaN. A regressão PRT/BRA cobre massivamente pixels 255
+(46% / 53% dos rasters) mas só o ramo `nodata == 255`.
+
+Justificativa: a regressão pixel-a-pixel de `biomass_resource` contra
+`outputs_baseline_fc7b43d` segue `max|delta|=0` para PRT e BRA após o fix (ambos
+os rasters legados têm `nodata == 255`, então o ramo exercitado é idêntico). Inerte
+no pipeline atual; elimina risco latente se um land-cover externo com pixels 255 e
+`nodata` não-255 for alimentado.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py::compute_biomass_resource` (L388-432) vs `::compute_land_cover_scores` (L355-385, `& (lc != 255)`);
+`src/geofrea/grid_alignment/raster_alignment.py::mosaic_land_cover` (nodata=NODATA_UINT8);
+`docs/DECISIONS.md` 2026-09-10 - compute_solar_resource guards NODATA_FLOAT (mesma classe de fix);
+regressão `tests/regression/test_suitability_criteria_regression.py::biomass_resource`.
+
+---
+## [2026-09-10] - suitability_criteria: pacote 4 fecha os 14 critérios; protected_areas é o único sem paridade bit-exata
+Tipo: VERIFICATION_UPDATE
+
+Descrição: o pacote 4 (`protected_areas` + `pop_suitability` + `seismic_suitability`)
+foi implementado, fechando os 14 critérios canônicos da Fase 2b. Estado de
+regressão contra `outputs_baseline_fc7b43d` (PRT + BRA):
+
+- **13 de 14 critérios: `max|delta| = 0` pixel-a-pixel** (solar_resource,
+  wind_resource, terrain_score, lc_biomass, biomass_resource, pop_suitability,
+  road_suitability, lakes_exclusion, river_solar, river_wind, river_biomass,
+  seismic_suitability, grid_suitability) — mais `slope_degrees` (artefato
+  cartográfico, não critério).
+- **`pop_suitability`**: bit-exato apenas com `pop_density_threshold = 300.0`
+  (o valor que gerou o baseline). A produção usa `200.0` por decisão de
+  calibração já registrada (2026-09-10 "suitability_criteria parameter
+  calibration", METHODOLOGY_REVISION). A regressão força 300.0 via override de
+  teste (`_CRITERIA_POP_300`) e passa `max|delta| = 0` — prova de fidelidade da
+  fórmula; a divergência em produção é intencional, não defeito de porte.
+- **`protected_areas` é o ÚNICO dos 14 critérios sem paridade bit-exata** contra
+  o baseline congelado. Motivo: o baseline usa a tabela IUCN graduada
+  (`IUCN_SCORES`, valores 0.0/0.25/0.30/0.45/0.55); o contrato aprovado
+  (`suitability_criteria_audit.md` §5 / M9-M10, 2026-09-10) descarta essa
+  tabela como código morto — o limiar de exclusão dura da Fase 3 (`0.99`) já a
+  tornava inerte — e adota **máscara binária**: categoria ∈
+  `iucn_strict_categories` → `0.0`, qualquer outra feição WDPA ou terra livre →
+  `1.0`. É decisão de contrato **pós-baseline**, não lacuna de porte. A regressão
+  de `protected_areas` verifica: (a) footprint mainland idêntico ao frozen
+  pixel-a-pixel (PRT 93.149 / BRA 7.100.137 válidos, batendo `n_valid_pixels` do
+  `grid_metadata`), (b) valores estritamente ∈ {0.0, 1.0}, (c)
+  `protected_source == "wdpa"` e presença de exclusões estritas — não os valores
+  das células.
+
+WDPA lido via `read_clipped_to_country` (D9) + `_resolve_wdpa_shapefile` (aceita
+`.shp` ou diretório, prefere `*polygon*.shp` — espelha o probe do legado
+L463-472). `pop`/`seismic` são portes verbatim das funções do legado
+(`compute_population_suitability` L518-533, `compute_seismic_suitability`
+L580-593); `seismic` parametriza os percentis 2/98 (M8) via `criteria`.
+
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py` (`compute_protected_areas` L435-515, `compute_population_suitability` L518-533, `compute_seismic_suitability` L580-593);
+`docs/architecture/suitability_criteria_audit.md` §5, §8a (M8/M9/M10/M11);
+`docs/DECISIONS.md` 2026-09-10 "suitability_criteria parameter calibration" (pop_density_threshold 300→200) e 2026-08-19 (categorias IUCN estritas);
+regressão `tests/regression/test_suitability_criteria_regression.py` (`seismic_suitability`, `pop_suitability`, `test_protected_areas_footprint_matches_frozen`).
+
+---
+
 (fim das decisões registradas até o momento)

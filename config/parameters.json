@@ -218,6 +218,32 @@
             "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
           }
         }
+      },
+      "criteria": {
+        "yield_by_land_cover": {
+          "value": {
+            "10": 8.0,
+            "20": 3.0,
+            "30": 5.0,
+            "40": 6.0,
+            "90": 0.0,
+            "95": 0.0
+          },
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.PRT.biomass.yield_by_land_cover (inherited verbatim)",
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed)."
+        },
+        "terrain_slope_threshold_deg": {
+          "value": 10.0,
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.PRT.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate). Confirmed pixel-exact vs outputs_baseline_fc7b43d/PRT terrain_score (2026-09-10).",
+          "verified": true,
+          "verified_by": "Douglas",
+          "verified_date": "2026-09-10",
+          "verification_method": "automated"
+        }
       }
     },
     "BRA": {
@@ -436,7 +462,322 @@
             "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
           }
         }
+      },
+      "criteria": {
+        "yield_by_land_cover": {
+          "value": {
+            "10": 8.0,
+            "20": 4.0,
+            "30": 6.0,
+            "40": 7.0,
+            "90": 0.0,
+            "95": 0.0
+          },
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.BRA.biomass.yield_by_land_cover (inherited verbatim)",
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed)."
+        },
+        "terrain_slope_threshold_deg": {
+          "value": 12.0,
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.BRA.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate). Confirmed pixel-exact vs outputs_baseline_fc7b43d/BRA terrain_score (2026-09-10).",
+          "verified": true,
+          "verified_by": "Douglas",
+          "verified_date": "2026-09-10",
+          "verification_method": "automated"
+        }
       }
+    }
+  },
+  "criteria": {
+    "slope_threshold_deg_solar": {
+      "value": 5.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (GIS siting suitability literature: solar 5 deg cutoff; search 2026-09-10, not systematic review)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "slope_threshold_deg_wind": {
+      "value": 25.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (GIS siting suitability literature: wind 15-25 deg favorable, >25 deg unsuitable)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "slope_threshold_deg_biomass": {
+      "value": 15.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (interpolated between solar/wind, no direct source)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "river_safety_buffer_km": {
+      "value": 0.5,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (upper bound of Brazil Codigo Florestal, Lei 12.651/2012 Art. 4 riparian buffer scale; no consistent cross-country standard, checked BR/PT/IN/PH/US)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "pop_density_threshold": {
+      "value": 200.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (~193/km2 comparable US solar-siting exclusion threshold; lowered from legacy 300)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "road_max_dist_km": {
+      "value": 15.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration; pixel-exact regression vs outputs_baseline_fc7b43d/PRT",
+      "verified": true,
+      "verified_by": "Douglas",
+      "verified_date": "2026-09-10",
+      "verification_method": "automated",
+      "note": "CountryParams schema default, not the legacy function-signature fallback (5.0), which is dead code."
+    },
+    "river_max_dist_biomass_km": {
+      "value": 30.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration; pixel-exact regression vs outputs_baseline_fc7b43d/PRT",
+      "verified": true,
+      "verified_by": "Douglas",
+      "verified_date": "2026-09-10",
+      "verification_method": "automated",
+      "note": "CountryParams schema default, not the legacy function-signature fallback (10.0), which is dead code."
+    },
+    "grid_max_dist_km": {
+      "value": 20.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (not disputed)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "normalization_min_percentile": {
+      "value": 5.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M7)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "normalization_max_percentile": {
+      "value": 95.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M7)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "seismic_percentile_low": {
+      "value": 2.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M8)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "seismic_percentile_high": {
+      "value": 98.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M8)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "linear_proximity_percentile_low": {
+      "value": 5.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M7)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "linear_proximity_percentile_high": {
+      "value": 95.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M7)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "terrain_slope_weight": {
+      "value": 0.6,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M1, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "terrain_tri_weight": {
+      "value": 0.4,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M1, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "tri_threshold_m": {
+      "value": 50.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M2, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "proximity_decay_sigma_km": {
+      "value": 10.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M5, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "proximity_smooth_sigma_px": {
+      "value": 2.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M6, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "proximity_plants_neutral_score": {
+      "value": 0.3,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M4, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "biomass_smooth_sigma": {
+      "value": 1.0,
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M16, no source, author calibration)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "solar_pvout_weight": {
+      "value": 1.0,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (no-op multiplier by default)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "renewable_fuel_labels": {
+      "value": [
+        "solar",
+        "wind",
+        "biomass",
+        "waste"
+      ],
+      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (M17, no source; 'waste' counts as renewable, legacy behavior)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "protected_as_exclusion": {
+      "value": true,
+      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (toggles zeroing of IUCN strict categories)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified"
+    },
+    "iucn_strict_categories": {
+      "value": [
+        "ia",
+        "ib",
+        "ii"
+      ],
+      "source": "docs/DECISIONS.md 2026-08-19 - protected_areas / IUCN exclusion categories (author decision, no external citation)",
+      "verified": true,
+      "verified_by": "Douglas",
+      "verified_date": "2026-08-19",
+      "verification_method": "manual_cross_check"
+    },
+    "land_suitability": {
+      "value": {
+        "10": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Tree cover"
+        },
+        "20": {
+          "solar": 0.7,
+          "wind": 0.7,
+          "biomass": 0.5,
+          "description": "Shrubland"
+        },
+        "30": {
+          "solar": 0.8,
+          "wind": 0.8,
+          "biomass": 0.9,
+          "description": "Grassland"
+        },
+        "40": {
+          "solar": 0.2,
+          "wind": 0.9,
+          "biomass": 0.9,
+          "description": "Cropland"
+        },
+        "50": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Built-up"
+        },
+        "60": {
+          "solar": 1.0,
+          "wind": 1.0,
+          "biomass": 0.1,
+          "description": "Bare / Sparse vegetation"
+        },
+        "70": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Snow and ice"
+        },
+        "80": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Permanent water bodies"
+        },
+        "90": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Herbaceous wetland"
+        },
+        "95": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Mangroves"
+        },
+        "100": {
+          "solar": 0.0,
+          "wind": 0.0,
+          "biomass": 0.0,
+          "description": "Moss and lichen"
+        }
+      },
+      "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json land_suitability (top-level, global; inherited verbatim)",
+      "verified": false,
+      "verified_by": null,
+      "verified_date": null,
+      "verification_method": "unverified",
+      "note": "Whole-table verification block, not per-cell (see docs/architecture/suitability_criteria_audit.md sec 8a). Global siting logic, same for every country; per-country biomass yield is CountryParams.yield_by_land_cover."
     }
   }
 }

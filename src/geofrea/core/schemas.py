@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Annotated, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 T = TypeVar("T")
 
@@ -42,6 +42,8 @@ UnitInterval = Annotated[float, Field(ge=0, le=1)]
 PositiveInt = Annotated[int, Field(gt=0)]
 NonNegativeFloat = Annotated[float, Field(ge=0)]
 PositiveFloat = Annotated[float, Field(gt=0)]
+Percentile = Annotated[float, Field(ge=0, le=100)]
+SlopeDegrees = Annotated[float, Field(ge=0, le=90)]
 
 
 class VerifiedValue(BaseModel, Generic[T]):
@@ -137,11 +139,25 @@ class _TechnologySitingParams(BaseModel):
     2026-08-20 - slope_threshold_deg moved to parameters.json.
 
     Args:
-        slope_threshold_deg: Maximum terrain slope, in degrees, above
-            which a pixel is excluded as unsuitable for this
-            technology. Used by data_quality_audit's slope-inactivity
-            check and (in a later phase) suitability_criteria's hard
-            exclusion. Constrained to >= 0.
+        slope_threshold_deg: Maximum terrain slope, in degrees, for this
+            technology, as used by data_quality_audit's slope-inactivity
+            diagnostic heuristic. Constrained to >= 0.
+
+            NOT unified with suitability_criteria's siting exclusion
+            gate: Fase 2b/3 uses its own fixed cross-country thresholds
+            (CriteriaParams.slope_threshold_deg_{solar,wind,biomass} =
+            5/25/15 deg), a deliberately separate value with a different
+            purpose and different numbers. This per-technology per-
+            country field stays as-is for the audit diagnostic, which is
+            already in production and validated (see docs/DECISIONS.md
+            2026-08-20 - slope_threshold_deg moved to parameters.json).
+            The two are not merged by design — merging would change a
+            live diagnostic's behavior only for schema tidiness, exactly
+            the kind of cross-phase coupling this project avoids
+            (PhaseContext.prior_results read-only). See docs/DECISIONS.md
+            2026-09-10 - suitability_criteria parameter calibration.
+            FUTURE: revisit unification when data_quality_audit is next
+            worked on, not before.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -217,6 +233,45 @@ class TechnologyParams(BaseModel):
     wind: WindParams
 
 
+class CountryCriteriaParams(BaseModel):
+    """Per-country inputs to suitability_criteria (Fase 2b).
+
+    The parallel of ParametersFile.criteria (CriteriaParams, cross-
+    country) for the criterion inputs that genuinely DO vary by country.
+    The audit (docs/architecture/suitability_criteria_audit.md sec 8a)
+    reserved the name CountryParams.criteria for "when a second per-
+    country criterion parameter appears" — implementing terrain_score
+    revealed it (terrain_slope_threshold_deg), so this sub-model now
+    exists. Each field carries a whole-table / whole-value verification
+    block (not per cell).
+
+    Args:
+        yield_by_land_cover: Biomass yield (dimensionless, legacy's own
+            unit) per ESA WorldCover class code. Biomass availability
+            differs by biome/climate, so values diverge across countries
+            (legacy config: PRT/BRA/EGY/IND/RUS all different). Feeds the
+            biomass_resource criterion. The cross-country ESA-class ->
+            suitability-score table is separate and global
+            (CriteriaParams.land_suitability). Ported verbatim from
+            legacy geoworld_framework @ fc7b43d.
+        terrain_slope_threshold_deg: Denominator (degrees) for
+            terrain_score's continuous slope sub-score
+            (clip(1 - slope/threshold, 0, 1)). NOT an exclusion gate —
+            that is CriteriaParams.slope_threshold_deg_{tech}, fixed
+            cross-country. This one is per-country in the legacy
+            (PRT=10, BRA=12) and is the FOURTH distinct slope-threshold
+            use in the pipeline (see docs/DECISIONS.md 2026-09-10 -
+            suitability_criteria: terrain_score denominator is per-
+            country). Ported verbatim from the legacy's country-level
+            `slope_threshold_deg` field @ fc7b43d.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    yield_by_land_cover: VerifiedValue[dict[int, float]]
+    terrain_slope_threshold_deg: VerifiedValue[SlopeDegrees]
+
+
 class CountryParams(BaseModel):
     """Top-level parameters for a single country.
 
@@ -224,11 +279,181 @@ class CountryParams(BaseModel):
         technologies: Per-technology parameter sets for this country.
             There is no country-level discount_rate: each technology
             carries its own (see _TechnologyEconomicParams).
+        criteria: Per-country suitability_criteria (Fase 2b) inputs —
+            see CountryCriteriaParams. Distinct from
+            ParametersFile.criteria (cross-country calibration).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     technologies: TechnologyParams
+    criteria: CountryCriteriaParams
+
+
+class LandCoverSuitability(BaseModel):
+    """Per-technology siting-suitability scores for one ESA WorldCover class.
+
+    One row of CriteriaParams.land_suitability. The table is a single
+    GLOBAL mapping: the ESA-class -> suitability logic ("grassland is
+    good for biomass, built-up is excluded") is the same reasoning in
+    every country, so it is not keyed per country (see docs/architecture/
+    suitability_criteria_audit.md sec 8a, "Tabelas de criterio", and the
+    per-country/global verdict in docs/DECISIONS.md 2026-09-10).
+    Real per-country biomass availability is a separate table,
+    CountryParams.yield_by_land_cover.
+
+    In suitability_criteria (Fase 2b) only the `biomass` column is read
+    (the `lc_biomass` criterion); `solar`/`wind` are consumed later in
+    suitability_builder (Fase 3). Ported verbatim from legacy
+    geoworld_framework @ fc7b43d (configs/parameters.json land_suitability).
+
+    Args:
+        solar: Solar-PV siting suitability for this land-cover class, [0, 1].
+        wind: Onshore-wind siting suitability for this land-cover class, [0, 1].
+        biomass: Biomass siting suitability for this land-cover class, [0, 1].
+        description: Human-readable ESA class name, verbatim from the
+            legacy table (redundant with core.constants.ESA_CLASS_NAMES,
+            kept for a faithful port). Optional.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    solar: UnitInterval
+    wind: UnitInterval
+    biomass: UnitInterval
+    description: str | None = None
+
+
+class CriteriaParams(BaseModel):
+    """Cross-country calibration parameters for suitability_criteria (Fase 2b).
+
+    A single top-level `criteria` block in config/parameters.json,
+    parallel to `countries` (see ParametersFile) — NOT nested per
+    country. Every field carries a VerifiedValue provenance block, same
+    as the technology parameters; STRUCTURAL_PRESERVE values inherited
+    from the legacy with no external source are still wrapped, marked
+    verified=False / verification_method="unverified", for uniform
+    traceability (see docs/architecture/suitability_criteria_audit.md
+    sec 8a and docs/DECISIONS.md 2026-09-10 - suitability_criteria
+    parameter calibration).
+
+    slope_threshold_deg_{solar,wind,biomass}: the Fase 2b/3 siting
+    exclusion thresholds (pixel excluded when slope exceeds the value).
+    Fixed cross-country, replacing the legacy's uncited additive offset
+    (country base + 5/10/20 deg). DISTINCT from
+    _TechnologySitingParams.slope_threshold_deg (the audit diagnostic
+    heuristic) — see that field's docstring; the two are not unified by
+    design.
+
+    road_max_dist_km / river_max_dist_biomass_km: confirmed by pixel-
+    exact regression against outputs_baseline_fc7b43d/PRT (2026-09-10)
+    to be the values that generated the frozen baseline — the legacy
+    function-signature fallbacks (5.0 / 10.0) are dead code, not ported.
+
+    Args:
+        slope_threshold_deg_solar: Max slope (deg) for solar siting.
+        slope_threshold_deg_wind: Max slope (deg) for wind siting.
+        slope_threshold_deg_biomass: Max slope (deg) for biomass siting.
+        river_safety_buffer_km: Riparian setback (km) — pixels closer
+            than this to a river are excluded for solar/wind (a real
+            hard exclusion in Fase 3, not a soft preference).
+        pop_density_threshold: Population density (persons/km2) at which
+            the log-penalty saturates for pop_suitability.
+        road_max_dist_km: Distance (km) at which road-proximity
+            suitability decays to 0 before percentile normalization.
+        river_max_dist_biomass_km: Distance (km) at which river-access
+            suitability decays to 0 for the biomass river criterion.
+        grid_max_dist_km: Distance (km) at which power-grid proximity
+            suitability decays to 0 before percentile normalization.
+        normalization_min_percentile / normalization_max_percentile:
+            Percentile clip bounds for the resource criteria
+            (solar/wind/biomass resource).
+        seismic_percentile_low / seismic_percentile_high: Percentile
+            clip bounds for seismic normalization (narrower than the
+            resource bounds in the legacy; kept as-is).
+        linear_proximity_percentile_low / linear_proximity_percentile_high:
+            Percentile clip bounds applied after the linear decay for
+            roads / grid / proximity_plants.
+        terrain_slope_weight / terrain_tri_weight: Convex-combination
+            weights for terrain_score (slope component vs. TRI
+            component); must sum to 1.
+        tri_threshold_m: Denominator (metres) for the TRI roughness
+            sub-score.
+        proximity_decay_sigma_km: Exponential decay length (km) for
+            proximity_plants.
+        proximity_smooth_sigma_px: Gaussian smoothing sigma (pixels,
+            resolution-scaled at runtime) for proximity_plants.
+        proximity_plants_neutral_score: Score assigned to all land
+            pixels when a country has no recorded power plants.
+        biomass_smooth_sigma: Gaussian smoothing sigma for
+            biomass_resource (0 disables smoothing).
+        solar_pvout_weight: Optional multiplier applied to the
+            normalized solar resource score (1.0 = no-op).
+        renewable_fuel_labels: Fuel-name substrings classifying an
+            existing plant as "renewable" in proximity_plants.
+        protected_as_exclusion: When True, IUCN strict-category polygons
+            are scored 0.0 (hard exclusion) in protected_areas.
+        iucn_strict_categories: IUCN category codes (lowercased) scored
+            0.0 when protected_as_exclusion is True. Ratified author
+            decision, 2026-08-19 (no external citation).
+        land_suitability: Global ESA-class -> {solar, wind, biomass}
+            suitability table (see LandCoverSuitability). One
+            verification block for the whole table.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slope_threshold_deg_solar: VerifiedValue[SlopeDegrees]
+    slope_threshold_deg_wind: VerifiedValue[SlopeDegrees]
+    slope_threshold_deg_biomass: VerifiedValue[SlopeDegrees]
+    river_safety_buffer_km: VerifiedValue[NonNegativeFloat]
+    pop_density_threshold: VerifiedValue[PositiveFloat]
+    road_max_dist_km: VerifiedValue[PositiveFloat]
+    river_max_dist_biomass_km: VerifiedValue[PositiveFloat]
+    grid_max_dist_km: VerifiedValue[PositiveFloat]
+    normalization_min_percentile: VerifiedValue[Percentile]
+    normalization_max_percentile: VerifiedValue[Percentile]
+    seismic_percentile_low: VerifiedValue[Percentile]
+    seismic_percentile_high: VerifiedValue[Percentile]
+    linear_proximity_percentile_low: VerifiedValue[Percentile]
+    linear_proximity_percentile_high: VerifiedValue[Percentile]
+    terrain_slope_weight: VerifiedValue[UnitInterval]
+    terrain_tri_weight: VerifiedValue[UnitInterval]
+    tri_threshold_m: VerifiedValue[PositiveFloat]
+    proximity_decay_sigma_km: VerifiedValue[PositiveFloat]
+    proximity_smooth_sigma_px: VerifiedValue[PositiveFloat]
+    proximity_plants_neutral_score: VerifiedValue[UnitInterval]
+    biomass_smooth_sigma: VerifiedValue[NonNegativeFloat]
+    solar_pvout_weight: VerifiedValue[PositiveFloat]
+    renewable_fuel_labels: VerifiedValue[list[str]]
+    protected_as_exclusion: VerifiedValue[bool]
+    iucn_strict_categories: VerifiedValue[list[str]]
+    land_suitability: VerifiedValue[dict[int, LandCoverSuitability]]
+
+    @model_validator(mode="after")
+    def _percentile_bounds_ordered(self) -> CriteriaParams:
+        pairs = (
+            ("normalization_min_percentile", "normalization_max_percentile"),
+            ("seismic_percentile_low", "seismic_percentile_high"),
+            ("linear_proximity_percentile_low", "linear_proximity_percentile_high"),
+        )
+        for lo_name, hi_name in pairs:
+            lo = getattr(self, lo_name).value
+            hi = getattr(self, hi_name).value
+            if lo >= hi:
+                raise ValueError(
+                    f"{lo_name} ({lo}) must be strictly less than {hi_name} ({hi})."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _terrain_weights_sum_to_one(self) -> CriteriaParams:
+        total = self.terrain_slope_weight.value + self.terrain_tri_weight.value
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(
+                f"terrain_slope_weight + terrain_tri_weight must sum to 1.0, got {total}."
+            )
+        return self
 
 
 class ParametersFile(BaseModel):
@@ -237,11 +462,17 @@ class ParametersFile(BaseModel):
     Args:
         countries: Mapping of ISO-3166-alpha-3 country code to that
             country's parameters. Currently PRT and BRA.
+        criteria: Cross-country calibration parameters for
+            suitability_criteria (Fase 2b). Required — absence of a
+            config block is treated as a bug class in this project, not
+            a "use defaults" signal (see docs/CONVENTIONS.md,
+            "Parameters").
     """
 
     model_config = ConfigDict(extra="forbid")
 
     countries: dict[str, CountryParams]
+    criteria: CriteriaParams
 
 
 class RunConfig(BaseModel):

@@ -293,21 +293,18 @@ Demais parâmetros da fase — **no mesmo bloco `criteria`**, herdados do legado
 `iucn_category_scores` — **REMOVIDO** (código morto, ver §5 / M9 / M10).
 `slope_offset_solar_deg` / `slope_offset_wind_deg` / `slope_offset_biomass_deg` (5/10/20) — **REMOVIDOS** do schema (substituídos por `slope_threshold_deg_{solar,wind,biomass}` fixos acima).
 
-**Tabelas de critério** (dois campos, ambos tabela — não escalares):
+**Parâmetros de critério per-country** — `CountryParams.criteria` (sub-model `CountryCriteriaParams`, criado 2026-09-10 — ver `DECISIONS.md` mesma data "terrain_score denominator is per-country"). A §8a original reservou este nome "para quando aparecer um segundo parâmetro per-country de critério"; a implementação de `terrain_score` revelou o segundo (`terrain_slope_threshold_deg`), então o sub-model existe:
 
-| campo | onde | tipo | natureza |
-|---|---|---|---|
-| `land_suitability` | bloco global `CriteriaParams` | `dict[int, LandCoverSuitability]` — classe ESA → `{solar, wind, biomass}` scores | **lógica de siting, não dado geográfico** — mesma tabela para todo país (ex. `Grassland → biomass 0.9` vale em PRT e BRA). Feed direto de `lc_biomass` (só a coluna `biomass` é lida na Fase 2b; `solar`/`wind` usados na Fase 3). |
-| `yield_by_land_cover` | **campo direto em `CountryParams`** (não em `technologies.biomass`, não em sub-model `criteria`) | `dict[int, float]` — classe ESA → yield de biomassa | **dado geográfico real por país** — confirmado divergente nos 5 países do legado (PRT/BRA/EGY/IND/RUS): produtividade por bioma/clima. Feed direto de `biomass_resource`. |
+| campo | tipo | natureza |
+|---|---|---|
+| `yield_by_land_cover` | `VerifiedValue[dict[int, float]]` — classe ESA → yield de biomassa | **dado geográfico real por país** — divergente nos 5 países do legado (PRT/BRA/EGY/IND/RUS): produtividade por bioma/clima. Feed direto de `biomass_resource`. |
+| `terrain_slope_threshold_deg` | `VerifiedValue[SlopeDegrees]` | **denominador contínuo** de `terrain_score` (`clip(1 − slope/threshold, 0, 1)`), per-country no legado (PRT=10, BRA=12). É o **quarto** uso distinto de slope-threshold no pipeline, ≠ do portão de exclusão fixo `criteria.slope_threshold_deg_{tech}` (5/25/15). Confirmado pixel-exato vs baseline PRT+BRA (2026-09-10) → `verified: true / automated`. |
 
-`LandCoverSuitability`: `{solar: float, wind: float, biomass: float}` (+ `description: str` opcional, cartográfico). Colunas em `[0, 1]`.
+`land_suitability` permanece **global** (bloco `CriteriaParams`): `dict[int, LandCoverSuitability]`, classe ESA → `{solar, wind, biomass}` — lógica de siting, mesma para todo país (`Grassland → biomass 0.9` vale em PRT e BRA). Feed direto de `lc_biomass` (só a coluna `biomass` na Fase 2b).
 
-**Verificação de tabela** (nota de schema): o bloco de verificação (`CONVENTIONS.md` §Parameter verification metadata) é **agregado — a tabela inteira é uma unidade**, não uma célula. Um único `{source, verified, verification_method, ...}` cobre `land_suitability` como um todo, e um por país cobre cada `yield_by_land_cover`. Reabrir granularidade célula-a-célula só se algum valor específico virar prioridade de recalibração.
+`LandCoverSuitability`: `{solar: float, wind: float, biomass: float}` (+ `description: str` opcional). Colunas em `[0, 1]`.
 
-- `land_suitability`: `verified: false`, `verification_method: "unverified"`, `verified_by: null`, `verified_date: null`, `source: "legacy geoworld_framework @ fc7b43d — configs/parameters.json land_suitability (top-level, global; inherited unchanged)"`.
-- `yield_by_land_cover` (por país): `verified: false`, `verification_method: "unverified"`, `verified_by: null`, `verified_date: null`, `source: "legacy geoworld_framework @ fc7b43d — configs/parameters.json countries.{ISO3}.biomass.yield_by_land_cover (inherited unchanged; 5 countries confirmed: PRT/BRA/EGY/IND/RUS)"`.
-
-Sub-model `CountryParams.criteria` **não é criado agora** — `yield_by_land_cover` é o único parâmetro de critério per-country, e um campo só não justifica o wrapper. O nome `CountryParams.criteria` fica **reservado** para quando aparecer um segundo parâmetro per-country de critério.
+**Verificação de tabela** (nota de schema): o bloco de verificação é **agregado — a tabela/valor inteiro é uma unidade**, não uma célula. `land_suitability`: `verified: false / unverified`, `source` → legado global. `yield_by_land_cover` (um bloco por país): `verified: false / unverified`, `source` → `countries.{ISO3}.biomass.yield_by_land_cover` do legado. `terrain_slope_threshold_deg` (um bloco por país): `verified: true / automated / 2026-09-10`, `source` → `countries.{ISO3}.slope_threshold_deg` do legado + confirmação de regressão.
 
 `compute_protected_areas` (contrato revisado): `categoria.lower().strip() ∈ criteria.iucn_strict_categories → 0.0`; qualquer outra feição WDPA → `1.0`; território livre → `1.0`; sem WDPA → `1.0` em todo o mainland (comportamento do legado L458-459 preservado). Sem `IUCN_SCORES`, sem ordenação por score, sem ramo `as_exclusion=False` com tabela graduada (`as_exclusion` só liga/desliga a zeragem das categorias estritas).
 
@@ -364,8 +361,8 @@ suitability_criteria consome:
                                               registry de power_plants, borders/mainland
   config: parameters.json bloco global `criteria` (CriteriaParams, novo — §8a),
           incluindo a tabela `land_suitability` (lógica de siting, global)
-          CountryParams.yield_by_land_cover (campo direto, tabela por país —
-            único param per-country desta fase; SEM sub-model CountryParams.criteria)
+          CountryParams.criteria (CountryCriteriaParams: yield_by_land_cover
+            + terrain_slope_threshold_deg — os params de critério per-country)
 ```
 
 ### 8d. `common_exclusions` da Fase 3 (documentado aqui, implementar só em `suitability_builder`)
