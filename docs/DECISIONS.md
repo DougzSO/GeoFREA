@@ -934,4 +934,94 @@ Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-
 
 ---
 
+## [2026-09-11] - grid_alignment: derivação de slope do DEM (método e ordem)
+Tipo: STRUCTURAL_PRESERVE
+
+Descrição: `derive_slope_from_dem()` (`grid_alignment/raster_alignment.py`) porta
+`geoworld_framework/src/processors/raster_processor.py::RasterProcessor.calculate_slope`
+(L27-95), que o legado chamava em `main.py` L598-609 sobre o DEM bruto baixado,
+ANTES de qualquer reprojeção. Antes desta sessão o GeoFREA não derivava slope em
+lugar nenhum (`data_acquisition` o exclui de propósito; o adapter de
+`grid_alignment` só mapeava `elevation`; o bloco `slope` de `align_layers` só
+reprojetava um `slope_path` que nunca era preenchido) — então `grid_alignment`
+sempre produzia `slope=None` e a `suitability_criteria` não rodava end-to-end
+(`_check_required_layers`).
+
+Método portado verbatim (STRUCTURAL_PRESERVE):
+- gradiente de **diferença central** via `numpy.gradient`, NÃO o método de Horn de
+  8 vizinhos do `gdaldem slope`;
+- espaçamento de pixel corrigido por latitude: `dy = res_y · KM_PER_DEG_LAT · 1000`
+  (constante, N-S); `dx = res_x · KM_PER_DEG_LAT · 1000 · cos(lat)` por linha (L-O).
+  `KM_PER_DEG_LAT = 111.32` — média plana da Terra, adicionada a `core/constants.py`
+  verbatim do legado (`src/core/constants.py`), deliberadamente NÃO
+  `core.geodesy.wgs84_km_per_degree()` (o legado usou essa constante única e
+  `cos(lat)` só no termo L-O; reproduzir os números exige o mesmo fator de escala);
+- `slope_deg = degrees(arctan(hypot(dz/dx, dz/dy)))` — **graus**, não percentual
+  nem radianos;
+- processamento em blocos de 512 linhas com padding de ±1 linha para as costuras do
+  gradiente, descartado antes de escrever.
+
+Ordem (STRUCTURAL_PRESERVE): slope calculado no DEM em **resolução nativa**, e
+DEPOIS reamostrado para a grade alvo (0.01°) com bilinear, exatamente como
+`elevation`. NÃO calculado sobre o DEM já reamostrado. O legado escolheu essa
+ordem; produz valores diferentes (mais suaves) da alternativa. `align_layers`
+grava o intermediário nativo em `outputs/<ISO>/processed/<ISO>_slope_native.tif` e
+o `_align_slope` interno o reprojeta para `<ISO>_slope_aligned.tif`.
+
+Localização: dentro de `grid_alignment` (não em `data_acquisition`, cujo docstring
+excluía slope; não em `main.py` como o legado). `GridAlignmentInputs.slope_path`
+vira override opcional (normalmente `None` → deriva de `elevation_path`).
+Docstrings de `data_acquisition/schemas.py`, `data_acquisition/phase.py` e
+`data_quality_audit/schemas.py` atualizados para deixar explícito qual módulo é
+responsável.
+
+Justificativa: não se pôde confirmar do repositório se o `_slope_aligned.tif` do
+`$GEOWORLD_BASELINE_DIR/data/processed/` foi gerado por este mesmo pipeline de
+origem (o legado só deriva `if not slope_path exists`, e pode ter usado um
+`{ISO}_slope.tif` pré-derivado). Por isso os testes checam paridade contra um
+**cálculo de referência analítico independente** (plano inclinado tem slope de
+forma fechada), não contra o arquivo congelado. O método/ordem em si não têm
+fonte citada no legado (nem escolha de diferença central vs Horn, nem a ordem
+native→resample) — mantidos como STRUCTURAL_PRESERVE por instrução explícita de
+Douglas 2026-09-11.
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/raster_processor.py` L27-95; `geoworld_framework/main.py` L598-609; `geoworld_framework/src/core/constants.py::KM_PER_DEG_LAT`; auditoria read-only reportada nesta sessão 2026-09-11.
+
+---
+
+## [2026-09-11] - grid_alignment: slope não herda contaminação de nodata (correção de integridade)
+Tipo: correção de integridade de dado (mesma classe de solar_pvout_weight e biomass_resource land_cover==255 desta sessão)
+
+Descrição: DESVIO DELIBERADO do legado em `derive_slope_from_dem()`. O legado
+alimentava o sentinela nodata bruto (−9999) no `numpy.gradient` como se fosse
+elevação real; um pixel VÁLIDO adjacente a um pixel nodata recebia gradiente
+contaminado (vizinho −9999 → slope falso ~90°). O legado só remascarava a
+CÉLULA-centro nodata **depois** (`slope_deg[elev == nodata] = nodata`), deixando a
+contaminação de adjacência no resultado.
+
+Correção: as células nodata do DEM são postas em `NaN` ANTES do gradiente
+(`finite_in = isfinite & (!= nodata_val)` → `work = where(finite_in, elev, nan)`),
+então o `NaN` propaga uma célula e todo pixel de slope cujo stencil de diferença
+central tocou nodata sai não-finito. A saída é então mascarada em dois pontos:
+(1) onde o gradiente saiu não-finito (a contaminação de adjacência que o legado
+deixava); (2) nas próprias células nodata originais — o `numpy.gradient` nunca lê
+a célula-centro, então uma célula nodata ainda ganharia um valor derivado dos
+vizinhos e precisa ser remascarada, exatamente como o mask final do legado já
+fazia. Resultado: um pixel válido adjacente a nodata vira nodata (não pôde ser
+computado sem dado falso) em vez de um número errado.
+
+Precedente nesta mesma sessão: `compute_solar_resource` guardando `NODATA_FLOAT`
+sob `solar_pvout_weight` (2026-09-10) e `compute_biomass_resource` excluindo
+`land_cover == 255` explicitamente (2026-09-10) — mesma natureza: fechar um
+caminho onde um sentinela numérico vazava como dado real. Inerte quando o DEM não
+tem nodata; muda resultado só na borda de buracos de dado do DEM (ex.: os 6 tiles
+corrompidos de land_cover/BRA são de outra camada, mas DEMs Copernicus também têm
+nodata em corpos d'água/borda de cobertura).
+
+Teste dedicado: `test_derive_slope_valid_pixel_next_to_nodata_is_not_contaminated`
+— falha contra uma reimplementação ingênua do legado (vizinhos da célula nodata ≈
+90°), passa com a correção (vizinhos = nodata).
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/raster_processor.py` L82-83 (mask só pós-gradiente); `docs/DECISIONS.md` 2026-09-10 "compute_solar_resource guards NODATA_FLOAT" e "compute_biomass_resource exclui land_cover == 255"; instrução explícita de Douglas 2026-09-11.
+
+---
+
 (fim das decisões registradas até o momento)

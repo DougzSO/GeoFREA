@@ -36,7 +36,11 @@ class AuditInputs(BaseModel):
     Args:
         solar_path: PVOUT raster path.
         elevation_path: DEM raster path.
-        slope_path: Slope raster path (derived from the DEM upstream).
+        slope_path: Slope raster path, if one exists yet. Usually None:
+            GeoFREA derives slope only later, inside grid_alignment
+            (raster_alignment.derive_slope_from_dem(), 2026-09-11), so at
+            audit time there is normally nothing to inspect and the
+            slope checks are skipped.
         population_path: Population raster path.
         wind_paths: Wind speed/power-density raster paths (only the
             first, if any, is inspected — matches legacy's wind_files[0]).

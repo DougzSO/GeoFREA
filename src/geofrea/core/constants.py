@@ -34,6 +34,16 @@ NODATA_UINT8: int = 255
 # below both former caps regardless of which was used).
 LINEAR_FEATURE_MAX_DIST_KM: float = 100.0
 
+# Flat mean kilometres-per-degree-of-latitude, used ONLY by
+# grid_alignment's slope-from-DEM derivation (derive_slope_from_dem()),
+# ported verbatim from legacy's src/core/constants.py::KM_PER_DEG_LAT for
+# STRUCTURAL_PRESERVE parity with RasterProcessor.calculate_slope (see
+# docs/DECISIONS.md 2026-09-11). Deliberately NOT
+# core.geodesy.wgs84_km_per_degree(): the legacy slope code used this
+# single constant (and cos(lat) only for the E-W term), and reproducing
+# its numbers means using the same scale factor it used.
+KM_PER_DEG_LAT: float = 111.32
+
 # Wind height variants combined by grid_alignment's AHP weighting
 # (_combine_wind_layers()) and the Saaty pairwise-comparison matrix
 # used to derive their weights. Ported as-is from legacy

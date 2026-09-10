@@ -65,8 +65,12 @@ class GridAlignmentInputs(BaseModel):
 
     Args:
         elevation_path: DEM raster path.
-        slope_path: Slope raster path (derived from the DEM upstream,
-            same source as AuditInputs.slope_path).
+        slope_path: OPTIONAL pre-computed slope raster override. Normally
+            None: grid_alignment derives slope from `elevation_path` at
+            the DEM's native resolution (raster_alignment.
+            derive_slope_from_dem), then reprojects it onto the grid like
+            elevation — see run_grid_alignment_phase(). Set this only to
+            skip that derivation with a slope raster made elsewhere.
         solar_path: PVOUT raster path.
         wind_paths: Wind speed/power-density raster paths. Unlike
             AuditInputs (which only ever inspects wind_paths[0]),

@@ -24,9 +24,11 @@ import numpy as np
 import rasterio
 from rasterio.enums import Resampling
 from rasterio.warp import reproject
+from rasterio.windows import Window
 
 from geofrea.core.constants import (
     AHP_RANDOM_INDEX,
+    KM_PER_DEG_LAT,
     NODATA_FLOAT,
     NODATA_UINT8,
     WIND_AHP_MATRIX,
@@ -97,6 +99,126 @@ def reproject_to_grid(
     }
     with safe_raster_write(out_path, **profile) as dst:
         dst.write(data_out, 1)
+
+    return out_path
+
+
+_SLOPE_BLOCK_HEIGHT = 512
+
+
+def derive_slope_from_dem(dem_path, out_path):
+    """Compute a slope-in-degrees raster from a DEM, at the DEM's own resolution.
+
+    Ported from legacy geoworld_framework's
+    src/processors/raster_processor.py::RasterProcessor.calculate_slope
+    (L27-95), called by legacy main.py L598-609 on the RAW downloaded DEM
+    BEFORE any reprojection. grid_alignment then reprojects this native
+    output onto the reference grid with bilinear resampling, exactly like
+    elevation — see run_grid_alignment_phase(). Computing slope on the
+    native DEM and then resampling (rather than resampling the DEM first
+    and computing slope on the target grid) is the legacy's deliberate
+    order; kept as STRUCTURAL_PRESERVE (docs/DECISIONS.md 2026-09-11).
+
+    Method (verbatim from legacy, STRUCTURAL_PRESERVE):
+      - central-difference gradient via numpy.gradient, NOT the Horn
+        8-neighbour method gdaldem uses;
+      - latitude-corrected pixel spacing: dy = res_y * KM_PER_DEG_LAT *
+        1000 (constant, N-S); dx = res_x * KM_PER_DEG_LAT * 1000 *
+        cos(lat) per row (E-W, shrinks toward the poles);
+      - slope_deg = degrees(arctan(hypot(dz/dx, dz/dy))) — degrees, not
+        percent or radians;
+      - processed in 512-row blocks with +/-1 row of padding so the
+        gradient is correct across block seams; padding discarded before
+        writing.
+
+    Data-integrity correction (DELIBERATE DIVERGENCE from legacy — same
+    class of fix applied this session to solar_pvout_weight and
+    biomass_resource's land_cover==255; see docs/DECISIONS.md 2026-09-11):
+    the legacy fed the raw nodata sentinel (-9999) into numpy.gradient as
+    if it were a real elevation, so every VALID pixel adjacent to a
+    nodata pixel got a garbage-contaminated slope. Here the DEM's nodata
+    cells are set to NaN BEFORE the gradient, so NaN propagates one cell
+    and any slope pixel whose stencil touched nodata is written as nodata
+    rather than a wrong number. The output is then masked in two places:
+    (1) where the gradient came out non-finite (the adjacency
+    contamination the legacy left in), and (2) at the original nodata
+    cells themselves — numpy.gradient's central difference never reads
+    the centre cell, so a nodata centre still gets a finite gradient from
+    its neighbours and must be re-masked, exactly as the legacy's final
+    `slope_deg[elev == nodata] = nodata` did.
+
+    Args:
+        dem_path: Path to the source DEM raster (native resolution).
+        out_path: Path to write the slope raster to.
+
+    Returns:
+        Path to the written slope raster (float32, degrees, LZW, tiled),
+        or None if the DEM has fewer than 2 rows/columns (numpy.gradient
+        needs at least 2 samples per axis).
+    """
+    with safe_raster_open(dem_path) as src:
+        if src.height < 2 or src.width < 2:
+            logger.warning(
+                "    slope: DEM %sx%s too small for a gradient, skipping.",
+                src.height, src.width,
+            )
+            return None
+
+        res_x, res_y = src.res
+        nodata_val = float(src.nodata) if src.nodata is not None else NODATA_FLOAT
+        dy = res_y * KM_PER_DEG_LAT * 1000.0  # metres per pixel, N-S (constant)
+
+        profile = src.profile.copy()
+        profile.update(
+            dtype=rasterio.float32,
+            count=1,
+            nodata=nodata_val,
+            compress="lzw",
+            tiled=True,
+            blockxsize=256,
+            blockysize=256,
+        )
+
+        with safe_raster_write(out_path, **profile) as dst:
+            for y in range(0, src.height, _SLOPE_BLOCK_HEIGHT):
+                h = min(_SLOPE_BLOCK_HEIGHT, src.height - y)
+
+                win_y_start = max(0, y - 1)
+                win_y_end = min(src.height, y + h + 1)
+                win_h = win_y_end - win_y_start
+
+                elev_block = src.read(
+                    1, window=Window(0, win_y_start, src.width, win_h)
+                ).astype(np.float32)
+
+                # Data-integrity correction: exclude nodata from the
+                # gradient entirely (NaN propagates one cell), instead of
+                # the legacy's "let -9999 act as an elevation, mask the
+                # centre afterwards".
+                finite_in = np.isfinite(elev_block) & (elev_block != nodata_val)
+                work = np.where(finite_in, elev_block, np.nan)
+
+                rows_idx = np.arange(win_y_start, win_y_end)
+                _xs, y_coords = src.xy(rows_idx, np.zeros(len(rows_idx)))
+                lat_grid = np.asarray(y_coords, dtype=np.float64).reshape(-1, 1)
+                dx_block = res_x * KM_PER_DEG_LAT * 1000.0 * np.cos(np.radians(lat_grid))
+
+                dz_drow, dz_dcol = np.gradient(work, 1.0, 1.0)
+                dz_dx = dz_dcol / dx_block
+                dz_dy = dz_drow / dy
+
+                slope_deg = np.degrees(np.arctan(np.sqrt(dz_dx**2 + dz_dy**2)))
+                # (1) non-finite gradient = stencil touched nodata; (2)
+                # the nodata cells themselves (gradient never reads the
+                # centre, so they'd otherwise keep a neighbour-derived
+                # value) — same final mask the legacy applied.
+                slope_deg = np.where(
+                    np.isfinite(slope_deg) & finite_in, slope_deg, nodata_val
+                ).astype(np.float32)
+
+                offset_top = 1 if y > 0 else 0
+                final_block = slope_deg[offset_top : offset_top + h, :]
+                dst.write(final_block, 1, window=Window(0, y, src.width, h))
 
     return out_path
 

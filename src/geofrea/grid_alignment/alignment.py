@@ -102,6 +102,7 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
     combine_wind_layers,
+    derive_slope_from_dem,
     mosaic_land_cover,
     reproject_to_grid,
 )
@@ -314,11 +315,25 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
             _exists(inputs.elevation_path),
         )
 
+    # slope is NOT an acquired layer — it is derived here from the DEM at
+    # the DEM's native resolution (legacy main.py L598-609 / raster_
+    # processor.calculate_slope), then reprojected onto the reference
+    # grid like elevation. `inputs.slope_path`, when set, is an optional
+    # pre-computed override; normally it is None and we derive.
+    def _align_slope() -> Path | None:
+        slope_src = inputs.slope_path
+        if not _exists(slope_src):
+            slope_src = processed_dir / f"{context.country_code}_slope_native.tif"
+            processed_dir.mkdir(parents=True, exist_ok=True)
+            if derive_slope_from_dem(inputs.elevation_path, slope_src) is None:
+                return None
+        return reproject_to_grid(slope_src, _path("slope"), grid)
+
     with timer("slope", timings), gdal_quiet():
         aligned["slope"] = _execute_or_load(
             "slope",
-            lambda: reproject_to_grid(inputs.slope_path, _path("slope"), grid),
-            _exists(inputs.slope_path),
+            _align_slope,
+            _exists(inputs.slope_path) or _exists(inputs.elevation_path),
         )
 
     with timer("solar", timings), gdal_quiet():
