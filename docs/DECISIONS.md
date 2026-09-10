@@ -669,4 +669,55 @@ Referência (literatura/discussão, se aplicável): `docs/architecture/grid_alig
 
 ---
 
+### 2026-09-10 — suitability_criteria parameter calibration
+
+- protected_areas: simplified to binary mask (IUCN Ia/Ib/II excluded, rest free).
+  iucn_category_scores table dropped as dead code (threshold made it inert in legacy).
+- river_safety_buffer_km: fixed at 0.5 (500m) for all countries, changed from
+  legacy's uncited internal value to an explicit reference: upper bound of
+  Brazil's Código Florestal (Lei 12.651/2012, Art. 4) riparian buffer scale
+  (500m applies to rivers >600m wide). No consistent cross-country standard
+  exists (checked BR/PT/IN/PH/US); fixed conservative value chosen over
+  per-country lookup to avoid unvalidated country-specific tables.
+  Promoted from soft criterion to hard exclusion (river_solar, river_wind
+  added to common_exclusions in Fase 3), since it represents a safety
+  setback, not a preference.
+- slope_threshold_deg: fixed cross-country defaults (not per-country):
+  solar = 5 deg, wind = 25 deg (exclusion above), biomass = 15 deg
+  (interpolated, no direct source). Replaces legacy's uncited additive
+  offset (base + 5/10/20 deg). Sources: solar 5 deg cutoff and wind
+  15-25 deg favorable / >25 deg unsuitable found in GIS siting suitability
+  literature (search 2026-09-10, not systematic review).
+- pop_density_threshold: lowered from legacy's 300 hab/km2 to 200 hab/km2,
+  closer to comparable US solar-siting exclusion threshold (~193/km2).
+  log1p penalty form kept unchanged (no source found, not flagged as
+  problematic).
+- road_max_dist_km = 15.0, river_max_dist_biomass_km = 30.0: confirmed via
+  pixel-exact regression against outputs_baseline_fc7b43d/PRT (2026-09-10).
+  These are the CountryParams schema defaults, not the function signature
+  fallbacks (5.0/10.0), which are dead code and not ported.
+- M1, M2, M4, M5, M6, M16, M19: no regulatory or literature equivalent
+  exists (internal numerical tuning, not environmental/technical standard).
+  Kept as STRUCTURAL_PRESERVE, no source found, author calibration.
+- M9/M10/M11: resolved, see protected_areas entry above.
+- M12, M13, M14, M15, M18: resolved, see entries above.
+
+---
+
+### 2026-09-10 — open tech debt: suitability_criteria pixel-exact regression harness
+
+The 14 criteria rasters of Fase 2b should eventually be checked pixel-for-pixel
+against `outputs_baseline_fc7b43d/{PRT,BRA}/criteria_builder/tif/` in CI, the
+same way `road_max_dist_km` / `river_max_dist_biomass_km` were confirmed ad hoc
+on 2026-09-10 (see "suitability_criteria parameter calibration" above). No such
+harness exists yet.
+
+This is open technical debt, NOT a blocker for implementing the phase: the phase
+can be built and merged without it, and the harness added afterwards. Recorded
+here so it is not lost. Related: `docs/architecture/module-mapping.md` cross-cutting
+items (regression tolerance is already defined in `CLAUDE.md`, only the automated
+comparison is missing).
+
+---
+
 (fim das decisões registradas até o momento)
