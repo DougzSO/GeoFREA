@@ -13,10 +13,11 @@ Built incrementally, one criterion package at a time. Packages landed:
   4. protected_areas, pop_suitability, seismic_suitability
      -> all 14 canonical criteria are now implemented.
 
+  5. Cartography (one PNG per criterion + slope_degrees), isolated in
+     this phase per audit sec 7 D7 — see cartography.py::plot_criterion_map,
+     not routed through any shared/generic renderer.
+
 Deferred to later packages, deliberately NOT stubbed here:
-  - Cartography (one PNG per criterion). Isolated in this phase when it
-    lands (audit sec 7 D7 — not routed through grid_alignment's generic
-    renderer). Until then every CriterionLayer.figure_path is None.
   - End-to-end wiring validation against a real 0.01deg GridAlignmentResult
     for BRA, with full progress/ETA logging for the slow country
     (audit sec 9 item 4 / DECISIONS.md 2026-09-10). The regression
@@ -34,6 +35,7 @@ from datetime import UTC, datetime
 from rasterio.transform import Affine
 
 from geofrea.core.orchestrator import PhaseContext
+from geofrea.suitability_criteria.cartography import plot_criterion_map
 from geofrea.suitability_criteria.criteria_functions import (
     ComputeResult,
     compute_biomass_resource,
@@ -209,10 +211,17 @@ def run_suitability_criteria_phase(
         tif_path = tif_dir / f"{name}.tif"
         save_criterion_raster(score, tif_path, canonical_transform, gm.crs)
         stats = criterion_stats(score)
+
+        figure_path = figure_dir / f"{name}.png"
+        plot_criterion_map(
+            score, canonical_transform, gm.crs, name, context.country_code,
+            inputs.mainland_gdf, figure_path, context_gdf=inputs.context_gdf,
+        )
+
         elapsed = time.perf_counter() - t0
         timings[name] = round(elapsed, 2)
 
-        produced[name] = CriterionLayer(name=name, tif_path=tif_path, figure_path=None, **stats)
+        produced[name] = CriterionLayer(name=name, tif_path=tif_path, figure_path=figure_path, **stats)
         logger.info(
             "  [%d/%d] %s: done in %.1fs (valid=%s, mean=%.3f)",
             i, total, name, elapsed, f"{stats['valid_pixels']:,}", stats["mean"],
@@ -240,9 +249,16 @@ def run_suitability_criteria_phase(
     prot_tif = tif_dir / "protected_areas.tif"
     save_criterion_raster(prot_score, prot_tif, canonical_transform, gm.crs)
     prot_stats = criterion_stats(prot_score)
+
+    prot_figure_path = figure_dir / "protected_areas.png"
+    plot_criterion_map(
+        prot_score, canonical_transform, gm.crs, "protected_areas", context.country_code,
+        inputs.mainland_gdf, prot_figure_path, context_gdf=inputs.context_gdf,
+    )
+
     timings["protected_areas"] = round(time.perf_counter() - t0, 2)
     produced["protected_areas"] = CriterionLayer(
-        name="protected_areas", tif_path=prot_tif, figure_path=None, **prot_stats
+        name="protected_areas", tif_path=prot_tif, figure_path=prot_figure_path, **prot_stats
     )
     logger.info(
         "  protected_areas: done (source=%s, valid=%s)",
@@ -253,6 +269,7 @@ def run_suitability_criteria_phase(
     # written to disk and referenced by the result, but never counted in
     # n_criteria or fed to the MCDA (audit sec 2b).
     slope_degrees_tif = None
+    slope_degrees_png = None
     if inputs.slope is not None:
         s_deg, _t, _c = compute_slope_degrees(str(inputs.slope))
         if s_deg.shape != expected_shape:
@@ -262,6 +279,12 @@ def run_suitability_criteria_phase(
             )
         slope_degrees_tif = tif_dir / "slope_degrees.tif"
         save_criterion_raster(s_deg, slope_degrees_tif, canonical_transform, gm.crs)
+
+        slope_degrees_png = figure_dir / "slope_degrees.png"
+        plot_criterion_map(
+            s_deg, canonical_transform, gm.crs, "slope_degrees", context.country_code,
+            inputs.mainland_gdf, slope_degrees_png, context_gdf=inputs.context_gdf,
+        )
         logger.info("  slope_degrees: written (cartography-only, not a criterion)")
 
     wired = set(_CRITERION_SPECS) | set(_SPECIAL_CRITERIA)
@@ -292,6 +315,7 @@ def run_suitability_criteria_phase(
         report_path=report_path,
         criteria=produced,
         slope_degrees_tif=slope_degrees_tif,
+        slope_degrees_png=slope_degrees_png,
         summary=SuitabilityCriteriaSummary(
             n_criteria=len(produced),
             missing_expected=missing_expected,

@@ -150,6 +150,9 @@ def test_phase_writes_slope_degrees_outside_criteria(tmp_path):
     assert result.slope_degrees_tif is not None
     assert result.slope_degrees_tif.name == "slope_degrees.tif"
     assert result.slope_degrees_tif.exists()
+    assert result.slope_degrees_png is not None
+    assert result.slope_degrees_png.name == "slope_degrees.png"
+    assert result.slope_degrees_png.exists()
     assert "slope_degrees" not in result.criteria
 
 
@@ -159,7 +162,9 @@ def test_phase_writes_one_tif_per_criterion(tmp_path):
     for name, layer in result.criteria.items():
         assert layer.tif_path.exists()
         assert layer.tif_path.name == f"{name}.tif"
-        assert layer.figure_path is None
+        assert layer.figure_path is not None
+        assert layer.figure_path.exists()
+        assert layer.figure_path.name == f"{name}.png"
         with rasterio.open(layer.tif_path) as src:
             assert (src.height, src.width) == (HEIGHT, WIDTH)
             assert src.nodata == NODATA_FLOAT

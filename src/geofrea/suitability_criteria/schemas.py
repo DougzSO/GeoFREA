@@ -231,6 +231,10 @@ class SuitabilityCriteriaResult(BaseModel):
         slope_degrees_tif: The cartography-only absolute-slope raster,
             written but outside `criteria` (audit sec 2b), or None if
             slope was absent.
+        slope_degrees_png: The cartography PNG for slope_degrees, or
+            None if slope was absent. Kept alongside slope_degrees_tif
+            rather than as a CriterionLayer, matching that field's own
+            not-a-canonical-criterion status.
         summary: Roll-up (see SuitabilityCriteriaSummary).
     """
 
@@ -243,6 +247,7 @@ class SuitabilityCriteriaResult(BaseModel):
     report_path: Path
     criteria: dict[str, CriterionLayer]
     slope_degrees_tif: Path | None = None
+    slope_degrees_png: Path | None = None
     summary: SuitabilityCriteriaSummary
 
     @model_validator(mode="after")
