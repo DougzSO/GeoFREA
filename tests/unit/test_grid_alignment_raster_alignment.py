@@ -338,6 +338,54 @@ def test_mosaic_land_cover_skips_corrupted_tile_without_crashing(tmp_path):
 
 
 @pytest.mark.unit
+def test_mosaic_land_cover_raises_when_corrupted_tile_overlaps_country(tmp_path):
+    # docs/DECISIONS.md 2026-09-11, "mosaic_land_cover fail-loud on
+    # in-country gaps": a tile that can't be opened has unreadable real
+    # bounds, so the overlap check falls back to its NOMINAL ESA
+    # WorldCover bounds parsed from the filename. This tile's id
+    # (N36W009 -> lon[-9,-6], lat[36,39]) overlaps the test country's
+    # bbox (see _country_gdf: centered ~(-8.8, 38.8), half_side=0.15).
+    grid = _grid()
+    country_gdf = _country_gdf()
+
+    corrupted_tile = tmp_path / "ESA_WorldCover_10m_2020_v100_N36W009_Map.tif"
+    corrupted_tile.write_bytes(b"not a real geotiff")
+
+    with pytest.raises(RuntimeError, match="overlaps the country being mosaicked"):
+        mosaic_land_cover([corrupted_tile], tmp_path / "lc.tif", grid, country_gdf)
+
+
+@pytest.mark.unit
+def test_mosaic_land_cover_skips_corrupted_tile_outside_country_with_warning(tmp_path, caplog):
+    # Same corrupted-file scenario, but this tile's nominal footprint
+    # (S36W060 -> lon[-60,-57], lat[-36,-33]) is nowhere near the test
+    # country -- must NOT raise, but must still be traceable in the log
+    # (not a fully silent skip).
+    grid = _grid()
+    country_gdf = _country_gdf()
+
+    good_tile = tmp_path / "good.tif"
+    _write_raster(good_tile, value=20, dtype="uint8", nodata=0)
+
+    corrupted_tile = tmp_path / "ESA_WorldCover_10m_2020_v100_S36W060_Map.tif"
+    corrupted_tile.write_bytes(b"not a real geotiff")
+
+    with caplog.at_level("WARNING"):
+        out_path = mosaic_land_cover(
+            [corrupted_tile, good_tile], tmp_path / "lc.tif", grid, country_gdf
+        )
+
+    assert out_path is not None
+    with rasterio.open(out_path) as src:
+        data = src.read(1)
+    assert (data[grid.country_mask] == 20).any()
+    assert any(
+        corrupted_tile.name in record.message and "no bbox overlap" in record.message
+        for record in caplog.records
+    )
+
+
+@pytest.mark.unit
 def test_mosaic_land_cover_returns_none_when_every_tile_fails(tmp_path):
     grid = _grid()
     country_gdf = _country_gdf()

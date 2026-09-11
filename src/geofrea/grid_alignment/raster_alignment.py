@@ -19,6 +19,7 @@ suitability_criteria (Phase 3) is designed, not a blocker here.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
@@ -398,17 +399,68 @@ def combine_wind_layers(wind_paths: list, out_path, grid: GridContext):
     return out_path
 
 
+_ESA_WORLDCOVER_TILE_ID_RE = re.compile(r"([NS])(\d{2})([EW])(\d{3})")
+_ESA_WORLDCOVER_TILE_SIZE_DEG = 3.0
+
+
+def _esa_worldcover_tile_bounds(filename: str) -> tuple[float, float, float, float] | None:
+    """Nominal (left, bottom, right, top) bbox for an ESA WorldCover tile filename.
+
+    Used ONLY as a fallback when a tile can't be opened at all
+    (corrupted file), so its REAL bounds can't be read from its own
+    metadata. ESA WorldCover bakes the tile's SW corner into every
+    filename (e.g. "S36W060" in
+    ESA_WorldCover_10m_2020_v100_S36W060_Map.tif) on the product's fixed
+    3x3 degree tiling grid. Returns None if the filename doesn't match
+    the expected pattern — footprint genuinely unknown then, not assumed
+    safe.
+    """
+    m = _ESA_WORLDCOVER_TILE_ID_RE.search(filename)
+    if m is None:
+        return None
+    ns, lat_str, ew, lon_str = m.groups()
+    lat0 = float(lat_str) * (-1.0 if ns == "S" else 1.0)
+    lon0 = float(lon_str) * (-1.0 if ew == "W" else 1.0)
+    return (
+        lon0,
+        lat0,
+        lon0 + _ESA_WORLDCOVER_TILE_SIZE_DEG,
+        lat0 + _ESA_WORLDCOVER_TILE_SIZE_DEG,
+    )
+
+
+def _bbox_overlaps(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> bool:
+    """True if two (left, bottom, right, top) bboxes intersect."""
+    return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
+
+
 def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
     """Build an ESA WorldCover mosaic from multiple tiles.
 
     Reprojects and merges tiles onto the reference grid (nearest-
-    neighbour). Tiles whose bounds don't overlap the country are
-    skipped without being opened for reprojection; tiles that fail to
-    open (corrupted file) are also skipped, not fatal to the mosaic —
-    same defensive behavior data_quality_audit's
-    inspect_land_cover_tiles() already has for the same known data gap
-    (see docs/DECISIONS.md 2026-09-08, "wire das 5 camadas restantes",
-    Fase 2, ACHADO REAL 3 — 6 corrupted BRA tiles).
+    neighbour). Tiles whose (real, opened) bounds don't overlap the
+    country are skipped without being opened for reprojection.
+
+    A tile that fails to open/read/reproject (corrupted file) is a
+    different matter (docs/DECISIONS.md 2026-09-11, "mosaic_land_cover
+    fail-loud on in-country gaps" — same fail-loud policy as the WDPA
+    data-integrity check): if its footprint overlaps the country being
+    processed, this raises rather than silently leaving that area at
+    the mosaic's zero-initialized fill value (which is NOT the output
+    raster's declared nodata — see `run_grid_alignment_phase`, which
+    nodata-masks everything outside the country afterward, but never
+    touches gaps left INSIDE it). A skipped tile that is genuinely
+    outside the country (the common case — e.g. the 6 corrupted BRA
+    tiles this session, all outside Brazil's mainland) is not an error;
+    it is logged for traceability instead. Since a file that won't even
+    open has no readable bounds of its own, that overlap check falls
+    back to the tile's NOMINAL bounds parsed from its ESA WorldCover
+    filename (`_esa_worldcover_tile_bounds`) — if the filename doesn't
+    match the expected pattern either, the footprint is genuinely
+    unknown and this degrades to the same warn-and-skip as before,
+    rather than guessing.
 
     Args:
         lc_tiles: ESA WorldCover tile paths.
@@ -418,21 +470,24 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
 
     Returns:
         Path to the mosaicked land-cover raster, or None if no tile was used.
+
+    Raises:
+        RuntimeError: If a tile can't be read AND its footprint (real or
+            nominal) overlaps the country being processed — the gap
+            would otherwise be silent and indistinguishable from
+            legitimate "no data here" downstream.
     """
     lc_out = np.zeros((grid.height, grid.width), dtype=np.uint8)
     bounds_main = tuple(float(b) for b in country_gdf.total_bounds)
     used = skipped = 0
 
     for tile in lc_tiles:
+        tile_path = Path(tile)
+        tile_bounds: tuple[float, float, float, float] | None = None
         try:
             with rasterio.open(str(tile)) as src:
-                tile_bounds = tuple(src.bounds)
-                if (
-                    tile_bounds[2] < bounds_main[0]
-                    or tile_bounds[0] > bounds_main[2]
-                    or tile_bounds[3] < bounds_main[1]
-                    or tile_bounds[1] > bounds_main[3]
-                ):
+                tile_bounds = tuple(float(b) for b in src.bounds)
+                if not _bbox_overlaps(tile_bounds, bounds_main):
                     skipped += 1
                     continue
 
@@ -452,8 +507,26 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
                 mask_fill = (tile_reprojected > 0) & (lc_out == 0)
                 lc_out[mask_fill] = tile_reprojected[mask_fill]
                 used += 1
-        except Exception:  # noqa: BLE001 — one bad/corrupted tile must not abort the mosaic
+        except Exception as exc:
+            footprint = tile_bounds or _esa_worldcover_tile_bounds(tile_path.name)
+            if footprint is not None and _bbox_overlaps(footprint, bounds_main):
+                raise RuntimeError(
+                    f"mosaic_land_cover: tile {tile_path.name!r} could not be read "
+                    f"({type(exc).__name__}: {exc}), and its {'real' if tile_bounds else 'nominal'} "
+                    f"footprint {footprint} overlaps the country being mosaicked — this "
+                    "would silently leave a land-cover coverage gap inside the study "
+                    "area. Fix or remove the file."
+                ) from exc
             skipped += 1
+            logger.warning(
+                "    Land cover tile %s could not be read (%s: %s) — skipped (%s).",
+                tile_path.name,
+                type(exc).__name__,
+                exc,
+                "no bbox overlap with the country"
+                if footprint is not None
+                else "footprint unknown, filename didn't match the expected tile pattern",
+            )
 
     logger.info("    Land cover mosaic: %d tiles used, %d skipped.", used, skipped)
 

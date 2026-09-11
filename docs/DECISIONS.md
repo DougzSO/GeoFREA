@@ -1187,4 +1187,52 @@ Referência (literatura/discussão, se aplicável): `geoworld_framework/src/proc
 
 ---
 
+## [2026-09-11] - grid_alignment: mosaic_land_cover fail-loud em tile corrompido que sobrepõe o país
+Tipo: METHODOLOGY_REVISION (fail-loud para falha de integridade; mesmo precedente do WDPA)
+
+Descrição: achado real durante a integração ao vivo desta sessão. `mosaic_land_cover()`
+pula um tile ESA WorldCover corrompido (`except Exception: skipped += 1;
+continue`) sem abortar o mosaico — comportamento correto em si (um tile ruim
+não deve derrubar o país inteiro), mas o array de saída é inicializado com
+`np.zeros(...)` e só recebe `NODATA_UINT8` (255) fora do polígono do país
+(`lc_out[~grid.country_mask] = NODATA_UINT8`, aplicado DEPOIS do loop). Um
+tile pulado cuja área caía DENTRO do país deixaria essa área em `0` — não um
+código ESA válido, mas também não o nodata declarado do raster — então um
+consumidor a jusante que faça o check padrão `!= nodata` trataria como dado
+real. Verificado ao vivo para o caso de hoje (BRA, os 6 tiles corrompidos
+conhecidos, ver `docs/DECISIONS.md` 2026-09-08 Fase 2 ACHADO REAL 3): nenhum
+dos 6 sobrepõe o mainland do Brasil no raster alinhado (todos na faixa
+36°S-33°S, majoritariamente fora do BRA) — 0 pixels de classe 0 remanescentes
+dentro da máscara do país nesta execução. Sorte geográfica, não uma
+propriedade do código.
+
+Correção (instrução explícita: "não usar burn de 255 como solução principal
+— é indistinguível de 'sem cobertura real' a jusante"): em vez de mudar a
+semântica do valor de preenchimento, o loop agora decide, por tile pulado,
+se o gap importa. Quando o tile abre normalmente mas não sobrepõe o país, o
+comportamento é inalterado (pulado sem erro). Quando o tile FALHA ao
+abrir/ler/reprojetar, o footprint real é desconhecido (nunca chegou a
+`src.bounds`) — o fallback é o footprint NOMINAL do tile, decifrado do nome
+do arquivo (convenção ESA WorldCover: `[N|S]xx[E|W]yyy` = canto SW, grade
+fixa de 3x3 graus — `_esa_worldcover_tile_bounds()`, nova função). Se esse
+footprint (real ou nominal) sobrepõe o país sendo processado: `RuntimeError`,
+citando o arquivo e a exceção original — mesma filosofia fail-loud de
+`_check_required_layers`/`_verify_alignment`/WDPA. Se não sobrepõe, OU o nome
+do arquivo não bate com o padrão esperado (footprint genuinamente
+desconhecido — não assumido seguro): `logger.warning` nomeando o tile e o
+motivo, para rastreabilidade, sem abortar.
+
+Testes: `test_mosaic_land_cover_raises_when_corrupted_tile_overlaps_country`
+(tile corrompido com nome de tile ESA que sobrepõe o país do teste — confirma
+`RuntimeError`); `test_mosaic_land_cover_skips_corrupted_tile_outside_country_with_warning`
+(mesmo tile corrompido, nome de tile fora do país — confirma que NÃO levanta,
+e que o warning nomeia o arquivo e o motivo no log). Os testes pré-existentes
+(`..._skips_corrupted_tile_without_crashing`, nome de arquivo que não bate
+com o padrão ESA) seguem passando inalterados — footprint desconhecido cai no
+mesmo warn-and-skip de antes.
+
+Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-08 "wire das 5 camadas restantes a partir do banco local, Fase 2" (ACHADO REAL 3, os 6 tiles corrompidos do BRA); `docs/DECISIONS.md` 2026-09-11 "protected_areas distingue WDPA ausente de WDPA corrompido" (precedente fail-loud citado explicitamente por Douglas); instrução explícita de Douglas 2026-09-11.
+
+---
+
 (fim das decisões registradas até o momento)
