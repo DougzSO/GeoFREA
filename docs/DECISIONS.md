@@ -1235,4 +1235,136 @@ Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-
 
 ---
 
+## [2026-09-11] - data_acquisition: AcquiredLayer.fetch_status quebrava resume a partir de manifest.json (correção de bug)
+Tipo: correção de bug — NÃO é mudança metodológica. Nenhum comportamento de fetch/provenance/fetch_status é alterado; apenas a serialização/deserialização volta a funcionar.
+
+Descrição: `AcquiredLayer.fetch_status` (`schemas.py`) é um `@computed_field` — derivado só de `layer_name`, não um campo de construtor (ver docstring do campo, "fetch_status computed field", 2026-08-26). Sendo computed, ele também é emitido por `model_dump(mode="json")`, que é exatamente o que `Orchestrator._write_manifest()` (`core/orchestrator.py`) chama para gravar `outputs/<country_code>/manifest.json` após cada fase bem-sucedida. Ao retomar uma execução (`Orchestrator.run()`, ramo `existing.status == "success"`), o dicionário lido do manifest é passado de volta para `AcquisitionResult.model_validate(existing.output)`, que por sua vez valida cada `AcquiredLayer` do zero — e `AcquiredLayer` tem `model_config = ConfigDict(extra="forbid")`. Um computed field é somente-leitura: não pode ser aceito como argumento de construtor, então `fetch_status` no dicionário caía na regra de `extra="forbid"` e o Pydantic levantava `extra_forbidden` em toda camada, para todo resume que passasse pela fase `data_acquisition`. Na prática, resumir uma execução após essa fase forçava re-rodar do zero, quebrando o propósito inteiro de `manifest.json` (evitar re-rodar um pipeline de ~1h por país após falha tardia — ver docstring do módulo `orchestrator.py`).
+
+Reproduzido diretamente antes da correção:
+```
+AcquiredLayer(layer_name="power_plants", provenance="fetched", auth_required=False).model_dump(mode="json")
+# -> inclui {"fetch_status": "implemented", ...}
+AcquiredLayer.model_validate(<esse dict>)
+# -> pydantic.ValidationError: fetch_status — Extra inputs are not permitted [extra_forbidden]
+```
+
+Correção: `AcquiredLayer` ganhou um `@model_validator(mode="before")` (`_drop_computed_fetch_status`) que remove a chave `fetch_status` do dicionário de entrada antes da validação, se presente. Como `fetch_status` é puramente derivado de `layer_name`, descartar o valor gravado e deixar o `@computed_field` recalculá-lo na reconstrução não perde informação — o valor recalculado é idêntico ao que foi gravado (mesmo `layer_name`, mesma lógica). Deliberadamente NÃO foi usado `model_config = ConfigDict(extra="ignore")` no lugar do validator: isso abriria mão da proteção `extra="forbid"` para qualquer chave desconhecida (ex.: um campo com nome digitado errado, ou um manifest genuinamente corrompido), não só para `fetch_status` — o validator descarta apenas essa chave nomeada, mantendo `extra="forbid"` como guarda contra qualquer outra entrada inesperada.
+
+Testes (`tests/unit/test_data_acquisition_phase.py`):
+- `test_acquired_layer_round_trips_through_dumped_fetch_status` — save → load isolado: `model_dump(mode="json")` seguido de `model_validate()` no mesmo dict não levanta mais, e o objeto recarregado é igual ao original.
+- `test_acquired_layer_still_rejects_unrelated_extra_fields` — confirma que a correção é específica a `fetch_status`: uma chave extra não relacionada ainda levanta `ValidationError`, então corrupção real de manifest continua sendo pega.
+- `test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest` — reprodução end-to-end do bug pelo caminho real: roda a fase `data_acquisition` via `Orchestrator` (grava `manifest.json` de verdade, com `fetch_status` incluído em cada layer), constrói um segundo `Orchestrator` apontando para o mesmo `outputs_dir` (simulando uma nova invocação do processo) e confirma que a fase é resumida com sucesso a partir do manifest salvo, sem re-executar, produzindo o mesmo `AcquisitionResult`.
+
+Nota: rodar a suíte completa de `tests/unit/test_data_acquisition_phase.py` nesta sessão expõe 25 falhas pré-existentes e não relacionadas — o fetcher `protected` (`fetchers/protected_planet.py`), ativado em trabalho em andamento não commitado desta mesma data (ver `phase.py`/`schemas.py` modificados fora desta entrada), ainda não está mockado na fixture `_no_network_fetchers` deste arquivo de teste, então qualquer teste que chame `run_acquisition_phase()` sem token real falha com `ProtectedPlanetTokenMissingError`. Os 3 testes novos acima evitam isso mockando `fetch_protected_areas` localmente (não a fixture compartilhada) e passam isoladamente; a fixture compartilhada não foi tocada por estar fora do escopo desta correção.
+
+Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-08-26 "fetch_status computed field" (origem do campo computed); instrução explícita de Douglas 2026-09-11 pedindo correção de bug (não mudança metodológica) e teste save → load → resume.
+
+---
+
+## [2026-09-11] - slope não herda contaminação de nodata: correção de escopo (PRT vs BRA)
+Tipo: VERIFICATION_UPDATE (addendum à entrada "grid_alignment: slope não herda contaminação de nodata (correção de integridade)", mesmo dia — não altera a correção em si, corrige a descrição do seu alcance)
+
+Descrição: a entrada original descreve o efeito da correção como algo que "muda
+resultado só na borda de buracos de dado do DEM". Investigação pedida por
+Douglas nesta sessão (comparação `slope_degrees` pós-fix vs. baseline congelado
+do legado, para PRT e BRA, mais recomputação independente a partir do DEM bruto
+pelos dois caminhos — "legado" alimentando o sentinela cru no gradiente vs.
+"corrigido" com NaN antes do gradiente) mostra que essa frase é precisa para
+BRA mas **enganosa para PRT**:
+
+- **BRA**: 7.074.855 pixels válidos nos dois lados (baseline e novo) — **0
+  divergem** (delta = 0,0 em 100% dos pixels comparados); o novo output tem
+  17.606 pixels válidos A MAIS que o baseline (recuperados pela correção, não
+  alterados). Recomputação independente a partir de `BRA_elevation.tif`
+  confirma: caminho "legado" e "corrigido" coincidem bit-a-bit nos pixels
+  compartilhados. Efeito real: recuperação pontual de borda, exatamente como a
+  entrada original descreve.
+- **PRT**: 93.147 pixels válidos nos dois lados — **100% divergem** (mediana
+  |delta| 0,16°, p99 2,15°, max 4,51°). Mas a recomputação independente a
+  partir de `PRT_elevation.tif` mostra que os caminhos "legado" e "corrigido"
+  produzem resultado BIT-IDÊNTICO em 100% dos 622.393 pixels válidos nativos —
+  **esta correção é um no-op para PRT**. Motivo: `PRT_elevation.tif` já
+  declara `nodata=NaN` nativamente (não um sentinela finito como o −9999 do
+  BRA); o bug do legado (sentinela finito vazando como elevação real dentro do
+  `numpy.gradient`) nunca tinha como se manifestar aqui — `NaN` já propaga no
+  gradiente com ou sem o pré-mascaramento explícito que esta correção
+  acrescenta.
+
+A divergência de 100% dos pixels de PRT contra o baseline **não vem desta
+correção**. Uma reimplementação independente do método documentado (diferença
+central + `cos(lat)`, nativo→resample), aplicada do zero sobre o DEM bruto de
+PRT, reproduz a MESMA divergência contra o baseline (mediana 0,16°, max
+4,51°) — ou seja, o método/ordem tal como documentado já diverge do baseline
+legado por conta própria, independentemente de qualquer correção de nodata.
+Essa é a incerteza de proveniência do baseline já registrada e ratificada em
+`docs/DECISIONS.md` 2026-09-11 "grid_alignment: derivação de slope do DEM
+(método e ordem)" (STRUCTURAL_PRESERVE) — **não reaberta aqui**, apenas
+confirmada como a causa real do que se observa em PRT.
+
+**Resolução nativa do DEM não explica a assimetria PRT vs. BRA**: ambos os
+DEMs brutos (`database/raw/elevation/PRT/PRT_elevation.tif`,
+`.../Brazil/BRA_elevation.tif`) têm a mesma resolução nativa — 0,005°/pixel,
+EPSG:4326 — confirmado por leitura direta. Fração de pixels válidos nativos
+adjacentes (8-conectividade) a alguma célula nodata é da mesma ordem de
+grandeza nos dois países (PRT 0,15% = 912/623.302; BRA 0,18% =
+92.546/52.211.212). A assimetria real não é espacial — é o TIPO de sentinela
+de nodata declarado por país: PRT declara `NaN` nativamente (sem bug
+possível), BRA declara `-9999.0` mas a maior parte do dado inválido já está
+armazenado como `NaN` literal na prática (~26% das células — mesmo achado já
+documentado em `docs/DECISIONS.md` 2026-09-11 "grid_alignment:
+reproject_to_grid sanitiza NaN literal antes do warp", ali para
+`elevation_aligned`, aqui confirmado também no DEM bruto usado pelo slope
+nativo).
+
+**Plausibilidade geomorfológica de `slope_degrees` pós-fix em PRT** (pedida
+por Douglas, referência independente grosseira — não confundir com os deltas
+acima, que são a diferença baseline-vs-novo, não a distribuição de slope em
+si): a distribuição real na grade alinhada (0,01°, ~1 km) tem mediana 2,00°,
+p99 12,47°, max 21,17°. Compatível com o relevo conhecido de Portugal
+continental nessa resolução agregada — litoral e Alentejo predominantemente
+planos a suavemente ondulados (consistente com a mediana baixa e a grande
+massa de pixels de baixo slope), com extremos de até ~21° plausíveis para as
+serras do interior/norte (Serra da Estrela, Gerês) mesmo suavizados por um
+pixel de ~1 km. Nada nessa distribuição, isoladamente, indica artefato.
+
+Nenhuma decisão de método/ordem é reaberta por esta entrada. Ela corrige
+apenas o escopo do efeito descrito na entrada de nodata (que segue válida e
+inalterada para BRA) e aponta a causa real da divergência de PRT para uma
+entrada já existente e já ratificada, sem alterá-la.
+
+Ação de correção: onde a frase "muda resultado só na borda de buracos de dado
+do DEM" (entrada 2026-09-11 "grid_alignment: slope não herda contaminação de
+nodata") for lida, entender como válida apenas para DEMs com nodata declarado
+como sentinela finito e efetivamente presente como tal no dado bruto (caso
+BRA) — não generalizável a PRT, onde a correção é comprovadamente inerte, e
+onde a divergência observada contra o baseline tem outra causa, já
+documentada.
+
+Referência (literatura/discussão, se aplicável): recomputação independente
+desta sessão a partir de `database/raw/elevation/PRT/PRT_elevation.tif` e
+`.../Brazil/BRA_elevation.tif`; `outputs_baseline/PRT_baseline` (legado) vs.
+`outputs/PRT/suitability_criteria/tif/slope_degrees.tif` e
+`outputs/BRA/suitability_criteria/tif/slope_degrees.tif`; `docs/DECISIONS.md`
+2026-09-11 "grid_alignment: derivação de slope do DEM (método e ordem)"
+(STRUCTURAL_PRESERVE) e "grid_alignment: reproject_to_grid sanitiza NaN
+literal antes do warp"; instrução explícita de Douglas 2026-09-11.
+
+---
+
+## [2026-09-11] - data_acquisition: protected_planet API activation
+Tipo: STRUCTURAL_PRESERVE — ativa um fetcher já implementado e testado (`fetchers/protected_planet.py`), sem mudar sua lógica interna. Não é mudança metodológica: o comportamento de `compute_protected_areas` (fail-loud em WDPA corrompido vs. `assumed_free` em WDPA genuinamente ausente, decisão 2026-09-11 "protected_areas distingue WDPA ausente de WDPA corrompido") não é tocado.
+
+Descrição: `protected` (WDPA) tinha, desde 2026-08-25, um fetcher completo e testado (`fetchers/protected_planet.py::fetch_protected_areas`) que não estava ligado a `run_acquisition_phase()` — a única coisa bloqueando era um token de API pessoal (`api.protectedplanet.net`, obtido via formulário manual, sem self-service). Douglas confirmou hoje que já colocou um token real em `.env` (`PROTECTED_PLANET_API_KEY`). Duas mudanças:
+
+1. **Nome da variável de ambiente**: o fetcher lia `PROTECTED_PLANET_API_TOKEN`, mas o `.env` real usa `PROTECTED_PLANET_API_KEY` — renomeado `TOKEN_ENV_VAR` no fetcher para casar com o que já está no `.env`, em vez de pedir um segundo valor duplicado sob outro nome. Não há carregamento de `.env` no código do pipeline (nenhum `python-dotenv` em `src/`) — a variável precisa estar no ambiente do processo que roda o pipeline, mesmo mecanismo já usado para `GEOFREA_RAW_DATA_DIR`/`GEOFREA_PROCESSED_DATA_DIR`/etc.
+2. **Wiring**: `protected` adicionado a `_FETCHED_LAYER_HANDLERS` (`phase.py`) e movido de `IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES` para `IMPLEMENTED_FETCH_LAYER_NAMES` (`schemas.py`) — `fetch_status` passa a reportar `"implemented"` em vez de `"implemented_not_activated"`. `_LayerSpec("protected", ...)` mudou `provenance` de `"local_only"` para `"fetched"` e `auth_required` de `False` para `True` (primeiro caso de `auth_required=True` desde que `land_cover`/Terrascope reverteu para local, 2026-09-08). `country_specific` permanece `False` — decisão deliberadamente NÃO revisitada aqui (fora do pedido de hoje): embora o fetcher consulte a API por país, o registro trata `protected` no mesmo padrão de `lakes`/`rivers` (fonte global/contínua, país é metadado do `AcquiredLayer`, não do arquivo em si) desde a auditoria de 2026-08-24 ("vector layer audit depth") — mudar isso seria uma decisão de escopo separada.
+
+`fetch_protected_areas` é o único fetcher, além de `hydrosheds.fetch_rivers` (país fora de `_COUNTRY_TO_REGION`), que pode *levantar* em vez de degradar para `path=None`: `ProtectedPlanetTokenMissingError` quando nenhum token está configurado — deliberado (token ausente é lacuna de configuração, não falha transitória de rede), não capturado em `run_acquisition_phase()`, propaga via `PhaseExecutionError` do Orchestrator, mesma filosofia fail-loud já estabelecida.
+
+Testes (`tests/unit/test_data_acquisition_phase.py`): `_FETCHER_NAMES` ganhou `fetch_protected_areas` (a fixture `_no_network_fetchers` agora cobre os 7 fetchers reais); `test_run_acquisition_phase_only_protected_requires_auth_2026_09_11` (substitui o teste "nenhuma camada exige auth", agora `protected` é a única); `test_run_acquisition_phase_provenance_split_2026_09_11` e `test_run_acquisition_phase_fetch_status_split_2026_09_11` (ambos atualizados: `protected` migra de `local_only`/`implemented_not_activated` para `fetched`/`implemented`); `test_run_acquisition_phase_populates_path_when_fetcher_succeeds` ganhou o caso `protected`; `test_run_acquisition_phase_protected_token_missing_propagates` (novo — mirror de `..._rivers_unmapped_country_propagates_keyerror`, confirma que `ProtectedPlanetTokenMissingError` não é engolido pela fase). `tests/unit/test_fetchers_protected_planet.py` não precisou de mudança de conteúdo — todo teste referencia `protected_planet.TOKEN_ENV_VAR` simbolicamente, não a string literal.
+
+Referência (literatura/discussão, se aplicável): `fetchers/protected_planet.py` (docstring do módulo, verificação ao vivo da API 2026-08-24/25); `docs/DECISIONS.md` 2026-08-25 "real fetchers for power_plants/wind/lakes/rivers" (mesmo padrão de ativação); instrução explícita de Douglas 2026-09-11 ("Configure o token... via variável de ambiente... resolva o path local/fetch de protected").
+
+---
+
 (fim das decisões registradas até o momento)
