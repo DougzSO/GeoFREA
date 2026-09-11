@@ -84,6 +84,69 @@ def test_reproject_to_grid_uint8_dtype_uses_zero_nodata_default(tmp_path):
 
 
 @pytest.mark.unit
+def test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata(tmp_path):
+    # Reproduces BRA_elevation.tif in production (docs/DECISIONS.md
+    # 2026-09-11, "elevation NaN leak"): the file declares a finite
+    # nodata sentinel (-9999) but 0 cells actually equal it -- its real
+    # nodata cells are literal NaN instead, a metadata/data mismatch in
+    # the raw source file. Without sanitizing before reproject, GDAL's
+    # bilinear warp doesn't recognise those NaN cells as `src_nodata`
+    # and blends them into neighbouring destination pixels as actual
+    # NaN, not `nodata_out`.
+    grid = _grid()
+    src_path = tmp_path / "src_with_nan.tif"
+    size = 60
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
+    data = np.full((size, size), 100.0, dtype="float32")
+    data[size // 2, size // 2] = np.nan  # NOT -9999 -- a bare NaN residual
+    with rasterio.open(
+        src_path, "w", driver="GTiff", height=size, width=size, count=1,
+        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+    ) as dst:
+        dst.write(data, 1)
+
+    out_path = reproject_to_grid(src_path, tmp_path / "out.tif", grid)
+
+    with rasterio.open(out_path) as src:
+        out_data = src.read(1)
+
+    assert not np.isnan(out_data).any(), (
+        "literal NaN from the source leaked into the aligned output instead "
+        "of being sanitized to the declared nodata sentinel"
+    )
+    # The rest of the (uniform 100.0) raster must still align correctly --
+    # sanitizing one stray cell must not corrupt everything else.
+    assert np.allclose(out_data[grid.country_mask], 100.0, atol=1.0) or (
+        out_data[grid.country_mask] == NODATA_FLOAT
+    ).any()
+
+
+@pytest.mark.unit
+def test_reproject_to_grid_leaves_nan_declared_nodata_sources_untouched(tmp_path):
+    # Some DEM products legitimately declare nodata AS NaN itself (e.g.
+    # PRT's own raw elevation raster in production). GDAL already
+    # handles that correctly; the sanitization guard must not touch it
+    # (guarded by `not np.isnan(src_nodata)` in reproject_to_grid).
+    grid = _grid()
+    src_path = tmp_path / "src_nan_nodata.tif"
+    size = 60
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
+    data = np.full((size, size), 50.0, dtype="float32")
+    data[0, 0] = np.nan
+    with rasterio.open(
+        src_path, "w", driver="GTiff", height=size, width=size, count=1,
+        dtype="float32", crs="EPSG:4326", transform=transform, nodata=np.nan,
+    ) as dst:
+        dst.write(data, 1)
+
+    out_path = reproject_to_grid(src_path, tmp_path / "out.tif", grid)
+
+    with rasterio.open(out_path) as src:
+        out_data = src.read(1)
+    assert not np.isnan(out_data).any()
+
+
+@pytest.mark.unit
 def test_compute_ahp_weights_perfectly_consistent_matrix_gives_zero_rc():
     # A matrix built from a real ratio scale (v = [1, 2, 4], matrix[i][j]
     # = v[i]/v[j]) is perfectly Saaty-consistent by construction: its

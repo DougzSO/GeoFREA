@@ -19,6 +19,7 @@ suitability_criteria (Phase 3) is designed, not a blocker here.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import numpy as np
 import rasterio
@@ -69,15 +70,48 @@ def reproject_to_grid(
         nd_out = nodata_out
 
     with safe_raster_open(src_path) as src:
+        src_nodata = src.nodata
+        source = rasterio.band(src, 1)
+
+        # Data-integrity guard (docs/DECISIONS.md 2026-09-11, "elevation
+        # NaN leak"): some source rasters declare a finite nodata
+        # sentinel (e.g. -9999) but actually encode nodata as literal
+        # IEEE NaN cells instead -- a mismatch between the file's own
+        # metadata and its own data, not something GeoFREA writes (e.g.
+        # BRA's raw elevation raster: 0 cells equal -9999, but ~26% are
+        # literal NaN). GDAL's warp only recognises `src_nodata`, so
+        # those NaN cells are treated as real elevation and
+        # bilinear-blended into neighbouring destination pixels,
+        # leaking actual NaN -- not `nodata_out` -- into the aligned
+        # output. Fixed at the source (this function, shared by every
+        # float raster grid_alignment reprojects) instead of papering
+        # over the symptom in each downstream consumer. Inert whenever
+        # the source has no such mismatch, and left alone when the
+        # source's OWN declared nodata is itself NaN (some DEM products
+        # legitimately encode nodata that way, and GDAL already handles
+        # that case correctly).
+        if dtype_out != "uint8" and src_nodata is not None and not np.isnan(src_nodata):
+            src_array = src.read(1)
+            nan_mask = np.isnan(src_array)
+            if nan_mask.any():
+                logger.warning(
+                    "    %s: %d source pixels are literal NaN despite a finite "
+                    "declared nodata (%s) -- sanitizing to nodata before reproject.",
+                    Path(src_path).name,
+                    int(nan_mask.sum()),
+                    src_nodata,
+                )
+                source = np.where(nan_mask, src_nodata, src_array).astype(src_array.dtype)
+
         reproject(
-            source=rasterio.band(src, 1),
+            source=source,
             destination=data_out,
             src_transform=src.transform,
             src_crs=src.crs,
             dst_transform=grid.transform,
             dst_crs=grid.crs,
             resampling=resampling,
-            src_nodata=src.nodata,
+            src_nodata=src_nodata,
             dst_nodata=nd_out,
         )
 

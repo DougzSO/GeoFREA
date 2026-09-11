@@ -1065,4 +1065,126 @@ Referência (literatura/discussão, se aplicável): `geoworld_framework/src/proc
 
 ---
 
+## [2026-09-11] - grid_alignment: reproject_to_grid sanitiza NaN literal antes do warp
+Tipo: correção de integridade de dado (mesma classe de solar_pvout_weight, biomass_resource land_cover==255, e a correção de contaminação de nodata do slope, todas desta sessão)
+
+Descrição: achado real durante a integração ao vivo BRA→PRT desta sessão (Fase
+2a→2b end-to-end, primeira vez com slope derivado de verdade em vez de
+injetado). `terrain_score.tif`/`BRA` saiu com 14.263 pixels de NaN literal
+(não o sentinela `-9999.0` que o próprio raster declara como nodata) — 7.700 a
+mais que o baseline congelado (que já tinha 6.563 de um artefato próprio do
+legado, ver entrada seguinte). Rastreado até a origem: `BRA_elevation_aligned.tif`
+tem 17.582 pixels de NaN literal apesar de declarar `nodata=-9999.0`. Investigação
+mais a fundo (raster bruto `BRA_elevation.tif`, antes de qualquer reprojeção):
+0 pixels são exatamente `-9999.0`, mas **18.427.230 de 70.638.442 pixels (26%)
+são NaN literal** — o arquivo bruto declara um sentinela numérico finito em
+sua própria metadata mas na prática nunca o usa, só NaN. `PRT_elevation.tif`,
+por comparação, declara `nodata=NaN` (não um sentinela finito) e o GDAL já
+trata esse caso corretamente hoje (0 NaN vazado no `PRT_elevation_aligned.tif`).
+
+`reproject_to_grid()` (compartilhada por toda camada float que passa por
+`grid_alignment`) chamava `rasterio.warp.reproject(..., src_nodata=src.nodata)`
+confiando na metadata declarada. Quando essa metadata está errada (finito
+declarado, NaN na prática), o GDAL não reconhece as células NaN como nodata,
+trata-as como elevação real, e o resample bilinear as mistura nos pixels de
+destino vizinhos como NaN de verdade — não `nodata_out`.
+
+Correção: antes do `reproject()`, quando `dtype_out` é float E o nodata
+declarado da fonte é finito (não é ele próprio NaN), a banda é lida para
+memória e qualquer NaN literal é substituído pelo sentinela declarado
+(`np.where(np.isnan(src_array), src_nodata, src_array)`), com um
+`logger.warning` contando os pixels afetados. Essa versão saneada (não mais
+`rasterio.band(src, 1)`) é o `source=` passado ao `reproject()`. Inerte
+quando a fonte não tem esse descompasso; não toca fontes cujo próprio
+`nodata` declarado já é NaN (caso do PRT, que o GDAL já trata certo hoje).
+Resolvido na origem (função compartilhada de reprojeção), não em cada
+consumidor — mesma filosofia da correção de nodata do slope abaixo.
+
+Testes: `test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata`
+(reproduz o caso real do BRA — NaN literal com nodata finito declarado —
+confirma zero NaN na saída); `test_reproject_to_grid_leaves_nan_declared_nodata_sources_untouched`
+(fixa que o caminho do PRT, nodata=NaN nativo, continua sem alteração).
+
+Referência (literatura/discussão, se aplicável): investigação ao vivo desta sessão (integração BRA→PRT, docs/DECISIONS.md — ver relatório de sessão); `docs/DECISIONS.md` 2026-09-11 "grid_alignment: slope não herda contaminação de nodata" (mesma classe de correção); instrução explícita de Douglas 2026-09-11 ("resolva na origem em vez de só tratar o sintoma no consumidor").
+
+---
+
+## [2026-09-11] - suitability_criteria: TRI (terrain_score) não herda contaminação de NaN/nodata
+Tipo: METHODOLOGY_REVISION (mesma classe da correção de nodata do slope, 2026-09-11)
+
+Descrição: `compute_terrain_score` tinha DOIS problemas relacionados no cálculo
+do TRI (Terrain Ruggedness Index), ambos herdados do legado
+(`criteria_builder.py` L167-220, confirmado por leitura direta): (1) a
+diferença de 8 vizinhos era calculada sobre o array de elevação BRUTO — com o
+sentinela de nodata embutido como se fosse elevação real — então um pixel
+VÁLIDO adjacente a um nodata (ex.: borda do país, borda do raster alinhado)
+recebia um TRI contaminado por uma diferença de ~10.000m falsa; (2) o
+resultado desse cálculo era filtrado só por `!= NODATA_FLOAT`, que NUNCA
+barra NaN (IEEE 754: `NaN != x` é sempre `True`), então qualquer NaN literal
+residual na elevação de entrada (ver entrada anterior — `reproject_to_grid`)
+vazava direto para `terrain_score.tif` como NaN de verdade, não o sentinela
+`-9999.0` que o raster declara.
+
+Correção, espelhando exatamente o padrão já decidido para
+`derive_slope_from_dem()` (2026-09-11): células de elevação inválidas
+(nodata OU NaN literal — `valid_finite_mask` já cobre os dois) são postas em
+NaN ANTES do cálculo de diferença de vizinhos (`work = where(valid_e, elev,
+nan)`), então o NaN se propaga para qualquer pixel cujo stencil 3x3 tocou uma
+célula inválida; o sub-score de TRI desse pixel é então explicitamente
+re-mascarado para `NODATA_FLOAT` via `np.isfinite(tri)` — nunca deixado como
+NaN silencioso. A combinação final (`both`/`only_s`) também ganhou
+`np.isfinite(...)` ao lado de cada `!=`, defesa em profundidade, ainda que
+estruturalmente o NaN não deva mais escapar do bloco do TRI.
+
+Decisão (pedida explicitamente: "decida e documente"): um pixel CENTRAL
+válido com 1+ vizinho inválido recebe TRI = `NODATA_FLOAT` (cai para
+slope-only), e não um TRI calculado ignorando só o(s) vizinho(s) inválido(s).
+Justificativa: mesmo princípio já adotado para o slope — "não pôde ser
+computado sem dado falso" é preferível a um número parcial/enviesado
+(computar TRI com 7 de 8 vizinhos reais e um "buraco" mudaria a escala
+implícita da métrica sem aviso). Grep de todo `suitability_criteria` por
+outros usos de `!= NODATA_FLOAT`/`!= nodata` sem `isfinite()` acompanhando
+(pedido explícito) não achou outra ocorrência real: `compute_solar_resource`
+(L80) já guarda com `np.isfinite(score) &` (correção 2026-09-10);
+`compute_lc_biomass`/`compute_biomass_resource` operam sobre `lc_data`
+inteiro (`int16` — não pode conter NaN); `compute_seismic_suitability`
+(L428) usa `normalized`, que só pode conter valores já filtrados por
+`valid_finite_mask` a montante — sem risco.
+
+Efeito colateral esperado, confirmado ao vivo contra os dois baselines
+congelados: o baseline do PRT tem 0 NaN em `terrain_score.tif`, mas o do BRA
+tem 6.563 — um artefato do PRÓPRIO legado (mesma classe de bug, nunca
+corrigido lá). A correção aqui fecha esse artefato herdado também, não só o
+NaN novo introduzido pelo `reproject_to_grid` desta sessão — então o teste de
+regressão de paridade bit-exata (`tests/regression/test_suitability_criteria_regression.py`)
+precisou de ajuste: `terrain_score` saiu da tabela cega de paridade e ganhou
+teste dedicado (`test_terrain_score_matches_frozen_baseline_away_from_nodata_boundary`),
+que exige bit-exato só FORA de uma faixa de 1 célula ao redor de qualquer
+elevação inválida (dilatação 3x3) — dentro dessa faixa a divergência é
+esperada e documentada aqui, não um defeito de port. Confirmado ao vivo: PRT
+e BRA batem bit-exato em 100% dos pixels fora dessa faixa (90.326 e 7.042.911
+pixels comparados, respectivamente, max|delta|=0.0 nos dois).
+
+Verificação extra pedida explicitamente por Douglas antes do commit (a faixa
+de exclusão não pode ter sido alargada até o teste passar — precisa ser
+justificada só pelo raio geométrico do próprio stencil de 8 vizinhos, 1
+célula): confirmado que os 6.563 NaN do baseline congelado do BRA caem
+**100% dentro** da faixa de dilatação de 1 célula (0 caem fora); mais que
+isso, nenhum dos 6.563 é, ele mesmo, uma célula de elevação inválida (contagem
+sem dilatação = 0) — são exatamente o caso "pixel central válido com vizinho
+inválido", a classe exata que um stencil de raio 1 produz, não uma
+coincidência de uma faixa maior. A faixa dilatada (53,96% do raster) cresce
+só ~0,26 ponto percentual sobre o conjunto bruto de elevação inválida
+(53,70%) — o perímetro de uma única célula ao redor de uma região já grande e
+contígua, não um raio inflado.
+
+Testes: `test_compute_terrain_score_nan_neighbour_falls_back_to_slope_only_not_nan`
+(fixture com NaN residual isolado em elevação — confirma que o pixel central
+válido mas com vizinho NaN cai para slope-only, não NaN, e que um pixel longe
+da contaminação permanece com a combinação completa slope+TRI).
+
+Referência (literatura/discussão, se aplicável): `geoworld_framework/src/processors/criteria_builder.py` L167-220 (bug original do legado, confirmado por leitura direta); `docs/DECISIONS.md` 2026-09-11 "grid_alignment: slope não herda contaminação de nodata" (mesmo padrão) e "grid_alignment: reproject_to_grid sanitiza NaN literal antes do warp" (causa raiz do NaN novo no BRA); instrução explícita de Douglas 2026-09-11.
+
+---
+
 (fim das decisões registradas até o momento)

@@ -252,6 +252,27 @@ def compute_terrain_score(
     2026-09-10 - terrain_score denominator is per-country). The legacy's
     7.0 signature fallback is dead code and not ported — the value always
     comes from config.
+
+    TRI contamination guard (DELIBERATE DIVERGENCE from legacy, same
+    class of fix as `derive_slope_from_dem`'s nodata-adjacency
+    correction — docs/DECISIONS.md 2026-09-11): the legacy fed the raw
+    elevation array (nodata sentinel included) straight into the 8
+    neighbour differences, so a VALID pixel next to a nodata one got a
+    garbage-contaminated TRI, and — separately — any actual NaN residue
+    in the elevation input (e.g. a source raster whose nodata sentinel
+    doesn't match its own encoding; see `reproject_to_grid`) leaked
+    straight through, because `!= NODATA_FLOAT` never catches NaN (IEEE
+    754: `NaN != x` is always True). Here, invalid elevation cells
+    (nodata OR literal NaN — `valid_finite_mask` catches both) are set
+    to NaN BEFORE the neighbour differencing, so NaN propagates to any
+    pixel whose 3x3 stencil touches one; the TRI sub-score for such a
+    pixel is then explicitly re-masked to NODATA_FLOAT via
+    `np.isfinite(tri)`, never left as a silent NaN. Decision: a valid
+    CENTRE pixel with 1+ invalid neighbour gets TRI = nodata (not a
+    TRI averaged over only its valid neighbours) — it falls back to
+    slope-only below, consistent with the slope fix's own precedent
+    ("não pôde ser computado sem dado falso" beats a partial/skewed
+    number).
     """
     slope, transform, crs, slope_nodata = _read_band(slope_path)
     valid_s = valid_finite_mask(slope, slope_nodata) & (slope >= 0)
@@ -266,7 +287,8 @@ def compute_terrain_score(
         try:
             elev, _t, _c, elev_nodata = _read_band(elev_path)
             valid_e = valid_finite_mask(elev, elev_nodata)
-            pad = np.pad(elev, 1, mode="edge")
+            work = np.where(valid_e, elev, np.nan).astype(np.float32)
+            pad = np.pad(work, 1, mode="edge")
             tri = np.zeros_like(elev, dtype=np.float32)
             for di in (-1, 0, 1):
                 for dj in (-1, 0, 1):
@@ -275,11 +297,12 @@ def compute_terrain_score(
                     neighbour = pad[
                         1 + di : 1 + di + elev.shape[0], 1 + dj : 1 + dj + elev.shape[1]
                     ]
-                    tri += (neighbour - elev) ** 2
+                    tri += (neighbour - work) ** 2
             tri = np.sqrt(tri)
             st = np.full(elev.shape, NODATA_FLOAT, dtype=np.float32)
-            st[valid_e] = np.clip(
-                1.0 - tri[valid_e] / criteria.tri_threshold_m.value, 0.0, 1.0
+            tri_valid = valid_e & np.isfinite(tri)
+            st[tri_valid] = np.clip(
+                1.0 - tri[tri_valid] / criteria.tri_threshold_m.value, 0.0, 1.0
             ).astype(np.float32)
             score_tri = st
         except Exception as exc:  # noqa: BLE001 — legacy degrades to slope-only here
@@ -291,8 +314,14 @@ def compute_terrain_score(
     w_slope = criteria.terrain_slope_weight.value
     w_tri = criteria.terrain_tri_weight.value
     combined = np.full(slope.shape, NODATA_FLOAT, dtype=np.float32)
-    both = (score_s != NODATA_FLOAT) & (score_tri != NODATA_FLOAT)
-    only_s = (score_s != NODATA_FLOAT) & (score_tri == NODATA_FLOAT)
+    # `np.isfinite(...)` alongside `!=` is belt-and-suspenders here:
+    # score_tri can no longer legitimately contain NaN after the guard
+    # above, but a stray NaN must never silently pass a `!=` check
+    # again anywhere in this function (see docstring).
+    s_ok = (score_s != NODATA_FLOAT) & np.isfinite(score_s)
+    tri_ok = (score_tri != NODATA_FLOAT) & np.isfinite(score_tri)
+    both = s_ok & tri_ok
+    only_s = s_ok & ~tri_ok
     combined[both] = (w_slope * score_s[both] + w_tri * score_tri[both]).astype(np.float32)
     combined[only_s] = score_s[only_s]
     return combined, transform, crs

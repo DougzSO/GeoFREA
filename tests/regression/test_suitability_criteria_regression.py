@@ -11,10 +11,12 @@ produced the frozen baseline, so any difference here is a Fase 2b port
 defect, not a grid-regeneration artifact.
 
 Package 1 criteria (road/river/solar/wind) are checked against PRT.
-Package 2 criteria (terrain_score, slope_degrees, lc_biomass,
-biomass_resource) are checked against PRT AND BRA — terrain_score
-especially, because its slope denominator is per-country (PRT=10,
-BRA=12, see docs/DECISIONS.md 2026-09-10).
+Package 2 criteria (slope_degrees, lc_biomass, biomass_resource) are
+checked against PRT AND BRA. terrain_score is ALSO checked against both
+(its slope denominator is per-country — PRT=10, BRA=12, see
+docs/DECISIONS.md 2026-09-10) but has its own dedicated test below,
+bit-exact only away from the nodata elevation boundary — see
+docs/DECISIONS.md 2026-09-11, "TRI contamination guard".
 """
 
 from pathlib import Path
@@ -22,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import rasterio
+from scipy.ndimage import binary_dilation
 
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.constants import NODATA_FLOAT
@@ -99,7 +102,12 @@ CASES: dict[str, tuple[tuple[str, ...], object]] = {
         ("PRT",),
         lambda pdir, iso: compute_wind_resource(str(pdir / f"{iso}_wind_aligned.tif"), CRITERIA),
     ),
-    "terrain_score": (("PRT", "BRA"), _terrain),
+    # terrain_score is NOT in this blind-parity table (docs/DECISIONS.md
+    # 2026-09-11, "TRI contamination guard"): its own dedicated test
+    # below (test_terrain_score_matches_frozen_baseline_away_from_nodata_boundary)
+    # checks bit-exact parity only AWAY from pixels whose TRI stencil
+    # touches a nodata elevation cell -- a deliberate divergence there,
+    # same class as derive_slope_from_dem's own nodata-adjacency fix.
     "slope_degrees": (
         ("PRT", "BRA"),
         lambda pdir, iso: compute_slope_degrees(str(pdir / f"{iso}_slope_aligned.tif")),
@@ -200,6 +208,67 @@ def test_criterion_matches_frozen_baseline(name, iso, baseline_dir, legacy_proce
     assert max_abs == 0.0, (
         f"{name}/{iso}: not pixel-exact vs frozen baseline — "
         f"max|delta|={max_abs:.3e}, RMSE={rmse:.3e}, exact={n_exact}/{diff.size}"
+    )
+
+
+# ── terrain_score — bit-exact AWAY from the nodata boundary only ────────
+#
+# docs/DECISIONS.md 2026-09-11, "TRI contamination guard": compute_terrain_
+# score now excludes NaN/nodata elevation neighbours from the TRI stencil
+# explicitly (instead of feeding the raw nodata sentinel into the
+# neighbour differencing, which is what BOTH the legacy and GeoFREA's own
+# pre-fix code did). This deliberately changes the result at any pixel
+# whose 3x3 TRI stencil touches a nodata elevation cell -- the exact same
+# class of fix already accepted for derive_slope_from_dem
+# (2026-09-11 too). Confirmed live (this session) against both frozen
+# PRT/BRA baselines: bit-exact holds perfectly everywhere ELSE.
+
+
+@pytest.mark.regression
+@pytest.mark.parametrize("iso", ["PRT", "BRA"])
+def test_terrain_score_matches_frozen_baseline_away_from_nodata_boundary(
+    iso, baseline_dir, legacy_processed_root
+):
+    pdir = legacy_processed_root / iso
+    if not pdir.is_dir():
+        pytest.skip(f"legacy aligned rasters for {iso} not found at {pdir}")
+
+    frozen_path = baseline_dir / iso / "criteria_builder" / "tif" / "terrain_score.tif"
+    if not frozen_path.exists():
+        pytest.skip(f"frozen baseline missing: {frozen_path}")
+    with rasterio.open(frozen_path) as src:
+        frozen = src.read(1).astype(np.float32)
+
+    try:
+        score, _transform, _crs = _terrain(pdir, iso)
+    except FileNotFoundError as exc:
+        pytest.skip(f"legacy aligned input missing: {exc}")
+
+    assert not np.isnan(score).any(), f"terrain_score/{iso}: a NaN leaked into the output"
+
+    elev_path = pdir / f"{iso}_elevation_aligned.tif"
+    with rasterio.open(elev_path) as src:
+        elev = src.read(1)
+        elev_nodata = src.nodata
+    invalid_elev = ~np.isfinite(elev) | (elev == elev_nodata)
+    # 3x3 dilation: any pixel whose TRI stencil touches an invalid
+    # elevation cell -- exactly the set this fix is allowed to change.
+    nodata_boundary = binary_dilation(invalid_elev, structure=np.ones((3, 3), dtype=bool))
+    away = ~nodata_boundary
+
+    fv, sv = _valid(frozen), _valid(score)
+    assert np.array_equal(fv & away, sv & away), (
+        f"terrain_score/{iso}: valid-pixel mask differs away from the nodata "
+        f"boundary (frozen={int((fv & away).sum())}, geofrea={int((sv & away).sum())}) "
+        "-- this must stay bit-exact"
+    )
+
+    both_valid_away = fv & sv & away
+    diff = np.abs(frozen[both_valid_away] - score[both_valid_away])
+    max_abs = float(diff.max()) if diff.size else 0.0
+    assert max_abs == 0.0, (
+        f"terrain_score/{iso}: not pixel-exact away from the nodata boundary — "
+        f"max|delta|={max_abs:.3e} over {int(both_valid_away.sum())} compared pixels"
     )
 
 

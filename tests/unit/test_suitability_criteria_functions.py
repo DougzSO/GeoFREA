@@ -217,6 +217,54 @@ def test_compute_terrain_score_without_elevation_is_slope_only(tmp_path):
     assert score[0, 2] == pytest.approx(0.0)
 
 
+@pytest.mark.unit
+def test_compute_terrain_score_nan_neighbour_falls_back_to_slope_only_not_nan(tmp_path):
+    # Reproduces docs/DECISIONS.md 2026-09-11 ("TRI contamination guard"):
+    # a residual literal NaN in the elevation input (e.g. from
+    # grid_alignment's own reprojection, see
+    # test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata)
+    # must not leak into terrain_score as NaN, and must not silently
+    # average over the NaN neighbour either.
+    #
+    #   elev (3x3):        (2,2) is the only invalid cell.
+    #   100 100 100
+    #   100 100 100
+    #   100 100 NaN
+    #
+    # (1,1) is valid itself but diagonally adjacent to the NaN cell -> a
+    # 1+ invalid-neighbour case: decision (b), TRI must come out nodata
+    # there, not a partial/skewed number, so terrain_score falls back to
+    # slope-only. (0,0) is far from the NaN cell (Chebyshev distance 2)
+    # and must be completely unaffected -- still gets the full
+    # slope+TRI combination.
+    elev_arr = np.array(
+        [[100.0, 100.0, 100.0], [100.0, 100.0, 100.0], [100.0, 100.0, np.nan]],
+        dtype=np.float32,
+    )
+    slope = _write_raster(tmp_path / "slope.tif", np.full((3, 3), 5.0))
+    elev = _write_raster(tmp_path / "elev.tif", elev_arr)
+
+    score, _t, _c = compute_terrain_score(str(slope), str(elev), _criteria(), slope_threshold_deg=10.0)
+
+    assert not np.isnan(score).any(), "a NaN neighbour must never leak into terrain_score as NaN"
+
+    slope_score = 1.0 - 5.0 / 10.0  # 0.5, uniform slope input
+    w_slope, w_tri = 0.6, 0.4  # matches this fixture's own weights (see criteria() default)
+
+    # (0,0): unaffected by the NaN cell -> flat elevation there -> TRI
+    # score 1.0 -> full slope+TRI combination.
+    assert score[0, 0] == pytest.approx(w_slope * slope_score + w_tri * 1.0)
+
+    # (1,1): valid elevation, but a NaN neighbour contaminates its TRI
+    # stencil -> TRI must come out nodata, not a wrong number -> falls
+    # back to slope-only, exactly like the "no elevation at all" path.
+    assert score[1, 1] == pytest.approx(slope_score)
+
+    # (2,2): its OWN elevation is the NaN cell -> unaffected by this fix,
+    # pre-existing center-exclusion behavior -> slope-only too.
+    assert score[2, 2] == pytest.approx(slope_score)
+
+
 # ─── lc_biomass / biomass_resource ───────────────────────────────────
 
 
