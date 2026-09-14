@@ -5,13 +5,13 @@
     {
       "id": "iucn_categorias",
       "descricao": "criteria_builder.py exclui categorias IUCN Ia/Ib/II; docs/memory/03-pipeline.md (legado) documenta só Ia/Ib",
-      "referencia": "GeoFREA/docs/architecture/suitability_criteria.md secao e.1",
+      "referencia": "GeoFREA/docs/architecture/suitability_criteria.md secao e.1; docs/DECISIONS.md 2026-08-19 - protected_areas / IUCN exclusion categories",
       "status": "resolvido_ver_decisions_md"
     },
     {
       "id": "capex_opex_fallback_fase8",
       "descricao": "_SA4_DEFAULTS (sensitivity_analyzer.py) diverge numericamente de DEFAULT_LCOE_PARAMS (lcoe_calculator.py), incluindo vida util de biomassa (30 vs 20 anos)",
-      "referencia": "GeoFREA/docs/architecture/sensitivity_analysis.md secao c",
+      "referencia": "GeoFREA/docs/architecture/sensitivity_analysis.md secao c; docs/DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values",
       "status": "resolvido_ver_decisions_md"
     },
     {
