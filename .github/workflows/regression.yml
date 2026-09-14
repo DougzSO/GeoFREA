@@ -129,5 +129,14 @@ jobs:
           test -d "${GEOWORLD_BASELINE_DIR}/data/processed/BRA"
           test -d "${GEOWORLD_BASELINE_DIR}/data/processed/PRT"
 
+      # TEMPORARY diagnostic (workflow_dispatch only) -- investigating a
+      # CI-only pop_suitability bit-exactness gap (2026-09-14): passes
+      # bit-exact locally on Windows (0 differing pixels), fails on this
+      # Linux runner with a ~1e-7 max delta. To be removed once the root
+      # cause is confirmed -- see docs/DECISIONS.md for the writeup.
+      - name: DEBUG - pop_suitability platform diagnostic
+        if: github.event_name == 'workflow_dispatch'
+        run: python scripts/_debug_pop_ci.py
+
       - name: Run regression tests
         run: pytest tests/regression/ -v
