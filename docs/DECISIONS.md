@@ -1435,4 +1435,15 @@ Referência (literatura/discussão, se aplicável): entrada anterior "cartografi
 
 ---
 
+## [2026-09-14] - grid (data_acquisition): verificação de estado, sem mudança de decisão
+Tipo: `VERIFICATION_UPDATE`
+
+Descrição: brief externo à sessão presumiu `grid.gpkg` como débito técnico pendente ("não implementado, necessário antes de Fase 3") e presumiu incorretamente que a camada representa uma malha regular de células (0.01°). Verificação ao vivo (`resolve_grid_path` + leitura de arquivo + `run_acquisition_phase` isolado, BRA e PRT) confirma que a decisão de 09-08 (wire das 5 camadas restantes a partir do banco local) segue válida e sem regressão: path resolve para ambos os países (`BRA_grid_osm.geojson`, `PRT_grid_osm.geojson`), schema/CRS corretos (EPSG:4326, tags OSM de infraestrutura elétrica — power/voltage/substation/etc, LineString+Point, não uma malha de análise espacial), fase roda sem erro nem warning para a camada grid, `fetch_status=not_implemented` confirmado como valor esperado/documentado, não um sinal de problema.
+
+Justificativa (se METHODOLOGY_REVISION): n/a — este registro não altera a decisão de 09-08, apenas confirma que ela segue correta e fecha a leitura equivocada de um brief externo à sessão.
+
+Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-08 - wire das 5 camadas restantes a partir do banco local, Fase 1 (decisão original que esta entrada verifica).
+
+---
+
 (fim das decisões registradas até o momento)
