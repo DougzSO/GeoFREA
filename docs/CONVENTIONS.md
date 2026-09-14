@@ -63,6 +63,22 @@ structural behavior must be logged as an entry in `docs/DECISIONS.md`
 - **METHODOLOGY_REVISION** — the legacy logic is deliberately changed,
   with a documented justification and, where applicable, a literature
   reference.
+- **VERIFICATION_UPDATE** — the decision itself is unchanged; only the
+  confidence/verification status of a cited source or value is updated
+  (e.g. a value moves from unverified to independently confirmed), or
+  an earlier entry's scope is narrowed/clarified without reversing it.
+
+A `Tipo:` value may combine a canonical type with a short parenthetical
+qualifier (e.g. `STRUCTURAL_PRESERVE (correção da auditoria, não revisão
+de método)`) or combine two types with `|` when an entry covers more than
+one change of different kinds (e.g. `STRUCTURAL_PRESERVE (itens 2 e 4) |
+METHODOLOGY_REVISION (itens 1 e 3)`). The qualifier is free text for
+context; the base type before any parenthetical or `|` must still be one
+of the three above.
+
+Regression tolerances (`rtol`, pixel-exact comparison thresholds) are
+defined in `CLAUDE.md`, not here — `DECISIONS.md` entries that cite a
+tolerance should be checked against `CLAUDE.md`, not against this file.
 
 Code that implements a decision recorded this way should reference it,
 e.g. `# See DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values`.
