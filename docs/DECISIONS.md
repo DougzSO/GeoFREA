@@ -1418,4 +1418,21 @@ Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-
 
 ---
 
+## [2026-09-14] - compass rose fix + backlog: mapa de densidade agregada (river_solar/river_wind, BRA) — ideia futura, não pendência de Fase 2b
+Tipo: `STRUCTURAL_PRESERVE` (correção visual, nenhuma lógica de cálculo tocada) + registro de ideia de backlog.
+
+Correção da rosa dos ventos (adicionada na entrada anterior, mesma data): o corte do label "N" não era só visualmente apertado — o `ylim` do inset (`[-1, 1]`) não incluía o ponto onde o texto era desenhado (`y≈1.25`), ou seja, o texto ficava fora do próprio espaço de dados do inset, não "por sorte" dentro dele. Corrigido reservando headroom explícito no `ylim` (`[-1.15, 2.0]`) e aumentando a margem física do canto do mapa (0.10→0.16in). Redesenho para estilo náutico "moderno/limpo": anel fino, cruz cardeal (N/E/S/W) mais longa/grossa, pontas intercardeais mais curtas/finas, só "N" rotulado — escolhido sobre um estilo vintage multi-anel por ser mais simples de renderizar bem legível nesse tamanho pequeno. Verificado para BRA (país largo) e PRT (país estreito/alto).
+
+Investigação de legibilidade dos binários (`lakes_exclusion`, `river_solar`, `river_wind`), instrução explícita de Douglas — nenhuma mudança de visualização feita, conclusão foi manter como está:
+- `lakes_exclusion`: genuinamente esparso (1.9% excluído no BRA) — legenda categórica claramente legível, sem ressalva.
+- `river_solar`/`river_wind`: a legenda categórica já funciona bem em PRT (país pequeno, rede dendrítica visível a olho nu no zoom do mapa) e para `lakes_exclusion`. O "salpicado" pouco legível é específico do BRA em zoom país-inteiro (área grande, rede densa), não um defeito da abordagem categórica em si. Medição real por faixa de latitude no BRA confirma que o padrão carrega sinal espacial genuíno, não é ruído uniforme: Amazônia equatorial 41.8% excluído, Cerrado/Central 35.1%, Sudeste 29.4%, Sul 35.7% — variação de ~12 pontos percentuais atualmente invisível no mapa país-inteiro em zoom total.
+
+**Backlog (ideia futura, opcional — NÃO uma pendência aberta de Fase 2b, que está genuinamente fechada)**: um mapa de densidade agregada complementar (ex.: % de pixels excluídos por célula de grade maior, tipo 0.5° ou 1°) para `river_solar`/`river_wind` no BRA revelaria esse padrão macro-regional hoje invisível no mapa binário pixel-a-pixel — complementar, não substituto do mapa categórico atual. Sem desenho metodológico, sem prioridade definida, sem autorização para implementar. Registrado aqui para não se perder, mesmo padrão de `modulos_futuros_backlog` do `docs/PROGRESS.json` mas mantido em DECISIONS.md por ser um detalhe de cartografia de um módulo já construído, não um módulo novo.
+
+14 figuras regeneradas para BRA e PRT com a rosa dos ventos corrigida (mesmo comando de `main.py` da entrada anterior — `suitability_criteria` reexecutado, `data_acquisition`/`grid_alignment` resumidos do manifest).
+
+Referência (literatura/discussão, se aplicável): entrada anterior "cartografia D7" (mesma data); instrução explícita de Douglas 2026-09-14.
+
+---
+
 (fim das decisões registradas até o momento)
