@@ -113,6 +113,16 @@ Rules:
   and `suitability_criteria` carry `fase_legado: 2`). It is provenance
   metadata, not the GeoFREA phase number.
 
+Modules in `docs/PROGRESS.json`'s `modulos` array use one of three status
+values: `construido` (built), `documentado_nao_construido` (documented,
+not yet built), or `parcialmente_implementado` (production code exists
+and is wired into `main.py`, but not all of the module's scope is
+implemented — e.g. `data_acquisition`, where some layers have real fetch
+and others resolve from local files only). A module marked `construido`
+may depend on a Fase 1 module that is only `parcialmente_implementado` —
+this is not itself an error, but the dependency gap should stay visible
+in status fields rather than only in free-text `observacao`.
+
 ### Project-milestone numbering (`fase_atual`)
 
 `docs/PROGRESS.json`'s `fase_atual` field is a **separate axis** from the
