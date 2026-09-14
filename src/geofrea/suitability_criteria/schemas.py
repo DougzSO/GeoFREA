@@ -199,6 +199,23 @@ class SuitabilityCriteriaSummary(BaseModel):
         protected_source: "wdpa" if a WDPA file drove protected_areas,
             "assumed_free" if it fell back to all-mainland-unrestricted
             (audit sec 5).
+        protected_wdpa_features_total: Feature count in the raw WDPA
+            file compute_protected_areas read this run — 0 when
+            protected_source is "assumed_free" (no file at all).
+        protected_wdpa_invalid_repaired: How many of those features were
+            topologically invalid (self-intersection) and were repaired
+            via shapely.make_valid() before clipping — a known
+            characteristic of real WDPA data, not file corruption (see
+            criteria_functions.py's WdpaGeometryRepairReport docstring
+            and DECISIONS.md 2026-09-11, "protected_areas: repair
+            invalid WDPA geometry before clip"). Reported here
+            structurally, not only logged, so this is visible without
+            reading logs.
+        protected_wdpa_repair_area_before_km2/
+        protected_wdpa_repair_area_after_km2: Aggregate area (EPSG:6933)
+            of just the repaired subset, before/after make_valid() — a
+            signed diagnostic (repair can grow or shrink area), not a
+            validation gate.
         grid_metadata: Echoed from grid_alignment, so a consumer can
             confirm every criterion shares that grid without opening a
             raster.
@@ -210,6 +227,10 @@ class SuitabilityCriteriaSummary(BaseModel):
     missing_expected: list[str]
     not_implemented: list[str]
     protected_source: Literal["wdpa", "assumed_free"]
+    protected_wdpa_features_total: int = 0
+    protected_wdpa_invalid_repaired: int = 0
+    protected_wdpa_repair_area_before_km2: float = 0.0
+    protected_wdpa_repair_area_after_km2: float = 0.0
     grid_metadata: GridMetadata
 
 

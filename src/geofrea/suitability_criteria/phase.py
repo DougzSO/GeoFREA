@@ -232,7 +232,7 @@ def run_suitability_criteria_phase(
     # aligned raster — handled outside the uniform loop above.
     logger.info("  protected_areas: computing...")
     t0 = time.perf_counter()
-    prot_score, _pt, _pc, protected_source = compute_protected_areas(
+    prot_score, _pt, _pc, protected_source, wdpa_repair_report = compute_protected_areas(
         inputs.wdpa_path,
         inputs.mainland_gdf,
         canonical_transform,
@@ -261,8 +261,9 @@ def run_suitability_criteria_phase(
         name="protected_areas", tif_path=prot_tif, figure_path=prot_figure_path, **prot_stats
     )
     logger.info(
-        "  protected_areas: done (source=%s, valid=%s)",
+        "  protected_areas: done (source=%s, valid=%s, wdpa_geoms_repaired=%d/%d)",
         protected_source, f"{prot_stats['valid_pixels']:,}",
+        wdpa_repair_report.invalid_repaired, wdpa_repair_report.total_features,
     )
 
     # slope_degrees: cartography-only raster, NOT a canonical criterion —
@@ -321,6 +322,10 @@ def run_suitability_criteria_phase(
             missing_expected=missing_expected,
             not_implemented=not_implemented,
             protected_source=protected_source,
+            protected_wdpa_features_total=wdpa_repair_report.total_features,
+            protected_wdpa_invalid_repaired=wdpa_repair_report.invalid_repaired,
+            protected_wdpa_repair_area_before_km2=wdpa_repair_report.area_before_km2,
+            protected_wdpa_repair_area_after_km2=wdpa_repair_report.area_after_km2,
             grid_metadata=gm,
         ),
     )

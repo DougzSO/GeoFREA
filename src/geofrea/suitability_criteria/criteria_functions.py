@@ -19,17 +19,18 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import geopandas as gpd
 import numpy as np
+import shapely
 from rasterio.features import rasterize
 from rasterio.transform import Affine
 from scipy.ndimage import gaussian_filter
 from shapely.geometry import mapping
 
 from geofrea.core.constants import NODATA_FLOAT
-from geofrea.core.geo_utils import read_clipped_to_country
+from geofrea.core.geo_utils import clip_vector_to_country
 from geofrea.core.raster_io import safe_raster_open
 from geofrea.core.schemas import CriteriaParams
 from geofrea.suitability_criteria.normalization import normalize_percentile, valid_finite_mask
@@ -38,8 +39,56 @@ logger = logging.getLogger(__name__)
 
 ComputeResult = tuple[np.ndarray, Affine, str]
 
-# compute_protected_areas also reports which branch it took (audit sec 5).
-ProtectedResult = tuple[np.ndarray, Affine, str, Literal["wdpa", "assumed_free"]]
+
+class WdpaGeometryRepairReport(NamedTuple):
+    """Traceability record for invalid-geometry repair in compute_protected_areas.
+
+    Real-world WDPA data legitimately contains topologically invalid
+    polygons (self-intersections) — confirmed live 2026-09-11 against
+    real BRA (383/4190, 9.1%) and PRT (61/442, 13.8%) data (DECISIONS.md
+    same date, "protected_areas: repair invalid WDPA geometry before
+    clip"). This is a known characteristic of the dataset, not evidence
+    of a truncated/corrupted download — distinct from the failure mode
+    the fail-loud RuntimeError below is designed to catch (which still
+    fires if a geometry breaks the clip even after repair). Reported
+    structurally (not just logged) so a consumer of
+    SuitabilityCriteriaSummary can see it without grepping logs — same
+    traceability spirit as mosaic_land_cover's skipped-tile reporting
+    (DECISIONS.md 2026-09-11, "grid_alignment: mosaic_land_cover
+    fail-loud em tile corrompido").
+
+    Args:
+        total_features: Feature count in the raw (pre-clip) WDPA file.
+            0 when there is no WDPA file at all (assumed_free).
+        invalid_repaired: How many of those features were topologically
+            invalid and were run through shapely.make_valid().
+        area_before_km2/area_after_km2: Aggregate area (EPSG:6933,
+            World Cylindrical Equal Area — chosen because WDPA spans the
+            whole globe, not one projected zone) of just the repaired
+            subset, before and after make_valid(). A repaired
+            self-intersecting polygon can gain or lose area depending on
+            how GEOS resolves the topology, so this is a signed
+            diagnostic, not a validation gate.
+    """
+
+    total_features: int
+    invalid_repaired: int
+    area_before_km2: float
+    area_after_km2: float
+
+
+_EMPTY_WDPA_REPAIR_REPORT = WdpaGeometryRepairReport(0, 0, 0.0, 0.0)
+
+# compute_protected_areas also reports which branch it took (audit sec 5)
+# and a geometry-repair traceability report (DECISIONS.md 2026-09-11).
+ProtectedResult = tuple[
+    np.ndarray, Affine, str, Literal["wdpa", "assumed_free"], WdpaGeometryRepairReport
+]
+
+# Equal-area CRS used only for the repair-report area diagnostic above —
+# WDPA is a global dataset, so no single UTM zone applies; World
+# Cylindrical Equal Area (EPSG:6933) is a standard global choice.
+_EQUAL_AREA_CRS_FOR_REPAIR_REPORT = "EPSG:6933"
 
 # The only value the binary protected-areas mask emits for unrestricted
 # land (legacy IUCN_FREE_SCORE, constants.py L196).
@@ -536,14 +585,17 @@ def compute_protected_areas(
             (criteria.iucn_strict_categories.value).
 
     Returns:
-        (score, transform, crs, source) where source is "wdpa" if a WDPA
-        file drove the mask, else "assumed_free".
+        (score, transform, crs, source, repair_report) where source is
+        "wdpa" if a WDPA file drove the mask, else "assumed_free", and
+        repair_report is a WdpaGeometryRepairReport (all zeros when
+        there was no WDPA file to read).
 
     Raises:
         RuntimeError: If `wdpa_path` resolves to a shapefile that exists
             but cannot be read, clipped, or rasterized (data-integrity
-            failure). A genuinely absent file returns "assumed_free"
-            instead.
+            failure) — including a geometry that is still broken after
+            the invalid-geometry repair below. A genuinely absent file
+            returns "assumed_free" instead.
     """
     strict = {c.lower().strip() for c in strict_categories}
 
@@ -562,7 +614,7 @@ def compute_protected_areas(
         # Genuinely absent (no token / no file) — a known operational
         # state, not an error. Legacy L458-459.
         score[mainland_mask > 0] = _IUCN_FREE_SCORE
-        return score, transform, crs, "assumed_free"
+        return score, transform, crs, "assumed_free", _EMPTY_WDPA_REPAIR_REPORT
 
     # The file IS present. A failure to read / clip / rasterize it now is
     # a data-integrity error, NOT the assumed_free fallback (DECISIONS.md
@@ -570,7 +622,63 @@ def compute_protected_areas(
     # as if the country had no protected areas — GeoFREA fails loud
     # instead, matching _check_required_layers / _verify_alignment.
     try:
-        gdf = read_clipped_to_country(shapefile, mainland_gdf)
+        raw_gdf = gpd.read_file(shapefile)
+        raw_gdf = raw_gdf[~raw_gdf.geometry.is_empty]
+
+        # Repair invalid geometry BEFORE clipping (DECISIONS.md
+        # 2026-09-11, "protected_areas: repair invalid WDPA geometry
+        # before clip") — clip_vector_to_country()'s .intersection()
+        # raises GEOSException on a self-intersecting input, and real
+        # WDPA data legitimately contains some (see
+        # WdpaGeometryRepairReport's docstring). make_valid(), not
+        # buffer(0): geometrically more correct for degenerate cases
+        # (shapely 2.x / GEOS >= 3.10, both available here). Only the
+        # WDPA features are repaired — clip_vector_to_country() itself
+        # is untouched, so every other caller (roads, lakes, rivers,
+        # land_cover clip) keeps its current behavior.
+        invalid_mask = ~raw_gdf.geometry.is_valid
+        n_invalid = int(invalid_mask.sum())
+        area_before_km2 = 0.0
+        area_after_km2 = 0.0
+        if n_invalid:
+            invalid_geoms = raw_gdf.loc[invalid_mask, "geometry"]
+            area_before_km2 = (
+                float(invalid_geoms.to_crs(_EQUAL_AREA_CRS_FOR_REPAIR_REPORT).area.sum()) / 1e6
+            )
+            # method="structure" (not the default "linework"): live-
+            # verified 2026-09-11 that "linework" throws
+            # `GEOSException: IllegalArgumentException: Overlay input
+            # is mixed-dimension` on a real subset of BRA's invalid WDPA
+            # polygons (27/383) — "structure" reasons from ring
+            # exterior/hole structure instead of noding all edges, and
+            # handled every invalid geometry in both BRA (383/383) and
+            # PRT (61/61) without error. Requires GEOS >= 3.10 (this
+            # environment: GEOS 3.13.1, shapely 2.1.2 — confirmed).
+            repaired = shapely.make_valid(invalid_geoms.to_numpy(), method="structure")
+            raw_gdf.loc[invalid_mask, "geometry"] = repaired
+            area_after_km2 = (
+                float(
+                    gpd.GeoSeries(repaired, crs=raw_gdf.crs)
+                    .to_crs(_EQUAL_AREA_CRS_FOR_REPAIR_REPORT)
+                    .area.sum()
+                )
+                / 1e6
+            )
+            logger.warning(
+                "protected_areas: %d/%d WDPA features in %s were topologically "
+                "invalid (self-intersection) and repaired via shapely.make_valid() "
+                "before clipping (aggregate area %.3f km2 -> %.3f km2). Known WDPA "
+                "dataset characteristic, not file corruption.",
+                n_invalid, len(raw_gdf), str(shapefile), area_before_km2, area_after_km2,
+            )
+        repair_report = WdpaGeometryRepairReport(
+            total_features=len(raw_gdf),
+            invalid_repaired=n_invalid,
+            area_before_km2=round(area_before_km2, 3),
+            area_after_km2=round(area_after_km2, 3),
+        )
+
+        gdf = clip_vector_to_country(raw_gdf, mainland_gdf)
         if gdf.crs is not None and str(gdf.crs) != crs:
             gdf = gdf.to_crs(crs)
         gdf = gdf[~gdf.geometry.is_empty]
@@ -595,10 +703,13 @@ def compute_protected_areas(
             temp = np.full((height, width), _IUCN_FREE_SCORE, dtype=np.float32)
             rasterize(shapes, out_shape=(height, width), transform=transform, out=temp)
             score[mainland_mask > 0] = temp[mainland_mask > 0]
-            return score, transform, crs, "wdpa"
+            return score, transform, crs, "wdpa", repair_report
     except Exception as exc:
-        # Any read/clip/rasterize failure on a file that IS present ->
-        # re-raise with a diagnostic message (not a blind swallow).
+        # Any read/repair/clip/rasterize failure on a file that IS
+        # present -> re-raise with a diagnostic message (not a blind
+        # swallow). This still fires for a geometry that is broken in a
+        # way make_valid() above could not fix — a genuine data-
+        # integrity error remains fail-loud, not silently degraded.
         raise RuntimeError(
             f"protected_areas: WDPA shapefile {str(shapefile)!r} is present but could "
             f"not be read/clipped/rasterized ({type(exc).__name__}: {exc}). A truncated "
@@ -610,4 +721,4 @@ def compute_protected_areas(
     # a legitimate "this country has no mapped WDPA areas", same result
     # as a missing file.
     score[mainland_mask > 0] = _IUCN_FREE_SCORE
-    return score, transform, crs, "assumed_free"
+    return score, transform, crs, "assumed_free", repair_report

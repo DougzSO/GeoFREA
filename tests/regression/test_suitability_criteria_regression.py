@@ -326,7 +326,7 @@ def test_protected_areas_footprint_matches_frozen(
     if wdpa is None:
         pytest.skip(f"WDPA directory missing for {iso}")
 
-    score, _t, _c, source = compute_protected_areas(
+    score, _t, _c, source, _repair_report = compute_protected_areas(
         wdpa, mainland_gdf, transform, width, height, crs, list(CRITERIA.iucn_strict_categories.value)
     )
 

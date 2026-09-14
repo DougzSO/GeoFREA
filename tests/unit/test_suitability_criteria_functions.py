@@ -423,7 +423,7 @@ def _write_wdpa(path, polygons_with_cat):
 def test_compute_protected_areas_no_wdpa_is_all_free(tmp_path):
     from rasterio.transform import from_origin
 
-    score, _t, _c, source = compute_protected_areas(
+    score, _t, _c, source, _repair = compute_protected_areas(
         None, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
     )
     assert source == "assumed_free"
@@ -441,7 +441,7 @@ def test_compute_protected_areas_binary_strict_vs_non_strict(tmp_path):
     lax = Polygon([(-9.44, 42.05), (-9.40, 42.05), (-9.40, 42.09), (-9.44, 42.09)])
     wdpa = _write_wdpa(tmp_path / "wdpa.shp", [(strict, "Ia"), (lax, "V")])
 
-    score, _t, _c, source = compute_protected_areas(
+    score, _t, _c, source, _repair = compute_protected_areas(
         wdpa, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
     )
     assert source == "wdpa"
@@ -461,7 +461,7 @@ def test_compute_protected_areas_directory_input_resolves_polygon_shp(tmp_path):
     poly = Polygon([(-9.5, 42.13), (-9.48, 42.13), (-9.48, 42.15), (-9.5, 42.15)])
     _write_wdpa(d / "WDPA_x_shp-polygons.shp", [(poly, "Ia")])
 
-    score, _t, _c, source = compute_protected_areas(
+    score, _t, _c, source, _repair = compute_protected_areas(
         tmp_path / "wdpa_dir", _mainland_gdf(),
         from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"],
     )
@@ -478,11 +478,82 @@ def test_compute_protected_areas_empty_directory_is_assumed_free(tmp_path):
     d = tmp_path / "wdpa_empty"
     d.mkdir()
 
-    score, _t, _c, source = compute_protected_areas(
+    score, _t, _c, source, _repair = compute_protected_areas(
         d, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
     )
     assert source == "assumed_free"
     assert np.array_equal(np.unique(score[score != NODATA_FLOAT]), np.array([1.0], dtype=np.float32))
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_repairs_self_intersecting_geometry(tmp_path):
+    # Regression test for the fix 2026-09-11 (DECISIONS.md same date,
+    # "protected_areas: repair invalid WDPA geometry before clip"):
+    # real WDPA data legitimately contains self-intersecting ("bowtie")
+    # polygons (confirmed live on BRA/PRT) which used to crash
+    # clip_vector_to_country() with a GEOSException, surfacing as the
+    # fail-loud RuntimeError below meant for genuine file corruption.
+    # This must now be repaired via shapely.make_valid() and succeed
+    # with source="wdpa", not raise.
+    from rasterio.transform import from_origin
+    from shapely.geometry import Polygon
+
+    # A classic bowtie: self-intersects at (-9.46, 42.10).
+    bowtie = Polygon(
+        [(-9.48, 42.05), (-9.44, 42.15), (-9.44, 42.05), (-9.48, 42.15), (-9.48, 42.05)]
+    )
+    assert not bowtie.is_valid  # sanity: the fixture really is invalid
+    wdpa = _write_wdpa(tmp_path / "wdpa_bowtie.shp", [(bowtie, "Ia")])
+
+    score, _t, _c, source, repair = compute_protected_areas(
+        wdpa, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
+    )
+
+    assert source == "wdpa"
+    assert repair.total_features == 1
+    assert repair.invalid_repaired == 1
+    # A perfect bowtie's two lobes have canceling signed area under the
+    # raw (invalid) shoelace computation -> area_before_km2 == 0.0 for
+    # this exact fixture is correct, not a bug (confirmed: GEOS/shapely
+    # .area on an invalid self-intersecting ring is not well-defined and
+    # commonly nets to ~0 for a symmetric bowtie). make_valid() resolves
+    # it into a real MultiPolygon with positive area.
+    assert repair.area_before_km2 == 0.0
+    assert repair.area_after_km2 > 0.0
+    inside = score[score != NODATA_FLOAT]
+    assert inside.size > 0
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_no_wdpa_repair_report_is_empty(tmp_path):
+    from rasterio.transform import from_origin
+
+    _score, _t, _c, source, repair = compute_protected_areas(
+        None, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
+    )
+
+    assert source == "assumed_free"
+    assert repair.total_features == 0
+    assert repair.invalid_repaired == 0
+    assert repair.area_before_km2 == 0.0
+    assert repair.area_after_km2 == 0.0
+
+
+@pytest.mark.unit
+def test_compute_protected_areas_valid_geometry_repair_report_is_zero(tmp_path):
+    from rasterio.transform import from_origin
+    from shapely.geometry import Polygon
+
+    strict = Polygon([(-9.5, 42.13), (-9.48, 42.13), (-9.48, 42.15), (-9.5, 42.15)])
+    wdpa = _write_wdpa(tmp_path / "wdpa_valid.shp", [(strict, "Ia")])
+
+    _score, _t, _c, source, repair = compute_protected_areas(
+        wdpa, _mainland_gdf(), from_origin(-9.5, 42.15, 0.01, 0.01), 5, 4, "EPSG:4326", ["ia", "ib", "ii"]
+    )
+
+    assert source == "wdpa"
+    assert repair.total_features == 1
+    assert repair.invalid_repaired == 0  # already valid, nothing to repair
 
 
 @pytest.mark.unit
