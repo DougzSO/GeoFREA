@@ -3,18 +3,18 @@
 This module defines the acquisition contract; it contains no fetch/
 download logic itself, and (as of 2026-09-08) no local-database
 resolution logic either (see phase.py, fetchers/, and
-local_layers.py). As of 2026-09-08 (2026-08-25 "real fetchers for
+local_layers.py). As of 2026-09-11 (2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
 borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
-banco local" (Fase 1 + Fase 2), all docs/DECISIONS.md), 11 of the 14
-AcquiredLayer entries run_acquisition_phase() produces can have a real
-`path`/`paths` — 6 via a real fetcher (power_plants, wind, lakes,
-rivers, borders, admin1) and 5 via local-database resolution
-(elevation, population, grid, roads, land_cover) — the other 3
-(protected, solar, seismic) still always have path=None/paths=[] (see
-phase.py's module docstring for exactly which and why). See
-docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for the
-original rationale and the open gaps flagged below, most still
+banco local" (Fase 1 + Fase 2) + 2026-09-11 "protected_planet API
+activation", all docs/DECISIONS.md), 13 of the 14 AcquiredLayer entries
+run_acquisition_phase() produces can have a real `path`/`paths` — 7 via
+a real fetcher (power_plants, wind, lakes, rivers, borders, admin1,
+protected) and 6 via local-database resolution (elevation, population,
+grid, roads, land_cover, solar) — the other 1 (seismic) still always
+has path=None (see phase.py's module docstring for exactly which and
+why). See docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for
+the original rationale and the open gaps flagged below, most still
 unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
@@ -55,7 +55,7 @@ stage's instructions — do not improvise past what was asked):
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
@@ -75,17 +75,20 @@ MULTI_FILE_LAYER_NAMES: frozenset[str] = frozenset({"land_cover"})
 # set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, so the
 # two cannot silently drift apart.
 IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
-    {"power_plants", "wind", "lakes", "rivers", "borders", "admin1"}
+    {"power_plants", "wind", "lakes", "rivers", "borders", "admin1", "protected"}
 )
 
-# protected (WDPA) has a complete, tested fetcher
-# (fetchers/protected_planet.py) that is deliberately not wired into
-# _FETCHED_LAYER_HANDLERS — gated behind a manual API token, not a
-# missing implementation (see that module's docstring and
-# docs/DECISIONS.md 2026-08-25). It is neither "implemented" (no
-# handler dispatches to it) nor plain "not_implemented" (the fetcher
-# exists and is tested) — hence the third fetch_status value.
-IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES: frozenset[str] = frozenset({"protected"})
+# Historically held "protected" while its fetcher
+# (fetchers/protected_planet.py) was complete and tested but
+# deliberately not wired into _FETCHED_LAYER_HANDLERS — gated behind a
+# manual API token, not a missing implementation (see that module's
+# docstring and docs/DECISIONS.md 2026-08-25). Activated 2026-09-11
+# once a real token was placed in .env (see DECISIONS.md same date,
+# "protected_planet API activation") — "protected" moved to
+# IMPLEMENTED_FETCH_LAYER_NAMES above, so this set is empty for now.
+# Kept (not deleted) as the landing place for any future fetcher that
+# is complete+tested but intentionally not activated yet.
+IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES: frozenset[str] = frozenset()
 
 
 class CrsMetadata(BaseModel):
@@ -129,24 +132,28 @@ class AcquiredLayer(BaseModel):
             where a 1:1 mapping exists (see adapter.py).
         provenance: "fetched" if this layer comes (or would come) from
             a live external source (GADM, Copernicus, WorldPop, OSM,
-            Terrascope). "local_only" if no fetch mechanism exists for
-            it at all — geoworld_framework's DataFetcher has exactly 6
-            download_* methods (gadm, land_cover, elevation, worldpop,
-            osm_grid, osm_roads); solar/lakes/rivers/seismic/protected/
-            power_plants have none and must be pre-placed on disk.
-            Deliberately unchanged in meaning by fetch_status below —
-            provenance is about intended/eventual source, not today's
-            execution state (see fetch_status for that).
+            Terrascope, Protected Planet). "local_only" if no fetch
+            mechanism exists for it at all — geoworld_framework's
+            DataFetcher has exactly 6 download_* methods (gadm,
+            land_cover, elevation, worldpop, osm_grid, osm_roads);
+            solar/lakes/rivers/seismic/power_plants originally had none
+            and had to be pre-placed on disk (protected joined
+            "fetched" 2026-09-11 once a real API token was activated —
+            see DECISIONS.md same date). Deliberately unchanged in
+            meaning by fetch_status below — provenance is about
+            intended/eventual source, not today's execution state (see
+            fetch_status for that).
         auth_required: Whether the (future) fetch for this layer needs
-            credentials. Always False today (2026-09-08): land_cover was
-            the one case where this was True (Terrascope, per the
-            legacy audit) until it reverted to local_only — it now
-            resolves from pre-placed tiles needing no auth at all, same
-            as every other fetched source (GADM, Copernicus DEM S3,
-            WorldPop, OSM Overpass), all public (see DECISIONS.md
-            2026-09-08, "wire das 5 camadas restantes a partir do banco
-            local, Fase 1"). Never holds the credential itself — this is
-            a capability flag, not a secret.
+            credentials. True for protected (Protected Planet API
+            token, activated 2026-09-11 — see DECISIONS.md same date).
+            Was also True for land_cover (Terrascope, per the legacy
+            audit) until it reverted to local_only, and now resolves
+            from pre-placed tiles needing no auth at all, same as every
+            other fetched source that is public (GADM, Copernicus DEM
+            S3, WorldPop, OSM Overpass; see DECISIONS.md 2026-09-08,
+            "wire das 5 camadas restantes a partir do banco local, Fase
+            1"). Never holds the credential itself — this is a
+            capability flag, not a secret.
         source_name: Human-readable source identifier (e.g. "GADM 4.1",
             "Terrascope ESA WorldCover"), or None if undetermined.
         country_code: ISO-3166-alpha-3 code this layer was/would be
@@ -173,17 +180,29 @@ class AcquiredLayer(BaseModel):
         crs_metadata: Reserved for future CRS/reprojection bookkeeping.
         fetch_status: Computed, not stored — "implemented" if
             layer_name has a real fetcher wired into phase.py's
-            _FETCHED_LAYER_HANDLERS (power_plants/wind/lakes/rivers
-            today); "implemented_not_activated" if a complete, tested
-            fetcher exists but is deliberately not wired in (protected
-            only, see IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES); otherwise
-            "not_implemented". Orthogonal to provenance: provenance
+            _FETCHED_LAYER_HANDLERS (power_plants/wind/lakes/rivers/
+            borders/admin1/protected today); "implemented_not_activated"
+            if a complete, tested fetcher exists but is deliberately not
+            wired in (none today — see
+            IMPLEMENTED_NOT_ACTIVATED_LAYER_NAMES, empty since protected
+            was activated 2026-09-11); otherwise "not_implemented".
+            Orthogonal to provenance: provenance
             says where a layer would come from if fetched, fetch_status
             says whether that fetch actually happens today. A computed
             property rather than a constructor field so existing
             AcquiredLayer(...) call sites (tests, adapter.py) don't need
             to pass it — see docs/DECISIONS.md 2026-08-26 "fetch_status
-            computed field".
+            computed field". BUG FIX 2026-09-11 (see DECISIONS.md same
+            date, "fetch_status manifest resume bug"): being computed
+            means it is also emitted by model_dump(mode="json") — so a
+            manifest.json written by orchestrator.py's Orchestrator
+            carries a `fetch_status` key per layer. Loading that
+            manifest back on resume calls AcquiredLayer.model_validate()
+            on that same dict, and extra="forbid" then rejected
+            `fetch_status` as an unrecognized field (it can't be passed
+            as a constructor arg — it's read-only), breaking resume for
+            every run past the data_acquisition phase. See
+            _drop_computed_fetch_status below for the fix.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -196,6 +215,25 @@ class AcquiredLayer(BaseModel):
     path: Path | None = None
     paths: list[Path] = []
     crs_metadata: CrsMetadata | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_computed_fetch_status(cls, data: Any) -> Any:
+        """Strip a round-tripped `fetch_status` key before validation.
+
+        fetch_status is a @computed_field: model_dump(mode="json")
+        includes it, but extra="forbid" refuses it as a constructor
+        input (computed fields are read-only, derived from layer_name
+        alone — see the field's own docstring). Without this, loading
+        outputs/<country>/manifest.json to resume a run past
+        data_acquisition raises `extra_forbidden` on every layer. Only
+        this one known key is dropped — any other unrecognized field
+        still fails validation as before, so real manifest corruption
+        is still caught.
+        """
+        if isinstance(data, dict) and "fetch_status" in data:
+            data = {k: v for k, v in data.items() if k != "fetch_status"}
+        return data
 
     @computed_field  # type: ignore[prop-decorator]
     @property

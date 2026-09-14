@@ -21,11 +21,16 @@ def _page_response(protected_areas: list[dict]) -> Mock:
     return resp
 
 
-def _pa(name: str, iucn_category: str, wdpa_id: int, geom_lon: float = 0.0) -> dict:
+def _pa(name: str, iucn_category: str, site_id: int, geom_lon: float = 0.0) -> dict:
+    # Shape matches a real authenticated v4 response (verified live
+    # 2026-09-11, BRA — see protected_planet.py's fetch loop comment):
+    # iucn_category is a nested {"id", "name"} object, not a bare
+    # string, and there is no top-level "wdpa_id" key at all — "site_id"
+    # is the actual WDPA identifier field.
     return {
         "name": name,
-        "wdpa_id": wdpa_id,
-        "iucn_category": iucn_category,
+        "site_id": site_id,
+        "iucn_category": {"id": 1, "name": iucn_category},
         "geojson": {
             "type": "Feature",
             "properties": {"designation": "National Park"},
@@ -100,6 +105,52 @@ def test_fetch_protected_areas_empty_result_saves_empty_feature_collection(tmp_p
 
     saved = json.loads(result.read_text(encoding="utf-8"))
     assert saved == {"type": "FeatureCollection", "features": []}
+
+
+@pytest.mark.unit
+def test_fetch_protected_areas_extracts_name_from_nested_iucn_category(tmp_path, monkeypatch):
+    # Regression test for the bug found 2026-09-11 against a real
+    # authenticated response (see DECISIONS.md same date, "protected_
+    # planet API activation"): iucn_category arrives as a nested
+    # {"id", "name"} object. Dumping it whole into IUCN_CAT (instead of
+    # extracting "name") would have made criteria_functions.py's
+    # `cats.isin(strict)` string match never fire for any category.
+    monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
+    page = _page_response([_pa("Parque Nacional Foo", "II", 2002)])
+    monkeypatch.setattr(protected_planet, "get_with_retry", Mock(return_value=page))
+
+    result = protected_planet.fetch_protected_areas(tmp_path, "BRA")
+
+    saved = json.loads(result.read_text(encoding="utf-8"))
+    assert saved["features"][0]["properties"]["IUCN_CAT"] == "II"
+    assert saved["features"][0]["properties"]["wdpa_id"] == 2002
+
+
+@pytest.mark.unit
+def test_fetch_protected_areas_handles_missing_iucn_category(tmp_path, monkeypatch):
+    # A feature with no iucn_category at all (null, per the live API for
+    # some records) must not crash — IUCN_CAT ends up None, same as
+    # today's "no IUCN column" fallback in compute_protected_areas
+    # (criteria_functions.py: feature_scores = _IUCN_FREE_SCORE).
+    monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
+    no_category = {
+        "name": "Unclassified Area",
+        "site_id": 3003,
+        "iucn_category": None,
+        "geojson": {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+        },
+    }
+    monkeypatch.setattr(
+        protected_planet, "get_with_retry", Mock(return_value=_page_response([no_category]))
+    )
+
+    result = protected_planet.fetch_protected_areas(tmp_path, "BRA")
+
+    saved = json.loads(result.read_text(encoding="utf-8"))
+    assert saved["features"][0]["properties"]["IUCN_CAT"] is None
 
 
 @pytest.mark.unit

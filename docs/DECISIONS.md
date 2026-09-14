@@ -1365,6 +1365,8 @@ Testes (`tests/unit/test_data_acquisition_phase.py`): `_FETCHER_NAMES` ganhou `f
 
 Referência (literatura/discussão, se aplicável): `fetchers/protected_planet.py` (docstring do módulo, verificação ao vivo da API 2026-08-24/25); `docs/DECISIONS.md` 2026-08-25 "real fetchers for power_plants/wind/lakes/rivers" (mesmo padrão de ativação); instrução explícita de Douglas 2026-09-11 ("Configure o token... via variável de ambiente... resolva o path local/fetch de protected").
 
+**Addendum (mesmo dia, mesma entrada — 2 bugs reais achados ao rodar contra a API autenticada de verdade)**: o schema de resposta nunca tinha sido verificado ao vivo (docstring do módulo já sinalizava isso explicitamente). Rodando `data_acquisition` + `grid_alignment` para BRA (4190 features) e PRT (442 features) com o token real, dois campos estavam errados: (1) `iucn_category` chega como objeto aninhado `{"id": 1, "name": "Ia"}`, não string — o código original gravava o dict inteiro em `IUCN_CAT`, o que faria `compute_protected_areas`'s `cats.isin(strict)` nunca casar nenhuma categoria IUCN real (toda área WDPA teria sido tratada como não-estrita, silenciosamente); (2) a v4 não tem campo `wdpa_id` — o campo real é `site_id`. Ambos corrigidos em `fetch_protected_areas` (extração de `.get("name")` do objeto aninhado, `site_id` em vez de `wdpa_id`), reconfirmado nos dois arquivos brutos re-baixados. Testes novos: `test_fetch_protected_areas_extracts_name_from_nested_iucn_category`, `test_fetch_protected_areas_handles_missing_iucn_category`.
+
 ---
 
 (fim das decisões registradas até o momento)

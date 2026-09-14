@@ -42,11 +42,14 @@ added 2026-09-11 the same way (single global Global Solar Atlas PVOUT
 file, resolve_solar_path) — hard-required by suitability_criteria, which
 could not run end-to-end without it. _LOCAL_PATH_HANDLERS /
 _LOCAL_MULTI_PATH_HANDLERS below are the only places this phase knows
-about local_layers.py. `protected` remains implemented-but-not-activated
-(see fetchers/protected_planet.py's module docstring). `seismic` remains
-out of scope (no confirmed automatable source and no local resolver yet,
-see DECISIONS.md 2026-08-25). fetch_status is UNCHANGED by any of this —
-none of the 6 local-resolved layer_names are in
+about local_layers.py. `protected` was activated 2026-09-11 (see
+DECISIONS.md same date, "protected_planet API activation") — it now
+calls a real fetcher too, wired into _FETCHED_LAYER_HANDLERS like the
+other 6 (see fetchers/protected_planet.py's module docstring).
+`seismic` remains out of scope (no confirmed automatable source and no
+local resolver yet, see DECISIONS.md 2026-08-25). fetch_status is
+UNCHANGED by the local-resolution wiring specifically — none of the 6
+local-resolved layer_names (Fase 1 + Fase 2 above) are in
 IMPLEMENTED_FETCH_LAYER_NAMES, so they keep reporting "not_implemented"
 (resolving a local path is not the same
 as GeoFREA's own code fetching one — see local_layers.py's module
@@ -81,6 +84,7 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
 from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
+from geofrea.data_acquisition.fetchers.protected_planet import fetch_protected_areas
 from geofrea.data_acquisition.fetchers.wind import fetch_wind
 from geofrea.data_acquisition.local_layers import (
     resolve_elevation_path,
@@ -100,14 +104,16 @@ from geofrea.data_acquisition.schemas import (
 
 logger = logging.getLogger("geofrea.data_acquisition.phase")
 
-# layer_name -> fetch function, for the 6 layers with a real fetcher
-# wired in as of 2026-08-26 (see module docstring). Each fetcher
+# layer_name -> fetch function, for the 7 layers with a real fetcher
+# wired in as of 2026-09-11 (see module docstring). Each fetcher
 # already catches its own network/parsing failures internally and
-# returns None rather than raising (see fetchers/*.py) — the one
-# deliberate exception is hydrosheds.fetch_rivers() raising KeyError
-# for a country outside _COUNTRY_TO_REGION, which is intentionally
-# NOT caught here either: an unmapped country is a configuration gap,
-# not a transient failure, so it should fail this phase loudly
+# returns None rather than raising (see fetchers/*.py) — deliberate
+# exceptions are hydrosheds.fetch_rivers() raising KeyError for a
+# country outside _COUNTRY_TO_REGION, and protected_planet.
+# fetch_protected_areas() raising ProtectedPlanetTokenMissingError when
+# no token is configured. Both are intentionally NOT caught here
+# either: an unmapped country or a missing token are configuration
+# gaps, not transient failures, so they should fail this phase loudly
 # (surfaced via the Orchestrator's own PhaseExecutionError) rather
 # than silently degrade to path=None like a real network error would.
 _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
@@ -117,6 +123,12 @@ _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
     "rivers": lambda ctx: fetch_rivers(ctx.outputs_dir, ctx.country_code),
     "borders": lambda ctx: fetch_borders(ctx.outputs_dir, ctx.country_code),
     "admin1": lambda ctx: fetch_admin1(ctx.outputs_dir, ctx.country_code),
+    # Activated 2026-09-11 (see DECISIONS.md same date, "protected_planet
+    # API activation") once a real PROTECTED_PLANET_API_KEY was placed
+    # in .env — fetch_protected_areas reads it from the environment
+    # itself (api_token=None default), same as every other credentialed
+    # fetcher in this dict reading its own env var internally.
+    "protected": lambda ctx: fetch_protected_areas(ctx.outputs_dir, ctx.country_code),
 }
 
 # AcquiredLayer.fetch_status (schemas.py, a computed field) mirrors
@@ -229,15 +241,17 @@ class _LayerSpec(NamedTuple):
 # provenance docstring, "fetched" means "comes OR WOULD come from a
 # live external source") — 2026-08-26 gave them a real handler too
 # (fetchers/gadm.py), with no provenance value change needed since it
-# was already correct. All 6 wired below via _FETCHED_LAYER_HANDLERS.
-# provenance is NOT a proxy for "has a real fetcher today" — see
-# AcquiredLayer.fetch_status, schemas.py, for the field that actually
-# answers that question. `protected` stays local_only even though a
-# real fetcher exists for it too (fetchers/protected_planet.py) —
-# gated behind a manual API token, not activated here (see that
-# module's docstring). `solar` stays local_only but now has a local
-# resolver (resolve_solar_path, 2026-09-11); `seismic` stays local_only
-# with no resolver yet — no confirmed automatable source.
+# was already correct. `protected` joined "fetched" 2026-09-11 (see
+# DECISIONS.md same date, "protected_planet API activation") once a
+# real PROTECTED_PLANET_API_KEY was placed in .env — its fetcher
+# (fetchers/protected_planet.py) was already complete and tested, just
+# gated behind a manual token before now. All 7 wired below via
+# _FETCHED_LAYER_HANDLERS. provenance is NOT a proxy for "has a real
+# fetcher today" — see AcquiredLayer.fetch_status, schemas.py, for the
+# field that actually answers that question. `solar` stays local_only
+# but now has a local resolver (resolve_solar_path, 2026-09-11);
+# `seismic` stays local_only with no resolver yet — no confirmed
+# automatable source.
 _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("borders", "fetched", False, "GADM 4.1 (fallback: NaturalEarth)", True),
     _LayerSpec("admin1", "fetched", False, "GADM 4.1 (level-1, same download as borders)", True),
@@ -283,7 +297,14 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     # it as a single global file clipped per-country, the same pattern
     # as lakes/rivers (both country_specific=False below), not a file
     # fetched or scoped separately per country.
-    _LayerSpec("protected", "local_only", False, "Protected Planet / WDPA API — fetcher ready, gated by manual token", False),
+    _LayerSpec(
+        "protected",
+        "fetched",
+        True,
+        "Protected Planet / WDPA API (api.protectedplanet.net/v4) — "
+        "activated 2026-09-11, see DECISIONS.md same date",
+        False,
+    ),
     _LayerSpec("solar", "local_only", False, "local bundled file (global PVOUT, no confirmed automatable source)", False),
     _LayerSpec("lakes", "fetched", False, "HydroSHEDS (HydroLAKES global file, data.hydrosheds.org)", False),
     _LayerSpec("rivers", "fetched", False, "HydroSHEDS (HydroRIVERS regional tile, data.hydrosheds.org)", False),
@@ -295,16 +316,15 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
 def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     """Build an AcquisitionResult for one country.
 
-    6 layers (power_plants, wind, lakes, rivers, borders, admin1 — see
-    _FETCHED_LAYER_HANDLERS) call a real fetcher and may have a real
-    `path` populated. 5 more (elevation, population, grid, roads,
-    land_cover — see _LOCAL_PATH_HANDLERS / _LOCAL_MULTI_PATH_HANDLERS)
-    resolve a pre-placed path/paths from the local database instead —
-    no fetch/download involved (see local_layers.py's module
-    docstring). Every other layer is still a structural placeholder —
-    path=None, paths=[] — either because no fetcher/resolver exists
-    yet, or because one exists but is deliberately not wired in (see
-    module docstring).
+    7 layers (power_plants, wind, lakes, rivers, borders, admin1,
+    protected — see _FETCHED_LAYER_HANDLERS) call a real fetcher and
+    may have a real `path` populated. 6 more (elevation, population,
+    grid, roads, land_cover, solar — see _LOCAL_PATH_HANDLERS /
+    _LOCAL_MULTI_PATH_HANDLERS) resolve a pre-placed path/paths from
+    the local database instead — no fetch/download involved (see
+    local_layers.py's module docstring). The remaining layer (seismic)
+    is still a structural placeholder — path=None — no fetcher/resolver
+    exists for it yet (see module docstring).
 
     Args:
         context: Shared phase context (country_code, outputs_dir, ...).

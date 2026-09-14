@@ -1,17 +1,21 @@
 """Unit tests for geofrea.data_acquisition.phase.
 
-As of 2026-08-26 (2026-08-25 "real fetchers for power_plants/wind/
-lakes/rivers" + 2026-08-26 "real fetcher for borders/admin1", both
-docs/DECISIONS.md), run_acquisition_phase() calls real fetcher
-functions for 6 layers — every test in this file must NOT hit the real
-network. The `_no_network_fetchers` autouse fixture below monkeypatches
-all 6 fetcher names in the `phase` module to return None by default
+As of 2026-09-11 (2026-08-25 "real fetchers for power_plants/wind/
+lakes/rivers" + 2026-08-26 "real fetcher for borders/admin1" +
+2026-09-11 "protected_planet API activation", all docs/DECISIONS.md),
+run_acquisition_phase() calls real fetcher functions for 7 layers —
+every test in this file must NOT hit the real network. The
+`_no_network_fetchers` autouse fixture below monkeypatches all 7
+fetcher names in the `phase` module to return None by default
 (matching these functions' own documented behavior when a real fetch
 fails — see fetchers/*.py), so every existing structural test keeps
 working unchanged: "no real fetch happens in this test" looks identical
 to "the fetch failed" from run_acquisition_phase()'s point of view.
 Tests that specifically exercise the wiring itself override individual
-fetchers to return a real value.
+fetchers to return a real value. `fetch_protected_areas` differs from
+the other 6 in that it can also *raise*
+(ProtectedPlanetTokenMissingError when no API token is configured) —
+see test_run_acquisition_phase_protected_token_missing_propagates below.
 
 2026-09-08 (see docs/DECISIONS.md same date, "wire das 5 camadas
 restantes a partir do banco local, Fase 1"): run_acquisition_phase()
@@ -31,11 +35,11 @@ from pathlib import Path
 import pytest
 
 from geofrea.core.config_loader import load_parameters
-from geofrea.core.orchestrator import PhaseContext
+from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseSpec
 from geofrea.data_acquisition import phase as phase_module
 from geofrea.data_acquisition.local_layers import RAW_DATA_DIR_ENV_VAR
 from geofrea.data_acquisition.phase import _LAYER_REGISTRY, run_acquisition_phase
-from geofrea.data_acquisition.schemas import AcquisitionResult
+from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
@@ -47,6 +51,7 @@ _FETCHER_NAMES = (
     "fetch_rivers",
     "fetch_borders",
     "fetch_admin1",
+    "fetch_protected_areas",
 )
 
 @pytest.fixture(autouse=True)
@@ -103,19 +108,22 @@ def test_run_acquisition_phase_slope_is_not_in_the_registry(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_no_layer_requires_auth_2026_09_08(tmp_path):
+def test_run_acquisition_phase_only_protected_requires_auth_2026_09_11(tmp_path):
     # Until 2026-09-08, land_cover was the one layer with
-    # auth_required=True (Terrascope). It reverted to local_only this
+    # auth_required=True (Terrascope). It reverted to local_only that
     # stage (see docs/DECISIONS.md 2026-09-08, "wire das 5 camadas
     # restantes a partir do banco local, Fase 1") — the local ESA
-    # WorldCover tiles need no credentials, so no layer requires auth
-    # anymore.
+    # WorldCover tiles need no credentials, so no layer required auth
+    # for a few days. 2026-09-11 (see DECISIONS.md same date,
+    # "protected_planet API activation") gave `protected` a real,
+    # credentialed fetcher (Protected Planet API token) — it is now the
+    # one layer that requires auth.
     result = run_acquisition_phase(_context(tmp_path))
 
     auth_required_names = {
         layer.layer_name for layer in result.layers if layer.auth_required
     }
-    assert auth_required_names == set()
+    assert auth_required_names == {"protected"}
 
 
 @pytest.mark.unit
@@ -153,19 +161,20 @@ def test_run_acquisition_phase_reads_country_code_from_context(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
+def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
     # Updated 2026-08-25 (real fetchers for power_plants/wind/lakes/
-    # rivers) then again 2026-09-08 (see DECISIONS.md same date, "wire
-    # das 5 camadas restantes a partir do banco local", Fase 1 for
+    # rivers) then 2026-09-08 (see DECISIONS.md same date, "wire das 5
+    # camadas restantes a partir do banco local", Fase 1 for
     # land_cover/elevation/population/grid, Fase 2 for roads):
     # land_cover/elevation/population/grid/roads all REVERTED from
     # fetched to local_only — not a bug fix, an explicit scope reversal
-    # now that they resolve from the local database instead. protected
-    # keeps a real fetcher too (fetchers/protected_planet.py) but its
-    # provenance stays local_only, gated behind a manual API token —
-    # not activated. solar/seismic stay local_only, no confirmed
-    # automatable source (solar gained a local-path resolver 2026-09-11,
-    # provenance unchanged — resolving a bundled path is not fetching).
+    # now that they resolve from the local database instead. Then
+    # 2026-09-11 (see DECISIONS.md same date, "protected_planet API
+    # activation") protected moved local_only -> fetched, once a real
+    # API token was placed in .env. solar/seismic stay local_only, no
+    # confirmed automatable source (solar gained a local-path resolver
+    # 2026-09-11 too, provenance unchanged — resolving a bundled path
+    # is not fetching).
     result = run_acquisition_phase(_context(tmp_path))
 
     fetched = {layer.layer_name for layer in result.layers if layer.provenance == "fetched"}
@@ -180,6 +189,7 @@ def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
         "lakes",
         "rivers",
         "power_plants",
+        "protected",
     }
     assert local_only == {
         "land_cover",
@@ -187,26 +197,25 @@ def test_run_acquisition_phase_provenance_split_2026_09_08(tmp_path):
         "population",
         "grid",
         "roads",
-        "protected",
         "solar",
         "seismic",
     }
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
+def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
     # fetch_status (AcquiredLayer, schemas.py — a computed field, not
     # stored) answers "is there real fetch code wired in today", which
     # provenance deliberately does not (see the test above and
     # docs/DECISIONS.md 2026-08-26, "fetch_status computed field").
-    # implemented: the 6 layers with a real handler in
-    # _FETCHED_LAYER_HANDLERS (borders/admin1 added 2026-08-26, see
-    # DECISIONS.md same date "real fetcher for borders/admin1").
-    # implemented_not_activated: protected only — fetcher complete and
-    # tested (fetchers/protected_planet.py) but gated behind a manual
-    # API token. not_implemented: the other 7 — the 5 remaining skeleton
-    # layers (still no fetch code at all) plus solar/seismic (no
-    # confirmed automatable source, decided not to pursue).
+    # implemented: the 7 layers with a real handler in
+    # _FETCHED_LAYER_HANDLERS (borders/admin1 added 2026-08-26, protected
+    # added 2026-09-11 — see DECISIONS.md same dates).
+    # implemented_not_activated: none today (empty — protected was the
+    # only member and it activated 2026-09-11). not_implemented: the
+    # other 7 — the 5 remaining skeleton layers (still no fetch code at
+    # all) plus solar/seismic (no confirmed automatable source, decided
+    # not to pursue).
     result = run_acquisition_phase(_context(tmp_path))
 
     by_status: dict[str, set[str]] = {
@@ -224,8 +233,9 @@ def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
         "rivers",
         "borders",
         "admin1",
+        "protected",
     }
-    assert by_status["implemented_not_activated"] == {"protected"}
+    assert by_status["implemented_not_activated"] == set()
     assert by_status["not_implemented"] == {
         "land_cover",
         "elevation",
@@ -239,7 +249,8 @@ def test_run_acquisition_phase_fetch_status_split_2026_08_26(tmp_path):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    "layer_name", ["power_plants", "wind", "lakes", "rivers", "borders", "admin1"]
+    "layer_name",
+    ["power_plants", "wind", "lakes", "rivers", "borders", "admin1", "protected"],
 )
 def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     tmp_path, monkeypatch, layer_name
@@ -252,6 +263,7 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
         "rivers": "fetch_rivers",
         "borders": "fetch_borders",
         "admin1": "fetch_admin1",
+        "protected": "fetch_protected_areas",
     }[layer_name]
     monkeypatch.setattr(phase_module, handler_name, lambda *args, **kwargs: fake_path)
 
@@ -264,9 +276,8 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
 
 @pytest.mark.unit
 def test_run_acquisition_phase_does_not_call_fetchers_for_unrelated_layers(tmp_path, monkeypatch):
-    # Only the 6 layers in _FETCHED_LAYER_HANDLERS should ever invoke a
-    # fetcher — every other layer_name, including protected (fetcher
-    # exists, not wired in), must never trigger a call.
+    # Only the 7 layers in _FETCHED_LAYER_HANDLERS should ever invoke a
+    # fetcher — every other layer_name must never trigger a call.
     called = []
     monkeypatch.setattr(
         phase_module, "fetch_power_plants", lambda *a, **k: called.append("power_plants") or None
@@ -289,6 +300,28 @@ def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_p
     monkeypatch.setattr(phase_module, "fetch_rivers", _raise_unmapped)
 
     with pytest.raises(KeyError):
+        run_acquisition_phase(_context(tmp_path))
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_protected_token_missing_propagates(tmp_path, monkeypatch):
+    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_
+    # propagates_keyerror above: fetch_protected_areas() deliberately
+    # raises ProtectedPlanetTokenMissingError when no API token is
+    # configured (a configuration gap, not a transient network failure
+    # — see fetchers/protected_planet.py's _require_token) — this phase
+    # must NOT swallow it either, unlike a real network error (which
+    # that fetcher already catches internally and returns None for).
+    from geofrea.data_acquisition.fetchers.protected_planet import (
+        ProtectedPlanetTokenMissingError,
+    )
+
+    def _raise_missing_token(*args, **kwargs):
+        raise ProtectedPlanetTokenMissingError("no token")
+
+    monkeypatch.setattr(phase_module, "fetch_protected_areas", _raise_missing_token)
+
+    with pytest.raises(ProtectedPlanetTokenMissingError):
         run_acquisition_phase(_context(tmp_path))
 
 
@@ -407,4 +440,97 @@ def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
     for name in ("elevation", "population", "grid", "roads"):
         assert layers_by_name[name].path is None
-    assert layers_by_name["land_cover"].paths == []
+
+
+@pytest.mark.unit
+def test_acquired_layer_round_trips_through_dumped_fetch_status():
+    # Regression test for the bug fixed 2026-09-11 (see docs/DECISIONS.md
+    # same date, "fetch_status manifest resume bug"): fetch_status is a
+    # @computed_field, so model_dump(mode="json") — exactly what
+    # Orchestrator._write_manifest() calls — includes it. Feeding that
+    # dict back into AcquiredLayer.model_validate() (what resuming from
+    # manifest.json does) used to raise `extra_forbidden`, because a
+    # computed field cannot be accepted as a constructor input under
+    # extra="forbid". schemas.py's _drop_computed_fetch_status before-
+    # validator strips it; this asserts the round trip now succeeds and
+    # is lossless.
+    layer = AcquiredLayer(layer_name="power_plants", provenance="fetched", auth_required=False)
+    dumped = layer.model_dump(mode="json")
+
+    assert "fetch_status" in dumped  # sanity: the bug requires this key to be present
+
+    reloaded = AcquiredLayer.model_validate(dumped)
+
+    assert reloaded == layer
+    assert reloaded.fetch_status == "implemented"
+
+
+@pytest.mark.unit
+def test_acquired_layer_still_rejects_unrelated_extra_fields():
+    # The fix above only special-cases the known `fetch_status` key —
+    # it must not turn into a blanket extra="ignore" that would hide a
+    # genuinely corrupted/mistyped manifest entry.
+    dumped = AcquiredLayer(
+        layer_name="power_plants", provenance="fetched", auth_required=False
+    ).model_dump(mode="json")
+    dumped["typo_field_that_should_not_exist"] = "oops"
+
+    with pytest.raises(Exception, match="typo_field_that_should_not_exist|extra_forbidden"):
+        AcquiredLayer.model_validate(dumped)
+
+
+@pytest.mark.unit
+def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_path, monkeypatch):
+    # End-to-end reproduction of the bug via the real save -> load ->
+    # resume path: run the data_acquisition phase through Orchestrator
+    # (which persists AcquisitionResult.model_dump(mode="json") — with
+    # every layer's computed fetch_status included — to manifest.json),
+    # then build a second Orchestrator pointed at the same outputs_dir
+    # to simulate a fresh process resuming. Before the fix, the second
+    # Orchestrator's __post_init__ -> _load_manifest() ->
+    # RunManifest.model_validate_json() raised extra_forbidden on the
+    # first layer's fetch_status; the phase then had to be re-run from
+    # scratch instead of resuming.
+    #
+    # fetch_protected_areas is mocked here (not via the module-level
+    # _no_network_fetchers fixture, which predates "protected"'s
+    # 2026-09-11 activation and is unrelated to this bug) purely so this
+    # test doesn't require a real PROTECTED_PLANET_API_KEY / network
+    # access — it plays no part in the fetch_status bug being tested.
+    monkeypatch.setattr(phase_module, "fetch_protected_areas", lambda *a, **kw: None)
+
+    country_code = "PRT"
+    country_params = load_parameters(PARAMETERS_JSON).countries[country_code]
+    phase_specs = [
+        PhaseSpec(
+            name="data_acquisition",
+            output_model=AcquisitionResult,
+            run=run_acquisition_phase,
+        )
+    ]
+    phases_enabled = {"data_acquisition": True}
+
+    first_run = Orchestrator(
+        outputs_dir=tmp_path,
+        country_code=country_code,
+        country_params=country_params,
+        phases_enabled=phases_enabled,
+    )
+    first_results = first_run.run(phase_specs)
+    assert first_results["data_acquisition"].status == "success"
+    assert first_run.manifest_path.exists()
+
+    # Simulates the next process/invocation for the same country: a
+    # fresh Orchestrator that loads the manifest.json just written.
+    resumed_run = Orchestrator(
+        outputs_dir=tmp_path,
+        country_code=country_code,
+        country_params=country_params,
+        phases_enabled=phases_enabled,
+    )
+    resumed_results = resumed_run.run(phase_specs)
+
+    resumed_result = resumed_results["data_acquisition"]
+    assert resumed_result.status == "success"
+    assert isinstance(resumed_result.output, AcquisitionResult)
+    assert resumed_result.output == first_results["data_acquisition"].output

@@ -1,4 +1,4 @@
-"""Protected Planet (WDPA) fetcher — implemented, NOT activated.
+"""Protected Planet (WDPA) fetcher — activated 2026-09-11.
 
 Verified live 2026-08-24/25 (see docs/DECISIONS.md same dates): unlike
 what geoworld_framework's own README claimed ("no public bulk API"),
@@ -10,22 +10,23 @@ form (no self-service signup), and it is genuinely NOT a bulk/global
 download even with a token: results are paginated (max 50/page) and
 filtered per country, not a single-file dump.
 
-`protected`'s provenance in _LAYER_REGISTRY (phase.py) STAYS
-"local_only" after this stage — this fetcher is complete and testable,
-but not wired into run_acquisition_phase(). The only thing blocking
-activation is a manual, one-time step external to this codebase (a
-human getting a token from UNEP-WCMC) — see docs/DECISIONS.md
-2026-08-25 for the activation checklist. This is the one fetcher in
-this stage that is not just "not automatable" but "automatable, just
-gated behind a human action GeoFREA cannot script."
+`protected`'s provenance in _LAYER_REGISTRY (phase.py) moved
+"local_only" -> "fetched" 2026-09-11, once a real API token was placed
+in `.env` (PROTECTED_PLANET_API_KEY — see docs/DECISIONS.md same date,
+"protected_planet API activation"). The only thing that had blocked
+activation was the manual, one-time step external to this codebase (a
+human getting a token from UNEP-WCMC); that step is now done.
 
-Response schema NOT independently verified against a live authenticated
-response — this session has no API token. Field names below
-(`protected_areas`, `geojson`, `iucn_category`, `wdpa_id`) come from
-api.protectedplanet.net/documentation/v3's published examples, not
-from an actual authenticated call. Flagged explicitly: re-verify
-against a real response the first time this fetcher is actually run
-with a token, before trusting its output blindly.
+Response schema live-verified 2026-09-11 against a real authenticated
+call (country=BRA) — see DECISIONS.md same date, "protected_planet API
+activation". Two assumptions from the unverified v3-docs-based version
+of this fetcher turned out wrong for v4 and were corrected: (1)
+`iucn_category` arrives as a nested `{"id": int, "name": str}` object,
+not a bare string — only `.name` (e.g. "Ia", "II") is written into the
+`IUCN_CAT` property; (2) there is no top-level `wdpa_id` key at all —
+`site_id` is the actual WDPA identifier field, used for the `wdpa_id`
+property this fetcher writes (kept under that name for continuity with
+vector_inspection.py's column detection, which never looks at it).
 """
 
 from __future__ import annotations
@@ -40,7 +41,12 @@ from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.protected_planet")
 
-TOKEN_ENV_VAR = "PROTECTED_PLANET_API_TOKEN"
+# Matches the key name Douglas placed in .env (not hardcoded — see
+# docs/DECISIONS.md 2026-09-11, "protected_planet API activation").
+# The var name previously read PROTECTED_PLANET_API_TOKEN; renamed to
+# match .env rather than asking for a second env var with the same
+# secret under a different name.
+TOKEN_ENV_VAR = "PROTECTED_PLANET_API_KEY"
 REGISTRATION_URL = "https://api.protectedplanet.net/request"
 
 _BASE_URL = "https://api.protectedplanet.net/v4"
@@ -128,8 +134,23 @@ def fetch_protected_areas(
                 if not geojson_feature or not geojson_feature.get("geometry"):
                     continue
                 properties = dict(geojson_feature.get("properties") or {})
-                properties["IUCN_CAT"] = pa.get("iucn_category")
-                properties["wdpa_id"] = pa.get("wdpa_id")
+                # Live-verified 2026-09-11 (real authenticated call, BRA)
+                # against the assumptions this module's docstring flagged
+                # as unverified: iucn_category is a nested object
+                # ({"id": 1, "name": "Ia"}), not the bare string this
+                # code originally assumed — dumping it whole into
+                # IUCN_CAT would have made criteria_functions.py's
+                # `cats.isin(strict)` string match never fire (a dict
+                # stringifies to "{'id': 1, 'name': 'Ia'}", which no
+                # IUCN code equals), silently defeating the whole IUCN
+                # strict-category exclusion. Also: v4 has no `wdpa_id`
+                # key at all (confirmed absent from a live response) —
+                # `site_id` is the actual WDPA identifier field.
+                iucn_category = pa.get("iucn_category")
+                properties["IUCN_CAT"] = (
+                    iucn_category.get("name") if isinstance(iucn_category, dict) else None
+                )
+                properties["wdpa_id"] = pa.get("site_id")
                 properties["name"] = pa.get("name")
                 features.append(
                     {
