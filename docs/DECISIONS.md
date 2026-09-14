@@ -1552,4 +1552,20 @@ Referência (literatura/discussão, se aplicável): investigação ao vivo desta
 
 ---
 
+## [2026-09-14] - addendum de rotulagem: Justificativa ausente em "protected_areas distingue WDPA ausente de WDPA corrompido"
+Tipo: VERIFICATION_UPDATE (addendum à entrada de 2026-09-11 "suitability_criteria: protected_areas distingue WDPA ausente de WDPA corrompido")
+Descrição: A entrada original (2026-09-11) tem Tipo METHODOLOGY_REVISION mas nunca usa o rótulo "Justificativa:" exigido pelo template — o conteúdo existe no parágrafo "Veredito ratificado por Douglas (2026-09-11)...", mas sem o campo formal. Este addendum não altera a decisão nem seu conteúdo, apenas identifica essa lacuna de formatação para fins de rastreabilidade.
+Justificativa (se METHODOLOGY_REVISION): n/a — addendum de formatação, não muda a decisão original.
+Referência (literatura/discussão, se aplicável): docs/DECISIONS.md 2026-09-11 "suitability_criteria: protected_areas distingue WDPA ausente de WDPA corrompido"; docs/audits/consistency-2026-09-14.md secao 3.
+
+---
+
+## [2026-09-14] - addendum de rotulagem: Justificativa ausente em "grid_alignment: mosaic_land_cover fail-loud em tile corrompido que sobrepõe o país"
+Tipo: VERIFICATION_UPDATE (addendum à entrada de 2026-09-11 "grid_alignment: mosaic_land_cover fail-loud em tile corrompido que sobrepõe o país")
+Descrição: Mesma lacuna que a entrada acima — Tipo METHODOLOGY_REVISION sem o rótulo "Justificativa:" formal, conteúdo presente em prosa. Este addendum não altera a decisão original.
+Justificativa (se METHODOLOGY_REVISION): n/a — addendum de formatação, não muda a decisão original.
+Referência (literatura/discussão, se aplicável): docs/DECISIONS.md 2026-09-11 "grid_alignment: mosaic_land_cover fail-loud em tile corrompido que sobrepõe o país"; docs/audits/consistency-2026-09-14.md secao 3.
+
+---
+
 (fim das decisões registradas até o momento)
