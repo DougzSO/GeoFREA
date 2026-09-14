@@ -1,0 +1,132 @@
+name: Regression
+
+# suitability_criteria (Fase 2b) pixel-exact regression against the frozen
+# legacy baseline. Needs two large, gitignored, non-versioned fixture sets
+# that a checkout alone never provides:
+#   - outputs_baseline_fc7b43d/{BRA,PRT}/criteria_builder/tif/*.tif  (the
+#     frozen legacy criterion rasters, 13/14 criteria bit-exact parity
+#     target)
+#   - $GEOWORLD_BASELINE_DIR/data/processed/{BRA,PRT}/*_aligned.tif  (the
+#     legacy-aligned input rasters those frozen outputs were computed
+#     from -- isolates suitability_criteria from GeoFREA's own
+#     grid_alignment, see docs/DECISIONS.md 2026-09-10 "Bloqueio 3
+#     decision (a)")
+#
+# Both are packaged together into one GitHub Release asset
+# (regression-fixtures-v1 / regression-fixtures.tar.gz, see
+# docs/DECISIONS.md 2026-09-14 "regression fixtures storage") rather than
+# committed to the repo (~380MB, would bloat every clone forever) or put
+# in Git LFS (adds a second storage system + LFS bandwidth billing for a
+# read-mostly, rarely-changing asset a Release already covers for free).
+#
+# Tarball layout (see the release asset itself, or the packaging step
+# that produced it): a single archive with TWO top-level directories,
+# `outputs_baseline_fc7b43d/` (extracted as-is at the repo root, matching
+# conftest.py's `_baseline_root()`) and `legacy_processed/` (moved into
+# place as `$GEOWORLD_BASELINE_DIR/data/processed/`, since GEOWORLD_
+# BASELINE_DIR does not exist as a real checkout in CI -- there is no
+# legacy repo to clone here, just its frozen data/processed/ output).
+#
+# NOT included in this fixture set (out of scope for this workflow,
+# tracked as a known gap -- see docs/DECISIONS.md same date):
+# GEOFREA_RAW_DATA_DIR (GADM borders + WDPA shapefiles), which
+# test_protected_areas_footprint_matches_frozen[BRA/PRT] also needs via
+# the `raw_data_root` fixture. Those 2 of the 26 regression tests will
+# still SKIP in this workflow today (conftest.py's raw_data_root fixture
+# was not changed to fail-in-CI -- only legacy_processed_root was, per
+# explicit scope). A future fixture-set expansion or a separate
+# raw-data-fixtures asset would close this.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  REGRESSION_FIXTURES_RELEASE: regression-fixtures-v1
+  REGRESSION_FIXTURES_ASSET: regression-fixtures.tar.gz
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    env:
+      # GitHub Actions sets this to "true" on every run already -- set
+      # explicitly anyway so the value this workflow depends on
+      # (conftest.py's legacy_processed_root skip->fail switch) is never
+      # implicit/inherited-only.
+      CI: "true"
+      GH_TOKEN: ${{ github.token }}
+      # No real legacy checkout exists in CI (GEOWORLD_BASELINE_DIR
+      # normally points at a sibling geoworld_framework/ clone on a
+      # developer's machine) -- this is just where the extracted
+      # data/processed/ fixture tree is placed instead.
+      GEOWORLD_BASELINE_DIR: ${{ github.workspace }}/.legacy_baseline
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # pyproject.toml only pins requires-python >= 3.11; no version
+          # is pinned elsewhere in the repo (no .python-version/lockfile)
+          # -- 3.12 chosen here as a stable, current default satisfying
+          # that floor. Bump alongside any future repo-wide pin.
+          python-version: "3.12"
+
+      - name: Install GeoFREA (editable, dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Resolve regression-fixtures asset checksum
+        id: fixture_digest
+        run: |
+          set -euo pipefail
+          digest=$(gh api "repos/${{ github.repository }}/releases/tags/${REGRESSION_FIXTURES_RELEASE}" \
+            --jq ".assets[] | select(.name == \"${REGRESSION_FIXTURES_ASSET}\") | .digest // empty")
+          if [ -z "$digest" ]; then
+            # Releases API only started returning a `digest` (sha256:...)
+            # field for assets uploaded after GitHub added checksumming;
+            # an asset uploaded before that (or via an older gh version)
+            # can have digest=null. Fall back to id+updated_at -- stable
+            # across cache runs as long as the asset is never replaced
+            # in place under the same release (it should be re-uploaded
+            # under a new release tag instead, e.g. regression-fixtures-v2).
+            digest=$(gh api "repos/${{ github.repository }}/releases/tags/${REGRESSION_FIXTURES_RELEASE}" \
+              --jq ".assets[] | select(.name == \"${REGRESSION_FIXTURES_ASSET}\") | (.id | tostring) + \"-\" + .updated_at")
+          fi
+          if [ -z "$digest" ]; then
+            echo "::error::Could not resolve an asset named ${REGRESSION_FIXTURES_ASSET} on release ${REGRESSION_FIXTURES_RELEASE}." >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Cache regression fixtures tarball
+        id: cache_fixtures
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/regression-fixtures.tar.gz
+          key: regression-fixtures-${{ steps.fixture_digest.outputs.digest }}
+
+      - name: Download regression fixtures asset
+        if: steps.cache_fixtures.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          gh release download "${REGRESSION_FIXTURES_RELEASE}" \
+            --repo "${{ github.repository }}" \
+            --pattern "${REGRESSION_FIXTURES_ASSET}" \
+            --output "${{ runner.temp }}/regression-fixtures.tar.gz" \
+            --clobber
+
+      - name: Extract regression fixtures
+        run: |
+          set -euo pipefail
+          tar -xzf "${{ runner.temp }}/regression-fixtures.tar.gz" -C "${{ github.workspace }}"
+          mkdir -p "${GEOWORLD_BASELINE_DIR}/data"
+          mv "${{ github.workspace }}/legacy_processed" "${GEOWORLD_BASELINE_DIR}/data/processed"
+          test -d "${{ github.workspace }}/outputs_baseline_fc7b43d/BRA"
+          test -d "${{ github.workspace }}/outputs_baseline_fc7b43d/PRT"
+          test -d "${GEOWORLD_BASELINE_DIR}/data/processed/BRA"
+          test -d "${GEOWORLD_BASELINE_DIR}/data/processed/PRT"
+
+      - name: Run regression tests
+        run: pytest tests/regression/ -v

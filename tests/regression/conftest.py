@@ -73,6 +73,21 @@ def baseline_dir() -> Path:
     return root
 
 
+def _in_ci() -> bool:
+    """True when running under GitHub Actions (or any CI setting CI=true).
+
+    GitHub Actions sets CI=true by default on every hosted/self-hosted
+    runner; other CI providers commonly follow the same convention. Added
+    2026-09-14 (see docs/DECISIONS.md same date, "regression fixtures
+    storage") alongside the CI workflow that now provisions
+    GEOWORLD_BASELINE_DIR from a packaged fixture: a skip is the right
+    call for a developer who has not fetched the local baseline, but the
+    exact same skip in CI silently hides a real misconfiguration (a
+    missing/broken fixture download) behind a green build.
+    """
+    return os.environ.get("CI", "").strip().lower() == "true"
+
+
 def _legacy_baseline_root() -> Path | None:
     """Locate the read-only legacy geoworld_framework checkout.
 
@@ -124,14 +139,31 @@ def legacy_processed_root() -> Path:
     matching outputs_baseline_fc7b43d/<ISO> exactly. Used to
     regression-test suitability_criteria in isolation from GeoFREA's own
     grid_alignment (Bloqueio 3 decision (a), 2026-09-10). Read-only.
+
+    Local dev: missing/unset is a pytest.skip() — an unfetched local
+    fixture is not a reason to fail the whole suite, same convention as
+    every other local-only fixture in this file (baseline_dir,
+    raw_data_root). In CI (CI=true, see _in_ci()), the exact same
+    condition is a pytest.fail() instead (added 2026-09-14, see
+    docs/DECISIONS.md same date): CI's copy of this fixture comes from a
+    packaged GitHub Release asset the workflow downloads itself, so
+    "missing" there means the download/extraction was broken or
+    misconfigured — a real red-build-worthy problem, not a developer's
+    unfetched local state, and a bare skip would hide it behind green.
     """
     root = _legacy_baseline_root()
     if root is None:
-        pytest.skip(
+        msg = (
             "GEOWORLD_BASELINE_DIR not set and no sibling geoworld_framework/ found — "
             "cannot locate the legacy aligned rasters."
         )
+        if _in_ci():
+            pytest.fail(msg)
+        pytest.skip(msg)
     processed = root / "data" / "processed"
     if not processed.is_dir():
-        pytest.skip(f"legacy aligned rasters not found at {processed}")
+        msg = f"legacy aligned rasters not found at {processed}"
+        if _in_ci():
+            pytest.fail(msg)
+        pytest.skip(msg)
     return processed

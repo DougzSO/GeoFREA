@@ -1465,4 +1465,29 @@ Referência (literatura/discussão, se aplicável): `docs/PROGRESS.json` (`modul
 
 ---
 
+## [2026-09-14] - regression fixtures storage: GitHub Release (opcao 1) + CI skip->fail
+Tipo: `STRUCTURAL_PRESERVE`
+
+Descrição: `tests/regression/test_suitability_criteria_regression.py` (26 testes) nunca rodou em CI — não havia workflow algum no repo (confirmado por levantamento de fatos em sessão anterior desta mesma data) — e depende de dois conjuntos de arquivos grandes, gitignored, nunca commitados: `outputs_baseline_fc7b43d/{BRA,PRT}/criteria_builder/tif/*.tif` (1.4GB completo, mas só ~197.5MB no subconjunto BRA+PRT/tif usado pelos testes) e `$GEOWORLD_BASELINE_DIR/data/processed/{BRA,PRT}/*_aligned.tif` (~186MB no mesmo subconjunto). Nenhum dos dois está no histórico do git (confirmado em sessão anterior).
+
+**Decisão: opção 1 — GitHub Release.** Os dois conjuntos são empacotados juntos em um único asset (`regression-fixtures.tar.gz`, ~380MB comprimido, `sha256=cc69fa752572de97bed58c37d932ca98f4f985f2d251409405908ab179b510e7`) anexado a um Release chamado `regression-fixtures-v1`, em vez de: (a) commitar direto no repo (infla todo clone para sempre, mesmo para quem nunca roda os testes de regressão), ou (b) Git LFS (segundo sistema de armazenamento + billing de banda LFS para um asset que muda raramente e é majoritariamente lido, não escrito — um Release já cobre esse caso de uso de graça, dentro do limite de 2GB/asset do GitHub, e o tarball fica bem abaixo disso).
+
+**Escopo exato do tarball** (54 arquivos, layout com dois diretórios de topo — ver comentário no próprio `.github/workflows/regression.yml` para o mapeamento completo):
+- `outputs_baseline_fc7b43d/{BRA,PRT}/criteria_builder/tif/*.tif` — **todos** os 16 arquivos por país (32 total), incluindo `proximity_plants.tif` que nenhum teste referencia hoje — mantido porque a instrução original definiu o escopo como o glob inteiro dessa pasta, não um filtro por arquivo individual.
+- `legacy_processed/{BRA,PRT}/*_aligned.tif` — 11 arquivos por país (22 total), **excluindo** `*_plants_aligned.tif` (não lido por nenhum teste — `compute_road_suitability`/`compute_river_suitability`/etc. do arquivo de teste usam apenas os 11 layers: elevation/grid/lakes/lc/population/rivers/roads/seismic/slope/solar/wind), excluindo os outros 4 países presentes no diretório legado (CHN/IND/RUS/ZAF, não usados pelos fixtures de BRA/PRT), e excluindo `*_grid_metadata.json` (não é um raster de entrada, não é aberto pelo arquivo de teste).
+
+**Workflow** (`.github/workflows/regression.yml`, trigger `push`/`pull_request` em `main`): baixa o asset via `gh release download`, cacheado via `actions/cache` com chave = checksum do asset (campo `digest` da API de Releases, com fallback documentado para `id+updated_at` se o digest não existir), extrai `outputs_baseline_fc7b43d/` na raiz do workspace e move `legacy_processed/` para `$GEOWORLD_BASELINE_DIR/data/processed/` (definido no job como `${{ github.workspace }}/.legacy_baseline` — não existe checkout real do legado em CI, só o `data/processed/` congelado).
+
+**Mudança skip→fail em CI** (`tests/regression/conftest.py`, fixture `legacy_processed_root` apenas — escopo explicitamente restrito a essa fixture, não a `baseline_dir`/`raw_data_root`): nova função `_in_ci()` checa `CI=true` (padrão do GitHub Actions). Localmente, ausência de `GEOWORLD_BASELINE_DIR` continua `pytest.skip()` (fixture não fetchada não é motivo pra falhar a suíte inteira, mesma convenção de sempre). Em CI, a mesma condição vira `pytest.fail()`: como o workflow provê essa fixture via download de um Release, "ausente" em CI significa download/extração quebrados — um problema real de build vermelho, não estado local de dev não buscado. Antes dessa mudança, um skip em CI passaria despercebido como verde.
+
+**GAP conhecido, não fechado nesta entrada**: `test_protected_areas_footprint_matches_frozen[BRA/PRT]` (2 dos 26 testes) também depende da fixture `raw_data_root` (`GEOFREA_RAW_DATA_DIR` — GADM borders + shapefiles WDPA), que **não faz parte** do escopo do `regression-fixtures.tar.gz` definido acima nem da mudança skip→fail (só `legacy_processed_root` foi alterada, por instrução explícita). Esses 2 testes continuarão pulando silenciosamente em CI até que um fixture set separado para dados brutos GADM/WDPA seja desenhado — registrado aqui para não se perder, sem prioridade definida.
+
+Validado localmente antes deste registro: `CI=true pytest tests/regression/` com os fixtures reais presentes = 26 passed, sem regressão de comportamento (a mudança só afeta o caminho de ausência de fixture, não o de presença).
+
+Justificativa (se METHODOLOGY_REVISION): n/a — `STRUCTURAL_PRESERVE` porque nenhuma lógica científica/de cálculo foi tocada; é infraestrutura de teste/CI.
+
+Referência (literatura/discussão, se aplicável): levantamento de fatos desta mesma data ("Tamanho e status de versionamento de $GEOWORLD_BASELINE_DIR/data/processed" e a sessão anterior sobre `outputs_baseline_fc7b43d/`); `docs/DECISIONS.md` 2026-09-10 "Bloqueio 3 decision (a)" (origem do desenho `legacy_processed_root` isolando suitability_criteria de grid_alignment); instrução explícita de Douglas 2026-09-14 ("Preparar tudo exceto a publicação da Release" — a criação do Release em si fica fora desta entrada, ver comando `gh release create` impresso ao final da resposta da sessão).
+
+---
+
 (fim das decisões registradas até o momento)
