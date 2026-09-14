@@ -172,6 +172,17 @@ def _valid(a: np.ndarray) -> np.ndarray:
     return np.isfinite(a) & (a != NODATA_FLOAT) & (a >= 0)
 
 
+# pop_suitability is NOT bit-exact in CI (Linux, numpy 2.5.3) despite being
+# bit-exact locally (Windows, numpy 2.5.2) -- confirmed root cause 2026-09-14
+# (see docs/DECISIONS.md same date): sub-ULP float32 log1p rounding noise
+# between numpy's vectorized kernel and the platform libm, NOT a threshold
+# comparison or a logic defect (0/1154 PRT and 0/18434 BRA differing pixels
+# have pop >= threshold; max delta = 0.75 float32 ULP). Every other
+# criterion in CASES stays bit-exact (atol=0.0) -- this tolerance is scoped
+# to pop_suitability alone.
+_POP_SUITABILITY_ATOL = 2e-7  # ~2x the observed max delta (8.941e-08)
+
+
 @pytest.mark.regression
 @pytest.mark.parametrize(("name", "iso"), PARAMS_LIST)
 def test_criterion_matches_frozen_baseline(name, iso, baseline_dir, legacy_processed_root):
@@ -205,9 +216,11 @@ def test_criterion_matches_frozen_baseline(name, iso, baseline_dir, legacy_proce
     rmse = float(np.sqrt(np.mean(diff**2))) if diff.size else 0.0
     n_exact = int((diff == 0).sum())
 
-    assert max_abs == 0.0, (
+    atol = _POP_SUITABILITY_ATOL if name == "pop_suitability" else 0.0
+    assert max_abs <= atol, (
         f"{name}/{iso}: not pixel-exact vs frozen baseline — "
-        f"max|delta|={max_abs:.3e}, RMSE={rmse:.3e}, exact={n_exact}/{diff.size}"
+        f"max|delta|={max_abs:.3e} (tolerance={atol:.3e}), RMSE={rmse:.3e}, "
+        f"exact={n_exact}/{diff.size}"
     )
 
 

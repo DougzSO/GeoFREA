@@ -42,3 +42,10 @@ Ao comparar outputs do GeoFREA com os baselines do legado (`docs/architecture/ba
 ### Concorrência
 
 Antes de escrever em qualquer arquivo compartilhado (documentos de arquitetura, `DECISIONS.md`, `PROGRESS.json`), verificar a existência de `.session-lock` na raiz do projeto. Se existir, tratar como sessão concorrente em andamento e não sobrescrever sem coordenação.
+
+### Investigações que alteram infraestrutura de CI temporariamente
+
+Regra adicionada em 2026-09-14, após uma investigação que criou e removeu um passo de workflow (`DEBUG - ...`, gated a `workflow_dispatch`) e um script (`scripts/_debug_pop_ci.py`) para diagnosticar uma divergência CI-only (ver `docs/DECISIONS.md` 2026-09-14 "pop_suitability: divergencia CI-only"). Vale para qualquer investigação futura que precise de um passo/trigger novo em `.github/workflows/`, ou de um script de debug adicionado ao repo, mesmo que temporário e destinado a ser removido no final:
+
+- **Aprovação explícita antes de cada commit/push dessas mudanças temporárias** — não só antes de disparar o workflow em si. Rodar `gh workflow run`/`gh run watch` sobre um workflow já commitado é uma coisa; commitar e dar push de infraestrutura de CI nova (mesmo que gated a `workflow_dispatch`, mesmo que planejada para ser revertida) é uma mudança visível no repositório compartilhado e exige aprovação prévia, igual a qualquer outro commit/push.
+- **Rastro obrigatório do que foi criado e removido**, mesmo quando o resultado final é "repositório limpo". Terminar com `git status` vazio não é suficiente — a limpeza em si deve deixar registro (em `DECISIONS.md`, na entrada da investigação que motivou a mudança) do que existiu, por que foi criado, e quando/como foi removido (idealmente citando os SHAs dos commits de criação e remoção). Sem esse rastro, uma investigação futura não tem como saber que aquele caminho já foi tentado.

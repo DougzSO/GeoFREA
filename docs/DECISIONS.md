@@ -1490,4 +1490,66 @@ Referência (literatura/discussão, se aplicável): levantamento de fatos desta 
 
 ---
 
+## [2026-09-14] - pop_suitability: divergencia CI-only vs baseline congelado, causa raiz confirmada (ruido sub-ULP float32 em log1p)
+Tipo: correção de robustez (mesma classe de correção de integridade de dado das entradas de nodata de 2026-09-11 — "grid_alignment: slope não herda contaminação de nodata", "reproject com dtype_out float" — mesma filosofia: causa raiz identificada e caracterizada antes de qualquer mudança de comportamento, aqui ainda sem a correção aplicada)
+
+Descrição: primeiro run real do workflow `regression.yml` (2026-09-14, ver entrada anterior "regression fixtures storage") revelou `test_criterion_matches_frozen_baseline[pop_suitability-PRT/BRA]` FAILED em CI (Linux, numpy 2.5.3) — os outros 24 testes (22 passed + 2 skipped, gap já documentado de `protected_areas`) comportaram-se como esperado. Localmente (Windows, numpy 2.5.2) esse mesmo teste é bit-exato: 0 pixels divergentes. Investigação ao vivo confirmou a causa raiz por eliminação, não por suposição:
+
+1. **Hipótese de comparação de threshold sem tolerância — REFUTADA com dado real.** `compute_population_suitability` (`criteria_functions.py:457-486`) não tem nenhuma comparação discreta com `pop_density_threshold` — só `np.clip(pop, 0, threshold)` (clamp contínuo, C0-contínuo) seguido de `log1p`/divisão. Confirmado empiricamente via diagnóstico rodado dentro do próprio runner de CI: dos pixels divergentes, **0/1154 (PRT)** e **0/18434 (BRA)** têm `pop >= threshold(300)` — os valores de `pop` nos pixels divergentes cobrem toda a faixa dinâmica (0.000034 a 183 em BRA), sem nenhum agrupamento perto de 300. Uma comparação de lado de threshold produziria pixels divergentes concentrados perto do valor do threshold; não é o que se observa.
+
+2. **Causa confirmada: arredondamento sub-ULP de `log1p` em float32, divergente entre implementações — não entre "Linux" e "Windows" como blocos monolíticos.** Evidências, coletadas rodando o mesmo cálculo 3 formas (vetorizado `np.log1p`, escalar `np.log1p`, `math.log1p`/libm puro via stdlib) dentro do próprio runner de CI:
+   - Delta máximo observado: `8.940697e-08` = exatamente **0.75 ULP** de float32 em 1.0 (`1.192093e-07`) — assinatura de arredondamentos encadeados (log1p(pop) + divisão por log1p(threshold), cada um até 0.5 ULP), não de uma função descontínua.
+   - `np.log1p` vetorizado e `np.log1p` escalar **sempre concordam entre si** na mesma máquina — descarta dispatch SIMD-vs-escalar do numpy como a variável (ambos reportam `SIMD Extensions: baseline X86_V2, found X86_V3` tanto no CI Linux quanto localmente no Windows — o nível de vetorização detectado é o mesmo nos dois ambientes).
+   - `math.log1p` (libm da plataforma, bypassando o kernel do numpy) **diverge de `np.log1p` mesmo dentro da mesma máquina Linux** — e, pixel a pixel, ora bate com o valor computado no Windows (`frozen`), ora com o valor computado no próprio numpy do Linux (`ours`), inconsistentemente. Isso mostra que existem pelo menos duas implementações de `log1p` com arredondamento de último bit diferente em jogo (kernel vetorizado interno do numpy vs. `libm` da plataforma), não uma distinção simples "SO A vs SO B".
+
+**Conclusão**: não é bug de lógica em GeoFREA, não é problema de threshold, é ruído numérico de ponto flutuante float32 nos limites de reprodutibilidade bit-exata entre implementações de `log1p` — categoria de problema bem documentada em computação científica cross-platform, não uma falha de port.
+
+**Correção de robustez proposta (NÃO aplicada — pendente de aprovação explícita de Douglas)**: trocar, apenas para `pop_suitability`, o `assert max_abs == 0.0` por uma tolerância pequena e coerente com o delta máximo observado (~9e-8). Os outros 13 critérios continuam bit-exatos (`max_abs == 0.0`), inalterados — a mudança é escopada estritamente a este um critério, pelo mecanismo de tolerância por-critério já existente em `CASES` (ver diff proposto abaixo).
+
+```diff
+--- a/tests/regression/test_suitability_criteria_regression.py
++++ b/tests/regression/test_suitability_criteria_regression.py
+@@ -175,6 +175,14 @@ def _valid(a: np.ndarray) -> np.ndarray:
+     return np.isfinite(a) & (a != NODATA_FLOAT) & (a >= 0)
+ 
+ 
++# pop_suitability is NOT bit-exact in CI (Linux, numpy 2.5.3) despite being
++# bit-exact locally (Windows, numpy 2.5.2) -- confirmed root cause 2026-09-14
++# (see docs/DECISIONS.md same date): sub-ULP float32 log1p rounding noise
++# between numpy's vectorized kernel and the platform libm, NOT a threshold
++# comparison or a logic defect (0/1154 PRT and 0/18434 BRA differing pixels
++# have pop >= threshold; max delta = 0.75 float32 ULP). Every other
++# criterion in CASES stays bit-exact (atol=0.0) -- this tolerance is scoped
++# to pop_suitability alone.
++_POP_SUITABILITY_ATOL = 2e-7  # ~2x the observed max delta (8.941e-08)
++
++
+ @pytest.mark.regression
+ @pytest.mark.parametrize(("name", "iso"), PARAMS_LIST)
+ def test_criterion_matches_frozen_baseline(name, iso, baseline_dir, legacy_processed_root):
+@@ -199,10 +207,14 @@ def test_criterion_matches_frozen_baseline(name, iso, baseline_dir, legacy_processed_root):
+     max_abs = float(diff.max()) if diff.size else 0.0
+     rmse = float(np.sqrt(np.mean(diff**2))) if diff.size else 0.0
+     n_exact = int((diff == 0).sum())
+ 
+-    assert max_abs == 0.0, (
++    atol = _POP_SUITABILITY_ATOL if name == "pop_suitability" else 0.0
++    assert max_abs <= atol, (
+         f"{name}/{iso}: not pixel-exact vs frozen baseline — "
+-        f"max|delta|={max_abs:.3e}, RMSE={rmse:.3e}, exact={n_exact}/{diff.size}"
++        f"max|delta|={max_abs:.3e} (tolerance={atol:.3e}), RMSE={rmse:.3e}, "
++        f"exact={n_exact}/{diff.size}"
+     )
+```
+
+Não aplicado nesta entrada — depende de aprovação explícita de Douglas na mesma resposta em que este diff foi apresentado.
+
+Investigação conduzida via um passo de CI temporário (`DEBUG - pop_suitability platform diagnostic`, gated a `workflow_dispatch`) + script `scripts/_debug_pop_ci.py`, ambos criados, rodados, e **removidos** ao final desta mesma sessão (commits `b248d45`→`e480598`→`73e5af6` no branch `main`) — ver `CLAUDE.md` § "Investigações que alteram infraestrutura de CI temporariamente" (regra de processo adicionada nesta mesma data) para a convenção de aprovação e rastro que passa a valer daqui pra frente.
+
+Justificativa (se METHODOLOGY_REVISION): n/a — nenhuma mudança de código aplicada nesta entrada; é caracterização de causa raiz + proposta pendente de aprovação.
+
+Referência (literatura/discussão, se aplicável): investigação ao vivo desta sessão (2026-09-14), runs de CI `34872011543` (diagnóstico inicial, bug de path corrigido) e `34872281587` (diagnóstico completo PRT+BRA com isolamento vetorizado/escalar/libm); `docs/DECISIONS.md` 2026-09-14 "regression fixtures storage" (contexto do primeiro run real que revelou o achado); instrução explícita de Douglas 2026-09-14 ("Registrar achado + propor tolerância + trava de aprovação").
+
+---
+
 (fim das decisões registradas até o momento)
