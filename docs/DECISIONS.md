@@ -1446,4 +1446,23 @@ Referência (literatura/discussão, se aplicável): `docs/DECISIONS.md` 2026-09-
 
 ---
 
+## [2026-09-14] - rivers/roads BRA (1.8x producao vs isolado): investigacao parcial, causa ainda nao confirmada
+Tipo: `VERIFICATION_UPDATE`
+
+Descrição: investigação da pendência registrada em `docs/PROGRESS.json` (`modulos_extra` → `data_acquisition`) — rivers/BRA 348.8s em produção real (via `main.py`) vs. 191.63s isolado, roads/BRA 328.0s vs. 184.4s isolado, ambos ~1.8x mais lentos em produção, causa não confirmada até esta data.
+
+Duas hipóteses testadas com dado concreto nesta sessão:
+
+1. **Hipótese de cache (recompute em vez de reuso entre `data_quality_audit` e `grid_alignment`) — DESCARTADA.** Confirmado por inspeção de código que `audit.py:163-164` e `alignment.py:286` calculam o MESMO `cache_path` (`outputs_dir/country_code/processed/{layer}_clipped.gpkg`) — reuso por convenção de arquivo em disco, já documentado nos dois módulos. Confirmado por medição real (`PRT/rivers`, layer menor por custo/tempo, mesma mecânica de código de BRA): 1ª chamada de `inspect_vector_layer()` com cache frio = 4.09s; 2ª chamada com cache quente = 0.25s — speedup de 16.3x, cache genuinamente reutilizado, sem recomputo.
+
+2. **Threading do `.intersection()` e leitura bbox/STRtree — confirmados funcionando normalmente.** Microbenchmark com dado real (subsample de 60.000 features de `roads/BRA`, das 548.304 casadas via STRtree sobre 895.190 candidatos bbox-prefiltrados): 1 worker = 114.73s (523 feat/s) → 8 workers = 18.08s → speedup 6.35x, próximo do 7.08x documentado em 2026-08-25. Leitura bbox-prefiltrada (8.94s) e STRtree query (1.00s) não são gargalo. Repetição da mesma intersecção 3x consecutivas, sem pausa, no mesmo processo (25.26s / 23.24s / 23.50s) não mostrou tendência de queda — sem evidência de degradação por carga sustentada/throttling nesta escala.
+
+**Não confirmado — reprodução em escala real de BRA não completou nesta sessão.** Tentativa de reproduzir o clip completo e frio de `rivers/BRA` (equivalente ao benchmark histórico de 191-349s) foi interrompida após 44 minutos sem terminar. Amostragem de CPU durante essa janela (`Get-Process`, 2 amostras de 5s) mediu média de apenas ~0.68 núcleos utilizados — bem abaixo do paralelismo que a mesma máquina/sessão demonstrou no microbenchmark item 2 acima (6.35x com 8 workers). Isso é registrado como uma possível diferença de capacidade/alocação de CPU entre esta sessão (ambiente sandboxed) e a máquina original que gerou os números de 2026-08-25/2026-09-08 — NÃO como causa confirmada do fator 1.8x original, e NÃO como uma repetição do próprio achado 1.8x (a comparação feita aqui foi sessão-atual-isolado vs. sessão-atual-produção-tentada, que não pôde ser completada nos dois lados para gerar um novo fator comparável).
+
+Justificativa (se METHODOLOGY_REVISION): n/a — nenhuma mudança de código ou de decisão metodológica feita. Este registro apenas descarta uma hipótese (cache) e deixa a causa raiz do 1.8x original ainda em aberto.
+
+Referência (literatura/discussão, se aplicável): `docs/PROGRESS.json` (`modulos_extra` → `data_acquisition`, nota original "rivers/BRA 348.8s eh 1.8x mais lento... roads/BRA em producao real (328.0s) ~1.8x mais lento"); `docs/DECISIONS.md` 2026-08-25 - clip_vector_to_country() exact-intersection bottleneck (STRtree + simplify + threading) (origem dos números de paralelismo 4/8/16 workers comparados aqui); `src/geofrea/core/geo_utils.py` (`_MAX_INTERSECTION_WORKERS`, `_simplify_for_intersection`, `clip_vector_to_country`).
+
+---
+
 (fim das decisões registradas até o momento)
