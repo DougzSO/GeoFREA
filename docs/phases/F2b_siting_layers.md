@@ -29,7 +29,14 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
 
 ## Active implementation decisions
 
-To be populated during the rebuild. Still-valid rationale to carry forward: WDPA invalid-geometry repair before clip; fail-loud on corrupted WDPA versus `assumed_free` for absent data; nodata-safe slope and TRI handling (TRI no longer used).
+- **D-F2b-001 — Riparian setback mechanism split across phases.** The riparian safety buffer is produced as a distance layer in `siting_layers` (F2b) and only promoted to a rigid exclusion in `land_eligibility` (F3); F2b itself does not exclude on it.
+  Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_builder (Fase 3): mecanismo do buffer de segurança de rio
+- **D-F2b-002 — WDPA absent versus corrupted.** `E1 protected` fails loudly on a present-but-corrupted WDPA file; `assumed_free` is used only for genuinely absent WDPA data, per M-F2b-05.
+  Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_criteria: protected_areas distingue WDPA ausente de corrompido
+- **D-F2b-003 — Nodata-safe terrain handling.** A pixel adjacent to nodata/NaN in the DEM never receives a corrupted terrain value; this nodata-safety pattern (originally applied to slope and the now-removed TRI term) carries forward to `E4 slope` in the rebuild.
+  Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_criteria: TRI (terrain_score) não herda contaminação de NaN/nodata
+
+Still pending migration: WDPA invalid-geometry repair before clip (2026-09-11, not in the section-4 `METHODOLOGY_REVISION` list — a `bug`-type entry per the audit's section 2 axis — carry forward during the rebuild if still applicable).
 
 ## Known issues
 
