@@ -1,195 +1,110 @@
-# CONVENTIONS.md — GeoFREA
+# CONVENTIONS.md: GeoFREA
 
-Technical reference for anyone writing code in this repository.
+Coding conventions for this repository. Scientific method and architecture requirements live in `docs/METHODOLOGY.md`; this file covers how code is written.
 
 ## Language
 
-All source code, comments, docstrings, variable/function names, and
-commit messages must be in English.
+US English for code, identifiers, comments, docstrings, documentation, and commit messages.
+
+## Phase and module names
+
+| Phase | Module | Phase record |
+|---|---|---|
+| F1 | `data_acquisition` | `docs/phases/F1_data_acquisition.md` |
+| F1b | `data_quality_audit` | `docs/phases/F1b_data_quality_audit.md` |
+| F2a | `grid_alignment` | `docs/phases/F2a_grid_alignment.md` |
+| F2b | `siting_layers` | `docs/phases/F2b_siting_layers.md` |
+| F3 | `land_eligibility` | `docs/phases/F3_land_eligibility.md` |
+| F4 | `climate_forcing` | `docs/phases/F4_climate_forcing.md` |
+| F5 | `technical_potential` | `docs/phases/F5_technical_potential.md` |
+| F6 | `lcoe_modeling` | `docs/phases/F6_lcoe_modeling.md` |
+| F7 | `robustness_analysis` | `docs/phases/F7_robustness_analysis.md` |
+| F7b | `external_validation` | `docs/phases/F7b_external_validation.md` |
+| F8 | `results_synthesis` | `docs/phases/F8_results_synthesis.md` |
+| E1 | `explorer` | `docs/phases/E1_explorer.md` |
+| core | `core` | `docs/phases/core.md` |
+
+Never write an unqualified `F2` or `F7`.
+
+## Status vocabulary
+
+Used in `docs/PROGRESS.json` and phase records:
+
+- `not_started`
+- `in_progress`
+- `built_pending_conformance`: code exists but has not been audited against the current methodology
+- `conformant`: audited, all conformance rows pass
+- `rework_required`: code exists and conflicts with the methodology
+
+Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`.
 
 ## Docstrings
 
-Google style: concise but complete. Cover purpose, `Args`, `Returns`,
-and — for any geospatial function — units and CRS. A geospatial function
-without a documented unit/CRS note is considered incomplete.
+Google style. Cover purpose, `Args`, `Returns`, `Raises` when relevant. Geospatial functions state units and CRS for every spatial input and output; a geospatial function without units and CRS is incomplete. Functions that implement a methodology item cite it:
 
-See the template in "Docstring template" below.
+```python
+def weibull_capacity_factor(A: np.ndarray, k: np.ndarray, curve: PowerCurve) -> np.ndarray:
+    """Compute capacity factor from Weibull parameters and a power curve.
+
+    Implements: M-F5-03.
+
+    Args:
+        A: Weibull scale at hub height, m/s, shape (n_cells,).
+        k: Weibull shape at hub height, dimensionless, shape (n_cells,).
+        curve: Reference power curve with rated power in kW.
+
+    Returns:
+        Capacity factor in [0, 1], shape (n_cells,).
+    """
+```
+
+Implementation decisions are cited as `See docs/phases/F5_technical_potential.md D-F5-003.`
 
 ## Parameters
 
-Every new parameter goes into `config/parameters.json` (scientific/
-technology values) or `config/settings.yaml` (operational/infrastructure
-values), validated through a Pydantic schema in `src/geofrea/core/`. No
-hardcoded values in processing modules — this is a hard project policy,
-not a style preference, since hardcoded fallbacks silently diverging
-from the canonical config was a recurring bug class in the legacy
-pipeline (see `docs/architecture/sensitivity_analysis.md` §c).
+- Scientific values go to `config/parameters.json` (schema METHODOLOGY U-05); operational values go to `config/settings.yaml`; experiment design goes to `config/experiments.yaml`; technology and country mappings go to `config/technologies.yaml` and `config/countries.yaml`.
+- All configuration is validated through Pydantic schemas in `src/geofrea/core/`.
+- No hardcoded scientific values in processing modules. Pydantic defaults must not duplicate configuration values; required fields have no default.
+- Every parameter carries `source`, `tier`, `range`, and verification metadata. `verified: false` does not block execution but must be testable.
+- No ISO3 code literals in `src/` outside comments and docstrings (enforced by test, METHODOLOGY A-05).
 
-## Parameter verification metadata
+## Artifacts and outputs
 
-Every parameter entry in `parameters.json` must carry a standard
-verification block alongside its value:
+- Rasters: Cloud Optimized GeoTIFF, EPSG:4326. Tables: parquet with a Pydantic schema and `schema_version`.
+- Layout and file naming follow METHODOLOGY A-08. Map file names: `<map>__<window>__<ssp>__<gcm>.png`, using `ref` for the reference climate and `na` for non-applicable fields.
+- One map per file. Figures respect `settings.yaml` `figures`.
+- Thesis outputs are produced only by F8 into `outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
 
-```json
-{
-    "value": 2720.0,
-    "source": "IRENA 2024",
-    "verified": true,
-    "verified_by": "Douglas",
-    "verified_date": "2026-08-20",
-    "verification_method": "manual_cross_check"
-}
-```
+## Error handling
 
-- `verified_by` and `verified_date` are `null` when `verified` is `false`.
-- `verification_method` is one of `"manual_cross_check"`, `"automated"`,
-  or `"unverified"`.
+- Fail-loud. Never fall back silently to a degraded path.
+- Integrity failures of present files raise. Absence of optional data is recorded explicitly in artifact metadata.
+- Guards replace silent defaults: if a precondition is missing (for example, clipping without a country boundary), raise a named exception.
 
-A parameter with `verified: false` is **not** blocked from use — the
-pipeline may run with unverified values. What's required is that the
-schema exposes this metadata (not just the bare value) and that it is
-testable: a test must be able to assert, for any given parameter, what
-its current verification status is. See `docs/DECISIONS.md` for the
-provenance narrative behind a given `source`/verification (e.g. the
-2026-08-19/2026-08-20 biomass CAPEX/OPEX/lifetime entries).
+## Large data
 
-## STRUCTURAL_PRESERVE vs. METHODOLOGY_REVISION
+- Large global vector files: bounding-box prefilter at read time, spatial index (`shapely.STRtree`) for predicates, country polygon simplification before intersection (never feature simplification), threaded intersection above 10,000 features, per-country cache of clipped results.
+- Rasters above the configured memory threshold are read in windows or chunks; decide before allocating.
+- F6 and F7 process in batches (METHODOLOGY A-10).
 
-Any decision that preserves or changes the legacy pipeline's scientific/
-structural behavior must be logged as an entry in `docs/DECISIONS.md`
-(append-only), tagged with one of:
+## Long-running scripts
 
-- **STRUCTURAL_PRESERVE** — the legacy logic is kept as-is.
-- **METHODOLOGY_REVISION** — the legacy logic is deliberately changed,
-  with a documented justification and, where applicable, a literature
-  reference.
-- **VERIFICATION_UPDATE** — the decision itself is unchanged; only the
-  confidence/verification status of a cited source or value is updated
-  (e.g. a value moves from unverified to independently confirmed), or
-  an earlier entry's scope is narrowed/clarified without reversing it.
+Scripts or validations expected to run longer than 30 seconds log progress with elapsed time and estimated remaining time, using flushed output.
 
-A `Tipo:` value may combine a canonical type with a short parenthetical
-qualifier (e.g. `STRUCTURAL_PRESERVE (correção da auditoria, não revisão
-de método)`) or combine two types with `|` when an entry covers more than
-one change of different kinds (e.g. `STRUCTURAL_PRESERVE (itens 2 e 4) |
-METHODOLOGY_REVISION (itens 1 e 3)`). The qualifier is free text for
-context; the base type before any parenthetical or `|` must still be one
-of the three above.
+## Code reused from GEAR
 
-Regression tolerances (`rtol`, pixel-exact comparison thresholds) are
-defined in `CLAUDE.md`, not here — `DECISIONS.md` entries that cite a
-tolerance should be checked against `CLAUDE.md`, not against this file.
-
-Code that implements a decision recorded this way should reference it,
-e.g. `# See DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback values`.
-
-## Phase numbering
-
-The pipeline has **nine modules** grouped into **eight numbered phases**.
-This is the canonical numbering — use it in code comments, docstrings,
-commit messages, `docs/PROGRESS.json`, and architecture docs.
-
-| Phase | Module(s) (`src/geofrea/<name>/`)        | Legacy origin |
-|-------|-----------------------------------------|---------------|
-| 1     | `data_acquisition` + `data_quality_audit` | Legacy Phase 1 (Audit); `data_acquisition` is a GeoFREA-only split of raw-data fetching out of the audit |
-| 2a    | `grid_alignment`                         | Legacy Phase 2a |
-| 2b    | `suitability_criteria`                   | Legacy Phase 2b (Criteria) |
-| 3     | `suitability_builder`                    | Legacy Phase 3 (Suitability / MCDA) |
-| 4     | `potential_analysis`                     | Legacy Phase 4 (Potential) |
-| 5     | `lcoe_modeling`                          | Legacy Phase 5 (LCOE) |
-| 6     | `results_synthesis`                      | Legacy Phase 6 (Results) |
-| 7     | `ghg_abatement`                          | Legacy Phase 7 (GHG Abatement) |
-| 8     | `sensitivity_analysis`                   | Legacy Phase 8 (Sensitivity) |
-
-Rules:
-
-- **Never write an unqualified "Phase 2".** `grid_alignment` is `2a` and
-  `suitability_criteria` is `2b` — distinct phases that merely share the
-  legacy's Phase 2 lineage. Always write `2a` or `2b`.
-- Transport Decarbonisation (legacy Phase 9) is permanently excluded and
-  has no GeoFREA phase number (see "Excluded modules" below).
-- `fase_legado` in `docs/PROGRESS.json` records each module's legacy
-  phase of origin and is intentionally coarser (both `grid_alignment`
-  and `suitability_criteria` carry `fase_legado: 2`). It is provenance
-  metadata, not the GeoFREA phase number.
-
-Modules in `docs/PROGRESS.json`'s `modulos` array use one of three status
-values: `construido` (built), `documentado_nao_construido` (documented,
-not yet built), or `parcialmente_implementado` (production code exists
-and is wired into `main.py`, but not all of the module's scope is
-implemented — e.g. `data_acquisition`, where some layers have real fetch
-and others resolve from local files only). A module marked `construido`
-may depend on a Fase 1 module that is only `parcialmente_implementado` —
-this is not itself an error, but the dependency gap should stay visible
-in status fields rather than only in free-text `observacao`.
-
-### Project-milestone numbering (`fase_atual`)
-
-`docs/PROGRESS.json`'s `fase_atual` field is a **separate axis** from the
-pipeline phase numbers above. It tracks GeoFREA *reconstruction*
-milestones, not the pipeline:
-
-| `fase_atual` | Milestone |
-|--------------|-----------|
-| `0`   | Legacy audit complete and all `docs/architecture/*.md` written (2026-08-19) |
-| `0.5` | Regression baseline (PRT + BRA) regenerated at legacy commit `fc7b43d` (2026-08-20, commit `d6def9c` — "Fase 0.5: regenerate regression baseline") |
-| `1`+  | Module construction under way — carry the **pipeline phase label** of the module currently being built (e.g. `2b` while `suitability_criteria` is being implemented) |
-
-The fractional `0.5` is real: it names the baseline-regeneration
-milestone that sits between the audit (`0`) and the first module build.
-It is not a placeholder. Once construction is under way, keep
-`fase_atual` set to the pipeline phase label of the work in progress, and
-update it at end of session (see `CLAUDE.md` § "Início e fim de sessão").
-
-## Excluded modules
-
-GeoFREA does not include a Transport Decarbonisation phase (see
-`DECISIONS.md` 2026-08-20 - Transport phase permanently excluded). This
-is a deliberate scope decision, not a gap.
-
-## Referencing DECISIONS.md addenda
-
-`DECISIONS.md` is append-only: a decision entry is never edited, even
-when a later addendum updates its verification status or narrows its
-scope. When a decision has been superseded *in part* by a later
-addendum (not replaced outright), code comments referencing that
-decision must point to the addendum date, not the original entry's
-date — the addendum is what's current.
+Every file or function copied from GEAR starts with:
 
 ```python
-# See DECISIONS.md 2026-08-20 (addendum to 2026-08-19) - biomass CAPEX/OPEX/lifetime
+# Adapted from GEAR (https://github.com/DougzSO/GEAR)
+# Commit: <sha>  Original path: <path>
+# Adaptation: <one-line summary>
 ```
 
-This is the fixed convention going forward: always cite the most recent
-addendum that touches the specific point the code depends on, and name
-the original entry's date in parentheses for traceability back through
-the append-only log.
+No imports from the GEAR repository.
 
-## Docstring template
+## Tests
 
-```python
-def compute_protected_area_score(
-    wdpa_gdf: gpd.GeoDataFrame,
-    transform: Affine,
-    out_shape: tuple[int, int],
-    as_exclusion: bool = True,
-) -> np.ndarray:
-    """Rasterize IUCN protected-area categories into a suitability score.
-
-    Pixels inside categories Ia/Ib/II are scored 0.0 when as_exclusion is
-    True (hard exclusion); all other pixels default to 1.0 (unrestricted).
-    See DECISIONS.md 2026-08-19 - protected_areas / IUCN exclusion categories.
-
-    Args:
-        wdpa_gdf: WDPA polygons with an IUCN category column, in the same
-            CRS as the target grid (EPSG:4326).
-        transform: Affine geotransform of the output raster.
-        out_shape: (height, width) of the output raster, in pixels.
-        as_exclusion: If True, strict categories (Ia/Ib/II) are scored
-            0.0 instead of their WDPA-derived score.
-
-    Returns:
-        np.ndarray of shape out_shape, dtype float32, values in [0, 1].
-        1.0 = unrestricted, 0.0 = excluded.
-    """
-```
+- `pytest`, `ruff` clean before any commit proposal.
+- Test names state the property tested (`test_regret_is_non_negative`).
+- Tests that need raw data are marked and skipped outside environments with `GEOFREA_RAW_DATA_DIR`; the synthetic country fixture covers CI.

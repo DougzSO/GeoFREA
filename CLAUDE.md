@@ -1,51 +1,85 @@
-# CLAUDE.md — GeoFREA
+# CLAUDE.md: GeoFREA
 
-## Projeto e propósito
+## Project
 
-GeoFREA é a reconstrução do zero do **GeoWorld Framework**, um pipeline geoespacial de 9 módulos organizados em 8 fases numeradas — **Fase 1** (`data_acquisition` + `data_quality_audit`) → **Fase 2a** (`grid_alignment`) → **Fase 2b** (`suitability_criteria`) → **Fase 3** (`suitability_builder`) → **Fase 4** (`potential_analysis`) → **Fase 5** (`lcoe_modeling`) → **Fase 6** (`results_synthesis`) → **Fase 7** (`ghg_abatement`) → **Fase 8** (`sensitivity_analysis`) — para análise de aptidão de sítios de energia renovável (solar/wind/biomass), desenvolvido como parte da pesquisa de doutorado de Douglas na UFMG.
+GeoFREA is a spatially explicit framework for solar and wind expansion planning under climate and techno-economic uncertainty, built for Douglas's PhD thesis (UFMG). Its scientific method, scope, phase contracts, and thesis outputs are defined in `docs/METHODOLOGY.md`, which is the single source of truth. Anything in code or in other documents that conflicts with `docs/METHODOLOGY.md` is a defect or an open question, never an alternative authority.
 
-A numeração canônica das fases é definida em `docs/CONVENTIONS.md` § "Phase numbering". Nunca escrever "Fase 2" sem sufixo: `grid_alignment` é **2a** e `suitability_criteria` é **2b**, fases distintas. O campo `fase_legado` em `docs/PROGRESS.json` (que mapeia ambos para o legado `2`) é metadado de proveniência, não o número de fase do GeoFREA.
+All documentation, code, comments, docstrings, and commit messages are in US English.
 
-O objetivo não é portar o código legado linha a linha, mas reconstruir a lógica científica com uma arquitetura limpa, corrigindo problemas estruturais já identificados no legado (ver `docs/architecture/module-mapping.md`) e preservando (ou revisando deliberadamente, com justificativa) o comportamento científico validado.
+## Session start
 
-## `GEOWORLD_BASELINE_DIR` — fonte read-only
+Read, in this order, before proposing or doing anything:
 
-A variável de ambiente `GEOWORLD_BASELINE_DIR` (definida em `.env`) aponta para o repositório `geoworld_framework/`, irmão de `GeoFREA/` no disco. Esse diretório é a referência legada e **é estritamente read-only**:
+1. `docs/PROGRESS.json`
+2. The sections of `docs/METHODOLOGY.md` referenced by the task (at least the phase specification and the related A-, U-, V- items)
+3. `docs/phases/<phase>.md` for the phase being touched
+4. `docs/OPEN_QUESTIONS.md` entries that block the phase
 
-- Nunca escrever, editar ou apagar nenhum arquivo dentro de `$GEOWORLD_BASELINE_DIR`, mesmo sem proteção de sistema de arquivos.
-- Usar esse diretório apenas para consulta: leitura de código-fonte, documentação (`docs/`), e outputs de baseline (`outputs_baseline/`) para geração de checksums/comparações de regressão.
-- Qualquer necessidade de "corrigir" algo no legado deve virar uma nota em `docs/architecture/` ou uma entrada em `DECISIONS.md` do GeoFREA — nunca uma edição no próprio `geoworld_framework/`.
+Do not load archived records (`docs/_archive/`) unless the task explicitly asks for historical rationale.
 
-## Início e fim de sessão
+## Authority and change rules
 
-- **No início de toda sessão**, ler `docs/PROGRESS.json` antes de qualquer outra ação, para determinar o que já foi feito e o que falta antes de propor próximos passos.
-- **Ao final de toda sessão que alterar código ou documentos de arquitetura**, atualizar `docs/PROGRESS.json` (campos `fase_atual`, `ultima_atualizacao`, status dos módulos afetados, contradições resolvidas/novas) antes de encerrar.
-  - `fase_atual` usa a numeração de **marcos de reconstrução do projeto** (`0`, `0.5`, depois o rótulo de fase do pipeline do módulo em construção), que é um eixo separado dos números de fase do pipeline. A convenção completa está em `docs/CONVENTIONS.md` § "Phase numbering" → "Project-milestone numbering".
+- `docs/METHODOLOGY.md` is edited only with explicit authorization from Douglas, following its Section 0 change protocol.
+- If implementation requires deviating from, reinterpreting, or extending a methodology item, open an entry in `docs/OPEN_QUESTIONS.md`, stop work on that item, and report. Never implement a deviation first.
+- A methodological value without a documented primary source is never assumed. Register it as an open question awaiting Douglas's verdict.
+- If a value depends on data that does not exist yet, register the approved protocol, not a value. The value enters only after the data exists.
 
-## Convenções do projeto
+## Record keeping
 
-### STRUCTURAL_PRESERVE vs. METHODOLOGY_REVISION
+Where things are recorded:
 
-Toda decisão que preserva ou altera o comportamento científico/estrutural do legado deve ser registrada em `docs/DECISIONS.md` (append-only, nunca editar/apagar entrada existente), usando um dos dois tipos:
+| Record | Content | Mode |
+|---|---|---|
+| `docs/METHODOLOGY.md` | Method, architecture, outputs | Static, versioned |
+| `docs/phases/<phase>.md` | Phase contract, conformance table, active implementation decisions, known issues, history | Current state, rewritten in place |
+| `docs/OPEN_QUESTIONS.md` | Unresolved items only | Items leave when resolved |
+| `docs/LIMITATIONS.md` | Declared limitations and every Tier 3 value | Append and maintain |
+| `docs/PROGRESS.json` | Status per phase and country | Rewritten in place |
+| `docs/CONVENTIONS.md` | Coding conventions | Maintained |
 
-- **STRUCTURAL_PRESERVE**: a lógica do legado é mantida como está (mesmo que imperfeita), porque alterá-la mudaria resultados científicos já validados sem justificativa nova.
-- **METHODOLOGY_REVISION**: a lógica do legado é deliberadamente alterada. Exige `Justificativa` e, quando aplicável, `Referência` (literatura ou discussão) no registro.
+What triggers a record in `docs/phases/<phase>.md`:
 
-### Tolerância de regressão por tipo de variável
+- A change to a scientific result, a data contract, or the interpretation of a methodology item: record it as an implementation decision (`D-<phase>-nnn`), at most about eight lines.
+- A bug fix that changes results: one line under the decision it affects, or a new decision if none applies.
+- Refactoring or performance work without result changes: commit message only.
+- A superseded decision leaves the active section and becomes one line under History, pointing to the decision that replaced it.
+- When a phase record exceeds about 400 lines, compact History.
 
-Ao comparar outputs do GeoFREA com os baselines do legado (`docs/architecture/baseline-manifest.md`):
+Changelog language ("was changed because", "previously") appears only in History sections and in the METHODOLOGY changelog. Code, docstrings, phase contracts, and thesis text describe the current state only.
 
-- **Determinístico** (fórmulas fechadas, sem componente estocástico): `rtol` entre `1e-4` e `1e-3`.
-- **Econômico/técnico** (ex. LCOE, CAPEX/OPEX, fatores de capacidade): tolerância de até **5%**; qualquer divergência acima de **0.5%** exige entrada obrigatória em `DECISIONS.md` explicando a causa.
-- **Decisões binárias** (ex. inclusão/exclusão de pixel, aprovação/reprovação de critério): **100% de paridade**, salvo `METHODOLOGY_REVISION` documentada explicitamente.
+When an open question is resolved: move the resolution into the relevant phase record (decision or conformance row), update `docs/METHODOLOGY.md` only if the resolution changes a methodology item and Douglas authorized it, then delete the entry from `docs/OPEN_QUESTIONS.md`.
 
-### Concorrência
+## Session end
 
-Antes de escrever em qualquer arquivo compartilhado (documentos de arquitetura, `DECISIONS.md`, `PROGRESS.json`), verificar a existência de `.session-lock` na raiz do projeto. Se existir, tratar como sessão concorrente em andamento e não sobrescrever sem coordenação.
+At the end of every session that changed code or documents:
 
-### Investigações que alteram infraestrutura de CI temporariamente
+1. Update the conformance table and decisions of the touched phase record.
+2. Update `docs/PROGRESS.json` (`last_updated`, phase status, country status, `summary` of at most 200 characters).
+3. Add any new Tier 3 value or limitation to `docs/LIMITATIONS.md`.
 
-Regra adicionada em 2026-09-14, após uma investigação que criou e removeu um passo de workflow (`DEBUG - ...`, gated a `workflow_dispatch`) e um script (`scripts/_debug_pop_ci.py`) para diagnosticar uma divergência CI-only (ver `docs/DECISIONS.md` 2026-09-14 "pop_suitability: divergencia CI-only"). Vale para qualquer investigação futura que precise de um passo/trigger novo em `.github/workflows/`, ou de um script de debug adicionado ao repo, mesmo que temporário e destinado a ser removido no final:
+## Commits
 
-- **Aprovação explícita antes de cada commit/push dessas mudanças temporárias** — não só antes de disparar o workflow em si. Rodar `gh workflow run`/`gh run watch` sobre um workflow já commitado é uma coisa; commitar e dar push de infraestrutura de CI nova (mesmo que gated a `workflow_dispatch`, mesmo que planejada para ser revertida) é uma mudança visível no repositório compartilhado e exige aprovação prévia, igual a qualquer outro commit/push.
-- **Rastro obrigatório do que foi criado e removido**, mesmo quando o resultado final é "repositório limpo". Terminar com `git status` vazio não é suficiente — a limpeza em si deve deixar registro (em `DECISIONS.md`, na entrada da investigação que motivou a mudança) do que existiu, por que foi criado, e quando/como foi removido (idealmente citando os SHAs dos commits de criação e remoção). Sem esse rastro, uma investigação futura não tem como saber que aquele caminho já foi tentado.
+- Never commit or push without explicit authorization from Douglas for that specific commit, after presenting the diff.
+- Review and approval of a change and the commit itself happen in separate steps.
+- Temporary CI infrastructure or debug scripts (even gated to `workflow_dispatch` and planned for removal) need approval before each commit or push, and their creation and removal (with commit SHAs) are recorded in the related phase record.
+
+## Read-only locations
+
+- `GEOWORLD_BASELINE_DIR`: legacy framework. Read-only. Used only to consult legacy code when a task explicitly requires it.
+- `GEAR_BASELINE_DIR`: GEAR repository. Read-only. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header. Never import from it and never edit it.
+- `GEOFREA_RAW_DATA_DIR`: raw data. Never modified by the pipeline.
+
+## Regression and testing
+
+- Frozen regression (METHODOLOGY V-01): binary layers require exact parity; float rasters `rtol = 1e-6` unless a documented platform difference justifies a larger bound in the phase record.
+- Fixtures are refrozen only with Douglas's authorization, recorded in the phase record with the reason.
+- Phases F3 onward are tested by analytical cases, invariants, and sanity ranges (V-02 to V-04), not by legacy parity.
+- Every new method item needs at least one test that fails if the item is violated.
+
+## Concurrency
+
+Before writing shared documents (`docs/METHODOLOGY.md`, `docs/phases/`, `docs/PROGRESS.json`, `docs/OPEN_QUESTIONS.md`, `docs/LIMITATIONS.md`), check for `.session-lock` at the repository root. If present, treat it as a concurrent session and do not write without coordination.
+
+## Scope reminders
+
+In scope: BRA, PRT, IND; solar PV and onshore wind; SSP1-2.6, SSP3-7.0, SSP5-8.5; windows 2041-2070 and 2071-2100. Out of scope: GHG abatement, biomass, seismic, transport decarbonisation, sea-level rise, wildfire. Do not add code for out-of-scope items.
