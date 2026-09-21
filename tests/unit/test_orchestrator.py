@@ -7,6 +7,7 @@ independently of any phase-specific logic. See tests/unit/test_audit.py
 etc. for individual phases themselves.
 """
 
+import json
 import random
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from geofrea.core.orchestrator import (
     MissingProducerError,
     Orchestrator,
     PhaseSpec,
+    StaleManifestEntryError,
     UndeclaredArtifactMissingError,
     UnexpectedArtifactError,
 )
@@ -416,3 +418,96 @@ def test_manifest_written_on_success(tmp_path):
     assert entry.status == "success"
     assert entry.output == {"value": 7}
     assert orchestrator.manifest.schema_version == "2.0"
+
+
+# ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
+
+
+@pytest.mark.unit
+def test_resume_with_missing_recorded_key_raises_stale_manifest_entry_error(tmp_path):
+    call_log: list[str] = []
+    spec_v1 = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+
+    first = _orchestrator(tmp_path, ["a"])
+    first.run([spec_v1])
+
+    # Same phase name, but produces has grown — mirrors grid_alignment's
+    # real E4 change (one summary key -> summary + per-raster keys).
+    spec_v2 = _make_spec("a", call_log, produces=frozenset({"a_out", "a_extra"}))
+    second = _orchestrator(tmp_path, ["a"])
+
+    with pytest.raises(StaleManifestEntryError):
+        second.run([spec_v2])
+
+
+@pytest.mark.unit
+def test_resume_with_schema_version_mismatch_raises_stale_manifest_entry_error(tmp_path):
+    call_log: list[str] = []
+    spec_v1 = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+
+    first = _orchestrator(tmp_path, ["a"])
+    first.run([spec_v1])
+
+    def run_v2(context):
+        call_log.append("a")
+        path = context.outputs_dir / "a_out.txt"
+        context.register_artifact("a_out", path, "1.0")
+        return DummyOutput(value=1)
+
+    spec_v2 = PhaseSpec(
+        name="a",
+        output_model=DummyOutput,
+        run=run_v2,
+        produces=frozenset({"a_out"}),
+        produces_schema_versions={"a_out": "2.0"},
+    )
+    second = _orchestrator(tmp_path, ["a"])
+
+    with pytest.raises(StaleManifestEntryError):
+        second.run([spec_v2])
+
+
+@pytest.mark.unit
+def test_lineage_is_recorded_for_a_phase_with_requires(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    orchestrator = _orchestrator(tmp_path, ["b"])
+    orchestrator.run([a, b])
+
+    b_entry = orchestrator.manifest.phases["b"]
+    assert b_entry.consumed_run_ids == {"a_out": orchestrator.run_id}
+
+
+@pytest.mark.unit
+def test_cross_run_id_resume_warns_without_failing(tmp_path, caplog):
+    # force_rerun on "a" alone would cascade to "b" too (a dependent —
+    # see test_force_rerun_reexecutes_target_and_dependents), which
+    # would just re-record "b"'s lineage and never exercise drift
+    # detection. The real-world case this guards — "a"'s artifact was
+    # produced by a different run_id than the one "b" last consumed,
+    # without "b" itself re-running — is simulated directly by editing
+    # the on-disk manifest between two Orchestrator instances, the same
+    # way a manifest hand-edited or merged from another run would look.
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"], run_id="run-1")
+    first.run([a, b])
+    assert first.manifest.phases["b"].consumed_run_ids == {"a_out": "run-1"}
+
+    manifest_path = tmp_path / "PRT" / "manifest.json"
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    data["artifacts"]["a_out"]["run_id"] = "run-2"
+    manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    call_log.clear()
+    third = _orchestrator(tmp_path, ["b"], run_id="run-2")
+    with caplog.at_level("WARNING"):
+        results = third.run([a, b])
+
+    assert call_log == []  # "b" resumed, not re-invoked
+    assert results["b"].status == "success"
+    assert any("lineage drift" in message for message in caplog.messages)

@@ -83,6 +83,14 @@ def _valid_result() -> dict:
             "missing_expected": [],
             "not_implemented": [c for c in CANONICAL_CRITERIA if c != "road_suitability"],
             "protected_source": "assumed_free",
+            "protected_wdpa_repair": {
+                "n_total": 0,
+                "n_invalid": 0,
+                "n_repaired": 0,
+                "n_dropped_empty": 0,
+                "invalid_reasons": {},
+                "country_polygon_repaired": False,
+            },
             "grid_metadata": dict(VALID_GRID_METADATA),
         },
     }

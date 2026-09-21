@@ -300,10 +300,17 @@ def _build_summary(
     for layer, meta in vectors.items():
         found = meta.get("found", False)
         error = meta.get("error")
+        error_type = meta.get("error_type")
         if not found:
             status = "missing"
+        elif error_type in ("read_error", "processing_error"):
+            status = error_type
         elif error:
-            status = "error"
+            # Defensive fallback: an error with no error_type shouldn't
+            # happen from inspect_vector_layer() itself (both its
+            # except blocks always set one), but a caller building this
+            # dict by hand (tests, future callers) might not.
+            status = "processing_error"
         else:
             status = "ok"
         layers[layer] = VectorLayerSummary(
@@ -522,7 +529,8 @@ def _format_report(result: AuditResult) -> str:
     _VECTOR_STATUS_DISPLAY = {
         "ok": "[OK] found",
         "missing": "[--] missing",
-        "error": "[ERROR] found (unreadable)",
+        "read_error": "[ERROR] found (read failed)",
+        "processing_error": "[ERROR] found (processing failed)",
     }
     for vname, label in _VECTOR_LABELS.items():
         vector_summary = s.layers.get(vname)

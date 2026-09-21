@@ -127,12 +127,114 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
 import pyogrio
 import shapely
+
+
+class GeometryRepairReport(NamedTuple):
+    """Traceability record for invalid-geometry repair on a clip path.
+
+    Moved here 2026-09-21 from suitability_criteria's WDPA-only
+    `WdpaGeometryRepairReport` (see docs/phases/core.md, docs/phases/
+    F2b_siting_layers.md) so every caller of `clip_vector_to_country()`/
+    `read_clipped_to_country()` gets the same repair, not just
+    `compute_protected_areas()`. Real-world vector data (WDPA confirmed
+    live: BRA 383/4190, PRT 61/442) legitimately contains topologically
+    invalid polygons (self-intersections) — a known dataset
+    characteristic, not evidence of a truncated/corrupted download.
+
+    Args:
+        n_total: Feature count in `gdf` as passed in.
+        n_invalid: How many of those were topologically invalid
+            (`shapely.is_valid` False) before repair.
+        n_repaired: Of `n_invalid`, how many are valid after
+            `shapely.make_valid(method="structure")` — almost always
+            equal to `n_invalid`; lower only if make_valid itself
+            produced a still-invalid result (rare, reported so it is
+            never silently assumed away).
+        n_dropped_empty: Feature rows dropped because their geometry
+            was (or became, after repair) empty.
+        invalid_reasons: `shapely.is_valid_reason()` on the invalid
+            subset, summarized by category (the text before the
+            coordinate-bearing `[...]` suffix, e.g. "Self-intersection")
+            with per-category counts — not the raw per-feature strings,
+            which each carry unique coordinates.
+        country_polygon_repaired: Whether the clip boundary itself
+            (the simplified country polygon) needed repair after
+            `shapely.simplify()` — see `_simplify_for_intersection()`'s
+            pre-simplify repair, which this reports on the post-simplify
+            side. False for every caller that supplies a well-formed
+            country boundary (the common case).
+    """
+
+    n_total: int
+    n_invalid: int
+    n_repaired: int
+    n_dropped_empty: int
+    invalid_reasons: dict[str, int]
+    country_polygon_repaired: bool
+
+
+_EMPTY_GEOMETRY_REPAIR_REPORT = GeometryRepairReport(0, 0, 0, 0, {}, False)
+
+
+def repair_invalid_geometries(
+    gdf: gpd.GeoDataFrame,
+) -> tuple[gpd.GeoDataFrame, GeometryRepairReport]:
+    """Repair topologically invalid geometries in `gdf`, in place semantics aside.
+
+    `shapely.make_valid(method="structure")`: chosen over the "linework"
+    default and over `buffer(0)` — live-verified 2026-09-11 against real
+    WDPA data that "linework" throws `GEOSException:
+    IllegalArgumentException: Overlay input is mixed-dimension` on a
+    real subset of invalid polygons, while "structure" (reasoning from
+    ring exterior/hole structure rather than noding all edges) handled
+    every invalid geometry in both BRA (383/383) and PRT (61/61)
+    without error. Requires GEOS >= 3.10.
+
+    Args:
+        gdf: Any GeoDataFrame. Not mutated — a new frame is returned.
+
+    Returns:
+        (repaired_gdf, GeometryRepairReport). `repaired_gdf` has had
+        invalid geometries replaced by their `make_valid()` result and
+        any now-empty (or already-empty) rows dropped.
+    """
+    n_total = len(gdf)
+    gdf = gdf.copy()
+
+    invalid_mask = ~gdf.geometry.is_valid
+    n_invalid = int(invalid_mask.sum())
+
+    invalid_reasons: dict[str, int] = {}
+    n_repaired = 0
+    if n_invalid:
+        invalid_geoms = gdf.loc[invalid_mask, "geometry"]
+        for reason in shapely.is_valid_reason(invalid_geoms.to_numpy()):
+            category = reason.split("[")[0].strip()
+            invalid_reasons[category] = invalid_reasons.get(category, 0) + 1
+
+        repaired_geoms = shapely.make_valid(invalid_geoms.to_numpy(), method="structure")
+        gdf.loc[invalid_mask, "geometry"] = repaired_geoms
+        n_repaired = int(shapely.is_valid(repaired_geoms).sum())
+
+    n_before_drop = len(gdf)
+    gdf = gdf[~gdf.geometry.is_empty]
+    n_dropped_empty = n_before_drop - len(gdf)
+
+    report = GeometryRepairReport(
+        n_total=n_total,
+        n_invalid=n_invalid,
+        n_repaired=n_repaired,
+        n_dropped_empty=n_dropped_empty,
+        invalid_reasons=invalid_reasons,
+        country_polygon_repaired=False,
+    )
+    return gdf, report
 
 
 def get_local_utm_crs(geometry: Any) -> str:
@@ -261,7 +363,7 @@ _SIMPLIFY_TOLERANCE_DEG = 0.001
 _SIMPLIFY_TOLERANCE_M = 100.0
 
 
-def _simplify_for_intersection(geom: Any, crs: Any) -> Any:
+def _simplify_for_intersection(geom: Any, crs: Any) -> tuple[Any, bool]:
     """Simplify a clip-boundary geometry before using it in `.intersection()`.
 
     Only ever applied to the COUNTRY polygon (the clip boundary), never
@@ -278,17 +380,30 @@ def _simplify_for_intersection(geom: Any, crs: Any) -> Any:
             accepts "any CRS", so this cannot hardcode one unit.
 
     Returns:
-        A simplified, topology-preserving version of `geom`. Invalid
-        input is repaired (`buffer(0)`) before simplification — GEOS
+        (simplified_geom, repaired): a simplified, topology-preserving
+        version of `geom`, and whether either the pre-simplify input or
+        the post-simplify output needed repair. Invalid input is
+        repaired (`buffer(0)`) before simplification — GEOS
         simplification of an invalid geometry can itself produce
-        invalid or unexpected output.
+        invalid or unexpected output — and the simplified result is
+        checked again afterward and repaired the same way if still
+        invalid, since `shapely.simplify()` is not itself guaranteed to
+        preserve validity in every case.
     """
+    repaired = False
     if not shapely.is_valid(geom):
         geom = geom.buffer(0)
+        repaired = True
 
     is_geographic = crs is not None and crs.is_geographic
     tolerance = _SIMPLIFY_TOLERANCE_DEG if is_geographic else _SIMPLIFY_TOLERANCE_M
-    return shapely.simplify(geom, tolerance=tolerance, preserve_topology=True)
+    simplified = shapely.simplify(geom, tolerance=tolerance, preserve_topology=True)
+
+    if not shapely.is_valid(simplified):
+        simplified = simplified.buffer(0)
+        repaired = True
+
+    return simplified, repaired
 
 
 # Below this many candidate geometries, thread-pool setup/chunking
@@ -340,7 +455,7 @@ def _intersection_threaded(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
 
 def clip_vector_to_country(
     gdf: gpd.GeoDataFrame, country_gdf: gpd.GeoDataFrame
-) -> gpd.GeoDataFrame:
+) -> tuple[gpd.GeoDataFrame, GeometryRepairReport]:
     """Clip a GeoDataFrame's geometries to a country polygon.
 
     Two-step strategy: a fast bounding-box prefilter (gdf.cx[]) before
@@ -385,11 +500,20 @@ def clip_vector_to_country(
             to gdf's CRS internally if they differ.
 
     Returns:
-        A new GeoDataFrame with geometries intersected against the
-        (simplified) country polygon; features with no overlap are
-        dropped, and boundary-crossing features are cut to the
-        country's extent.
+        (clipped_gdf, GeometryRepairReport). `clipped_gdf` has
+        geometries intersected against the (simplified) country
+        polygon; features with no overlap are dropped, and boundary-
+        crossing features are cut to the country's extent. Every
+        caller's invalid input geometries (`gdf`) are repaired via
+        `repair_invalid_geometries()` before the intersection — this is
+        unconditional, not opt-in (2026-09-21, see docs/phases/core.md
+        — moved here from suitability_criteria's WDPA-only repair so
+        every phase using this shared clip path gets it). The report is
+        always returned, never just logged, so a caller cannot
+        silently miss that a repair happened.
     """
+    gdf, feature_repair_report = repair_invalid_geometries(gdf)
+
     country_in_gdf_crs = (
         country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
     )
@@ -402,7 +526,9 @@ def clip_vector_to_country(
     minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
     prefiltered = gdf.cx[minx:maxx, miny:maxy]
 
-    simplified_country_geom = _simplify_for_intersection(country_geom, gdf.crs)
+    simplified_country_geom, country_repaired = _simplify_for_intersection(
+        country_geom, gdf.crs
+    )
 
     tree = shapely.STRtree(prefiltered.geometry.values)
     matched_positions = tree.query(simplified_country_geom, predicate="intersects")
@@ -413,12 +539,19 @@ def clip_vector_to_country(
         index=clipped.index,
         crs=clipped.crs,
     )
-    return clipped[~clipped.geometry.is_empty]
+    n_before_drop = len(clipped)
+    clipped = clipped[~clipped.geometry.is_empty]
+
+    report = feature_repair_report._replace(
+        n_dropped_empty=feature_repair_report.n_dropped_empty + (n_before_drop - len(clipped)),
+        country_polygon_repaired=country_repaired,
+    )
+    return clipped, report
 
 
 def read_clipped_to_country(
     path: str | Path, country_gdf: gpd.GeoDataFrame
-) -> gpd.GeoDataFrame:
+) -> tuple[gpd.GeoDataFrame, GeometryRepairReport]:
     """Read a vector file pre-filtered to a country's bbox, then exactly clip it.
 
     See module docstring ("read_clipped_to_country() was added

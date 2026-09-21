@@ -166,7 +166,20 @@ def _read_clipped_with_cache(
     if cache_path.exists():
         return gpd.read_file(str(cache_path))
 
-    clipped = read_clipped_to_country(path, country_gdf)
+    clipped, repair_report = read_clipped_to_country(path, country_gdf)
+    if repair_report.n_invalid:
+        # Not silent (METHODOLOGY A-02/A-09 spirit, see docs/phases/
+        # core.md): repair_invalid_geometries() runs unconditionally
+        # inside read_clipped_to_country() now, but grid_alignment's
+        # own output schema has no slot for the report itself (unlike
+        # data_quality_audit's VectorLayerInspection.geometry_repair) —
+        # logged here so a repair on this phase's inputs is still
+        # visible, not just on the audit/criteria side.
+        logger.warning(
+            "%s: %d/%d features were topologically invalid and repaired "
+            "before clipping (reasons: %s).",
+            path, repair_report.n_invalid, repair_report.n_total, repair_report.invalid_reasons,
+        )
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         clipped.to_file(cache_path, driver="GPKG")

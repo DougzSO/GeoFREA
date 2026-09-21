@@ -253,3 +253,57 @@ def test_inspect_vector_layer_cache_write_failure_does_not_fail_the_inspection(t
     assert result["error"] is None
     assert result["n_features"] == 1
     assert not cache_path.exists()
+
+
+# ─── geometry repair + read_error/processing_error states (2026-09-21,
+# see docs/phases/core.md, docs/phases/F1b_data_quality_audit.md) ───
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_repairs_bowtie_on_clip_path_and_reports_it(tmp_path):
+    from shapely.geometry import Polygon
+
+    bowtie = Polygon([(0.2, 0.2), (0.8, 0.8), (0.8, 0.2), (0.2, 0.8), (0.2, 0.2)])
+    assert not bowtie.is_valid
+
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    path = tmp_path / "bowtie.geojson"
+    gpd.GeoDataFrame(geometry=[bowtie], crs="EPSG:4326").to_file(path, driver="GeoJSON")
+
+    result = inspect_vector_layer(path, country_gdf=country_gdf, clip=True)
+
+    assert result["error"] is None
+    assert result["error_type"] is None
+    assert result["geometry_repair"] is not None
+    assert result["geometry_repair"]["n_invalid"] == 1
+    assert result["geometry_repair"]["n_repaired"] == 1
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_read_failure_sets_read_error_state(tmp_path):
+    path = tmp_path / "corrupt.geojson"
+    path.write_text("this is not valid geojson", encoding="utf-8")
+
+    result = inspect_vector_layer(path, clip=False)
+
+    assert result["error"] is not None
+    assert result["error_type"] == "read_error"
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_processing_failure_sets_processing_error_state(tmp_path, monkeypatch):
+    import geofrea.data_quality_audit.vector_inspection as vector_inspection_module
+
+    path = tmp_path / "polygons.geojson"
+    gpd.GeoDataFrame(geometry=[box(0, 0, 1, 1)], crs="EPSG:4326").to_file(path, driver="GeoJSON")
+
+    def _boom(*a, **k):
+        raise RuntimeError("simulated processing failure")
+
+    monkeypatch.setattr(vector_inspection_module, "get_local_utm_crs", _boom)
+
+    result = inspect_vector_layer(path, clip=False)
+
+    assert result["found"] is True
+    assert result["error"] is not None
+    assert result["error_type"] == "processing_error"

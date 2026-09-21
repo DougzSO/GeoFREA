@@ -35,8 +35,7 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_criteria: protected_areas distingue WDPA ausente de corrompido
 - **D-F2b-003 — Nodata-safe terrain handling.** A pixel adjacent to nodata/NaN in the DEM never receives a corrupted terrain value; this nodata-safety pattern (originally applied to slope and the now-removed TRI term) carries forward to `E4 slope` in the rebuild.
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_criteria: TRI (terrain_score) não herda contaminação de NaN/nodata
-
-Still pending migration: WDPA invalid-geometry repair before clip (2026-09-11, not in the section-4 `METHODOLOGY_REVISION` list — a `bug`-type entry per the audit's section 2 axis — carry forward during the rebuild if still applicable).
+- **D-F2b-004 — WDPA invalid-geometry repair moved to the shared clip path.** `compute_protected_areas()`'s own `make_valid()` repair (and `WdpaGeometryRepairReport`) was removed 2026-09-21; `core/geo_utils.py::clip_vector_to_country()` now repairs invalid geometries unconditionally for every caller (data_quality_audit included, not just this phase), returning the shared `GeometryRepairReport`. `compute_protected_areas()`'s `ProtectedResult` carries that report through; `SuitabilityCriteriaSummary.protected_wdpa_repair` replaces the old four flat `protected_wdpa_*` fields. V-01 regression (`test_protected_areas_footprint_matches_frozen`, PRT+BRA) confirmed max abs diff = 0.0 against the pre-refactor implementation. Carries forward into the F2b rebuild as-is (see History for the "pending migration" note this resolves).
 
 ## Known issues
 
@@ -44,4 +43,4 @@ Still pending migration: WDPA invalid-geometry repair before clip (2026-09-11, n
 
 ## History
 
-None.
+- "Still pending migration: WDPA invalid-geometry repair before clip" (2026-09-11 note, carried in this record's Active implementation decisions) — resolved by D-F2b-004 (2026-09-21): the repair moved into the shared clip path rather than staying suitability_criteria-specific.

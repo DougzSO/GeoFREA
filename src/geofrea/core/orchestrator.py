@@ -82,6 +82,24 @@ class ArtifactIntegrityError(RuntimeError):
     """A resumed artifact's file is missing or no longer matches its recorded hash."""
 
 
+class StaleManifestEntryError(RuntimeError):
+    """A phase's successful manifest entry no longer matches its current PhaseSpec.
+
+    Raised on resume when either:
+      - the artifact keys recorded for this phase (manifest.artifacts
+        entries with `phase == spec.name`) no longer equal exactly
+        `spec.produces` (a produces contract change since the entry was
+        written — e.g. E4's per-raster grid_alignment keys landing on
+        top of an older single-summary entry); or
+      - a recorded artifact's `schema_version` no longer matches what
+        `spec.produces_schema_versions` now declares for that key.
+
+    Not auto-recovered: the fix is `force_rerun=True` targeting this
+    phase (or a phase that transitively requires it), which discards
+    the stale entry and reruns it — see RunConfig.force_rerun.
+    """
+
+
 def _sha256_file(path: Path) -> str:
     """Hash a file in fixed-size blocks, logging progress for large files."""
     size = path.stat().st_size
@@ -159,7 +177,18 @@ class PhaseResult(BaseModel, Generic[T]):
 
 
 class PhaseManifestEntry(BaseModel):
-    """The on-disk (manifest.json) record of one phase's outcome."""
+    """The on-disk (manifest.json) record of one phase's outcome.
+
+    Args:
+        consumed_run_ids: For a "success" entry, the run_id of every
+            upstream artifact this phase's run() read (keyed by
+            artifact key, i.e. one entry per key in this phase's
+            PhaseSpec.requires that had a manifest artifact at the time
+            it ran). Empty for "failed"/"skipped_upstream_failed"
+            entries and for phases with no requires. Lineage only,
+            never blocks a resume by itself — see Orchestrator.run()'s
+            lineage-drift warning.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -169,6 +198,7 @@ class PhaseManifestEntry(BaseModel):
     error: str | None
     started_at: str
     finished_at: str
+    consumed_run_ids: dict[str, str] = {}
 
 
 class ArtifactEntry(BaseModel):
@@ -271,6 +301,12 @@ class PhaseSpec:
             registered PhaseSpec.
         produces: Artifact keys this phase's `run` must register via
             `PhaseContext.register_artifact`, exactly.
+        produces_schema_versions: Optional expected schema_version per
+            produces key. A key absent here is not schema-version-
+            checked on resume (only its presence in produces is).
+            Populated by callers who want a schema bump on an artifact's
+            content to invalidate old manifest entries — see
+            StaleManifestEntryError.
     """
 
     name: str
@@ -278,6 +314,7 @@ class PhaseSpec:
     run: Callable[[PhaseContext], BaseModel]
     requires: frozenset[str] = frozenset()
     produces: frozenset[str] = frozenset()
+    produces_schema_versions: Mapping[str, str] = field(default_factory=dict)
 
 
 class PhaseExecutionError(RuntimeError):
@@ -451,6 +488,47 @@ class Orchestrator:
             return existing.sha256, size_bytes, mtime_ns
         return _sha256_file(path), size_bytes, mtime_ns
 
+    def _check_resume_is_not_stale(self, spec: PhaseSpec) -> None:
+        """Raise StaleManifestEntryError if spec's recorded entry no longer fits spec.
+
+        See StaleManifestEntryError's docstring for the two checks.
+        """
+        recorded_keys = {
+            entry.key for entry in self.manifest.artifacts.values() if entry.phase == spec.name
+        }
+        if recorded_keys != spec.produces:
+            missing = sorted(spec.produces - recorded_keys)
+            extra = sorted(recorded_keys - spec.produces)
+            raise StaleManifestEntryError(
+                f"Phase '{spec.name}' has a successful manifest entry, but its recorded "
+                f"artifact keys ({sorted(recorded_keys)}) no longer match this PhaseSpec's "
+                f"produces ({sorted(spec.produces)}) — missing={missing}, extra={extra}. "
+                f"Pass force_rerun=True targeting '{spec.name}' to discard the stale entry "
+                "and rerun it."
+            )
+
+        for key, expected_schema_version in spec.produces_schema_versions.items():
+            entry = self.manifest.artifacts.get(key)
+            if entry is not None and entry.schema_version != expected_schema_version:
+                raise StaleManifestEntryError(
+                    f"Phase '{spec.name}' artifact '{key}' has schema_version "
+                    f"{entry.schema_version!r} recorded, but this PhaseSpec now expects "
+                    f"{expected_schema_version!r}. Pass force_rerun=True targeting "
+                    f"'{spec.name}' to discard the stale entry and rerun it."
+                )
+
+    def _warn_on_lineage_drift(self, spec: PhaseSpec, existing: PhaseManifestEntry) -> None:
+        """Log (never raise) when a resumed phase's upstream lineage has moved on."""
+        for key, recorded_run_id in existing.consumed_run_ids.items():
+            current_entry = self.manifest.artifacts.get(key)
+            if current_entry is not None and current_entry.run_id != recorded_run_id:
+                logger.warning(
+                    "Phase '%s' resumed, but upstream artifact '%s' was produced by "
+                    "run_id %s when '%s' last ran and is now run_id %s. Resuming anyway "
+                    "— lineage drift does not block.",
+                    spec.name, key, recorded_run_id, spec.name, current_entry.run_id,
+                )
+
     def _verify_artifact_integrity(self, key: str) -> None:
         entry = self.manifest.artifacts.get(key)
         if entry is None:
@@ -540,8 +618,10 @@ class Orchestrator:
             must_force = self.force_rerun and spec.name in forced
             existing = self.manifest.phases.get(spec.name)
             if not must_force and existing is not None and existing.status == "success":
+                self._check_resume_is_not_stale(spec)
                 for key in spec.produces:
                     self._verify_artifact_integrity(key)
+                self._warn_on_lineage_drift(spec, existing)
                 output = (
                     spec.output_model.model_validate(existing.output)
                     if existing.output is not None
@@ -624,6 +704,11 @@ class Orchestrator:
                 finished_at=finished_at,
             )
             results[spec.name] = result
+            consumed_run_ids = {
+                key: self.manifest.artifacts[key].run_id
+                for key in spec.requires
+                if key in self.manifest.artifacts
+            }
             self.manifest.phases[spec.name] = PhaseManifestEntry(
                 phase=spec.name,
                 status="success",
@@ -631,6 +716,7 @@ class Orchestrator:
                 error=None,
                 started_at=started_at,
                 finished_at=finished_at,
+                consumed_run_ids=consumed_run_ids,
             )
             self.manifest.artifacts.update(new_artifacts)
             self._write_manifest()

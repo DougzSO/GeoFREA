@@ -154,9 +154,18 @@ def _build_audit_inputs(context: PhaseContext) -> AuditInputs:
     return acquisition_result_to_audit_inputs(acquisition_result.output)
 
 
+_AUDIT_REPORT_SCHEMA_VERSION = "2.0"  # bumped 2026-09-21: VectorLayerSummary.status
+# gained read_error/processing_error, replacing the single "error" value
+# (see docs/phases/core.md, docs/phases/F1b_data_quality_audit.md) — an
+# old "1.0" audit_report entry cannot be reconstructed into the current
+# AuditResult schema, so a stale one must be rejected on resume
+# (StaleManifestEntryError via produces_schema_versions below), not
+# silently misvalidated.
+
+
 def _audit_run(context: PhaseContext) -> AuditResult:
     result = run_audit_phase(context, inputs=_build_audit_inputs(context))
-    _register_json_artifact(context, "audit_report", result)
+    _register_json_artifact(context, "audit_report", result, _AUDIT_REPORT_SCHEMA_VERSION)
     return result
 
 
@@ -329,6 +338,7 @@ def _build_phase_specs(
             run=_audit_run,
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"audit_report"}),
+            produces_schema_versions={"audit_report": _AUDIT_REPORT_SCHEMA_VERSION},
         ),
         PhaseSpec(
             name="grid_alignment",

@@ -604,3 +604,26 @@ class SettingsFile(BaseModel):
 
     run: RunConfig
     geospatial: GeospatialConfig = GeospatialConfig()
+
+
+class GeometryRepairSummary(BaseModel):
+    """Pydantic mirror of `geofrea.core.geo_utils.GeometryRepairReport`.
+
+    A plain NamedTuple there (shared by every clip-path caller —
+    data_quality_audit, suitability_criteria, and any future phase
+    using `clip_vector_to_country()`/`read_clipped_to_country()`); this
+    model exists only so a Pydantic phase-output schema can hold it
+    with the same `extra="forbid"` validation every other field gets.
+    Lives in core, not in either phase's own schemas module, since both
+    need it and neither owns it. Field-for-field identical to the
+    NamedTuple — see its docstring for what each one means.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n_total: int
+    n_invalid: int
+    n_repaired: int
+    n_dropped_empty: int
+    invalid_reasons: dict[str, int]
+    country_polygon_repaired: bool

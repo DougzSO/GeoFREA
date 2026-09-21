@@ -510,16 +510,9 @@ def test_compute_protected_areas_repairs_self_intersecting_geometry(tmp_path):
     )
 
     assert source == "wdpa"
-    assert repair.total_features == 1
-    assert repair.invalid_repaired == 1
-    # A perfect bowtie's two lobes have canceling signed area under the
-    # raw (invalid) shoelace computation -> area_before_km2 == 0.0 for
-    # this exact fixture is correct, not a bug (confirmed: GEOS/shapely
-    # .area on an invalid self-intersecting ring is not well-defined and
-    # commonly nets to ~0 for a symmetric bowtie). make_valid() resolves
-    # it into a real MultiPolygon with positive area.
-    assert repair.area_before_km2 == 0.0
-    assert repair.area_after_km2 > 0.0
+    assert repair.n_total == 1
+    assert repair.n_invalid == 1
+    assert repair.n_repaired == 1
     inside = score[score != NODATA_FLOAT]
     assert inside.size > 0
 
@@ -533,10 +526,8 @@ def test_compute_protected_areas_no_wdpa_repair_report_is_empty(tmp_path):
     )
 
     assert source == "assumed_free"
-    assert repair.total_features == 0
-    assert repair.invalid_repaired == 0
-    assert repair.area_before_km2 == 0.0
-    assert repair.area_after_km2 == 0.0
+    assert repair.n_total == 0
+    assert repair.n_invalid == 0
 
 
 @pytest.mark.unit
@@ -552,8 +543,8 @@ def test_compute_protected_areas_valid_geometry_repair_report_is_zero(tmp_path):
     )
 
     assert source == "wdpa"
-    assert repair.total_features == 1
-    assert repair.invalid_repaired == 0  # already valid, nothing to repair
+    assert repair.n_total == 1
+    assert repair.n_invalid == 0  # already valid, nothing to repair
 
 
 @pytest.mark.unit

@@ -19,6 +19,8 @@ import geopandas as gpd
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
+from geofrea.core.schemas import GeometryRepairSummary
+
 
 class AuditInputs(BaseModel):
     """Raw, already-resolved geodata paths/objects the audit phase inspects.
@@ -205,7 +207,9 @@ class VectorLayerInspection(BaseModel):
     total_length_km: float | None = None
     clipped_to_country: bool = False
     attribute_breakdown: dict[str, VectorAttributeStat] | None = None
+    geometry_repair: GeometryRepairSummary | None = None
     error: str | None = None
+    error_type: Literal["read_error", "processing_error"] | None = None
 
 
 class PowerPlantsInspection(BaseModel):
@@ -254,12 +258,19 @@ class VectorLayerSummary(BaseModel):
     counterpart, which only distinguishes ok/missing in the flat schema
     this replaces. Not invented here — replicates behavior
     _format_report()'s VECTOR LAYERS section already had.
+
+    The single generic "error" status was split into "read_error"/
+    "processing_error" 2026-09-21 (see docs/phases/F1b_data_quality_audit.md):
+    VectorLayerInspection.error_type now distinguishes a failure opening
+    or clipping the file from a failure computing statistics on an
+    already-open GeoDataFrame — this mirrors that distinction rather
+    than collapsing it back into one bucket.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["vector"] = "vector"
-    status: Literal["ok", "missing", "error"]
+    status: Literal["ok", "missing", "read_error", "processing_error"]
     error: str | None = None
     n_features: int | None = None
 

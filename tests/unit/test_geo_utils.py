@@ -17,6 +17,7 @@ from geofrea.core.geo_utils import (
     get_local_utm_crs,
     get_mainland_gdf,
     read_clipped_to_country,
+    repair_invalid_geometries,
 )
 
 
@@ -96,7 +97,7 @@ def test_clip_vector_to_country_drops_features_outside_and_cuts_crossing_ones():
     far_away = _square(10.0, 10.0, 0.1)
     gdf = gpd.GeoDataFrame(geometry=[inside, crossing, far_away], crs="EPSG:4326")
 
-    clipped = clip_vector_to_country(gdf, country_gdf)
+    clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
     assert len(clipped) == 2
     # The crossing feature must be cut down, not kept whole.
@@ -135,7 +136,7 @@ def test_clip_vector_to_country_matches_by_position_not_by_pandas_label():
     # resembles 0..n-1 in any way after this.
     gdf = full_gdf.loc[[999, 100, 205, 3, 7]]
 
-    clipped = clip_vector_to_country(gdf, country_gdf)
+    clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
     assert len(clipped) == 2
     centroids_x = sorted(round(g.centroid.x, 1) for g in clipped.geometry)
@@ -149,7 +150,7 @@ def test_clip_vector_to_country_reprojects_when_crs_differs():
         "EPSG:3857"
     )
 
-    clipped = clip_vector_to_country(gdf, country_gdf)
+    clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
     assert len(clipped) == 1
 
@@ -163,7 +164,7 @@ def test_simplify_for_intersection_reduces_vertices_for_geographic_crs():
     dense = _dense_circle(0.0, 0.0, radius=1.0, n_points=5000)
     assert shapely.get_num_coordinates(dense) > 4900
 
-    simplified = _simplify_for_intersection(dense, gpd.GeoSeries([dense], crs="EPSG:4326").crs)
+    simplified, _repaired = _simplify_for_intersection(dense, gpd.GeoSeries([dense], crs="EPSG:4326").crs)
 
     n = shapely.get_num_coordinates(simplified)
     assert 0 < n < 500  # drastic reduction at 0.001deg tolerance on a 1deg-radius circle
@@ -182,7 +183,7 @@ def test_simplify_for_intersection_uses_meters_tolerance_for_projected_crs():
     crs = gpd.GeoSeries([dense], crs="EPSG:32633").crs  # UTM zone 33N, projected, meters
     assert crs.is_geographic is False
 
-    simplified = _simplify_for_intersection(dense, crs)
+    simplified, _repaired = _simplify_for_intersection(dense, crs)
 
     assert shapely.get_num_coordinates(simplified) < shapely.get_num_coordinates(dense)
 
@@ -193,9 +194,10 @@ def test_simplify_for_intersection_repairs_invalid_geometry_before_simplifying()
     bowtie = Polygon([(0, 0), (1, 1), (1, 0), (0, 1), (0, 0)])
     assert not shapely.is_valid(bowtie)
 
-    result = _simplify_for_intersection(bowtie, gpd.GeoSeries([bowtie], crs="EPSG:4326").crs)
+    result, repaired = _simplify_for_intersection(bowtie, gpd.GeoSeries([bowtie], crs="EPSG:4326").crs)
 
     assert shapely.is_valid(result)
+    assert repaired is True
 
 
 @pytest.mark.unit
@@ -212,7 +214,7 @@ def test_clip_vector_to_country_with_vertex_dense_boundary_still_matches_correct
     far_away = _square(10.0, 10.0, 0.1)
     gdf = gpd.GeoDataFrame(geometry=[inside, crossing, far_away], crs="EPSG:4326")
 
-    clipped = clip_vector_to_country(gdf, country_gdf)
+    clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
     assert len(clipped) == 2
     by_centroid_x = {round(g.centroid.x, 2): g for g in clipped.geometry}
@@ -239,8 +241,8 @@ def test_read_clipped_to_country_matches_read_then_clip(tmp_path):
         path, driver="GeoJSON"
     )
 
-    via_read_time_bbox = read_clipped_to_country(path, country_gdf)
-    via_full_read = clip_vector_to_country(gpd.read_file(path), country_gdf)
+    via_read_time_bbox, _repair_a = read_clipped_to_country(path, country_gdf)
+    via_full_read, _repair_b = clip_vector_to_country(gpd.read_file(path), country_gdf)
 
     assert len(via_read_time_bbox) == len(via_full_read) == 2
     assert sorted(via_read_time_bbox.geometry.area) == pytest.approx(
@@ -260,7 +262,7 @@ def test_read_clipped_to_country_reprojects_bbox_to_the_files_own_crs(tmp_path):
         "EPSG:3857"
     ).to_file(path, driver="GeoJSON")
 
-    clipped = read_clipped_to_country(path, country_gdf)
+    clipped, _repair = read_clipped_to_country(path, country_gdf)
 
     assert len(clipped) == 1
 
@@ -344,6 +346,85 @@ def test_clip_vector_to_country_uses_threaded_path_above_min_features():
     far_away = _square(100.0, 100.0, 0.1)
     gdf = gpd.GeoDataFrame(geometry=[*inside, far_away], crs="EPSG:4326")
 
-    clipped = clip_vector_to_country(gdf, country_gdf)
+    clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
     assert len(clipped) == n  # far_away dropped, everything else survives (fully inside)
+
+
+# ─── repair_invalid_geometries() / clip_vector_to_country() unconditional
+# repair (2026-09-21, see docs/phases/core.md — moved from
+# suitability_criteria's WDPA-only repair) ───
+
+
+def _bowtie() -> Polygon:
+    return Polygon([(0, 0), (1, 1), (1, 0), (0, 1), (0, 0)])
+
+
+@pytest.mark.unit
+def test_repair_invalid_geometries_repairs_bowtie_and_reports_it():
+    bowtie = _bowtie()
+    assert not bowtie.is_valid
+
+    gdf = gpd.GeoDataFrame(geometry=[bowtie], crs="EPSG:4326")
+    repaired_gdf, report = repair_invalid_geometries(gdf)
+
+    assert report.n_total == 1
+    assert report.n_invalid == 1
+    assert report.n_repaired == 1
+    assert "Self-intersection" in report.invalid_reasons
+    assert all(g.is_valid for g in repaired_gdf.geometry)
+
+
+@pytest.mark.unit
+def test_repair_invalid_geometries_leaves_valid_geometry_untouched():
+    square = _square(0.0, 0.0, 1.0)
+    gdf = gpd.GeoDataFrame(geometry=[square], crs="EPSG:4326")
+
+    repaired_gdf, report = repair_invalid_geometries(gdf)
+
+    assert report.n_total == 1
+    assert report.n_invalid == 0
+    assert report.n_repaired == 0
+    assert report.invalid_reasons == {}
+    assert repaired_gdf.geometry.iloc[0].equals(square)
+
+
+@pytest.mark.unit
+def test_clip_vector_to_country_repairs_bowtie_feature_without_raising():
+    # A bowtie in the CANDIDATE features (not the country polygon) used
+    # to crash .intersection() with a GEOSException before repair moved
+    # into the shared clip path — this must now succeed and count the
+    # repair.
+    country_gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 5.0)], crs="EPSG:4326")
+    bowtie = _bowtie()
+    gdf = gpd.GeoDataFrame(geometry=[bowtie], crs="EPSG:4326")
+
+    clipped, report = clip_vector_to_country(gdf, country_gdf)
+
+    assert report.n_invalid == 1
+    assert report.n_repaired == 1
+    assert len(clipped) >= 1
+
+
+@pytest.mark.unit
+def test_clip_vector_to_country_repairs_invalid_simplified_country_polygon(monkeypatch):
+    # Simulate shapely.simplify() producing an invalid result (rare in
+    # practice, but the post-simplify validity check must catch it and
+    # repair it, per docs/phases/core.md — not just trust simplify()).
+    import geofrea.core.geo_utils as geo_utils_module
+
+    bowtie = _bowtie()
+    real_simplify = shapely.simplify
+
+    def _simplify_returns_bowtie(geom, tolerance, preserve_topology):
+        return bowtie
+
+    monkeypatch.setattr(geo_utils_module.shapely, "simplify", _simplify_returns_bowtie)
+
+    country_gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 1.0)], crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 0.2)], crs="EPSG:4326")
+
+    _clipped, report = clip_vector_to_country(gdf, country_gdf)
+
+    assert report.country_polygon_repaired is True
+    monkeypatch.setattr(geo_utils_module.shapely, "simplify", real_simplify)

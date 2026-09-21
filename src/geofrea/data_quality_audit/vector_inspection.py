@@ -76,7 +76,9 @@ from typing import Any
 
 import geopandas as gpd
 
-from geofrea.core.geo_utils import get_local_utm_crs, read_clipped_to_country
+from geofrea.core.geo_utils import GeometryRepairReport, get_local_utm_crs, read_clipped_to_country
+
+_EMPTY_GEOMETRY_REPAIR_REPORT = GeometryRepairReport(0, 0, 0, 0, {}, False)
 
 logger = logging.getLogger("geofrea.data_quality_audit.vector_inspection")
 
@@ -109,16 +111,20 @@ class ClipRequiresCountryGdfError(ValueError):
 
 def _read_clipped_with_cache(
     path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path | None
-) -> gpd.GeoDataFrame:
+) -> tuple[gpd.GeoDataFrame, GeometryRepairReport]:
     """read_clipped_to_country(), backed by an on-disk cache keyed by cache_path.
 
     See module docstring, "cache_path", for the full rationale. On a
-    cache hit, `path` (the large source file) is never read at all.
+    cache hit, `path` (the large source file) is never read at all —
+    and no repair report, since read_clipped_to_country() (and its
+    unconditional repair_invalid_geometries() call, see
+    core/geo_utils.py) never runs; the cached file is already clipped
+    and was reported on when it was first written.
     """
     if cache_path is not None and Path(cache_path).exists():
-        return gpd.read_file(str(cache_path))
+        return gpd.read_file(str(cache_path)), _EMPTY_GEOMETRY_REPAIR_REPORT
 
-    clipped = read_clipped_to_country(path, country_gdf)
+    clipped, repair_report = read_clipped_to_country(path, country_gdf)
 
     if cache_path is not None:
         try:
@@ -127,7 +133,7 @@ def _read_clipped_with_cache(
         except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail the inspection
             logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
 
-    return clipped
+    return clipped, repair_report
 
 
 def inspect_vector_layer(
@@ -188,7 +194,9 @@ def inspect_vector_layer(
         "total_length_km": None,
         "clipped_to_country": False,
         "attribute_breakdown": None,
+        "geometry_repair": None,
         "error": None,
+        "error_type": None,
     }
 
     if not path or not Path(path).exists():
@@ -215,13 +223,32 @@ def inspect_vector_layer(
             "intended."
         )
 
+    # Two separate try/except stages (2026-09-21, see docs/phases/core.md
+    # and docs/phases/F1b_data_quality_audit.md): a failure opening/
+    # clipping the file (read_error — a truncated download, an
+    # unreadable shapefile) is a structurally different failure mode
+    # from one computing statistics on an already-open GeoDataFrame
+    # (processing_error — e.g. a reprojection or geometry-op failure on
+    # data that DID read fine). Reporting both under one generic "found
+    # (unreadable)" label made a read failure and a downstream
+    # processing bug indistinguishable without reading logs; `error_type`
+    # now names which stage failed, `error` still carries the message.
     try:
         if clip and country_gdf is not None:
-            gdf = _read_clipped_with_cache(path, country_gdf, cache_path)
+            gdf, repair_report = _read_clipped_with_cache(path, country_gdf, cache_path)
             result["clipped_to_country"] = True
         else:
             gdf = gpd.read_file(str(path))
+            repair_report = _EMPTY_GEOMETRY_REPAIR_REPORT
+    except Exception as exc:  # noqa: BLE001 — one bad vector file must not abort the whole audit
+        result["error"] = str(exc)
+        result["error_type"] = "read_error"
+        logger.warning("Error reading %s: %s", path.name, exc)
+        return result
 
+    result["geometry_repair"] = repair_report._asdict()
+
+    try:
         result["crs"] = str(gdf.crs) if gdf.crs else None
         result["n_features"] = len(gdf)
         result["geometry_types"] = sorted({str(g) for g in gdf.geom_type.unique()})
@@ -250,7 +277,8 @@ def inspect_vector_layer(
 
     except Exception as exc:  # noqa: BLE001 — one bad vector file must not abort the whole audit
         result["error"] = str(exc)
-        logger.warning("Error inspecting %s: %s", path.name, exc)
+        result["error_type"] = "processing_error"
+        logger.warning("Error processing %s: %s", path.name, exc)
 
     return result
 

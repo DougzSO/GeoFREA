@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 from rasterio.transform import Affine
 
 from geofrea.core.orchestrator import PhaseContext
+from geofrea.core.schemas import GeometryRepairSummary
 from geofrea.suitability_criteria.cartography import plot_criterion_map
 from geofrea.suitability_criteria.criteria_functions import (
     ComputeResult,
@@ -263,7 +264,7 @@ def run_suitability_criteria_phase(
     logger.info(
         "  protected_areas: done (source=%s, valid=%s, wdpa_geoms_repaired=%d/%d)",
         protected_source, f"{prot_stats['valid_pixels']:,}",
-        wdpa_repair_report.invalid_repaired, wdpa_repair_report.total_features,
+        wdpa_repair_report.n_repaired, wdpa_repair_report.n_total,
     )
 
     # slope_degrees: cartography-only raster, NOT a canonical criterion —
@@ -322,10 +323,7 @@ def run_suitability_criteria_phase(
             missing_expected=missing_expected,
             not_implemented=not_implemented,
             protected_source=protected_source,
-            protected_wdpa_features_total=wdpa_repair_report.total_features,
-            protected_wdpa_invalid_repaired=wdpa_repair_report.invalid_repaired,
-            protected_wdpa_repair_area_before_km2=wdpa_repair_report.area_before_km2,
-            protected_wdpa_repair_area_after_km2=wdpa_repair_report.area_after_km2,
+            protected_wdpa_repair=GeometryRepairSummary(**wdpa_repair_report._asdict()),
             grid_metadata=gm,
         ),
     )
