@@ -22,27 +22,24 @@ run:
   # on how this resolves once a phase runner exists.
   countries: []
 
-  # One flag per module, matching the "nome" values in
-  # docs/PROGRESS.json's "modulos"/"modulos_extra" arrays (and the
-  # src/geofrea/<name>/ package layout from Fase 1). data_acquisition
-  # and data_quality_audit have real phase runners, wired together
-  # (main.py, see docs/DECISIONS.md 2026-08-25 - data_acquisition
-  # activation) — both false here by default; the rest are still
-  # "documentado_nao_construido" per PROGRESS.json, nothing to enable
-  # yet.
-  phases:
-    data_acquisition: false
-    data_quality_audit: false
-    grid_alignment: false
-    suitability_criteria: false
-    land_eligibility: false
-    climate_forcing: false
-    technical_potential: false
-    lcoe_modeling: false
-    robustness_analysis: false
-    external_validation: false
-    results_synthesis: false
-    explorer: false
+  # Phases to execute (METHODOLOGY A-03). Non-empty, validated at run
+  # time against the phases actually registered in main.py. The
+  # orchestrator resolves everything these transitively require from
+  # the requires/produces DAG (docs/phases/core.md D-core-001) — this
+  # no longer needs to list upstream phases just to unblock a
+  # downstream one, unlike the old per-phase boolean toggle map.
+  # Currently only these four have real phase runners wired in main.py.
+  target_phases:
+    - data_acquisition
+    - data_quality_audit
+    - grid_alignment
+    - suitability_criteria
+
+  # Required, no default (RunConfig.force_rerun): re-execute
+  # target_phases and everything that transitively depends on them,
+  # even if the manifest already records success. false = normal
+  # resume-from-manifest behavior.
+  force_rerun: false
 
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
 # docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).

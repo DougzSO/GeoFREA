@@ -173,30 +173,18 @@ def test_audit_run_with_no_prior_acquisition_matches_standalone_behavior(tmp_pat
 
 
 # ─── grid_alignment wiring (2026-09-08, see DECISIONS.md same date) ───
-
-
-@pytest.mark.unit
-def test_build_grid_alignment_inputs_raises_when_acquisition_did_not_run(tmp_path):
-    # Unlike _build_audit_inputs(), there is no empty-inputs fallback —
-    # grid_alignment cannot run at all without a real AcquisitionResult.
-    with pytest.raises(RuntimeError, match="data_acquisition"):
-        main._build_grid_alignment_inputs(_context(tmp_path, prior_results={}), ResolutionsConfig())
-
-
-@pytest.mark.unit
-def test_build_grid_alignment_inputs_raises_when_acquisition_output_is_none(tmp_path):
-    failed = PhaseResult(
-        phase="data_acquisition",
-        status="failed",
-        output=None,
-        error="boom",
-        started_at="2026-09-08T00:00:00+00:00",
-        finished_at="2026-09-08T00:00:01+00:00",
-    )
-    with pytest.raises(RuntimeError, match="data_acquisition"):
-        main._build_grid_alignment_inputs(
-            _context(tmp_path, prior_results={"data_acquisition": failed}), ResolutionsConfig()
-        )
+#
+# test_build_grid_alignment_inputs_raises_when_acquisition_did_not_run
+# and ..._raises_when_acquisition_output_is_none were REMOVED 2026-09-21
+# (see docs/phases/core.md D-core-001): _build_grid_alignment_inputs()
+# no longer guards with a RuntimeError — grid_alignment's PhaseSpec now
+# declares requires={"layer_registry"}, produced only by
+# data_acquisition, so Orchestrator.run()'s graph validation and
+# dependency-skip logic already guarantee data_acquisition succeeded
+# before this closure is ever called. The scenario these tests exercised
+# (calling the closure directly with no/failed data_acquisition in
+# prior_results) is no longer a case the function itself defends
+# against; it is now a precondition enforced one level up, by the DAG.
 
 
 @pytest.mark.unit
@@ -270,37 +258,40 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
 
 
 @pytest.mark.unit
-def test_orchestrator_runs_grid_alignment_with_data_quality_audit_disabled(tmp_path):
+def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(tmp_path):
     # The point of this test: prove the independence Passo 1 designed
     # for actually holds through the REAL Orchestrator + main.py
     # closures, not just "grid_alignment's adapter doesn't import
     # AuditResult" in isolation. data_acquisition uses a stub run
     # function (no real fetch/network — out of scope for a unit test);
     # data_quality_audit and grid_alignment use main.py's REAL closures.
+    # data_quality_audit is registered but not in target_phases and
+    # nothing requires its output, so the DAG never pulls it in.
     mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
     boundary_path = tmp_path / "country" / "borders.geojson"
     boundary_path.parent.mkdir(parents=True)
     gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(boundary_path, driver="GeoJSON")
 
     def _stub_acquisition_run(context):
-        return _acquisition_phase_result(
+        result = _acquisition_phase_result(
             [
                 AcquiredLayer(
                     layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
                 )
             ]
         ).output
+        context.register_artifact("layer_registry", boundary_path, "1.0")
+        return result
 
     outputs_dir = tmp_path / "outputs"
     orchestrator = Orchestrator(
         outputs_dir=outputs_dir,
         country_code="PRT",
         country_params=_country_params("PRT"),
-        phases_enabled={
-            "data_acquisition": True,
-            "data_quality_audit": False,
-            "grid_alignment": True,
-        },
+        target_phases=["grid_alignment"],
+        force_rerun=False,
+        run_id="test-run-id",
+        dirty=False,
     )
 
     real_grid_alignment_run = next(
@@ -308,17 +299,122 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_disabled(tmp_p
     )
     specs = [
         PhaseSpec(
-            name="data_acquisition", output_model=AcquisitionResult, run=_stub_acquisition_run
+            name="data_acquisition",
+            output_model=AcquisitionResult,
+            run=_stub_acquisition_run,
+            requires=frozenset(),
+            produces=frozenset({"layer_registry"}),
         ),
-        PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=main._audit_run),
         PhaseSpec(
-            name="grid_alignment", output_model=GridAlignmentResult, run=real_grid_alignment_run
+            name="data_quality_audit",
+            output_model=AuditResult,
+            run=main._audit_run,
+            requires=frozenset({"layer_registry"}),
+            produces=frozenset({"audit_report"}),
+        ),
+        PhaseSpec(
+            name="grid_alignment",
+            output_model=GridAlignmentResult,
+            run=real_grid_alignment_run,
+            requires=frozenset({"layer_registry"}),
+            produces=frozenset({"aligned_rasters"}),
         ),
     ]
 
     results = orchestrator.run(specs)
 
     assert list(results.keys()) == ["data_acquisition", "grid_alignment"]
-    assert "data_quality_audit" not in results  # disabled: never attempted, no PhaseResult at all
+    assert "data_quality_audit" not in results  # not targeted, nothing requires it: never attempted
     assert results["grid_alignment"].status == "success"
     assert results["grid_alignment"].output.grid_metadata.n_valid_pixels > 0
+
+
+# ─── run_geofrea exit-code contract (2026-09-21, see docs/phases/core.md) ───
+#
+# main.py must exit non-zero when any target phase ends "failed" or
+# "skipped_upstream_failed" — run_geofrea() is what main() derives its
+# return code from (main() itself is a thin loop over run_geofrea() +
+# `all_ok`), so these test run_geofrea() directly with a stubbed
+# _build_phase_specs() rather than re-deriving the whole real pipeline.
+
+
+@pytest.mark.unit
+def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypatch):
+    def _failing_specs(resolutions, criteria):
+        def run(context):
+            raise ValueError("boom")
+
+        return [
+            PhaseSpec(
+                name="data_acquisition",
+                output_model=AcquisitionResult,
+                run=run,
+                requires=frozenset(),
+                produces=frozenset(),
+            )
+        ]
+
+    monkeypatch.setattr(main, "_build_phase_specs", _failing_specs)
+    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
+
+    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
+
+    assert ok is False
+
+
+@pytest.mark.unit
+def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(tmp_path, monkeypatch):
+    def _specs(resolutions, criteria):
+        def failing_run(context):
+            raise ValueError("boom")
+
+        def dependent_run(context):
+            return _acquisition_phase_result([]).output
+
+        return [
+            PhaseSpec(
+                name="a",
+                output_model=AcquisitionResult,
+                run=failing_run,
+                requires=frozenset(),
+                produces=frozenset({"a_out"}),
+            ),
+            PhaseSpec(
+                name="b",
+                output_model=AcquisitionResult,
+                run=dependent_run,
+                requires=frozenset({"a_out"}),
+                produces=frozenset(),
+            ),
+        ]
+
+    monkeypatch.setattr(main, "_build_phase_specs", _specs)
+    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
+
+    ok = main.run_geofrea("PRT", ["b"], False, ResolutionsConfig(), "run-id", False)
+
+    assert ok is False
+
+
+@pytest.mark.unit
+def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, monkeypatch):
+    def _specs(resolutions, criteria):
+        def run(context):
+            return _acquisition_phase_result([]).output
+
+        return [
+            PhaseSpec(
+                name="data_acquisition",
+                output_model=AcquisitionResult,
+                run=run,
+                requires=frozenset(),
+                produces=frozenset(),
+            )
+        ]
+
+    monkeypatch.setattr(main, "_build_phase_specs", _specs)
+    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
+
+    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
+
+    assert ok is True

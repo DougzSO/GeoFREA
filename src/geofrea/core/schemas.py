@@ -478,23 +478,42 @@ class ParametersFile(BaseModel):
 class RunConfig(BaseModel):
     """Which countries/phases a pipeline execution should cover.
 
+    Replaces the per-phase boolean toggle map (`phases: dict[str, bool]`)
+    with explicit run targeting per METHODOLOGY A-03: the orchestrator
+    resolves which phases actually execute from the requires/produces
+    DAG (docs/phases/core.md D-core-001), not from a flat enabled/
+    disabled map.
+
     Args:
         countries: ISO-3166-alpha-3 codes to run. Empty list means "run
             every country present in parameters.json's 'countries' key"
             — resolved dynamically by the (future) phase runner, not
             hardcoded here. See config_loader.py::load_settings().
-        phases: One flag per pipeline module, keyed by the same names
-            used in docs/PROGRESS.json's "modulos" array and the
-            src/geofrea/<name>/ package layout. True = phase runs for
-            this execution, False = disabled (mirrors the legacy
-            geoworld_framework's skip_* toggles, inverted for a
-            non-double-negative reading).
+        target_phases: Phase names to execute. Non-empty — the
+            orchestrator also runs (or resumes) whatever these
+            transitively require, so this need only name the phases the
+            caller actually wants outputs for. Validated against the
+            registered PhaseSpecs at run time (not by this schema,
+            which does not know the registry).
+        force_rerun: Whether target_phases (and every phase that
+            transitively depends on them) should be re-executed even if
+            already recorded as successful in the manifest. Required,
+            with no default: an operational toggle with real
+            consequences (discards cached work) should never be silently
+            assumed.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     countries: list[str]
-    phases: dict[str, bool]
+    target_phases: list[str]
+    force_rerun: bool
+
+    @model_validator(mode="after")
+    def _target_phases_not_empty(self) -> RunConfig:
+        if not self.target_phases:
+            raise ValueError("run.target_phases must not be empty.")
+        return self
 
 
 class AdaptiveResolutionConfig(BaseModel):

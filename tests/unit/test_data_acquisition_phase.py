@@ -508,13 +508,15 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
             run=run_acquisition_phase,
         )
     ]
-    phases_enabled = {"data_acquisition": True}
 
     first_run = Orchestrator(
         outputs_dir=tmp_path,
         country_code=country_code,
         country_params=country_params,
-        phases_enabled=phases_enabled,
+        target_phases=["data_acquisition"],
+        force_rerun=False,
+        run_id="test-run-id",
+        dirty=False,
     )
     first_results = first_run.run(phase_specs)
     assert first_results["data_acquisition"].status == "success"
@@ -526,7 +528,10 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
         outputs_dir=tmp_path,
         country_code=country_code,
         country_params=country_params,
-        phases_enabled=phases_enabled,
+        target_phases=["data_acquisition"],
+        force_rerun=False,
+        run_id="test-run-id",
+        dirty=False,
     )
     resumed_results = resumed_run.run(phase_specs)
 

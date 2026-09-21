@@ -19,7 +19,6 @@ from geofrea.core.constants import NODATA_FLOAT
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
-    PhaseExecutionError,
     PhaseSpec,
     RunManifest,
 )
@@ -248,8 +247,12 @@ def test_corrupted_wdpa_error_message_survives_to_orchestrator_output(tmp_path):
     # The RuntimeError from compute_protected_areas (WDPA file present but
     # unreadable — DECISIONS.md 2026-09-11) must reach a production
     # operator WITHOUT them opening a traceback: its text has to survive
-    # verbatim into (a) the PhaseExecutionError message main.py logs and
-    # (b) the persisted manifest's `error` field.
+    # verbatim into (a) the failed PhaseResult's `error` and (b) the
+    # persisted manifest's `error` field. Orchestrator.run() no longer
+    # raises on a phase failure (METHODOLOGY A-09, docs/phases/core.md
+    # D-core-001 — a failure is recorded, not raised, so independent
+    # branches can still run) — this diagnostic now has to survive
+    # through the returned PhaseResult instead of an exception.
     bad_wdpa = tmp_path / "WDPA_broken_shp-polygons.shp"
     bad_wdpa.write_bytes(b"\x00 not a shapefile \xff" * 8)
     inp = _inputs(tmp_path).model_copy(update={"wdpa_path": bad_wdpa})
@@ -263,18 +266,20 @@ def test_corrupted_wdpa_error_message_survives_to_orchestrator_output(tmp_path):
         outputs_dir=tmp_path / "out",
         country_code="PRT",
         country_params=load_parameters(_REPO_ROOT / "config" / "parameters.json").countries["PRT"],
-        phases_enabled={"suitability_criteria": True},
+        target_phases=["suitability_criteria"],
+        force_rerun=False,
+        run_id="test-run-id",
+        dirty=False,
     )
 
-    with pytest.raises(PhaseExecutionError) as excinfo:
-        orchestrator.run([spec])
+    results = orchestrator.run([spec])
 
-    # (a) the exception the CLI logs, one line, no traceback needed
-    final_msg = str(excinfo.value)
-    assert "Phase 'suitability_criteria' failed" in final_msg
-    assert "protected_areas: WDPA shapefile" in final_msg
-    assert "present but could not be read" in final_msg
-    assert bad_wdpa.name in final_msg
+    # (a) the diagnostic on the returned PhaseResult
+    result = results["suitability_criteria"]
+    assert result.status == "failed"
+    assert "protected_areas: WDPA shapefile" in result.error
+    assert "present but could not be read" in result.error
+    assert bad_wdpa.name in result.error
     # a generic I/O failure in another layer would NOT contain these
 
     # (b) the same diagnostic, persisted to manifest.json on disk

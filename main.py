@@ -56,18 +56,24 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import sys
 from pathlib import Path
+
+from pydantic import BaseModel
 
 from geofrea.core.config_loader import load_parameters, load_settings
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
-    PhaseExecutionError,
     PhaseSpec,
+    compute_dirty,
+    compute_git_commit,
+    compute_run_id,
 )
-from geofrea.core.schemas import CriteriaParams, ResolutionsConfig
+from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
@@ -89,7 +95,37 @@ logger = logging.getLogger("geofrea.main")
 REPO_ROOT = Path(__file__).resolve().parent
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
+METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 OUTPUTS_DIR = REPO_ROOT / "outputs"
+
+_METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
+
+
+def _read_methodology_version(path: Path) -> str:
+    """Parse the `| Version | x.y.z |` row from METHODOLOGY.md's header table."""
+    match = _METHODOLOGY_VERSION_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise RuntimeError(f"Could not find a Version row in {path}.")
+    return match.group(1)
+
+
+def _register_json_artifact(
+    context: PhaseContext, key: str, output: BaseModel, schema_version: str = "1.0"
+) -> None:
+    """Dump `output` as JSON and register it as the artifact identified by `key`.
+
+    Each migrated phase's real outputs already exist on disk as
+    individual rasters/vectors, written by that phase's own code
+    (unchanged here). This JSON dump is a single, hashable, resumable
+    artifact file representing the whole phase output for the artifact
+    registry (METHODOLOGY A-02) — it does not replace or duplicate the
+    underlying raster/vector writers.
+    """
+    artifact_dir = context.outputs_dir / context.country_code / "artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    path = artifact_dir / f"{key}.json"
+    path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
+    context.register_artifact(key, path, schema_version)
 
 
 def _build_audit_inputs(context: PhaseContext) -> AuditInputs:
@@ -119,7 +155,9 @@ def _build_audit_inputs(context: PhaseContext) -> AuditInputs:
 
 
 def _audit_run(context: PhaseContext) -> AuditResult:
-    return run_audit_phase(context, inputs=_build_audit_inputs(context))
+    result = run_audit_phase(context, inputs=_build_audit_inputs(context))
+    _register_json_artifact(context, "audit_report", result)
+    return result
 
 
 def _build_grid_alignment_inputs(
@@ -127,16 +165,13 @@ def _build_grid_alignment_inputs(
 ) -> GridAlignmentInputs:
     """Build GridAlignmentInputs from data_acquisition's output.
 
-    Unlike _build_audit_inputs(), there is NO empty-inputs fallback:
-    grid_alignment has no degraded mode (see GridAlignmentInputs'
-    docstring in schemas.py, and GridAlignmentRequiresBordersError) —
-    it cannot produce anything meaningful without a real
-    AcquisitionResult to adapt. If data_acquisition did not run this
-    pipeline (disabled in settings.yaml, or a hypothetical standalone
-    grid_alignment-only run), this raises immediately rather than
-    silently building a request GridAlignmentInputs could never
-    satisfy — same "fail loud at construction time" philosophy as
-    GridAlignmentRequiresBordersError itself (see adapter.py).
+    No RuntimeError guard here (removed 2026-09-21, see docs/phases/
+    core.md D-core-001): grid_alignment's PhaseSpec declares
+    requires={"layer_registry"}, produced only by data_acquisition, so
+    the orchestrator's graph validation and dependency-skip logic
+    (Orchestrator.run()) already guarantee data_acquisition succeeded
+    before this closure is ever called — the DAG covers what the
+    RuntimeError used to guard against.
 
     Args:
         context: The grid_alignment phase's PhaseContext, as passed by
@@ -148,20 +183,12 @@ def _build_grid_alignment_inputs(
         Real GridAlignmentInputs adapted from data_acquisition's output.
 
     Raises:
-        RuntimeError: If data_acquisition did not run (or failed) in
-            this pipeline — grid_alignment has nothing to adapt from.
         GridAlignmentRequiresBordersError: If data_acquisition ran but
             its AcquisitionResult has no usable `borders` layer (see
             grid_alignment/adapter.py).
     """
-    acquisition_result = context.prior_results.get("data_acquisition")
-    if acquisition_result is None or acquisition_result.output is None:
-        raise RuntimeError(
-            "grid_alignment requires data_acquisition to have run in this "
-            "same pipeline (see settings.yaml's run.phases) — it has no "
-            "degraded/empty-inputs mode, unlike data_quality_audit."
-        )
-    return acquisition_result_to_grid_alignment_inputs(acquisition_result.output, resolutions)
+    acquisition_output = context.prior_results["data_acquisition"].output
+    return acquisition_result_to_grid_alignment_inputs(acquisition_output, resolutions)
 
 
 def _build_suitability_criteria_inputs(
@@ -169,11 +196,12 @@ def _build_suitability_criteria_inputs(
 ) -> SuitabilityCriteriaInputs:
     """Build suitability_criteria's input from grid_alignment + data_acquisition.
 
-    Two-phase dependency (audit sec 8c): the aligned rasters come from
-    grid_alignment's PhaseResult, the WDPA path / plants DataFrame /
-    mainland boundary from data_acquisition's. Neither has a degraded
-    mode here — same fail-loud-at-construction philosophy as
-    _build_grid_alignment_inputs().
+    No RuntimeError guards here (removed 2026-09-21, see docs/phases/
+    core.md D-core-001): suitability_criteria's PhaseSpec declares
+    requires={"aligned_rasters", "layer_registry"}, produced only by
+    grid_alignment and data_acquisition respectively — the
+    orchestrator's graph validation and dependency-skip logic already
+    guarantee both succeeded before this closure is ever called.
 
     Args:
         context: The suitability_criteria phase's PhaseContext.
@@ -183,113 +211,179 @@ def _build_suitability_criteria_inputs(
 
     Returns:
         Real SuitabilityCriteriaInputs.
-
-    Raises:
-        RuntimeError: If grid_alignment or data_acquisition did not run
-            (or failed) in this pipeline.
     """
-    grid_result = context.prior_results.get("grid_alignment")
-    acquisition_result = context.prior_results.get("data_acquisition")
-    if grid_result is None or grid_result.output is None:
-        raise RuntimeError(
-            "suitability_criteria requires grid_alignment to have run in this "
-            "same pipeline (see settings.yaml's run.phases)."
-        )
-    if acquisition_result is None or acquisition_result.output is None:
-        raise RuntimeError(
-            "suitability_criteria requires data_acquisition to have run in this "
-            "same pipeline (for the WDPA path, plants, and mainland boundary)."
-        )
+    grid_output = context.prior_results["grid_alignment"].output
+    acquisition_output = context.prior_results["data_acquisition"].output
     return build_suitability_criteria_inputs(
-        grid_result.output,
-        acquisition_result.output,
+        grid_output,
+        acquisition_output,
         criteria,
         context.country_params.criteria,
     )
 
 
+def _data_acquisition_run(context: PhaseContext) -> AcquisitionResult:
+    result = run_acquisition_phase(context)
+    _register_json_artifact(context, "layer_registry", result)
+    return result
+
+
+# GridAlignmentResult's raster fields registered individually (METHODOLOGY
+# A-02, 2026-09-21 — see docs/phases/core.md D-core-003). Excludes
+# `seismic`: METHODOLOGY S-08 puts the seismic hazard layer out of scope,
+# so GridAlignmentResult.seismic is always None — never a real artifact
+# to register, unlike the other 11 fields, which real F1 data resolves
+# for every country currently in scope (PRT, BRA; see docs/PROGRESS.json).
+_ALIGNED_RASTER_LAYER_KEYS = (
+    "elevation",
+    "slope",
+    "solar",
+    "wind",
+    "land_cover",
+    "population",
+    "roads",
+    "grid",
+    "lakes",
+    "rivers",
+    "plants",
+)
+
+
+def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult) -> None:
+    """Register each of grid_alignment's raster outputs as its own artifact.
+
+    A layer that resolved to None (no source data for this country) is
+    not registered — see _ALIGNED_RASTER_LAYER_KEYS' docstring note for
+    why this is safe for PRT/BRA today, and the known limitation this
+    creates for a future country missing one of these layers (recorded
+    in docs/phases/core.md Known issues).
+    """
+    for layer_key in _ALIGNED_RASTER_LAYER_KEYS:
+        path = getattr(result, layer_key)
+        if path is not None:
+            context.register_artifact(f"aligned/{layer_key}", path, "1.0")
+
+
 def _build_phase_specs(
     resolutions: ResolutionsConfig, criteria: CriteriaParams
 ) -> list[PhaseSpec]:
-    """Registered phases, in execution order.
+    """Registered phases, with their requires/produces artifact contracts.
 
-    data_acquisition MUST come before data_quality_audit: the
-    Orchestrator enforces no ordering or dependency between phases on
-    its own (RunConfig.phases is a flat enabled/disabled toggle map,
-    with no ordering semantics) — this list's order is the only thing
-    that determines execution order, and it's also what makes
-    data_acquisition's PhaseResult available in context.prior_results
-    by the time _audit_run() executes (see module docstring for the
-    wiring itself).
+    Execution order is no longer this list's order: the Orchestrator
+    derives it from each PhaseSpec's requires/produces (METHODOLOGY
+    A-01, docs/phases/core.md D-core-001). data_quality_audit and
+    grid_alignment both require only "layer_registry" (data_acquisition's
+    output) — neither requires the other's output, preserving the
+    independence grid_alignment's own closure has always relied on (see
+    _build_grid_alignment_inputs, which reads only
+    context.prior_results["data_acquisition"]).
 
-    grid_alignment is registered THIRD (2026-09-08, see DECISIONS.md
-    same date), matching the readable pipeline order
-    (acquisition -> audit -> alignment, same as legacy's Fase 1/2a
-    numbering) — but its closure only reads
-    context.prior_results["data_acquisition"], never
-    ["data_quality_audit"]. List position here governs execution order
-    only; it does not imply grid_alignment depends on
-    data_quality_audit having run (see module docstring's "grid_
-    alignment wiring" section for why that independence matters).
+    grid_alignment registers one artifact per raster field
+    ("aligned/<layer>", see _ALIGNED_RASTER_LAYER_KEYS) plus the
+    "aligned_rasters" JSON summary of the whole GridAlignmentResult.
+    data_acquisition and data_quality_audit still register only their
+    own output-model summary ("layer_registry", "audit_report") — F1's
+    AcquiredLayer entries have no per-layer content to hash beyond the
+    resolved path itself (see OQ-024, docs/OPEN_QUESTIONS.md).
 
-    No longer takes phases_enabled (see module docstring —
-    UnwiredPhasesError, the only reason this function inspected it, was
-    removed 2026-08-25): which phases actually execute is decided by
-    Orchestrator.run() itself, per phase, via Orchestrator.phases_enabled.
+    suitability_criteria (F2b) produces only its own output-model
+    artifact ("suitability_criteria_result"), not a per-layer
+    breakdown — a temporary exception, see docs/phases/core.md Known
+    issues, pending the Estágio H rebuild of F2b into siting_layers.
 
     Args:
         resolutions: settings.yaml's `geospatial.resolutions`, closed
             over by grid_alignment's run closure (2026-09-09, see
-            docs/DECISIONS.md same date, grid_alignment Passo 4 item 3
-            — same per-context-closure pattern as _audit_run, not a
-            functools.partial with eagerly-bound inputs, see module
-            docstring's "grid_alignment wiring" section for why).
+            docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
 
     Returns:
-        The registered PhaseSpecs, in execution order.
+        The registered PhaseSpecs.
     """
 
     def grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
-        return run_grid_alignment_phase(
+        result = run_grid_alignment_phase(
             context, inputs=_build_grid_alignment_inputs(context, resolutions)
         )
+        _register_json_artifact(context, "aligned_rasters", result)
+        _register_aligned_rasters(context, result)
+        return result
 
     def suitability_criteria_run(context: PhaseContext) -> SuitabilityCriteriaResult:
-        return run_suitability_criteria_phase(
+        result = run_suitability_criteria_phase(
             context, inputs=_build_suitability_criteria_inputs(context, criteria)
         )
+        _register_json_artifact(context, "suitability_criteria_result", result)
+        return result
 
     return [
         PhaseSpec(
-            name="data_acquisition", output_model=AcquisitionResult, run=run_acquisition_phase
+            name="data_acquisition",
+            output_model=AcquisitionResult,
+            run=_data_acquisition_run,
+            requires=frozenset(),
+            produces=frozenset({"layer_registry"}),
         ),
-        PhaseSpec(name="data_quality_audit", output_model=AuditResult, run=_audit_run),
         PhaseSpec(
-            name="grid_alignment", output_model=GridAlignmentResult, run=grid_alignment_run
+            name="data_quality_audit",
+            output_model=AuditResult,
+            run=_audit_run,
+            requires=frozenset({"layer_registry"}),
+            produces=frozenset({"audit_report"}),
+        ),
+        PhaseSpec(
+            name="grid_alignment",
+            output_model=GridAlignmentResult,
+            run=grid_alignment_run,
+            requires=frozenset({"layer_registry"}),
+            produces=frozenset({"aligned_rasters"})
+            | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS},
         ),
         PhaseSpec(
             name="suitability_criteria",
             output_model=SuitabilityCriteriaResult,
             run=suitability_criteria_run,
+            requires=frozenset({"aligned_rasters", "layer_registry"}),
+            produces=frozenset({"suitability_criteria_result"}),
         ),
     ]
 
 
+def _resolved_config_json(settings: SettingsFile, parameters) -> str:
+    return json.dumps(
+        {
+            "settings": settings.model_dump(mode="json"),
+            "parameters": parameters.model_dump(mode="json"),
+        },
+        sort_keys=True,
+    )
+
+
 def run_geofrea(
-    country_code: str, phases_enabled: dict[str, bool], resolutions: ResolutionsConfig
+    country_code: str,
+    target_phases: list[str],
+    force_rerun: bool,
+    resolutions: ResolutionsConfig,
+    run_id: str,
+    dirty: bool,
 ) -> bool:
-    """Run every enabled, registered phase for a single country.
+    """Run the phases needed to satisfy target_phases for a single country.
 
     Args:
         country_code: ISO-3166-alpha-3 code, must be a key in parameters.json.
-        phases_enabled: RunConfig.phases for this run.
+        target_phases: RunConfig.target_phases for this run.
+        force_rerun: RunConfig.force_rerun for this run.
         resolutions: settings.yaml's `geospatial.resolutions`, threaded
             through to grid_alignment's PhaseSpec (see
             _build_phase_specs()).
+        run_id: This run's identifier (see
+            geofrea.core.orchestrator.compute_run_id).
+        dirty: Whether the working tree has uncommitted changes (see
+            geofrea.core.orchestrator.compute_dirty).
 
     Returns:
-        True if every attempted phase succeeded (or none were enabled),
-        False if a phase failed.
+        True if every one of target_phases ended "success", False if any
+        ended "failed" or "skipped_upstream_failed" (main()'s exit code
+        is derived from this — see module-level Usage note).
     """
     parameters = load_parameters(PARAMETERS_JSON)
     country_params = parameters.countries[country_code]
@@ -298,17 +392,23 @@ def run_geofrea(
         outputs_dir=OUTPUTS_DIR,
         country_code=country_code,
         country_params=country_params,
-        phases_enabled=phases_enabled,
+        target_phases=target_phases,
+        force_rerun=force_rerun,
+        run_id=run_id,
+        dirty=dirty,
     )
 
-    try:
-        orchestrator.run(_build_phase_specs(resolutions, parameters.criteria))
-    except PhaseExecutionError as exc:
-        logger.error("Run aborted for %s: %s", country_code, exc)
-        return False
-
-    logger.info("Run completed for %s.", country_code)
-    return True
+    results = orchestrator.run(_build_phase_specs(resolutions, parameters.criteria))
+    ok = all(results[name].status == "success" for name in target_phases)
+    if not ok:
+        logger.error(
+            "Run incomplete for %s: %s",
+            country_code,
+            {name: results[name].status for name in target_phases if results[name].status != "success"},
+        )
+    else:
+        logger.info("Run completed for %s.", country_code)
+    return ok
 
 
 def main() -> int:
@@ -324,14 +424,23 @@ def main() -> int:
         )
         return 1
 
-    if not any(settings.run.phases.values()):
-        logger.warning(
-            "No phase is enabled in settings.yaml's run.phases — nothing to do."
-        )
+    methodology_version = _read_methodology_version(METHODOLOGY_MD)
+    git_commit = compute_git_commit(REPO_ROOT)
+    dirty = compute_dirty(REPO_ROOT)
+    run_id = compute_run_id(
+        _resolved_config_json(settings, parameters), methodology_version, git_commit
+    )
 
     all_ok = True
     for country_code in countries:
-        ok = run_geofrea(country_code, settings.run.phases, settings.geospatial.resolutions)
+        ok = run_geofrea(
+            country_code,
+            settings.run.target_phases,
+            settings.run.force_rerun,
+            settings.geospatial.resolutions,
+            run_id,
+            dirty,
+        )
         all_ok = all_ok and ok
 
     return 0 if all_ok else 1

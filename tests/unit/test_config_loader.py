@@ -68,24 +68,16 @@ def test_load_real_settings_yaml_validates():
     assert isinstance(result, SettingsFile)
     # Empty = run every country in parameters.json, per RunConfig's contract.
     assert result.run.countries == []
-    # data_acquisition/data_quality_audit have real phase runners now
-    # (see docs/DECISIONS.md 2026-08-25 - data_acquisition activation);
-    # every flag is still off by default.
-    assert set(result.run.phases.keys()) == {
+    # target_phases replaces the old per-phase boolean toggle map (see
+    # docs/phases/core.md D-core-001) — only the four phases with real
+    # phase runners wired in main.py are listed by default.
+    assert result.run.target_phases == [
         "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
         "suitability_criteria",
-        "land_eligibility",
-        "climate_forcing",
-        "technical_potential",
-        "lcoe_modeling",
-        "robustness_analysis",
-        "external_validation",
-        "results_synthesis",
-        "explorer",
-    }
-    assert all(enabled is False for enabled in result.run.phases.values())
+    ]
+    assert result.run.force_rerun is False
 
 
 @pytest.mark.unit

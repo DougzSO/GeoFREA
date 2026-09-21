@@ -23,7 +23,7 @@
       "module": "core",
       "status": "rework_required",
       "record": "docs/phases/core.md",
-      "summary": "Orchestrator is manifest-resumable but order is list-implicit; needs A-01 to A-03 and new config schemas (U-05, Section 9)."
+      "summary": "A-01/A-02/A-03/A-09 done, incl. per-raster F2a artifacts and exit-code contract; OQ-024 (F1 checksums) open; still needs A-04 to A-06, U-05, Section 9."
     },
     {
       "id": "F1",

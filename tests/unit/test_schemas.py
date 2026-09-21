@@ -157,7 +157,8 @@ VALID_PARAMETERS_FILE = {
 
 VALID_RUN_CONFIG = {
     "countries": [],
-    "phases": {"data_quality_audit": False, "grid_alignment": False},
+    "target_phases": ["data_quality_audit", "grid_alignment"],
+    "force_rerun": False,
 }
 
 VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG}
@@ -246,7 +247,16 @@ def test_parameters_file_accepts_valid_payload():
 def test_run_config_accepts_valid_payload():
     result = RunConfig.model_validate(VALID_RUN_CONFIG)
     assert result.countries == []
-    assert result.phases["grid_alignment"] is False
+    assert result.target_phases == ["data_quality_audit", "grid_alignment"]
+    assert result.force_rerun is False
+
+
+@pytest.mark.unit
+def test_run_config_empty_target_phases_raises():
+    data = copy.deepcopy(VALID_RUN_CONFIG)
+    data["target_phases"] = []
+    with pytest.raises(ValidationError):
+        RunConfig.model_validate(data)
 
 
 @pytest.mark.unit
@@ -306,7 +316,7 @@ def test_parameters_file_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["countries", "phases"])
+@pytest.mark.parametrize("field", ["countries", "target_phases", "force_rerun"])
 def test_run_config_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_RUN_CONFIG)
     del data[field]
