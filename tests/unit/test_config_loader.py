@@ -76,12 +76,14 @@ def test_load_real_settings_yaml_validates():
         "data_quality_audit",
         "grid_alignment",
         "suitability_criteria",
-        "suitability_analysis",
-        "potential_analysis",
+        "land_eligibility",
+        "climate_forcing",
+        "technical_potential",
         "lcoe_modeling",
+        "robustness_analysis",
+        "external_validation",
         "results_synthesis",
-        "ghg_abatement",
-        "sensitivity_analysis",
+        "explorer",
     }
     assert all(enabled is False for enabled in result.run.phases.values())
 

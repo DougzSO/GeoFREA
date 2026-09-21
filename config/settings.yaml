@@ -35,12 +35,14 @@ run:
     data_quality_audit: false
     grid_alignment: false
     suitability_criteria: false
-    suitability_analysis: false
-    potential_analysis: false
+    land_eligibility: false
+    climate_forcing: false
+    technical_potential: false
     lcoe_modeling: false
+    robustness_analysis: false
+    external_validation: false
     results_synthesis: false
-    ghg_abatement: false
-    sensitivity_analysis: false
+    explorer: false
 
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
 # docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).

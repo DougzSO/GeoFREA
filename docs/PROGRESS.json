@@ -1,10 +1,10 @@
 {
   "schema_version": "2.0",
   "methodology_version": "1.0.0",
-  "last_updated": "2026-09-15",
+  "last_updated": "2026-09-21",
   "current_milestone": "MS-0",
   "milestones": [
-    {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "in_progress"},
+    {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
     {"id": "MS-1", "title": "Core DAG orchestration and configuration schemas", "status": "not_started"},
     {"id": "MS-2", "title": "F1 and F1b conformance, India wiring", "status": "not_started"},
     {"id": "MS-3", "title": "F2a conformance", "status": "not_started"},
