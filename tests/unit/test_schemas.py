@@ -32,7 +32,10 @@ from geofrea.core.schemas import (
 
 VALID_VERIFIED_VALUE = {
     "value": 1.0,
+    "unit": "dimensionless",
     "source": "IRENA 2025",
+    "tier": None,
+    "range": None,
     "verified": True,
     "verified_by": "Douglas",
     "verified_date": "2026-08-20",
@@ -41,7 +44,10 @@ VALID_VERIFIED_VALUE = {
 
 VALID_PENDING_VALUE = {
     "value": None,
+    "unit": "dimensionless",
     "source": None,
+    "tier": None,
+    "range": None,
     "verified": False,
     "verified_by": None,
     "verified_date": None,
@@ -53,7 +59,6 @@ VALID_BIOMASS = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 3606},
     "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.04},
     "opex_variable_usd_per_kwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
-    "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.81},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
@@ -64,7 +69,6 @@ VALID_SOLAR = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 823},
     "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0092},
     "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
-    "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.12},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
@@ -75,14 +79,13 @@ VALID_WIND = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 976},
     "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0348},
     "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
-    "capacity_factor": {**VALID_VERIFIED_VALUE, "value": 0.34},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
     "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 8.5},
 }
 
-VALID_TECHNOLOGIES = {"biomass": VALID_BIOMASS, "solar": VALID_SOLAR, "wind": VALID_WIND}
+VALID_TECHNOLOGIES = {"solar": VALID_SOLAR, "wind": VALID_WIND}
 
 VALID_YIELD_BY_LAND_COVER = {
     **VALID_VERIFIED_VALUE,
@@ -158,6 +161,7 @@ VALID_PARAMETERS_FILE = {
 VALID_RUN_CONFIG = {
     "countries": [],
     "target_phases": ["data_quality_audit", "grid_alignment"],
+    "technologies": ["solar", "wind"],
     "force_rerun": False,
 }
 
@@ -174,7 +178,6 @@ REQUIRED_TECH_FIELDS = [
     "capex_usd_per_kw",
     "opex_fixed_pct_of_capex",
     "opex_variable_usd_per_kwh",
-    "capacity_factor",
     "lifetime_years",
     "discount_rate",
     "discount_rate_increment",
@@ -226,15 +229,14 @@ def test_wind_params_accepts_valid_payload():
 @pytest.mark.unit
 def test_technology_params_accepts_valid_payload():
     result = TechnologyParams.model_validate(VALID_TECHNOLOGIES)
-    assert result.biomass.capacity_factor.value == 0.81
-    assert result.solar.capacity_factor.value == 0.12
-    assert result.wind.capacity_factor.value == 0.34
+    assert result.solar.lifetime_years.value == 25
+    assert result.wind.lifetime_years.value == 25
 
 
 @pytest.mark.unit
 def test_country_params_accepts_valid_payload():
     result = CountryParams.model_validate(VALID_COUNTRY)
-    assert result.technologies.biomass.lifetime_years.value == 20
+    assert result.technologies.solar.lifetime_years.value == 25
 
 
 @pytest.mark.unit
@@ -248,6 +250,7 @@ def test_run_config_accepts_valid_payload():
     result = RunConfig.model_validate(VALID_RUN_CONFIG)
     assert result.countries == []
     assert result.target_phases == ["data_quality_audit", "grid_alignment"]
+    assert result.technologies == ["solar", "wind"]
     assert result.force_rerun is False
 
 
@@ -269,7 +272,7 @@ def test_settings_file_accepts_valid_payload():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["value", "verified", "verification_method"])
+@pytest.mark.parametrize("field", ["value", "unit", "verified", "verification_method"])
 def test_verified_value_missing_required_field_raises(field):
     data = dict(VALID_VERIFIED_VALUE)
     del data[field]
@@ -289,7 +292,7 @@ def test_tech_economic_params_missing_required_field_raises(tech_name, field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("field", ["solar", "wind"])
 def test_technology_params_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_TECHNOLOGIES)
     del data[field]
@@ -316,7 +319,7 @@ def test_parameters_file_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["countries", "target_phases", "force_rerun"])
+@pytest.mark.parametrize("field", ["countries", "target_phases", "technologies", "force_rerun"])
 def test_run_config_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_RUN_CONFIG)
     del data[field]
@@ -390,16 +393,6 @@ def test_settings_file_rejects_unexpected_field():
 
 
 # ─── Range-constraint tests: one parametrized case per constraint, per tech ──
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
-def test_capacity_factor_out_of_range_raises(tech_name):
-    model_cls, valid = TECH_MODELS[tech_name]
-    data = copy.deepcopy(valid)
-    data["capacity_factor"]["value"] = -0.1
-    with pytest.raises(ValidationError):
-        model_cls.model_validate(data)
 
 
 @pytest.mark.unit

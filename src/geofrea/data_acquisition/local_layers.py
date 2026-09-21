@@ -151,54 +151,67 @@ import logging
 import os
 from pathlib import Path
 
+from geofrea.core.config_loader import CountryMappingError, load_countries
+
 logger = logging.getLogger("geofrea.data_acquisition.local_layers")
 
 RAW_DATA_DIR_ENV_VAR = "GEOFREA_RAW_DATA_DIR"
 
-# Confirmed 2026-09-08 by directly listing GEOFREA_RAW_DATA_DIR/elevation
-# — NOT a naming convention, a literal record of what each of the 7
-# directories on disk is actually called. See module docstring.
-_ELEVATION_COUNTRY_DIRS: dict[str, str] = {
-    "BRA": "Brazil",
-    "CHN": "China",
-    "EGY": "EGY",
-    "IND": "India",
-    "PRT": "PRT",
-    "RUS": "Russia",
-    "ZAF": "South Africa",
-}
-
-# Confirmed 2026-09-08 by directly listing GEOFREA_RAW_DATA_DIR/land_cover
-# — full English country name in every case (unlike elevation above).
-_LAND_COVER_COUNTRY_DIRS: dict[str, str] = {
-    "BRA": "Brazil",
-    "CHN": "China",
-    "EGY": "Egypt",
-    "IND": "India",
-    "PRT": "Portugal",
-    "RUS": "Russia",
-    "ZAF": "South Africa",
-}
-
 _LAND_COVER_TILE_GLOB = "ESA_WorldCover_10m_2020_v100_*_Map.tif"
 
-# Deliberately BRA/PRT only — see module docstring, "roads (added
-# 2026-09-08...)", for why this is NOT extended to the other 5
-# countries the two tables above cover (regions_lookup.json's region
-# numbering conflicts with the shapefiles' own gp_gripreg attribute for
-# every region except these two, confirmed by sampling, not guessed).
-# Cross-validated against gp_gripreg 2026-09-08: folder number, folder
-# name, regions_lookup.json key, and each file's own gp_gripreg column
-# all agree for BRA (2) and PRT (4).
-_ROADS_COUNTRY_REGION_DIRS: dict[str, str] = {
-    "BRA": "Region_2_Central_South_America",
-    "PRT": "Region_4_Europe",
-}
+# Lazy-loaded cache for countries.yaml
+_COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
 
-_ROADS_COUNTRY_REGION_FILES: dict[str, str] = {
-    "BRA": "GRIP4_region2.shp",
-    "PRT": "GRIP4_region4.shp",
-}
+
+def _load_countries_config() -> dict[str, dict[str, str | None]]:
+    """Load countries.yaml lazily, caching the result.
+
+    Returns:
+        The loaded countries configuration dictionary.
+
+    Raises:
+        FileNotFoundError: If countries.yaml is not found.
+    """
+    global _COUNTRIES_CONFIG
+    if _COUNTRIES_CONFIG is None:
+        # Find countries.yaml relative to this module
+        # Path from local_layers.py to project root is up 3 levels:
+        # local_layers.py -> data_acquisition -> geofrea -> src -> project_root
+        project_root = Path(__file__).resolve().parents[3]
+        countries_file = project_root / "config" / "countries.yaml"
+        _COUNTRIES_CONFIG = load_countries(countries_file)
+    return _COUNTRIES_CONFIG
+
+
+def _get_country_mapping(country_code: str, key: str) -> str:
+    """Get a mapping value from countries.yaml for a country.
+
+    Args:
+        country_code: ISO-3 country code (e.g., "BRA", "PRT").
+        key: The mapping key (e.g., "elevation_dir", "land_cover_dir").
+
+    Returns:
+        The mapping value (a non-null string).
+
+    Raises:
+        CountryMappingError: If the country is not in the config, or if
+            the requested mapping is null (not yet determined).
+    """
+    config = _load_countries_config()
+
+    if country_code not in config:
+        raise CountryMappingError(
+            f"Country '{country_code}' not found in config/countries.yaml"
+        )
+
+    value = config[country_code].get(key)
+    if value is None:
+        raise CountryMappingError(
+            f"Mapping '{key}' for country '{country_code}' is null in "
+            f"config/countries.yaml (not yet determined)"
+        )
+
+    return value
 
 
 def _raw_data_dir() -> Path | None:
@@ -224,8 +237,8 @@ def resolve_elevation_path(country_code: str) -> Path | None:
     """Resolve the local Copernicus DEM elevation raster for one country.
 
     Args:
-        country_code: ISO-3166-alpha-3 code. Must be a key in
-            _ELEVATION_COUNTRY_DIRS.
+        country_code: ISO-3166-alpha-3 code. Must have an elevation_dir
+            mapping in config/countries.yaml.
 
     Returns:
         Path to `<raw>/elevation/<dir>/<country_code>_elevation.tif`, or
@@ -233,11 +246,11 @@ def resolve_elevation_path(country_code: str) -> Path | None:
         absent on disk (logged, not raised in either case).
 
     Raises:
-        KeyError: If country_code is not in _ELEVATION_COUNTRY_DIRS —
-            a configuration gap, not a runtime condition (see module
-            docstring).
+        CountryMappingError: If country_code is not in countries.yaml or
+            if its elevation_dir mapping is null — a configuration gap,
+            not a runtime condition (see module docstring).
     """
-    country_dir = _ELEVATION_COUNTRY_DIRS[country_code]
+    country_dir = _get_country_mapping(country_code, "elevation_dir")
 
     raw_data_dir = _raw_data_dir()
     if raw_data_dir is None:
@@ -350,8 +363,8 @@ def resolve_land_cover_tiles(country_code: str) -> list[Path]:
     the full sorted list, not a single path.
 
     Args:
-        country_code: ISO-3166-alpha-3 code. Must be a key in
-            _LAND_COVER_COUNTRY_DIRS.
+        country_code: ISO-3166-alpha-3 code. Must have a land_cover_dir
+            mapping in config/countries.yaml.
 
     Returns:
         Sorted list of tile Paths under
@@ -361,11 +374,11 @@ def resolve_land_cover_tiles(country_code: str) -> list[Path]:
         (logged, not raised in any of these cases).
 
     Raises:
-        KeyError: If country_code is not in _LAND_COVER_COUNTRY_DIRS —
-            a configuration gap, not a runtime condition (see module
-            docstring).
+        CountryMappingError: If country_code is not in countries.yaml or
+            if its land_cover_dir mapping is null — a configuration gap,
+            not a runtime condition (see module docstring).
     """
-    country_dir = _LAND_COVER_COUNTRY_DIRS[country_code]
+    country_dir = _get_country_mapping(country_code, "land_cover_dir")
 
     raw_data_dir = _raw_data_dir()
     if raw_data_dir is None:
@@ -391,11 +404,11 @@ def resolve_roads_path(country_code: str) -> Path | None:
     cache_path machinery — see module docstring.
 
     Args:
-        country_code: ISO-3166-alpha-3 code. Must be a key in
-            _ROADS_COUNTRY_REGION_DIRS — deliberately BRA/PRT only this
-            stage (see module docstring for why extending this is
-            blocked on a regions_lookup.json numbering conflict, not
-            just unstarted work).
+        country_code: ISO-3166-alpha-3 code. Must have grip4_region_dir
+            and grip4_region_file mappings in config/countries.yaml —
+            deliberately BRA/PRT only this stage (see module docstring
+            for why extending this is blocked on a regions_lookup.json
+            numbering conflict, not just unstarted work).
 
     Returns:
         Path to `<raw>/infrastructure/roads/<region_dir>/<region_file>.shp`,
@@ -403,12 +416,13 @@ def resolve_roads_path(country_code: str) -> Path | None:
         genuinely absent on disk (logged, not raised).
 
     Raises:
-        KeyError: If country_code is not in _ROADS_COUNTRY_REGION_DIRS —
+        CountryMappingError: If country_code is not in countries.yaml or
+            if its grip4_region_dir or grip4_region_file mappings are null —
             a configuration gap, not a runtime condition (see module
             docstring; same treatment as elevation/land_cover above).
     """
-    region_dir = _ROADS_COUNTRY_REGION_DIRS[country_code]
-    region_file = _ROADS_COUNTRY_REGION_FILES[country_code]
+    region_dir = _get_country_mapping(country_code, "grip4_region_dir")
+    region_file = _get_country_mapping(country_code, "grip4_region_file")
 
     raw_data_dir = _raw_data_dir()
     if raw_data_dir is None:

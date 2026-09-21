@@ -46,21 +46,66 @@ Percentile = Annotated[float, Field(ge=0, le=100)]
 SlopeDegrees = Annotated[float, Field(ge=0, le=90)]
 
 
-class VerifiedValue(BaseModel, Generic[T]):
-    """A parameter value with verification provenance metadata.
+class ParameterRange(BaseModel):
+    """Uncertainty range for a scientific parameter.
 
-    Mirrors the block defined in docs/CONVENTIONS.md, "Parameter
-    verification metadata". A value with verified=False is not blocked
-    from use by this schema — it only requires the provenance fields to
-    be present and readable.
+    Used by U-05 (METHODOLOGY) to specify the range for uncertain parameters
+    in F6/F7 ensembles. The range is null for non-uncertain parameters;
+    every parameter listed in experiments.yaml uncertain_parameters must
+    have a non-null range, enforced at config load.
+
+    Args:
+        min: Minimum value in the range.
+        max: Maximum value in the range. Must be >= min.
+        distribution: Distribution type ('uniform' or 'triangular').
+        source: Citation for where the range comes from.
+        tier: Evidence tier (1, 2, 3, or null) for the range itself
+            (may differ from the nominal value's tier).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min: float
+    max: float
+    distribution: Literal["uniform", "triangular"]
+    source: str
+    tier: Literal[1, 2, 3] | None = None
+
+    @model_validator(mode="after")
+    def _min_max_ordered(self) -> ParameterRange:
+        if self.min > self.max:
+            raise ValueError(f"min ({self.min}) must be <= max ({self.max}).")
+        return self
+
+
+class VerifiedValue(BaseModel, Generic[T]):
+    """A parameter value with verification provenance metadata and uncertainty range.
+
+    Mirrors the block defined in METHODOLOGY U-05 and docs/CONVENTIONS.md,
+    "Parameter verification metadata". A value with verified=False is not
+    blocked from use by this schema — it only requires the provenance fields
+    to be present and readable.
 
     Args:
         value: The parameter value itself. May be None for parameters
             that are pending research (e.g. an unpopulated
             opex_variable_usd_per_kwh for a technology whose source
             doesn't split fixed/variable O&M).
+        unit: Physical unit of the parameter (e.g. "USD/kW", "fraction",
+            "deg", "km"). Required for all parameters.
         source: Citation for where the value comes from (e.g.
             "IRENA 2025"), or None if unverified.
+        tier: Evidence tier (1, 2, 3, or null) per METHODOLOGY U-07.
+            Tier 1 = primary source specific to country+tech or physical
+            standard; Tier 2 = primary source transferred from another
+            region with recorded rationale; Tier 3 = author judgment/no
+            source (must be listed in docs/LIMITATIONS.md). null = not
+            yet assigned or not applicable (e.g. for non-uncertain
+            parameters or parameters without a defined tier scheme).
+        range: Uncertainty range for this parameter if it is uncertain
+            (i.e. listed in experiments.yaml uncertain_parameters); null
+            for non-uncertain parameters. Validation at config load ensures
+            every uncertain parameter has range != null.
         verified: Whether the value has been independently confirmed
             against its cited source.
         verified_by: Name of the person who verified the value, or
@@ -77,13 +122,25 @@ class VerifiedValue(BaseModel, Generic[T]):
     model_config = ConfigDict(extra="forbid")
 
     value: T
+    unit: str
     source: str | None = None
+    tier: Literal[1, 2, 3] | None = None
+    range: ParameterRange | None = None
     verified: bool
     verified_by: str | None = None
     verified_date: str | None = None
     verification_method: VerificationMethod
     note: str | None = None
     status: str | None = None
+
+    @model_validator(mode="after")
+    def _value_within_range_when_set(self) -> VerifiedValue:
+        """Validate that value is within range bounds if range is set."""
+        if self.range is not None and self.value is not None and (self.value < self.range.min or self.value > self.range.max):
+            raise ValueError(
+                f"value ({self.value}) must be within range [{self.range.min}, {self.range.max}]."
+            )
+        return self
 
 
 class _TechnologyEconomicParams(BaseModel):
@@ -102,8 +159,6 @@ class _TechnologyEconomicParams(BaseModel):
             generated. Populated (float) for biomass; left as an
             unverified/null placeholder for solar and wind, whose
             source doesn't split fixed/variable O&M.
-        capacity_factor: Dimensionless ratio of actual to nameplate
-            generation, country-specific. Constrained to [0, 1].
         lifetime_years: Asset operational lifetime, in years. Must be
             positive.
         discount_rate: Technology-specific discount rate for this
@@ -120,7 +175,6 @@ class _TechnologyEconomicParams(BaseModel):
     capex_usd_per_kw: VerifiedValue[float]
     opex_fixed_pct_of_capex: VerifiedValue[UnitInterval]
     opex_variable_usd_per_kwh: VerifiedValue[float]
-    capacity_factor: VerifiedValue[UnitInterval]
     lifetime_years: VerifiedValue[PositiveInt]
     discount_rate: VerifiedValue[NonNegativeFloat]
     discount_rate_increment: VerifiedValue[float | None]
@@ -221,14 +275,19 @@ class TechnologyParams(BaseModel):
     """Per-technology parameters for a single country.
 
     Args:
-        biomass: Biomass technology parameters.
         solar: Solar PV technology parameters.
         wind: Onshore wind technology parameters.
+
+    Note: biomass technology parameters were removed per METHODOLOGY A-04
+    and Section 9 (S-02 scope: only solar and wind). BiomassParams class
+    is retained in schemas.py for backward compatibility and for the
+    suitability_criteria phase's criteria.biomass-related parameters
+    (yield_by_land_cover, land_suitability), which remain in
+    CountryCriteriaParams and CriteriaParams respectively.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    biomass: BiomassParams
     solar: SolarParams
     wind: WindParams
 
@@ -476,7 +535,7 @@ class ParametersFile(BaseModel):
 
 
 class RunConfig(BaseModel):
-    """Which countries/phases a pipeline execution should cover.
+    """Which countries/phases/technologies a pipeline execution should cover.
 
     Replaces the per-phase boolean toggle map (`phases: dict[str, bool]`)
     with explicit run targeting per METHODOLOGY A-03: the orchestrator
@@ -495,6 +554,9 @@ class RunConfig(BaseModel):
             caller actually wants outputs for. Validated against the
             registered PhaseSpecs at run time (not by this schema,
             which does not know the registry).
+        technologies: Technology keys (e.g. ["solar", "wind"]) to run.
+            Non-empty, required per METHODOLOGY A-04. Validated against
+            config/technologies.yaml keys at config load.
         force_rerun: Whether target_phases (and every phase that
             transitively depends on them) should be re-executed even if
             already recorded as successful in the manifest. Required,
@@ -507,12 +569,19 @@ class RunConfig(BaseModel):
 
     countries: list[str]
     target_phases: list[str]
+    technologies: list[str]
     force_rerun: bool
 
     @model_validator(mode="after")
     def _target_phases_not_empty(self) -> RunConfig:
         if not self.target_phases:
             raise ValueError("run.target_phases must not be empty.")
+        return self
+
+    @model_validator(mode="after")
+    def _technologies_not_empty(self) -> RunConfig:
+        if not self.technologies:
+            raise ValueError("run.technologies must not be empty.")
         return self
 
 

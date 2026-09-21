@@ -37,7 +37,14 @@ Entry format: ID, statement, affected items, why it is accepted, where it is dec
 
 ## Tier 3 values
 
-No Tier 3 parameter values are adopted yet. Add one row per value when adopted.
-
 | ID | Parameter path | Value | Rationale | Thesis section |
 |---|---|---|---|---|
+| L-201 | countries.BRA.technologies.solar.slope_threshold_deg | 5.0 degrees | single case study; pending OQ-002 | |
+| L-202 | countries.BRA.technologies.wind.slope_threshold_deg | 8.5 degrees | calibrated without primary source; pending OQ-003 | |
+| L-203 | countries.BRA.technologies.wind.opex_fixed_pct_of_capex | 0.0077 fraction/year | O&M of another technology; pending OQ-016 | |
+| L-204 | countries.BRA.criteria.terrain_slope_threshold_deg | 12.0 degrees | legacy inheritance without primary source; pending OQ-002 | |
+| L-205 | countries.PRT.technologies.solar.slope_threshold_deg | 5.0 degrees | single case study; pending OQ-002 | |
+| L-206 | countries.PRT.technologies.wind.slope_threshold_deg | 8.5 degrees | calibrated without primary source; pending OQ-003 | |
+| L-207 | countries.PRT.criteria.terrain_slope_threshold_deg | 10.0 degrees | legacy inheritance without primary source; pending OQ-002 | |
+| L-208 | criteria.river_safety_buffer_km | 0.5 km | calibrated without primary source; pending OQ-003 | |
+| L-209 | criteria.pop_density_threshold | 200.0 persons/km2 | calibrated without primary source; pending OQ-003 | |

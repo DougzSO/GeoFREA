@@ -14,6 +14,17 @@ import yaml
 from geofrea.core.schemas import ParametersFile, SettingsFile
 
 
+class CountryMappingError(KeyError):
+    """Raised when a requested country has no mapping in config/countries.yaml.
+
+    Per METHODOLOGY A-05: a null mapping for a requested country must raise
+    a named error (not silently proceed). This exception extends KeyError so
+    it still behaves like the key was not found, but with better semantics
+    for country configuration gaps.
+    """
+
+
+
 def load_parameters(path: Path) -> ParametersFile:
     """Load and validate parameters.json.
 
@@ -54,3 +65,22 @@ def load_settings(path: Path) -> SettingsFile:
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     return SettingsFile.model_validate(raw)
+
+
+def load_countries(path: Path) -> dict[str, dict[str, str | None]]:
+    """Load countries.yaml and return the country mappings.
+
+    Args:
+        path: Path to a countries.yaml file.
+
+    Returns:
+        A dictionary mapping ISO-3 country codes to sub-dictionaries
+        containing mappings like hydrosheds_region, elevation_dir, etc.
+        Values may be None if a mapping is not yet determined.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        yaml.YAMLError: If the file is not valid YAML.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return raw if raw else {}

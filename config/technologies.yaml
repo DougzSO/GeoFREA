@@ -1,0 +1,103 @@
+# GeoFREA technology registry — METHODOLOGY A-04
+#
+# Declares per-technology configuration: resource layers, capacity-factor
+# model, exclusion set, cost structure, and uncertain-parameter keys.
+# F5-F7 code contains no technology names (S-02 and A-04 requirement).
+#
+# This is a skeleton with keys named in METHODOLOGY Section 9 and U-01 to U-06.
+# Values that depend on open questions are null with the OQ ID in a comment.
+
+solar:
+  # Resource layers for this technology (M-F2b-03)
+  resource_layers:
+    - pvout  # Solar irradiance (kWh/kWp/day), Global Solar Atlas
+
+  # Capacity-factor model selection (M-F5-02 for solar)
+  # "pvout_with_temperature": Uses temperature-corrected PVOUT
+  # (see M-F5-02: CF0 = pvout_kwh_kwp_day / 24; CF_m = CF0 * delta_rsds * (1 + gamma * dT))
+  cf_model: "pvout_with_temperature"
+
+  # Exclusion set (M-F2b-01, applied in F3)
+  # Currently a subset of M-F2b-01's E1-E6; exact enum pending F3 design
+  exclusions:
+    - protected  # E1: WDPA protected areas
+    - water      # E2: Lakes
+    - riparian   # E3: Distance to rivers below threshold
+    - slope      # E4: Slope above threshold
+    - land_cover # E5: Excluded land-cover classes
+    - population # E6: Population density above threshold
+
+  # Cost structure (M-F6-01)
+  # Which cost-driver layers are included in CAPEX
+  cost_drivers:
+    - grid_connection   # Distance to transmission grid (km)
+    - site_access       # Distance to roads (km)
+
+  # Uncertain parameters (U-03, U-04)
+  # Keys must exist in config/parameters.json countries.<ISO3>.technologies.solar
+  # Every key here must have a non-null range in experiments.yaml.uncertain_parameters
+  uncertain_parameters:
+    - capex_usd_per_kw
+    - opex_fixed_frac
+    - discount_rate
+    - lifetime_years
+    - degradation_rate
+    - grid_cost_usd_per_mw_km
+    - substation_cost_usd_per_mw
+    - road_cost_usd_per_km
+    - gamma  # Temperature coefficient (1/K, negative)
+
+  # Technology-specific thresholds and parameters
+  # OQ-005: IEC class selection rule per cell (location-dependent or fixed)
+  iec_class_rule: null  # Pending OQ-005
+
+wind:
+  # Resource layers for this technology
+  # Weibull parameters at three hub heights (M-F2b-03, M-F5-03)
+  resource_layers:
+    - weibull_a_100    # Weibull shape at 100m
+    - weibull_k_100    # Weibull scale at 100m
+    - air_density_100  # Air density at 100m (kg/m³)
+    - weibull_a_150
+    - weibull_k_150
+    - air_density_150
+    - weibull_a_200
+    - weibull_k_200
+    - air_density_200
+
+  # Capacity-factor model (M-F5-03)
+  # "weibull_with_air_density": Weibull integration with air-density-corrected wind speed
+  cf_model: "weibull_with_air_density"
+
+  # Exclusion set (M-F2b-01)
+  exclusions:
+    - protected
+    - water
+    - riparian
+    - slope
+    - land_cover
+    - population
+
+  # Cost structure (M-F6-01)
+  cost_drivers:
+    - grid_connection
+    - site_access
+
+  # Uncertain parameters (U-03)
+  uncertain_parameters:
+    - capex_usd_per_kw
+    - opex_fixed_frac
+    - discount_rate
+    - lifetime_years
+    - degradation_rate
+    - grid_cost_usd_per_mw_km
+    - substation_cost_usd_per_mw
+    - road_cost_usd_per_km
+    - eta_loss  # Availability + wake losses
+
+  # Hub height per country (M-F5-03)
+  # OQ-019: Country-specific hub height selection rule
+  hub_heights:
+    PRT: null  # Pending OQ-019
+    BRA: null
+    IND: null

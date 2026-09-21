@@ -16,6 +16,7 @@ Requires: `acquisition_registry`. Produces: `aligned_layers` (COGs on the 0.01 d
 | M-F2a-03 | Distance cap as parameter with flag | `LINEAR_FEATURE_MAX_DIST_KM = 100.0` hardcoded, no flag | fail |
 | M-F2a-04 | Per-height wind alignment, no cross-height combination | AHP combination code present (`WIND_AHP_MATRIX`) | fail |
 | V-01 | Frozen parity for aligned rasters | Legacy-baseline parity; fixtures to refreeze after M-F2a-02 | fail |
+| CONVENTIONS | no duplicated defaults | Pydantic schema defaults duplicate settings.yaml values in ResolutionsConfig/AdaptiveResolutionConfig/GeospatialConfig/SettingsFile | fail |
 
 ## Active implementation decisions
 
@@ -28,6 +29,7 @@ Requires: `acquisition_registry`. Produces: `aligned_layers` (COGs on the 0.01 d
 
 ## Known issues
 
+- **Known issue (CONVENTIONS, fail — see conformance row):** Adaptive resolution mode and its defaults (target_pixels, min_deg, max_deg, suitability) are removed in playbook task G-3; fields become absent, not required. Deferred by Douglas on 2026-09-21.
 - Adaptive resolution mode exists as opt-in; not used by the method.
 - **TODO (M-F2a-01, fail — see conformance row, evidence `grid_alignment/reference_grid.py:build_reference_grid` lines 56-64):** `build_reference_grid()` snaps `minx`/`miny`/`maxx`/`maxy` to 0.01 degree multiples only; it must instead snap them to 0.05 degree multiples before generating the 0.01 degree grid, so every 0.05 degree cell nests exactly on 5 x 5 pixels. Add a test asserting `width % 5 == 0 and height % 5 == 0` for the resulting `GridContext`.
 

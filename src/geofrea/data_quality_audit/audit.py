@@ -68,7 +68,7 @@ _EXPECTED_RESOLUTIONS_DEG: dict[str, float] = {
 }
 _RESOLUTION_TOLERANCE = 0.5
 _SOLAR_PVOUT_SANITY_RANGE = (1.0, 10.0)  # kWh/m2/day
-_TECHNOLOGIES = ("biomass", "solar", "wind")
+_TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 
 
 def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:

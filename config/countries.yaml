@@ -1,0 +1,75 @@
+# GeoFREA country configuration — METHODOLOGY A-05
+#
+# Maps ISO-3166-alpha-3 country codes to data-source-specific regional
+# identifiers and directory names. This replaces hardcoded country mappings
+# scattered across src/geofrea/data_acquisition/local_layers.py and
+# src/geofrea/data_acquisition/fetchers/hydrosheds.py.
+#
+# Each country entry has sub-keys for different data sources:
+#   - hydrosheds_region: HydroSHEDS continent tile code (HydroRIVERS only)
+#   - elevation_dir: Subdirectory name in GEOFREA_RAW_DATA_DIR/elevation/
+#   - land_cover_dir: Subdirectory name in GEOFREA_RAW_DATA_DIR/land_cover/
+#   - grip4_region_dir: Subdirectory in GEOFREA_RAW_DATA_DIR/infrastructure/roads/
+#   - grip4_region_file: GRIP4 shapefile name within grip4_region_dir
+#
+# A null value means the mapping has not been determined yet or the country
+# lacks that data source entirely. Code reading from config/ must raise a
+# named error if a null mapping is requested, never silently proceed.
+#
+# OQ-012: India mappings — blocked on resolution of which GRIP4 region
+# numbering scheme (regions_lookup.json vs. shapefiles' gp_gripreg) is
+# correct for India and other extended-scope countries.
+
+BRA:
+  hydrosheds_region: "sa"  # South America (HydroRIVERS)
+  elevation_dir: "Brazil"
+  land_cover_dir: "Brazil"
+  grip4_region_dir: "Region_2_Central_South_America"
+  grip4_region_file: "GRIP4_region2.shp"
+
+PRT:
+  hydrosheds_region: "eu"  # Europe and Middle East (HydroRIVERS)
+  elevation_dir: "PRT"
+  land_cover_dir: "Portugal"
+  grip4_region_dir: "Region_4_Europe"
+  grip4_region_file: "GRIP4_region4.shp"
+
+IND:
+  # OQ-012: All mappings pending verdict on GRIP4 region numbering
+  hydrosheds_region: null  # South Asia region code pending resolution
+  elevation_dir: "India"
+  land_cover_dir: "India"
+  grip4_region_dir: null
+  grip4_region_file: null
+
+CHN:
+  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code pending resolution
+  elevation_dir: "China"
+  land_cover_dir: "China"
+  grip4_region_dir: null
+  grip4_region_file: null
+
+EGY:
+  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code pending resolution
+  elevation_dir: "EGY"
+  land_cover_dir: "Egypt"
+  grip4_region_dir: null
+  grip4_region_file: null
+
+RUS:
+  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code pending resolution
+  elevation_dir: "Russia"
+  land_cover_dir: "Russia"
+  grip4_region_dir: null
+  grip4_region_file: null
+
+ZAF:
+  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code pending resolution
+  elevation_dir: "South Africa"
+  land_cover_dir: "South Africa"
+  grip4_region_dir: null
+  grip4_region_file: null

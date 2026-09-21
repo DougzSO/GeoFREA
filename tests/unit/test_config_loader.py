@@ -80,45 +80,13 @@ def test_load_real_settings_yaml_validates():
     assert result.run.force_rerun is False
 
 
-@pytest.mark.unit
-@pytest.mark.parametrize("country", ["PRT", "BRA"])
-@pytest.mark.parametrize(
-    "field_name",
-    ["capex_usd_per_kw", "opex_fixed_pct_of_capex", "opex_variable_usd_per_kwh", "lifetime_years"],
-)
-def test_biomass_verification_metadata_readable(country, field_name):
-    """Criterion 4: verification metadata is present/readable on the parsed model."""
-    result = load_parameters(PARAMETERS_JSON)
-    field = getattr(result.countries[country].technologies.biomass, field_name)
-    assert field.verified is True
-    assert field.verified_by == "Douglas"
-    assert field.verified_date == "2026-08-20"
-    assert field.verification_method == "manual_cross_check"
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("country", ["PRT", "BRA"])
-def test_biomass_capex_deliberately_diverges_from_legacy(country):
-    """Criterion 5: CAPEX was a deliberate METHODOLOGY_REVISION, not a
-    preserved legacy value (DECISIONS.md 2026-08-20, addendum to
-    2026-08-19 - biomass parameters restructure). Pins the new value
-    and asserts it differs from the legacy figure, so an accidental
-    revert to the old number would fail this test instead of silently
-    passing as a valid load.
-    """
-    result = load_parameters(PARAMETERS_JSON)
-    capex = result.countries[country].technologies.biomass.capex_usd_per_kw.value
-    assert capex == 3606.0
-    assert capex != _LEGACY_BIOMASS_CAPEX_USD_KW
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("country", ["PRT", "BRA"])
-def test_biomass_lifetime_preserved_from_legacy(country):
-    """Criterion 5: lifetime_years is the one field DECISIONS.md
-    2026-08-20 states was NOT changed from the legacy/2024 value —
-    asserts it still matches, unlike capex.
-    """
-    result = load_parameters(PARAMETERS_JSON)
-    lifetime = result.countries[country].technologies.biomass.lifetime_years.value
-    assert lifetime == _LEGACY_BIOMASS_LIFETIME_YEARS
+# Biomass technology tests removed 2026-09-21 per METHODOLOGY S-02:
+# only solar and wind are in active scope. BiomassParams class remains in
+# schemas.py for backward compatibility (criteria.biomass still exists), but
+# biomass has been removed from parameters.json, TechnologyParams, and
+# config/technologies.yaml. The below tests are no longer applicable.
+#
+# Previous tests removed:
+# - test_biomass_verification_metadata_readable (parametrized)
+# - test_biomass_capex_deliberately_diverges_from_legacy (parametrized)
+# - test_biomass_lifetime_preserved_from_legacy (parametrized)

@@ -2,7 +2,7 @@
   "schema_version": "2.0",
   "methodology_version": "1.0.0",
   "last_updated": "2026-09-21",
-  "current_milestone": "MS-0",
+  "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
     {"id": "MS-1", "title": "Core DAG orchestration and configuration schemas", "status": "not_started"},
@@ -21,9 +21,9 @@
     {
       "id": "core",
       "module": "core",
-      "status": "rework_required",
+      "status": "in_progress",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-09 done: stale-resume rejection, lineage, shared geometry repair (fixed PRT WDPA). OQ-024 open; needs A-04 to A-06, U-05, Section 9."
+      "summary": "A-01/A-02/A-03/A-04/A-05/A-09/U-05/Section-9 done: DAG orchestration, stale-resume rejection, lineage, tech/country registries (solar/wind), config schemas with verification metadata, shared geometry repair (fixed PRT WDPA). A-06 (synthetic country) and OQ-024 (per-file checksums) deferred to MS-2."
     },
     {
       "id": "F1",

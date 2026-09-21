@@ -1,0 +1,150 @@
+# GeoFREA experiments configuration — METHODOLOGY Section 9, U-01 to U-06
+#
+# Futures design: climate members, time windows, uncertain parameters,
+# sampler configuration, land-availability variants, and output thresholds.
+# This is a skeleton with keys from METHODOLOGY Section 9; values that depend
+# on open questions are null with the OQ ID in comments.
+
+# Climate members (U-01)
+# Full factorial of GCM × SSP × window. Reference member has no climate change.
+members:
+  reference:
+    gcm: null  # No model — actual climate period
+    ssp: null  # No scenario
+    window: "1995-2014"
+    description: "Reference climatology (IPCC AR6 baseline)"
+
+  # To be populated via M-F4-02: GCM selection protocol at F4 implementation
+  # For each selected model and SSP × window combination:
+  # - m_<gcm>_<ssp>_<window>: {gcm: <name>, ssp: "SSP1-2.6"|"SSP3-7.0"|"SSP5-8.5", window: "2041-2070"|"2071-2100"}
+  # Example (not yet implemented):
+  # m_gfdl_esm4_ssp3_70_2041_2070:
+  #   gcm: "GFDL-ESM4"
+  #   ssp: "SSP3-7.0"
+  #   window: "2041-2070"
+
+# Time windows (M-F4-01, S-05)
+windows:
+  # Historical reference climatology (M-F4-03: delta change base period)
+  reference:
+    start_year: 1995
+    end_year: 2014
+
+  # Core projection window (S-05: central scenario 2041-2070)
+  core:
+    start_year: 2041
+    end_year: 2070
+
+  # Sensitivity window (S-05: future repowering / second-generation assets)
+  # Analyzed as a sensitivity check, not part of the core hypothesis testing
+  sensitivity:
+    start_year: 2071
+    end_year: 2100
+
+# Uncertain parameters (U-03: default set)
+# Each entry is a parameter key that exists in config/parameters.json and
+# has a non-null range in experiments.yaml.uncertain_parameters (validated at load).
+# Parameters marked as non-uncertain (range=null in parameters.json) must NOT appear here.
+uncertain_parameters:
+  capex_usd_per_kw:
+    description: "Capital expenditure, USD/kW installed"
+  opex_fixed_frac:
+    description: "Fixed O&M as fraction of CAPEX per year"
+  discount_rate:
+    description: "Technology-specific real discount rate"
+  lifetime_years:
+    description: "Asset operational lifetime"
+  degradation_rate:
+    description: "Annual capacity degradation (technology-dependent)"
+  grid_cost_usd_per_mw_km:
+    description: "Transmission interconnection cost per MW·km"
+  substation_cost_usd_per_mw:
+    description: "Substation / POI cost per MW"
+  road_cost_usd_per_km:
+    description: "Road access / construction cost per km"
+  gamma:
+    description: "Solar module temperature coefficient (1/K, negative)"
+  eta_loss:
+    description: "Wind availability + wake losses (fraction)"
+
+# Sampler configuration (U-02, U-04)
+sampler:
+  # Method: Latin hypercube sampling (U-02)
+  method: "latin_hypercube"
+
+  # Seed for reproducibility (A-12, M-F6-02)
+  # Fixed seed ensures determinism across reruns (same configuration, same samples)
+  seed: 42
+
+  # Sample size (U-04: convergence protocol)
+  # Start at 500, double until Jaccard(top-k) change < 0.01 for all countries/techs
+  # Once converged, record the adopted size here (along with the convergence analysis
+  # in the F6 phase record)
+  initial_size: 500
+  # max_size_for_convergence: null  # Pending U-04 protocol completion
+
+# Land-availability variants (U-06)
+# Alternative exclusion parameter sets for sensitivity analysis
+# Only "central" feeds F4-F7 (core analysis); variants feed T-R2 and E1 only
+land_variants:
+  # Central (default) exclusion set from M-F2b-01
+  central:
+    description: "Standard exclusion set (M-F2b-01 E1-E6)"
+    # E4 slope threshold per technology (degrees)
+    # E3 riparian buffer (km)
+    # E2 water bodies (binary exclusion)
+    # E6 population density threshold (persons/km²)
+    # E5 land cover excluded classes (per land-cover table)
+    # E1 IUCN protected categories (see config/parameters.json criteria.iucn_strict_categories)
+
+  strict:
+    description: "Stricter exclusion criteria (tighter thresholds)"
+    # Applied only in T-R2 and E1 sensitivity tables
+    # Specific thresholds pending phase specification; typically:
+    # - Reduced riparian buffer (e.g., 1.0 km instead of 0.5 km) — OQ-025
+    # - Higher population density threshold
+    # - Expanded land-cover exclusions (e.g., grassland / cropland included)
+
+  lenient:
+    description: "Relaxed exclusion criteria (looser thresholds)"
+    # Applied only in T-R2 and E1 sensitivity tables
+    # Specific thresholds pending phase specification; typically:
+    # - Increased riparian buffer (e.g., 0.1 km instead of 0.5 km)
+    # - Lower population density threshold
+    # - Reduced land-cover exclusions
+
+# Output thresholds (M-F7-04, M-F7-05)
+thresholds:
+  # Satisficing LCOE threshold (M-F7-04)
+  # tau[country, tech] = maximum acceptable LCOE for satisficing robustness
+  # OQ-008: Per-country and technology thresholds pending review
+  satisficing_lcoe_usd_per_mwh:
+    # Format: {country: {technology: threshold_value}}
+    # Example (not yet implemented):
+    # PRT:
+    #   solar: 50  # USD/MWh
+    #   wind: 60
+
+  # Top-k threshold (M-F7-05)
+  # Either:
+  #   - fixed p_k (0 < p_k <= 1): top p_k share of candidate cells by count
+  #   - capacity_target_gw: minimum national capacity to identify top-k
+  # OQ-021: Decision between fixed vs. capacity-driven top-k
+  top_k_percent: null  # Pending OQ-021 (fixed approach)
+  top_k_capacity_gw: null  # Pending OQ-021 (capacity approach)
+
+  # Feasibility threshold (M-F7-01)
+  # Capacity factor minimum for a cell to be feasible
+  # OQ-009: Per-technology CF_min
+  capacity_factor_min:
+    # solar: null  # Pending OQ-009
+    # wind: null
+
+  # Regret quantile (M-F7-02)
+  # q_ref for the "optimal" LCOE definition (default 0 = minimum)
+  # OQ-020: Decision on q_ref
+  regret_quantile: 0  # Pending OQ-020 (currently fixed at minimum)
+
+# Future-only analysis (F7 onward)
+# OQ-013: Technical stack for the precomputed explorer (E1)
+# Not yet configurable here; placeholder for phase specification

@@ -199,10 +199,11 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
     # No slope raster: threshold_deg still reads from parameters.json per
     # technology, max_observed_deg is None, nothing is "inactive" without
     # data to judge that against.
+    # Updated 2026-09-21: per METHODOLOGY S-02 scope (solar and wind only),
+    # biomass was removed from _TECHNOLOGIES in audit.py.
     result = run_audit_phase(_context(tmp_path), AuditInputs())
 
-    assert set(result.slope_threshold_check.keys()) == {"biomass", "solar", "wind"}
-    assert result.slope_threshold_check["biomass"].threshold_deg == pytest.approx(8.5)
+    assert set(result.slope_threshold_check.keys()) == {"solar", "wind"}
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
     assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(8.5)
     for check in result.slope_threshold_check.values():
@@ -212,25 +213,24 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
-    # PRT thresholds: biomass=8.5, solar=5.0, wind=8.5. A max observed
-    # slope of exactly 5.0 must be inactive for biomass/wind (8.5 > 5.0)
+    # PRT thresholds: solar=5.0, wind=8.5. A max observed
+    # slope of exactly 5.0 must be inactive for wind (8.5 > 5.0)
     # but NOT for solar (5.0 is not strictly less than its own 5.0
     # threshold) — this is the per-technology behavior criterion 3/4
     # asked for, replacing the old single per-country 15.0 fallback.
+    # Updated 2026-09-21: biomass was removed per METHODOLOGY S-02.
     slope_path = tmp_path / "slope.tif"
     _write_raster(slope_path, np.full((_SIZE, _SIZE), 5.0, dtype=np.float32))
 
     inputs = AuditInputs(slope_path=slope_path, country_gdf=_covering_gdf())
     result = run_audit_phase(_context(tmp_path), inputs)
 
-    assert result.slope_threshold_check["biomass"].max_observed_deg == pytest.approx(5.0)
-    assert result.slope_threshold_check["biomass"].inactive is True
+    assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(5.0)
     assert result.slope_threshold_check["solar"].inactive is False
     assert result.slope_threshold_check["wind"].inactive is True
 
-    assert any("INACTIVE CRITERION [slope/biomass]" in alert for alert in result.alerts)
-    assert any("INACTIVE CRITERION [slope/wind]" in alert for alert in result.alerts)
     assert not any("INACTIVE CRITERION [slope/solar]" in alert for alert in result.alerts)
+    assert any("INACTIVE CRITERION [slope/wind]" in alert for alert in result.alerts)
 
 
 @pytest.mark.unit
@@ -239,9 +239,9 @@ def test_run_audit_phase_slope_threshold_check_reads_bra_values(tmp_path):
     # parameters.json (no country-specific slope source found this
     # session) — confirms the read goes through context.country_params
     # for the actual requested country, not a hardcoded PRT assumption.
+    # Updated 2026-09-21: biomass was removed per METHODOLOGY S-02.
     result = run_audit_phase(_context(tmp_path, country_code="BRA"), AuditInputs())
 
-    assert result.slope_threshold_check["biomass"].threshold_deg == pytest.approx(8.5)
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
     assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(8.5)
 

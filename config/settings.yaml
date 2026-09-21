@@ -35,6 +35,13 @@ run:
     - grid_alignment
     - suitability_criteria
 
+  # Technologies to run (METHODOLOGY A-04). Non-empty, required,
+  # validated against config/technologies.yaml keys at config load.
+  # F5-F7 code contains no technology names (per A-04 requirement).
+  technologies:
+    - solar
+    - wind
+
   # Required, no default (RunConfig.force_rerun): re-execute
   # target_phases and everything that transitively depends on them,
   # even if the manifest already records success. false = normal

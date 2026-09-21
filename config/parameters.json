@@ -2,76 +2,6 @@
   "countries": {
     "PRT": {
       "technologies": {
-        "biomass": {
-          "capex_usd_per_kw": {
-            "value": 3606,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "opex_fixed_pct_of_capex": {
-            "value": 0.04,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "0.04 is the midpoint of IRENA 2025's reported fixed O&M range of 2-6% of total installed cost, chosen considering the mean value in the range in the IRENA report. Not a directly reported single figure."
-          },
-          "opex_variable_usd_per_kwh": {
-            "value": 0.004,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "capacity_factor": {
-            "value": 0.81,
-            "source": "IRENA 2025, Fig 8.7 (Europe regional proxy)",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "lifetime_years": {
-            "value": 20,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "discount_rate": {
-            "value": 0.05,
-            "source": "IRENA 2024, Table A1 default (OECD/China bioenergy WACC)",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Portugal is OECD. IRENA's technology-specific WACC benchmark tool (2022+) only covers onshore wind, offshore wind, and solar PV for 100 countries — bioenergy, geothermal, and hydropower use this simpler OECD/non-OECD default instead, per IRENA 2024 methodology."
-          },
-          "discount_rate_increment": {
-            "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital methodology section",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
-          },
-          "slope_threshold_deg": {
-            "value": 8.5,
-            "source": "Agrivoltaic/agricultural-land-suitability literature: 15% slope (~8.5 deg) is the commonly cited upper limit for perennial-crop mechanized agriculture.",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Proxy from agricultural slope literature, not a bioenergy-specific source — same caveat pattern as biomass capacity_factor's regional proxies. Used here because biomass feedstock harvesting has similar mechanized-access constraints."
-          }
-        },
         "solar": {
           "capex_usd_per_kw": {
             "value": 823,
@@ -80,7 +10,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "No PRT-specific figure in source; Europe regional weighted average used as proxy."
+            "note": "No PRT-specific figure in source; Europe regional weighted average used as proxy.",
+            "unit": "USD/kW",
+            "tier": 2
           },
           "opex_fixed_pct_of_capex": {
             "value": 0.0092,
@@ -89,7 +21,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "NAMING CAVEAT: this is TOTAL O&M as a % of CAPEX, not a fixed-only component like BiomassParams' field of the same name — IRENA's source does not split fixed/variable O&M for solar. The field name is kept for schema consistency across technologies; interpret this value as 'total O&M % of CAPEX' for solar, not 'fixed-only' as for biomass."
+            "note": "NAMING CAVEAT: this is TOTAL O&M as a % of CAPEX, not a fixed-only component like BiomassParams' field of the same name \u00e2\u20ac\u201d IRENA's source does not split fixed/variable O&M for solar. The field name is kept for schema consistency across technologies; interpret this value as 'total O&M % of CAPEX' for solar, not 'fixed-only' as for biomass.",
+            "unit": "fraction/year",
+            "tier": 2
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -99,16 +33,9 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "IRENA 2025 reports only a combined/total O&M figure for solar (see opex_fixed_pct_of_capex, which actually carries the full O&M burden), not split into fixed+variable components like biomass. This field is a structural placeholder for schema consistency across technologies, not a real data gap requiring further sourcing in the near term."
-          },
-          "capacity_factor": {
-            "value": 0.12,
-            "source": "IRENA 2025 narrative text, Europe range 11-14%, midpoint used",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "No PRT-specific point value in source; midpoint of IRENA's stated Europe range used as proxy."
+            "note": "IRENA 2025 reports only a combined/total O&M figure for solar (see opex_fixed_pct_of_capex, which actually carries the full O&M burden), not split into fixed+variable components like biomass. This field is a structural placeholder for schema consistency across technologies, not a real data gap requiring further sourcing in the near term.",
+            "unit": "USD/MWh",
+            "tier": null
           },
           "lifetime_years": {
             "value": 25,
@@ -116,7 +43,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
           },
           "discount_rate": {
             "value": 0.042,
@@ -124,7 +53,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "fraction",
+            "tier": 2
           },
           "discount_rate_increment": {
             "value": 0.0,
@@ -133,7 +64,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero."
+            "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero.",
+            "unit": "fraction",
+            "tier": 2
           },
           "slope_threshold_deg": {
             "value": 5.0,
@@ -142,7 +75,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value — a reasonable starting point, not a definitive figure."
+            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value \u00e2\u20ac\u201d a reasonable starting point, not a definitive figure.",
+            "unit": "degrees",
+            "tier": 3
           }
         },
         "wind": {
@@ -153,7 +88,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "No country-specific onshore wind TIC found in sources reviewed this session; the global average is used as a proxy for both PRT and BRA."
+            "note": "No country-specific onshore wind TIC found in sources reviewed this session; the global average is used as a proxy for both PRT and BRA.",
+            "unit": "USD/kW",
+            "tier": 2
           },
           "opex_fixed_pct_of_capex": {
             "value": 0.0348,
@@ -162,7 +99,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "PRECISION CAVEAT: this value was read approximately off a chart (Fig 2.9), not a stated table figure — a rougher estimate than the biomass/solar OPEX figures, which came from stated numbers. Same naming caveat as solar's field of the same name: this is total O&M as % of CAPEX, not a fixed-only component; IRENA does not split fixed/variable O&M for wind either."
+            "note": "PRECISION CAVEAT: this value was read approximately off a chart (Fig 2.9), not a stated table figure \u00e2\u20ac\u201d a rougher estimate than the biomass/solar OPEX figures, which came from stated numbers. Same naming caveat as solar's field of the same name: this is total O&M as % of CAPEX, not a fixed-only component; IRENA does not split fixed/variable O&M for wind either.",
+            "unit": "fraction/year",
+            "tier": 2
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -172,16 +111,9 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "IRENA 2025 reports only a combined/total O&M figure for wind (see opex_fixed_pct_of_capex), not split into fixed+variable components like biomass. Structural placeholder for schema consistency, same as solar."
-          },
-          "capacity_factor": {
-            "value": 0.34,
-            "source": "IRENA 2025, Table 2.2, Europe weighted average",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Regional proxy for PRT; no PRT-specific figure found in sources reviewed this session."
+            "note": "IRENA 2025 reports only a combined/total O&M figure for wind (see opex_fixed_pct_of_capex), not split into fixed+variable components like biomass. Structural placeholder for schema consistency, same as solar.",
+            "unit": "USD/MWh",
+            "tier": null
           },
           "lifetime_years": {
             "value": 25,
@@ -189,7 +121,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
           },
           "discount_rate": {
             "value": 0.037,
@@ -197,7 +131,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "fraction",
+            "tier": 2
           },
           "discount_rate_increment": {
             "value": 0.0,
@@ -206,7 +142,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+            "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "unit": "fraction",
+            "tier": 2
           },
           "slope_threshold_deg": {
             "value": 8.5,
@@ -215,7 +153,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
+            "note": "No wind-specific source found \u00e2\u20ac\u201d reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later.",
+            "unit": "degrees",
+            "tier": 3
           }
         }
       },
@@ -234,7 +174,9 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed)."
+          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
+          "unit": "dimensionless",
+          "tier": null
         },
         "terrain_slope_threshold_deg": {
           "value": 10.0,
@@ -242,82 +184,14 @@
           "verified": true,
           "verified_by": "Douglas",
           "verified_date": "2026-09-10",
-          "verification_method": "automated"
+          "verification_method": "automated",
+          "unit": "degrees",
+          "tier": 3
         }
       }
     },
     "BRA": {
       "technologies": {
-        "biomass": {
-          "capex_usd_per_kw": {
-            "value": 3606,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "opex_fixed_pct_of_capex": {
-            "value": 0.04,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "0.04 is the midpoint of IRENA 2025's reported fixed O&M range of 2-6% of total installed cost, chosen considering the mean value in the range in the IRENA report. Not a directly reported single figure."
-          },
-          "opex_variable_usd_per_kwh": {
-            "value": 0.004,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "capacity_factor": {
-            "value": 0.63,
-            "source": "IRENA 2025, Fig 8.7 (Brazil-specific)",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "lifetime_years": {
-            "value": 20,
-            "source": "IRENA 2025",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
-          },
-          "discount_rate": {
-            "value": 0.075,
-            "source": "IRENA 2024, Table A1 default (rest-of-world bioenergy WACC)",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "CONFIRMED CLAIM: Brazil is non-OECD, so the 7.5% rest-of-world default applies per IRENA 2024 Table A1 — this numeric default value is verified. UNCONFIRMED ASSUMPTION (a separate claim, NOT verified): IRENA describes a 'minimum WACC floor' override for high-risk countries (e.g. Argentina, Moody's Caa1) where the flat default would underestimate real cost of capital. Brazil's Moody's rating in IRENA's own Figure S7 is Ba2 (moderate, well above Argentina's Caa1/Ghana's Caa3) — Douglas's judgment is that the floor override likely does not apply here, but this has NOT been computed (requires global risk-free rate, Brazil's country default spread, lender margin, and equity risk premium inputs not available in this session). verified=true above reflects only that 0.075 is the correct IRENA default value as documented — it does NOT mean the floor-non-applicability has been verified or calculated."
-          },
-          "discount_rate_increment": {
-            "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital methodology section",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Bioenergy is NOT covered by IRENA's technology-specific WACC benchmark tool (which only differentiates onshore wind/offshore wind/solar PV) — it uses the flat OECD/non-OECD default directly, with no separate technology premium layered on top. Setting this to 0.0 reflects that IRENA's own methodology does not add a bioenergy-specific increment; it does NOT mean no risk premium exists in reality, only that no such premium is documented in this source."
-          },
-          "slope_threshold_deg": {
-            "value": 8.5,
-            "source": "Agrivoltaic/agricultural-land-suitability literature: 15% slope (~8.5 deg) is the commonly cited upper limit for perennial-crop mechanized agriculture.",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Proxy from agricultural slope literature, not a bioenergy-specific source — same caveat pattern as biomass capacity_factor's regional proxies. Used here because biomass feedstock harvesting has similar mechanized-access constraints."
-          }
-        },
         "solar": {
           "capex_usd_per_kw": {
             "value": 672,
@@ -325,7 +199,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "USD/kW",
+            "tier": 1
           },
           "opex_fixed_pct_of_capex": {
             "value": 0.0112,
@@ -334,7 +210,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same naming caveat as PRT's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component — IRENA's source does not split fixed/variable O&M for solar."
+            "note": "Same naming caveat as PRT's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component \u00e2\u20ac\u201d IRENA's source does not split fixed/variable O&M for solar.",
+            "unit": "fraction/year",
+            "tier": 2
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -344,16 +222,9 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for solar, not split into fixed+variable components. Structural placeholder for schema consistency."
-          },
-          "capacity_factor": {
-            "value": 0.17,
-            "source": "IRENA 2025 narrative, global average 16-18%",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "No Brazil-specific solar capacity factor found in sources reviewed this session; global average range midpoint-adjacent value used as proxy."
+            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for solar, not split into fixed+variable components. Structural placeholder for schema consistency.",
+            "unit": "USD/MWh",
+            "tier": null
           },
           "lifetime_years": {
             "value": 25,
@@ -361,7 +232,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
           },
           "discount_rate": {
             "value": 0.077,
@@ -369,7 +242,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "fraction",
+            "tier": 2
           },
           "discount_rate_increment": {
             "value": 0.0,
@@ -378,7 +253,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium."
+            "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "unit": "fraction",
+            "tier": 2
           },
           "slope_threshold_deg": {
             "value": 5.0,
@@ -387,7 +264,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value — a reasonable starting point, not a definitive figure. Same value/source used for both PRT and BRA (no country-specific slope-suitability source found this session)."
+            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value \u00e2\u20ac\u201d a reasonable starting point, not a definitive figure. Same value/source used for both PRT and BRA (no country-specific slope-suitability source found this session).",
+            "unit": "degrees",
+            "tier": 3
           }
         },
         "wind": {
@@ -398,16 +277,20 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same global figure as PRT; no country-specific breakdown available."
+            "note": "Same global figure as PRT; no country-specific breakdown available.",
+            "unit": "USD/kW",
+            "tier": 2
           },
           "opex_fixed_pct_of_capex": {
             "value": 0.0077,
-            "source": "IRENA 2025, Fig 3.5 — SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 976 wind CAPEX",
+            "source": "IRENA 2025, Fig 3.5 \u00e2\u20ac\u201d SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 976 wind CAPEX",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "PROXY QUALITY: WEAK. No wind-specific O&M data for Brazil (or wind generally, beyond PRT's chart-read Fig 2.9 estimate) was found in sources reviewed this session. This value borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in — it is NOT a wind-specific source, unlike every other technology/country combination in this dataset, which use regional proxies but with technology-matched sources. verification_method=manual_cross_check here only confirms the arithmetic (7.54/976), not that this is a sound wind O&M estimate. Weakest-sourced value in the dataset so far — revisit if a better source is found."
+            "note": "PROXY QUALITY: WEAK. No wind-specific O&M data for Brazil (or wind generally, beyond PRT's chart-read Fig 2.9 estimate) was found in sources reviewed this session. This value borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in \u00e2\u20ac\u201d it is NOT a wind-specific source, unlike every other technology/country combination in this dataset, which use regional proxies but with technology-matched sources. verification_method=manual_cross_check here only confirms the arithmetic (7.54/976), not that this is a sound wind O&M estimate. Weakest-sourced value in the dataset so far \u00e2\u20ac\u201d revisit if a better source is found.",
+            "unit": "fraction/year",
+            "tier": 3
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -417,15 +300,9 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for wind (and here, not even a wind-specific one — see opex_fixed_pct_of_capex's proxy-quality caveat). Structural placeholder for schema consistency."
-          },
-          "capacity_factor": {
-            "value": 0.50,
-            "source": "IRENA 2025, Table 2.2, Brazil-specific",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for wind (and here, not even a wind-specific one \u00e2\u20ac\u201d see opex_fixed_pct_of_capex's proxy-quality caveat). Structural placeholder for schema consistency.",
+            "unit": "USD/MWh",
+            "tier": null
           },
           "lifetime_years": {
             "value": 25,
@@ -433,7 +310,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
           },
           "discount_rate": {
             "value": 0.077,
@@ -441,7 +320,9 @@
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check"
+            "verification_method": "manual_cross_check",
+            "unit": "fraction",
+            "tier": 2
           },
           "discount_rate_increment": {
             "value": 0.0,
@@ -450,7 +331,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium."
+            "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "unit": "fraction",
+            "tier": 2
           },
           "slope_threshold_deg": {
             "value": 8.5,
@@ -459,7 +342,9 @@
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found — reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later."
+            "note": "No wind-specific source found \u00e2\u20ac\u201d reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later.",
+            "unit": "degrees",
+            "tier": 3
           }
         }
       },
@@ -478,7 +363,9 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed)."
+          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
+          "unit": "dimensionless",
+          "tier": null
         },
         "terrain_slope_threshold_deg": {
           "value": 12.0,
@@ -486,7 +373,9 @@
           "verified": true,
           "verified_by": "Douglas",
           "verified_date": "2026-09-10",
-          "verification_method": "automated"
+          "verification_method": "automated",
+          "unit": "degrees",
+          "tier": 3
         }
       }
     }
@@ -498,7 +387,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "degrees",
+      "tier": null
     },
     "slope_threshold_deg_wind": {
       "value": 25.0,
@@ -506,7 +397,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "degrees",
+      "tier": null
     },
     "slope_threshold_deg_biomass": {
       "value": 15.0,
@@ -514,7 +407,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "degrees",
+      "tier": null
     },
     "river_safety_buffer_km": {
       "value": 0.5,
@@ -522,7 +417,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "km",
+      "tier": 3
     },
     "pop_density_threshold": {
       "value": 200.0,
@@ -530,7 +427,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "persons/km2",
+      "tier": 3
     },
     "road_max_dist_km": {
       "value": 15.0,
@@ -539,7 +438,9 @@
       "verified_by": "Douglas",
       "verified_date": "2026-09-10",
       "verification_method": "automated",
-      "note": "CountryParams schema default, not the legacy function-signature fallback (5.0), which is dead code."
+      "note": "CountryParams schema default, not the legacy function-signature fallback (5.0), which is dead code.",
+      "unit": "km",
+      "tier": null
     },
     "river_max_dist_biomass_km": {
       "value": 30.0,
@@ -548,7 +449,9 @@
       "verified_by": "Douglas",
       "verified_date": "2026-09-10",
       "verification_method": "automated",
-      "note": "CountryParams schema default, not the legacy function-signature fallback (10.0), which is dead code."
+      "note": "CountryParams schema default, not the legacy function-signature fallback (10.0), which is dead code.",
+      "unit": "km",
+      "tier": null
     },
     "grid_max_dist_km": {
       "value": 20.0,
@@ -556,7 +459,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "km",
+      "tier": null
     },
     "normalization_min_percentile": {
       "value": 5.0,
@@ -564,7 +469,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "normalization_max_percentile": {
       "value": 95.0,
@@ -572,7 +479,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "seismic_percentile_low": {
       "value": 2.0,
@@ -580,7 +489,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "seismic_percentile_high": {
       "value": 98.0,
@@ -588,7 +499,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "linear_proximity_percentile_low": {
       "value": 5.0,
@@ -596,7 +509,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "linear_proximity_percentile_high": {
       "value": 95.0,
@@ -604,7 +519,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "percentile",
+      "tier": null
     },
     "terrain_slope_weight": {
       "value": 0.6,
@@ -612,7 +529,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "fraction",
+      "tier": null
     },
     "terrain_tri_weight": {
       "value": 0.4,
@@ -620,7 +539,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "fraction",
+      "tier": null
     },
     "tri_threshold_m": {
       "value": 50.0,
@@ -628,7 +549,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "meters",
+      "tier": null
     },
     "proximity_decay_sigma_km": {
       "value": 10.0,
@@ -636,7 +559,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "km",
+      "tier": null
     },
     "proximity_smooth_sigma_px": {
       "value": 2.0,
@@ -644,7 +569,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "pixels",
+      "tier": null
     },
     "proximity_plants_neutral_score": {
       "value": 0.3,
@@ -652,7 +579,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "dimensionless",
+      "tier": null
     },
     "biomass_smooth_sigma": {
       "value": 1.0,
@@ -660,7 +589,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "pixels",
+      "tier": null
     },
     "solar_pvout_weight": {
       "value": 1.0,
@@ -668,7 +599,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "dimensionless",
+      "tier": null
     },
     "renewable_fuel_labels": {
       "value": [
@@ -681,7 +614,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "unknown",
+      "tier": null
     },
     "protected_as_exclusion": {
       "value": true,
@@ -689,7 +624,9 @@
       "verified": false,
       "verified_by": null,
       "verified_date": null,
-      "verification_method": "unverified"
+      "verification_method": "unverified",
+      "unit": "unknown",
+      "tier": null
     },
     "iucn_strict_categories": {
       "value": [
@@ -701,7 +638,9 @@
       "verified": true,
       "verified_by": "Douglas",
       "verified_date": "2026-08-19",
-      "verification_method": "manual_cross_check"
+      "verification_method": "manual_cross_check",
+      "unit": "unknown",
+      "tier": 2
     },
     "land_suitability": {
       "value": {
@@ -777,7 +716,9 @@
       "verified_by": null,
       "verified_date": null,
       "verification_method": "unverified",
-      "note": "Whole-table verification block, not per-cell (see docs/architecture/suitability_criteria_audit.md sec 8a). Global siting logic, same for every country; per-country biomass yield is CountryParams.yield_by_land_cover."
+      "note": "Whole-table verification block, not per-cell (see docs/architecture/suitability_criteria_audit.md sec 8a). Global siting logic, same for every country; per-country biomass yield is CountryParams.yield_by_land_cover.",
+      "unit": "unknown",
+      "tier": null
     }
   }
 }

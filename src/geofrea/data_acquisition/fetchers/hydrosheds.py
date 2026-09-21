@@ -65,6 +65,7 @@ import logging
 import zipfile
 from pathlib import Path
 
+from geofrea.core.config_loader import CountryMappingError, load_countries
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.hydrosheds")
@@ -75,13 +76,58 @@ _RIVERS_TILE_URL_TEMPLATE = (
     "https://data.hydrosheds.org/file/HydroRIVERS/HydroRIVERS_v10_{region}_shp.zip"
 )
 
-# HydroRIVERS' own 9 continental tile codes (af, ar, as, au, eu, gr,
-# na, sa, si) mapped to GeoFREA's current countries only. Extend this
-# when a new country is added — see module docstring.
-_COUNTRY_TO_REGION: dict[str, str] = {
-    "PRT": "eu",  # Europe and Middle East
-    "BRA": "sa",  # South America
-}
+# Lazy-loaded cache for countries.yaml
+_COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
+
+
+def _load_countries_config() -> dict[str, dict[str, str | None]]:
+    """Load countries.yaml lazily, caching the result.
+
+    Returns:
+        The loaded countries configuration dictionary.
+
+    Raises:
+        FileNotFoundError: If countries.yaml is not found.
+    """
+    global _COUNTRIES_CONFIG
+    if _COUNTRIES_CONFIG is None:
+        # Find countries.yaml relative to this module
+        # Path from hydrosheds.py to project root is up 4 levels:
+        # hydrosheds.py -> fetchers -> data_acquisition -> geofrea -> src -> project_root
+        project_root = Path(__file__).resolve().parents[4]
+        countries_file = project_root / "config" / "countries.yaml"
+        _COUNTRIES_CONFIG = load_countries(countries_file)
+    return _COUNTRIES_CONFIG
+
+
+def _get_hydrosheds_region(country_code: str) -> str:
+    """Get the HydroSHEDS region tile code for a country.
+
+    Args:
+        country_code: ISO-3 country code (e.g., "BRA", "PRT").
+
+    Returns:
+        The region tile code (e.g., "sa", "eu").
+
+    Raises:
+        CountryMappingError: If the country is not in the config, or if
+            the hydrosheds_region mapping is null.
+    """
+    config = _load_countries_config()
+
+    if country_code not in config:
+        raise CountryMappingError(
+            f"Country '{country_code}' not found in config/countries.yaml"
+        )
+
+    region = config[country_code].get("hydrosheds_region")
+    if region is None:
+        raise CountryMappingError(
+            f"HydroSHEDS region mapping for country '{country_code}' is null in "
+            f"config/countries.yaml (not yet determined)"
+        )
+
+    return region
 
 
 def _fetch_and_extract_shapefile(
@@ -175,21 +221,22 @@ def fetch_rivers(outputs_dir: Path, country_code: str) -> Path | None:
 
     Args:
         outputs_dir: Root outputs directory (PhaseContext.outputs_dir).
-        country_code: ISO-3166-alpha-3 code. Must be a key in
-            _COUNTRY_TO_REGION — an unmapped country is a configuration
-            gap to fix (add the region code), not a runtime condition
-            to handle gracefully, so this raises KeyError rather than
-            silently returning None like the network-failure path
-            below does.
+        country_code: ISO-3166-alpha-3 code. Must have a hydrosheds_region
+            mapping in config/countries.yaml — an unmapped country is a
+            configuration gap to fix (add the region code), not a runtime
+            condition to handle gracefully, so this raises CountryMappingError
+            rather than silently returning None like the network-failure
+            path below does.
 
     Returns:
         Path to the extracted .shp file, or None if the fetch/extraction
         failed (logged, not raised — see _fetch_and_extract_shapefile()).
 
     Raises:
-        KeyError: If country_code is not in _COUNTRY_TO_REGION.
+        CountryMappingError: If country_code is not in countries.yaml or
+            if its hydrosheds_region mapping is null.
     """
-    region = _COUNTRY_TO_REGION[country_code]
+    region = _get_hydrosheds_region(country_code)
 
     dest_dir = Path(outputs_dir) / country_code / "raw"
     zip_path = dest_dir / f"HydroRIVERS_v10_{region}_shp.zip"
