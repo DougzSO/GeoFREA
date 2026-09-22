@@ -85,6 +85,16 @@ Note: All pipeline data lives in GEOFREA_DATA_DIR (external directory). No data 
 
 Before writing shared documents (`docs/METHODOLOGY.md`, `docs/phases/`, `docs/PROGRESS.json`, `docs/OPEN_QUESTIONS.md`, `docs/LIMITATIONS.md`), check for `.session-lock` at the repository root. If present, treat it as a concurrent session and do not write without coordination.
 
+## Delegation policy
+
+- Audit, inventory, provenance, and conformance work is executed in the main session. It is never delegated to a subagent.
+- A subagent may only be used for a task whose completion criterion is a count or a file list, and only when the main session re-verifies that count or list afterward.
+- Reporting an action as done when it was narrowed or skipped is a stop-and-report condition, not a deferral. Report it to Douglas immediately instead of continuing.
+
+## Geometry over bounding box
+
+Any tile, extent, or coverage claim about a country is decided by intersection with the GADM country polygon, never by bounding box. A bounding box overstates coverage in every non-rectangular country. Precedent: the BRA S36W057 tile and the IND 28-tile case were both wrongly included/counted under bounding-box logic and corrected only after GADM polygon intersection was applied.
+
 ## Scope reminders
 
 In scope: BRA, PRT, IND; solar PV and onshore wind; SSP1-2.6, SSP3-7.0, SSP5-8.5; windows 2041-2070 and 2071-2100. Out of scope: GHG abatement, biomass, seismic, transport decarbonisation, sea-level rise, wildfire. Do not add code for out-of-scope items.
