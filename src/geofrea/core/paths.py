@@ -28,7 +28,8 @@ class MissingPathEnvironmentError(RuntimeError):
     def __init__(self, var_name: str) -> None:
         super().__init__(
             f"Required environment variable '{var_name}' is not set. "
-            f"Set it or provide it in .env"
+            f"Set it in the process environment or in a repository-root .env "
+            f"file (see .env.example)."
         )
         self.var_name = var_name
 

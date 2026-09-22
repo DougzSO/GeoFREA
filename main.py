@@ -62,6 +62,7 @@ import re
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from geofrea.core.config_loader import load_parameters, load_settings
@@ -94,6 +95,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("geofrea.main")
 
 REPO_ROOT = Path(__file__).resolve().parent
+
+# Loaded before any geofrea.core.paths helper can run (those raise
+# MissingPathEnvironmentError if their variable isn't set yet).
+# override=False: a variable already set in the process environment
+# wins over .env, so an operator can still override per-invocation.
+load_dotenv(REPO_ROOT / ".env", override=False)
+
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"

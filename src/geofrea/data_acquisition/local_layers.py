@@ -5,7 +5,7 @@ layers have no automatable source today (see phase.py's _LAYER_REGISTRY
 and schemas.py's AcquiredLayer.provenance docstring: "local_only" means
 "no fetch mechanism exists for it at all ... must be pre-placed on
 disk"). This module's only job is locating files that were already
-placed on disk by hand, under GEOFREA_RAW_DATA_DIR, and handing back a
+placed on disk by hand, under GEOFREA_SHARED_RAW_DIR, and handing back a
 Path/list[Path] — the same shape run_acquisition_phase() would get from
 a real fetcher, so phase.py's wiring for these layers is a thin
 "resolve instead of download" swap, not a new code path.
@@ -48,13 +48,13 @@ explicit instruction this stage — not symmetric by oversight):
     KeyError, uncaught, so it surfaces loudly via the Orchestrator's own
     PhaseExecutionError instead of silently producing path=None for a
     country nobody remembered to add to the table.
-  - GEOFREA_RAW_DATA_DIR unset, or the expected file/directory genuinely
+  - GEOFREA_SHARED_RAW_DIR unset, or the expected file/directory genuinely
     absent under it (download never completed, drive not mounted, wrong
     machine): graceful degradation, same contract every fetcher in this
     package already follows for a transient failure — log a warning,
     return None / []. This also means every existing
     test_data_acquisition_phase.py test that does not configure
-    GEOFREA_RAW_DATA_DIR keeps passing unchanged (explicit Douglas
+    GEOFREA_SHARED_RAW_DIR keeps passing unchanged (explicit Douglas
     decision this stage): an unconfigured local database is not a
     reason to fail the whole phase, any more than a network outage is.
 
@@ -62,11 +62,11 @@ population/grid need no lookup table at all — their on-disk naming is a
 mechanical function of country_code (population: lowercase ISO3
 filename prefix, flat directory; grid: uppercase ISO3 filename prefix,
 flat directory), confirmed against the real database
-(GEOFREA_RAW_DATA_DIR/population/*.tif,
-GEOFREA_RAW_DATA_DIR/infrastructure/grid/*.geojson) for all 7 countries
+(GEOFREA_SHARED_RAW_DIR/population/*.tif,
+GEOFREA_SHARED_RAW_DIR/infrastructure/grid/*.geojson) for all 7 countries
 currently on disk. elevation/land_cover are NOT mechanical — their
 per-country subdirectory names were confirmed by directly listing
-GEOFREA_RAW_DATA_DIR, not assumed from a naming convention:
+GEOFREA_SHARED_RAW_DIR, not assumed from a naming convention:
 
   - land_cover subdirectories use the full English country name
     consistently ("Portugal", "Brazil", "South Africa", ...).
@@ -98,7 +98,7 @@ no clipping itself — same boundary as every other resolver in this
 file, "locate a path, don't process it."
 
 _ROADS_COUNTRY_REGION_DIRS is DELIBERATELY restricted to BRA/PRT only,
-not all 7 countries like the tables above — GEOFREA_RAW_DATA_DIR also
+not all 7 countries like the tables above — GEOFREA_SHARED_RAW_DIR also
 ships a regions_lookup.json meant to map every country to its GRIP4
 region, but it was found (2026-09-08) to DISAGREE with the actual
 region number embedded in each shapefile's own `gp_gripreg` attribute
@@ -128,7 +128,7 @@ numbering (matching regions_lookup.json's official scheme), the
 extracted directories do not (see above). Left unresolved and
 unextracted; flagged, not touched, this stage.
 
-Also found under GEOFREA_RAW_DATA_DIR/infrastructure/roads/, NOT used
+Also found under GEOFREA_SHARED_RAW_DIR/infrastructure/roads/, NOT used
 by this module: `<ISO3>_roads_osm.geojson` files for CHN/EGY/IND/ZAF
 (not BRA/PRT) — leftovers from an earlier OSM-based roads acquisition
 attempt, orphaned now that GRIP4 is the designated source for `roads`.
@@ -148,21 +148,20 @@ throughout both runs (never dropped below ~5.2 GB free of 15.8 GB).
 from __future__ import annotations
 
 import logging
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from shapely.geometry import box
 
+from geofrea.core import paths
 from geofrea.core.config_loader import CountryMappingError, load_countries
+from geofrea.core.paths import MissingPathEnvironmentError
 
 if TYPE_CHECKING:
     import geopandas as gpd
 
 logger = logging.getLogger("geofrea.data_acquisition.local_layers")
-
-RAW_DATA_DIR_ENV_VAR = "GEOFREA_RAW_DATA_DIR"
 
 _LAND_COVER_TILE_GLOB = "ESA_WorldCover_10m_2020_v100_*_Map.tif"
 
@@ -256,22 +255,21 @@ def _get_country_mapping(country_code: str, key: str) -> str:
 
 
 def _raw_data_dir() -> Path | None:
-    """Resolve GEOFREA_RAW_DATA_DIR, or None if unset/empty.
+    """Resolve GEOFREA_SHARED_RAW_DIR (via paths.shared_raw()), or None if unset.
 
     Deliberately graceful (log + None), not a raise — see module
     docstring's "two different failure modes". Re-read from the
     environment on every call rather than cached at import time, so a
     test's monkeypatch.setenv() takes effect without needing a reload.
     """
-    raw = os.environ.get(RAW_DATA_DIR_ENV_VAR)
-    if not raw:
+    try:
+        return paths.shared_raw()
+    except MissingPathEnvironmentError:
         logger.warning(
-            "%s is not set — local-only layers (elevation/population/grid/"
-            "roads/land_cover) cannot be resolved this run.",
-            RAW_DATA_DIR_ENV_VAR,
+            "GEOFREA_SHARED_RAW_DIR is not set — local-only layers (elevation/"
+            "population/grid/roads/land_cover) cannot be resolved this run.",
         )
         return None
-    return Path(raw)
 
 
 def resolve_elevation_path(country_code: str) -> Path | None:
@@ -283,7 +281,7 @@ def resolve_elevation_path(country_code: str) -> Path | None:
 
     Returns:
         Path to `<raw>/elevation/<dir>/<country_code>_elevation.tif`, or
-        None if GEOFREA_RAW_DATA_DIR is unset or the file is genuinely
+        None if GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely
         absent on disk (logged, not raised in either case).
 
     Raises:
@@ -315,7 +313,7 @@ def resolve_population_path(country_code: str) -> Path | None:
 
     Returns:
         Path to `<raw>/population/<iso3_lower>_pop_2020.tif`, or None if
-        GEOFREA_RAW_DATA_DIR is unset or the file is genuinely absent on
+        GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely absent on
         disk (logged, not raised).
     """
     raw_data_dir = _raw_data_dir()
@@ -332,7 +330,7 @@ def resolve_population_path(country_code: str) -> Path | None:
 # Single GLOBAL file (Global Solar Atlas v2 long-term-average PVOUT),
 # not a per-country raster — grid_alignment clips/reprojects it to each
 # country's target grid. Confirmed 2026-09-11 by listing
-# GEOFREA_RAW_DATA_DIR/solar_potential/. The sibling `World_TEMP_...`
+# GEOFREA_SHARED_RAW_DIR/solar_potential/. The sibling `World_TEMP_...`
 # bundle (air temperature) is deliberately not matched — it is not a
 # suitability_criteria input.
 _SOLAR_PVOUT_RELPATH = Path(
@@ -352,7 +350,7 @@ def resolve_solar_path(country_code: str) -> Path | None:
 
     Returns:
         Path to `<raw>/solar_potential/World_PVOUT_.../PVOUT.tif`, or None
-        if GEOFREA_RAW_DATA_DIR is unset or the file is genuinely absent
+        if GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely absent
         on disk (logged, not raised — same as resolve_elevation_path).
     """
     raw_data_dir = _raw_data_dir()
@@ -381,7 +379,7 @@ def resolve_grid_path(country_code: str) -> Path | None:
 
     Returns:
         Path to `<raw>/infrastructure/grid/<country_code>_grid_osm.geojson`,
-        or None if GEOFREA_RAW_DATA_DIR is unset or the file is genuinely
+        or None if GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely
         absent on disk (logged, not raised).
     """
     raw_data_dir = _raw_data_dir()
@@ -435,7 +433,7 @@ def resolve_land_cover_tiles(
         Sorted list of tile Paths under
         `<raw>/land_cover/<dir>/ESA_WorldCover_10m_2020_v100_*_Map.tif`,
         with out-of-territory and manually excluded tiles removed, or
-        [] if GEOFREA_RAW_DATA_DIR is unset, the country directory does
+        [] if GEOFREA_SHARED_RAW_DIR is unset, the country directory does
         not exist, or it exists but contains no matching tile (logged,
         not raised in any of these cases).
 
@@ -500,7 +498,7 @@ def resolve_roads_path(country_code: str) -> Path | None:
 
     Returns:
         Path to `<raw>/infrastructure/roads/<region_dir>/<region_file>.shp`,
-        or None if GEOFREA_RAW_DATA_DIR is unset or the file is
+        or None if GEOFREA_SHARED_RAW_DIR is unset or the file is
         genuinely absent on disk (logged, not raised).
 
     Raises:

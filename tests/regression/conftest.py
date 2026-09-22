@@ -108,14 +108,14 @@ def _legacy_baseline_root() -> Path | None:
 
 @pytest.fixture
 def raw_data_root() -> Path:
-    """The local raw-data database (GEOFREA_RAW_DATA_DIR from .env).
+    """The local raw-data database (GEOFREA_SHARED_RAW_DIR from .env).
 
     Holds the GADM country boundaries (countries_borders/<Country>/) and
     the WDPA protected-areas shapefiles (protected_areas/<Country>/shp_*/)
     that the legacy compute_protected_areas consumed. Read-only; skips
     when the env var is unset or the directory is absent.
     """
-    env = os.environ.get("GEOFREA_RAW_DATA_DIR")
+    env = os.environ.get("GEOFREA_SHARED_RAW_DIR")
     candidates = []
     if env:
         candidates.append(Path(env))
@@ -124,7 +124,7 @@ def raw_data_root() -> Path:
         if root.is_dir():
             return root
     pytest.skip(
-        "GEOFREA_RAW_DATA_DIR not set and no sibling database/raw/ found — "
+        "GEOFREA_SHARED_RAW_DIR not set and no sibling database/raw/ found — "
         "cannot locate GADM/WDPA raw inputs."
     )
     raise AssertionError  # unreachable, for type-checkers

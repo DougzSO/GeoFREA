@@ -21,8 +21,8 @@ see test_run_acquisition_phase_protected_token_missing_propagates below.
 restantes a partir do banco local, Fase 1"): run_acquisition_phase()
 also resolves elevation/population/grid/land_cover from the local
 database (local_layers.py) unconditionally on every call. The
-`_no_raw_data_dir` autouse fixture below clears GEOFREA_RAW_DATA_DIR so
-every existing structural test keeps passing unchanged, exactly like
+`_no_raw_data_dir` autouse fixture below clears GEOFREA_SHARED_RAW_DIR
+so every existing structural test keeps passing unchanged, exactly like
 `_no_network_fetchers` above — an unset env var makes those 4 resolvers
 gracefully return None/[] (see local_layers.py's module docstring, "two
 different failure modes"), the same as a fetcher returning None. Tests
@@ -37,7 +37,6 @@ import pytest
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseSpec
 from geofrea.data_acquisition import phase as phase_module
-from geofrea.data_acquisition.local_layers import RAW_DATA_DIR_ENV_VAR
 from geofrea.data_acquisition.phase import _LAYER_REGISTRY, run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
 
@@ -62,7 +61,7 @@ def _no_network_fetchers(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_raw_data_dir(monkeypatch):
-    monkeypatch.delenv(RAW_DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv("GEOFREA_SHARED_RAW_DIR", raising=False)
 
 
 def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
@@ -430,7 +429,7 @@ def test_run_acquisition_phase_roads_unmapped_country_propagates_keyerror(tmp_pa
 
 @pytest.mark.unit
 def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir(tmp_path):
-    # With GEOFREA_RAW_DATA_DIR unset (the _no_raw_data_dir autouse
+    # With GEOFREA_SHARED_RAW_DIR unset (the _no_raw_data_dir autouse
     # fixture's default) and no monkeypatched resolver, elevation/
     # population/grid/roads/land_cover fall back to the real
     # local_layers.py resolvers, which gracefully return None/[] rather

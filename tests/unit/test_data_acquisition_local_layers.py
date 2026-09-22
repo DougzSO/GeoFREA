@@ -1,9 +1,9 @@
 """Unit tests for geofrea.data_acquisition.local_layers.
 
 All tests build a fake raw-data directory under tmp_path and point
-RAW_DATA_DIR_ENV_VAR at it via monkeypatch — no dependency on the real
+GEOFREA_SHARED_RAW_DIR at it via monkeypatch — no dependency on the real
 local database (see pyproject.toml's "unit" marker, "no external data
-dependency"). GEOFREA_RAW_DATA_DIR is also explicitly cleared by an
+dependency"). GEOFREA_SHARED_RAW_DIR is also explicitly cleared by an
 autouse fixture so these tests are hermetic regardless of what is set
 in the developer's own shell/.env.
 """
@@ -15,7 +15,6 @@ import pytest
 from shapely.geometry import box
 
 from geofrea.data_acquisition.local_layers import (
-    RAW_DATA_DIR_ENV_VAR,
     resolve_elevation_path,
     resolve_grid_path,
     resolve_land_cover_tiles,
@@ -29,7 +28,7 @@ _SOLAR_SUBDIR = "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEO
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    monkeypatch.delenv(RAW_DATA_DIR_ENV_VAR, raising=False)
+    monkeypatch.delenv("GEOFREA_SHARED_RAW_DIR", raising=False)
 
 
 def _make_raw_dir(tmp_path: Path) -> Path:
@@ -44,7 +43,7 @@ def test_resolve_elevation_path_found(tmp_path, monkeypatch):
     (raw / "elevation" / "Brazil").mkdir(parents=True)
     expected = raw / "elevation" / "Brazil" / "BRA_elevation.tif"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_elevation_path("BRA") == expected
 
@@ -60,7 +59,7 @@ def test_resolve_elevation_path_uses_iso3_dir_name_for_prt(tmp_path, monkeypatch
     (raw / "elevation" / "PRT").mkdir(parents=True)
     expected = raw / "elevation" / "PRT" / "PRT_elevation.tif"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_elevation_path("PRT") == expected
 
@@ -69,7 +68,7 @@ def test_resolve_elevation_path_uses_iso3_dir_name_for_prt(tmp_path, monkeypatch
 def test_resolve_elevation_path_missing_file_returns_none(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "elevation" / "Brazil").mkdir(parents=True)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_elevation_path("BRA") is None
 
@@ -77,7 +76,7 @@ def test_resolve_elevation_path_missing_file_returns_none(tmp_path, monkeypatch)
 @pytest.mark.unit
 def test_resolve_elevation_path_unmapped_country_raises_keyerror(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     with pytest.raises(KeyError):
         resolve_elevation_path("XXX")
@@ -85,7 +84,7 @@ def test_resolve_elevation_path_unmapped_country_raises_keyerror(tmp_path, monke
 
 @pytest.mark.unit
 def test_resolve_elevation_path_no_env_var_returns_none(tmp_path):
-    # GEOFREA_RAW_DATA_DIR unset entirely — graceful, not a raise (see
+    # GEOFREA_SHARED_RAW_DIR unset entirely — graceful, not a raise (see
     # module docstring's "two different failure modes"). Deliberately
     # NOT raised even for a country that IS in the mapping table.
     assert resolve_elevation_path("BRA") is None
@@ -97,7 +96,7 @@ def test_resolve_population_path_found(tmp_path, monkeypatch):
     (raw / "population").mkdir(parents=True)
     expected = raw / "population" / "bra_pop_2020.tif"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_population_path("BRA") == expected
 
@@ -106,7 +105,7 @@ def test_resolve_population_path_found(tmp_path, monkeypatch):
 def test_resolve_population_path_missing_file_returns_none(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "population").mkdir(parents=True)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_population_path("BRA") is None
 
@@ -120,7 +119,7 @@ def test_resolve_population_path_no_lookup_table_needed(tmp_path, monkeypatch):
     (raw / "population").mkdir(parents=True)
     expected = raw / "population" / "xxx_pop_2020.tif"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_population_path("XXX") == expected
 
@@ -131,7 +130,7 @@ def test_resolve_solar_path_found(tmp_path, monkeypatch):
     (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
     expected = raw / "solar_potential" / _SOLAR_SUBDIR / "PVOUT.tif"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_solar_path("BRA") == expected
 
@@ -143,7 +142,7 @@ def test_resolve_solar_path_is_global_not_country_split(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
     (raw / "solar_potential" / _SOLAR_SUBDIR / "PVOUT.tif").write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_solar_path("BRA") == resolve_solar_path("PRT") == resolve_solar_path("XXX")
 
@@ -152,7 +151,7 @@ def test_resolve_solar_path_is_global_not_country_split(tmp_path, monkeypatch):
 def test_resolve_solar_path_missing_file_returns_none(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "solar_potential" / _SOLAR_SUBDIR).mkdir(parents=True)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_solar_path("BRA") is None
 
@@ -168,7 +167,7 @@ def test_resolve_grid_path_found(tmp_path, monkeypatch):
     (raw / "infrastructure" / "grid").mkdir(parents=True)
     expected = raw / "infrastructure" / "grid" / "BRA_grid_osm.geojson"
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_grid_path("BRA") == expected
 
@@ -181,7 +180,7 @@ def test_resolve_grid_path_ignores_unlabeled_gpkg(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "infrastructure" / "grid").mkdir(parents=True)
     (raw / "infrastructure" / "grid" / "grid.gpkg").write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_grid_path("BRA") is None
 
@@ -195,7 +194,7 @@ def test_resolve_land_cover_tiles_found_sorted(tmp_path, monkeypatch):
     tile_a = tiles_dir / "ESA_WorldCover_10m_2020_v100_N27W006_Map.tif"
     tile_a.write_bytes(b"")
     tile_b.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_land_cover_tiles("PRT") == [tile_a, tile_b]
 
@@ -206,7 +205,7 @@ def test_resolve_land_cover_tiles_ignores_non_matching_files(tmp_path, monkeypat
     tiles_dir = raw / "land_cover" / "Portugal"
     tiles_dir.mkdir(parents=True)
     (tiles_dir / "readme.txt").write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_land_cover_tiles("PRT") == []
 
@@ -214,7 +213,7 @@ def test_resolve_land_cover_tiles_ignores_non_matching_files(tmp_path, monkeypat
 @pytest.mark.unit
 def test_resolve_land_cover_tiles_missing_dir_returns_empty_list(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_land_cover_tiles("PRT") == []
 
@@ -222,7 +221,7 @@ def test_resolve_land_cover_tiles_missing_dir_returns_empty_list(tmp_path, monke
 @pytest.mark.unit
 def test_resolve_land_cover_tiles_unmapped_country_raises_keyerror(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     with pytest.raises(KeyError):
         resolve_land_cover_tiles("XXX")
@@ -256,7 +255,7 @@ def test_resolve_land_cover_tiles_geometry_filter_excludes_out_of_territory(tmp_
     in_territory = tiles_dir / "ESA_WorldCover_10m_2020_v100_N39W009_Map.tif"
     out_of_territory.write_bytes(b"")
     in_territory.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     # Minimal synthetic country polygon inside N39W009's tile bbox
     # (lon -9..-6, lat 39..42), nowhere near S36W057's bbox — stands in
@@ -276,7 +275,7 @@ def test_resolve_land_cover_tiles_no_geometry_filter_without_country_gdf(tmp_pat
     tiles_dir.mkdir(parents=True)
     far_tile = tiles_dir / "ESA_WorldCover_10m_2020_v100_S36W057_Map.tif"
     far_tile.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_land_cover_tiles("PRT") == [far_tile]
 
@@ -294,7 +293,7 @@ def test_resolve_roads_path_found(tmp_path, monkeypatch, country_code, region_di
     (raw / "infrastructure" / "roads" / region_dir).mkdir(parents=True)
     expected = raw / "infrastructure" / "roads" / region_dir / region_file
     expected.write_bytes(b"")
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_roads_path(country_code) == expected
 
@@ -303,7 +302,7 @@ def test_resolve_roads_path_found(tmp_path, monkeypatch, country_code, region_di
 def test_resolve_roads_path_missing_file_returns_none(tmp_path, monkeypatch):
     raw = _make_raw_dir(tmp_path)
     (raw / "infrastructure" / "roads" / "Region_2_Central_South_America").mkdir(parents=True)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     assert resolve_roads_path("BRA") is None
 
@@ -315,7 +314,7 @@ def test_resolve_roads_path_unmapped_country_raises_keyerror(tmp_path, monkeypat
     # countries is blocked on a regions_lookup.json numbering conflict,
     # not just unstarted work. Any other country must raise, not guess.
     raw = _make_raw_dir(tmp_path)
-    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(raw))
 
     with pytest.raises(KeyError):
         resolve_roads_path("CHN")
