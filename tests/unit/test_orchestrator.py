@@ -417,7 +417,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.0"
+    assert orchestrator.manifest.schema_version == "2.1"
 
 
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─

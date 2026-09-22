@@ -73,6 +73,7 @@ from geofrea.core.orchestrator import (
     compute_git_commit,
     compute_run_id,
 )
+from geofrea.core.paths import log_path, outputs_dir
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import run_acquisition_phase
@@ -96,7 +97,6 @@ REPO_ROOT = Path(__file__).resolve().parent
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
-OUTPUTS_DIR = REPO_ROOT / "outputs"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
 
@@ -395,11 +395,19 @@ def run_geofrea(
         ended "failed" or "skipped_upstream_failed" (main()'s exit code
         is derived from this — see module-level Usage note).
     """
+    # Set up file logging in addition to console logging
+    log_file_path = log_path(country_code, run_id)
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(file_handler)
+    logger.info("Starting run for %s with run_id %s", country_code, run_id)
+
     parameters = load_parameters(PARAMETERS_JSON)
     country_params = parameters.countries[country_code]
 
     orchestrator = Orchestrator(
-        outputs_dir=OUTPUTS_DIR,
+        outputs_dir=outputs_dir(),
         country_code=country_code,
         country_params=country_params,
         target_phases=target_phases,

@@ -1,7 +1,7 @@
 # core: orchestration, configuration, shared utilities
 
-Status: `in_progress` (A-04, A-05, U-05, Section 9 done; A-06 synthetic country deferred to MS-2)
-Methodology items: A-01, A-02, A-03, A-04, A-05, A-06, A-07, A-09, A-10, A-12, A-13, U-05, Section 9
+Status: `in_progress` (A-04, A-05, A-07, A-08, U-05, Section 9 done; A-06 synthetic country deferred to MS-2)
+Methodology items: A-01, A-02, A-03, A-04, A-05, A-06, A-07, A-08, A-09, A-10, A-12, A-13, U-05, Section 9
 
 ## Contract
 
@@ -31,6 +31,9 @@ Provides to all phases: DAG orchestrator, artifact registry and manifest, config
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit phase
 - **D-core-004 — Slope threshold as a technology parameter.** Terrain slope tolerance is a scientific parameter in `config/parameters.json`, keyed per technology, not a single unsourced country-level fallback — each technology has a physically distinct terrain tolerance. Carried forward into M-F2b-01 E4 (`slope_max_deg[tech]`), same underlying rationale.
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-08-20 - slope_threshold_deg movido para parameters.json
+
+- **D-core-005 — Portable path resolution via `StoredPath` (E5b). Manifest schema version bumped to "2.1".** All data lives in GEOFREA_DATA_DIR (external, never under repository root). `src/geofrea/core/paths.py` is the single module reading data-location environment variables; every other module uses helpers from it (`shared_raw()`, `fetched_raw()`, `interim()`, `phase_dir()`, `manifest_path()`, `log_path()`, `outputs_dir()`). `StoredPath(root, rel)` stores artifact paths with a root identifier ("data", "shared_raw", or "legacy_baseline") + posix-relative path, portable across installations and environments. `ArtifactEntry.path` changed from string to `StoredPath` (manifests written by E5b forward-only; schema "2.0" reads are rejected with `LegacyManifestError`). `ensure_writable(path)` guards against writes to read-only locations (GEOFREA_SHARED_RAW_DIR, GEOFREA_LEGACY_BASELINE_DIR, CRAEI_BASELINE_DIR, GEAR_BASELINE_DIR, GEOWORLD_BASELINE_DIR). Manifests migrated from 2.0→2.1 via `scripts/migrate_manifest_2_0_to_2_1.py` with sha256 re-verification at new location.
+  Conformance: A-07, A-08, A-11. Tests: `tests/unit/test_paths.py` (StoredPath resolution, to_stored_path conversion, read-only guards); `tests/unit/test_orchestrator.py` (ArtifactEntry with StoredPath).
 
 ## Known issues
 

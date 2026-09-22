@@ -71,9 +71,10 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 ## Artifacts and outputs
 
 - Rasters: Cloud Optimized GeoTIFF, EPSG:4326. Tables: parquet with a Pydantic schema and `schema_version`.
-- Layout and file naming follow METHODOLOGY A-08. Map file names: `<map>__<window>__<ssp>__<gcm>.png`, using `ref` for the reference climate and `na` for non-applicable fields.
+- Layout and file naming follow METHODOLOGY A-08. Paths are resolved via `src/geofrea/core/paths.py`, the only module that reads data-location environment variables.
+- Map file names: `<map>__<window>__<ssp>__<gcm>.png`, using `ref` for the reference climate and `na` for non-applicable fields.
 - One map per file. Figures respect `settings.yaml` `figures`.
-- Thesis outputs are produced only by F8 into `outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
+- Thesis outputs are produced only by F8 into `GEOFREA_DATA_DIR/outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
 
 ## Error handling
 
@@ -91,20 +92,20 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 
 Scripts or validations expected to run longer than 30 seconds log progress with elapsed time and estimated remaining time, using flushed output.
 
-## Code reused from GEAR
+## Code reused from reference repositories
 
-Every file or function copied from GEAR starts with:
+Code copied from CRAEI or GEAR (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary:
 
 ```python
-# Adapted from GEAR (https://github.com/DougzSO/GEAR)
+# Adapted from CRAEI (or GEAR): https://github.com/<repo>
 # Commit: <sha>  Original path: <path>
 # Adaptation: <one-line summary>
 ```
 
-No imports from the GEAR repository.
+No imports from CRAEI, GEAR, or other reference repositories. Reference repositories remain read-only; edits belong in GeoFREA only.
 
 ## Tests
 
 - `pytest`, `ruff` clean before any commit proposal.
 - Test names state the property tested (`test_regret_is_non_negative`).
-- Tests that need raw data are marked and skipped outside environments with `GEOFREA_RAW_DATA_DIR`; the synthetic country fixture covers CI.
+- Tests that need external data (raw, legacy baseline, reference repositories) are marked and skipped when required env vars are unset; the synthetic country fixture covers CI.

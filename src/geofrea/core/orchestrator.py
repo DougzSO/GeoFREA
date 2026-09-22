@@ -34,6 +34,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
+from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.schemas import CountryParams
 
 logger = logging.getLogger("geofrea.core.orchestrator")
@@ -44,7 +45,7 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed"]
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.0"
+_MANIFEST_SCHEMA_VERSION = "2.1"
 
 
 def _now_iso() -> str:
@@ -206,8 +207,8 @@ class ArtifactEntry(BaseModel):
 
     Args:
         key: Artifact key, matching an entry in some PhaseSpec.produces.
-        path: Filesystem path of the artifact, as a string (JSON-
-            portable).
+        path: StoredPath of the artifact (root + relative posix-style path).
+            Resolves to an absolute Path at read time via StoredPath.resolve().
         sha256: Content hash, computed at registration and reused on a
             later registration at the same path when size_bytes and
             mtime_ns are unchanged.
@@ -221,7 +222,7 @@ class ArtifactEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str
-    path: str
+    path: StoredPath
     sha256: str
     size_bytes: int
     mtime_ns: int
@@ -231,17 +232,18 @@ class ArtifactEntry(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Root schema for outputs/<country_code>/manifest.json.
+    """Root schema for manifest.json (GEOFREA_DATA_DIR/outputs/<country_code>/).
 
-    schema_version is fixed at "2.0" (see LegacyManifestError): a
-    manifest written by the pre-A-01/A-02 orchestrator has no
-    schema_version key at all and is treated as unreadable, not
-    migrated in place.
+    schema_version "2.1" (since E5b): uses StoredPath for artifact paths
+    to remain portable across environments. Schema "2.0" (deprecated,
+    no auto-migration): used absolute Windows paths. Earlier schemas
+    have no version key at all and are treated as unreadable
+    (LegacyManifestError) — delete and rerun.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.0"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.1"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -481,7 +483,7 @@ class Orchestrator:
         existing = self.manifest.artifacts.get(key)
         if (
             existing is not None
-            and existing.path == str(path)
+            and existing.path.resolve() == path.resolve()
             and existing.size_bytes == size_bytes
             and existing.mtime_ns == mtime_ns
         ):
@@ -533,7 +535,7 @@ class Orchestrator:
         entry = self.manifest.artifacts.get(key)
         if entry is None:
             return
-        path = Path(entry.path)
+        path = entry.path.resolve()
         if not path.exists():
             raise ArtifactIntegrityError(
                 f"Artifact '{key}' (phase '{entry.phase}') is recorded at "
@@ -668,9 +670,10 @@ class Orchestrator:
                 new_artifacts: dict[str, ArtifactEntry] = {}
                 for key, (path, schema_version) in context._artifact_sink.items():
                     sha256, size_bytes, mtime_ns = self._hash_with_reuse(key, path)
+                    stored_path = to_stored_path(path)
                     new_artifacts[key] = ArtifactEntry(
                         key=key,
-                        path=str(path),
+                        path=stored_path,
                         sha256=sha256,
                         size_bytes=size_bytes,
                         mtime_ns=mtime_ns,

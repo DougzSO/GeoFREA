@@ -3,8 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 1.0.0 |
+| Version | 1.1.0 |
 | Adopted | 2026-09-15 |
+| Updated | 2026-09-21 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -152,8 +153,8 @@ Critical transitions:
 - **M-F1-01.** Layer registry with provenance per layer: `provenance` in {`fetched`, `local_only`} and computed `fetch_status`. Layers without automated fetch resolve from the local database (`GEOFREA_RAW_DATA_DIR`).
 - **M-F1-02.** Active layers: country borders and admin1 (GADM 4.1), protected areas (WDPA via Protected Planet API v4), lakes and rivers (HydroSHEDS), land cover, elevation, population, transmission grid, roads (GRIP4), solar PVOUT (Global Solar Atlas, long-term average daily totals, kWh/kWp/day), wind (M-F1-03), CMIP6 (M-F1-04), ERA5 gust (M-F1-05), existing plants (M-F1-06). The seismic layer is not part of GeoFREA.
 - **M-F1-03.** Global Wind Atlas products at hub-relevant heights 100, 150, 200 m: `combined-Weibull-A`, `combined-Weibull-k`, `air-density`, and `wind-speed` (quality check only). Product existence is confirmed on the CDN response after redirect, never on the API redirect alone.
-- **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download).
-- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator), ported from GEAR.
+- **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI or GEAR per A-11.
+- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator). Adapted from CRAEI or GEAR per A-11.
 - **M-F1-06.** Existing solar and wind plants from Global Energy Monitor trackers, used only in F7b. Never used to fit any parameter (V-06).
 - **M-F1-07.** GADM borders resolve local-first with checksum; network download is a fallback.
 
@@ -215,7 +216,7 @@ Critical transitions:
 - **M-F4-05.** Hazard channels (D15 rule):
   - C1 (mean resource) always enters F5 through M-F4-03.
   - C2 (operational extremes: extreme heat, extreme wind) and C3 (damage and cost: extreme precipitation) enter F5 or F6 quantitatively only with a loss function of evidence Tier 1 or 2 (resolved in OQ-007). Otherwise they are computed as per-cell context indicators per member and reported in T-R10, never entering regret or satisficing.
-  - Hazard indicator processors are copied and adapted from GEAR (A-11).
+  - Hazard indicator processors adapted from CRAEI or GEAR per A-11.
 - **M-F4-06.** Outputs: `forcing.parquet` (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), `hazard_context.parquet`, `members.yaml` (resolved member list with provenance).
 
 ### F5 technical_potential
@@ -332,19 +333,19 @@ Definitions for one country and technology. `C` = candidate cells; futures `f = 
 - **A-05. Country agnosticism.** All country-specific mappings (data-source regions, file names, GRIP4 regions, HydroSHEDS regions) live in `config/countries.yaml`. A test fails if an ISO3 code literal appears in `src/` outside comments and docstrings.
 - **A-06. Synthetic country.** A small synthetic country fixture runs F1-F7 in CI.
 - **A-07. Formats.** Rasters are Cloud Optimized GeoTIFF, EPSG:4326. Tables are parquet with a Pydantic schema and a `schema_version`. Run ID = hash of configuration, methodology version, and code commit.
-- **A-08. Outputs layout.**
-
-```
-outputs/<ISO3>/<phase>/artifacts/                     COG and parquet
-outputs/<ISO3>/<phase>/figures/<tech>/<map>__<window>__<ssp>__<gcm>.png
-outputs/<ISO3>/manifest.json
-outputs/thesis/                                        F8 only
-```
+- **A-08. Outputs layout.** All data stored in GEOFREA_DATA_DIR (environment variable, never under repository root). Structure:
+  - `raw/<source>/<ISO3|_global>/`: fetched raw data (GADM, HydroSHEDS, WRI GPPD, WDPA, GWA)
+  - `interim/<ISO3>/<layer>/`: intermediate processing caches
+  - `outputs/<ISO3>/manifest.json`: run manifest per country
+  - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports)
+  - `outputs/thesis/`: F8 only
+  - `reference/legacy_baseline_fc7b43d/`: frozen legacy results (read-only)
+  - `logs/<ISO3>/`: per-country run logs
 
   One map per file. `settings.yaml` `figures: all | summary | none`. Member-level maps exist only for F4 and F5; F6 and F7 maps show summaries (nominal, median, p10, p90, MR, SR).
 - **A-09. Failure policy.** Fail-loud; no silent fallback. A failure stops the phases that depend on it; independent branches may complete.
 - **A-10. Memory.** F6 and F7 process in batches under `settings.yaml` `memory.max_batch_gb`.
-- **A-11. Reuse from GEAR.** GEAR code is copied into GeoFREA and adapted, with a provenance header (GEAR repository, commit SHA, original path, adaptation summary). No imports from the GEAR repository, no shared package, no edits to GEAR. `GEAR_BASELINE_DIR` is read-only.
+- **A-11. Reuse from reference repositories.** CRAEI (primary climate-risk codebase, source for climate data acquisition and hazard processing) and GEAR (predecessor; used only for components absent from CRAEI) may be copied into GeoFREA and adapted with a provenance header (repository, commit SHA, original path, adaptation summary). No imports from reference repositories, no shared package, no edits to CRAEI or GEAR. `CRAEI_BASELINE_DIR` and `GEAR_BASELINE_DIR` are read-only. geoworld_framework is consulted for logic only, never ported line by line.
 - **A-12. Determinism.** Seeds are recorded in the manifest; reruns with identical run ID reproduce identical artifacts on the same platform.
 - **A-13. Traceability.** Functions implementing a method item cite it in the docstring (`Implements: M-F5-03.`).
 
@@ -456,4 +457,5 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 1.1.0 | 2026-09-21 | A-11 adds CRAEI as primary reference repository; A-08 adopts external data layout; M-F1-04, M-F1-05, M-F4-05 reference A-11. |
 | 1.0.0 | 2026-09-15 | Initial adoption. |

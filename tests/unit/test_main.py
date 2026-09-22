@@ -355,7 +355,6 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
         ]
 
     monkeypatch.setattr(main, "_build_phase_specs", _failing_specs)
-    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
 
     ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
 
@@ -389,7 +388,6 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
         ]
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
-    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
 
     ok = main.run_geofrea("PRT", ["b"], False, ResolutionsConfig(), "run-id", False)
 
@@ -413,7 +411,6 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
         ]
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
-    monkeypatch.setattr(main, "OUTPUTS_DIR", tmp_path)
 
     ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
 

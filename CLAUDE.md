@@ -23,6 +23,7 @@ Do not load archived records (`docs/_archive/`) unless the task explicitly asks 
 - If implementation requires deviating from, reinterpreting, or extending a methodology item, open an entry in `docs/OPEN_QUESTIONS.md`, stop work on that item, and report. Never implement a deviation first.
 - A methodological value without a documented primary source is never assumed. Register it as an open question awaiting Douglas's verdict.
 - If a value depends on data that does not exist yet, register the approved protocol, not a value. The value enters only after the data exists.
+- When delegating to a subagent, pass the command verbatim. A subagent or the main session must not replace, narrow, or defer an instructed action; if an action seems wrong or too large, stop before executing and report the objection for Douglas's verdict.
 
 ## Record keeping
 
@@ -65,9 +66,13 @@ At the end of every session that changed code or documents:
 
 ## Read-only locations
 
-- `GEOWORLD_BASELINE_DIR`: legacy framework. Read-only. Used only to consult legacy code when a task explicitly requires it.
-- `GEAR_BASELINE_DIR`: GEAR repository. Read-only. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header. Never import from it and never edit it.
-- `GEOFREA_RAW_DATA_DIR`: raw data. Never modified by the pipeline.
+- `GEOFREA_SHARED_RAW_DIR`: shared raw data (environment variable, never under repository root). Read-only. Never modified by the pipeline.
+- `GEOFREA_LEGACY_BASELINE_DIR`: frozen legacy baseline outputs. Read-only reference for regression tests.
+- `GEOWORLD_BASELINE_DIR`: legacy geoworld framework. Read-only. Used only to consult logic (never ported line by line) when a task explicitly requires it.
+- `CRAEI_BASELINE_DIR`: CRAEI climate-risk framework. Read-only. Primary reference repository for climate data acquisition, hazard processing, and risk logic. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header. Never import from it and never edit it.
+- `GEAR_BASELINE_DIR`: GEAR repository (CRAEI predecessor). Read-only. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header, only for components absent from CRAEI. Never import from it and never edit it.
+
+Note: All pipeline data lives in GEOFREA_DATA_DIR (external directory). No data is stored under the repository root (`outputs/`, `outputs_baseline_fc7b43d/`, logs, etc.).
 
 ## Regression and testing
 

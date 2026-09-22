@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "1.0.0",
+  "methodology_version": "1.1.0",
   "last_updated": "2026-09-21",
   "current_milestone": "MS-1",
   "milestones": [
@@ -23,7 +23,7 @@
       "module": "core",
       "status": "in_progress",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-04/A-05/A-09/U-05/Section-9 done: DAG orchestration, stale-resume rejection, lineage, tech/country registries (solar/wind), config schemas with verification metadata, shared geometry repair (fixed PRT WDPA). A-06 (synthetic country) and OQ-024 (per-file checksums) deferred to MS-2."
+      "summary": "A-01/A-02/A-03/A-04/A-05/A-07/A-08/A-09/U-05/Section-9 done: DAG orchestration, stale-resume rejection, lineage, tech/country registries (solar/wind), config schemas with verification metadata, shared geometry repair (fixed PRT WDPA), external data layout with portable StoredPath (E5b), manifest schema v2.1. A-06 (synthetic country) deferred to MS-2."
     },
     {
       "id": "F1",
