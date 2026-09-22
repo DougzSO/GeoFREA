@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from geofrea.core import paths
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.power_plants")
@@ -50,10 +51,12 @@ def fetch_power_plants(outputs_dir: Path) -> Path | None:
     """Download the Global Power Plant Database CSV, once.
 
     Args:
-        outputs_dir: Root outputs directory (PhaseContext.outputs_dir).
-            The file is saved under `outputs_dir/_global/raw/` — this
-            is a global (not per-country) dataset, so it does not live
-            under any single country's output tree.
+        outputs_dir: Unused — kept for call-site symmetry with the other
+            fetchers (see phase.py's _LOCAL_PATH_HANDLERS/lambdas). The
+            file is saved under paths.fetched_raw("wri_gppd", "_global")
+            (GEOFREA_DATA_DIR/raw/wri_gppd/_global/), per METHODOLOGY
+            A-08 — this is a global (not per-country) dataset, so it
+            does not live under any single country's raw tree.
 
     Returns:
         Path to the saved CSV, or None if the download failed (logged,
@@ -61,7 +64,7 @@ def fetch_power_plants(outputs_dir: Path) -> Path | None:
         acquisition phase, matching data_quality_audit's own
         established pattern for degrading gracefully per layer).
     """
-    dest_dir = Path(outputs_dir) / "_global" / "raw"
+    dest_dir = paths.fetched_raw("wri_gppd", "_global")
     dest_path = dest_dir / "global_power_plant_database.csv"
 
     if dest_path.exists():

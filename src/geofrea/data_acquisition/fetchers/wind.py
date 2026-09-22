@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from geofrea.core import paths
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.wind")
@@ -52,7 +53,7 @@ def fetch_wind(outputs_dir: Path, country_code: str, height_m: int = _DEFAULT_HE
         Path to the saved GeoTIFF, or None if the fetch failed (logged,
         not raised).
     """
-    dest_dir = Path(outputs_dir) / country_code / "raw"
+    dest_dir = paths.fetched_raw("gwa", country_code)
     dest_path = dest_dir / f"{country_code}_wind_speed_{height_m}m.tif"
 
     if dest_path.exists():

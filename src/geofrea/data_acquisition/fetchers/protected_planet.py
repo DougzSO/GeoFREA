@@ -37,6 +37,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from geofrea.core import paths
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.protected_planet")
@@ -168,7 +169,7 @@ def fetch_protected_areas(
         logger.warning("Failed to fetch protected areas for %s: %s", country_code, exc)
         return None
 
-    dest_dir = Path(outputs_dir) / country_code / "raw"
+    dest_dir = paths.fetched_raw("wdpa", country_code)
     dest_path = dest_dir / f"{country_code}_protected_areas_wdpa.geojson"
     dest_dir.mkdir(parents=True, exist_ok=True)
 

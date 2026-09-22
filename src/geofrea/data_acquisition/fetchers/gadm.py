@@ -47,6 +47,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from geofrea.core import paths
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.gadm")
@@ -81,7 +82,7 @@ def _safe_extract(zip_path: Path, target_dir: Path) -> None:
 
 
 def _gadm_paths(outputs_dir: Path, country_code: str) -> tuple[Path, Path]:
-    dest_dir = Path(outputs_dir) / country_code / "raw"
+    dest_dir = paths.fetched_raw("gadm", country_code)
     zip_path = dest_dir / f"gadm41_{country_code}_shp.zip"
     extract_dir = dest_dir / f"gadm41_{country_code}_shp"
     return zip_path, extract_dir
@@ -165,7 +166,7 @@ def _naturalearth_fallback(outputs_dir: Path, country_code: str) -> Path | None:
         logger.warning("%s not found in NaturalEarth fallback data.", country_code)
         return None
 
-    dest_dir = Path(outputs_dir) / country_code / "raw"
+    dest_dir = paths.fetched_raw("gadm", country_code)
     dest_dir.mkdir(parents=True, exist_ok=True)
     out_path = dest_dir / f"{country_code}_naturalearth_fallback.shp"
     country_gdf.to_file(out_path)

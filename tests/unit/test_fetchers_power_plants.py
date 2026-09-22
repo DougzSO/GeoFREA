@@ -9,7 +9,18 @@ from unittest.mock import Mock
 import pytest
 import requests
 
+from geofrea.core import paths
 from geofrea.data_acquisition.fetchers import power_plants
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    # fetch_power_plants() resolves its destination through
+    # paths.fetched_raw("wri_gppd", "_global"), i.e. GEOFREA_DATA_DIR/raw/
+    # wri_gppd/_global (METHODOLOGY A-08) — not the outputs_dir argument
+    # this test still passes (kept for call-site symmetry, see phase.py's
+    # lambdas, but unused internally now).
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
 
 
 @pytest.mark.unit
@@ -19,7 +30,7 @@ def test_fetch_power_plants_happy_path_saves_file(tmp_path, monkeypatch):
 
     result = power_plants.fetch_power_plants(tmp_path)
 
-    assert result == tmp_path / "_global" / "raw" / "global_power_plant_database.csv"
+    assert result == paths.fetched_raw("wri_gppd", "_global") / "global_power_plant_database.csv"
     assert result.read_bytes() == b"fuel,capacity_mw\nHydro,10.0\n"
 
 
@@ -37,7 +48,7 @@ def test_fetch_power_plants_uses_pinned_commit_url(tmp_path, monkeypatch):
 
 @pytest.mark.unit
 def test_fetch_power_plants_idempotent_skips_network_if_already_present(tmp_path, monkeypatch):
-    dest = tmp_path / "_global" / "raw" / "global_power_plant_database.csv"
+    dest = paths.fetched_raw("wri_gppd", "_global") / "global_power_plant_database.csv"
     dest.parent.mkdir(parents=True)
     dest.write_bytes(b"already here")
 
@@ -60,7 +71,7 @@ def test_fetch_power_plants_network_error_returns_none(tmp_path, monkeypatch):
     result = power_plants.fetch_power_plants(tmp_path)
 
     assert result is None
-    assert not (tmp_path / "_global" / "raw" / "global_power_plant_database.csv").exists()
+    assert not (paths.fetched_raw("wri_gppd", "_global") / "global_power_plant_database.csv").exists()
 
 
 @pytest.mark.unit

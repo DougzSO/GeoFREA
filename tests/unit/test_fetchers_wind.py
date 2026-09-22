@@ -9,7 +9,18 @@ from unittest.mock import Mock
 import pytest
 import requests
 
+from geofrea.core import paths
 from geofrea.data_acquisition.fetchers import wind
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    # fetch_wind() resolves its destination through
+    # paths.fetched_raw("gwa", country_code), i.e. GEOFREA_DATA_DIR/raw/
+    # gwa/<country_code> (METHODOLOGY A-08) — not the outputs_dir
+    # argument these tests still pass (kept for call-site symmetry, see
+    # phase.py's lambdas, but unused internally now).
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
 
 
 @pytest.mark.unit
@@ -19,7 +30,7 @@ def test_fetch_wind_happy_path_saves_file(tmp_path, monkeypatch):
 
     result = wind.fetch_wind(tmp_path, "PRT")
 
-    assert result == tmp_path / "PRT" / "raw" / "PRT_wind_speed_100m.tif"
+    assert result == paths.fetched_raw("gwa", "PRT") / "PRT_wind_speed_100m.tif"
     assert result.read_bytes() == b"\x00fake-tiff-bytes"
 
 
@@ -36,7 +47,7 @@ def test_fetch_wind_url_uses_country_code_and_height(tmp_path, monkeypatch):
 
 @pytest.mark.unit
 def test_fetch_wind_idempotent_skips_network_if_already_present(tmp_path, monkeypatch):
-    dest = tmp_path / "BRA" / "raw" / "BRA_wind_speed_100m.tif"
+    dest = paths.fetched_raw("gwa", "BRA") / "BRA_wind_speed_100m.tif"
     dest.parent.mkdir(parents=True)
     dest.write_bytes(b"already here")
 

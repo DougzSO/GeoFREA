@@ -65,6 +65,7 @@ import logging
 import zipfile
 from pathlib import Path
 
+from geofrea.core import paths
 from geofrea.core.config_loader import CountryMappingError, load_countries
 from geofrea.core.http_retry import get_with_retry
 
@@ -208,7 +209,7 @@ def fetch_lakes(outputs_dir: Path) -> Path | None:
         Path to the extracted .shp file, or None if the fetch/extraction
         failed (logged, not raised — see _fetch_and_extract_shapefile()).
     """
-    dest_dir = Path(outputs_dir) / "_global" / "raw"
+    dest_dir = paths.fetched_raw("hydrosheds", "_global")
     zip_path = dest_dir / "HydroLAKES_polys_v10_shp.zip"
 
     return _fetch_and_extract_shapefile(
@@ -238,7 +239,7 @@ def fetch_rivers(outputs_dir: Path, country_code: str) -> Path | None:
     """
     region = _get_hydrosheds_region(country_code)
 
-    dest_dir = Path(outputs_dir) / country_code / "raw"
+    dest_dir = paths.fetched_raw("hydrosheds", country_code)
     zip_path = dest_dir / f"HydroRIVERS_v10_{region}_shp.zip"
     url = _RIVERS_TILE_URL_TEMPLATE.format(region=region)
 

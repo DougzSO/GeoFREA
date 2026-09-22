@@ -19,7 +19,18 @@ import pytest
 import requests
 from shapely.geometry import box
 
+from geofrea.core import paths
 from geofrea.data_acquisition.fetchers import gadm
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    # fetch_borders()/fetch_admin1() resolve their destination through
+    # paths.fetched_raw("gadm", country_code), i.e. GEOFREA_DATA_DIR/raw/
+    # gadm/<country_code> (METHODOLOGY A-08) — not the outputs_dir
+    # argument these tests still pass (kept for call-site symmetry, see
+    # phase.py's lambdas, but unused internally now).
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
 
 
 def _make_gadm_zip_bytes(country_code: str, levels: tuple[int, ...] = (0, 1, 2)) -> bytes:
@@ -38,11 +49,11 @@ def test_fetch_borders_happy_path_downloads_extracts_and_returns_level0(tmp_path
 
     result = gadm.fetch_borders(tmp_path, "PRT")
 
-    expected = tmp_path / "PRT" / "raw" / "gadm41_PRT_shp" / "gadm41_PRT_0.shp"
+    expected = paths.fetched_raw("gadm", "PRT") / "gadm41_PRT_shp" / "gadm41_PRT_0.shp"
     assert result == expected
     assert result.read_bytes() == b"fake-shp-level-0"
     # The zip itself is kept on disk — same idempotency convention as hydrosheds.py.
-    assert (tmp_path / "PRT" / "raw" / "gadm41_PRT_shp.zip").exists()
+    assert (paths.fetched_raw("gadm", "PRT") / "gadm41_PRT_shp.zip").exists()
 
 
 @pytest.mark.unit
@@ -69,7 +80,7 @@ def test_fetch_admin1_alone_triggers_its_own_extraction_if_needed(tmp_path, monk
 
     result = gadm.fetch_admin1(tmp_path, "PRT")
 
-    assert result == tmp_path / "PRT" / "raw" / "gadm41_PRT_shp" / "gadm41_PRT_1.shp"
+    assert result == paths.fetched_raw("gadm", "PRT") / "gadm41_PRT_shp" / "gadm41_PRT_1.shp"
 
 
 @pytest.mark.unit
@@ -85,7 +96,7 @@ def test_fetch_admin1_returns_none_when_country_has_no_level1(tmp_path, monkeypa
 
 @pytest.mark.unit
 def test_fetch_borders_idempotent_skips_everything_if_already_extracted(tmp_path, monkeypatch):
-    extract_dir = tmp_path / "PRT" / "raw" / "gadm41_PRT_shp"
+    extract_dir = paths.fetched_raw("gadm", "PRT") / "gadm41_PRT_shp"
     extract_dir.mkdir(parents=True)
     shp_path = extract_dir / "gadm41_PRT_0.shp"
     shp_path.write_bytes(b"already extracted")
@@ -100,7 +111,7 @@ def test_fetch_borders_idempotent_skips_everything_if_already_extracted(tmp_path
 
 @pytest.mark.unit
 def test_fetch_borders_reuses_already_downloaded_zip_without_refetching(tmp_path, monkeypatch):
-    dest_dir = tmp_path / "PRT" / "raw"
+    dest_dir = paths.fetched_raw("gadm", "PRT")
     dest_dir.mkdir(parents=True)
     (dest_dir / "gadm41_PRT_shp.zip").write_bytes(_make_gadm_zip_bytes("PRT"))
     mock_get = Mock()
@@ -189,7 +200,7 @@ def test_fetch_borders_rejects_zip_slip_and_writes_nothing_outside_target(tmp_pa
     result = gadm.fetch_borders(tmp_path, "PRT")
 
     assert result is None
-    assert not (tmp_path / "PRT" / "raw" / "evil.txt").exists()
+    assert not (paths.fetched_raw("gadm", "PRT") / "evil.txt").exists()
     assert not (tmp_path / "evil.txt").exists()
 
 

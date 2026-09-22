@@ -12,7 +12,18 @@ from unittest.mock import Mock
 import pytest
 import requests
 
+from geofrea.core import paths
 from geofrea.data_acquisition.fetchers import protected_planet
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    # fetch_protected_areas() resolves its destination through
+    # paths.fetched_raw("wdpa", country_code), i.e. GEOFREA_DATA_DIR/raw/
+    # wdpa/<country_code> (METHODOLOGY A-08) — not the outputs_dir
+    # argument these tests still pass (kept for call-site symmetry, see
+    # phase.py's lambdas, but unused internally now).
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
 
 
 def _page_response(protected_areas: list[dict]) -> Mock:
@@ -73,7 +84,7 @@ def test_fetch_protected_areas_happy_path_single_page(tmp_path, monkeypatch):
 
     result = protected_planet.fetch_protected_areas(tmp_path, "PRT")
 
-    assert result == tmp_path / "PRT" / "raw" / "PRT_protected_areas_wdpa.geojson"
+    assert result == paths.fetched_raw("wdpa", "PRT") / "PRT_protected_areas_wdpa.geojson"
     saved = json.loads(result.read_text(encoding="utf-8"))
     assert saved["type"] == "FeatureCollection"
     assert len(saved["features"]) == 1

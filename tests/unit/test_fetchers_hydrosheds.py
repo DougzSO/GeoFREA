@@ -16,7 +16,18 @@ from unittest.mock import Mock
 import pytest
 import requests
 
+from geofrea.core import paths
 from geofrea.data_acquisition.fetchers import hydrosheds
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    # fetch_lakes()/fetch_rivers() resolve their destination through
+    # paths.fetched_raw("hydrosheds", scope), i.e. GEOFREA_DATA_DIR/raw/
+    # hydrosheds/<scope> (METHODOLOGY A-08) — not the outputs_dir
+    # argument these tests still pass (kept for call-site symmetry, see
+    # phase.py's lambdas, but unused internally now).
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
 
 
 def _make_zip_bytes(inner_dir: str, shp_basename: str) -> bytes:
@@ -46,9 +57,7 @@ def test_fetch_lakes_happy_path_extracts_and_returns_shp_path(tmp_path, monkeypa
     result = hydrosheds.fetch_lakes(tmp_path)
 
     expected = (
-        tmp_path
-        / "_global"
-        / "raw"
+        paths.fetched_raw("hydrosheds", "_global")
         / "HydroLAKES_polys_v10_shp"
         / "HydroLAKES_polys_v10_shp"
         / "HydroLAKES_polys_v10.shp"
@@ -57,13 +66,15 @@ def test_fetch_lakes_happy_path_extracts_and_returns_shp_path(tmp_path, monkeypa
     assert result.read_bytes() == b"fake-shp-bytes"
     # The downloaded zip itself is still kept on disk (not deleted after
     # extraction) — cheap idempotency for a re-extract without re-fetch.
-    assert (tmp_path / "_global" / "raw" / "HydroLAKES_polys_v10_shp.zip").exists()
+    assert (paths.fetched_raw("hydrosheds", "_global") / "HydroLAKES_polys_v10_shp.zip").exists()
 
 
 @pytest.mark.unit
 def test_fetch_lakes_idempotent_skips_everything_if_already_extracted(tmp_path, monkeypatch):
     extract_dir = (
-        tmp_path / "_global" / "raw" / "HydroLAKES_polys_v10_shp" / "HydroLAKES_polys_v10_shp"
+        paths.fetched_raw("hydrosheds", "_global")
+        / "HydroLAKES_polys_v10_shp"
+        / "HydroLAKES_polys_v10_shp"
     )
     extract_dir.mkdir(parents=True)
     shp_path = extract_dir / "HydroLAKES_polys_v10.shp"
@@ -81,7 +92,7 @@ def test_fetch_lakes_idempotent_skips_everything_if_already_extracted(tmp_path, 
 def test_fetch_lakes_reuses_already_downloaded_zip_without_refetching(tmp_path, monkeypatch):
     # Simulates a prior run that downloaded successfully but crashed
     # before extraction — the zip is on disk, nothing is extracted yet.
-    dest_dir = tmp_path / "_global" / "raw"
+    dest_dir = paths.fetched_raw("hydrosheds", "_global")
     dest_dir.mkdir(parents=True)
     zip_bytes = _make_zip_bytes("HydroLAKES_polys_v10_shp", "HydroLAKES_polys_v10")
     (dest_dir / "HydroLAKES_polys_v10_shp.zip").write_bytes(zip_bytes)
@@ -144,9 +155,7 @@ def test_fetch_rivers_happy_path_uses_correct_region_tile(
         == f"https://data.hydrosheds.org/file/HydroRIVERS/HydroRIVERS_v10_{region}_shp.zip"
     )
     expected = (
-        tmp_path
-        / country_code
-        / "raw"
+        paths.fetched_raw("hydrosheds", country_code)
         / f"HydroRIVERS_v10_{region}_shp"
         / f"HydroRIVERS_v10_{region}_shp"
         / f"HydroRIVERS_v10_{region}.shp"
@@ -157,7 +166,9 @@ def test_fetch_rivers_happy_path_uses_correct_region_tile(
 @pytest.mark.unit
 def test_fetch_rivers_idempotent_skips_everything_if_already_extracted(tmp_path, monkeypatch):
     extract_dir = (
-        tmp_path / "PRT" / "raw" / "HydroRIVERS_v10_eu_shp" / "HydroRIVERS_v10_eu_shp"
+        paths.fetched_raw("hydrosheds", "PRT")
+        / "HydroRIVERS_v10_eu_shp"
+        / "HydroRIVERS_v10_eu_shp"
     )
     extract_dir.mkdir(parents=True)
     shp_path = extract_dir / "HydroRIVERS_v10_eu.shp"
