@@ -18,7 +18,7 @@ def setup_test_environment():
     test_tmp_base.mkdir(exist_ok=True)
 
     # Create required directories if they don't exist
-    for subdir in ["data", "shared_raw", "legacy_baseline", "geoworld", "craei", "gear"]:
+    for subdir in ["data", "shared_raw", "legacy_baseline", "geoworld", "craei"]:
         (test_tmp_base / subdir).mkdir(exist_ok=True)
 
     # Set defaults if not already set
@@ -27,7 +27,6 @@ def setup_test_environment():
     os.environ.setdefault("GEOFREA_LEGACY_BASELINE_DIR", str(test_tmp_base / "legacy_baseline"))
     os.environ.setdefault("GEOWORLD_BASELINE_DIR", str(test_tmp_base / "geoworld"))
     os.environ.setdefault("CRAEI_BASELINE_DIR", str(test_tmp_base / "craei"))
-    os.environ.setdefault("GEAR_BASELINE_DIR", str(test_tmp_base / "gear"))
 
     yield
 

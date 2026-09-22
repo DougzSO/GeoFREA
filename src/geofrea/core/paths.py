@@ -7,7 +7,6 @@ Environment variables define the data layout:
   - GEOFREA_LEGACY_BASELINE_DIR: legacy baseline outputs (read-only reference)
   - GEOWORLD_BASELINE_DIR: legacy geoworld framework (logic reference only)
   - CRAEI_BASELINE_DIR: CRAEI climate-risk framework (primary reference, copy and adapt)
-  - GEAR_BASELINE_DIR: GEAR deprecated code (CRAEI substitute)
 
 Paths stored in manifests and Pydantic models use StoredPath (root + relative path)
 to remain portable across environments. Absolute paths are resolved at read time only.
@@ -318,12 +317,5 @@ def ensure_writable(path: Path) -> None:
         craei_str = str(Path(_ensure_env("CRAEI_BASELINE_DIR")).resolve())
         if path_str.startswith(craei_str):
             raise ReadOnlyLocationError(path_str, "CRAEI_BASELINE_DIR")
-    except MissingPathEnvironmentError:
-        pass
-
-    try:
-        gear_str = str(Path(_ensure_env("GEAR_BASELINE_DIR")).resolve())
-        if path_str.startswith(gear_str):
-            raise ReadOnlyLocationError(path_str, "GEAR_BASELINE_DIR")
     except MissingPathEnvironmentError:
         pass

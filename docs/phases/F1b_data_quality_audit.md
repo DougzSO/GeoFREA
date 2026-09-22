@@ -26,6 +26,7 @@ Requires: `acquisition_registry`. Produces: `audit_report` (per-layer summaries,
 
 - Land-cover inspection for BRA takes about 37 minutes; candidate for per-tile caching, no priority.
 - `audit_report`'s artifact `schema_version` was bumped to `"2.0"` 2026-09-21 (main.py `_AUDIT_REPORT_SCHEMA_VERSION`) when `VectorLayerSummary.status`'s literal set changed — a manifest entry recorded under `"1.0"` now correctly raises `StaleManifestEntryError` on resume (METHODOLOGY A-02/A-09, docs/phases/core.md) instead of a raw Pydantic `ValidationError`. Any future breaking change to `AuditResult`'s shape needs the same bump.
+- The 2026-09-22 FD4c `force_rerun` audited the corrected, geometry-filtered `land_cover` registry (BRA 112/155 tiles, PRT 11/26 tiles — see `docs/phases/F1_data_acquisition.md` Known issues) end to end; both audits completed and reported `success`. BRA's land-cover inspection took ~55 minutes this run (up from the ~37-minute figure above, consistent with more real per-tile geometry work now happening, not a regression).
 
 ## History
 

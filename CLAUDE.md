@@ -70,7 +70,6 @@ At the end of every session that changed code or documents:
 - `GEOFREA_LEGACY_BASELINE_DIR`: frozen legacy baseline outputs. Read-only reference for regression tests.
 - `GEOWORLD_BASELINE_DIR`: legacy geoworld framework. Read-only. Used only to consult logic (never ported line by line) when a task explicitly requires it.
 - `CRAEI_BASELINE_DIR`: CRAEI climate-risk framework. Read-only. Primary reference repository for climate data acquisition, hazard processing, and risk logic. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header. Never import from it and never edit it.
-- `GEAR_BASELINE_DIR`: GEAR repository (CRAEI predecessor). Read-only. Code may be copied into GeoFREA and adapted under METHODOLOGY A-11, with a provenance header, only for components absent from CRAEI. Never import from it and never edit it.
 
 Note: All pipeline data lives in GEOFREA_DATA_DIR (external directory). No data is stored under the repository root (`outputs/`, `outputs_baseline_fc7b43d/`, logs, etc.).
 

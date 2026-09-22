@@ -94,15 +94,15 @@ Scripts or validations expected to run longer than 30 seconds log progress with 
 
 ## Code reused from reference repositories
 
-Code copied from CRAEI or GEAR (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary:
+Code copied from CRAEI (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary:
 
 ```python
-# Adapted from CRAEI (or GEAR): https://github.com/<repo>
+# Adapted from CRAEI: https://github.com/<repo>
 # Commit: <sha>  Original path: <path>
 # Adaptation: <one-line summary>
 ```
 
-No imports from CRAEI, GEAR, or other reference repositories. Reference repositories remain read-only; edits belong in GeoFREA only.
+No imports from CRAEI or other reference repositories. Reference repositories remain read-only; edits belong in GeoFREA only.
 
 ## Tests
 

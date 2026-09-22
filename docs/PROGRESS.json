@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "1.1.0",
-  "last_updated": "2026-09-21",
+  "methodology_version": "1.2.0",
+  "last_updated": "2026-09-22",
   "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -30,7 +30,7 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "Layers resolve for BRA/PRT; needs GWA Weibull/air-density, CMIP6, ERA5 gust, GEM trackers, India mappings, seismic removal."
+      "summary": "land_cover now polygon-filtered (BRA 112/155, PRT 11/26 tiles). force_rerun also produced unrequested F2a/F2b output (cascades to dependents); BRA F2a failed (OOM)."
     },
     {
       "id": "F1b",
@@ -44,7 +44,7 @@
       "module": "grid_alignment",
       "status": "built_pending_conformance",
       "record": "docs/phases/F2a_grid_alignment.md",
-      "summary": "Aligned for BRA/PRT; needs geodesic slope, removal of wind AHP combination, multi-height wind alignment, distance cap parameter."
+      "summary": "PRT aligned (provisional, see Known issues); BRA failed on population reproject (OOM, deleted). Needs geodesic slope, wind AHP removal, distance cap parameter."
     },
     {
       "id": "F2b",
@@ -63,8 +63,8 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "ran_with_issues", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "ran_with_issues", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "IND": {"F1": "not_run", "F1b": "not_run", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
   "regression": {

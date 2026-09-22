@@ -41,6 +41,7 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
 
 - Regression fixtures `regression-fixtures-v1` cover the 14 legacy criteria; only E1-E3 layers remain under V-01.
 - Parameters retired in H-2 (tier: null): criteria.slope_threshold_deg_solar, criteria.slope_threshold_deg_wind, criteria.slope_threshold_deg_biomass, criteria.road_max_dist_km, criteria.river_max_dist_biomass_km, criteria.grid_max_dist_km, criteria.normalization_min_percentile, criteria.normalization_max_percentile, criteria.seismic_percentile_low, criteria.seismic_percentile_high, criteria.linear_proximity_percentile_low, criteria.linear_proximity_percentile_high, criteria.terrain_slope_weight, criteria.terrain_tri_weight, criteria.tri_threshold_m, criteria.proximity_decay_sigma_km, criteria.proximity_smooth_sigma_px, criteria.proximity_plants_neutral_score, criteria.biomass_smooth_sigma, criteria.solar_pvout_weight, criteria.renewable_fuel_labels, criteria.protected_as_exclusion, criteria.land_suitability, countries.BRA.criteria.yield_by_land_cover, countries.PRT.criteria.yield_by_land_cover.
+- **PRT's current `suitability_criteria` output is provisional (2026-09-22).** Produced by an unrequested force_rerun cascade (see `docs/phases/core.md`'s decision on the FD4c/FD4d/FD5 pass), not a deliberate F2b conformance run; overwritten once Stage H lands.
 
 ## History
 

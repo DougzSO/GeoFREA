@@ -7,9 +7,9 @@
 #
 # Each country entry has sub-keys for different data sources:
 #   - hydrosheds_region: HydroSHEDS continent tile code (HydroRIVERS only)
-#   - elevation_dir: Subdirectory name in GEOFREA_RAW_DATA_DIR/elevation/
-#   - land_cover_dir: Subdirectory name in GEOFREA_RAW_DATA_DIR/land_cover/
-#   - grip4_region_dir: Subdirectory in GEOFREA_RAW_DATA_DIR/infrastructure/roads/
+#   - elevation_dir: Subdirectory name in GEOFREA_SHARED_RAW_DIR/elevation/
+#   - land_cover_dir: Subdirectory name in GEOFREA_SHARED_RAW_DIR/land_cover/
+#   - grip4_region_dir: Subdirectory in GEOFREA_SHARED_RAW_DIR/infrastructure/roads/
 #   - grip4_region_file: GRIP4 shapefile name within grip4_region_dir
 #
 # A null value means the mapping has not been determined yet or the country

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 1.1.0 |
+| Version | 1.2.0 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-09-21 |
+| Updated | 2026-09-22 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -54,7 +54,7 @@ All architecture and output decisions are subordinate to this section.
 
 - **RO1.** Quantify spatially the technical solar and wind potential in the three core countries. Served by F3 and F5.
 - **RO2.** Integrate land-eligibility constraints and spatially explicit cost drivers (grid connection, site access) into site-level LCOE. Served by F2b, F3, F6.
-- **RO3.** Quantify how SSP1-2.6, SSP3-7.0, and SSP5-8.5 projections from a CMIP6 GCM ensemble change resource, technical potential, and LCOE of candidate sites in 2041-2070 (core) and 2071-2100 (sensitivity), reusing and adapting the GEAR climate data layer. Climate hazards enter quantitatively only where a Tier 1-2 loss function exists. Served by F4, F5, F6.
+- **RO3.** Quantify how SSP1-2.6, SSP3-7.0, and SSP5-8.5 projections from a CMIP6 GCM ensemble change resource, technical potential, and LCOE of candidate sites in 2041-2070 (core) and 2071-2100 (sensitivity), reusing and adapting the CRAEI climate data layer. Climate hazards enter quantitatively only where a Tier 1-2 loss function exists. Served by F4, F5, F6.
 - **RO4.** Develop a site-level robustness assessment over a full-factorial ensemble of climate members and techno-economic parameter samples, with min-max regret on LCOE as primary metric, satisficing robustness under a minimum-generation constraint as secondary metric, and PRIM scenario discovery for vulnerabilities. Served by F7.
 - **RO5.** Validate the framework in Brazil, Portugal, and India through cross-country comparison and external plausibility checks against existing plants, and deliver a lightweight precomputed explorer as a demonstration artifact. Served by F7b, F8, E1.
 
@@ -85,8 +85,8 @@ All architecture and output decisions are subordinate to this section.
 | S-05 | Time windows | Core window 2041-2070. Sensitivity window 2071-2100, interpreted as repowering or second-generation assets. Reference climatology 1995-2014. |
 | S-06 | Decision unit | 0.05 degree cell, exactly 5 x 5 pixels of the 0.01 degree analysis grid (M-F3-03). |
 | S-07 | Currency | Constant 2024 USD. |
-| S-08 | Excluded from scope | GHG abatement; biomass; seismic hazard layer; transport decarbonisation; sea-level rise; wildfire (data limitation inherited from GEAR). |
-| S-09 | Repository boundary | GeoFREA and GEAR remain separate repositories. GeoFREA copies and adapts any needed GEAR code (A-11); GEAR is never modified from GeoFREA work. |
+| S-08 | Excluded from scope | GHG abatement; biomass; seismic hazard layer; transport decarbonisation; sea-level rise; wildfire. |
+| S-09 | Repository boundary | GeoFREA and CRAEI remain separate repositories. GeoFREA copies and adapts any needed CRAEI code (A-11); CRAEI is never modified from GeoFREA work. |
 
 ---
 
@@ -150,11 +150,11 @@ Critical transitions:
 
 ### F1 data_acquisition
 
-- **M-F1-01.** Layer registry with provenance per layer: `provenance` in {`fetched`, `local_only`} and computed `fetch_status`. Layers without automated fetch resolve from the local database (`GEOFREA_RAW_DATA_DIR`).
+- **M-F1-01.** Layer registry with provenance per layer: `provenance` in {`fetched`, `local_only`} and computed `fetch_status`. Layers without automated fetch resolve from the local database (`GEOFREA_SHARED_RAW_DIR`, resolved through `paths.py`).
 - **M-F1-02.** Active layers: country borders and admin1 (GADM 4.1), protected areas (WDPA via Protected Planet API v4), lakes and rivers (HydroSHEDS), land cover, elevation, population, transmission grid, roads (GRIP4), solar PVOUT (Global Solar Atlas, long-term average daily totals, kWh/kWp/day), wind (M-F1-03), CMIP6 (M-F1-04), ERA5 gust (M-F1-05), existing plants (M-F1-06). The seismic layer is not part of GeoFREA.
 - **M-F1-03.** Global Wind Atlas products at hub-relevant heights 100, 150, 200 m: `combined-Weibull-A`, `combined-Weibull-k`, `air-density`, and `wind-speed` (quality check only). Product existence is confirmed on the CDN response after redirect, never on the API redirect alone.
-- **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI or GEAR per A-11.
-- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator). Adapted from CRAEI or GEAR per A-11.
+- **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI per A-11.
+- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator). Adapted from CRAEI per A-11.
 - **M-F1-06.** Existing solar and wind plants from Global Energy Monitor trackers, used only in F7b. Never used to fit any parameter (V-06).
 - **M-F1-07.** GADM borders resolve local-first with checksum; network download is a fallback.
 
@@ -216,7 +216,7 @@ Critical transitions:
 - **M-F4-05.** Hazard channels (D15 rule):
   - C1 (mean resource) always enters F5 through M-F4-03.
   - C2 (operational extremes: extreme heat, extreme wind) and C3 (damage and cost: extreme precipitation) enter F5 or F6 quantitatively only with a loss function of evidence Tier 1 or 2 (resolved in OQ-007). Otherwise they are computed as per-cell context indicators per member and reported in T-R10, never entering regret or satisficing.
-  - Hazard indicator processors adapted from CRAEI or GEAR per A-11.
+  - Hazard indicator processors adapted from CRAEI per A-11.
 - **M-F4-06.** Outputs: `forcing.parquet` (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), `hazard_context.parquet`, `members.yaml` (resolved member list with provenance).
 
 ### F5 technical_potential
@@ -345,8 +345,8 @@ Definitions for one country and technology. `C` = candidate cells; futures `f = 
   One map per file. `settings.yaml` `figures: all | summary | none`. Member-level maps exist only for F4 and F5; F6 and F7 maps show summaries (nominal, median, p10, p90, MR, SR).
 - **A-09. Failure policy.** Fail-loud; no silent fallback. A failure stops the phases that depend on it; independent branches may complete.
 - **A-10. Memory.** F6 and F7 process in batches under `settings.yaml` `memory.max_batch_gb`.
-- **A-11. Reuse from reference repositories.** CRAEI (primary climate-risk codebase, source for climate data acquisition and hazard processing) and GEAR (predecessor; used only for components absent from CRAEI) may be copied into GeoFREA and adapted with a provenance header (repository, commit SHA, original path, adaptation summary). No imports from reference repositories, no shared package, no edits to CRAEI or GEAR. `CRAEI_BASELINE_DIR` and `GEAR_BASELINE_DIR` are read-only. geoworld_framework is consulted for logic only, never ported line by line.
-- **A-12. Determinism.** Seeds are recorded in the manifest; reruns with identical run ID reproduce identical artifacts on the same platform.
+- **A-11. Reuse from reference repositories.** CRAEI (primary climate-risk codebase, source for climate data acquisition and hazard processing) is the only reuse source under the copy-and-adapt rule: code may be copied into GeoFREA and adapted with a provenance header (repository, commit SHA, original path, adaptation summary). No imports from reference repositories, no shared package, no edits to CRAEI. `CRAEI_BASELINE_DIR` is read-only. geoworld_framework is consulted for logic only, never ported line by line.
+- **A-12. Determinism.** Seeds are recorded in the manifest; reruns with identical run ID reproduce identical artifacts on the same platform. The run environment (`GEOFREA_DATA_DIR`, `GEOFREA_SHARED_RAW_DIR`, and the other location variables) is declared in `.env.example` and loaded at startup, not assumed from an undocumented shell state.
 - **A-13. Traceability.** Functions implementing a method item cite it in the docstring (`Implements: M-F5-03.`).
 
 ---
@@ -457,5 +457,6 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.0 | 2026-09-22 | GEAR removed as an active reference repository (A-11, S-08, S-09, M-F1-04, M-F1-05, M-F4-05 now cite CRAEI only); M-F1-01's local-database variable renamed to its current name, `GEOFREA_SHARED_RAW_DIR`; A-12 adds that the run environment is declared in `.env.example` and loaded at startup. |
 | 1.1.0 | 2026-09-21 | A-11 adds CRAEI as primary reference repository; A-08 adopts external data layout; M-F1-04, M-F1-05, M-F4-05 reference A-11. |
 | 1.0.0 | 2026-09-15 | Initial adoption. |

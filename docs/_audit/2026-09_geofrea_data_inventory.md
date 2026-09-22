@@ -258,12 +258,12 @@ No filename overlap in either country — every `audit_<ISO3>_<timestamp>.txt` i
 
 ### `outputs/<ISO3>/grid_alignment/*.tif` (top-level) vs. `outputs/<ISO3>/grid_alignment/artifacts/` (subdirectory)
 
-All 12-13 same-named files (`*_elevation_aligned.tif`, `*_grid_aligned.tif`, `*_grid_metadata.json`, `*_lakes_aligned.tif`, `*_land_cover_aligned.tif`, `*_lc_aligned.tif`, `*_plants_aligned.tif`, `*_population_aligned.tif`, `*_rivers_aligned.tif`, `*_roads_aligned.tif`, `*_slope_aligned.tif`, `*_solar_aligned.tif`, `*_wind_aligned.tif`) are **IDENTICAL** for both BRA and PRT. This is a genuine full duplication — every raster is written twice, once flat under `grid_alignment/` and once under `grid_alignment/artifacts/`, at 100% redundancy (not a migration in progress; both copies are current for the same run).
+> **Correction (2026-09-22, FD4c/FD4d/FD5 pass): this section's original framing was backwards, and has since been resolved by deletion.** At the time this section was first written, top-level and `artifacts/` held byte-identical content for both countries, and `artifacts/` was treated as the "current" copy for planning purposes. The 2026-09-22 `force_rerun` of `data_acquisition`+`data_quality_audit` for BRA and PRT (with its unrequested `grid_alignment`/`suitability_criteria` cascade — see `docs/phases/F1_data_acquisition.md` Known issues) regenerated the **top-level** files only; `artifacts/` was left untouched from an earlier run (dated 2026-09-09/11, vs. today's date on top-level). Checking the live manifest at that point showed every `aligned/*` artifact entry (`manifest.json`'s `StoredPath`s) resolved to the **top-level** files, not `artifacts/` — the relationship had reversed. Two files (`rivers`, `roads`) were no longer even byte-identical between the two locations by then. `artifacts/` also held a `*_lc_aligned.tif` with no top-level counterpart at all (an older, retired layer key). Per FD4d's own verify-before-delete rule, the stale `artifacts/` subdirectory (including both `*_lc_aligned.tif` files, confirmed unreferenced by any manifest) was deleted for both BRA and PRT, and the current top-level files were kept — the opposite of this section's original recommendation. See `logs/_moves/fd4d_log.csv` (`7a_delete` rows) for the deleted file list with sha256.
 
 ### Additional pairs required by this action
 
-- **`outputs/IND`** — exists, and is **completely empty** (no files, no subdirectories). Confirms Action 5's earlier note: F1 has not been run for IND.
-- **Audit documents in `GEOFREA_DATA_DIR/logs`** — `logs/orphan_files.txt` (the source list for Action 1) and `logs/2026-09_geofrea_data_inventory.md`. The latter is the **original, pre-correction** audit tool's direct output, written into the data directory rather than the repository's `docs/_audit/`; it predates every correction in this document and should not be read as current. It is not deleted or moved by this read-only pass.
+- **`outputs/IND`** — exists, and is **completely empty** (no files, no subdirectories). Confirms Action 5's earlier note: F1 has not been run for IND. **Deleted 2026-09-22 (FD4d)** — the pipeline recreates it when IND actually runs.
+- **Audit documents in `GEOFREA_DATA_DIR/logs`** — `logs/orphan_files.txt` (the source list for Action 1) and `logs/2026-09_geofrea_data_inventory.md`. The latter is the **original, pre-correction** audit tool's direct output, written into the data directory rather than the repository's `docs/_audit/`; it predates every correction in this document and should not be read as current. **Deleted 2026-09-22 (FD4d)** — this document (`docs/_audit/2026-09_geofrea_data_inventory.md`) is their home in the repository.
 
 ## Reproducibility defect (added 2026-09-22, FD3b2 pass)
 
@@ -283,16 +283,16 @@ The BRA/PRT manifests and logs on disk are real and well-formed, so the 2026-09-
 ### Snapshot Integrity (GEOFREA_SHARED_RAW_DIR)
 - Status: read-only for this entire pass; no writes made to `GEOFREA_SHARED_RAW_DIR`, `GEOFREA_DATA_DIR`, `src/`, `config/`, or any data file. Only `docs/_audit/*.md` and `docs/OPEN_QUESTIONS.md` were written.
 
-## Proposed Actions (AWAITING VERDICT FROM DOUGLAS)
+## Proposed Actions — resolved 2026-09-22 (FD4c/FD4d/FD5 pass)
 
 | Category | Count | Size | Proposed action | Status |
 |---|---|---|---|---|
-| Active | 17 | 2,522,196 | Keep (required) | — awaiting verdict |
-| Cache — current | ~161 | ~6.0 GB | Keep (intermediate) | — awaiting verdict |
-| Cache — stale (BRA grid_alignment + suitability_criteria) | 46 | not separately sized this pass | Candidate for deletion or re-run; Douglas's verdict on whether to re-run `grid_alignment` for BRA first | — awaiting verdict |
-| raw_input | 66 | 4,383,849,641 | Candidate for deletion as a duplicate of the live `outputs/` copy (Action 1, 2, 7) — **not** a "might be garbage" cleanup, a "confirmed dead-code-path duplicate" cleanup | — awaiting verdict |
-| Legacy | 328 | 1,409,148,189 | Keep (frozen baseline) | — awaiting verdict |
-| Log | 38 | 2,118,898 | Keep (run history) | — awaiting verdict |
+| Active | 17 | 2,522,196 | Keep (required) | kept |
+| Cache — current | ~161 | ~6.0 GB | Keep (intermediate) | kept |
+| Cache — stale (BRA grid_alignment + suitability_criteria) | 46 | not separately sized this pass | Candidate for deletion or re-run | **deleted** (FD4d 7b) — Douglas's re-run happened first (force_rerun cascade), then failed on the population reproject (OOM); the resulting partial output was deleted as stale, not re-run again |
+| raw_input | 66 | 4,383,849,641 | Candidate for deletion as a duplicate of the live `outputs/` copy | **deleted** (FD4d 2a) — fetchers now write to `raw/<source>/<scope>/`, superseding this tree |
+| Legacy | 328 | 1,409,148,189 | Keep (frozen baseline) | kept |
+| Log | 38 | 2,118,898 | Keep (run history) | kept, except the two stray audit files in `GEOFREA_DATA_DIR/logs` (**deleted**, FD4d 7e — redundant with this document) |
 
 ## Audit Details
 

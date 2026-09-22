@@ -175,20 +175,6 @@ class TestEnsureWritable:
                 with pytest.raises(ReadOnlyLocationError, match="CRAEI_BASELINE_DIR"):
                     ensure_writable(path)
 
-    def test_write_to_gear_raises(self):
-        """ensure_writable() raises for writes under GEAR_BASELINE_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            gear = Path(tmpdir) / "gear"
-            gear.mkdir()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": tmpdir, "GEAR_BASELINE_DIR": str(gear)},
-            ):
-                path = gear / "legacy_code.py"
-                with pytest.raises(ReadOnlyLocationError, match="GEAR_BASELINE_DIR"):
-                    ensure_writable(path)
-
     def test_write_to_geoworld_raises(self):
         """ensure_writable() raises for writes under GEOWORLD_BASELINE_DIR."""
         with tempfile.TemporaryDirectory() as tmpdir:
