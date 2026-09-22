@@ -140,7 +140,6 @@ def test_run_acquisition_phase_global_layers_have_no_country_code(tmp_path):
         "solar",
         "lakes",
         "rivers",
-        "seismic",
         "power_plants",
         "protected",
         "roads",
@@ -170,7 +169,7 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
     # now that they resolve from the local database instead. Then
     # 2026-09-11 (see DECISIONS.md same date, "protected_planet API
     # activation") protected moved local_only -> fetched, once a real
-    # API token was placed in .env. solar/seismic stay local_only, no
+    # API token was placed in .env. solar stays local_only, no
     # confirmed automatable source (solar gained a local-path resolver
     # 2026-09-11 too, provenance unchanged — resolving a bundled path
     # is not fetching).
@@ -197,7 +196,6 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
         "grid",
         "roads",
         "solar",
-        "seismic",
     }
 
 
@@ -212,8 +210,8 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
     # added 2026-09-11 — see DECISIONS.md same dates).
     # implemented_not_activated: none today (empty — protected was the
     # only member and it activated 2026-09-11). not_implemented: the
-    # other 7 — the 5 remaining skeleton layers (still no fetch code at
-    # all) plus solar/seismic (no confirmed automatable source, decided
+    # other 6 — the 5 remaining skeleton layers (still no fetch code at
+    # all) plus solar (no confirmed automatable source, decided
     # not to pursue).
     result = run_acquisition_phase(_context(tmp_path))
 
@@ -242,7 +240,6 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
         "grid",
         "roads",
         "solar",
-        "seismic",
     }
 
 

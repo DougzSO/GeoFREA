@@ -10,8 +10,8 @@ Built incrementally, one criterion package at a time. Packages landed:
   2. terrain_score, slope_degrees (cartography-only raster),
      lc_biomass, biomass_resource
   3. grid_suitability, river_solar, river_wind, lakes_exclusion
-  4. protected_areas, pop_suitability, seismic_suitability
-     -> all 14 canonical criteria are now implemented.
+  4. protected_areas, pop_suitability
+     -> all 13 canonical criteria are now implemented.
 
   5. Cartography (one PNG per criterion + slope_degrees), isolated in
      this phase per audit sec 7 D7 — see cartography.py::plot_criterion_map,
@@ -47,7 +47,6 @@ from geofrea.suitability_criteria.criteria_functions import (
     compute_protected_areas,
     compute_river_suitability,
     compute_road_suitability,
-    compute_seismic_suitability,
     compute_slope_degrees,
     compute_solar_resource,
     compute_terrain_score,
@@ -125,10 +124,6 @@ _CRITERION_SPECS: dict[str, tuple[str, Callable[[SuitabilityCriteriaInputs], Com
     "pop_suitability": (
         "population",
         lambda inp: compute_population_suitability(str(inp.population), inp.criteria),
-    ),
-    "seismic_suitability": (
-        "seismic",
-        lambda inp: compute_seismic_suitability(str(inp.seismic), inp.criteria),
     ),
 }
 

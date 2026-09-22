@@ -68,7 +68,6 @@ _CRITERION_META: dict[str, tuple[str, str, str, bool]] = {
     "river_solar": ("River Buffer - Solar/Wind", "Score (0-1)", "RdYlGn", False),
     "river_wind": ("River Buffer - Wind", "Score (0-1)", "RdYlGn", False),
     "river_biomass": ("River Access - Biomass", "Score (0-1)", "Blues", False),
-    "seismic_suitability": ("Seismic Hazard Suitability", "Score (0-1)", "RdYlGn", False),
     "grid_suitability": ("Power Grid Proximity (OSM)", "Score (0-1)", "RdYlGn", False),
 }
 

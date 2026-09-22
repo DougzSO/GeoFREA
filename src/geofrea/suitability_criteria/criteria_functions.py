@@ -449,28 +449,6 @@ def compute_population_suitability(pop_path: str, criteria: CriteriaParams) -> C
     return score, transform, crs
 
 
-def compute_seismic_suitability(seismic_path: str, criteria: CriteriaParams) -> ComputeResult:
-    """Seismic-risk inversion: low hazard -> high suitability.
-
-    Legacy: compute_seismic_suitability (criteria_builder.py L580-593).
-    normalize_percentile over the 2/98 percentile band (parametrised as
-    criteria.seismic_percentile_low/high, values inherited unchanged from
-    the legacy — audit M8), then score = clip(1 - normalized, 0, 1).
-    """
-    data, transform, crs, nodata = _read_band(seismic_path)
-    valid = valid_finite_mask(data, nodata) & (data >= 0)
-    normalized = normalize_percentile(
-        data,
-        valid,
-        criteria.seismic_percentile_low.value,
-        criteria.seismic_percentile_high.value,
-    )
-    score = np.full(data.shape, NODATA_FLOAT, dtype=np.float32)
-    valid_norm = valid & (normalized != NODATA_FLOAT)
-    score[valid_norm] = np.clip(1.0 - normalized[valid_norm], 0.0, 1.0).astype(np.float32)
-    return score, transform, crs
-
-
 def _resolve_wdpa_shapefile(wdpa_path: str | Path | None) -> str | None:
     """Resolve a WDPA input (file or directory) to a single polygon shapefile.
 

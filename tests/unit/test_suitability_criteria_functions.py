@@ -23,7 +23,6 @@ from geofrea.suitability_criteria.criteria_functions import (
     compute_protected_areas,
     compute_river_suitability,
     compute_road_suitability,
-    compute_seismic_suitability,
     compute_slope_degrees,
     compute_solar_resource,
     compute_terrain_score,
@@ -370,26 +369,6 @@ def test_compute_population_suitability_threshold_changes_scores(tmp_path):
     lo, _t, _c = compute_population_suitability(str(p), _criteria(pop_density_threshold=200.0))
     hi, _t, _c = compute_population_suitability(str(p), _criteria(pop_density_threshold=300.0))
     assert hi[0, 0] > lo[0, 0]  # a higher threshold is more permissive at fixed density
-
-
-# ─── seismic suitability ─────────────────────────────────────────────
-
-
-@pytest.mark.unit
-def test_compute_seismic_suitability_inverts_hazard(tmp_path):
-    p = _write_raster(tmp_path / "seismic.tif", [[0.1, 0.2, 0.3, 0.4, 0.5]])
-    score, _t, _c = compute_seismic_suitability(str(p), _criteria())
-    valid = score[score != NODATA_FLOAT]
-    assert valid.min() >= 0.0 and valid.max() <= 1.0
-    assert score[0, 0] > score[0, 4]  # low hazard -> high suitability
-
-
-@pytest.mark.unit
-def test_compute_seismic_suitability_excludes_negative_and_nodata(tmp_path):
-    p = _write_raster(tmp_path / "seismic.tif", [[-1.0, 0.0, 0.5, NODATA_FLOAT]])
-    score, _t, _c = compute_seismic_suitability(str(p), _criteria())
-    assert score[0, 0] == NODATA_FLOAT
-    assert score[0, 3] == NODATA_FLOAT
 
 
 # ─── protected areas (binary WDPA mask) ──────────────────────────────

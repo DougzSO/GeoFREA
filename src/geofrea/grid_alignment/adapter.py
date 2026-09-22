@@ -62,7 +62,6 @@ _SOURCE_PATH_FIELDS: dict[str, str] = {
     "elevation": "elevation_path",
     "solar": "solar_path",
     "population": "population_path",
-    "seismic": "seismic_path",
     "lakes": "lakes_path",
     "rivers": "rivers_path",
     "roads": "roads_source",

@@ -125,8 +125,6 @@ VALID_CRITERIA = {
     "grid_max_dist_km": _cv(20.0),
     "normalization_min_percentile": _cv(5.0),
     "normalization_max_percentile": _cv(95.0),
-    "seismic_percentile_low": _cv(2.0),
-    "seismic_percentile_high": _cv(98.0),
     "linear_proximity_percentile_low": _cv(5.0),
     "linear_proximity_percentile_high": _cv(95.0),
     "terrain_slope_weight": _cv(0.6),
@@ -505,7 +503,7 @@ def test_criteria_params_slope_threshold_out_of_range_raises():
 @pytest.mark.unit
 def test_criteria_params_percentile_out_of_range_raises():
     data = copy.deepcopy(VALID_CRITERIA)
-    data["seismic_percentile_high"]["value"] = 120.0
+    data["normalization_max_percentile"]["value"] = 120.0
     with pytest.raises(ValidationError):
         CriteriaParams.model_validate(data)
 

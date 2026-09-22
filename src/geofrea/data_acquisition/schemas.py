@@ -7,15 +7,13 @@ local_layers.py). As of 2026-09-11 (2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
 borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
 banco local" (Fase 1 + Fase 2) + 2026-09-11 "protected_planet API
-activation", all docs/DECISIONS.md), 13 of the 14 AcquiredLayer entries
-run_acquisition_phase() produces can have a real `path`/`paths` — 7 via
-a real fetcher (power_plants, wind, lakes, rivers, borders, admin1,
-protected) and 6 via local-database resolution (elevation, population,
-grid, roads, land_cover, solar) — the other 1 (seismic) still always
-has path=None (see phase.py's module docstring for exactly which and
-why). See docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton) for
-the original rationale and the open gaps flagged below, most still
-unresolved.
+activation", all docs/DECISIONS.md), every one of the 13 AcquiredLayer
+entries run_acquisition_phase() produces can have a real `path`/`paths`
+— 7 via a real fetcher (power_plants, wind, lakes, rivers, borders,
+admin1, protected) and 6 via local-database resolution (elevation,
+population, grid, roads, land_cover, solar). See docs/DECISIONS.md
+2026-08-24 (data_acquisition skeleton) for the original rationale and
+the open gaps flagged below, most still unresolved.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT
@@ -136,7 +134,7 @@ class AcquiredLayer(BaseModel):
             mechanism exists for it at all — geoworld_framework's
             DataFetcher has exactly 6 download_* methods (gadm,
             land_cover, elevation, worldpop, osm_grid, osm_roads);
-            solar/lakes/rivers/seismic/power_plants originally had none
+            solar/lakes/rivers/power_plants originally had none
             and had to be pre-placed on disk (protected joined
             "fetched" 2026-09-11 once a real API token was activated —
             see DECISIONS.md same date). Deliberately unchanged in
@@ -158,7 +156,7 @@ class AcquiredLayer(BaseModel):
             "Terrascope ESA WorldCover"), or None if undetermined.
         country_code: ISO-3166-alpha-3 code this layer was/would be
             acquired for, or None for layers that are not country-
-            specific (Solar/Lakes/Rivers/Seismic/Power Plants/Protected
+            specific (Solar/Lakes/Rivers/Power Plants/Protected
             — see geoworld_framework's DataOrchestrator.global_layers.
             Protected/WDPA was corrected from country_specific=True to
             False 2026-08-24 — see phase.py's _LAYER_REGISTRY comment

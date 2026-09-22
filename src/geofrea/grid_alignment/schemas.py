@@ -90,7 +90,6 @@ class GridAlignmentInputs(BaseModel):
         lakes_path: HydroLAKES vector path (global — clipped internally
             by this phase, same approach data_quality_audit uses).
         rivers_path: HydroRIVERS vector path (global — clipped internally).
-        seismic_path: Seismic hazard raster path.
         plants_df: Existing power-plant records — rasterized to a
             binary existing-plant mask, not reprojected from a file.
         country_gdf: Country polygon (mainland-filtered, from
@@ -138,7 +137,6 @@ class GridAlignmentInputs(BaseModel):
     grid_source: Path | None = None
     lakes_path: Path | None = None
     rivers_path: Path | None = None
-    seismic_path: Path | None = None
     plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame
     resolution_deg: float | Literal["adaptive"] = 0.01
@@ -183,9 +181,9 @@ class GridAlignmentResult(BaseModel):
     """Root output model for the grid_alignment phase.
 
     Mirrors legacy's AlignedLayers (geoworld_framework's
-    src/core/schemas.py) field-for-field — 12 optional raster paths,
+    src/core/schemas.py) field-for-field — 11 optional raster paths,
     all sharing the same CRS/transform/dimensions once produced. A
-    missing input layer (e.g. no seismic_path resolved) simply leaves
+    missing input layer (e.g. no lakes_path resolved) simply leaves
     the corresponding field None; this phase does not fail for one
     missing layer (matches legacy's `_execute_or_load()` per-layer
     skip), only for structural failures (no country_gdf, or a produced
@@ -224,8 +222,6 @@ class GridAlignmentResult(BaseModel):
         rivers: Geodesic distance-to-river raster (km, float32,
             capped — cap value pending, see module docstring), or None
             if no rivers were found within the country.
-        seismic: Bilinear-reprojected float32 seismic hazard raster,
-            or None if seismic_path was missing.
         plants: Binary existing-power-plant mask, or None if plants_df
             was empty/None.
     """
@@ -245,5 +241,4 @@ class GridAlignmentResult(BaseModel):
     grid: Path | None = None
     lakes: Path | None = None
     rivers: Path | None = None
-    seismic: Path | None = None
     plants: Path | None = None

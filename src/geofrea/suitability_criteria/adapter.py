@@ -35,7 +35,6 @@ _ALIGNED_RASTER_FIELDS: tuple[str, ...] = (
     "grid",
     "lakes",
     "rivers",
-    "seismic",
     "plants",
 )
 

@@ -37,7 +37,6 @@ from geofrea.suitability_criteria.criteria_functions import (
     compute_protected_areas,
     compute_river_suitability,
     compute_road_suitability,
-    compute_seismic_suitability,
     compute_slope_degrees,
     compute_solar_resource,
     compute_terrain_score,
@@ -145,12 +144,6 @@ CASES: dict[str, tuple[tuple[str, ...], object]] = {
     "lakes_exclusion": (
         ("PRT", "BRA"),
         lambda pdir, iso: compute_lakes_exclusion(str(pdir / f"{iso}_lakes_aligned.tif")),
-    ),
-    "seismic_suitability": (
-        ("PRT", "BRA"),
-        lambda pdir, iso: compute_seismic_suitability(
-            str(pdir / f"{iso}_seismic_aligned.tif"), CRITERIA
-        ),
     ),
     # threshold forced back to the legacy's 300.0 (see _CRITERIA_POP_300)
     "pop_suitability": (

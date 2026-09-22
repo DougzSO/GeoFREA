@@ -30,7 +30,7 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "land_cover now polygon-filtered (BRA 112/155, PRT 11/26 tiles). force_rerun also produced unrequested F2a/F2b output (cascades to dependents); BRA F2a failed (OOM)."
+      "summary": "M-F1-02/M-F1-07 closed (F6-2): seismic removed end-to-end; GADM resolves local-first with checksum (GadmChecksumMismatchError on mismatch). land_cover polygon-filtered (BRA 112/155, PRT 11/26 tiles). force_rerun also produced unrequested F2a/F2b output; BRA F2a failed (OOM)."
     },
     {
       "id": "F1b",

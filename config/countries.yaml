@@ -11,6 +11,17 @@
 #   - land_cover_dir: Subdirectory name in GEOFREA_SHARED_RAW_DIR/land_cover/
 #   - grip4_region_dir: Subdirectory in GEOFREA_SHARED_RAW_DIR/infrastructure/roads/
 #   - grip4_region_file: GRIP4 shapefile name within grip4_region_dir
+#   - gadm_dir: Subdirectory name in GEOFREA_SHARED_RAW_DIR/countries_borders/
+#     holding the pre-placed GADM 4.1 shapefile set (gadm41_<ISO3>_0.shp
+#     through _N.shp) — METHODOLOGY M-F1-07, local database checked
+#     before the network.
+#   - gadm_level0_sha256: Recorded sha256 of gadm_dir's level-0 (country
+#     boundary) shapefile. A local hit is trusted only when this matches
+#     (verified at fetch time); a mismatch fails loud
+#     (GadmChecksumMismatchError, METHODOLOGY A-09) rather than silently
+#     re-downloading. A null gadm_dir or gadm_level0_sha256 means the
+#     local database is skipped for that country — GADM falls through to
+#     its existing network-download path instead.
 #
 # A null value means the mapping has not been determined yet or the country
 # lacks that data source entirely. Code reading from config/ must raise a
@@ -26,6 +37,8 @@ BRA:
   land_cover_dir: "Brazil"
   grip4_region_dir: "Region_2_Central_South_America"
   grip4_region_file: "GRIP4_region2.shp"
+  gadm_dir: "Brazil"
+  gadm_level0_sha256: "b9fab45e4c63b017cdfd51d107c09d992c39139f0c3d93ad6ccc86b8ab925f49"
   # Fallback list — resolve_land_cover_tiles() now also runs a real
   # polygon-overlap check (filename-derived tile bbox vs GADM geometry)
   # as its primary defense, which independently catches every tile
@@ -93,6 +106,8 @@ PRT:
   land_cover_dir: "Portugal"
   grip4_region_dir: "Region_4_Europe"
   grip4_region_file: "GRIP4_region4.shp"
+  gadm_dir: "Portugal"
+  gadm_level0_sha256: "9bf13b07b5b687037fe09a161ce641c29f40e64377a68ad5e9667fe231f07183"
 
 IND:
   # OQ-012: All mappings pending verdict on GRIP4 region numbering
@@ -101,6 +116,8 @@ IND:
   land_cover_dir: "India"
   grip4_region_dir: null
   grip4_region_file: null
+  gadm_dir: "India"
+  gadm_level0_sha256: "6d53f0bd76c64d1c28453b8716642632aee7fcb6c447a2d13f413dc42f241263"
 
 CHN:
   # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database

@@ -109,7 +109,6 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         "population": inputs.population_path,
         "slope": inputs.slope_path,
         "wind": inputs.wind_paths[0] if inputs.wind_paths else None,
-        "seismic": inputs.seismic_path,
     }
 
     rasters: dict[str, dict] = {}
@@ -260,8 +259,8 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
 # the old flat schema's range_map covered. "wind" is deliberately
 # excluded (it never had a *_range field in the flat schema either,
 # despite going through the same inspect_raster() pipeline as these
-# five) — preserved as-is, not fixed, out of scope for this refactor.
-_RASTER_LAYERS_WITH_RANGE = frozenset({"solar", "elevation", "slope", "population", "seismic"})
+# four) — preserved as-is, not fixed, out of scope for this refactor.
+_RASTER_LAYERS_WITH_RANGE = frozenset({"solar", "elevation", "slope", "population"})
 
 
 def _build_summary(
@@ -510,7 +509,6 @@ def _format_report(result: AuditResult) -> str:
         "elevation": ("Elevation (m)", "{0:.0f} – {1:.0f}"),
         "slope": ("Slope (°)", "{0:.1f} – {1:.1f}"),
         "population": ("Population (people/pixel)", "{0:.1f} – {1:.1f}"),
-        "seismic": ("Seismicity (hazard)", "{0:.4f} – {1:.4f}"),
     }
     for layer_name, (label, fmt) in _RASTER_RANGE_LABELS.items():
         layer_summary = s.layers.get(layer_name)

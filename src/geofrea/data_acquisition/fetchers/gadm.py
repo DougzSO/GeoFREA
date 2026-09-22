@@ -41,6 +41,7 @@ does.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import zipfile
 from pathlib import Path
@@ -48,13 +49,109 @@ from pathlib import Path
 import pandas as pd
 
 from geofrea.core import paths
+from geofrea.core.config_loader import load_countries
 from geofrea.core.http_retry import get_with_retry
+from geofrea.core.paths import MissingPathEnvironmentError
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.gadm")
 
 _GADM_URL_TEMPLATE = "https://geodata.ucdavis.edu/gadm/gadm4.1/shp/gadm41_{code}_shp.zip"
 
 _NATURALEARTH_ISO_COLUMNS = ("iso_a3", "ISO_A3", "ADM0_A3")
+
+_HASH_CHUNK_SIZE = 8 * 1024 * 1024
+
+# Lazy-loaded cache for countries.yaml, same pattern as local_layers.py.
+_COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
+
+
+class GadmChecksumMismatchError(RuntimeError):
+    """A local-database GADM level-0 shapefile's sha256 doesn't match countries.yaml.
+
+    METHODOLOGY M-F1-07 + A-09: fails loud, never silently re-downloads
+    or falls through to the network on a checksum mismatch — a mismatch
+    means the local database file is not the one countries.yaml records,
+    which is a data-integrity problem to fix (or a checksum to update),
+    not something to route around automatically.
+    """
+
+
+def _load_countries_config() -> dict[str, dict[str, str | None]]:
+    global _COUNTRIES_CONFIG
+    if _COUNTRIES_CONFIG is None:
+        project_root = Path(__file__).resolve().parents[4]
+        countries_file = project_root / "config" / "countries.yaml"
+        _COUNTRIES_CONFIG = load_countries(countries_file)
+    return _COUNTRIES_CONFIG
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        while chunk := f.read(_HASH_CHUNK_SIZE):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _local_database_dir(country_code: str) -> Path | None:
+    """Resolve GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>, if configured.
+
+    Returns None (not raised) when GEOFREA_SHARED_RAW_DIR is unset or
+    countries.yaml has no gadm_dir mapping for this country — both mean
+    "skip the local database, fall through to the existing cache/network
+    chain", not a configuration error, since GADM already has a working
+    fallback for countries the local database doesn't cover.
+    """
+    config = _load_countries_config()
+    gadm_dir = config.get(country_code, {}).get("gadm_dir")
+    if gadm_dir is None:
+        return None
+    try:
+        shared_raw = paths.shared_raw()
+    except MissingPathEnvironmentError:
+        return None
+    return shared_raw / "countries_borders" / gadm_dir
+
+
+def _local_database_level0(country_code: str) -> Path | None:
+    """Return the local-database level-0 shapefile if present and checksum-verified.
+
+    Verifies against countries.yaml's `gadm_level0_sha256`. No recorded
+    checksum (None) is treated the same as no local file — the local
+    database is never trusted without a checksum to verify against.
+
+    Raises:
+        GadmChecksumMismatchError: The local file exists but its sha256
+            does not match the recorded checksum.
+    """
+    local_dir = _local_database_dir(country_code)
+    if local_dir is None:
+        return None
+
+    level0 = local_dir / f"gadm41_{country_code}_0.shp"
+    if not level0.exists():
+        return None
+
+    config = _load_countries_config()
+    expected_sha256 = config.get(country_code, {}).get("gadm_level0_sha256")
+    if expected_sha256 is None:
+        logger.warning(
+            "Local GADM file found for %s at %s but countries.yaml has no "
+            "gadm_level0_sha256 recorded — not trusting it, falling back.",
+            country_code,
+            level0,
+        )
+        return None
+
+    actual_sha256 = _sha256_file(level0)
+    if actual_sha256 != expected_sha256:
+        raise GadmChecksumMismatchError(
+            f"Local GADM level-0 shapefile for {country_code} at {level0} has "
+            f"sha256 {actual_sha256}, but countries.yaml records "
+            f"{expected_sha256}. Not falling back to the network — fix the "
+            "local file or update the recorded checksum."
+        )
+    return level0
 
 
 def _safe_extract(zip_path: Path, target_dir: Path) -> None:
@@ -179,19 +276,32 @@ def _naturalearth_fallback(outputs_dir: Path, country_code: str) -> Path | None:
 
 
 def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
-    """Download GADM 4.1 boundaries and return the level-0 (country) shapefile.
+    """Resolve GADM 4.1 boundaries and return the level-0 (country) shapefile.
 
-    Falls back to NaturalEarth 1:110m if GADM itself fails — see
-    _naturalearth_fallback() and the module docstring.
+    METHODOLOGY M-F1-07: checks the local database
+    (GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>, countries.yaml)
+    first, verifying the recorded sha256 — a match performs no network
+    call at all. Only when the local database has no entry for this
+    country (or no file at the expected path) does this fall through to
+    the existing GEOFREA_DATA_DIR cache/network chain, then to
+    NaturalEarth 1:110m if GADM itself fails — see
+    _naturalearth_fallback() and the module docstring. A checksum
+    mismatch raises GadmChecksumMismatchError instead of falling back
+    (A-09: fail loud, never silently re-download).
 
     Args:
         outputs_dir: Root outputs directory (PhaseContext.outputs_dir).
         country_code: ISO-3166-alpha-3 code.
 
     Returns:
-        Path to the level-0 .shp (or the NaturalEarth fallback .shp),
-        or None if both failed (logged, not raised).
+        Path to the level-0 .shp (local database, cache, or the
+        NaturalEarth fallback .shp), or None if every path failed
+        (logged, not raised).
     """
+    local_level0 = _local_database_level0(country_code)
+    if local_level0 is not None:
+        return local_level0
+
     extract_dir = _ensure_gadm_extracted(outputs_dir, country_code)
     if extract_dir is None:
         return _naturalearth_fallback(outputs_dir, country_code)
@@ -207,10 +317,15 @@ def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
 def fetch_admin1(outputs_dir: Path, country_code: str) -> Path | None:
     """Locate the GADM level-1 (admin1) shapefile.
 
-    Not a separate download — a subproduct of the same zip
-    fetch_borders() uses (see module docstring). Calls
-    _ensure_gadm_extracted() itself so this works correctly even if
-    called before/without fetch_borders() in the same run.
+    METHODOLOGY M-F1-07: reuses fetch_borders()'s local-database check —
+    a checksum-verified level-0 hit means the same local directory's
+    level-1 file is trusted too (both are the same pre-placed shapefile
+    set, not two independent artifacts). Otherwise falls through to the
+    same GEOFREA_DATA_DIR cache/network chain fetch_borders() uses; not
+    a separate download either way (see module docstring). Calls
+    _ensure_gadm_extracted() itself so the network-fallback path works
+    correctly even if called before/without fetch_borders() in the same
+    run.
 
     Args:
         outputs_dir: Root outputs directory (PhaseContext.outputs_dir).
@@ -221,6 +336,11 @@ def fetch_admin1(outputs_dir: Path, country_code: str) -> Path | None:
         has no level-1 boundaries (no NaturalEarth-equivalent fallback
         exists for admin1 — see module docstring).
     """
+    local_level0 = _local_database_level0(country_code)
+    if local_level0 is not None:
+        level1 = local_level0.parent / f"gadm41_{country_code}_1.shp"
+        return level1 if level1.exists() else None
+
     extract_dir = _ensure_gadm_extracted(outputs_dir, country_code)
     if extract_dir is None:
         return None

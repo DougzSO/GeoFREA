@@ -46,7 +46,6 @@ class AuditInputs(BaseModel):
         population_path: Population raster path.
         wind_paths: Wind speed/power-density raster paths (only the
             first, if any, is inspected — matches legacy's wind_files[0]).
-        seismic_path: Seismic hazard raster path.
         land_cover_tiles: ESA WorldCover tile paths.
         lakes_path: HydroLAKES vector path (global — clipped to
             country_gdf during inspection, see vector_inspection.py).
@@ -90,7 +89,6 @@ class AuditInputs(BaseModel):
     slope_path: Path | None = None
     population_path: Path | None = None
     wind_paths: list[Path] = []
-    seismic_path: Path | None = None
     land_cover_tiles: list[Path] = []
     lakes_path: Path | None = None
     rivers_path: Path | None = None
@@ -227,8 +225,8 @@ class RasterLayerSummary(BaseModel):
     """Concise per-layer status for one audited raster (see AuditSummary.layers).
 
     `value_range` mirrors the pre-2026-08-24 flat `*_range` fields
-    (solar_range, elev_range, slope_range, pop_range, seismic_range) —
-    populated only for those 5 layers, same as before. `wind` never got
+    (solar_range, elev_range, slope_range, pop_range) —
+    populated only for those 4 layers, same as before. `wind` never got
     a range in the flat schema either (its own `range_map` in
     audit.py's `_build_summary()` never included "wind") — that
     asymmetry is preserved here, not fixed, since fixing it was out of
@@ -285,15 +283,15 @@ class AuditSummary(BaseModel):
 
     `layers` replaced the flat per-raster-layer fields (layers_ok,
     layers_missing, n_wind_files, solar_range, elev_range, slope_range,
-    pop_range, seismic_range) 2026-08-24 (see DECISIONS.md same date,
+    pop_range) 2026-08-24 (see DECISIONS.md same date,
     "AuditSummary refactor to layer-keyed dict") — one dict, keyed by
-    layer name, covering the same 13 names as AuditResult.rasters
-    (6) + AuditResult.vectors (7) combined (confirmed disjoint — no
+    layer name, covering the same 12 names as AuditResult.rasters
+    (5) + AuditResult.vectors (7) combined (confirmed disjoint — no
     name collision between the two namespaces). land_cover and
     power_plants deliberately stay OUT of `layers`, as their own
     dedicated fields below — they are aggregates over many files/
     records, not a single-file "layer" in the same sense as the other
-    13, and AuditResult itself already keeps them as separate top-level
+    12, and AuditResult itself already keeps them as separate top-level
     fields rather than folding them into `rasters`/`vectors` — `layers`
     mirrors that same structural split, not a new one.
     """
@@ -349,7 +347,7 @@ class AuditResult(BaseModel):
         country_code: ISO-3166-alpha-3 code audited.
         timestamp: ISO-8601 UTC timestamp when the audit started.
         rasters: One RasterInspection per inspected raster layer
-            (solar, elevation, slope, population, wind, seismic).
+            (solar, elevation, slope, population, wind).
         land_cover: ESA WorldCover aggregate statistics.
         power_plants: Existing power-plant aggregate statistics.
         vectors: One VectorLayerInspection per inspected vector layer

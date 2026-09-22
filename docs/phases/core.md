@@ -43,6 +43,26 @@ Provides to all phases: DAG orchestrator, artifact registry and manifest, config
 - **D-core-010 — GEAR removed as an active reference repository (2026-09-22).** METHODOLOGY A-11/S-08/S-09 and M-F1-04/M-F1-05/M-F4-05 cited GEAR (CRAEI's predecessor) alongside CRAEI as a reuse source; Douglas decided GEAR is discarded entirely — CRAEI is now the sole copy-and-adapt source (METHODOLOGY 1.2.0). `paths.py`'s `GEAR_BASELINE_DIR` read-only guard in `ensure_writable()` and its dedicated test (`test_write_to_gear_raises`) were removed in the same pass; `CRAEI_BASELINE_DIR`'s guard and test (`test_write_to_craei_raises`) are unchanged. `GEAR_BASELINE_DIR` removed from `.env.example`; the local `.env` still defines the name (empty value) — left as-is, outside the scope of a docs/code change.
 - **D-core-011 — Environment-variable naming and loading fixed against D-core-008 (2026-09-22).** `main.py` now loads a repository-root `.env` via `python-dotenv` (`override=False`) before any `paths.py` helper can run, and `local_layers.py` resolves its raw-data root through `paths.shared_raw()` instead of a second, independently-named `GEOFREA_RAW_DATA_DIR` variable — closing D-core-008's reproducibility gap against A-12. Every remaining reference to the three retired names (`GEOFREA_RAW_DATA_DIR`, `GEOFREA_PROCESSED_DATA_DIR`, `GEOFREA_OUTPUT_DIR`) outside `docs/_archive/` and `docs/_audit/` has been updated to the current name (`GEOFREA_SHARED_RAW_DIR`).
 
+## Draft decision — force_rerun semantics (awaiting verdict, 2026-09-22)
+
+`Orchestrator.run()` (`orchestrator.py:587-590`) currently conflates two different meanings under one `force_rerun: bool` flag:
+
+- `needed = _transitive_closure(target_set, deps)` — phases required to satisfy `target_phases` (upstream only).
+- `forced = _transitive_closure(target_set, consumers) if self.force_rerun else set()` — when `force_rerun` is True, this walks the **consumers** graph instead of `deps`, i.e. `target_phases` plus every phase that transitively **depends on** them (downstream). `target_phases` itself does not bound this set; it is only the seed the closure walks outward from.
+
+A phase outside `forced` but inside `needed | forced` (i.e. an upstream dependency of a target phase, not itself targeted or downstream of anything targeted) hits `orchestrator.py:622`: `if not must_force and existing is not None and existing.status == "success"` — it **resumes** from the manifest. It only re-executes if it has no successful manifest entry, or if it is itself part of the forced set on some other path (e.g. it is also a downstream dependent of a different targeted phase in the same run).
+
+Proposed split, replacing the single `force_rerun: bool`:
+
+- **`rerun_phases` (exact re-execute).** Re-execute exactly the named phases. Every phase that is a producer this set's members require but do not themselves belong to it still resumes normally (existing `needed` logic, untouched). No transitive-consumer walk. Use case: a phase's own logic changed (bug fix, parameter tweak) but its inputs and its downstream consumers' logic did not — rerun it once, let dependents resume from manifest and (per `_warn_on_lineage_drift`) only log if their consumed lineage moved on.
+- **`rerun_phases_cascade` (re-execute + everything downstream).** Current `force_rerun` behavior, renamed to say what it does: re-execute the named phases and the transitive closure over `consumers`. Use case: an upstream artifact's *content* changed in a way dependents must not silently resume past (e.g. a stale/corrupt cache, per OQ-026, or a producing phase's output schema changed shape).
+
+Both remain independent of `target_phases`/`needed`: a name in either rerun set that is not in `needed` (not required to satisfy `target_phases`) is either a `RunConfig`-validation error (reject it) or silently irrelevant (never attempted) — needs a verdict but leaning toward validation error, matching `unknown_targets`'s existing pattern (`orchestrator.py:581-585`).
+
+`RunConfig.force_rerun: bool` (`schemas.py:560-565`) and its docstring would be replaced by two `list[str]` fields (empty = no forced rerun), each independently empty-default, with `force_rerun=True` migrating to `rerun_phases_cascade=target_phases` (today's actual behavior) for anyone matching current semantics.
+
+Not implemented here — draft only, per command scope.
+
 ## Known issues
 
 - **Deferred to playbook task G-3 (Douglas, 2026-09-21):** Remove duplicated Pydantic schema defaults in adaptive resolution mode fields (7 fields total): `AdaptiveResolutionConfig.target_pixels` (src/geofrea/core/schemas.py:615), `AdaptiveResolutionConfig.min_deg` (src/geofrea/core/schemas.py:616), `AdaptiveResolutionConfig.max_deg` (src/geofrea/core/schemas.py:617), `ResolutionsConfig.suitability` (src/geofrea/core/schemas.py:642), `ResolutionsConfig.adaptive` (src/geofrea/core/schemas.py:643), `GeospatialConfig.resolutions` (src/geofrea/core/schemas.py:655), `SettingsFile.geospatial` (src/geofrea/core/schemas.py:675). Fields will become absent instead of required after removal.

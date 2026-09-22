@@ -12,12 +12,12 @@ Requires: configuration. Produces: layer registry artifact (`acquisition_registr
 | Item | Requirement | Current state | Status |
 |---|---|---|---|
 | M-F1-01 | Registry with provenance | Implemented for 14 legacy layers; `provenance` and computed `fetch_status` verified in `data_acquisition/schemas.py:AcquiredLayer` (fetch_status, lines 238-248) and `data_acquisition/phase.py:run_acquisition_phase` (`_LAYER_REGISTRY`, `_LOCAL_PATH_HANDLERS`, lines 255-387) | pass |
-| M-F1-02 | Active layer set | Seismic layer still registered; biomass-only inputs present | fail |
+| M-F1-02 | Active layer set | Seismic removed (F6-2, 2026-09-22): no `seismic`/`seismic_path` field remains in `_LAYER_REGISTRY`, `AuditInputs`, `GridAlignmentInputs`/`Result`, or `SuitabilityCriteriaInputs`; `criteria.seismic_percentile_low/high` removed from `config/parameters.json`. Biomass-only inputs still present (`CountryCriteriaParams.yield_by_land_cover`, `CriteriaParams.land_suitability`'s biomass column) — out of scope for this pass | fail |
 | M-F1-03 | GWA Weibull A/k, air density, wind speed at 100/150/200 m | Only `wind-speed` at 100 m fetched | fail |
 | M-F1-04 | CMIP6 monthly rsds/tas/sfcWind and daily tasmax/pr | Not present in GeoFREA (CRAEI has daily tasmax/pr/tas 2041-2070 only) | fail |
 | M-F1-05 | ERA5 gust | Not present in GeoFREA | fail |
 | M-F1-06 | GEM solar and wind trackers | Not present (GPPD power plants exist) | fail |
-| M-F1-07 | GADM local-first with checksum | Network download with NaturalEarth fallback | fail |
+| M-F1-07 | GADM local-first with checksum | Implemented (F6-2, 2026-09-22): `fetchers/gadm.py::_local_database_level0()` checks `GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>/gadm41_<ISO3>_0.shp` first (per `config/countries.yaml`'s new `gadm_dir`/`gadm_level0_sha256` fields), verifying sha256 before trusting it — no network call on a match. A mismatch raises `GadmChecksumMismatchError` (A-09 fail-loud), never a silent re-download. Only when the local database has no entry (or no recorded checksum) does it fall through to the pre-existing `GEOFREA_DATA_DIR` cache/network/NaturalEarth chain. `gadm_dir`/`gadm_level0_sha256` populated for BRA, PRT, IND (the three in-scope countries); other `countries.yaml` entries left null, matching that field's existing null convention. Tests: `tests/unit/test_fetchers_gadm.py::test_fetch_borders_local_database_hit_performs_no_network_call`, `::test_fetch_borders_local_database_checksum_mismatch_raises`, `::test_fetch_borders_local_database_absent_falls_back_and_fetches` | pass |
 | A-05 | Country mappings in config | Dicts in `local_layers.py` and `fetchers/hydrosheds.py` | fail |
 
 ## Active implementation decisions
@@ -46,6 +46,7 @@ Requires: configuration. Produces: layer registry artifact (`acquisition_registr
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-08 - wire das 5 camadas restantes, Fase 1 (elevation/population/grid/land_cover)
 - **D-F1-012 — GRIP4 replaces per-country OSM roads.** Roads resolve from a single regional GRIP4 file, clipped per-country downstream, replacing a per-country OSM download.
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-08 - wire das 5 camadas restantes, Fase 2 (roads/GRIP4)
+- **D-F1-013 — Seismic removed; GADM resolves local-first with checksum (F6-2, 2026-09-22).** Seismic hazard was excluded from scope by METHODOLOGY S-08 but still had a full end-to-end implementation (layer registry entry, alignment handler, `seismic_suitability` criterion, audit range check, config parameters) — removed entirely from `src/`, `tests/`, and `config/`, closing the M-F1-02 gap F6-1's audit found. GADM boundary resolution now checks `GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>/` first (`config/countries.yaml`'s new `gadm_dir`/`gadm_level0_sha256` fields), verifying the recorded sha256 before trusting a local hit; a mismatch raises `GadmChecksumMismatchError` rather than silently re-fetching (A-09). Only a missing local entry falls through to the pre-existing `GEOFREA_DATA_DIR` cache/network/NaturalEarth chain, closing M-F1-07.
 
 ## Known issues
 

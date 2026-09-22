@@ -483,26 +483,6 @@
       "unit": "percentile",
       "tier": null
     },
-    "seismic_percentile_low": {
-      "value": 2.0,
-      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M8)",
-      "verified": false,
-      "verified_by": null,
-      "verified_date": null,
-      "verification_method": "unverified",
-      "unit": "percentile",
-      "tier": null
-    },
-    "seismic_percentile_high": {
-      "value": 98.0,
-      "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M8)",
-      "verified": false,
-      "verified_by": null,
-      "verified_date": null,
-      "verification_method": "unverified",
-      "unit": "percentile",
-      "tier": null
-    },
     "linear_proximity_percentile_low": {
       "value": 5.0,
       "source": "legacy geoworld_framework @ fc7b43d - criteria_builder.py (inherited unchanged) (M7)",

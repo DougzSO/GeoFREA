@@ -31,6 +31,15 @@ def _data_dir(tmp_path, monkeypatch):
     # argument these tests still pass (kept for call-site symmetry, see
     # phase.py's lambdas, but unused internally now).
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    # Isolate GEOFREA_SHARED_RAW_DIR too, same reasoning as
+    # GEOFREA_DATA_DIR above: fetch_borders()/fetch_admin1() now check
+    # the local database first (METHODOLOGY M-F1-07). Without this, a
+    # session where some other test has already imported main.py (whose
+    # module-level load_dotenv(override=False) runs at collection time,
+    # before conftest's session fixture sets a default) leaks the real
+    # developer .env's GEOFREA_SHARED_RAW_DIR into these tests, making
+    # them see Douglas's real local GADM files instead of test fixtures.
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(tmp_path / "shared_raw_unused"))
 
 
 def _make_gadm_zip_bytes(country_code: str, levels: tuple[int, ...] = (0, 1, 2)) -> bytes:
@@ -260,3 +269,74 @@ def test_fetch_borders_naturalearth_fallback_reports_load_failure_as_none(tmp_pa
     monkeypatch.setitem(sys.modules, "geodatasets", fake_geodatasets)
 
     assert gadm.fetch_borders(tmp_path, "PRT") is None
+
+
+# ─── local database, METHODOLOGY M-F1-07 ──────────────────────────────
+
+
+def _write_local_gadm(shared_raw_dir, gadm_subdir, country_code, content=b"real-local-shp"):
+    country_dir = shared_raw_dir / "countries_borders" / gadm_subdir
+    country_dir.mkdir(parents=True)
+    (country_dir / f"gadm41_{country_code}_0.shp").write_bytes(content)
+    return country_dir, content
+
+
+@pytest.mark.unit
+def test_fetch_borders_local_database_hit_performs_no_network_call(tmp_path, monkeypatch):
+    shared_raw_dir = tmp_path / "shared_raw"
+    country_dir, content = _write_local_gadm(shared_raw_dir, "Portugal", "PRT")
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(shared_raw_dir))
+    monkeypatch.setattr(
+        gadm,
+        "_load_countries_config",
+        lambda: {
+            "PRT": {
+                "gadm_dir": "Portugal",
+                "gadm_level0_sha256": gadm._sha256_file(country_dir / "gadm41_PRT_0.shp"),
+            }
+        },
+    )
+    mock_get = Mock()
+    monkeypatch.setattr(gadm, "get_with_retry", mock_get)
+
+    result = gadm.fetch_borders(tmp_path, "PRT")
+
+    mock_get.assert_not_called()
+    assert result == country_dir / "gadm41_PRT_0.shp"
+    assert result.read_bytes() == content
+
+
+@pytest.mark.unit
+def test_fetch_borders_local_database_checksum_mismatch_raises(tmp_path, monkeypatch):
+    shared_raw_dir = tmp_path / "shared_raw"
+    _write_local_gadm(shared_raw_dir, "Portugal", "PRT")
+    monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(shared_raw_dir))
+    monkeypatch.setattr(
+        gadm,
+        "_load_countries_config",
+        lambda: {"PRT": {"gadm_dir": "Portugal", "gadm_level0_sha256": "0" * 64}},
+    )
+    mock_get = Mock()
+    monkeypatch.setattr(gadm, "get_with_retry", mock_get)
+
+    with pytest.raises(gadm.GadmChecksumMismatchError):
+        gadm.fetch_borders(tmp_path, "PRT")
+
+    mock_get.assert_not_called()
+
+
+@pytest.mark.unit
+def test_fetch_borders_local_database_absent_falls_back_and_fetches(tmp_path, monkeypatch):
+    # No GEOFREA_SHARED_RAW_DIR set at all — matches the module fixture
+    # default. The local-database check must be a clean skip, not a
+    # crash, and the layer's provenance ("fetched", per phase.py's
+    # _LAYER_REGISTRY) is unaffected by which internal path resolved it.
+    zip_bytes = _make_gadm_zip_bytes("PRT")
+    mock_get = Mock(return_value=Mock(content=zip_bytes))
+    monkeypatch.setattr(gadm, "get_with_retry", mock_get)
+
+    result = gadm.fetch_borders(tmp_path, "PRT")
+
+    mock_get.assert_called_once()
+    assert result is not None
+    assert result.name == "gadm41_PRT_0.shp"

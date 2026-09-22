@@ -56,7 +56,6 @@ CANONICAL_CRITERIA: tuple[str, ...] = (
     "river_solar",
     "river_wind",
     "river_biomass",
-    "seismic_suitability",
     "grid_suitability",
 )
 
@@ -79,7 +78,7 @@ class SuitabilityCriteriaInputs(BaseModel):
 
     Args:
         elevation/slope/solar/wind/land_cover/population/roads/grid/
-        lakes/rivers/seismic/plants: Aligned raster paths from
+        lakes/rivers/plants: Aligned raster paths from
             grid_alignment (GridAlignmentResult), or None if that layer
             was not produced.
         grid_metadata: The reference-grid parameters from grid_alignment
@@ -122,7 +121,6 @@ class SuitabilityCriteriaInputs(BaseModel):
     grid: Path | None = None
     lakes: Path | None = None
     rivers: Path | None = None
-    seismic: Path | None = None
     plants: Path | None = None
 
     grid_metadata: GridMetadata

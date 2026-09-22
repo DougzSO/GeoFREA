@@ -246,11 +246,10 @@ def _data_acquisition_run(context: PhaseContext) -> AcquisitionResult:
 
 
 # GridAlignmentResult's raster fields registered individually (METHODOLOGY
-# A-02, 2026-09-21 — see docs/phases/core.md D-core-003). Excludes
-# `seismic`: METHODOLOGY S-08 puts the seismic hazard layer out of scope,
-# so GridAlignmentResult.seismic is always None — never a real artifact
-# to register, unlike the other 11 fields, which real F1 data resolves
-# for every country currently in scope (PRT, BRA; see docs/PROGRESS.json).
+# A-02, 2026-09-21 — see docs/phases/core.md D-core-003). All 11 fields,
+# which real F1 data resolves for every country currently in scope (PRT,
+# BRA; see docs/PROGRESS.json). The seismic hazard layer was removed
+# entirely per METHODOLOGY S-08 (see docs/phases/core.md F6-2).
 _ALIGNED_RASTER_LAYER_KEYS = (
     "elevation",
     "slope",

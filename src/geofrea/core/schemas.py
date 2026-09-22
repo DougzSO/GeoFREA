@@ -427,9 +427,6 @@ class CriteriaParams(BaseModel):
         normalization_min_percentile / normalization_max_percentile:
             Percentile clip bounds for the resource criteria
             (solar/wind/biomass resource).
-        seismic_percentile_low / seismic_percentile_high: Percentile
-            clip bounds for seismic normalization (narrower than the
-            resource bounds in the legacy; kept as-is).
         linear_proximity_percentile_low / linear_proximity_percentile_high:
             Percentile clip bounds applied after the linear decay for
             roads / grid / proximity_plants.
@@ -472,8 +469,6 @@ class CriteriaParams(BaseModel):
     grid_max_dist_km: VerifiedValue[PositiveFloat]
     normalization_min_percentile: VerifiedValue[Percentile]
     normalization_max_percentile: VerifiedValue[Percentile]
-    seismic_percentile_low: VerifiedValue[Percentile]
-    seismic_percentile_high: VerifiedValue[Percentile]
     linear_proximity_percentile_low: VerifiedValue[Percentile]
     linear_proximity_percentile_high: VerifiedValue[Percentile]
     terrain_slope_weight: VerifiedValue[UnitInterval]
@@ -493,7 +488,6 @@ class CriteriaParams(BaseModel):
     def _percentile_bounds_ordered(self) -> CriteriaParams:
         pairs = (
             ("normalization_min_percentile", "normalization_max_percentile"),
-            ("seismic_percentile_low", "seismic_percentile_high"),
             ("linear_proximity_percentile_low", "linear_proximity_percentile_high"),
         )
         for lo_name, hi_name in pairs:

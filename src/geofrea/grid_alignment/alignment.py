@@ -96,7 +96,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-from rasterio.enums import Resampling
 
 from geofrea.core.geo_utils import read_clipped_to_country
 from geofrea.core.geodesy import wgs84_km_per_degree
@@ -428,15 +427,6 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 _clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid, inputs.max_dist_km
             ),
             _exists(inputs.rivers_path),
-        )
-
-    with timer("seismic", timings), gdal_quiet():
-        aligned["seismic"] = _execute_or_load(
-            "seismic",
-            lambda: reproject_to_grid(
-                inputs.seismic_path, _path("seismic"), grid, resampling=Resampling.bilinear
-            ),
-            _exists(inputs.seismic_path),
         )
 
     with timer("plants", timings):

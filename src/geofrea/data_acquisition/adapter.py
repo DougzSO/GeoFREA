@@ -77,7 +77,6 @@ _SINGLE_PATH_FIELDS: dict[str, str] = {
     "solar": "solar_path",
     "elevation": "elevation_path",
     "population": "population_path",
-    "seismic": "seismic_path",
     "lakes": "lakes_path",
     "rivers": "rivers_path",
     "protected": "protected_path",

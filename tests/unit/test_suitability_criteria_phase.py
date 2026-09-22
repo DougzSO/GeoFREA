@@ -90,7 +90,6 @@ def _inputs(tmp_path, *, with_roads=True, with_rivers=True, with_wind=True) -> S
         "grid": _write(d / "grid.tif", 2.5),
         "lakes": _write_lakes(d / "lakes.tif"),
         "population": _write(d / "pop.tif", 50.0),
-        "seismic": _write(d / "seismic.tif", 0.8),
     }
     if with_wind:
         fields["wind"] = _write(d / "wind.tif", 6.0)
@@ -130,7 +129,6 @@ IMPLEMENTED = {
     "river_wind",
     "lakes_exclusion",
     "pop_suitability",
-    "seismic_suitability",
     "protected_areas",
 }
 

@@ -28,7 +28,7 @@ because Terrascope (the only source geoworld_framework's DataFetcher
 ever used for it) requires credentials. This stage reverses that
 decision — land_cover now resolves from pre-downloaded ESA WorldCover
 tiles already sitting in the local database, same as
-solar/seismic/protected always have — per Douglas's explicit
+solar/protected always have — per Douglas's explicit
 instruction, recorded in DECISIONS.md rather than silently changed.
 
 fetch_status (AcquiredLayer, schemas.py — a computed field keyed off

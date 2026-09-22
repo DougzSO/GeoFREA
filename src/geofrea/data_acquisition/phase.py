@@ -46,9 +46,7 @@ about local_layers.py. `protected` was activated 2026-09-11 (see
 DECISIONS.md same date, "protected_planet API activation") — it now
 calls a real fetcher too, wired into _FETCHED_LAYER_HANDLERS like the
 other 6 (see fetchers/protected_planet.py's module docstring).
-`seismic` remains out of scope (no confirmed automatable source and no
-local resolver yet, see DECISIONS.md 2026-08-25). fetch_status is
-UNCHANGED by the local-resolution wiring specifically — none of the 6
+fetch_status is UNCHANGED by the local-resolution wiring specifically — none of the 6
 local-resolved layer_names (Fase 1 + Fase 2 above) are in
 IMPLEMENTED_FETCH_LAYER_NAMES, so they keep reporting "not_implemented"
 (resolving a local path is not the same
@@ -222,7 +220,7 @@ class _LayerSpec(NamedTuple):
 # restantes a partir do banco local", Fase 1 for the first 4, Fase 2 for
 # roads — NOT a bug fix, an explicit scope reversal in both cases):
 # these 5 now resolve from pre-placed files in the local database
-# (local_layers.py) instead, same as solar/seismic/protected always
+# (local_layers.py) instead, same as solar/protected always
 # have — so they are local_only now, matching how they are actually
 # acquired today, not how legacy could in principle acquire them.
 # land_cover in particular reverses the original skeleton's
@@ -257,9 +255,7 @@ class _LayerSpec(NamedTuple):
 # _FETCHED_LAYER_HANDLERS. provenance is NOT a proxy for "has a real
 # fetcher today" — see AcquiredLayer.fetch_status, schemas.py, for the
 # field that actually answers that question. `solar` stays local_only
-# but now has a local resolver (resolve_solar_path, 2026-09-11);
-# `seismic` stays local_only with no resolver yet — no confirmed
-# automatable source.
+# but now has a local resolver (resolve_solar_path, 2026-09-11).
 _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("borders", "fetched", False, "GADM 4.1 (fallback: NaturalEarth)", True),
     _LayerSpec("admin1", "fetched", False, "GADM 4.1 (level-1, same download as borders)", True),
@@ -316,7 +312,6 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("solar", "local_only", False, "local bundled file (global PVOUT, no confirmed automatable source)", False),
     _LayerSpec("lakes", "fetched", False, "HydroSHEDS (HydroLAKES global file, data.hydrosheds.org)", False),
     _LayerSpec("rivers", "fetched", False, "HydroSHEDS (HydroRIVERS regional tile, data.hydrosheds.org)", False),
-    _LayerSpec("seismic", "local_only", False, "local bundled file (source unidentified — no URL in legacy)", False),
     _LayerSpec("power_plants", "fetched", False, "WRI Global Power Plant Database (GitHub, pinned commit)", False),
 )
 
@@ -330,9 +325,7 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     grid, roads, land_cover, solar — see _LOCAL_PATH_HANDLERS /
     _LOCAL_MULTI_PATH_HANDLERS) resolve a pre-placed path/paths from
     the local database instead — no fetch/download involved (see
-    local_layers.py's module docstring). The remaining layer (seismic)
-    is still a structural placeholder — path=None — no fetcher/resolver
-    exists for it yet (see module docstring).
+    local_layers.py's module docstring).
 
     Args:
         context: Shared phase context (country_code, outputs_dir, ...).

@@ -100,8 +100,8 @@ def _valid_result() -> dict:
 
 
 @pytest.mark.unit
-def test_canonical_criteria_has_14_entries_and_excludes_slope_degrees():
-    assert len(CANONICAL_CRITERIA) == 14
+def test_canonical_criteria_has_13_entries_and_excludes_slope_degrees():
+    assert len(CANONICAL_CRITERIA) == 13
     assert "slope_degrees" not in CANONICAL_CRITERIA
     assert REQUIRED_ALIGNED_LAYERS == ("elevation", "slope", "solar", "land_cover")
 
@@ -140,7 +140,7 @@ def test_inputs_reject_unexpected_field():
 @pytest.mark.unit
 def test_inputs_optional_layers_default_to_none():
     result = SuitabilityCriteriaInputs.model_validate(_valid_inputs())
-    for layer in ("wind", "population", "roads", "grid", "lakes", "rivers", "seismic", "plants"):
+    for layer in ("wind", "population", "roads", "grid", "lakes", "rivers", "plants"):
         assert getattr(result, layer) is None
 
 
