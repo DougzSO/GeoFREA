@@ -351,7 +351,7 @@ def test_run_acquisition_phase_populates_path_from_local_resolver(
 def test_run_acquisition_phase_populates_paths_from_land_cover_resolver(tmp_path, monkeypatch):
     fake_tiles = [tmp_path / "tile_a.tif", tmp_path / "tile_b.tif"]
     monkeypatch.setattr(
-        phase_module, "resolve_land_cover_tiles", lambda country_code: fake_tiles
+        phase_module, "resolve_land_cover_tiles", lambda country_code, country_gdf: fake_tiles
     )
 
     result = run_acquisition_phase(_context(tmp_path))

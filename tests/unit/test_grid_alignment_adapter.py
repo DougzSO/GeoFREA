@@ -201,11 +201,13 @@ def test_adapter_threads_adaptive_resolution_and_its_fallback_knobs(tmp_path):
         result,
         ResolutionsConfig(
             suitability="adaptive",
-            adaptive=AdaptiveResolutionConfig(target_pixels=1000, min_deg=0.002, max_deg=0.03),
+            adaptive=AdaptiveResolutionConfig(
+                target_pixels=1000, min_deg=0.002, adaptive_pixel_ceiling_deg=0.03
+            ),
         ),
     )
 
     assert inputs.resolution_deg == "adaptive"
     assert inputs.adaptive_target_pixels == 1000
     assert inputs.adaptive_min_deg == 0.002
-    assert inputs.adaptive_max_deg == 0.03
+    assert inputs.adaptive_pixel_ceiling_deg == 0.03

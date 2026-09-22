@@ -142,5 +142,5 @@ def acquisition_result_to_grid_alignment_inputs(
         resolution_deg=resolutions.suitability,
         adaptive_target_pixels=resolutions.adaptive.target_pixels,
         adaptive_min_deg=resolutions.adaptive.min_deg,
-        adaptive_max_deg=resolutions.adaptive.max_deg,
+        adaptive_pixel_ceiling_deg=resolutions.adaptive.adaptive_pixel_ceiling_deg,
     )

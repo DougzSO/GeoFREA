@@ -514,8 +514,8 @@ def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(
 def test_run_grid_alignment_phase_defaults_to_fixed_0_01_resolution(tmp_path):
     # GridAlignmentInputs.resolution_deg defaults to 0.01 (not
     # "adaptive") — matches the value that generated the frozen PRT/BRA
-    # baseline. No target_pixels/min_deg/max_deg formula involved when
-    # this default is used.
+    # baseline. No target_pixels/min_deg/adaptive_pixel_ceiling_deg
+    # formula involved when this default is used.
     country_gdf = _country_gdf()
     inputs = GridAlignmentInputs(country_gdf=country_gdf)
 
@@ -538,8 +538,9 @@ def test_run_grid_alignment_phase_honors_explicit_fixed_resolution(tmp_path):
 def test_run_grid_alignment_phase_adaptive_mode_computes_resolution_from_area(tmp_path):
     # "adaptive" is an explicit opt-in (not the default) — when
     # selected, reproduces legacy's own formula: sqrt(area/target_pixels)
-    # / sqrt(lat_km*lon_km), clipped to [min_deg, max_deg]. Using an
-    # unrealistically small target_pixels forces the clip to max_deg,
+    # / sqrt(lat_km*lon_km), clipped to [min_deg, adaptive_pixel_ceiling_deg].
+    # Using an unrealistically small target_pixels forces the clip to
+    # the ceiling,
     # giving a value independent of the exact WGS84 scale-factor
     # arithmetic (covered separately by test_core_geodesy.py) and
     # trivial to assert on.
@@ -549,7 +550,7 @@ def test_run_grid_alignment_phase_adaptive_mode_computes_resolution_from_area(tm
         resolution_deg="adaptive",
         adaptive_target_pixels=1,
         adaptive_min_deg=0.001,
-        adaptive_max_deg=0.03,
+        adaptive_pixel_ceiling_deg=0.03,
     )
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
@@ -567,7 +568,7 @@ def test_run_grid_alignment_phase_adaptive_mode_respects_min_deg_clip(tmp_path):
         resolution_deg="adaptive",
         adaptive_target_pixels=10_000_000_000,
         adaptive_min_deg=0.005,
-        adaptive_max_deg=0.05,
+        adaptive_pixel_ceiling_deg=0.05,
     )
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)

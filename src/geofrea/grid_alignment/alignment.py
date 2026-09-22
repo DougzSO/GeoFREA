@@ -52,12 +52,14 @@ that generated the frozen PRT/BRA baseline
 existed but was never the value legacy's real settings.yaml used;
 GeoFREA had ported that unused code path as its only, hardcoded
 behavior until this fix — measured divergence from the baseline before
-this fix: BRA rendered at 785x781px (0.05deg, adaptive's max_deg
-ceiling) vs. the baseline's 3920x3902px (0.01deg fixed), ~25x fewer
+this fix: BRA rendered at 785x781px (0.05deg, adaptive's pixel-ceiling
+default) vs. the baseline's 3920x3902px (0.01deg fixed), ~25x fewer
 pixels. "adaptive" is preserved as an explicit opt-in (its
-target_pixels/min_deg/max_deg fallback constants ported unchanged, see
-inputs.adaptive_target_pixels/adaptive_min_deg/adaptive_max_deg), not
-the default.
+target_pixels/min_deg/adaptive_pixel_ceiling_deg fallback constants
+ported unchanged, see inputs.adaptive_target_pixels/adaptive_min_deg/
+adaptive_pixel_ceiling_deg — this ceiling field's old name was renamed
+2026-09-22 to avoid confusion with S-06's unrelated 0.05deg decision
+cell), not the default.
 
 land_cover cache filename mismatch (FIXED 2026-09-09, see
 docs/DECISIONS.md same date — Passo 6 land_cover cache fix): legacy's
@@ -313,7 +315,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         area_km2 = (maxx - minx) * lon_km * (maxy - miny) * lat_km
         computed_res = math.sqrt(area_km2 / inputs.adaptive_target_pixels) / math.sqrt(lat_km * lon_km)
         resolution_deg = float(
-            np.clip(computed_res, inputs.adaptive_min_deg, inputs.adaptive_max_deg)
+            np.clip(computed_res, inputs.adaptive_min_deg, inputs.adaptive_pixel_ceiling_deg)
         )
     else:
         resolution_deg = float(inputs.resolution_deg)

@@ -10,7 +10,9 @@ in the developer's own shell/.env.
 
 from pathlib import Path
 
+import geopandas as gpd
 import pytest
+from shapely.geometry import box
 
 from geofrea.data_acquisition.local_layers import (
     RAW_DATA_DIR_ENV_VAR,
@@ -229,6 +231,54 @@ def test_resolve_land_cover_tiles_unmapped_country_raises_keyerror(tmp_path, mon
 @pytest.mark.unit
 def test_resolve_land_cover_tiles_no_env_var_returns_empty_list(tmp_path):
     assert resolve_land_cover_tiles("PRT") == []
+
+
+@pytest.mark.unit
+def test_resolve_land_cover_tiles_geometry_filter_excludes_out_of_territory(tmp_path, monkeypatch):
+    """Structural regression test for the TILE-SCAN class of bug (2026-09-22).
+
+    BRA's land_cover directory had 42 tiles (out of 155) with zero real
+    geometric overlap with Brazil — a naive bbox-based fetch pulled in
+    neighboring-country/ocean tiles, discovered only incrementally via
+    failed pipeline runs. resolve_land_cover_tiles()'s country_gdf
+    filter must catch this class of tile automatically: a tile whose
+    filename-derived bbox does not overlap the country's real polygon
+    is excluded, independent of excluded_land_cover_tiles.
+    """
+    raw = _make_raw_dir(tmp_path)
+    tiles_dir = raw / "land_cover" / "Portugal"
+    tiles_dir.mkdir(parents=True)
+    # S36W057's bbox (lon -57..-54, lat -36..-33) — nowhere near
+    # Portugal (lat ~37-42N, lon ~-9.5..-6) — same real-world tile that
+    # caused this bug for BRA, reused here to prove the filter is
+    # country-agnostic (A-05), not a BRA-specific patch.
+    out_of_territory = tiles_dir / "ESA_WorldCover_10m_2020_v100_S36W057_Map.tif"
+    in_territory = tiles_dir / "ESA_WorldCover_10m_2020_v100_N39W009_Map.tif"
+    out_of_territory.write_bytes(b"")
+    in_territory.write_bytes(b"")
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    # Minimal synthetic country polygon inside N39W009's tile bbox
+    # (lon -9..-6, lat 39..42), nowhere near S36W057's bbox — stands in
+    # for a real GADM polygon without needing a fixture shapefile.
+    country_gdf = gpd.GeoDataFrame(geometry=[box(-9.0, 39.5, -8.0, 40.5)], crs="EPSG:4326")
+
+    result = resolve_land_cover_tiles("PRT", country_gdf=country_gdf)
+
+    assert result == [in_territory]
+
+
+@pytest.mark.unit
+def test_resolve_land_cover_tiles_no_geometry_filter_without_country_gdf(tmp_path, monkeypatch):
+    """Omitting country_gdf preserves prior behavior exactly (no filtering)."""
+    raw = _make_raw_dir(tmp_path)
+    tiles_dir = raw / "land_cover" / "Portugal"
+    tiles_dir.mkdir(parents=True)
+    far_tile = tiles_dir / "ESA_WorldCover_10m_2020_v100_S36W057_Map.tif"
+    far_tile.write_bytes(b"")
+    monkeypatch.setenv(RAW_DATA_DIR_ENV_VAR, str(raw))
+
+    assert resolve_land_cover_tiles("PRT") == [far_tile]
 
 
 @pytest.mark.unit

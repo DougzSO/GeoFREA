@@ -26,6 +26,66 @@ BRA:
   land_cover_dir: "Brazil"
   grip4_region_dir: "Region_2_Central_South_America"
   grip4_region_file: "GRIP4_region2.shp"
+  # Fallback list — resolve_land_cover_tiles() now also runs a real
+  # polygon-overlap check (filename-derived tile bbox vs GADM geometry)
+  # as its primary defense, which independently catches every tile
+  # below except N03W051 (0.0 deg^2 overlap, confirmed TILE-SCAN
+  # 2026-09-22: 6 files corrupted/0-byte in the S36 row extending into
+  # Argentina/Chile/ocean, 36 files valid-but-out-of-territory from the
+  # original bbox-based fetch). This list stays as a belt-and-suspenders
+  # fallback for any case the geometry filter can't cover (e.g. a
+  # non-standard filename it can't parse a bbox from), and for
+  # N03W051's manual judgment-call exclusion (see entry below).
+  excluded_land_cover_tiles:
+    - "ESA_WorldCover_10m_2020_v100_S36W057_Map.tif"
+    # N03W051: ~0.33 km^2 (2.7e-5 deg^2) real overlap with BRA — a
+    # genuine sliver, not zero, so the geometry filter's threshold
+    # deliberately does not auto-exclude it (see local_layers.py's
+    # _MIN_OVERLAP_DEG2). Manually accepted as a judgment call by
+    # Douglas, 2026-09-22 — negligible contribution, not worth keeping
+    # in the mosaic input for its processing cost.
+    - "ESA_WorldCover_10m_2020_v100_N03W051_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W060_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S36W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_N00W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_N03W057_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_N03W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_N03W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_N03W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S03W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S15W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S15W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S15W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S18W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S18W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S18W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S18W075_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S21W039_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S21W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S21W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S21W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S21W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S24W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S24W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S24W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S24W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S27W060_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S27W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S27W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S27W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S27W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S30W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S30W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S30W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S30W072_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S33W063_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S33W066_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S33W069_Map.tif"
+    - "ESA_WorldCover_10m_2020_v100_S33W072_Map.tif"
 
 PRT:
   hydrosheds_region: "eu"  # Europe and Middle East (HydroRIVERS)

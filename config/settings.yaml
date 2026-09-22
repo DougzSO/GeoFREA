@@ -71,4 +71,8 @@ geospatial:
     adaptive:
       target_pixels: 50000
       min_deg: 0.001
-      max_deg: 0.05
+      # Renamed from max_deg 2026-09-22: this is an unused dead-code
+      # ceiling for the (inactive) adaptive-pixel-resolution formula,
+      # numerically 0.05 by coincidence — unrelated to S-06's 0.05deg
+      # decision cell. Do not confuse the two.
+      adaptive_pixel_ceiling_deg: 0.05

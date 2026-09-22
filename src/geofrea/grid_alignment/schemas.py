@@ -115,9 +115,12 @@ class GridAlignmentInputs(BaseModel):
             `geospatial.resolutions.suitability` by main.py/adapter.py.
             Default 0.01 matches the value that generated the frozen
             PRT/BRA baseline (see module docstring).
-        adaptive_target_pixels/adaptive_min_deg/adaptive_max_deg: Only
-            consulted when resolution_deg == "adaptive" — from
-            settings.yaml's `geospatial.resolutions.adaptive`.
+        adaptive_target_pixels/adaptive_min_deg/adaptive_pixel_ceiling_deg:
+            Only consulted when resolution_deg == "adaptive" — from
+            settings.yaml's `geospatial.resolutions.adaptive`. The
+            ceiling field's old name was renamed 2026-09-22 — the
+            value is numerically 0.05 by coincidence, unrelated to
+            S-06's 0.05deg decision cell.
         max_dist_km: Maximum distance (km) encoded in the roads/grid/
             rivers distance rasters before clipping — unified value,
             see core.constants.LINEAR_FEATURE_MAX_DIST_KM.
@@ -141,7 +144,7 @@ class GridAlignmentInputs(BaseModel):
     resolution_deg: float | Literal["adaptive"] = 0.01
     adaptive_target_pixels: int = 50000
     adaptive_min_deg: float = 0.001
-    adaptive_max_deg: float = 0.05
+    adaptive_pixel_ceiling_deg: float = 0.05
     max_dist_km: float = LINEAR_FEATURE_MAX_DIST_KM
 
 

@@ -597,24 +597,28 @@ class AdaptiveResolutionConfig(BaseModel):
     has no found calibration basis anywhere in legacy — confirmed to
     have ZERO effect on large countries in practice (BRA's unclamped
     ideal resolution would be ~0.175 deg, so it always saturates at
-    `max_deg` regardless of `target_pixels`). Kept available as an
-    explicit opt-in for whoever needs it, not the default.
+    `adaptive_pixel_ceiling_deg` regardless of `target_pixels`). Kept
+    available as an explicit opt-in for whoever needs it, not the
+    default.
 
     Args:
         target_pixels: Target total grid pixel count the adaptive
             formula solves for. Uncalibrated (no documented basis —
             processing time, minimum siting resolution, or otherwise).
         min_deg: Lower clamp on the computed resolution, in degrees.
-        max_deg: Upper clamp on the computed resolution, in degrees —
-            the value that actually controls large-country output in
-            practice (see class docstring).
+        adaptive_pixel_ceiling_deg: Upper clamp on the computed
+            resolution, in degrees — the value that actually controls
+            large-country output in practice (see class docstring).
+            Renamed from `max_deg` 2026-09-22: numerically 0.05 by
+            coincidence, unrelated to S-06's 0.05deg decision cell —
+            do not confuse the two.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     target_pixels: PositiveInt = 50000
     min_deg: PositiveFloat = 0.001
-    max_deg: PositiveFloat = 0.05
+    adaptive_pixel_ceiling_deg: PositiveFloat = 0.05
 
 
 class ResolutionsConfig(BaseModel):

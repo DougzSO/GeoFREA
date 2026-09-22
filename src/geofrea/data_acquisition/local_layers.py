@@ -149,15 +149,56 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from shapely.geometry import box
 
 from geofrea.core.config_loader import CountryMappingError, load_countries
+
+if TYPE_CHECKING:
+    import geopandas as gpd
 
 logger = logging.getLogger("geofrea.data_acquisition.local_layers")
 
 RAW_DATA_DIR_ENV_VAR = "GEOFREA_RAW_DATA_DIR"
 
 _LAND_COVER_TILE_GLOB = "ESA_WorldCover_10m_2020_v100_*_Map.tif"
+
+# ESA WorldCover's fixed 3x3-degree SW-corner tile naming convention
+# (e.g. "S36W057" = SW corner at lat -36, lon -57), empirically
+# confirmed against real tile headers (TILE-SCAN, 2026-09-22) — lets us
+# derive a tile's real-world bbox from its filename alone, without
+# opening the file (needed for corrupted/0-byte tiles, which can't be
+# opened to read their own header bounds).
+_TILE_NAME_PATTERN = re.compile(r"v100_([NS])(\d+)([EW])(\d+)_Map")
+
+# A tile is excluded by the geometry filter only when its intersection
+# with the country polygon is (effectively) exactly zero — not merely
+# small. This deliberately does NOT auto-exclude genuine small-overlap
+# border tiles (e.g. N03W051's ~2.7e-5 deg^2 sliver, flagged as a
+# judgment call in TILE-SCAN, 2026-09-22) — those stay in unless a
+# human adds them to excluded_land_cover_tiles explicitly.
+_MIN_OVERLAP_DEG2 = 1e-6
+
+
+def _tile_bbox_from_filename(name: str):
+    """Return the tile's bbox (a shapely box) derived from its filename.
+
+    Returns None if the filename doesn't match the expected
+    ESA WorldCover naming convention (never raises — an unparseable
+    name just means the geometry filter can't say anything about that
+    tile, so it falls through to the manual excluded_land_cover_tiles
+    fallback instead).
+    """
+    m = _TILE_NAME_PATTERN.search(name)
+    if not m:
+        return None
+    ns, lat_str, ew, lon_str = m.groups()
+    lat = -int(lat_str) if ns == "S" else int(lat_str)
+    lon = -int(lon_str) if ew == "W" else int(lon_str)
+    return box(lon, lat, lon + 3, lat + 3)
 
 # Lazy-loaded cache for countries.yaml
 _COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
@@ -354,7 +395,9 @@ def resolve_grid_path(country_code: str) -> Path | None:
     return path
 
 
-def resolve_land_cover_tiles(country_code: str) -> list[Path]:
+def resolve_land_cover_tiles(
+    country_code: str, country_gdf: gpd.GeoDataFrame | None = None
+) -> list[Path]:
     """Resolve every local ESA WorldCover tile covering one country.
 
     land_cover is genuinely multi-file (MULTI_FILE_LAYER_NAMES,
@@ -362,16 +405,39 @@ def resolve_land_cover_tiles(country_code: str) -> list[Path]:
     (inspect_land_cover_tiles() iterates every tile), so this returns
     the full sorted list, not a single path.
 
+    Two independent defenses against a naive bbox-based fetch pulling
+    in neighboring-country/ocean tiles (TILE-SCAN, 2026-09-22 — BRA had
+    42 such tiles out of 155, only discovered incrementally via failed
+    pipeline runs before this fix):
+      1. Primary: if `country_gdf` is given, every candidate tile's
+         filename-derived bbox (see `_tile_bbox_from_filename()`) is
+         intersected against the real country polygon — not its
+         bounding box, which is exactly what caused the over-inclusion
+         in the first place. A tile whose intersection area is
+         effectively zero (`_MIN_OVERLAP_DEG2`) is dropped, regardless
+         of whether the file itself is corrupted or perfectly valid.
+      2. Fallback: `excluded_land_cover_tiles` in config/countries.yaml
+         — consulted unconditionally (even when `country_gdf` is
+         omitted), for any tile the geometry filter can't rule on
+         (unparseable filename) or that a human wants excluded for a
+         reason the geometry check can't express.
+
     Args:
         country_code: ISO-3166-alpha-3 code. Must have a land_cover_dir
             mapping in config/countries.yaml.
+        country_gdf: The country's polygon (e.g. from the GADM borders
+            fetch, already available earlier in the same
+            data_acquisition phase run). Optional — when omitted, only
+            the manual `excluded_land_cover_tiles` fallback applies
+            (matches every caller and test that predates this filter).
 
     Returns:
         Sorted list of tile Paths under
         `<raw>/land_cover/<dir>/ESA_WorldCover_10m_2020_v100_*_Map.tif`,
-        or [] if GEOFREA_RAW_DATA_DIR is unset, the country directory
-        does not exist, or it exists but contains no matching tile
-        (logged, not raised in any of these cases).
+        with out-of-territory and manually excluded tiles removed, or
+        [] if GEOFREA_RAW_DATA_DIR is unset, the country directory does
+        not exist, or it exists but contains no matching tile (logged,
+        not raised in any of these cases).
 
     Raises:
         CountryMappingError: If country_code is not in countries.yaml or
@@ -379,13 +445,35 @@ def resolve_land_cover_tiles(country_code: str) -> list[Path]:
             not a runtime condition (see module docstring).
     """
     country_dir = _get_country_mapping(country_code, "land_cover_dir")
+    config = _load_countries_config()
+    excluded = frozenset(config[country_code].get("excluded_land_cover_tiles") or [])
 
     raw_data_dir = _raw_data_dir()
     if raw_data_dir is None:
         return []
 
     tiles_dir = raw_data_dir / "land_cover" / country_dir
-    tiles = sorted(tiles_dir.glob(_LAND_COVER_TILE_GLOB))
+    candidates = sorted(t for t in tiles_dir.glob(_LAND_COVER_TILE_GLOB) if t.name not in excluded)
+
+    if country_gdf is not None and len(candidates) > 0:
+        country_geom = (
+            country_gdf.union_all() if hasattr(country_gdf, "union_all") else country_gdf.unary_union
+        )
+        tiles = []
+        for t in candidates:
+            bbox = _tile_bbox_from_filename(t.name)
+            if bbox is not None and country_geom.intersection(bbox).area < _MIN_OVERLAP_DEG2:
+                logger.info(
+                    "Excluding out-of-territory land_cover tile for %s: %s (bbox does not "
+                    "overlap the country polygon)",
+                    country_code,
+                    t.name,
+                )
+                continue
+            tiles.append(t)
+    else:
+        tiles = candidates
+
     if not tiles:
         logger.warning("No local land_cover tiles found for %s under %s", country_code, tiles_dir)
     return tiles

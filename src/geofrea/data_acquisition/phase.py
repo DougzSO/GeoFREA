@@ -80,6 +80,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NamedTuple
 
+import geopandas as gpd
+
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
@@ -172,8 +174,14 @@ _LOCAL_PATH_HANDLERS: dict[str, Callable[[str], Path | None]] = {
 # would silently miss it — the lambda instead looks the name up in this
 # module's globals on every call, which is what makes that monkeypatch
 # pattern work at all (confirmed by the test suite, not assumed).
-_LOCAL_MULTI_PATH_HANDLERS: dict[str, Callable[[str], list[Path]]] = {
-    "land_cover": lambda country_code: resolve_land_cover_tiles(country_code),
+_LOCAL_MULTI_PATH_HANDLERS: dict[str, Callable[[str, gpd.GeoDataFrame | None], list[Path]]] = {
+    # country_gdf: the borders polygon fetched earlier in this same
+    # loop (see run_acquisition_phase()'s _borders_gdf), used by
+    # resolve_land_cover_tiles()'s real polygon-overlap filter — see
+    # that function's docstring for the TILE-SCAN rationale.
+    "land_cover": lambda country_code, country_gdf: resolve_land_cover_tiles(
+        country_code, country_gdf
+    ),
 }
 
 assert not set(_LOCAL_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
@@ -336,6 +344,14 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     started_at = datetime.now(UTC)
 
     layers = []
+    # Populated once "borders" (first in _LAYER_REGISTRY) is fetched,
+    # then reused by the "land_cover" handler's real polygon-overlap
+    # filter (resolve_land_cover_tiles()'s country_gdf argument) — see
+    # that function's docstring, TILE-SCAN, 2026-09-22. Stays None if
+    # the borders fetch failed/returned no path, or the shapefile
+    # can't be read; the filter degrades gracefully to
+    # excluded_land_cover_tiles-only in that case.
+    borders_gdf: gpd.GeoDataFrame | None = None
     for spec in _LAYER_REGISTRY:
         # MULTI_FILE_LAYER_NAMES (schemas.py) is the single source of
         # truth for path vs. paths (see DECISIONS.md 2026-08-24,
@@ -353,8 +369,20 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
         else:
             path = None
 
+        if spec.layer_name == "borders" and path is not None:
+            try:
+                borders_gdf = gpd.read_file(path)
+            except Exception:
+                logger.warning(
+                    "Could not read borders shapefile %s for land_cover's "
+                    "polygon-overlap filter — falling back to "
+                    "excluded_land_cover_tiles only.",
+                    path,
+                    exc_info=True,
+                )
+
         local_multi_handler = _LOCAL_MULTI_PATH_HANDLERS.get(spec.layer_name)
-        paths = local_multi_handler(context.country_code) if local_multi_handler else []
+        paths = local_multi_handler(context.country_code, borders_gdf) if local_multi_handler else []
 
         layers.append(
             AcquiredLayer(
