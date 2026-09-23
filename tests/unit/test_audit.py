@@ -84,7 +84,16 @@ def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
 def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
     result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
-    for layer in ("solar", "elevation", "population", "slope", "wind"):
+    for layer in (
+        "solar",
+        "elevation",
+        "population",
+        "slope",
+        "wind",
+        "weibull_a",
+        "weibull_k",
+        "air_density",
+    ):
         assert result.rasters[layer].error == "File not found"
     assert result.land_cover.error == "Tiles not found"
     assert result.power_plants.error is not None
@@ -92,15 +101,25 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
         assert result.vectors[vname].found is False
     # AuditSummary.layers replaced the flat layers_ok/layers_missing
     # fields 2026-08-24 (see DECISIONS.md same date, "AuditSummary
-    # refactor to layer-keyed dict") — now spans all 12 raster+vector
-    # names, not just rasters.
+    # refactor to layer-keyed dict") — now spans all raster+vector
+    # names, not just rasters. weibull_a/weibull_k/air_density joined
+    # the raster set 2026-09-23 (M-F1-03, task F1-2).
     assert all(ls.status != "ok" for ls in result.summary.layers.values())
     missing_rasters = {
         name
         for name, ls in result.summary.layers.items()
         if ls.kind == "raster" and ls.status == "missing"
     }
-    assert missing_rasters == {"solar", "elevation", "population", "slope", "wind"}
+    assert missing_rasters == {
+        "solar",
+        "elevation",
+        "population",
+        "slope",
+        "wind",
+        "weibull_a",
+        "weibull_k",
+        "air_density",
+    }
     missing_vectors = {
         name
         for name, ls in result.summary.layers.items()

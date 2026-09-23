@@ -94,15 +94,38 @@ Scripts or validations expected to run longer than 30 seconds log progress with 
 
 ## Code reused from reference repositories
 
-Code copied from CRAEI (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary:
+Code copied from CRAEI (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary, placed directly above the `def` line — outside the docstring, since it documents where the *code* came from, not what it does. A-13's `Implements: M-<item>.` line is separate: it is the first line of the docstring body, documenting what the function *does* against the method. The two lines answer different questions and never merge into one:
 
 ```python
 # Adapted from CRAEI: https://github.com/<repo>
 # Commit: <sha>  Original path: <path>
 # Adaptation: <one-line summary>
+def some_function(...) -> ...:
+    """One-line summary of what the function does.
+
+    Implements: M-<item>.
+
+    Args:
+        ...
+    """
 ```
 
-No imports from CRAEI or other reference repositories. Reference repositories remain read-only; edits belong in GeoFREA only.
+Filled example, approved F1-1 (2026-09-23) against a real CRAEI function — illustrates the header mechanics only, not a wind adaptation (CRAEI has no wind module to adapt; see `docs/phases/F1_data_acquisition.md`, M-F1-03 row):
+
+```python
+# Adapted from CRAEI: https://github.com/<douglas-org>/craei
+# Commit: baae8816f65d3a0b3c2379461639e20a375b14d6  Original path: src/craei/acquire/auxiliary.py:57 (run_hydrobasins)
+# Adaptation: per-country download-loop and manifest-registration pattern adapted for
+# CMIP6/ERA5 fetch jobs; region/URL construction and payload handling are new.
+def run_hydrobasins(manifest: Manifest, raw_dir: Path) -> list[dict]:
+    """Download HydroBASINS level 6 zips per country region.
+
+    Implements: M-F1-04.
+    ...
+    """
+```
+
+Every later adaptation follows this format: provenance comment above the `def`, `Implements:` line inside the docstring. No imports from CRAEI or other reference repositories. Reference repositories remain read-only; edits belong in GeoFREA only. Code with no CRAEI counterpart is written fresh and carries no provenance header — there is nothing to attribute.
 
 ## Tests
 

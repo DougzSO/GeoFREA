@@ -74,17 +74,26 @@ _TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 # Layers with no AuditInputs field / fetch path at all today — M-F1b-01
 # requires the audit to cover every active layer, so these are reported
 # `not_audited` unconditionally rather than omitted. Task IDs match
-# docs/OPEN_QUESTIONS.md OQ-027 to OQ-029 and the acquisition tasks that
-# will populate them.
-_UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = (
-    "combined-Weibull-A",
-    "combined-Weibull-k",
-    "air-density",
-)
+# docs/OPEN_QUESTIONS.md OQ-028/OQ-029 and the acquisition tasks that
+# will populate them. Empty as of task F1-2 (2026-09-23): all four GWA
+# products (wind-speed, combined-Weibull-A/k, air-density) are now
+# fetched (M-F1-03) — see _GWA_PRODUCT_RASTER_KEYS below, which is what
+# replaced this tuple's old role for those three.
+_UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = ()
 _UNACQUIRED_LAYERS: dict[str, str] = {
     "cmip6": "not yet acquired (task F-3)",
     "era5_gust": "not yet acquired (task F-4)",
     "gem_existing_plants": "not yet acquired (task F-5)",
+}
+
+# audit.yaml product key -> (AuditInputs field's raster_map key, rasters
+# dict key). All three now have a real fetched file (task F1-2) and a
+# sourced config/audit.yaml entry, so they're audited exactly like any
+# other raster layer below — no longer in _UNACQUIRED_GWA_PRODUCTS.
+_GWA_PRODUCT_RASTER_KEYS: dict[str, str] = {
+    "combined-Weibull-A": "weibull_a",
+    "combined-Weibull-k": "weibull_k",
+    "air-density": "air_density",
 }
 
 
@@ -130,15 +139,34 @@ def run_audit_phase(
         "population": inputs.population_path,
         "slope": inputs.slope_path,
         "wind": inputs.wind_paths[0] if inputs.wind_paths else None,
+        "weibull_a": inputs.weibull_a_path,
+        "weibull_k": inputs.weibull_k_path,
+        "air_density": inputs.air_density_path,
     }
 
     solar_cfg = audit_config.layers.get("solar")
+
+    # weibull_a/weibull_k ship with no embedded CRS (D-F1b-005) — their
+    # grid was confirmed bit-for-bit identical to wind-speed's (same
+    # country, same 100m height) before this mapping was added, so
+    # borrowing wind's CRS here is an observed fact, not a guess (see
+    # inspect_raster()'s assume_crs_from parameter, raster_inspection.py,
+    # for the exact-match check that still guards it at read time).
+    _wind_speed_path = inputs.wind_paths[0] if inputs.wind_paths else None
+    _crs_reference_by_layer: dict[str, Path | None] = {
+        "weibull_a": _wind_speed_path,
+        "weibull_k": _wind_speed_path,
+    }
 
     rasters: dict[str, dict] = {}
     for layer, path in raster_map.items():
         if path and Path(path).exists():
             with timer(layer, timings):
-                meta = inspect_raster(Path(path), country_gdf=inputs.country_gdf)
+                meta = inspect_raster(
+                    Path(path),
+                    country_gdf=inputs.country_gdf,
+                    assume_crs_from=_crs_reference_by_layer.get(layer),
+                )
                 rasters[layer] = meta
 
                 if layer == "solar" and isinstance(solar_cfg, AuditLayerConfig):
@@ -237,6 +265,11 @@ def run_audit_phase(
     expected_resolutions["wind"] = (
         wind_speed_cfg.expected_resolution_deg if wind_speed_cfg is not None else None
     )
+    for product_key, raster_key in _GWA_PRODUCT_RASTER_KEYS.items():
+        product_cfg = wind_cfg.get(product_key) if isinstance(wind_cfg, dict) else None
+        expected_resolutions[raster_key] = (
+            product_cfg.expected_resolution_deg if isinstance(product_cfg, AuditLayerConfig) else None
+        )
 
     res_alerts, not_audited = diagnose_consistency(
         rasters, expected_resolutions, audit_config.resolution_tolerance
@@ -246,6 +279,8 @@ def run_audit_phase(
     # Layers with no fetch path at all today (M-F1b-01: audit covers
     # every active layer, not just the ones already wired into
     # AuditInputs) — reported unconditionally, never silently omitted.
+    # _UNACQUIRED_GWA_PRODUCTS is empty since task F1-2 (all four GWA
+    # products now fetched — see _GWA_PRODUCT_RASTER_KEYS above).
     for product in _UNACQUIRED_GWA_PRODUCTS:
         product_cfg = wind_cfg.get(product) if isinstance(wind_cfg, dict) else None
         reason = "not yet fetched (task F-1)"

@@ -251,9 +251,21 @@ def _build_suitability_criteria_inputs(
     )
 
 
+_LAYER_REGISTRY_SCHEMA_VERSION = "1.1"  # bumped 2026-09-23: AcquiredLayer
+# gained source_sha256/source_sha256_skipped_reason (docs/phases/core.md
+# D-core-016, resolving OQ-024). Both are optional with a None default,
+# so an existing "1.0" layer_registry.json still deserializes into the
+# current AcquisitionResult without error — this bump does not reject
+# old data on load, it only stops data_acquisition itself from being
+# *resumed* against a "1.0"-recorded entry (StaleManifestEntryError,
+# same mechanism as _AUDIT_REPORT_SCHEMA_VERSION above), forcing a real
+# rerun next time so BRA/PRT/IND's existing manifests pick up real
+# hashes instead of silently staying null forever.
+
+
 def _data_acquisition_run(context: PhaseContext) -> AcquisitionResult:
     result = run_acquisition_phase(context)
-    _register_json_artifact(context, "layer_registry", result)
+    _register_json_artifact(context, "layer_registry", result, _LAYER_REGISTRY_SCHEMA_VERSION)
     failed_layer_names = [
         layer.layer_name for layer in result.layers if layer.resolution_status == "failed"
     ]
@@ -366,6 +378,7 @@ def _build_phase_specs(
             run=_data_acquisition_run,
             requires=frozenset(),
             produces=frozenset({"layer_registry"}),
+            produces_schema_versions={"layer_registry": _LAYER_REGISTRY_SCHEMA_VERSION},
         ),
         PhaseSpec(
             name="data_quality_audit",

@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "methodology_version": "1.2.3",
-  "last_updated": "2026-09-24",
+  "last_updated": "2026-09-23",
   "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -30,14 +30,14 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-02/M-F1-07 closed. Per-layer isolation added. OQ-012 closed: IND data_acquisition SUCCESS, 13/13 layers, land_cover 63/91. hydrosheds_region=as, from HydroRIVERS TechDoc p.4."
+      "summary": "M-F1-02/M-F1-03/M-F1-07 closed. M-F1-03: 12 GWA product/height entries, source_sha256 each, fresh (no CRAEI wind code exists). OQ-012, OQ-024, OQ-027 closed."
     },
     {
       "id": "F1b",
       "module": "data_quality_audit",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1b_data_quality_audit.md",
-      "summary": "M-F1b-01 expectations moved to config/audit.yaml, sourced from native metadata; PVOUT unit fixed to kWh/kWp/day. GWA/CMIP6/ERA5/GEM report not_audited, not omitted. BRA/PRT rerun clean, 0 alerts. Land-cover tile cache added."
+      "summary": "GWA products moved to real inspection, not not_audited. Weibull-A/k lack embedded CRS (found, reported, not fixed). IND blocked on parameters.json. CMIP6/ERA5/GEM still not_audited."
     },
     {
       "id": "F2a",
@@ -63,8 +63,8 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "ran_with_issues", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "ran_with_issues", "F1b": "ran_with_issues", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "PRT": {"F1": "ran_clean", "F1b": "ran_with_issues", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "IND": {"F1": "success", "F1b": "blocked_no_parameters", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
   "regression": {

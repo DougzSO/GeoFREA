@@ -86,6 +86,15 @@ class AuditInputs(BaseModel):
         population_path: Population raster path.
         wind_paths: Wind speed/power-density raster paths (only the
             first, if any, is inspected — matches legacy's wind_files[0]).
+        weibull_a_path: Global Wind Atlas combined-Weibull-A raster path
+            at 100m (M-F1-03, task F1-2) — the representative height;
+            config/audit.yaml's `wind.combined-Weibull-A` entry is not
+            height-specific, matching the same "one file inspected"
+            precedent as wind_paths above.
+        weibull_k_path: Global Wind Atlas combined-Weibull-k raster path
+            at 100m — same rationale as weibull_a_path.
+        air_density_path: Global Wind Atlas air-density raster path at
+            100m — same rationale as weibull_a_path.
         land_cover_tiles: ESA WorldCover tile paths.
         lakes_path: HydroLAKES vector path (global — clipped to
             country_gdf during inspection, see vector_inspection.py).
@@ -129,6 +138,9 @@ class AuditInputs(BaseModel):
     slope_path: Path | None = None
     population_path: Path | None = None
     wind_paths: list[Path] = []
+    weibull_a_path: Path | None = None
+    weibull_k_path: Path | None = None
+    air_density_path: Path | None = None
     land_cover_tiles: list[Path] = []
     lakes_path: Path | None = None
     rivers_path: Path | None = None

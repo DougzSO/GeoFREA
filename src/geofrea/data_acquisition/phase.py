@@ -72,7 +72,9 @@ other unlisted phase name.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import time
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -86,7 +88,12 @@ from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
 from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
 from geofrea.data_acquisition.fetchers.protected_planet import fetch_protected_areas
-from geofrea.data_acquisition.fetchers.wind import fetch_wind
+from geofrea.data_acquisition.fetchers.wind import (
+    GWA_HEIGHTS_M,
+    GWA_PRODUCTS,
+    fetch_gwa_product,
+    fetch_wind,
+)
 from geofrea.data_acquisition.local_layers import (
     resolve_elevation_path,
     resolve_grid_path,
@@ -156,6 +163,31 @@ _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
     "protected": lambda ctx: fetch_protected_areas(ctx.outputs_dir, ctx.country_code),
 }
 
+# M-F1-03 (2026-09-23, task F1-2): the 11 GWA product/height
+# combinations beyond the existing "wind" entry (= wind_speed at
+# 100 m, fetch_wind() above, unchanged). Generated from
+# fetchers/wind.py's GWA_PRODUCTS x GWA_HEIGHTS_M rather than written
+# out by hand, so the registry, IMPLEMENTED_FETCH_LAYER_NAMES
+# (schemas.py) and this dict cannot silently drift apart — the
+# `product`/`height_m` default-argument binding below (`p=product,
+# h=height`) avoids the classic late-binding closure bug (every lambda
+# would otherwise capture the *same* loop variable's final value).
+# fetch_gwa_product() raises rather than returning None (see its
+# docstring) — a missing product/height fails that one layer only,
+# per phase.py's existing per-layer isolation, never the whole phase.
+_GWA_EXTRA_LAYER_SPECS: tuple[tuple[str, str, int], ...] = tuple(
+    (f"{product}_{height}m", product, height)
+    for product in GWA_PRODUCTS
+    for height in GWA_HEIGHTS_M
+    if not (product == "wind_speed" and height == 100)  # already "wind"
+)
+
+for _layer_name, _product, _height in _GWA_EXTRA_LAYER_SPECS:
+    _FETCHED_LAYER_HANDLERS[_layer_name] = (
+        lambda ctx, p=_product, h=_height: fetch_gwa_product(ctx.outputs_dir, ctx.country_code, p, h)
+    )
+del _layer_name, _product, _height
+
 # AcquiredLayer.fetch_status (schemas.py, a computed field) mirrors
 # this dict's keys via IMPLEMENTED_FETCH_LAYER_NAMES rather than
 # importing this dict directly (schemas.py is imported by this module,
@@ -216,6 +248,69 @@ assert not set(_LOCAL_MULTI_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
     "_LOCAL_MULTI_PATH_HANDLERS and _FETCHED_LAYER_HANDLERS overlap — same "
     "requirement as _LOCAL_PATH_HANDLERS above."
 )
+
+
+# Per-layer hashing budget (docs/phases/core.md D-core-016, resolving
+# OQ-024). Measured 2026-09-23 against every layer already resolved for
+# BRA and PRT (F1-1b action 1): the worst case was BRA's land_cover at
+# ~55.8s (112 tiles, 6.2 GB) and BRA's population at ~30.2s (4.2 GB) —
+# both under this budget, so no layer is skipped for cost today. Not
+# tuned to those two files specifically; it is the "exceeds one minute
+# per country" ceiling the verdict itself specified.
+_HASH_BUDGET_S = 60.0
+
+_HASH_CHUNK_BYTES = 1 << 20  # 1 MiB
+
+
+def _sha256_file(path: Path) -> str:
+    """Hash one file's bytes in fixed-size chunks (no full-file read into memory)."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(_HASH_CHUNK_BYTES)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _hash_layer_files(files: list[Path]) -> tuple[dict[str, str] | None, str | None]:
+    """Hash every file a layer resolved to, within `_HASH_BUDGET_S` per layer.
+
+    A fact about the file, recorded once at resolve time — never a gate
+    (see AcquiredLayer.source_sha256's docstring, schemas.py). Runs
+    inside the same per-layer try/except as fetch/resolve in
+    run_acquisition_phase() below, so a real hashing failure (e.g. the
+    file vanishing between resolve and hash) surfaces as that layer's
+    own resolution_status="failed", same as a fetch/resolve exception —
+    not swallowed here.
+
+    Args:
+        files: The layer's resolved file(s) — `[path]` for a
+            single-file layer, `paths` for a multi-file one. Empty if
+            nothing resolved.
+
+    Returns:
+        (source_sha256, skipped_reason): exactly one is None.
+        source_sha256 is None with no reason when `files` is empty
+        (nothing to hash, nothing to explain); None with a reason when
+        the budget was exceeded partway through; otherwise a full
+        {path_str: hexdigest} dict.
+    """
+    if not files:
+        return None, None
+
+    digests: dict[str, str] = {}
+    started = time.perf_counter()
+    for fp in files:
+        digests[str(fp)] = _sha256_file(fp)
+        if time.perf_counter() - started > _HASH_BUDGET_S:
+            return None, (
+                f"hashing {len(files)} file(s) exceeded the {_HASH_BUDGET_S:.0f}s "
+                f"per-layer budget after {len(digests)} file(s) — "
+                "see docs/phases/core.md D-core-016"
+            )
+    return digests, None
 
 
 class _LayerSpec(NamedTuple):
@@ -319,6 +414,22 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
         False,
     ),
     _LayerSpec("wind", "fetched", False, "Global Wind Atlas 3.0 (globalwindatlas.info/api)", True),
+    # M-F1-03 (2026-09-23, task F1-2): the 11 remaining GWA product/
+    # height registry entries — generated from _GWA_EXTRA_LAYER_SPECS
+    # above so this tuple, _FETCHED_LAYER_HANDLERS and
+    # IMPLEMENTED_FETCH_LAYER_NAMES (schemas.py) all enumerate the same
+    # 11 names. Each is its own fetched, country-specific, no-auth
+    # layer, same shape as "wind" itself.
+    *(
+        _LayerSpec(
+            layer_name,
+            "fetched",
+            False,
+            f"Global Wind Atlas 3.0 (globalwindatlas.info/api, {product} @ {height}m)",
+            True,
+        )
+        for layer_name, product, height in _GWA_EXTRA_LAYER_SPECS
+    ),
     # country_specific corrected 2026-08-24 (see DECISIONS.md same date,
     # "vector layer audit depth"): was True in the original skeleton,
     # inconsistent with how WDPA is actually consumed in legacy —
@@ -390,6 +501,8 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
         # type/file:line/message) and the loop continues.
         path: Path | None = None
         paths: list[Path] = []
+        source_sha256: dict[str, str] | None = None
+        source_sha256_skipped_reason: str | None = None
         resolution_status = "resolved"
         error_type: str | None = None
         error_location: str | None = None
@@ -417,9 +530,14 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
 
             if local_multi_handler:
                 paths = local_multi_handler(context.country_code, borders_gdf)
+
+            hashed_files = [path] if (path is not None and not is_multi_file) else paths
+            source_sha256, source_sha256_skipped_reason = _hash_layer_files(hashed_files)
         except Exception as exc:  # noqa: BLE001 — one layer's failure must not abort the others
             path = None
             paths = []
+            source_sha256 = None
+            source_sha256_skipped_reason = None
             resolution_status = "failed"
             error_type = type(exc).__name__
             error_message = str(exc)
@@ -444,6 +562,8 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 path=None if is_multi_file else path,
                 paths=paths,
                 crs_metadata=None,
+                source_sha256=source_sha256,
+                source_sha256_skipped_reason=source_sha256_skipped_reason,
                 resolution_status=resolution_status,
                 error_type=error_type,
                 error_location=error_location,

@@ -180,9 +180,85 @@ def _country_window(
     return window.intersection(rasterio.windows.Window(0, 0, width, height))
 
 
+class MissingCrsWithNoReferenceError(RuntimeError):
+    """A raster has no embedded CRS and no reference file was given to compare against.
+
+    Raised by inspect_raster() (never silently defaulted to a CRS) —
+    see that function's `assume_crs_from` parameter and
+    CrsAssumptionMismatchError below for the one place a missing CRS is
+    ever assigned, and only after an exact-geometry match against a
+    real reference file.
+    """
+
+
+class CrsAssumptionMismatchError(RuntimeError):
+    """A raster's geotransform/bounds/shape does not match its given CRS reference file.
+
+    Raised by inspect_raster() when `assume_crs_from` is given but the
+    two files disagree — assigning the reference's CRS anyway would be
+    an unverified guess, not the observed-fact assignment this
+    mechanism exists for (see docs/phases/F1b_data_quality_audit.md
+    D-F1b-005).
+    """
+
+
+def _effective_crs(
+    src: rasterio.DatasetReader, assume_crs_from: Path | None
+) -> rasterio.crs.CRS:
+    """Resolve the CRS to use for `src`, assigning one only from an exact-match reference.
+
+    Never mutates or rewrites `src`'s own file — the returned CRS is
+    used purely in-memory, by the two callers below, for the
+    country-polygon reprojection their masking needs. `src`'s bytes
+    (and therefore its source_sha256, computed at fetch time — see
+    docs/phases/core.md D-core-016) are never touched.
+
+    Args:
+        src: The open raster dataset being inspected.
+        assume_crs_from: Path to a reference raster to compare against
+            when `src.crs` is missing — see inspect_raster()'s
+            docstring for the exact-match rule that must hold before a
+            CRS is ever assigned.
+
+    Returns:
+        `src.crs` if present; otherwise the reference file's CRS, once
+        verified to sit on the identical grid.
+
+    Raises:
+        MissingCrsWithNoReferenceError: `src.crs` is None and no
+            `assume_crs_from` was given (or the reference itself has no
+            CRS either — nothing to assign).
+        CrsAssumptionMismatchError: `assume_crs_from` was given but its
+            geotransform, bounds or shape does not match `src` exactly.
+    """
+    if src.crs is not None:
+        return src.crs
+
+    if assume_crs_from is None:
+        raise MissingCrsWithNoReferenceError(
+            f"{src.name} has no embedded CRS, and no reference file was given to "
+            "compare against — refusing to assume one."
+        )
+
+    with rasterio.open(str(assume_crs_from)) as ref:
+        same_grid = (
+            ref.transform == src.transform
+            and ref.bounds == src.bounds
+            and (ref.width, ref.height) == (src.width, src.height)
+        )
+        if not same_grid or ref.crs is None:
+            raise CrsAssumptionMismatchError(
+                f"{src.name} has no embedded CRS, and its reference {assume_crs_from} "
+                f"does not confirm a matching grid (same_grid={same_grid}, "
+                f"ref.crs={ref.crs}) — refusing to assume a CRS from it."
+            )
+        return ref.crs
+
+
 def _mask_raster_by_polygon(
     src: rasterio.DatasetReader,
     country_gdf: gpd.GeoDataFrame,
+    effective_crs: rasterio.crs.CRS | None = None,
 ) -> tuple[np.ndarray | None, rasterio.Affine | None]:
     """Clip a raster to a country polygon using a windowed read strategy.
 
@@ -208,7 +284,7 @@ def _mask_raster_by_polygon(
             can page instead of raising). Caller falls back to
             _stats_chunked().
     """
-    geom_in_src_crs = country_gdf.to_crs(src.crs)
+    geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
     bounds = geom_in_src_crs.total_bounds
 
     window = _country_window(bounds, src.transform, src.width, src.height)
@@ -235,6 +311,7 @@ def _mask_raster_by_polygon(
 def _stats_chunked(
     src: rasterio.DatasetReader,
     country_gdf: gpd.GeoDataFrame,
+    effective_crs: rasterio.crs.CRS | None = None,
 ) -> tuple[dict[str, Any] | None, rasterio.Affine | None]:
     """Compute raster statistics by reading in chunks of _CHUNK_ROWS rows.
 
@@ -272,7 +349,7 @@ def _stats_chunked(
     behavior through the shared helper, not changing it, is the point.
     """
     try:
-        geom_in_src_crs = country_gdf.to_crs(src.crs)
+        geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
         shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
         transform = src.transform
         nodata = src.nodata
@@ -361,7 +438,11 @@ def _stats_chunked(
         return None, None
 
 
-def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> dict[str, Any]:
+def inspect_raster(
+    path: Path,
+    country_gdf: gpd.GeoDataFrame | None = None,
+    assume_crs_from: Path | None = None,
+) -> dict[str, Any]:
     """Read metadata and statistics from a single raster file.
 
     Adaptive memory strategy: try a windowed polygon-masked read first;
@@ -371,9 +452,24 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
     the window's allocation size upfront and refusing it proactively,
     not only from an actual failed allocation.
 
+    Missing CRS (task F1-2 follow-up, 2026-09-23, see
+    docs/phases/F1b_data_quality_audit.md D-F1b-005): `combined-Weibull-A`
+    and `combined-Weibull-k` GWA files carry no embedded CRS at all. If
+    `path` has none, `assume_crs_from` (when given) is opened and
+    compared to `path` on geotransform, bounds and shape; only on an
+    exact match is its CRS borrowed, purely in-memory, for the
+    country-polygon reprojection this function's masking needs — `path`
+    itself is never rewritten, so its source_sha256 (computed at fetch
+    time) stays meaningful. No match, or no `assume_crs_from` given for
+    a CRS-less file, fails loud (MissingCrsWithNoReferenceError /
+    CrsAssumptionMismatchError below) rather than defaulting.
+
     Args:
         path: Path to the raster file.
         country_gdf: Country polygon for masking (uses the full file if None).
+        assume_crs_from: Reference raster to borrow a CRS from if `path`
+            has none — see "Missing CRS" above. None (the default) means
+            a CRS-less file always fails loud.
 
     Returns:
         Dict matching geofrea.data_quality_audit.schemas.RasterInspection's fields.
@@ -397,7 +493,12 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
 
     try:
         with rasterio.open(str(path)) as src:
-            result["crs"] = str(src.crs)
+            # A CRS is only ever needed to reproject country_gdf for
+            # masking (below) — with no country_gdf, the full file is
+            # read as-is and a missing CRS is harmless, so resolution
+            # (and its fail-loud check) is skipped entirely in that case.
+            effective_crs = _effective_crs(src, assume_crs_from) if country_gdf is not None else src.crs
+            result["crs"] = str(effective_crs)
             result["resolution"] = round(abs(src.res[0]), 8)
             result["global_shape"] = (src.height, src.width)
             result["nodata"] = src.nodata
@@ -405,7 +506,7 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
             if country_gdf is not None:
                 data, transform = None, None
                 try:
-                    data, transform = _mask_raster_by_polygon(src, country_gdf)
+                    data, transform = _mask_raster_by_polygon(src, country_gdf, effective_crs)
                 except MemoryError:
                     pass
 
@@ -415,7 +516,7 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
                         path.stem,
                         _CHUNK_ROWS,
                     )
-                    stats, transform = _stats_chunked(src, country_gdf)
+                    stats, transform = _stats_chunked(src, country_gdf, effective_crs)
                     if stats is None:
                         result["error"] = (
                             "Failed to process raster "

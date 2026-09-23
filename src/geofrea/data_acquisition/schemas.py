@@ -74,6 +74,24 @@ MULTI_FILE_LAYER_NAMES: frozenset[str] = frozenset({"land_cover"})
 # two cannot silently drift apart.
 IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
     {"power_plants", "wind", "lakes", "rivers", "borders", "admin1", "protected"}
+    # M-F1-03 (2026-09-23, task F1-2): 11 more GWA product/height
+    # registry entries, alongside "wind" (= wind_speed at 100 m,
+    # unchanged) — see phase.py's _GWA_EXTRA_LAYER_SPECS for the full
+    # list and fetchers/wind.py's GWA_PRODUCTS/GWA_HEIGHTS_M for the
+    # product x height matrix these names are generated from.
+    | {
+        "wind_speed_150m",
+        "wind_speed_200m",
+        "weibull_a_100m",
+        "weibull_a_150m",
+        "weibull_a_200m",
+        "weibull_k_100m",
+        "weibull_k_150m",
+        "weibull_k_200m",
+        "air_density_100m",
+        "air_density_150m",
+        "air_density_200m",
+    }
 )
 
 # Historically held "protected" while its fetcher
@@ -176,6 +194,26 @@ class AcquiredLayer(BaseModel):
             MULTI_FILE_LAYER_NAMES — enforced by this model's
             validator. Always [] in this skeleton.
         crs_metadata: Reserved for future CRS/reprojection bookkeeping.
+        source_sha256: sha256 of each resolved file's bytes, keyed by
+            the file's own path string (posix or native — whatever
+            `path`/`paths` already carries). One entry per file, so a
+            multi-file layer (land_cover) carries one hash per tile.
+            None when nothing has been hashed: no file resolved, the
+            layer failed, or hashing was skipped for cost (see
+            source_sha256_skipped_reason). Computed at fetch/resolve
+            time in phase.py's per-layer loop (docs/phases/core.md
+            D-core-016, resolving OQ-024) — a fact recorded about the
+            file, never a gate: nothing in this model or phase.py
+            compares a freshly computed hash against a prior one.
+            METHODOLOGY M-F1-07 (GADM local-first) is the only place a
+            checksum mismatch fails loud today, and it uses its own
+            dedicated `gadm_level0_sha256` config field/comparison
+            (fetchers/gadm.py), not this one.
+        source_sha256_skipped_reason: Why source_sha256 is None despite
+            at least one file being resolved (e.g. hashing exceeded the
+            per-layer time budget, see phase.py's `_HASH_BUDGET_S`).
+            None whenever source_sha256 is populated, or when there was
+            no file to hash in the first place (nothing to explain).
         fetch_status: Computed, not stored — "implemented" if
             layer_name has a real fetcher wired into phase.py's
             _FETCHED_LAYER_HANDLERS (power_plants/wind/lakes/rivers/
@@ -213,10 +251,27 @@ class AcquiredLayer(BaseModel):
     path: Path | None = None
     paths: list[Path] = []
     crs_metadata: CrsMetadata | None = None
+    source_sha256: dict[str, str] | None = None
+    source_sha256_skipped_reason: str | None = None
     resolution_status: Literal["resolved", "failed", "not_attempted"] = "not_attempted"
     error_type: str | None = None
     error_location: str | None = None
     error_message: str | None = None
+
+    @model_validator(mode="after")
+    def _check_skipped_reason_matches_source_sha256(self) -> AcquiredLayer:
+        """source_sha256_skipped_reason is set only when source_sha256 is None.
+
+        Does not require a reason whenever source_sha256 is None (there
+        may simply be no file to hash) — only forbids the two being set
+        together, since a populated hash needs no explaining.
+        """
+        if self.source_sha256 is not None and self.source_sha256_skipped_reason is not None:
+            raise ValueError(
+                f"AcquiredLayer(layer_name={self.layer_name!r}): "
+                "source_sha256_skipped_reason must be None when source_sha256 is set."
+            )
+        return self
 
     @model_validator(mode="after")
     def _check_error_fields_match_status(self) -> AcquiredLayer:

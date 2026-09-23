@@ -30,6 +30,7 @@ that specifically exercise this new wiring monkeypatch the resolver
 functions themselves, same pattern as the fetcher tests below.
 """
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -54,10 +55,48 @@ _FETCHER_NAMES = (
     "fetch_protected_areas",
 )
 
+# The 11 GWA registry entries beyond "wind" (= wind_speed@100m) — M-F1-03,
+# task F1-2. Kept as one constant so the provenance/fetch_status tests
+# below don't hand-enumerate the same 11 names twice.
+_GWA_EXTRA_LAYER_NAMES = {
+    "wind_speed_150m",
+    "wind_speed_200m",
+    "weibull_a_100m",
+    "weibull_a_150m",
+    "weibull_a_200m",
+    "weibull_k_100m",
+    "weibull_k_150m",
+    "weibull_k_200m",
+    "air_density_100m",
+    "air_density_150m",
+    "air_density_200m",
+}
+
 @pytest.fixture(autouse=True)
-def _no_network_fetchers(monkeypatch):
+def _no_network_fetchers(monkeypatch, tmp_path):
     for name in _FETCHER_NAMES:
         monkeypatch.setattr(phase_module, name, lambda *args, **kwargs: None)
+
+    # fetch_gwa_product() (M-F1-03, task F1-2) backs 11 more registry
+    # entries (weibull_a/k, air_density, wind_speed@150/200m). Unlike
+    # the 7 fetchers above, its real contract is to RAISE on failure,
+    # never return None (see fetchers/wind.py) — so "no network in this
+    # test" cannot be represented the same way here. Defaulting this to
+    # a real, on-disk fake file (success) rather than a raise keeps
+    # every pre-existing per-layer-isolation test (written before
+    # M-F1-03 existed, each asserting "every OTHER layer still
+    # succeeds") correct unchanged; tests that specifically exercise
+    # the fail-loud contract monkeypatch this away per-test instead.
+    gwa_dir = tmp_path / "_gwa_default_fixture"
+    gwa_dir.mkdir()
+
+    def _default_fetch_gwa_product(outputs_dir, country_code, product, height_m):
+        fake_path = gwa_dir / f"{country_code}_{product}_{height_m}m.tif"
+        if not fake_path.exists():
+            fake_path.write_bytes(b"fake gwa bytes")
+        return fake_path
+
+    monkeypatch.setattr(phase_module, "fetch_gwa_product", _default_fetch_gwa_product)
 
 
 @pytest.fixture(autouse=True)
@@ -86,14 +125,22 @@ def test_run_acquisition_phase_returns_valid_result(tmp_path):
 
 @pytest.mark.unit
 def test_run_acquisition_phase_every_layer_path_is_none_when_fetchers_fail(tmp_path):
-    # With every real fetcher mocked to return None (the
-    # _no_network_fetchers default — matches how these functions
-    # actually behave on a real network failure, see fetchers/*.py),
-    # every AcquiredLayer.path stays None regardless of provenance.
+    # With every soft-fail fetcher/local resolver mocked to return None
+    # (the _no_network_fetchers/_no_raw_data_dir defaults — matches how
+    # these functions actually behave on a real network/lookup failure,
+    # see fetchers/*.py and local_layers.py), every non-GWA
+    # AcquiredLayer.path stays None. The 11 GWA layers are excluded
+    # here: fetch_gwa_product()'s contract is to raise, not return
+    # None, on failure (M-F1-03, A-09), so this fixture's default for
+    # it is a real fake success instead (see _no_network_fetchers) —
+    # dedicated GWA tests below cover its actual failure path.
     result = run_acquisition_phase(_context(tmp_path))
 
-    assert all(layer.path is None for layer in result.layers)
-    assert result.summary.layers_resolved == 0
+    non_gwa_layers = [
+        layer for layer in result.layers if layer.layer_name not in _GWA_EXTRA_LAYER_NAMES
+    ]
+    assert all(layer.path is None for layer in non_gwa_layers)
+    assert result.summary.layers_resolved == len(_GWA_EXTRA_LAYER_NAMES)
 
 
 @pytest.mark.unit
@@ -189,7 +236,7 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
         "rivers",
         "power_plants",
         "protected",
-    }
+    } | _GWA_EXTRA_LAYER_NAMES
     assert local_only == {
         "land_cover",
         "elevation",
@@ -232,7 +279,7 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
         "borders",
         "admin1",
         "protected",
-    }
+    } | _GWA_EXTRA_LAYER_NAMES
     assert by_status["implemented_not_activated"] == set()
     assert by_status["not_implemented"] == {
         "land_cover",
@@ -253,6 +300,7 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     tmp_path, monkeypatch, layer_name
 ):
     fake_path = tmp_path / f"{layer_name}.fake"
+    fake_path.write_bytes(b"fake layer bytes")  # real bytes: resolution now hashes the file
     handler_name = {
         "power_plants": "fetch_power_plants",
         "wind": "fetch_wind",
@@ -268,7 +316,7 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
 
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
     assert layers_by_name[layer_name].path == fake_path
-    assert result.summary.layers_resolved == 1
+    assert result.summary.layers_resolved == 1 + len(_GWA_EXTRA_LAYER_NAMES)
 
 
 @pytest.mark.unit
@@ -341,6 +389,7 @@ def test_run_acquisition_phase_populates_path_from_local_resolver(
     tmp_path, monkeypatch, layer_name
 ):
     fake_path = tmp_path / f"{layer_name}.fake"
+    fake_path.write_bytes(b"fake layer bytes")  # real bytes: resolution now hashes the file
     handler_name = {
         "elevation": "resolve_elevation_path",
         "population": "resolve_population_path",
@@ -354,12 +403,14 @@ def test_run_acquisition_phase_populates_path_from_local_resolver(
 
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
     assert layers_by_name[layer_name].path == fake_path
-    assert result.summary.layers_resolved == 1
+    assert result.summary.layers_resolved == 1 + len(_GWA_EXTRA_LAYER_NAMES)
 
 
 @pytest.mark.unit
 def test_run_acquisition_phase_populates_paths_from_land_cover_resolver(tmp_path, monkeypatch):
     fake_tiles = [tmp_path / "tile_a.tif", tmp_path / "tile_b.tif"]
+    for tile in fake_tiles:
+        tile.write_bytes(b"fake tile bytes")  # real bytes: resolution now hashes each tile
     monkeypatch.setattr(
         phase_module, "resolve_land_cover_tiles", lambda country_code, country_gdf: fake_tiles
     )
@@ -369,7 +420,7 @@ def test_run_acquisition_phase_populates_paths_from_land_cover_resolver(tmp_path
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
     assert layers_by_name["land_cover"].paths == fake_tiles
     assert layers_by_name["land_cover"].path is None
-    assert result.summary.layers_resolved == 1
+    assert result.summary.layers_resolved == 1 + len(_GWA_EXTRA_LAYER_NAMES)
 
 
 @pytest.mark.unit
@@ -616,3 +667,94 @@ def test_partial_layer_failure_still_registers_layer_registry_with_the_failed_la
     assert rivers.error_type == "KeyError"
     other_layers = [layer for layer in registry.layers if layer.layer_name != "rivers"]
     assert all(layer.resolution_status != "failed" for layer in other_layers)
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_records_source_sha256_at_resolve_time(tmp_path, monkeypatch):
+    # OQ-024 verdict (docs/phases/core.md D-core-016): a resolved
+    # layer's file(s) are hashed as part of the same resolve step, not
+    # deferred to a later pass.
+    fake_path = tmp_path / "wind.fake"
+    content = b"real GWA bytes for hashing"
+    fake_path.write_bytes(content)
+    monkeypatch.setattr(phase_module, "fetch_wind", lambda *a, **kw: fake_path)
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    wind = next(layer for layer in result.layers if layer.layer_name == "wind")
+    assert wind.source_sha256 == {str(fake_path): hashlib.sha256(content).hexdigest()}
+    assert wind.source_sha256_skipped_reason is None
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_skips_hash_over_budget_and_records_reason(tmp_path, monkeypatch):
+    # A layer whose hashing would exceed the per-layer time budget
+    # stores null with a reason instead of being dropped from the model
+    # (verdict, F1-1b action 2) — simulated here by forcing the budget
+    # to 0 rather than actually waiting out a real one-minute budget.
+    fake_path = tmp_path / "wind.fake"
+    fake_path.write_bytes(b"some bytes")
+    monkeypatch.setattr(phase_module, "fetch_wind", lambda *a, **kw: fake_path)
+    monkeypatch.setattr(phase_module, "_HASH_BUDGET_S", 0.0)
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    wind = next(layer for layer in result.layers if layer.layer_name == "wind")
+    assert wind.source_sha256 is None
+    assert wind.source_sha256_skipped_reason is not None
+    assert "budget" in wind.source_sha256_skipped_reason
+    # Still resolved, not failed — a cost-based skip is not an error.
+    assert wind.resolution_status == "resolved"
+    assert wind.path == fake_path
+
+
+@pytest.mark.unit
+def test_acquired_layer_missing_source_sha256_defaults_to_none_on_load():
+    # An older manifest/layer_registry.json recorded before source_sha256
+    # existed has no such key at all — it must still load, with the new
+    # field defaulting to None, rather than being rejected as stale
+    # (verdict, F1-1b action 4: existing BRA/PRT/IND manifests stay
+    # valid with null hashes until their next acquisition run).
+    old_dict = {
+        "layer_name": "wind",
+        "provenance": "fetched",
+        "auth_required": False,
+        "source_name": "Global Wind Atlas 3.0",
+        "country_code": "PRT",
+        "path": "/some/path/wind.tif",
+        "paths": [],
+        "crs_metadata": None,
+        "resolution_status": "resolved",
+        "error_type": None,
+        "error_location": None,
+        "error_message": None,
+    }
+
+    reloaded = AcquiredLayer.model_validate(old_dict)
+
+    assert reloaded.source_sha256 is None
+    assert reloaded.source_sha256_skipped_reason is None
+
+
+@pytest.mark.unit
+def test_run_acquisition_phase_registers_12_gwa_entries_each_with_a_hash(tmp_path, monkeypatch):
+    # M-F1-03 (task F1-2): "wind" (wind_speed@100m) plus the 11 entries
+    # in _GWA_EXTRA_LAYER_NAMES cover all 4 products x 3 heights — 12
+    # total. The 11 extras already succeed by default (_no_network_fetchers'
+    # fetch_gwa_product default); "wind" itself defaults to None (its own
+    # fixture default, unrelated to M-F1-03), so it's given a real file
+    # here too, to verify all 12 together carry a real source_sha256.
+    wind_path = tmp_path / "wind.fake"
+    wind_path.write_bytes(b"fake wind-speed bytes")
+    monkeypatch.setattr(phase_module, "fetch_wind", lambda *a, **kw: wind_path)
+
+    result = run_acquisition_phase(_context(tmp_path))
+
+    gwa_layer_names = _GWA_EXTRA_LAYER_NAMES | {"wind"}
+    gwa_layers = [layer for layer in result.layers if layer.layer_name in gwa_layer_names]
+
+    assert len(gwa_layers) == 12
+    for layer in gwa_layers:
+        assert layer.resolution_status == "resolved"
+        assert layer.source_sha256 is not None
+        assert len(layer.source_sha256) == 1

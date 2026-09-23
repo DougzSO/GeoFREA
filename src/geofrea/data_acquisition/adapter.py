@@ -126,6 +126,14 @@ def acquisition_result_to_audit_inputs(
     wind_path = resolved_path(layers.get("wind"))
     wind_paths = [wind_path] if wind_path else []
 
+    # M-F1-03 (task F1-2): the other three GWA products, represented by
+    # their 100m entry (config/audit.yaml's wind.<product> expectations
+    # are not height-specific — same "inspect one representative file"
+    # precedent as wind_paths/wind-speed above).
+    weibull_a_path = resolved_path(layers.get("weibull_a_100m"))
+    weibull_k_path = resolved_path(layers.get("weibull_k_100m"))
+    air_density_path = resolved_path(layers.get("air_density_100m"))
+
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
     plants_df = load_power_plants_df(layers.get("power_plants"))
@@ -134,6 +142,9 @@ def acquisition_result_to_audit_inputs(
     return AuditInputs(
         **single_paths,
         wind_paths=wind_paths,
+        weibull_a_path=weibull_a_path,
+        weibull_k_path=weibull_k_path,
+        air_density_path=air_density_path,
         land_cover_tiles=land_cover_tiles,
         plants_df=plants_df,
         country_gdf=country_gdf,
