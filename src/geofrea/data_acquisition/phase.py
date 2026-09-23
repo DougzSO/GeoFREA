@@ -73,6 +73,7 @@ other unlisted phase name.
 from __future__ import annotations
 
 import logging
+import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,6 +104,30 @@ from geofrea.data_acquisition.schemas import (
 )
 
 logger = logging.getLogger("geofrea.data_acquisition.phase")
+
+
+class DataAcquisitionLayerFailedError(RuntimeError):
+    """One or more layers failed to resolve (per-layer isolation, 2026-09-23).
+
+    Raised AFTER the full AcquisitionResult — including every layer that
+    DID resolve — has been built and registered as the "layer_registry"
+    artifact (see run_acquisition_phase()'s caller, main.py::
+    _data_acquisition_run). This is what makes the orchestrator record
+    the phase's own status as "failed" (A-09 still stops dependents),
+    while the artifact itself still holds what succeeded (A-02) — unlike
+    a raw exception from inside the resolution loop, which would abort
+    before anything got registered at all (the prior behavior; see
+    docs/phases/F1_data_acquisition.md for the IND case this replaced).
+    """
+
+    def __init__(self, country_code: str, failed_layer_names: list[str]) -> None:
+        super().__init__(
+            f"data_acquisition for {country_code!r}: layer(s) "
+            f"{failed_layer_names} failed to resolve — see the "
+            "layer_registry artifact for each one's exception and file:line."
+        )
+        self.country_code = country_code
+        self.failed_layer_names = failed_layer_names
 
 # layer_name -> fetch function, for the 7 layers with a real fetcher
 # wired in as of 2026-09-11 (see module docstring). Each fetcher
@@ -353,29 +378,61 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
 
         fetch_handler = _FETCHED_LAYER_HANDLERS.get(spec.layer_name)
         local_handler = _LOCAL_PATH_HANDLERS.get(spec.layer_name)
-        # Disjoint by construction (asserted above at import time), so
-        # at most one of these two ever applies to a given layer_name.
-        if fetch_handler:
-            path = fetch_handler(context)
-        elif local_handler:
-            path = local_handler(context.country_code)
-        else:
-            path = None
-
-        if spec.layer_name == "borders" and path is not None:
-            try:
-                borders_gdf = gpd.read_file(path)
-            except Exception:
-                logger.warning(
-                    "Could not read borders shapefile %s for land_cover's "
-                    "polygon-overlap filter — falling back to "
-                    "excluded_land_cover_tiles only.",
-                    path,
-                    exc_info=True,
-                )
-
         local_multi_handler = _LOCAL_MULTI_PATH_HANDLERS.get(spec.layer_name)
-        paths = local_multi_handler(context.country_code, borders_gdf) if local_multi_handler else []
+
+        # Per-layer isolation (2026-09-23, see docs/phases/F1_data_acquisition.md
+        # — the IND/hydrosheds_region case that motivated this): one
+        # layer's resolver raising no longer aborts the whole phase
+        # (which used to discard every other already-resolved layer,
+        # see git history of this function). Each layer resolves
+        # independently; a raised exception is recorded on ITS OWN
+        # AcquiredLayer entry (resolution_status="failed" + exception
+        # type/file:line/message) and the loop continues.
+        path: Path | None = None
+        paths: list[Path] = []
+        resolution_status = "resolved"
+        error_type: str | None = None
+        error_location: str | None = None
+        error_message: str | None = None
+        try:
+            # Disjoint by construction (asserted above at import time),
+            # so at most one of these two ever applies to a given
+            # layer_name.
+            if fetch_handler:
+                path = fetch_handler(context)
+            elif local_handler:
+                path = local_handler(context.country_code)
+
+            if spec.layer_name == "borders" and path is not None:
+                try:
+                    borders_gdf = gpd.read_file(path)
+                except Exception:
+                    logger.warning(
+                        "Could not read borders shapefile %s for land_cover's "
+                        "polygon-overlap filter — falling back to "
+                        "excluded_land_cover_tiles only.",
+                        path,
+                        exc_info=True,
+                    )
+
+            if local_multi_handler:
+                paths = local_multi_handler(context.country_code, borders_gdf)
+        except Exception as exc:  # noqa: BLE001 — one layer's failure must not abort the others
+            path = None
+            paths = []
+            resolution_status = "failed"
+            error_type = type(exc).__name__
+            error_message = str(exc)
+            tb = traceback.extract_tb(exc.__traceback__)
+            error_location = f"{tb[-1].filename}:{tb[-1].lineno}" if tb else "unknown"
+            logger.error(
+                "Layer '%s' failed to resolve for %s: %s at %s: %s",
+                spec.layer_name,
+                context.country_code,
+                error_type,
+                error_location,
+                error_message,
+            )
 
         layers.append(
             AcquiredLayer(
@@ -387,8 +444,14 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 path=None if is_multi_file else path,
                 paths=paths,
                 crs_metadata=None,
+                resolution_status=resolution_status,
+                error_type=error_type,
+                error_location=error_location,
+                error_message=error_message,
             )
         )
+
+    failed_layer_names = [layer.layer_name for layer in layers if layer.resolution_status == "failed"]
 
     summary = AcquisitionSummary(
         layers_total=len(layers),
@@ -398,8 +461,17 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
         ),
         layers_requiring_auth=sum(1 for layer in layers if layer.auth_required),
         layers_resolved=sum(1 for layer in layers if layer.path is not None or layer.paths),
+        layers_failed=len(failed_layer_names),
     )
 
+    # Deliberately does NOT raise here even if failed_layer_names is
+    # non-empty: this function always returns the full result — every
+    # layer that DID resolve, plus each failed one's own record — so
+    # the caller (main.py::_data_acquisition_run) can register it as
+    # the "layer_registry" artifact (A-02) BEFORE deciding whether the
+    # phase's own status should read "failed" (A-09). Raising here
+    # would discard the result before it could ever be registered,
+    # reproducing the exact problem this whole mechanism replaced.
     return AcquisitionResult(
         country_code=context.country_code,
         timestamp=started_at.isoformat(),

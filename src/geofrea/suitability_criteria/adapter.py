@@ -16,7 +16,7 @@ from __future__ import annotations
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import CountryCriteriaParams, CriteriaParams
 from geofrea.data_acquisition.adapter import load_power_plants_df
-from geofrea.data_acquisition.schemas import AcquisitionResult
+from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.suitability_criteria.schemas import SuitabilityCriteriaInputs
 
@@ -78,19 +78,18 @@ def build_suitability_criteria_inputs(
 
     aligned = {field: getattr(grid_result, field) for field in _ALIGNED_RASTER_FIELDS}
 
-    protected_layer = layers.get("protected")
-    wdpa_path = protected_layer.path if protected_layer else None
+    wdpa_path = resolved_path(layers.get("protected"))
 
     plants_df = load_power_plants_df(layers.get("power_plants"))
 
-    borders_layer = layers.get("borders")
-    if borders_layer is None or borders_layer.path is None:
+    borders_path = resolved_path(layers.get("borders"))
+    if borders_path is None:
         raise SuitabilityCriteriaRequiresBordersError(
             f"suitability_criteria requires a resolved 'borders' layer for "
             f"{acquisition_result.country_code!r} to build the mainland mask — "
             f"AcquisitionResult has none (path=None or layer missing)."
         )
-    mainland_gdf = load_mainland_boundary(borders_layer.path)
+    mainland_gdf = load_mainland_boundary(borders_path)
 
     return SuitabilityCriteriaInputs(
         **aligned,

@@ -17,7 +17,6 @@ Entry fields: blocking phase, question, resolution protocol, owner, status (`ope
 | OQ-009 | F4 | Final GCM ensemble. | Execute M-F4-02; record results in `docs/phases/F4_climate_forcing.md`. | Douglas | open |
 | OQ-010 | F7 | National capacity targets for the top-k sensitivity. | Official planning documents per country, horizon-matched. | Douglas | open |
 | OQ-011 | F1, F2b | Transmission grid layer source per country, voltage attribute availability, minimum voltage for connection. | Inspect local grid data; document source and coverage; decide voltage filter only if attribute is consistent across countries. | Douglas | open |
-| OQ-012 | F1 | India data wiring: HydroSHEDS region, GRIP4 region mapping (lookup divergence), land cover and population tiles. | Audit local database for India; move mappings to `config/countries.yaml`. | Douglas | open |
 | OQ-013 | E1 | Explorer technology stack and hosting. | Decide after F7 artifacts exist; static bundle preferred. | Douglas | open |
 | OQ-014 | Thesis Ch. 2 | Literature justification of min-max regret as primary metric with satisficing and PRIM, answering RQ4. | Literature review; architecture already supports both metrics. | Douglas | open |
 | OQ-015 | F2b | Land-cover classes excluded per technology and forest treatment in each land-availability variant. Citation required for IUCN Ia/Ib/II as exclusion set. | Map land-cover legend to exclusion literature; define central, strict, lenient sets. | Douglas | open |

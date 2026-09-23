@@ -22,7 +22,12 @@ from pyogrio.errors import DataSourceError
 from shapely.geometry import Polygon
 
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
-from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
+from geofrea.data_acquisition.schemas import (
+    AcquiredLayer,
+    AcquisitionResult,
+    AcquisitionSummary,
+    LayerAcquisitionFailedError,
+)
 from geofrea.data_quality_audit.schemas import AuditInputs
 
 
@@ -77,6 +82,35 @@ def test_adapter_maps_single_path_fields():
     audit_inputs = acquisition_result_to_audit_inputs(result)
 
     assert audit_inputs.elevation_path == elevation_path
+
+
+@pytest.mark.unit
+def test_adapter_fails_loud_on_a_failed_layer_never_treats_it_as_absent():
+    # Per-layer isolation (2026-09-23, see docs/phases/F1_data_acquisition.md):
+    # a layer with resolution_status="failed" must not be read as
+    # path=None (an absent/optional layer) — the adapter has to raise
+    # LayerAcquisitionFailedError naming it instead.
+    result = _result(
+        [
+            AcquiredLayer(
+                layer_name="elevation",
+                provenance="local_only",
+                auth_required=False,
+                path=None,
+                resolution_status="failed",
+                error_type="KeyError",
+                error_location="local_layers.py:42",
+                error_message="'XXX'",
+            )
+        ]
+    )
+
+    with pytest.raises(LayerAcquisitionFailedError) as exc_info:
+        acquisition_result_to_audit_inputs(result)
+
+    assert exc_info.value.layer_name == "elevation"
+    assert "elevation" in str(exc_info.value)
+    assert "KeyError" in str(exc_info.value)
 
 
 @pytest.mark.unit

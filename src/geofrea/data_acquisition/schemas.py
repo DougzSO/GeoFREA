@@ -213,6 +213,34 @@ class AcquiredLayer(BaseModel):
     path: Path | None = None
     paths: list[Path] = []
     crs_metadata: CrsMetadata | None = None
+    resolution_status: Literal["resolved", "failed", "not_attempted"] = "not_attempted"
+    error_type: str | None = None
+    error_location: str | None = None
+    error_message: str | None = None
+
+    @model_validator(mode="after")
+    def _check_error_fields_match_status(self) -> AcquiredLayer:
+        """error_type/location/message are populated exactly when status is "failed".
+
+        Per-layer isolation (phase.py, 2026-09-23 — see
+        docs/phases/F1_data_acquisition.md): a layer's resolver may raise
+        instead of returning a path; that exception is recorded here,
+        never silently dropped into path=None (which would make a real
+        failure indistinguishable from "no data for this layer").
+        """
+        if self.resolution_status == "failed":
+            if self.error_type is None:
+                raise ValueError(
+                    f"AcquiredLayer(layer_name={self.layer_name!r}): "
+                    "resolution_status='failed' requires error_type to be set."
+                )
+        elif self.error_type is not None or self.error_location is not None or self.error_message is not None:
+            raise ValueError(
+                f"AcquiredLayer(layer_name={self.layer_name!r}): error_type/"
+                "error_location/error_message must be None unless "
+                "resolution_status='failed'."
+            )
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -292,6 +320,7 @@ class AcquisitionSummary(BaseModel):
     layers_local_only_provenance: int
     layers_requiring_auth: int
     layers_resolved: int  # path is not None — always 0 in this skeleton
+    layers_failed: int = 0  # resolution_status == "failed" (per-layer isolation, 2026-09-23)
 
 
 class AcquisitionResult(BaseModel):
@@ -317,3 +346,46 @@ class AcquisitionResult(BaseModel):
     timestamp: str
     layers: list[AcquiredLayer]
     summary: AcquisitionSummary
+
+
+class LayerAcquisitionFailedError(RuntimeError):
+    """A downstream phase read a layer whose acquisition failed outright.
+
+    resolution_status distinguishes "no data for this layer"
+    (path/paths empty, resolution_status="resolved") from "acquisition
+    errored" (resolution_status="failed") — a consuming adapter must
+    fail loud on the latter (A-09), never silently treat it the same as
+    an absent/optional layer. Raised by resolved_path()/resolved_paths()
+    below, not constructed directly by adapters.
+    """
+
+    def __init__(self, layer: AcquiredLayer) -> None:
+        super().__init__(
+            f"Layer {layer.layer_name!r} failed to resolve for "
+            f"{layer.country_code!r}: {layer.error_type} at "
+            f"{layer.error_location}: {layer.error_message}"
+        )
+        self.layer_name = layer.layer_name
+
+
+def resolved_path(layer: AcquiredLayer | None) -> Path | None:
+    """Return `layer.path`, raising LayerAcquisitionFailedError if it failed.
+
+    Every adapter that reads an AcquiredLayer's single-file `path` goes
+    through this instead of accessing the field directly, so a failed
+    layer can never be silently read as "no data" (`path=None`) — the
+    single place this distinction is enforced.
+    """
+    if layer is not None and layer.resolution_status == "failed":
+        raise LayerAcquisitionFailedError(layer)
+    return layer.path if layer is not None else None
+
+
+def resolved_paths(layer: AcquiredLayer | None) -> list[Path]:
+    """Return `layer.paths`, raising LayerAcquisitionFailedError if it failed.
+
+    Multi-file counterpart of resolved_path() — land_cover today.
+    """
+    if layer is not None and layer.resolution_status == "failed":
+        raise LayerAcquisitionFailedError(layer)
+    return layer.paths if layer is not None else []

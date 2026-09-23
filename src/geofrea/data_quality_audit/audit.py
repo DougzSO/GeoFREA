@@ -266,7 +266,8 @@ def run_audit_phase(
 
     slope_threshold_check: dict[str, SlopeThresholdCheck] = {}
     for tech_name in _TECHNOLOGIES:
-        tech_params = getattr(context.country_params.technologies, tech_name)
+        country_params = context.require_country_params(f"technologies.{tech_name}")
+        tech_params = getattr(country_params.technologies, tech_name)
         threshold = tech_params.slope_threshold_deg.value
         inactive = slope_max_obs is not None and slope_max_obs < threshold
         slope_threshold_check[tech_name] = SlopeThresholdCheck(

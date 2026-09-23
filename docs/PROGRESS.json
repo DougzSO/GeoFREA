@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "methodology_version": "1.2.3",
-  "last_updated": "2026-09-23",
+  "last_updated": "2026-09-24",
   "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -23,14 +23,14 @@
       "module": "core",
       "status": "in_progress",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-04/A-05/A-07/A-08/A-09/U-05/Section-9 done: DAG orchestration, stale-resume rejection, lineage, tech/country registries (solar/wind), config schemas with verification metadata, shared geometry repair (fixed PRT WDPA), external data layout with portable StoredPath (E5b), manifest schema v2.1. A-06 (synthetic country) deferred to MS-2."
+      "summary": "A-01/A-02/A-03/A-04/A-05/A-07/A-08/A-09/U-05/Section-9 done. CountryParams requirement is per-phase (D-core-013): a country in countries.yaml but absent from parameters.json still runs data_acquisition/grid_alignment; data_quality_audit/suitability_criteria fail loud naming the field."
     },
     {
       "id": "F1",
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-02/M-F1-07 closed (F6-2): seismic removed end-to-end; GADM resolves local-first with checksum (GadmChecksumMismatchError on mismatch). land_cover polygon-filtered (BRA 112/155, PRT 11/26 tiles). force_rerun also produced unrequested F2a/F2b output; BRA F2a failed (OOM)."
+      "summary": "M-F1-02/M-F1-07 closed. Per-layer isolation added. OQ-012 closed: IND data_acquisition SUCCESS, 13/13 layers, land_cover 63/91. hydrosheds_region=as, from HydroRIVERS TechDoc p.4."
     },
     {
       "id": "F1b",
@@ -65,7 +65,7 @@
   "countries": {
     "BRA": {"F1": "ran_with_issues", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "IND": {"F1": "not_run", "F1b": "not_run", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
+    "IND": {"F1": "success", "F1b": "blocked_no_parameters", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
   "regression": {
     "workflow": ".github/workflows/regression.yml",

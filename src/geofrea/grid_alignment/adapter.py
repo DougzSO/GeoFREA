@@ -52,7 +52,12 @@ from __future__ import annotations
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.adapter import load_power_plants_df
-from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
+from geofrea.data_acquisition.schemas import (
+    AcquiredLayer,
+    AcquisitionResult,
+    resolved_path,
+    resolved_paths,
+)
 from geofrea.grid_alignment.schemas import GridAlignmentInputs
 
 # layer_name -> GridAlignmentInputs single-Path field. wind/land_cover/
@@ -110,27 +115,26 @@ def acquisition_result_to_grid_alignment_inputs(
     layers = _layers_by_name(result)
 
     source_paths = {
-        field_name: layers[layer_name].path
+        field_name: resolved_path(layers.get(layer_name))
         for layer_name, field_name in _SOURCE_PATH_FIELDS.items()
         if layer_name in layers
     }
 
-    wind_layer = layers.get("wind")
-    wind_paths = [wind_layer.path] if wind_layer and wind_layer.path else []
+    wind_path = resolved_path(layers.get("wind"))
+    wind_paths = [wind_path] if wind_path else []
 
-    land_cover_layer = layers.get("land_cover")
-    land_cover_tiles = land_cover_layer.paths if land_cover_layer else []
+    land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
     plants_df = load_power_plants_df(layers.get("power_plants"))
 
-    borders_layer = layers.get("borders")
-    if borders_layer is None or borders_layer.path is None:
+    borders_path = resolved_path(layers.get("borders"))
+    if borders_path is None:
         raise GridAlignmentRequiresBordersError(
             f"grid_alignment requires a resolved 'borders' layer for "
             f"{result.country_code!r} to build country_gdf — "
             f"AcquisitionResult has none (path=None or layer missing)."
         )
-    country_gdf = load_mainland_boundary(borders_layer.path)
+    country_gdf = load_mainland_boundary(borders_path)
 
     return GridAlignmentInputs(
         **source_paths,

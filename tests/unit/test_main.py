@@ -22,7 +22,13 @@ from shapely.geometry import Polygon
 
 import main
 from geofrea.core.config_loader import load_audit_config, load_parameters
-from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseResult, PhaseSpec
+from geofrea.core.orchestrator import (
+    CountryParamsRequiredError,
+    Orchestrator,
+    PhaseContext,
+    PhaseResult,
+    PhaseSpec,
+)
 from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
 from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
@@ -420,3 +426,164 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
     ok = main.run_geofrea("PRT", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is True
+
+
+# ─── Gating moved to point of use (F2-2 follow-up, see docs/phases/core.md) ───
+#
+# A country present in countries.yaml but absent from parameters.json
+# (IND, at the time this was written — see config/countries.yaml and
+# OQ-012) must still be able to run phases that read no CountryParams
+# field. Only a phase that actually reads one (data_quality_audit's
+# slope_threshold_deg, suitability_criteria's criteria) fails loud,
+# naming the country and the field, via
+# PhaseContext.require_country_params().
+
+
+@pytest.mark.unit
+def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, monkeypatch):
+    def _specs(resolutions, criteria, audit_config):
+        def run(context):
+            # Reads country_code only, never country_params — same shape
+            # as the real data_acquisition PhaseSpec.
+            assert context.country_params is None
+            return _acquisition_phase_result([]).output
+
+        return [
+            PhaseSpec(
+                name="data_acquisition",
+                output_model=AcquisitionResult,
+                run=run,
+                requires=frozenset(),
+                produces=frozenset(),
+            )
+        ]
+
+    monkeypatch.setattr(main, "_build_phase_specs", _specs)
+    monkeypatch.setattr(main, "outputs_dir", lambda: tmp_path)
+
+    ok = main.run_geofrea("IND", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
+
+    assert ok is True
+
+
+@pytest.mark.unit
+def test_audit_run_fails_loud_naming_country_and_field_when_params_absent(tmp_path):
+    context = PhaseContext(
+        country_code="IND",
+        country_params=None,
+        outputs_dir=tmp_path,
+        prior_results={},
+    )
+
+    with pytest.raises(CountryParamsRequiredError) as exc_info:
+        main._audit_run(context, _audit_config())
+
+    assert exc_info.value.country_code == "IND"
+    assert exc_info.value.field == "technologies.solar"
+    assert "IND" in str(exc_info.value)
+    assert "technologies.solar" in str(exc_info.value)
+
+
+@pytest.mark.unit
+def test_orchestrator_records_audit_as_failed_not_raised_when_params_absent(tmp_path):
+    # A- 09: an exception from spec.run() becomes a "failed" PhaseResult,
+    # never propagates out of Orchestrator.run() — same contract as any
+    # other phase failure, confirmed here for the new error specifically.
+    def stub_acquisition_run(context):
+        context.register_artifact("layer_registry", tmp_path / "dummy.txt", "1.0")
+        (tmp_path / "dummy.txt").write_text("x", encoding="utf-8")
+        return _acquisition_phase_result([]).output
+
+    specs = [
+        PhaseSpec(
+            name="data_acquisition",
+            output_model=AcquisitionResult,
+            run=stub_acquisition_run,
+            requires=frozenset(),
+            produces=frozenset({"layer_registry"}),
+        ),
+        PhaseSpec(
+            name="data_quality_audit",
+            output_model=AuditResult,
+            run=lambda context: main._audit_run(context, _audit_config()),
+            requires=frozenset({"layer_registry"}),
+            produces=frozenset({"audit_report"}),
+        ),
+    ]
+
+    orchestrator = Orchestrator(
+        outputs_dir=tmp_path / "outputs",
+        country_code="IND",
+        country_params=None,
+        target_phases=["data_quality_audit"],
+        rerun_phases=[],
+        run_id="test-run-id",
+        dirty=False,
+    )
+
+    results = orchestrator.run(specs)
+
+    assert results["data_acquisition"].status == "success"
+    assert results["data_quality_audit"].status == "failed"
+    assert "IND" in results["data_quality_audit"].error
+    assert "technologies.solar" in results["data_quality_audit"].error
+
+
+@pytest.mark.unit
+def test_build_suitability_criteria_inputs_fails_loud_when_params_absent(tmp_path):
+    # require_country_params("criteria") is only reached after
+    # grid_alignment/data_acquisition's prior_results are read (see
+    # main.py::_build_suitability_criteria_inputs) — neither is
+    # inspected before the CountryParamsRequiredError, so dummy
+    # PhaseResults with placeholder output are enough here; the real
+    # adapter wiring is exercised end-to-end by the grid_alignment tests
+    # above.
+    dummy_result = PhaseResult(
+        phase="dummy",
+        status="success",
+        output=None,
+        error=None,
+        started_at="2026-09-23T00:00:00+00:00",
+        finished_at="2026-09-23T00:00:01+00:00",
+    )
+    context = PhaseContext(
+        country_code="IND",
+        country_params=None,
+        outputs_dir=tmp_path,
+        prior_results={"grid_alignment": dummy_result, "data_acquisition": dummy_result},
+    )
+
+    with pytest.raises(CountryParamsRequiredError) as exc_info:
+        main._build_suitability_criteria_inputs(context, _criteria())
+
+    assert exc_info.value.country_code == "IND"
+    assert exc_info.value.field == "criteria"
+
+
+@pytest.mark.unit
+def test_run_geofrea_still_succeeds_for_bra_and_prt(monkeypatch, tmp_path):
+    # BRA/PRT both have real parameters.json entries — confirm the
+    # gating change doesn't alter their behavior.
+    monkeypatch.setattr(main, "outputs_dir", lambda: tmp_path)
+    for country in ("BRA", "PRT"):
+
+        def _specs(resolutions, criteria, audit_config):
+            def run(context):
+                assert context.country_params is not None
+                return _acquisition_phase_result([]).output
+
+            return [
+                PhaseSpec(
+                    name="data_acquisition",
+                    output_model=AcquisitionResult,
+                    run=run,
+                    requires=frozenset(),
+                    produces=frozenset(),
+                )
+            ]
+
+        monkeypatch.setattr(main, "_build_phase_specs", _specs)
+
+        ok = main.run_geofrea(country, ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
+
+        assert ok is True

@@ -65,7 +65,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from geofrea.core.config_loader import load_audit_config, load_parameters, load_settings
+from geofrea.core.config_loader import (
+    load_audit_config,
+    load_countries,
+    load_parameters,
+    load_settings,
+)
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
@@ -77,7 +82,7 @@ from geofrea.core.orchestrator import (
 from geofrea.core.paths import log_path, outputs_dir
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
-from geofrea.data_acquisition.phase import run_acquisition_phase
+from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
@@ -102,6 +107,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 # wins over .env, so an operator can still override per-invocation.
 load_dotenv(REPO_ROOT / ".env", override=False)
 
+COUNTRIES_YAML = REPO_ROOT / "config" / "countries.yaml"
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
@@ -236,17 +242,29 @@ def _build_suitability_criteria_inputs(
     """
     grid_output = context.prior_results["grid_alignment"].output
     acquisition_output = context.prior_results["data_acquisition"].output
+    country_params = context.require_country_params("criteria")
     return build_suitability_criteria_inputs(
         grid_output,
         acquisition_output,
         criteria,
-        context.country_params.criteria,
+        country_params.criteria,
     )
 
 
 def _data_acquisition_run(context: PhaseContext) -> AcquisitionResult:
     result = run_acquisition_phase(context)
     _register_json_artifact(context, "layer_registry", result)
+    failed_layer_names = [
+        layer.layer_name for layer in result.layers if layer.resolution_status == "failed"
+    ]
+    if failed_layer_names:
+        # Raised AFTER registering the artifact above: the orchestrator's
+        # per-phase exception handling persists whatever's already
+        # registered on the context before recording status="failed"
+        # (see Orchestrator.run(), the except branch) — see
+        # DataAcquisitionLayerFailedError's docstring for why this order
+        # matters (A-02 registry vs. A-09 dependents-stop contract).
+        raise DataAcquisitionLayerFailedError(context.country_code, failed_layer_names)
     return result
 
 
@@ -424,7 +442,12 @@ def run_geofrea(
     logger.info("Starting run for %s with run_id %s", country_code, run_id)
 
     parameters = load_parameters(PARAMETERS_JSON)
-    country_params = parameters.countries[country_code]
+    # None is valid: a country present in countries.yaml but not yet in
+    # parameters.json can still run phases that read no CountryParams
+    # field (data_acquisition, grid_alignment). A phase that does need a
+    # field fails loud via PhaseContext.require_country_params() instead
+    # of every country needing full economic parameters up front.
+    country_params = parameters.countries.get(country_code)
 
     orchestrator = Orchestrator(
         outputs_dir=outputs_dir(),
@@ -456,11 +479,19 @@ def main() -> int:
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
 
+    # "Known" is defined by countries.yaml (A-05's single source of
+    # country-specific mappings), not parameters.json: a country can be
+    # wired for data_acquisition/grid_alignment before its economics are
+    # researched (see CountryParamsRequiredError). Empty run.countries
+    # still means "every country parameters.json currently has", per
+    # settings.yaml's own comment — that default is about scope, not a
+    # requirement every country must satisfy.
+    countries_config = load_countries(COUNTRIES_YAML)
     countries = settings.run.countries or list(parameters.countries.keys())
-    unknown = [c for c in countries if c not in parameters.countries]
+    unknown = [c for c in countries if c not in countries_config]
     if unknown:
         logger.error(
-            "settings.yaml's run.countries lists %s, not present in parameters.json.",
+            "settings.yaml's run.countries lists %s, not present in countries.yaml.",
             unknown,
         )
         return 1

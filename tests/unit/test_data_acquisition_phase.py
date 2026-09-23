@@ -34,6 +34,7 @@ from pathlib import Path
 
 import pytest
 
+import main
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseSpec
 from geofrea.data_acquisition import phase as phase_module
@@ -285,29 +286,36 @@ def test_run_acquisition_phase_does_not_call_fetchers_for_unrelated_layers(tmp_p
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror(tmp_path, monkeypatch):
-    # hydrosheds.fetch_rivers() deliberately raises KeyError for a
-    # country outside _COUNTRY_TO_REGION (a configuration gap, not a
-    # transient failure — see phase.py's _FETCHED_LAYER_HANDLERS
-    # comment) — this phase must NOT swallow it.
+def test_run_acquisition_phase_rivers_unmapped_country_records_failed_layer(tmp_path, monkeypatch):
+    # Per-layer isolation (2026-09-23, see docs/phases/F1_data_acquisition.md):
+    # one layer's resolver raising no longer aborts the whole phase — it
+    # is recorded on its own AcquiredLayer entry instead, and every
+    # other layer still resolves.
     def _raise_unmapped(*args, **kwargs):
         raise KeyError("XXX")
 
     monkeypatch.setattr(phase_module, "fetch_rivers", _raise_unmapped)
 
-    with pytest.raises(KeyError):
-        run_acquisition_phase(_context(tmp_path))
+    result = run_acquisition_phase(_context(tmp_path))
+
+    rivers = next(layer for layer in result.layers if layer.layer_name == "rivers")
+    assert rivers.resolution_status == "failed"
+    assert rivers.error_type == "KeyError"
+    assert "test_data_acquisition_phase.py" in rivers.error_location
+    assert rivers.path is None
+    other_layers = [layer for layer in result.layers if layer.layer_name != "rivers"]
+    assert all(layer.resolution_status != "failed" for layer in other_layers)
+    assert result.summary.layers_failed == 1
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_protected_token_missing_propagates(tmp_path, monkeypatch):
-    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_
-    # propagates_keyerror above: fetch_protected_areas() deliberately
-    # raises ProtectedPlanetTokenMissingError when no API token is
-    # configured (a configuration gap, not a transient network failure
-    # — see fetchers/protected_planet.py's _require_token) — this phase
-    # must NOT swallow it either, unlike a real network error (which
-    # that fetcher already catches internally and returns None for).
+def test_run_acquisition_phase_protected_token_missing_records_failed_layer(tmp_path, monkeypatch):
+    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_records_
+    # failed_layer above: fetch_protected_areas() deliberately raises
+    # ProtectedPlanetTokenMissingError when no API token is configured
+    # (a configuration gap, not a transient network failure — see
+    # fetchers/protected_planet.py's _require_token) — recorded on its
+    # own layer entry, not swallowed and not aborting the whole phase.
     from geofrea.data_acquisition.fetchers.protected_planet import (
         ProtectedPlanetTokenMissingError,
     )
@@ -317,8 +325,14 @@ def test_run_acquisition_phase_protected_token_missing_propagates(tmp_path, monk
 
     monkeypatch.setattr(phase_module, "fetch_protected_areas", _raise_missing_token)
 
-    with pytest.raises(ProtectedPlanetTokenMissingError):
-        run_acquisition_phase(_context(tmp_path))
+    result = run_acquisition_phase(_context(tmp_path))
+
+    protected = next(layer for layer in result.layers if layer.layer_name == "protected")
+    assert protected.resolution_status == "failed"
+    assert protected.error_type == "ProtectedPlanetTokenMissingError"
+    assert protected.path is None
+    other_layers = [layer for layer in result.layers if layer.layer_name != "protected"]
+    assert all(layer.resolution_status != "failed" for layer in other_layers)
 
 
 @pytest.mark.unit
@@ -389,39 +403,53 @@ def test_run_acquisition_phase_does_not_call_local_resolvers_for_unrelated_layer
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_elevation_unmapped_country_propagates_keyerror(
+def test_run_acquisition_phase_elevation_unmapped_country_records_failed_layer(
     tmp_path, monkeypatch
 ):
-    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_propagates_keyerror
-    # above: local_layers.py's resolve_elevation_path()/
+    # Mirrors test_run_acquisition_phase_rivers_unmapped_country_records_
+    # failed_layer above: local_layers.py's resolve_elevation_path()/
     # resolve_land_cover_tiles() deliberately raise KeyError for a
     # country outside their lookup tables (a configuration gap, not a
     # transient failure — see local_layers.py's module docstring) —
-    # this phase must NOT swallow it either.
+    # recorded on its own layer entry, not swallowed and not aborting
+    # the whole phase.
     def _raise_unmapped(country_code):
         raise KeyError(country_code)
 
     monkeypatch.setattr(phase_module, "resolve_elevation_path", _raise_unmapped)
 
-    with pytest.raises(KeyError):
-        run_acquisition_phase(_context(tmp_path))
+    result = run_acquisition_phase(_context(tmp_path))
+
+    elevation = next(layer for layer in result.layers if layer.layer_name == "elevation")
+    assert elevation.resolution_status == "failed"
+    assert elevation.error_type == "KeyError"
+    assert elevation.path is None
+    other_layers = [layer for layer in result.layers if layer.layer_name != "elevation"]
+    assert all(layer.resolution_status != "failed" for layer in other_layers)
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_roads_unmapped_country_propagates_keyerror(tmp_path, monkeypatch):
+def test_run_acquisition_phase_roads_unmapped_country_records_failed_layer(tmp_path, monkeypatch):
     # local_layers.py's resolve_roads_path() has its own independent
     # lookup table (_ROADS_COUNTRY_REGION_DIRS, deliberately BRA/PRT
     # only — see that module's docstring) — same KeyError-on-unmapped-
     # country contract as resolve_elevation_path()/
     # resolve_land_cover_tiles(), verified separately since it is a
-    # separate table that could independently regress.
+    # separate table that could independently regress. Recorded on its
+    # own layer entry (per-layer isolation), not swallowed.
     def _raise_unmapped(country_code):
         raise KeyError(country_code)
 
     monkeypatch.setattr(phase_module, "resolve_roads_path", _raise_unmapped)
 
-    with pytest.raises(KeyError):
-        run_acquisition_phase(_context(tmp_path))
+    result = run_acquisition_phase(_context(tmp_path))
+
+    roads = next(layer for layer in result.layers if layer.layer_name == "roads")
+    assert roads.resolution_status == "failed"
+    assert roads.error_type == "KeyError"
+    assert roads.path is None
+    other_layers = [layer for layer in result.layers if layer.layer_name != "roads"]
+    assert all(layer.resolution_status != "failed" for layer in other_layers)
 
 
 @pytest.mark.unit
@@ -535,3 +563,56 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
     assert resumed_result.status == "success"
     assert isinstance(resumed_result.output, AcquisitionResult)
     assert resumed_result.output == first_results["data_acquisition"].output
+
+
+@pytest.mark.unit
+def test_partial_layer_failure_still_registers_layer_registry_with_the_failed_layer_named(
+    tmp_path, monkeypatch
+):
+    # Part A.4's completion test (F2-4, 2026-09-23): a country with one
+    # unmappable layer still produces a "layer_registry" artifact
+    # holding every other layer, with the failed one recorded; the
+    # phase's own status is "failed" (A-09 still stops dependents).
+    # Exercised through the real orchestrator + main.py wiring
+    # (main._data_acquisition_run), not just run_acquisition_phase()
+    # directly, since the artifact-persist-on-failure behavior lives in
+    # Orchestrator.run()'s except branch.
+    def _raise_unmapped(*args, **kwargs):
+        raise KeyError("XXX")
+
+    monkeypatch.setattr(phase_module, "fetch_rivers", _raise_unmapped)
+
+    orchestrator = Orchestrator(
+        outputs_dir=tmp_path,
+        country_code="PRT",
+        country_params=None,
+        target_phases=["data_acquisition"],
+        rerun_phases=[],
+        run_id="test-run-id",
+        dirty=False,
+    )
+    specs = [
+        PhaseSpec(
+            name="data_acquisition",
+            output_model=AcquisitionResult,
+            run=main._data_acquisition_run,
+            requires=frozenset(),
+            produces=frozenset({"layer_registry"}),
+        )
+    ]
+
+    results = orchestrator.run(specs)
+
+    assert results["data_acquisition"].status == "failed"
+    assert "rivers" in results["data_acquisition"].error
+
+    # The artifact was still persisted despite the phase failing (A-02).
+    artifact_entry = orchestrator.manifest.artifacts["layer_registry"]
+    registry = AcquisitionResult.model_validate_json(artifact_entry.path.resolve().read_text())
+
+    assert len(registry.layers) == len(_LAYER_REGISTRY)
+    rivers = next(layer for layer in registry.layers if layer.layer_name == "rivers")
+    assert rivers.resolution_status == "failed"
+    assert rivers.error_type == "KeyError"
+    other_layers = [layer for layer in registry.layers if layer.layer_name != "rivers"]
+    assert all(layer.resolution_status != "failed" for layer in other_layers)

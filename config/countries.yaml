@@ -110,12 +110,24 @@ PRT:
   gadm_level0_sha256: "9bf13b07b5b687037fe09a161ce641c29f40e64377a68ad5e9667fe231f07183"
 
 IND:
-  # OQ-012: All mappings pending verdict on GRIP4 region numbering
-  hydrosheds_region: null  # South Asia region code pending resolution
+  # HydroRIVERS region = "as" (Central and South-East Asia), per
+  # HydroRIVERS_TechDoc_v10.pdf p.4 (raw/hydrology/rivers/, and
+  # GEOFREA_DATA_DIR/raw/hydrosheds/*/HydroRIVERS_v10_*_shp/): the
+  # region table lists "as" as Central and South-East Asia, and
+  # Figure 2's map places all of India within that single region, not
+  # split with any neighbor. OQ-012 closed 2026-09-24.
+  hydrosheds_region: "as"  # Central and South-East Asia (HydroRIVERS)
   elevation_dir: "India"
   land_cover_dir: "India"
-  grip4_region_dir: null
-  grip4_region_file: null
+  # GRIP4 region for IND is Region_5_South_Asia per
+  # GEOFREA_SHARED_RAW_DIR/infrastructure/roads/regions_lookup.json.
+  # The on-disk directory is mislabeled Region_5_Middle_East_Central_Asia
+  # (a naming defect in the shared read-only database, not GeoFREA's;
+  # renaming it is out of scope). This value points at the real on-disk
+  # name so fetches resolve correctly. Douglas-authorized 2026-09-23
+  # per OQ-012 / docs/_audit/2026-09_data_coverage.md Finding 2.
+  grip4_region_dir: "Region_5_Middle_East_Central_Asia"
+  grip4_region_file: "GRIP4_region5.shp"
   gadm_dir: "India"
   gadm_level0_sha256: "6d53f0bd76c64d1c28453b8716642632aee7fcb6c447a2d13f413dc42f241263"
 

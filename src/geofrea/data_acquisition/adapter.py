@@ -56,7 +56,12 @@ import geopandas as gpd
 import pandas as pd
 
 from geofrea.core.geo_utils import load_mainland_boundary
-from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult
+from geofrea.data_acquisition.schemas import (
+    AcquiredLayer,
+    AcquisitionResult,
+    resolved_path,
+    resolved_paths,
+)
 from geofrea.data_quality_audit.schemas import AuditInputs
 
 # layer_name -> AuditInputs single-Path field. power_plants needs
@@ -113,16 +118,15 @@ def acquisition_result_to_audit_inputs(
     layers = _layers_by_name(result)
 
     single_paths = {
-        field_name: layers[layer_name].path
+        field_name: resolved_path(layers.get(layer_name))
         for layer_name, field_name in _SINGLE_PATH_FIELDS.items()
         if layer_name in layers
     }
 
-    wind_layer = layers.get("wind")
-    wind_paths = [wind_layer.path] if wind_layer and wind_layer.path else []
+    wind_path = resolved_path(layers.get("wind"))
+    wind_paths = [wind_path] if wind_path else []
 
-    land_cover_layer = layers.get("land_cover")
-    land_cover_tiles = land_cover_layer.paths if land_cover_layer else []
+    land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
     plants_df = load_power_plants_df(layers.get("power_plants"))
     country_gdf = _load_mainland_boundary(layers.get("borders"))
@@ -148,9 +152,10 @@ def load_power_plants_df(layer: AcquiredLayer | None) -> pd.DataFrame | None:
     mechanically duplicate" care already applied to the mainland-
     boundary derivation below).
     """
-    if layer is None or layer.path is None:
+    path = resolved_path(layer)
+    if path is None:
         return None
-    return pd.read_csv(layer.path)
+    return pd.read_csv(path)
 
 
 def _load_mainland_boundary(layer: AcquiredLayer | None) -> gpd.GeoDataFrame | None:
@@ -166,6 +171,7 @@ def _load_mainland_boundary(layer: AcquiredLayer | None) -> gpd.GeoDataFrame | N
     raises instead of returning None when borders is missing, since it
     has no equivalent degraded mode.
     """
-    if layer is None or layer.path is None:
+    path = resolved_path(layer)
+    if path is None:
         return None
-    return load_mainland_boundary(layer.path)
+    return load_mainland_boundary(path)

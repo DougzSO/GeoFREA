@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.schemas import CountryParams
@@ -88,6 +88,57 @@ class LegacyManifestError(RuntimeError):
 
 class ArtifactIntegrityError(RuntimeError):
     """A resumed artifact's file is missing or no longer matches its recorded hash."""
+
+
+class CountryParamsRequiredError(RuntimeError):
+    """A phase needs this country's parameters.json entry, but none exists.
+
+    Raised at the point of use (PhaseContext.require_country_params), not
+    at orchestrator/main.py setup: data_acquisition and grid_alignment
+    read no CountryParams field and run fine for a country present only
+    in countries.yaml; data_quality_audit (technologies.<tech>.
+    slope_threshold_deg) and suitability_criteria (criteria) do need an
+    entry and fail loud here, naming the country and the field, instead
+    of every country needing full economic parameters before F1 can run.
+    """
+
+    def __init__(self, country_code: str, field: str) -> None:
+        super().__init__(
+            f"{country_code!r} has no entry in parameters.json's 'countries' "
+            f"block, required for {field!r}. Add one (see CountryParams in "
+            "core/schemas.py) before running a phase that reads it."
+        )
+        self.country_code = country_code
+        self.field = field
+
+
+class StaleManifestOutputSchemaError(RuntimeError):
+    """A resumed phase's recorded output no longer validates against its current schema.
+
+    Distinct from StaleManifestEntryError (which catches a produces-key
+    or schema_version mismatch before ever touching the recorded JSON):
+    this fires when the *content* of `existing.output` itself has
+    drifted from `spec.output_model` in a way neither of those checks
+    covers — a field removed from the model without a `schema_version`
+    bump on its artifact (e.g. `grid_alignment`'s retired `seismic`
+    field, S-08/F6-2 — see docs/phases/F2a_grid_alignment.md). Without
+    this, resuming raises a bare pydantic.ValidationError naming the
+    field but not the manifest, the phase, or the fix. G-3 owns
+    migrating `grid_alignment`'s on-disk manifests properly; until then,
+    `rerun_phases` naming the affected phase is the way past this.
+    """
+
+    def __init__(self, spec_name: str, manifest_path: Path, original: Exception) -> None:
+        super().__init__(
+            f"Manifest {manifest_path} has a recorded output for phase "
+            f"{spec_name!r} that no longer validates against its current "
+            f"output schema: {original}. Name {spec_name!r} in "
+            "rerun_phases to discard the stale entry and recompute it "
+            "instead of resuming."
+        )
+        self.spec_name = spec_name
+        self.manifest_path = manifest_path
+        self.original = original
 
 
 class StaleManifestEntryError(RuntimeError):
@@ -274,7 +325,11 @@ class PhaseContext:
 
     Args:
         country_code: ISO-3166-alpha-3 code being processed.
-        country_params: This country's validated CountryParams.
+        country_params: This country's validated CountryParams, or None
+            if it has no entry in parameters.json's 'countries' block
+            (countries.yaml alone is enough for data_acquisition and
+            grid_alignment). A phase that needs a field calls
+            require_country_params() rather than reading this directly.
         outputs_dir: Root outputs directory for the whole run.
         prior_results: Read-only mapping of phase name -> PhaseResult for
             every phase already completed (resumed or freshly run) in
@@ -287,10 +342,23 @@ class PhaseContext:
     """
 
     country_code: str
-    country_params: CountryParams
+    country_params: CountryParams | None
     outputs_dir: Path
     prior_results: Mapping[str, PhaseResult[Any]]
     _artifact_sink: dict[str, tuple[Path, str]] = field(default_factory=dict)
+
+    def require_country_params(self, field: str) -> CountryParams:
+        """Return country_params, or raise CountryParamsRequiredError naming `field`.
+
+        Args:
+            field: Human-readable name of the CountryParams field the
+                caller is about to read (e.g. "technologies.solar",
+                "criteria") — included in the error so the failure names
+                exactly what's missing, not just that something is.
+        """
+        if self.country_params is None:
+            raise CountryParamsRequiredError(self.country_code, field)
+        return self.country_params
 
     def register_artifact(self, key: str, path: Path, schema_version: str) -> None:
         """Record that the currently running phase produced `path` under `key`.
@@ -440,7 +508,8 @@ class Orchestrator:
         outputs_dir: Root outputs directory (manifest lives at
             outputs_dir/country_code/manifest.json).
         country_code: ISO-3166-alpha-3 code being processed.
-        country_params: This country's validated CountryParams.
+        country_params: This country's validated CountryParams, or None
+            if it has no parameters.json entry (see PhaseContext).
         target_phases: Phase names the caller wants executed. The
             orchestrator also runs (or resumes) every phase these
             transitively require, to satisfy the graph.
@@ -462,7 +531,7 @@ class Orchestrator:
 
     outputs_dir: Path
     country_code: str
-    country_params: CountryParams
+    country_params: CountryParams | None
     target_phases: Sequence[str]
     rerun_phases: Sequence[str]
     run_id: str
@@ -662,11 +731,14 @@ class Orchestrator:
                 for key in spec.produces:
                     self._verify_artifact_integrity(key)
                 self._warn_on_lineage_drift(spec, existing)
-                output = (
-                    spec.output_model.model_validate(existing.output)
-                    if existing.output is not None
-                    else None
-                )
+                try:
+                    output = (
+                        spec.output_model.model_validate(existing.output)
+                        if existing.output is not None
+                        else None
+                    )
+                except ValidationError as exc:
+                    raise StaleManifestOutputSchemaError(spec.name, self.manifest_path, exc) from exc
                 results[spec.name] = PhaseResult(
                     phase=spec.name,
                     status="success",
@@ -721,6 +793,51 @@ class Orchestrator:
                     )
             except Exception as exc:
                 finished_at = _now_iso()
+                # A phase can raise AFTER already registering some of its
+                # declared artifacts (data_acquisition's per-layer
+                # isolation, 2026-09-23: the "layer_registry" artifact is
+                # registered with whatever resolved before the phase
+                # raises over what didn't — see docs/phases/
+                # F1_data_acquisition.md). Those persist here too, so
+                # A-02's registry records what succeeded even though
+                # A-09 still needs this phase's status to read "failed"
+                # (so dependents correctly get "skipped_upstream_failed").
+                # Only keys the PhaseSpec actually declares are trusted —
+                # anything else registered before the exception is
+                # logged and dropped, not persisted, so a secondary
+                # problem can't mask the real one.
+                new_artifacts: dict[str, ArtifactEntry] = {}
+                for key, (path, schema_version) in context._artifact_sink.items():
+                    if key not in spec.produces:
+                        logger.warning(
+                            "Phase '%s' failed after registering undeclared artifact "
+                            "'%s' — not persisted.",
+                            spec.name,
+                            key,
+                        )
+                        continue
+                    try:
+                        sha256, size_bytes, mtime_ns = self._hash_with_reuse(key, path)
+                    except OSError:
+                        logger.warning(
+                            "Phase '%s' failed and its registered artifact '%s' at %s "
+                            "could not be hashed — not persisted.",
+                            spec.name,
+                            key,
+                            path,
+                        )
+                        continue
+                    new_artifacts[key] = ArtifactEntry(
+                        key=key,
+                        path=to_stored_path(path),
+                        sha256=sha256,
+                        size_bytes=size_bytes,
+                        mtime_ns=mtime_ns,
+                        schema_version=schema_version,
+                        phase=spec.name,
+                        run_id=self.run_id,
+                    )
+
                 result = PhaseResult(
                     phase=spec.name,
                     status="failed",
@@ -731,6 +848,7 @@ class Orchestrator:
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump())
+                self.manifest.artifacts.update(new_artifacts)
                 self._write_manifest()
                 logger.exception("Phase '%s' failed", spec.name)
                 continue

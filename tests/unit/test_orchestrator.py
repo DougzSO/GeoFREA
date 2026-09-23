@@ -24,6 +24,7 @@ from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseSpec,
     StaleManifestEntryError,
+    StaleManifestOutputSchemaError,
     UndeclaredArtifactMissingError,
     UnexpectedArtifactError,
 )
@@ -556,6 +557,50 @@ def test_resume_with_schema_version_mismatch_raises_stale_manifest_entry_error(t
 
     with pytest.raises(StaleManifestEntryError):
         second.run([spec_v2])
+
+
+class DummyOutputWithExtra(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    value: int
+    seismic: int | None = None
+
+
+@pytest.mark.unit
+def test_resume_with_removed_output_field_raises_stale_manifest_output_schema_error(tmp_path):
+    # F2-4, 2026-09-23 (Part D): mirrors the real PRT grid_alignment
+    # residue (docs/phases/F2a_grid_alignment.md) — a field removed from
+    # the output model without a produces_schema_versions bump, so
+    # neither StaleManifestEntryError check catches it (same produces
+    # keys, same schema_version); the bare pydantic.ValidationError from
+    # model_validate() must instead surface as a named error pointing at
+    # the manifest, the phase, and rerun_phases as the fix.
+    call_log: list[str] = []
+
+    def run_v1(context):
+        call_log.append("a")
+        path = context.outputs_dir / "a_out.txt"
+        path.write_text("x", encoding="utf-8")
+        context.register_artifact("a_out", path, "1.0")
+        return DummyOutputWithExtra(value=1, seismic=5)
+
+    spec_v1 = PhaseSpec(
+        name="a", output_model=DummyOutputWithExtra, run=run_v1, produces=frozenset({"a_out"})
+    )
+    first = _orchestrator(tmp_path, ["a"])
+    first.run([spec_v1])
+
+    # Same phase name, same produces keys, same (absent) schema_version
+    # — only the output MODEL dropped a field.
+    spec_v2 = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    second = _orchestrator(tmp_path, ["a"])
+
+    with pytest.raises(StaleManifestOutputSchemaError) as exc_info:
+        second.run([spec_v2])
+
+    assert exc_info.value.spec_name == "a"
+    assert "rerun_phases" in str(exc_info.value)
+    assert str(second.manifest_path) in str(exc_info.value)
 
 
 @pytest.mark.unit
