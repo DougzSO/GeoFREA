@@ -41,11 +41,18 @@ logger = logging.getLogger("geofrea.core.orchestrator")
 
 T = TypeVar("T", bound=BaseModel)
 
-PhaseStatus = Literal["success", "failed", "skipped_upstream_failed"]
+PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_upstream"]
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.1"
+_MANIFEST_SCHEMA_VERSION = "2.2"
+# 2.1 manifests are readable without migration: PhaseManifestEntry's new
+# fields (invalidated_by, invalidated_in_run) default to None, so old
+# JSON missing them still validates. _load_manifest() normalizes the
+# on-disk "2.1" tag to "2.2" in memory before validating (RunManifest's
+# schema_version is a Literal["2.2"]) rather than running a migration
+# step. Versions before 2.1 still raise LegacyManifestError.
+_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", _MANIFEST_SCHEMA_VERSION})
 
 
 def _now_iso() -> str:
@@ -95,9 +102,9 @@ class StaleManifestEntryError(RuntimeError):
       - a recorded artifact's `schema_version` no longer matches what
         `spec.produces_schema_versions` now declares for that key.
 
-    Not auto-recovered: the fix is `force_rerun=True` targeting this
-    phase (or a phase that transitively requires it), which discards
-    the stale entry and reruns it — see RunConfig.force_rerun.
+    Not auto-recovered: the fix is naming this phase (or a phase that
+    transitively requires it) in `rerun_phases`, which discards the
+    stale entry and reruns it — see RunConfig.rerun_phases.
     """
 
 
@@ -189,6 +196,11 @@ class PhaseManifestEntry(BaseModel):
             entries and for phases with no requires. Lineage only,
             never blocks a resume by itself — see Orchestrator.run()'s
             lineage-drift warning.
+        invalidated_by: For a "stale_upstream" entry, the name of the
+            phase whose rerun invalidated this one. None otherwise.
+        invalidated_in_run: For a "stale_upstream" entry, the run_id of
+            the run that performed the invalidating rerun. None
+            otherwise.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -200,6 +212,8 @@ class PhaseManifestEntry(BaseModel):
     started_at: str
     finished_at: str
     consumed_run_ids: dict[str, str] = {}
+    invalidated_by: str | None = None
+    invalidated_in_run: str | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -234,16 +248,19 @@ class ArtifactEntry(BaseModel):
 class RunManifest(BaseModel):
     """Root schema for manifest.json (GEOFREA_DATA_DIR/outputs/<country_code>/).
 
-    schema_version "2.1" (since E5b): uses StoredPath for artifact paths
-    to remain portable across environments. Schema "2.0" (deprecated,
-    no auto-migration): used absolute Windows paths. Earlier schemas
-    have no version key at all and are treated as unreadable
-    (LegacyManifestError) — delete and rerun.
+    schema_version "2.2" (since R-1): PhaseStatus gained "stale_upstream"
+    and PhaseManifestEntry gained invalidated_by/invalidated_in_run (see
+    docs/phases/core.md's rerun_phases decision). "2.1" manifests on disk
+    are read and normalized in place (see _READABLE_MANIFEST_SCHEMA_VERSIONS)
+    since the new fields are optional and default to None — no migration
+    step exists or is needed. Schema "2.0" (deprecated): used absolute
+    Windows paths. Earlier schemas have no version key at all and are
+    treated as unreadable (LegacyManifestError) — delete and rerun.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.1"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.2"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -427,9 +444,17 @@ class Orchestrator:
         target_phases: Phase names the caller wants executed. The
             orchestrator also runs (or resumes) every phase these
             transitively require, to satisfy the graph.
-        force_rerun: If True, target_phases and every phase that
-            transitively depends on them (per requires/produces) are
-            re-executed even if already recorded as successful.
+        rerun_phases: Phase names to re-execute even if already recorded
+            as successful — exactly these phases, never their
+            dependents. Each name must be in the transitive closure of
+            target_phases over `requires` (validated in run(), a
+            MissingProducerError otherwise). After a named phase
+            completes, every phase in its transitive `consumers`
+            closure that currently holds a "success" manifest entry is
+            marked "stale_upstream" instead of being re-executed here;
+            a later run that needs a "stale_upstream" phase recomputes
+            it automatically, whether or not it is named in that run's
+            rerun_phases.
         run_id: This run's identifier (see compute_run_id).
         dirty: Whether the working tree has uncommitted changes under
             src/ or config/ (see compute_dirty).
@@ -439,7 +464,7 @@ class Orchestrator:
     country_code: str
     country_params: CountryParams
     target_phases: Sequence[str]
-    force_rerun: bool
+    rerun_phases: Sequence[str]
     run_id: str
     dirty: bool
     manifest: RunManifest = field(init=False)
@@ -460,13 +485,18 @@ class Orchestrator:
         import json
 
         data = json.loads(raw)
-        if data.get("schema_version") != _MANIFEST_SCHEMA_VERSION:
+        if data.get("schema_version") not in _READABLE_MANIFEST_SCHEMA_VERSIONS:
             raise LegacyManifestError(
                 f"{self.manifest_path} has schema_version "
-                f"{data.get('schema_version')!r}, not '{_MANIFEST_SCHEMA_VERSION}'. "
+                f"{data.get('schema_version')!r}, not one of "
+                f"{sorted(_READABLE_MANIFEST_SCHEMA_VERSIONS)}. "
                 "There is no migration path — delete this manifest and rerun the "
                 "pipeline for this country from scratch."
             )
+        # A "2.1" manifest validates as-is against the "2.2" schema (its
+        # new fields are optional); normalize the tag itself since
+        # RunManifest.schema_version is a Literal["2.2"].
+        data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
 
     def _write_manifest(self) -> None:
@@ -505,8 +535,7 @@ class Orchestrator:
                 f"Phase '{spec.name}' has a successful manifest entry, but its recorded "
                 f"artifact keys ({sorted(recorded_keys)}) no longer match this PhaseSpec's "
                 f"produces ({sorted(spec.produces)}) — missing={missing}, extra={extra}. "
-                f"Pass force_rerun=True targeting '{spec.name}' to discard the stale entry "
-                "and rerun it."
+                f"Name '{spec.name}' in rerun_phases to discard the stale entry and rerun it."
             )
 
         for key, expected_schema_version in spec.produces_schema_versions.items():
@@ -515,8 +544,8 @@ class Orchestrator:
                 raise StaleManifestEntryError(
                     f"Phase '{spec.name}' artifact '{key}' has schema_version "
                     f"{entry.schema_version!r} recorded, but this PhaseSpec now expects "
-                    f"{expected_schema_version!r}. Pass force_rerun=True targeting "
-                    f"'{spec.name}' to discard the stale entry and rerun it."
+                    f"{expected_schema_version!r}. Name '{spec.name}' in rerun_phases to "
+                    "discard the stale entry and rerun it."
                 )
 
     def _warn_on_lineage_drift(self, spec: PhaseSpec, existing: PhaseManifestEntry) -> None:
@@ -586,8 +615,17 @@ class Orchestrator:
 
         target_set = set(self.target_phases)
         needed = _transitive_closure(target_set, deps)
-        forced = _transitive_closure(target_set, consumers) if self.force_rerun else set()
-        to_attempt = {name for name in needed | forced if name in by_name}
+
+        rerun_set = set(self.rerun_phases)
+        unknown_reruns = sorted(rerun_set - needed)
+        if unknown_reruns:
+            raise MissingProducerError(
+                f"run.rerun_phases names phases outside the needed closure of "
+                f"run.target_phases: {unknown_reruns}. Add them to target_phases, or "
+                "target a phase that requires them, if they should run at all."
+            )
+
+        to_attempt = {name for name in needed if name in by_name}
         attempt_order = [spec for spec in ordered if spec.name in to_attempt]
 
         results: dict[str, PhaseResult[Any]] = {}
@@ -617,7 +655,7 @@ class Orchestrator:
                 )
                 continue
 
-            must_force = self.force_rerun and spec.name in forced
+            must_force = spec.name in rerun_set
             existing = self.manifest.phases.get(spec.name)
             if not must_force and existing is not None and existing.status == "success":
                 self._check_resume_is_not_stale(spec)
@@ -722,6 +760,24 @@ class Orchestrator:
                 consumed_run_ids=consumed_run_ids,
             )
             self.manifest.artifacts.update(new_artifacts)
+
+            # Same write as the success entry above (one _write_manifest()
+            # call below covers both): a crash between them is impossible
+            # because nothing is written until every in-memory mutation for
+            # this phase's completion — its own entry and its dependents'
+            # staleness — has been made. See docs/phases/core.md's
+            # rerun_phases decision for the atomicity statement.
+            for consumer_name in _transitive_closure({spec.name}, consumers) - {spec.name}:
+                consumer_entry = self.manifest.phases.get(consumer_name)
+                if consumer_entry is not None and consumer_entry.status == "success":
+                    self.manifest.phases[consumer_name] = consumer_entry.model_copy(
+                        update={
+                            "status": "stale_upstream",
+                            "invalidated_by": spec.name,
+                            "invalidated_in_run": self.run_id,
+                        }
+                    )
+
             self._write_manifest()
             logger.info("Phase '%s' completed.", spec.name)
 

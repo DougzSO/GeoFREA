@@ -388,7 +388,7 @@ def _resolved_config_json(settings: SettingsFile, parameters) -> str:
 def run_geofrea(
     country_code: str,
     target_phases: list[str],
-    force_rerun: bool,
+    rerun_phases: list[str],
     resolutions: ResolutionsConfig,
     audit_config: AuditConfig,
     run_id: str,
@@ -399,7 +399,7 @@ def run_geofrea(
     Args:
         country_code: ISO-3166-alpha-3 code, must be a key in parameters.json.
         target_phases: RunConfig.target_phases for this run.
-        force_rerun: RunConfig.force_rerun for this run.
+        rerun_phases: RunConfig.rerun_phases for this run.
         resolutions: settings.yaml's `geospatial.resolutions`, threaded
             through to grid_alignment's PhaseSpec (see
             _build_phase_specs()).
@@ -431,7 +431,7 @@ def run_geofrea(
         country_code=country_code,
         country_params=country_params,
         target_phases=target_phases,
-        force_rerun=force_rerun,
+        rerun_phases=rerun_phases,
         run_id=run_id,
         dirty=dirty,
     )
@@ -477,7 +477,7 @@ def main() -> int:
         ok = run_geofrea(
             country_code,
             settings.run.target_phases,
-            settings.run.force_rerun,
+            settings.run.rerun_phases,
             settings.geospatial.resolutions,
             audit_config,
             run_id,

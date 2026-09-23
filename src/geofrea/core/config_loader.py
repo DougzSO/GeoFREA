@@ -65,6 +65,13 @@ def load_settings(path: Path) -> SettingsFile:
         when it is.
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    run_raw = raw.get("run") if isinstance(raw, dict) else None
+    if isinstance(run_raw, dict) and "force_rerun" in run_raw:
+        raise ValueError(
+            f"{path} sets run.force_rerun, which no longer exists (R-1). Replace it "
+            "with run.rerun_phases: a list of phase names to re-execute exactly "
+            "(never their dependents); an empty list means normal resume behavior."
+        )
     return SettingsFile.model_validate(raw)
 
 

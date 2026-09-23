@@ -160,7 +160,7 @@ VALID_RUN_CONFIG = {
     "countries": [],
     "target_phases": ["data_quality_audit", "grid_alignment"],
     "technologies": ["solar", "wind"],
-    "force_rerun": False,
+    "rerun_phases": [],
 }
 
 VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG}
@@ -249,7 +249,15 @@ def test_run_config_accepts_valid_payload():
     assert result.countries == []
     assert result.target_phases == ["data_quality_audit", "grid_alignment"]
     assert result.technologies == ["solar", "wind"]
-    assert result.force_rerun is False
+    assert result.rerun_phases == []
+
+
+@pytest.mark.unit
+def test_run_config_rerun_phases_defaults_to_empty():
+    data = copy.deepcopy(VALID_RUN_CONFIG)
+    del data["rerun_phases"]
+    result = RunConfig.model_validate(data)
+    assert result.rerun_phases == []
 
 
 @pytest.mark.unit
@@ -317,7 +325,7 @@ def test_parameters_file_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["countries", "target_phases", "technologies", "force_rerun"])
+@pytest.mark.parametrize("field", ["countries", "target_phases", "technologies"])
 def test_run_config_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_RUN_CONFIG)
     del data[field]

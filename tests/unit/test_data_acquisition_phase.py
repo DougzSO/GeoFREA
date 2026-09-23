@@ -510,7 +510,7 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
         country_code=country_code,
         country_params=country_params,
         target_phases=["data_acquisition"],
-        force_rerun=False,
+        rerun_phases=[],
         run_id="test-run-id",
         dirty=False,
     )
@@ -525,7 +525,7 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
         country_code=country_code,
         country_params=country_params,
         target_phases=["data_acquisition"],
-        force_rerun=False,
+        rerun_phases=[],
         run_id="test-run-id",
         dirty=False,
     )

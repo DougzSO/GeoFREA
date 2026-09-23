@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 1.2.2 |
+| Version | 1.2.3 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-09-22 |
+| Updated | 2026-09-23 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -328,7 +328,7 @@ Definitions for one country and technology. `C` = candidate cells; futures `f = 
 
 - **A-01. DAG orchestration.** Each `PhaseSpec` declares `requires` and `produces` artifact keys. The orchestrator validates the graph at startup (missing producers, cycles) and orders phases topologically. Phases exchange data only through declared artifacts.
 - **A-02. Artifact registry.** The per-country manifest records, for each artifact: path, content hash, schema version, producing phase, run ID. A phase whose upstream is not part of the current run loads upstream artifacts from the manifest. In-memory coupling between phases is not allowed.
-- **A-03. Run targeting.** `settings.yaml` declares `run.target_phases`, `run.countries`, `run.technologies`, and `run.force_rerun`; dependencies are resolved from the DAG. Per-phase boolean toggles are not used.
+- **A-03. Run targeting.** `settings.yaml` declares `run.target_phases`, `run.countries`, `run.technologies`, and `run.rerun_phases`; dependencies are resolved from the DAG. `rerun_phases` re-executes exactly the phases it names; every phase downstream of a named phase that currently holds a successful manifest entry is marked stale and recomputed automatically the next time a run needs it, rather than being re-executed in the same pass (see `docs/phases/core.md` D-core-012). Per-phase boolean toggles are not used.
 - **A-04. Technology registry.** `config/technologies.yaml` declares per technology: resource layers, capacity-factor model, exclusion set, cost structure, uncertain-parameter keys. F5-F7 code contains no technology names.
 - **A-05. Country agnosticism.** All country-specific mappings (data-source regions, file names, GRIP4 regions, HydroSHEDS regions) live in `config/countries.yaml`. A test fails if an ISO3 code literal appears in `src/` outside comments and docstrings.
 - **A-06. Synthetic country.** A small synthetic country fixture runs F1-F7 in CI.
@@ -458,6 +458,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.3 | 2026-09-23 | A-03 wording updated: `run.force_rerun` replaced by `run.rerun_phases` (exact re-execute scope; downstream consumers are marked stale and recomputed lazily, not re-executed eagerly — R-1, `docs/phases/core.md` D-core-012). |
 | 1.2.2 | 2026-09-22 | Section 9 adds `config/audit.yaml` (data_quality_audit diagnostic-gate configuration, M-F1b-01). |
 | 1.2.0 | 2026-09-22 | GEAR removed as an active reference repository (A-11, S-08, S-09, M-F1-04, M-F1-05, M-F4-05 now cite CRAEI only); M-F1-01's local-database variable renamed to its current name, `GEOFREA_SHARED_RAW_DIR`; A-12 adds that the run environment is declared in `.env.example` and loaded at startup. |
 | 1.1.0 | 2026-09-21 | A-11 adds CRAEI as primary reference repository; A-08 adopts external data layout; M-F1-04, M-F1-05, M-F4-05 reference A-11. |

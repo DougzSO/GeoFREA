@@ -265,7 +265,7 @@ def test_corrupted_wdpa_error_message_survives_to_orchestrator_output(tmp_path):
         country_code="PRT",
         country_params=load_parameters(_REPO_ROOT / "config" / "parameters.json").countries["PRT"],
         target_phases=["suitability_criteria"],
-        force_rerun=False,
+        rerun_phases=[],
         run_id="test-run-id",
         dirty=False,
     )

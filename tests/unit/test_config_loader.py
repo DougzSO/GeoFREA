@@ -77,7 +77,24 @@ def test_load_real_settings_yaml_validates():
         "grid_alignment",
         "suitability_criteria",
     ]
-    assert result.run.force_rerun is False
+    assert result.run.rerun_phases == []
+
+
+@pytest.mark.unit
+def test_load_settings_rejects_leftover_force_rerun_key(tmp_path):
+    """R-1: force_rerun is retired; a config still carrying it fails loud, naming rerun_phases."""
+    settings_path = tmp_path / "settings.yaml"
+    settings_path.write_text(
+        "run:\n"
+        "  countries: []\n"
+        "  target_phases: [data_acquisition]\n"
+        "  technologies: [solar]\n"
+        "  force_rerun: false\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="rerun_phases"):
+        load_settings(settings_path)
 
 
 # Biomass technology tests removed 2026-09-21 per METHODOLOGY S-02:

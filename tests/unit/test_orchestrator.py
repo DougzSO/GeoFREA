@@ -74,7 +74,7 @@ def _orchestrator(
     tmp_path: Path,
     target_phases: list[str],
     *,
-    force_rerun: bool = False,
+    rerun_phases: list[str] | None = None,
     run_id: str = "run-1",
     dirty: bool = False,
 ) -> Orchestrator:
@@ -83,7 +83,7 @@ def _orchestrator(
         country_code="PRT",
         country_params=_country_params(),
         target_phases=target_phases,
-        force_rerun=force_rerun,
+        rerun_phases=rerun_phases if rerun_phases is not None else [],
         run_id=run_id,
         dirty=dirty,
     )
@@ -269,7 +269,7 @@ def test_hash_reused_when_size_and_mtime_unchanged(tmp_path, monkeypatch):
 
     monkeypatch.setattr(orchestrator_module, "_sha256_file", _tracking_sha256)
 
-    second = _orchestrator(tmp_path, ["a"], force_rerun=True)
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a])
 
     assert hash_calls == []
@@ -330,7 +330,7 @@ def test_failure_upstream_marks_all_dependents_skipped(tmp_path):
     assert call_log == ["F1"]
 
 
-# ─── resumability & force_rerun ──────────────────────────────────────────
+# ─── resumability & rerun_phases ─────────────────────────────────────────
 
 
 @pytest.mark.unit
@@ -370,7 +370,16 @@ def test_resume_does_not_apply_to_a_previously_failed_phase(tmp_path):
 
 
 @pytest.mark.unit
-def test_force_rerun_reexecutes_target_and_dependents(tmp_path):
+def test_rerun_phases_reexecutes_only_the_named_phase(tmp_path):
+    """R-1: rerun_phases re-executes exactly the phases it names, never dependents.
+
+    Targets only "a" (not "c"): "b"/"c" are downstream of "a" but not
+    themselves needed to satisfy this run's target_phases, so marking
+    them stale_upstream (see test_rerun_phases_marks_downstream_
+    consumers_stale_upstream) does not also pull them into this run's
+    execution — that only happens for a phase the run's own targets
+    actually need, per test_stale_upstream_phase_is_recomputed_not_resumed.
+    """
     call_log: list[str] = []
     a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
     b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
@@ -381,13 +390,95 @@ def test_force_rerun_reexecutes_target_and_dependents(tmp_path):
     assert call_log == ["a", "b", "c"]
 
     call_log.clear()
-    second = _orchestrator(tmp_path, ["a"], force_rerun=True)
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     results = second.run([a, b, c])
 
-    # "a" (the target) and everything downstream of it ("b", "c") are
-    # forced to re-execute; order is still topological.
-    assert call_log == ["a", "b", "c"]
-    assert all(result.status == "success" for result in results.values())
+    assert call_log == ["a"]
+    assert results["a"].status == "success"
+    assert "b" not in results
+    assert "c" not in results
+
+
+@pytest.mark.unit
+def test_rerun_phases_marks_downstream_consumers_stale_upstream(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+    c = _make_spec("c", call_log, requires=frozenset({"b_out"}), produces=frozenset({"c_out"}))
+
+    first = _orchestrator(tmp_path, ["c"])
+    first.run([a, b, c])
+
+    # Targets only "a": "b"/"c" are not needed by this run, so they are
+    # marked stale_upstream and left there, not recomputed in the same
+    # pass (recomputing them anyway once needed is
+    # test_stale_upstream_phase_is_recomputed_not_resumed's job).
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([a, b, c])
+
+    assert second.manifest.phases["b"].status == "stale_upstream"
+    assert second.manifest.phases["b"].invalidated_by == "a"
+    assert second.manifest.phases["b"].invalidated_in_run == second.run_id
+    assert second.manifest.phases["c"].status == "stale_upstream"
+    assert second.manifest.phases["c"].invalidated_by == "a"
+
+
+@pytest.mark.unit
+def test_stale_upstream_phase_is_recomputed_not_resumed(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+    assert first.manifest.phases["b"].status == "success"
+
+    # Rerunning "a" alone (not targeting "b") leaves "b" marked
+    # stale_upstream without recomputing it in this same run.
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([a, b])
+    assert second.manifest.phases["b"].status == "stale_upstream"
+
+    call_log.clear()
+    third = _orchestrator(tmp_path, ["b"])
+    results = third.run([a, b])
+
+    # "b" is needed by this run and holds stale_upstream, so it is
+    # recomputed even though it was not named in rerun_phases; "a"
+    # itself is untouched and simply resumes.
+    assert call_log == ["b"]
+    assert results["b"].status == "success"
+    assert third.manifest.phases["b"].status == "success"
+
+
+@pytest.mark.unit
+def test_rerun_phases_name_outside_needed_closure_raises(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    unrelated = _make_spec("unrelated", call_log, produces=frozenset({"u_out"}))
+
+    orchestrator = _orchestrator(tmp_path, ["a"], rerun_phases=["unrelated"])
+
+    with pytest.raises(MissingProducerError):
+        orchestrator.run([a, unrelated])
+
+
+@pytest.mark.unit
+def test_phase_whose_upstream_is_untouched_still_resumes(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+
+    call_log.clear()
+    second = _orchestrator(tmp_path, ["b"])
+    results = second.run([a, b])
+
+    assert call_log == []
+    assert results["a"].status == "success"
+    assert results["b"].status == "success"
 
 
 # ─── dirty flag ───────────────────────────────────────────────────────────
@@ -417,7 +508,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.1"
+    assert orchestrator.manifest.schema_version == "2.2"
 
 
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
@@ -482,10 +573,10 @@ def test_lineage_is_recorded_for_a_phase_with_requires(tmp_path):
 
 @pytest.mark.unit
 def test_cross_run_id_resume_warns_without_failing(tmp_path, caplog):
-    # force_rerun on "a" alone would cascade to "b" too (a dependent —
-    # see test_force_rerun_reexecutes_target_and_dependents), which
-    # would just re-record "b"'s lineage and never exercise drift
-    # detection. The real-world case this guards — "a"'s artifact was
+    # Naming "a" in rerun_phases would only mark "b" stale_upstream, not
+    # re-execute it (see test_rerun_phases_marks_downstream_consumers_
+    # stale_upstream), so it would never exercise drift detection either.
+    # The real-world case this guards — "a"'s artifact was
     # produced by a different run_id than the one "b" last consumed,
     # without "b" itself re-running — is simulated directly by editing
     # the on-disk manifest between two Orchestrator instances, the same

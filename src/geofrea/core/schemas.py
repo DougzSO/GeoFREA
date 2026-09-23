@@ -551,12 +551,18 @@ class RunConfig(BaseModel):
         technologies: Technology keys (e.g. ["solar", "wind"]) to run.
             Non-empty, required per METHODOLOGY A-04. Validated against
             config/technologies.yaml keys at config load.
-        force_rerun: Whether target_phases (and every phase that
-            transitively depends on them) should be re-executed even if
-            already recorded as successful in the manifest. Required,
-            with no default: an operational toggle with real
-            consequences (discards cached work) should never be silently
-            assumed.
+        rerun_phases: Phase names to re-execute even if already recorded
+            as successful in the manifest — exactly these phases, never
+            their dependents (see docs/phases/core.md's rerun_phases
+            decision). Each name must be in the transitive dependency
+            closure of target_phases; a name outside it is a validation
+            error at run time (Orchestrator.run(), not this schema,
+            which does not know the registered phase graph). Empty list
+            (the default) means normal resume-from-manifest behavior —
+            no phase is forced. A phase whose successful entry is marked
+            stale_upstream by a rerun elsewhere in the DAG is recomputed
+            automatically when this run needs it, whether or not it is
+            named here.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -564,7 +570,7 @@ class RunConfig(BaseModel):
     countries: list[str]
     target_phases: list[str]
     technologies: list[str]
-    force_rerun: bool
+    rerun_phases: list[str] = []
 
     @model_validator(mode="after")
     def _target_phases_not_empty(self) -> RunConfig:

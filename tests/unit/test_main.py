@@ -294,7 +294,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
         country_code="PRT",
         country_params=_country_params("PRT"),
         target_phases=["grid_alignment"],
-        force_rerun=False,
+        rerun_phases=[],
         run_id="test-run-id",
         dirty=False,
     )
@@ -361,7 +361,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
 
     monkeypatch.setattr(main, "_build_phase_specs", _failing_specs)
 
-    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is False
 
@@ -394,7 +394,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok = main.run_geofrea("PRT", ["b"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["b"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is False
 
@@ -417,6 +417,6 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is True

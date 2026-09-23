@@ -42,11 +42,14 @@ run:
     - solar
     - wind
 
-  # Required, no default (RunConfig.force_rerun): re-execute
-  # target_phases and everything that transitively depends on them,
-  # even if the manifest already records success. false = normal
-  # resume-from-manifest behavior.
-  force_rerun: false
+  # Phase names to re-execute even if the manifest already records
+  # success — exactly these phases, never their dependents (R-1,
+  # replacing force_rerun's cascade). Each name must be in the needed
+  # closure of target_phases. Empty list (default) = normal
+  # resume-from-manifest behavior. A phase downstream of a rerun is
+  # marked stale_upstream in the manifest and recomputed automatically
+  # the next time a run needs it, without being named here.
+  rerun_phases: []
 
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
 # docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
