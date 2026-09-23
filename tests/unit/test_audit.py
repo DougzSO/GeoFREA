@@ -25,13 +25,21 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
-from geofrea.core.config_loader import load_parameters
+from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.audit import run_audit_phase
-from geofrea.data_quality_audit.schemas import AuditInputs
+from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
+AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
+
+
+def _audit_config() -> AuditConfig:
+    """The real config/audit.yaml — these tests exercise the actual
+    M-F1b-01 configuration, not a synthetic stand-in (see docs/phases/
+    F1b_data_quality_audit.md action F7-2)."""
+    return load_audit_config(AUDIT_YAML)
 
 _ORIGIN_LON, _ORIGIN_LAT = -9.0, 39.0
 _RES = 0.01
@@ -74,7 +82,7 @@ def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
 
 @pytest.mark.unit
 def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
-    result = run_audit_phase(_context(tmp_path), AuditInputs())
+    result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
     for layer in ("solar", "elevation", "population", "slope", "wind"):
         assert result.rasters[layer].error == "File not found"
@@ -130,7 +138,7 @@ def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_pat
         lakes_path=lakes_path,
         country_gdf=_covering_gdf(),
     )
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
     report_text = Path(result.report_path).read_text(encoding="utf-8")
     summary_section = report_text.split("  SUMMARY")[1].split("TIME PER STEP")[0]
     summary_lines = summary_section.splitlines()
@@ -155,7 +163,7 @@ def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_pat
 
 @pytest.mark.unit
 def test_run_audit_phase_writes_report_under_outputs_dir(tmp_path):
-    result = run_audit_phase(_context(tmp_path), AuditInputs())
+    result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
     assert result.report_path is not None
     report_path = Path(result.report_path)
@@ -170,7 +178,7 @@ def test_run_audit_phase_inspects_a_present_raster(tmp_path):
     _write_raster(elevation_path, np.full((_SIZE, _SIZE), 250.0, dtype=np.float32))
 
     inputs = AuditInputs(elevation_path=elevation_path, country_gdf=_covering_gdf())
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert result.rasters["elevation"].error is None
     assert result.rasters["elevation"].mean == pytest.approx(250.0)
@@ -183,13 +191,13 @@ def test_run_audit_phase_inspects_a_present_raster(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_flags_pvout_unit_mismatch(tmp_path):
-    # Realistic kWh/m2/day PVOUT is ~2-8; a raster full of ~4000 looks
-    # like it's actually in kWh/kWp/yr.
+    # Realistic PVOUT (kWh/kWp/day, config/audit.yaml's sanity_range
+    # ~0.7-6.8) is ~2-8; a raster full of ~4000 is out of range either way.
     solar_path = tmp_path / "solar.tif"
     _write_raster(solar_path, np.full((_SIZE, _SIZE), 4000.0, dtype=np.float32))
 
     inputs = AuditInputs(solar_path=solar_path, country_gdf=_covering_gdf())
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert any("PVOUT" in alert for alert in result.alerts)
 
@@ -201,7 +209,7 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
     # data to judge that against.
     # Updated 2026-09-21: per METHODOLOGY S-02 scope (solar and wind only),
     # biomass was removed from _TECHNOLOGIES in audit.py.
-    result = run_audit_phase(_context(tmp_path), AuditInputs())
+    result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
     assert set(result.slope_threshold_check.keys()) == {"solar", "wind"}
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
@@ -223,7 +231,7 @@ def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
     _write_raster(slope_path, np.full((_SIZE, _SIZE), 5.0, dtype=np.float32))
 
     inputs = AuditInputs(slope_path=slope_path, country_gdf=_covering_gdf())
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(5.0)
     assert result.slope_threshold_check["solar"].inactive is False
@@ -240,7 +248,7 @@ def test_run_audit_phase_slope_threshold_check_reads_bra_values(tmp_path):
     # session) — confirms the read goes through context.country_params
     # for the actual requested country, not a hardcoded PRT assumption.
     # Updated 2026-09-21: biomass was removed per METHODOLOGY S-02.
-    result = run_audit_phase(_context(tmp_path, country_code="BRA"), AuditInputs())
+    result = run_audit_phase(_context(tmp_path, country_code="BRA"), AuditInputs(), audit_config=_audit_config())
 
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
     assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(8.5)
@@ -249,7 +257,7 @@ def test_run_audit_phase_slope_threshold_check_reads_bra_values(tmp_path):
 @pytest.mark.unit
 def test_run_audit_phase_skip_land_cover_flag(tmp_path):
     inputs = AuditInputs(skip_land_cover=True)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert result.land_cover.skipped is True
     assert "land_cover" in result.skipped
@@ -261,7 +269,7 @@ def test_run_audit_phase_inspects_power_plants(tmp_path):
         {"capacity_mw": [12.0, 8.0], "primary_fuel": ["Hydro", "Hydro"]}
     )
     inputs = AuditInputs(plants_df=plants_df)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert result.power_plants.total_plants == 2
     assert result.power_plants.total_capacity_mw == pytest.approx(20.0)
@@ -284,7 +292,7 @@ def test_run_audit_phase_lakes_and_rivers_presence(tmp_path):
     lakes_path.write_bytes(b"not a real geopackage, presence-only check")
 
     inputs = AuditInputs(lakes_path=lakes_path, country_gdf=_covering_gdf())
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     assert result.vectors["lakes"].found is True
     assert result.vectors["lakes"].name == "lakes.gpkg"
@@ -305,7 +313,7 @@ def test_run_audit_phase_inspects_a_valid_global_vector_layer_clipped(tmp_path):
     )
 
     inputs = AuditInputs(lakes_path=lakes_path, country_gdf=country_gdf)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     lakes = result.vectors["lakes"]
     assert lakes.found is True
@@ -331,7 +339,7 @@ def test_run_audit_phase_protected_areas_iucn_breakdown(tmp_path):
     ).to_file(protected_path, driver="GeoJSON")
 
     inputs = AuditInputs(protected_path=protected_path, country_gdf=country_gdf)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     protected = result.vectors["protected"]
     assert protected.found is True
@@ -363,7 +371,7 @@ def test_run_audit_phase_borders_and_admin1_are_not_clipped(tmp_path):
     )
 
     inputs = AuditInputs(borders_path=borders_path)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     borders = result.vectors["borders"]
     assert borders.found is True
@@ -390,7 +398,7 @@ def test_run_audit_phase_roads_is_clipped(tmp_path):
     )
 
     inputs = AuditInputs(roads_path=roads_path, country_gdf=country_gdf)
-    result = run_audit_phase(_context(tmp_path), inputs)
+    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
     roads = result.vectors["roads"]
     assert roads.found is True

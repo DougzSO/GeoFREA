@@ -65,7 +65,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from geofrea.core.config_loader import load_parameters, load_settings
+from geofrea.core.config_loader import load_audit_config, load_parameters, load_settings
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
@@ -80,7 +80,7 @@ from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 from geofrea.data_quality_audit.audit import run_audit_phase
-from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
+from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
 from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_inputs
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
@@ -104,6 +104,7 @@ load_dotenv(REPO_ROOT / ".env", override=False)
 
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
+AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
@@ -162,17 +163,21 @@ def _build_audit_inputs(context: PhaseContext) -> AuditInputs:
     return acquisition_result_to_audit_inputs(acquisition_result.output)
 
 
-_AUDIT_REPORT_SCHEMA_VERSION = "2.0"  # bumped 2026-09-21: VectorLayerSummary.status
-# gained read_error/processing_error, replacing the single "error" value
-# (see docs/phases/core.md, docs/phases/F1b_data_quality_audit.md) — an
-# old "1.0" audit_report entry cannot be reconstructed into the current
-# AuditResult schema, so a stale one must be rejected on resume
-# (StaleManifestEntryError via produces_schema_versions below), not
-# silently misvalidated.
+_AUDIT_REPORT_SCHEMA_VERSION = "2.1"  # bumped 2026-09-22: AuditResult gained
+# the required `not_audited` field (M-F1b-01, config/audit.yaml — see
+# docs/phases/F1b_data_quality_audit.md D-F1b-002). Previous bump,
+# 2026-09-21: VectorLayerSummary.status gained read_error/
+# processing_error, replacing the single "error" value (see
+# docs/phases/core.md). An old "2.0" (or "1.0") audit_report entry
+# cannot be reconstructed into the current AuditResult schema, so a
+# stale one must be rejected on resume (StaleManifestEntryError via
+# produces_schema_versions below), not silently misvalidated.
 
 
-def _audit_run(context: PhaseContext) -> AuditResult:
-    result = run_audit_phase(context, inputs=_build_audit_inputs(context))
+def _audit_run(context: PhaseContext, audit_config: AuditConfig) -> AuditResult:
+    result = run_audit_phase(
+        context, inputs=_build_audit_inputs(context), audit_config=audit_config
+    )
     _register_json_artifact(context, "audit_report", result, _AUDIT_REPORT_SCHEMA_VERSION)
     return result
 
@@ -281,7 +286,7 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
 
 
 def _build_phase_specs(
-    resolutions: ResolutionsConfig, criteria: CriteriaParams
+    resolutions: ResolutionsConfig, criteria: CriteriaParams, audit_config: AuditConfig
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -311,10 +316,15 @@ def _build_phase_specs(
         resolutions: settings.yaml's `geospatial.resolutions`, closed
             over by grid_alignment's run closure (2026-09-09, see
             docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
+        audit_config: config/audit.yaml, closed over by
+            data_quality_audit's run closure (M-F1b-01).
 
     Returns:
         The registered PhaseSpecs.
     """
+
+    def data_quality_audit_run(context: PhaseContext) -> AuditResult:
+        return _audit_run(context, audit_config)
 
     def grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
         result = run_grid_alignment_phase(
@@ -342,7 +352,7 @@ def _build_phase_specs(
         PhaseSpec(
             name="data_quality_audit",
             output_model=AuditResult,
-            run=_audit_run,
+            run=data_quality_audit_run,
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"audit_report"}),
             produces_schema_versions={"audit_report": _AUDIT_REPORT_SCHEMA_VERSION},
@@ -380,6 +390,7 @@ def run_geofrea(
     target_phases: list[str],
     force_rerun: bool,
     resolutions: ResolutionsConfig,
+    audit_config: AuditConfig,
     run_id: str,
     dirty: bool,
 ) -> bool:
@@ -392,6 +403,8 @@ def run_geofrea(
         resolutions: settings.yaml's `geospatial.resolutions`, threaded
             through to grid_alignment's PhaseSpec (see
             _build_phase_specs()).
+        audit_config: config/audit.yaml, threaded through to
+            data_quality_audit's PhaseSpec (see _build_phase_specs()).
         run_id: This run's identifier (see
             geofrea.core.orchestrator.compute_run_id).
         dirty: Whether the working tree has uncommitted changes (see
@@ -423,7 +436,9 @@ def run_geofrea(
         dirty=dirty,
     )
 
-    results = orchestrator.run(_build_phase_specs(resolutions, parameters.criteria))
+    results = orchestrator.run(
+        _build_phase_specs(resolutions, parameters.criteria, audit_config)
+    )
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
         logger.error(
@@ -439,6 +454,7 @@ def run_geofrea(
 def main() -> int:
     settings = load_settings(SETTINGS_YAML)
     parameters = load_parameters(PARAMETERS_JSON)
+    audit_config = load_audit_config(AUDIT_YAML)
 
     countries = settings.run.countries or list(parameters.countries.keys())
     unknown = [c for c in countries if c not in parameters.countries]
@@ -463,6 +479,7 @@ def main() -> int:
             settings.run.target_phases,
             settings.run.force_rerun,
             settings.geospatial.resolutions,
+            audit_config,
             run_id,
             dirty,
         )

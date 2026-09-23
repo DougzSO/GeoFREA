@@ -16,6 +16,8 @@ optional here (falls back to a no-op iterator wrapper).
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import math
 import warnings
@@ -470,17 +472,85 @@ def inspect_raster(path: Path, country_gdf: gpd.GeoDataFrame | None = None) -> d
     return result
 
 
+def _land_cover_geom_fingerprint(country_geom) -> str:
+    """Short hash of the country polygon actually used to mask tiles.
+
+    Included in every per-tile cache key so a changed island-filtering
+    rule or a different country_gdf invalidates cached results instead
+    of silently reusing areas computed against a stale polygon.
+    """
+    return hashlib.sha256(country_geom.wkb).hexdigest()[:16]
+
+
+def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
+    """Cache key for one tile: name + mtime + size + the masking polygon's
+    fingerprint. Any of the three changing invalidates the cached entry —
+    this is a stronger check than the path-existence-only caching used
+    elsewhere in this phase (see OQ-026 for that caveat), deliberately,
+    since a per-tile cache surviving a stale mismatch silently would be
+    much harder to notice than a whole-file cache miss.
+    """
+    stat = tile.stat()
+    return f"{stat.st_mtime_ns}:{stat.st_size}:{geom_fingerprint}"
+
+
+def _load_land_cover_tile_cache(
+    cache_dir: Path, tile: Path, geom_fingerprint: str
+) -> dict[str, Any] | None:
+    cache_file = cache_dir / f"{tile.stem}.json"
+    if not cache_file.exists():
+        return None
+    try:
+        cached = json.loads(cache_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.warning("[land_cover] Failed to read tile cache %s: %s", cache_file, exc)
+        return None
+    if cached.get("cache_key") != _land_cover_tile_cache_key(tile, geom_fingerprint):
+        return None
+    return cached
+
+
+def _save_land_cover_tile_cache(
+    cache_dir: Path, tile: Path, geom_fingerprint: str, payload: dict[str, Any]
+) -> None:
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        payload_with_key = {
+            **payload,
+            "cache_key": _land_cover_tile_cache_key(tile, geom_fingerprint),
+        }
+        (cache_dir / f"{tile.stem}.json").write_text(
+            json.dumps(payload_with_key), encoding="utf-8"
+        )
+    except OSError as exc:
+        logger.warning("[land_cover] Failed to write tile cache for %s: %s", tile.name, exc)
+
+
 def inspect_land_cover_tiles(
-    tile_paths: list[Path], country_gdf: gpd.GeoDataFrame | None = None
+    tile_paths: list[Path],
+    country_gdf: gpd.GeoDataFrame | None = None,
+    cache_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Aggregate ESA WorldCover statistics across multiple tiles.
 
     Each tile is masked by the real country polygon; tiles with no
     overlap are skipped automatically.
 
+    Real incident, 2026-09-22: a BRA run was interrupted (computer
+    suspended) partway through this loop, near tile 60/112 — with no
+    per-tile persistence, that meant restarting the whole ~30-55 minute
+    scan from tile 1. `cache_dir`, when given, persists each processed
+    (non-skipped) tile's class-area contribution as its own small JSON
+    file, so an interrupted run resumes from where it left off instead
+    of from zero. Skipped tiles (no bbox overlap) are cheap and not
+    cached — only the per-window class-area computation is.
+
     Args:
         tile_paths: ESA WorldCover tile paths.
         country_gdf: Country polygon for masking (required for accuracy).
+        cache_dir: Directory to persist/read back per-tile results.
+            None (default) disables caching entirely — every tile is
+            recomputed, unchanged from before this cache existed.
 
     Returns:
         Dict matching geofrea.data_quality_audit.schemas.LandCoverInspection's fields.
@@ -499,6 +569,7 @@ def inspect_land_cover_tiles(
 
     country_geom = country_gdf.geometry.union_all()
     country_bounds = country_gdf.total_bounds
+    geom_fingerprint = _land_cover_geom_fingerprint(country_geom)
 
     pbar = tqdm(tile_paths, desc="   [land_cover] Analyzing", unit="tile", leave=False)
 
@@ -508,6 +579,19 @@ def inspect_land_cover_tiles(
         for tile in pbar:
             if hasattr(pbar, "set_postfix"):
                 pbar.set_postfix({"status": tile.name[-20:]})
+
+            if cache_dir is not None:
+                cached = _load_land_cover_tile_cache(cache_dir, tile, geom_fingerprint)
+                if cached is not None:
+                    crs_set.add(cached["crs"])
+                    res_set.add(cached["res"])
+                    tiles_used += 1
+                    for cls_str, area in cached["class_areas"].items():
+                        cls_int = int(cls_str)
+                        class_areas[cls_int] = class_areas.get(cls_int, 0.0) + area
+                        total_area += area
+                    continue
+
             try:
                 with rasterio.open(str(tile)) as src:
                     t_bounds = src.bounds
@@ -528,11 +612,14 @@ def inspect_land_cover_tiles(
                         tiles_skip += 1
                         continue
 
-                    crs_set.add(str(src.crs))
-                    res_set.add(round(abs(src.res[0]), 8))
+                    tile_crs = str(src.crs)
+                    tile_res = round(abs(src.res[0]), 8)
+                    crs_set.add(tile_crs)
+                    res_set.add(tile_res)
                     tiles_used += 1
 
                     row_areas_global = row_area_km2((src.height, src.width), src.transform)
+                    tile_class_areas: dict[int, float] = {}
 
                     step = 8192
                     for r in range(0, src.height, step):
@@ -571,10 +658,29 @@ def inspect_land_cover_tiles(
                                 cls_per_row = cls_mask.sum(axis=1)
                                 area = float((row_areas_win * cls_per_row).sum())
                                 cls_int = int(cls)
-                                class_areas[cls_int] = class_areas.get(cls_int, 0.0) + area
-                                total_area += area
+                                tile_class_areas[cls_int] = (
+                                    tile_class_areas.get(cls_int, 0.0) + area
+                                )
 
                     del row_areas_global
+
+                    for cls_int, area in tile_class_areas.items():
+                        class_areas[cls_int] = class_areas.get(cls_int, 0.0) + area
+                        total_area += area
+
+                    if cache_dir is not None:
+                        _save_land_cover_tile_cache(
+                            cache_dir,
+                            tile,
+                            geom_fingerprint,
+                            {
+                                "crs": tile_crs,
+                                "res": tile_res,
+                                "class_areas": {
+                                    str(k): v for k, v in tile_class_areas.items()
+                                },
+                            },
+                        )
 
             except Exception as exc:  # noqa: BLE001 — one bad tile must not abort the whole scan
                 errors.append(f"{tile.name}: {exc}")
@@ -650,19 +756,28 @@ def inspect_power_plants(plants_df: pd.DataFrame | None) -> dict[str, Any]:
 
 
 def diagnose_consistency(
-    raster_meta: dict[str, dict], expected_resolutions: dict[str, float], res_tolerance: float
-) -> list[str]:
+    raster_meta: dict[str, dict],
+    expected_resolutions: dict[str, float | None],
+    res_tolerance: float,
+) -> tuple[list[str], dict[str, str]]:
     """Check for divergent CRS and unexpected resolutions across layers.
 
     Args:
         raster_meta: Layer name -> inspect_raster() result.
-        expected_resolutions: Expected resolution in degrees per layer.
+        expected_resolutions: Expected resolution in degrees per layer
+            (M-F1b-01, from config/audit.yaml). A layer present in this
+            dict with value None has no configured expectation (a null
+            AuditLayerConfig entry) and is reported not_audited rather
+            than silently skipped.
         res_tolerance: Fractional tolerance for resolution comparison.
 
     Returns:
-        Alert strings describing consistency issues found.
+        (alerts, not_audited): alert strings describing consistency
+        issues found, and a layer-name -> reason map for layers with an
+        inspected raster but no configured expected resolution.
     """
-    alerts = []
+    alerts: list[str] = []
+    not_audited: dict[str, str] = {}
 
     crs_set = {
         m["crs"] for m in raster_meta.values() if m.get("crs") and not m.get("error")
@@ -673,8 +788,11 @@ def diagnose_consistency(
     for layer, meta in raster_meta.items():
         if meta.get("error") or not meta.get("resolution"):
             continue
-        expected = expected_resolutions.get(layer)
-        if not expected:
+        if layer not in expected_resolutions:
+            continue
+        expected = expected_resolutions[layer]
+        if expected is None:
+            not_audited[layer] = "no configured expected resolution (config/audit.yaml)"
             continue
         ratio = meta["resolution"] / expected
         if ratio < (1 - res_tolerance) or ratio > (1 + res_tolerance):
@@ -683,4 +801,4 @@ def diagnose_consistency(
                 f"(expected ~{expected:.6f}°, ratio={ratio:.1f}x)"
             )
 
-    return alerts
+    return alerts, not_audited

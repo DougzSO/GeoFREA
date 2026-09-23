@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 1.2.0 |
+| Version | 1.2.2 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-09-22 |
 | Owner | Douglas |
@@ -373,6 +373,7 @@ Definitions for one country and technology. `C` = candidate cells; futures `f = 
 | `config/countries.yaml` | Country-specific data mappings, A-05 |
 | `config/experiments.yaml` | Members, windows, uncertain parameters, sampler, seed, sample size, land variants, top-k, thresholds |
 | `config/settings.yaml` | Operational settings: run targeting, grid resolution, figures, memory, paths |
+| `config/audit.yaml` | data_quality_audit (F1b) diagnostic-gate configuration: expected native resolution, sanity range and unit per layer, each with a primary source or null with an open question (M-F1b-01) |
 
 ---
 
@@ -457,6 +458,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 1.2.2 | 2026-09-22 | Section 9 adds `config/audit.yaml` (data_quality_audit diagnostic-gate configuration, M-F1b-01). |
 | 1.2.0 | 2026-09-22 | GEAR removed as an active reference repository (A-11, S-08, S-09, M-F1-04, M-F1-05, M-F4-05 now cite CRAEI only); M-F1-01's local-database variable renamed to its current name, `GEOFREA_SHARED_RAW_DIR`; A-12 adds that the run environment is declared in `.env.example` and loaded at startup. |
 | 1.1.0 | 2026-09-21 | A-11 adds CRAEI as primary reference repository; A-08 adopts external data layout; M-F1-04, M-F1-05, M-F4-05 reference A-11. |
 | 1.0.0 | 2026-09-15 | Initial adoption. |

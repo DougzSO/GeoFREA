@@ -1,0 +1,77 @@
+# audit.yaml — data_quality_audit (F1b) diagnostic-gate configuration.
+#
+# Scope: M-F1b-01's "expected resolutions and sanity ranges are
+# configuration, not code". Every value here either carries a `source`
+# (a primary reference: literature, official product documentation, or
+# the native metadata of a file actually read from disk, with the read
+# date) or is `null` with an OQ ID in a comment — never a plausible
+# guess. See docs/phases/F1b_data_quality_audit.md action F7-2 for the
+# read-metadata evidence behind every sourced value below.
+#
+# These are diagnostic-gate defaults (M-F1b-02: audit reports, never
+# blocks) — they gate this phase's own alert text, never a downstream
+# calculation.
+
+resolution_tolerance: 0.5
+
+layers:
+  land_cover:
+    expected_resolution_deg: 0.00008333
+    source: "native metadata (GDAL transform) of ESA_WorldCover_10m_2020_v100 tiles, one tile each for BRA (N00W051) and PRT (N30W018), both agreeing at 1/12000 deg — read 2026-09-22"
+
+  solar:
+    expected_resolution_deg: 0.00833333
+    source: "native metadata (GDAL transform) of World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/PVOUT.tif — single global file shared by BRA and PRT, read 2026-09-22"
+    unit: "kWh/kWp/day"
+    sanity_range: [0.7, 6.8]
+    # sanity_range source: the file's own STATISTICS_MINIMUM/MAXIMUM
+    # GeoTIFF band tags (0.727 / 6.731), rounded outward to one decimal
+    # — read 2026-09-22. unit source: the file's own XML sidecar
+    # (PVOUT.tif.xml), gmd:abstract and gmd:RecordType both state
+    # "PVOUT ... in kWh/kWp" — read 2026-09-22. Confirms M-F1-02
+    # (kWh/kWp/day); the code's prior "kWh/m2/day" label was wrong, not
+    # METHODOLOGY.
+
+  elevation:
+    expected_resolution_deg: 0.005
+    source: "native metadata (GDAL transform) of Copernicus DEM 30m files BRA_elevation.tif and PRT_elevation.tif, both agreeing at 0.005 deg — read 2026-09-22"
+
+  slope:
+    expected_resolution_deg: null  # OQ-030 — not a file the audit can read today.
+    source: null
+    # slope is a derived product, not an original layer: GeoFREA
+    # derives it from the DEM inside grid_alignment
+    # (raster_alignment.derive_slope_from_dem(), 2026-09-11).
+    # AuditInputs.slope_path is always None at F1b time (see
+    # schemas.py's own docstring) — there is no slope file on disk yet
+    # for this phase to read a native resolution from. The
+    # database/raw/elevation/{Brazil,PRT}/*_slope.tif files that DO
+    # exist on disk are legacy leftovers, never wired into GeoFREA's
+    # AuditInputs (grep confirms no `slope_path` assignment anywhere in
+    # data_acquisition/), so they are not a legitimate source either.
+
+  wind:
+    wind-speed:
+      expected_resolution_deg: 0.0025
+      source: "native metadata (GDAL transform) of Global Wind Atlas BRA_wind_speed_100m.tif and PRT_wind_speed_100m.tif, both agreeing at 0.0025 deg — read 2026-09-22. Resolves the prior code/phase-record conflict (code: 0.0083 deg, unsourced; phase record: 0.0025 deg, unsourced) — see OQ history in docs/phases/F1b_data_quality_audit.md."
+    combined-Weibull-A:
+      expected_resolution_deg: null  # OQ-027 — not yet fetched (task F-1).
+      source: null
+    combined-Weibull-k:
+      expected_resolution_deg: null  # OQ-027 — not yet fetched (task F-1).
+      source: null
+    air-density:
+      expected_resolution_deg: null  # OQ-027 — not yet fetched (task F-1).
+      source: null
+
+  cmip6:
+    expected_resolution_deg: null  # OQ-028 — not yet acquired (task F-3).
+    source: null
+
+  era5_gust:
+    expected_resolution_deg: null  # OQ-029 — not yet acquired (task F-4).
+    source: null
+
+  gem_existing_plants:
+    expected_resolution_deg: null  # not yet acquired (task F-5); tabular, not a resolution layer.
+    source: null

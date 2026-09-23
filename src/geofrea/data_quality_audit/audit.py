@@ -2,9 +2,9 @@
 
 Ports geoworld_framework's DataAuditor.run() (see
 docs/architecture/data_quality_audit.md) into GeoFREA's orchestrator
-contract: run_audit_phase(context, inputs) -> AuditResult, a validated
-Pydantic model, instead of legacy's ad hoc dict. See DECISIONS.md
-2026-08-20 - orchestrator + data_quality_audit phase.
+contract: run_audit_phase(context, inputs, audit_config) -> AuditResult,
+a validated Pydantic model, instead of legacy's ad hoc dict. See
+DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit phase.
 
 Known simplifications vs. legacy (flagged here rather than silently
 carried over or silently fixed):
@@ -12,18 +12,20 @@ carried over or silently fixed):
     code only, with no name-lookup table (legacy accepted a name or code
     as CLI input and resolved it via ConfigLoader.get_country_by_name()).
     The audit report header uses country_code only.
-  - `expected_resolutions` / `res_tolerance` stay as named module
-    constants, not settings.yaml keys: legacy's own architecture notes
-    (docs/architecture/data_quality_audit.md sec c) classify these as
-    diagnostic-gate defaults, not scientific parameters — they gate only
-    this phase's own alert text, never a downstream calculation.
+
+Expected resolutions, sanity ranges and units (M-F1b-01) come from
+config/audit.yaml (AuditConfig), not from module constants — see
+docs/phases/F1b_data_quality_audit.md action F7-2. A layer whose
+config entry has no source is null there and reported `not_audited`,
+never defaulted.
 
 slope_threshold_deg is technology-specific (CountryParams.technologies.
 <tech>.slope_threshold_deg), not the legacy's single hardcoded 15.0°
 per-country fallback — see docs/DECISIONS.md 2026-08-20 -
 slope_threshold_deg moved to parameters.json. The slope-inactivity
 check therefore runs once per technology (biomass/solar/wind), not
-once per country.
+once per country. Unrelated to config/audit.yaml's `slope` entry,
+which gates the slope RASTER's resolution check, not this threshold.
 """
 
 from __future__ import annotations
@@ -42,7 +44,9 @@ from geofrea.data_quality_audit.raster_inspection import (
     timer,
 )
 from geofrea.data_quality_audit.schemas import (
+    AuditConfig,
     AuditInputs,
+    AuditLayerConfig,
     AuditResult,
     AuditSummary,
     LandCoverInspection,
@@ -57,26 +61,35 @@ from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
 
 logger = logging.getLogger("geofrea.data_quality_audit.audit")
 
-# Diagnostic-gate defaults — see module docstring. Not scientific
-# parameters, so not sourced from parameters.json/settings.yaml.
-_EXPECTED_RESOLUTIONS_DEG: dict[str, float] = {
-    "land_cover": 0.0001,
-    "solar": 0.0083,
-    "wind": 0.0083,
-    "elevation": 0.005,
-    "slope": 0.005,
-}
-_RESOLUTION_TOLERANCE = 0.5
-_SOLAR_PVOUT_SANITY_RANGE = (1.0, 10.0)  # kWh/m2/day
 _TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 
+# Layers with no AuditInputs field / fetch path at all today — M-F1b-01
+# requires the audit to cover every active layer, so these are reported
+# `not_audited` unconditionally rather than omitted. Task IDs match
+# docs/OPEN_QUESTIONS.md OQ-027 to OQ-029 and the acquisition tasks that
+# will populate them.
+_UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = (
+    "combined-Weibull-A",
+    "combined-Weibull-k",
+    "air-density",
+)
+_UNACQUIRED_LAYERS: dict[str, str] = {
+    "cmip6": "not yet acquired (task F-3)",
+    "era5_gust": "not yet acquired (task F-4)",
+    "gem_existing_plants": "not yet acquired (task F-5)",
+}
 
-def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
+
+def run_audit_phase(
+    context: PhaseContext, inputs: AuditInputs, audit_config: AuditConfig
+) -> AuditResult:
     """Audit raw country data before any processing.
 
     Args:
         context: Shared phase context (country_code, outputs_dir, ...).
         inputs: Already-resolved raster/vector/tabular inputs to inspect.
+        audit_config: config/audit.yaml, validated (M-F1b-01 expected
+            resolutions, sanity ranges and units).
 
     Returns:
         A validated AuditResult.
@@ -111,6 +124,8 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         "wind": inputs.wind_paths[0] if inputs.wind_paths else None,
     }
 
+    solar_cfg = audit_config.layers.get("solar")
+
     rasters: dict[str, dict] = {}
     for layer, path in raster_map.items():
         if path and Path(path).exists():
@@ -118,17 +133,18 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
                 meta = inspect_raster(Path(path), country_gdf=inputs.country_gdf)
                 rasters[layer] = meta
 
-                if layer == "solar":
+                if layer == "solar" and isinstance(solar_cfg, AuditLayerConfig):
                     solar_mean = meta.get("mean")
-                    lo, hi = _SOLAR_PVOUT_SANITY_RANGE
-                    if solar_mean is not None and not (lo < solar_mean < hi):
-                        msg = (
-                            f"PVOUT appears to be in incorrect units (mean "
-                            f"{solar_mean:.1f}). Expected: kWh/m2/day (~{lo} to {hi}). "
-                            f"Is the file in kWh/kWp/yr?"
-                        )
-                        logger.error("  %s", msg)
-                        alerts.append(msg)
+                    if solar_mean is not None and solar_cfg.sanity_range is not None:
+                        lo, hi = solar_cfg.sanity_range
+                        if not (lo < solar_mean < hi):
+                            unit = solar_cfg.unit or "unit not configured"
+                            msg = (
+                                f"PVOUT appears to be in incorrect units (mean "
+                                f"{solar_mean:.1f}). Expected: {unit} (~{lo} to {hi})."
+                            )
+                            logger.error("  %s", msg)
+                            alerts.append(msg)
         else:
             rasters[layer] = {"error": "File not found"}
             timings[layer] = 0.0
@@ -180,9 +196,15 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         timings["land_cover"] = 0.0
         logger.info("  [land_cover] SKIP enabled.")
     elif inputs.land_cover_tiles:
+        land_cover_cache_dir = (
+            context.outputs_dir / context.country_code / "data_quality_audit"
+            / "land_cover_tile_cache"
+        )
         with timer("land_cover", timings):
             land_cover = inspect_land_cover_tiles(
-                inputs.land_cover_tiles, country_gdf=inputs.country_gdf
+                inputs.land_cover_tiles,
+                country_gdf=inputs.country_gdf,
+                cache_dir=land_cover_cache_dir,
             )
     else:
         land_cover = {"error": "Tiles not found"}
@@ -197,7 +219,32 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         timings["power_plants"] = 0.0
 
     # ── Consistency diagnostics ─────────────────────────────────────
-    alerts.extend(diagnose_consistency(rasters, _EXPECTED_RESOLUTIONS_DEG, _RESOLUTION_TOLERANCE))
+    wind_cfg = audit_config.layers.get("wind", {})
+    wind_speed_cfg = wind_cfg.get("wind-speed") if isinstance(wind_cfg, dict) else None
+    expected_resolutions: dict[str, float | None] = {
+        layer: (cfg.expected_resolution_deg if isinstance(cfg, AuditLayerConfig) else None)
+        for layer, cfg in audit_config.layers.items()
+        if isinstance(cfg, AuditLayerConfig)
+    }
+    expected_resolutions["wind"] = (
+        wind_speed_cfg.expected_resolution_deg if wind_speed_cfg is not None else None
+    )
+
+    res_alerts, not_audited = diagnose_consistency(
+        rasters, expected_resolutions, audit_config.resolution_tolerance
+    )
+    alerts.extend(res_alerts)
+
+    # Layers with no fetch path at all today (M-F1b-01: audit covers
+    # every active layer, not just the ones already wired into
+    # AuditInputs) — reported unconditionally, never silently omitted.
+    for product in _UNACQUIRED_GWA_PRODUCTS:
+        product_cfg = wind_cfg.get(product) if isinstance(wind_cfg, dict) else None
+        reason = "not yet fetched (task F-1)"
+        if isinstance(product_cfg, AuditLayerConfig) and product_cfg.source:
+            reason = f"configured, but not yet fetched (task F-1): {product_cfg.source}"
+        not_audited[f"wind/{product}"] = reason
+    not_audited.update(_UNACQUIRED_LAYERS)
 
     # ── Slope threshold inactivity check — once per technology ────────
     # Each technology carries its own slope_threshold_deg (see module
@@ -228,7 +275,9 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
 
     # ── Assemble + validate ─────────────────────────────────────────
     n_wind = len(inputs.wind_paths)
-    summary = _build_summary(rasters, vectors, land_cover, power_plants, alerts, n_wind)
+    summary = _build_summary(
+        rasters, vectors, land_cover, power_plants, alerts, n_wind, not_audited
+    )
     elapsed_total = round((datetime.now(UTC) - started_at).total_seconds(), 1)
 
     result = AuditResult(
@@ -243,11 +292,12 @@ def run_audit_phase(context: PhaseContext, inputs: AuditInputs) -> AuditResult:
         summary=summary,
         timings=timings,
         skipped=skipped,
+        not_audited=not_audited,
         elapsed_total=elapsed_total,
         report_path=None,
     )
 
-    report_text = _format_report(result)
+    report_text = _format_report(result, audit_config)
     print(report_text)
     report_path = _save_report(report_text, context.country_code, started_at, context.outputs_dir)
     logger.info("Report saved: %s", report_path)
@@ -270,6 +320,7 @@ def _build_summary(
     power_plants: dict,
     alerts: list[str],
     n_wind: int,
+    not_audited: dict[str, str],
 ) -> AuditSummary:
     """Build a concise summary from the raw audit dicts.
 
@@ -327,10 +378,11 @@ def _build_summary(
         total_plants=pp.get("total_plants", 0),
         total_cap_mw=pp.get("total_capacity_mw", 0),
         n_alerts=len(alerts),
+        n_not_audited=len(not_audited),
     )
 
 
-def _format_report(result: AuditResult) -> str:
+def _format_report(result: AuditResult, audit_config: AuditConfig) -> str:
     """Format the full audit report as a human-readable text string."""
     lines: list[str] = []
     W = 64
@@ -478,6 +530,16 @@ def _format_report(result: AuditResult) -> str:
             lines.append(f"  [WARNING]  {alert}")
 
     blank()
+    sep("-")
+    lines.append("  NOT AUDITED (M-F1b-01: no configured expectation, never silently skipped)")
+    sep("-")
+    if not result.not_audited:
+        lines.append("  [OK] Every inspected layer has a configured expectation.")
+    else:
+        for layer, reason in sorted(result.not_audited.items()):
+            lines.append(f"  [NOT AUDITED] {layer}: {reason}")
+
+    blank()
     sep()
     lines.append("  SUMMARY")
     sep("-")
@@ -504,8 +566,14 @@ def _format_report(result: AuditResult) -> str:
     row("Land cover area", f"{s.lc_total_area_km2:,.0f} km²")
     row("LC classes", s.lc_classes)
 
+    solar_cfg = audit_config.layers.get("solar")
+    solar_unit = (
+        solar_cfg.unit
+        if isinstance(solar_cfg, AuditLayerConfig) and solar_cfg.unit
+        else "unit not configured"
+    )
     _RASTER_RANGE_LABELS = {
-        "solar": ("Solar PVOUT (kWh/m²/d)", "{0} – {1}"),
+        "solar": (f"Solar PVOUT ({solar_unit})", "{0} – {1}"),
         "elevation": ("Elevation (m)", "{0:.0f} – {1:.0f}"),
         "slope": ("Slope (°)", "{0:.1f} – {1:.1f}"),
         "population": ("Population (people/pixel)", "{0:.1f} – {1:.1f}"),
@@ -538,6 +606,7 @@ def _format_report(result: AuditResult) -> str:
     row("Power plants", s.total_plants)
     row("Installed capacity", f"{s.total_cap_mw:,.0f} MW")
     row("Alerts", s.n_alerts)
+    row("Not audited", s.n_not_audited)
 
     blank()
     lines.append("  TIME PER STEP")

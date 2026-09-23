@@ -219,27 +219,40 @@ def test_diagnose_consistency_flags_divergent_crs():
         "elevation": {"crs": "EPSG:3857", "resolution": 0.005, "error": None},
     }
 
-    alerts = diagnose_consistency(raster_meta, {}, 0.5)
+    alerts, not_audited = diagnose_consistency(raster_meta, {}, 0.5)
 
     assert any("DIVERGENT CRS" in a for a in alerts)
+    assert not_audited == {}
 
 
 @pytest.mark.unit
 def test_diagnose_consistency_flags_unexpected_resolution():
     raster_meta = {"solar": {"crs": "EPSG:4326", "resolution": 0.05, "error": None}}
 
-    alerts = diagnose_consistency(raster_meta, {"solar": 0.0083}, 0.5)
+    alerts, not_audited = diagnose_consistency(raster_meta, {"solar": 0.0083}, 0.5)
 
     assert any("UNEXPECTED RESOLUTION" in a for a in alerts)
+    assert not_audited == {}
 
 
 @pytest.mark.unit
 def test_diagnose_consistency_no_alerts_when_consistent():
     raster_meta = {"solar": {"crs": "EPSG:4326", "resolution": 0.0083, "error": None}}
 
-    alerts = diagnose_consistency(raster_meta, {"solar": 0.0083}, 0.5)
+    alerts, not_audited = diagnose_consistency(raster_meta, {"solar": 0.0083}, 0.5)
 
     assert alerts == []
+    assert not_audited == {}
+
+
+@pytest.mark.unit
+def test_diagnose_consistency_reports_not_audited_for_null_expectation():
+    raster_meta = {"slope": {"crs": "EPSG:4326", "resolution": 0.005, "error": None}}
+
+    alerts, not_audited = diagnose_consistency(raster_meta, {"slope": None}, 0.5)
+
+    assert alerts == []
+    assert "slope" in not_audited
 
 
 # ===========================================================================
@@ -344,6 +357,70 @@ def test_inspect_land_cover_tiles_aggregates_class_areas_across_tiles(tmp_path):
     assert result["class_stats"][10]["pct"] == pytest.approx(50.0, abs=1.0)
     assert result["class_stats"][40]["pct"] == pytest.approx(50.0, abs=1.0)
     assert result["total_area_km2"] > 0
+
+
+@pytest.mark.unit
+def test_inspect_land_cover_tiles_reuses_cached_tile_without_reopening_it(tmp_path, monkeypatch):
+    # Real incident, 2026-09-22: a BRA run was interrupted partway
+    # through 112 tiles with no per-tile persistence, forcing a full
+    # restart. cache_dir lets a resumed run skip tiles already scored —
+    # verified here by spying on rasterio.open, not just by the result.
+    tile = tmp_path / "tile.tif"
+    _write_raster(tile, np.full((_SIZE, _SIZE), 10, dtype=np.uint8))  # Tree cover
+    country_gdf = _covering_gdf()
+    cache_dir = tmp_path / "cache"
+
+    first = inspect_land_cover_tiles([tile], country_gdf=country_gdf, cache_dir=cache_dir)
+    assert first["tiles_used"] == 1
+    assert (cache_dir / f"{tile.stem}.json").exists()
+
+    opened: list[str] = []
+    real_open = rasterio.open
+
+    def _spy_open(path, *args, **kwargs):
+        opened.append(str(path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "geofrea.data_quality_audit.raster_inspection.rasterio.open", _spy_open
+    )
+
+    second = inspect_land_cover_tiles([tile], country_gdf=country_gdf, cache_dir=cache_dir)
+
+    assert opened == []  # the cached tile was never reopened
+    assert second["tiles_used"] == 1
+    assert second["errors"] == []
+    assert second["class_stats"] == first["class_stats"]
+
+
+@pytest.mark.unit
+def test_inspect_land_cover_tiles_invalidates_cache_when_tile_changes(tmp_path):
+    tile = tmp_path / "tile.tif"
+    _write_raster(tile, np.full((_SIZE, _SIZE), 10, dtype=np.uint8))  # Tree cover
+    country_gdf = _covering_gdf()
+    cache_dir = tmp_path / "cache"
+
+    inspect_land_cover_tiles([tile], country_gdf=country_gdf, cache_dir=cache_dir)
+
+    # Overwrite with different data and a fresh mtime — the cache entry
+    # keyed by the old mtime/size must not be reused.
+    _write_raster(tile, np.full((_SIZE, _SIZE), 40, dtype=np.uint8))  # Cropland
+
+    result = inspect_land_cover_tiles([tile], country_gdf=country_gdf, cache_dir=cache_dir)
+
+    assert result["class_stats"][40]["name"] == "Cropland"
+    assert 10 not in result["class_stats"]
+
+
+@pytest.mark.unit
+def test_inspect_land_cover_tiles_without_cache_dir_recomputes_every_time(tmp_path):
+    tile = tmp_path / "tile.tif"
+    _write_raster(tile, np.full((_SIZE, _SIZE), 10, dtype=np.uint8))
+
+    result = inspect_land_cover_tiles([tile], country_gdf=_covering_gdf())
+
+    assert result["tiles_used"] == 1
+    assert not (tmp_path / "cache").exists()
 
 
 @pytest.mark.unit

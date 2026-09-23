@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from geofrea.core.schemas import ParametersFile, SettingsFile
+from geofrea.data_quality_audit.schemas import AuditConfig
 
 
 class CountryMappingError(KeyError):
@@ -65,6 +66,23 @@ def load_settings(path: Path) -> SettingsFile:
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     return SettingsFile.model_validate(raw)
+
+
+def load_audit_config(path: Path) -> AuditConfig:
+    """Load and validate config/audit.yaml.
+
+    Args:
+        path: Path to an audit.yaml file.
+
+    Returns:
+        A validated AuditConfig model instance.
+
+    Raises:
+        pydantic.ValidationError: If the file's content doesn't match
+            the schema.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return AuditConfig.model_validate(raw)
 
 
 def load_countries(path: Path) -> dict[str, dict[str, str | None]]:

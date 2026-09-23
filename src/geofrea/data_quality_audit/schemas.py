@@ -22,6 +22,44 @@ from pydantic import BaseModel, ConfigDict, Field
 from geofrea.core.schemas import GeometryRepairSummary
 
 
+class AuditLayerConfig(BaseModel):
+    """One layer's diagnostic-gate expectations from config/audit.yaml (M-F1b-01).
+
+    `expected_resolution_deg` and `source` are both null together, never
+    one without the other — a value with no primary source is not
+    configuration, it's a guess (see CLAUDE.md, "A methodological value
+    without a documented primary source is never assumed"). A null pair
+    means the layer is reported `not_audited` for the resolution check
+    rather than silently skipped or defaulted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_resolution_deg: float | None = None
+    source: str | None = None
+    unit: str | None = None
+    sanity_range: tuple[float, float] | None = None
+
+
+class AuditConfig(BaseModel):
+    """Root schema for config/audit.yaml.
+
+    `layers` is keyed by the same layer names AuditResult.rasters uses
+    for simple layers (land_cover, solar, elevation, slope) plus
+    entries with no corresponding AuditInputs field yet — `wind` holds
+    a nested dict of GWA product name -> AuditLayerConfig (only
+    `wind-speed` has a fetched file today; the rest are OQ-pending), and
+    `cmip6`/`era5_gust`/`gem_existing_plants` are flat AuditLayerConfig
+    entries with no file to inspect yet at all, reported `not_audited`
+    unconditionally.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    resolution_tolerance: float
+    layers: dict[str, AuditLayerConfig | dict[str, AuditLayerConfig]]
+
+
 class AuditInputs(BaseModel):
     """Raw, already-resolved geodata paths/objects the audit phase inspects.
 
@@ -306,6 +344,7 @@ class AuditSummary(BaseModel):
     total_plants: int
     total_cap_mw: float
     n_alerts: int
+    n_not_audited: int
 
 
 class SlopeThresholdCheck(BaseModel):
@@ -366,6 +405,13 @@ class AuditResult(BaseModel):
         timings: Elapsed seconds per audit step.
         skipped: Step names that were explicitly skipped (e.g.
             "land_cover" when skip_land_cover=True).
+        not_audited: Layer name -> reason, for every layer whose
+            resolution expectation is null in config/audit.yaml (M-F1b-01:
+            never silently skipped, never falls back to a hardcoded
+            value). Distinct from `skipped` (an operator choice) and
+            from a raster reporting "File not found" (the file itself
+            is missing, independent of whether its expectation is
+            configured).
         elapsed_total: Total audit wall-clock time, in seconds.
         report_path: Path to the saved human-readable .txt report, or
             None if it could not be written.
@@ -384,5 +430,6 @@ class AuditResult(BaseModel):
     summary: AuditSummary
     timings: dict[str, float]
     skipped: list[str]
+    not_audited: dict[str, str]
     elapsed_total: float
     report_path: str | None = None

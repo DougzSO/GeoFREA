@@ -21,16 +21,17 @@ import pytest
 from shapely.geometry import Polygon
 
 import main
-from geofrea.core.config_loader import load_parameters
+from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.orchestrator import Orchestrator, PhaseContext, PhaseResult, PhaseSpec
 from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
-from geofrea.data_quality_audit.schemas import AuditInputs, AuditResult
+from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
 from geofrea.grid_alignment.adapter import GridAlignmentRequiresBordersError
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
+AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 
 
 def _country_params(country_code: str = "PRT"):
@@ -39,6 +40,10 @@ def _country_params(country_code: str = "PRT"):
 
 def _criteria():
     return load_parameters(PARAMETERS_JSON).criteria
+
+
+def _audit_config() -> AuditConfig:
+    return load_audit_config(AUDIT_YAML)
 
 
 def _context(tmp_path: Path, prior_results: dict, country_code: str = "PRT") -> PhaseContext:
@@ -79,7 +84,7 @@ def _acquisition_phase_result(layers: list[AcquiredLayer]) -> PhaseResult[Acquis
 
 @pytest.mark.unit
 def test_build_phase_specs_returns_all_phases_in_order():
-    specs = main._build_phase_specs(ResolutionsConfig(), _criteria())
+    specs = main._build_phase_specs(ResolutionsConfig(), _criteria(), _audit_config())
     assert [spec.name for spec in specs] == [
         "data_acquisition",
         "data_quality_audit",
@@ -155,7 +160,7 @@ def test_audit_run_reflects_data_acquisition_output_end_to_end(tmp_path):
         )
     }
 
-    result = main._audit_run(_context(tmp_path, prior_results=prior_results))
+    result = main._audit_run(_context(tmp_path, prior_results=prior_results), _audit_config())
 
     assert result.vectors["borders"].found is True
     assert result.vectors["borders"].n_features == 1
@@ -167,7 +172,7 @@ def test_audit_run_reflects_data_acquisition_output_end_to_end(tmp_path):
 
 @pytest.mark.unit
 def test_audit_run_with_no_prior_acquisition_matches_standalone_behavior(tmp_path):
-    result = main._audit_run(_context(tmp_path, prior_results={}))
+    result = main._audit_run(_context(tmp_path, prior_results={}), _audit_config())
     assert result.vectors["borders"].found is False
     assert result.rasters["elevation"].error == "File not found"
 
@@ -247,7 +252,7 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
         )
     }
 
-    specs = main._build_phase_specs(ResolutionsConfig(), _criteria())
+    specs = main._build_phase_specs(ResolutionsConfig(), _criteria(), _audit_config())
     grid_alignment_run = next(s.run for s in specs if s.name == "grid_alignment")
     result = grid_alignment_run(_context(tmp_path, prior_results=prior_results))
 
@@ -295,7 +300,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
     )
 
     real_grid_alignment_run = next(
-        s.run for s in main._build_phase_specs(ResolutionsConfig(), _criteria()) if s.name == "grid_alignment"
+        s.run for s in main._build_phase_specs(ResolutionsConfig(), _criteria(), _audit_config()) if s.name == "grid_alignment"
     )
     specs = [
         PhaseSpec(
@@ -340,7 +345,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
 
 @pytest.mark.unit
 def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypatch):
-    def _failing_specs(resolutions, criteria):
+    def _failing_specs(resolutions, criteria, audit_config):
         def run(context):
             raise ValueError("boom")
 
@@ -356,14 +361,14 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
 
     monkeypatch.setattr(main, "_build_phase_specs", _failing_specs)
 
-    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is False
 
 
 @pytest.mark.unit
 def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(tmp_path, monkeypatch):
-    def _specs(resolutions, criteria):
+    def _specs(resolutions, criteria, audit_config):
         def failing_run(context):
             raise ValueError("boom")
 
@@ -389,14 +394,14 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok = main.run_geofrea("PRT", ["b"], False, ResolutionsConfig(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["b"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is False
 
 
 @pytest.mark.unit
 def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, monkeypatch):
-    def _specs(resolutions, criteria):
+    def _specs(resolutions, criteria, audit_config):
         def run(context):
             return _acquisition_phase_result([]).output
 
@@ -412,6 +417,6 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), "run-id", False)
+    ok = main.run_geofrea("PRT", ["data_acquisition"], False, ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is True
