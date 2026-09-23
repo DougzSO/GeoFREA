@@ -378,6 +378,199 @@
           "tier": 3
         }
       }
+    },
+    "IND": {
+      "technologies": {
+        "solar": {
+          "capex_usd_per_kw": {
+            "value": 691,
+            "source": "IRENA (2025), Renewable power generation costs in 2024, Table S1 - global 2024 weighted-average total installed cost, solar PV",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "capex_usd_per_kw_source (task F1-3 item B): no India-specific solar PV TIC figure was found in the accessible IRENA 2025 Summary report (only a global 2024 figure and India's LCOE, USD 0.038/kWh, are given) — global weighted average used as a proxy, same convention already used for PRT/BRA's wind capex (also a global-average proxy, no country-specific figure found). Revisit if the full (non-summary) IRENA report or a country-specific benchmark tool run becomes available.",
+            "unit": "USD/kW",
+            "tier": 3
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0109,
+            "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 691 CAPEX (this entry's own capex_usd_per_kw)",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Same naming caveat as PRT/BRA's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component — IRENA's source does not split fixed/variable O&M for solar. Same global O&M numerator as PRT/BRA, divided by India's own (global-average-proxy) capex.",
+            "unit": "fraction/year",
+            "tier": 3
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Same as PRT/BRA: IRENA 2025 reports only a combined/total O&M figure for solar, not split into fixed+variable components. Structural placeholder for schema consistency.",
+            "unit": "USD/MWh",
+            "tier": null
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Solar PV (same global standard assumption used for PRT/BRA, not country-varying in this source)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
+          },
+          "discount_rate": {
+            "value": 0.0708,
+            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific solar PV figure (7.08%), per web research 2026-09-23 (task F1-3 item B) — IRENA's benchmark-tool country breakdown (used for PRT/BRA's 2025-vintage figures) was not directly accessible this session; this is a different (older) IRENA WACC exercise, not the same benchmark tool run.",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "VINTAGE CAVEAT: sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session (unlike PRT/BRA's figures, which were manually cross-checked against the benchmark tool). Weaker verification than PRT/BRA's discount_rate entries — revisit once the primary IRENA WACC dataset for India can be read directly.",
+            "unit": "fraction",
+            "tier": 3
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "note": "Same reasoning as PRT/BRA: discount_rate above is already the final technology-specific value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "unit": "fraction",
+            "tier": 2
+          },
+          "slope_threshold_deg": {
+            "value": 5.0,
+            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "note": "Same non-country-specific case-study value already used for PRT and BRA (no India-specific slope-suitability source found either, this session or before).",
+            "unit": "degrees",
+            "tier": 3
+          }
+        },
+        "wind": {
+          "capex_usd_per_kw": {
+            "value": 1041,
+            "source": "IRENA (2025), Renewable power generation costs in 2024, Table S1 - global 2024 weighted-average total installed cost, onshore wind",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "No India-specific onshore wind TIC figure was found in the accessible IRENA 2025 Summary report — global weighted average used as a proxy, same convention as PRT/BRA's wind capex (976, an older-vintage global figure from a prior session; this session's search found the newer 2024-actuals global figure, 1041, used here instead of re-using the older 976 since it is the more current global average available this session).",
+            "unit": "USD/kW",
+            "tier": 3
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.0072,
+            "source": "IRENA 2025, Fig 3.5 — SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 1041 wind CAPEX (this entry's own capex_usd_per_kw)",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "PROXY QUALITY: WEAK, same as BRA's field of the same name. No wind-specific O&M data for India was found in sources reviewed this session; borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in.",
+            "unit": "fraction/year",
+            "tier": 3
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": null,
+            "source": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "status": "pending_research",
+            "note": "Same as PRT/BRA: IRENA 2025 reports only a combined/total O&M figure for wind, not split into fixed+variable components. Structural placeholder for schema consistency.",
+            "unit": "USD/MWh",
+            "tier": null
+          },
+          "lifetime_years": {
+            "value": 25,
+            "source": "IRENA lifetime table, Onshore Wind (same global standard assumption used for PRT/BRA, not country-varying in this source)",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "unit": "years",
+            "tier": 2
+          },
+          "discount_rate": {
+            "value": 0.0838,
+            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific onshore wind figure (8.38%), per web research 2026-09-23 (task F1-3 item B) — same vintage caveat as this entry's solar discount_rate.",
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "VINTAGE CAVEAT: same as solar's discount_rate — sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session. Revisit once the primary IRENA WACC dataset for India can be read directly.",
+            "unit": "fraction",
+            "tier": 3
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "note": "Same reasoning as PRT/BRA/solar: discount_rate above is already the final technology-specific value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "unit": "fraction",
+            "tier": 2
+          },
+          "slope_threshold_deg": {
+            "value": 8.5,
+            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, same as PRT/BRA, per Douglas's instruction.",
+            "verified": true,
+            "verified_by": "Douglas",
+            "verified_date": "2026-09-23",
+            "verification_method": "manual_cross_check",
+            "note": "No wind-specific source found, same as PRT/BRA — reuses biomass's agricultural-slope proxy value directly. Revisit if a wind-specific source is found later.",
+            "unit": "degrees",
+            "tier": 3
+          }
+        }
+      },
+      "criteria": {
+        "yield_by_land_cover": {
+          "value": {
+            "10": 9.0,
+            "20": 3.0,
+            "30": 5.0,
+            "40": 8.0,
+            "90": 0.0,
+            "95": 0.0
+          },
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.IND.biomass.yield_by_land_cover (inherited verbatim)",
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
+          "unit": "dimensionless",
+          "tier": null
+        },
+        "terrain_slope_threshold_deg": {
+          "value": 12.0,
+          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.IND.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate).",
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Read directly from the legacy config this session, unlike PRT/BRA's same field — those were additionally confirmed pixel-exact against a legacy baseline terrain_score run (automated verification); no such India baseline run exists to check against, so this is manual_cross_check-quality confidence only (source value transcription), marked unverified/tier null pending an automated check if an India legacy baseline ever exists.",
+          "unit": "degrees",
+          "tier": null
+        }
+      }
     }
   },
   "criteria": {

@@ -37,7 +37,7 @@
       "module": "data_quality_audit",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1b_data_quality_audit.md",
-      "summary": "GWA products moved to real inspection, not not_audited. Weibull-A/k lack embedded CRS (found, reported, not fixed). IND blocked on parameters.json. CMIP6/ERA5/GEM still not_audited."
+      "summary": "GWA products moved to real inspection. Weibull-A/k CRS gap fixed (exact-grid match). IND parameters.json filled, F1b runs clean (0 alerts). CMIP6/ERA5/GEM still not_audited."
     },
     {
       "id": "F2a",
@@ -65,7 +65,7 @@
   "countries": {
     "BRA": {"F1": "ran_with_issues", "F1b": "ran_with_issues", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "PRT": {"F1": "ran_clean", "F1b": "ran_with_issues", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "IND": {"F1": "success", "F1b": "blocked_no_parameters", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
+    "IND": {"F1": "success", "F1b": "ran_clean", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
   "regression": {
     "workflow": ".github/workflows/regression.yml",

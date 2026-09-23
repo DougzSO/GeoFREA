@@ -593,19 +593,27 @@ def _file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
 
 
 def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
-    """Cache key for one tile: mtime + size + sha256 of the tile's own
-    bytes + the masking polygon's fingerprint. Any of the four changing
-    invalidates the cached entry. mtime/size alone (2026-09-22, this
-    cache's first version) are a metadata proxy, not a content check —
-    two files can share both while differing in content (e.g. a tile
-    silently re-downloaded or restored with the same size and a copied
-    timestamp). The sha256 (added 2026-09-23) closes that gap; mtime and
-    size stay in the key too as a cheap fast-reject before nothing here
-    actually needs them once sha256 is present — kept for continuity
-    with the first cache-file generation rather than to add safety.
+    """Cache key for one tile: sha256 of the tile's own bytes + the
+    masking polygon's fingerprint. Either changing invalidates the
+    cached entry; identical content always hits regardless of mtime.
+
+    Content-stable since 2026-09-23 (task F1-3 item C): the prior
+    version (2026-09-22 through earlier today) also concatenated
+    `stat.st_mtime_ns` and `stat.st_size` into this same string, so a
+    re-fetch of byte-identical content (same URL, same bytes) still
+    produced a different key — the whole string differs even though
+    the embedded sha256 alone would have matched, because
+    _load_land_cover_tile_cache() compares the two full strings, not
+    the sha256 in isolation. That is the real, observed cause of the
+    88%-of-runtime cache invalidation documented in
+    docs/phases/F1b_data_quality_audit.md's "BRA F1b total runtime"
+    entry: F1-2's acquisition rerun rewrote all 111 BRA tiles on disk
+    (new mtime each), invalidating every cache entry even where content
+    had not changed. Dropping mtime/size fixes that without weakening
+    correctness: content really changing still changes the sha256,
+    still misses.
     """
-    stat = tile.stat()
-    return f"{stat.st_mtime_ns}:{stat.st_size}:{_file_sha256(tile)}:{geom_fingerprint}"
+    return f"{_file_sha256(tile)}:{geom_fingerprint}"
 
 
 def _load_land_cover_tile_cache(

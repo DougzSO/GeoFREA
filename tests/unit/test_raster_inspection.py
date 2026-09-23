@@ -60,6 +60,24 @@ def _write_raster(path: Path, data: np.ndarray, nodata: float | None = None) -> 
         dst.write(data, 1)
 
 
+def _write_raster_no_crs(path: Path, data: np.ndarray, nodata: float | None = None) -> None:
+    """Like _write_raster, but with no CRS at all (e.g. combined-Weibull-A/k, D-F1b-005)."""
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=data.shape[0],
+        width=data.shape[1],
+        count=1,
+        dtype=data.dtype,
+        crs=None,
+        transform=transform,
+        nodata=nodata,
+    ) as dst:
+        dst.write(data, 1)
+
+
 def _covering_gdf() -> gpd.GeoDataFrame:
     """Polygon covering the full extent of the synthetic raster above."""
     west, north = _ORIGIN_LON, _ORIGIN_LAT
@@ -861,6 +879,51 @@ def test_inspect_raster_applies_declared_nodata_distinct_from_mask_fill(tmp_path
     assert result["error"] is None
     assert result["mean"] == pytest.approx(10.0)
     assert result["valid_pct"] < 100.0
+
+
+@pytest.mark.unit
+def test_inspect_raster_reports_missing_crs_error_with_no_reference_given(tmp_path):
+    # combined-Weibull-A/k ship with no embedded CRS at all (D-F1b-005) —
+    # reachable from inspect_raster() whenever country_gdf is given but
+    # assume_crs_from is not: _effective_crs() raises
+    # MissingCrsWithNoReferenceError, caught by inspect_raster()'s own
+    # broad except and surfaced as result["error"], never a silent
+    # default CRS.
+    data = np.ones((_SIZE, _SIZE), dtype=np.float32)
+    path = tmp_path / "no_crs.tif"
+    _write_raster_no_crs(path, data)
+
+    result = inspect_raster(path, country_gdf=_covering_gdf())
+
+    assert result["error"] is not None
+    assert "no embedded CRS" in result["error"]
+    assert "no reference file was given" in result["error"]
+
+
+@pytest.mark.unit
+def test_inspect_raster_reports_crs_assumption_mismatch_error(tmp_path):
+    # A reference file is given (assume_crs_from) but its grid does not
+    # match the CRS-less file exactly — assigning its CRS anyway would be
+    # an unverified guess, so inspect_raster() must fail loud instead
+    # (CrsAssumptionMismatchError), not silently borrow a mismatched CRS.
+    data = np.ones((_SIZE, _SIZE), dtype=np.float32)
+    path = tmp_path / "no_crs.tif"
+    _write_raster_no_crs(path, data)
+
+    reference_path = tmp_path / "reference.tif"
+    _write_raster_at(
+        reference_path,
+        data,
+        origin_lon=_ORIGIN_LON + 5.0,  # different grid entirely
+        origin_lat=_ORIGIN_LAT,
+        res=_RES,
+    )
+
+    result = inspect_raster(path, country_gdf=_covering_gdf(), assume_crs_from=reference_path)
+
+    assert result["error"] is not None
+    assert "does not confirm a matching grid" in result["error"]
+    assert "refusing to assume a CRS from it" in result["error"]
 
 
 @pytest.mark.unit

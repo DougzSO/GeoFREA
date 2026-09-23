@@ -58,7 +58,7 @@ def test_load_real_parameters_json_validates():
     """Criterion 2: the REAL config/parameters.json must validate as-is."""
     result = load_parameters(PARAMETERS_JSON)
     assert isinstance(result, ParametersFile)
-    assert set(result.countries.keys()) == {"PRT", "BRA"}
+    assert set(result.countries.keys()) == {"PRT", "BRA", "IND"}
 
 
 @pytest.mark.unit
