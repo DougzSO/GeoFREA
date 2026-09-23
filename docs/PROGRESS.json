@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "1.2.0",
-  "last_updated": "2026-09-22",
+  "methodology_version": "1.2.2",
+  "last_updated": "2026-09-23",
   "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -37,7 +37,7 @@
       "module": "data_quality_audit",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1b_data_quality_audit.md",
-      "summary": "Audit works; expected resolutions and sanity ranges must move to config; PVOUT unit label must read kWh/kWp/day."
+      "summary": "M-F1b-01 expectations moved to config/audit.yaml, sourced from native metadata; PVOUT unit fixed to kWh/kWp/day. GWA/CMIP6/ERA5/GEM report not_audited, not omitted. BRA/PRT rerun clean, 0 alerts. Land-cover tile cache added."
     },
     {
       "id": "F2a",
