@@ -45,13 +45,15 @@ class AuditConfig(BaseModel):
     """Root schema for config/audit.yaml.
 
     `layers` is keyed by the same layer names AuditResult.rasters uses
-    for simple layers (land_cover, solar, elevation, slope) plus
-    entries with no corresponding AuditInputs field yet — `wind` holds
-    a nested dict of GWA product name -> AuditLayerConfig (only
-    `wind-speed` has a fetched file today; the rest are OQ-pending), and
+    for simple layers (land_cover, solar, elevation) plus entries with
+    no corresponding AuditInputs field yet — `wind` holds a nested dict
+    of GWA product name -> AuditLayerConfig (only `wind-speed` has a
+    fetched file today; the rest are OQ-pending), and
     `cmip6`/`era5_gust`/`gem_existing_plants` are flat AuditLayerConfig
     entries with no file to inspect yet at all, reported `not_audited`
-    unconditionally.
+    unconditionally. No `slope` key: slope is not an F1b layer at all
+    (derived later, in grid_alignment) — see docs/phases/
+    F1b_data_quality_audit.md D-F1b-003.
     """
 
     model_config = ConfigDict(extra="forbid")

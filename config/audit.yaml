@@ -36,19 +36,15 @@ layers:
     expected_resolution_deg: 0.005
     source: "native metadata (GDAL transform) of Copernicus DEM 30m files BRA_elevation.tif and PRT_elevation.tif, both agreeing at 0.005 deg — read 2026-09-22"
 
-  slope:
-    expected_resolution_deg: null  # OQ-030 — not a file the audit can read today.
-    source: null
-    # slope is a derived product, not an original layer: GeoFREA
-    # derives it from the DEM inside grid_alignment
-    # (raster_alignment.derive_slope_from_dem(), 2026-09-11).
-    # AuditInputs.slope_path is always None at F1b time (see
-    # schemas.py's own docstring) — there is no slope file on disk yet
-    # for this phase to read a native resolution from. The
-    # database/raw/elevation/{Brazil,PRT}/*_slope.tif files that DO
-    # exist on disk are legacy leftovers, never wired into GeoFREA's
-    # AuditInputs (grep confirms no `slope_path` assignment anywhere in
-    # data_acquisition/), so they are not a legitimate source either.
+  # No `slope` entry (removed 2026-09-23, see docs/phases/
+  # F1b_data_quality_audit.md D-F1b-003, resolving OQ-030): slope is
+  # not an F1b layer at all — it does not exist until grid_alignment
+  # derives it from the DEM (raster_alignment.derive_slope_from_dem(),
+  # F2a). F1b never has a file to audit here, so carrying a permanently
+  # null entry for it misstated the audit as having an open question
+  # about slope's resolution, when the real fact is that F1b is the
+  # wrong phase to own that expectation at all. See docs/phases/
+  # F2a_grid_alignment.md Known issues for where it belongs instead.
 
   wind:
     wind-speed:

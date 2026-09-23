@@ -482,16 +482,29 @@ def _land_cover_geom_fingerprint(country_geom) -> str:
     return hashlib.sha256(country_geom.wkb).hexdigest()[:16]
 
 
+def _file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
+    """sha256 of a file's actual bytes, read in chunks (tiles run tens of MB)."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
-    """Cache key for one tile: name + mtime + size + the masking polygon's
-    fingerprint. Any of the three changing invalidates the cached entry —
-    this is a stronger check than the path-existence-only caching used
-    elsewhere in this phase (see OQ-026 for that caveat), deliberately,
-    since a per-tile cache surviving a stale mismatch silently would be
-    much harder to notice than a whole-file cache miss.
+    """Cache key for one tile: mtime + size + sha256 of the tile's own
+    bytes + the masking polygon's fingerprint. Any of the four changing
+    invalidates the cached entry. mtime/size alone (2026-09-22, this
+    cache's first version) are a metadata proxy, not a content check —
+    two files can share both while differing in content (e.g. a tile
+    silently re-downloaded or restored with the same size and a copied
+    timestamp). The sha256 (added 2026-09-23) closes that gap; mtime and
+    size stay in the key too as a cheap fast-reject before nothing here
+    actually needs them once sha256 is present — kept for continuity
+    with the first cache-file generation rather than to add safety.
     """
     stat = tile.stat()
-    return f"{stat.st_mtime_ns}:{stat.st_size}:{geom_fingerprint}"
+    return f"{stat.st_mtime_ns}:{stat.st_size}:{_file_sha256(tile)}:{geom_fingerprint}"
 
 
 def _load_land_cover_tile_cache(

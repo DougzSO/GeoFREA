@@ -24,8 +24,16 @@ slope_threshold_deg is technology-specific (CountryParams.technologies.
 per-country fallback — see docs/DECISIONS.md 2026-08-20 -
 slope_threshold_deg moved to parameters.json. The slope-inactivity
 check therefore runs once per technology (biomass/solar/wind), not
-once per country. Unrelated to config/audit.yaml's `slope` entry,
-which gates the slope RASTER's resolution check, not this threshold.
+once per country.
+
+config/audit.yaml has no `slope` entry (removed 2026-09-23, see
+docs/phases/F1b_data_quality_audit.md D-F1b-003): slope does not exist
+as a file at F1b time (it is derived from the DEM later, in
+grid_alignment), so F1b never has a resolution to audit for it. The
+raster_map entry below still reports it — always "File not found"
+today — which is a distinct, honest status, not the same as
+`not_audited` (a layer that DOES have an inspected file but no
+configured expectation).
 """
 
 from __future__ import annotations
