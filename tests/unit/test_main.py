@@ -461,12 +461,15 @@ def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
     monkeypatch.setattr(main, "outputs_dir", lambda: tmp_path)
 
-    # ZZZ (not a real ISO code): must be present in countries.yaml-style
-    # test fixtures but absent from the real config/parameters.json —
-    # IND no longer qualifies as of task F1-3 item B (now has a full
-    # countries.IND entry, see docs/phases/F1b_data_quality_audit.md
-    # D-F1b-007).
-    ok = main.run_geofrea("ZZZ", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
+    # QQQ (not a real ISO code, and not the ZZZ synthetic fixture, which
+    # gained a real config/parameters.json entry 2026-09-24 — see
+    # docs/phases/core.md D-core-018 — so it no longer qualifies as
+    # "absent from parameters.json" either): must be present in
+    # countries.yaml-style test fixtures but absent from the real
+    # config/parameters.json — IND no longer qualifies as of task F1-3
+    # item B (now has a full countries.IND entry, see docs/phases/
+    # F1b_data_quality_audit.md D-F1b-007).
+    ok = main.run_geofrea("QQQ", ["data_acquisition"], [], ResolutionsConfig(), _audit_config(), "run-id", False)
 
     assert ok is True
 

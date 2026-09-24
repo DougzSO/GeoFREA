@@ -54,12 +54,28 @@ class AuditConfig(BaseModel):
     unconditionally. No `slope` key: slope is not an F1b layer at all
     (derived later, in grid_alignment) — see docs/phases/
     F1b_data_quality_audit.md D-F1b-003.
+
+    Args:
+        country_overrides: Per-country replacement of `layers`' flat
+            (non-wind-nested) entries, keyed by ISO3/synthetic code then
+            by raster key (the same keys `expected_resolutions` in
+            `run_audit_phase()` uses: `land_cover`, `elevation`,
+            `population`, `solar`, `wind`, `weibull_a`, `weibull_k`,
+            `air_density`). `layers` above describes real, cross-country
+            source products (WorldPop is always ~1/1200 deg regardless of
+            country); a synthetic country's fixture rasters are generated
+            at whatever resolution its own generator script chose (A-06/
+            D-core-017/D-core-018) and need their own expectation so F1b
+            audits them properly instead of reporting every one of them
+            `not_audited`. Empty for every real country — only ZZZ uses
+            this today.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     resolution_tolerance: float
     layers: dict[str, AuditLayerConfig | dict[str, AuditLayerConfig]]
+    country_overrides: dict[str, dict[str, AuditLayerConfig]] = {}
 
 
 class AuditInputs(BaseModel):

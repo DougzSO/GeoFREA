@@ -500,7 +500,18 @@ def main() -> int:
     # settings.yaml's own comment — that default is about scope, not a
     # requirement every country must satisfy.
     countries_config = load_countries(COUNTRIES_YAML)
-    countries = settings.run.countries or list(parameters.countries.keys())
+    # A synthetic country (countries.yaml's synthetic_fixture_root, A-06/
+    # D-core-017/D-core-018/OQ-032 verdict) is a test fixture, never a
+    # thesis country — it must never enter the default "every country
+    # parameters.json has" expansion below, only an explicit
+    # settings.run.countries listing naming it (which a real run never
+    # does; only a test/CI job targeting the fixture itself would). This
+    # is the separation OQ-032's verdict requires enforced at the point
+    # where "every country" would otherwise silently include it.
+    default_countries = [
+        c for c in parameters.countries if not countries_config.get(c, {}).get("synthetic_fixture_root")
+    ]
+    countries = settings.run.countries or default_countries
     unknown = [c for c in countries if c not in countries_config]
     if unknown:
         logger.error(

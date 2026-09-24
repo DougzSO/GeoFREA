@@ -58,7 +58,9 @@ def test_load_real_parameters_json_validates():
     """Criterion 2: the REAL config/parameters.json must validate as-is."""
     result = load_parameters(PARAMETERS_JSON)
     assert isinstance(result, ParametersFile)
-    assert set(result.countries.keys()) == {"PRT", "BRA", "IND"}
+    # ZZZ (synthetic fixture, A-06/OQ-032) joined 2026-09-24 alongside the
+    # three real, in-scope countries -- see docs/phases/core.md D-core-018.
+    assert set(result.countries.keys()) == {"PRT", "BRA", "IND", "ZZZ"}
 
 
 @pytest.mark.unit

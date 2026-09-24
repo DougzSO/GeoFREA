@@ -272,6 +272,88 @@ def _raw_data_dir() -> Path | None:
         return None
 
 
+def _country_raw_root(country_code: str) -> Path | None:
+    """Resolve the raw-data root to search for one country's local-only layers.
+
+    Every real country's mapping in countries.yaml has no
+    `synthetic_fixture_root` key, so this is identical to `_raw_data_dir()`
+    (GEOFREA_SHARED_RAW_DIR) for BRA/PRT/IND/etc — unchanged behavior.
+    A synthetic country (A-06/D-core-017/OQ-032 verdict — playbook
+    COMMAND ADJ-3) declares `synthetic_fixture_root` instead: a path
+    relative to GEOFREA_DATA_DIR (never GEOFREA_SHARED_RAW_DIR, which
+    stays real-country-only and read-only) holding its generated fixture
+    tree (`scripts/generate_zzz_fixture.py`). This is the single place
+    that decides which root every one of resolve_elevation_path() /
+    resolve_population_path() / resolve_solar_path() / resolve_grid_path()
+    / resolve_land_cover_tiles() / resolve_roads_path() below searches —
+    none of those five functions' own path-construction logic changed.
+    """
+    config = _load_countries_config()
+    fixture_rel = config.get(country_code, {}).get("synthetic_fixture_root")
+    if fixture_rel is not None:
+        return paths.data_root() / fixture_rel
+    return _raw_data_dir()
+
+
+# layer_name -> path relative to a synthetic country's fixture root, for
+# the layers that have a real fetcher for every real country
+# (phase.py's _FETCHED_LAYER_HANDLERS) and therefore no local resolver of
+# their own to redirect via _country_raw_root() above. Consulted by
+# resolve_synthetic_fetched_layer() below, itself only invoked by
+# phase.py when the current country has a synthetic_fixture_root at all
+# — a real country's borders/admin1/wind/protected/lakes/rivers/
+# power_plants resolution is completely unaffected, still calling its
+# real fetcher exactly as before.
+_SYNTHETIC_FETCHED_LAYER_RELPATHS: dict[str, str] = {
+    "borders": "countries_borders/Synthetica/gadm41_ZZZ_0.shp",
+    "admin1": "countries_borders/Synthetica/gadm41_ZZZ_1.shp",
+    "protected": "protected_areas/wdpa_synthetic.gpkg",
+    "lakes": "hydrology/lakes/zzz_lakes.gpkg",
+    "rivers": "hydrology/rivers/zzz_rivers.gpkg",
+    "power_plants": "power_plants/zzz_power_plants.csv",
+    "wind": "wind/gwa/ZZZ_wind_speed_100m.tif",
+    "wind_speed_150m": "wind/gwa/ZZZ_wind_speed_150m.tif",
+    "wind_speed_200m": "wind/gwa/ZZZ_wind_speed_200m.tif",
+    "weibull_a_100m": "wind/gwa/ZZZ_combined_weibull_a_100m.tif",
+    "weibull_a_150m": "wind/gwa/ZZZ_combined_weibull_a_150m.tif",
+    "weibull_a_200m": "wind/gwa/ZZZ_combined_weibull_a_200m.tif",
+    "weibull_k_100m": "wind/gwa/ZZZ_combined_weibull_k_100m.tif",
+    "weibull_k_150m": "wind/gwa/ZZZ_combined_weibull_k_150m.tif",
+    "weibull_k_200m": "wind/gwa/ZZZ_combined_weibull_k_200m.tif",
+    "air_density_100m": "wind/gwa/ZZZ_air_density_100m.tif",
+    "air_density_150m": "wind/gwa/ZZZ_air_density_150m.tif",
+    "air_density_200m": "wind/gwa/ZZZ_air_density_200m.tif",
+}
+
+
+def resolve_synthetic_fetched_layer(country_code: str, layer_name: str) -> Path | None:
+    """Resolve a "fetched"-provenance layer locally for a synthetic country.
+
+    Returns None for every real country (no `synthetic_fixture_root` in
+    its countries.yaml mapping) and for any layer_name this fixture
+    doesn't cover — in both cases phase.py falls through to the real
+    fetcher exactly as before this function existed. Returns None (not
+    raise) if the fixture file is genuinely absent, same graceful
+    contract as every other resolver in this module.
+    """
+    config = _load_countries_config()
+    fixture_rel = config.get(country_code, {}).get("synthetic_fixture_root")
+    if fixture_rel is None:
+        return None
+
+    rel = _SYNTHETIC_FETCHED_LAYER_RELPATHS.get(layer_name)
+    if rel is None:
+        return None
+
+    path = paths.data_root() / fixture_rel / rel
+    if not path.exists():
+        logger.warning(
+            "Synthetic fixture layer '%s' not found for %s: %s", layer_name, country_code, path
+        )
+        return None
+    return path
+
+
 def resolve_elevation_path(country_code: str) -> Path | None:
     """Resolve the local Copernicus DEM elevation raster for one country.
 
@@ -291,7 +373,7 @@ def resolve_elevation_path(country_code: str) -> Path | None:
     """
     country_dir = _get_country_mapping(country_code, "elevation_dir")
 
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return None
 
@@ -316,7 +398,7 @@ def resolve_population_path(country_code: str) -> Path | None:
         GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely absent on
         disk (logged, not raised).
     """
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return None
 
@@ -353,7 +435,7 @@ def resolve_solar_path(country_code: str) -> Path | None:
         if GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely absent
         on disk (logged, not raised — same as resolve_elevation_path).
     """
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return None
 
@@ -382,7 +464,7 @@ def resolve_grid_path(country_code: str) -> Path | None:
         or None if GEOFREA_SHARED_RAW_DIR is unset or the file is genuinely
         absent on disk (logged, not raised).
     """
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return None
 
@@ -446,7 +528,7 @@ def resolve_land_cover_tiles(
     config = _load_countries_config()
     excluded = frozenset(config[country_code].get("excluded_land_cover_tiles") or [])
 
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return []
 
@@ -510,7 +592,7 @@ def resolve_roads_path(country_code: str) -> Path | None:
     region_dir = _get_country_mapping(country_code, "grip4_region_dir")
     region_file = _get_country_mapping(country_code, "grip4_region_file")
 
-    raw_data_dir = _raw_data_dir()
+    raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
         return None
 

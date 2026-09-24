@@ -88,3 +88,39 @@ layers:
   gem_existing_plants:
     expected_resolution_deg: null  # not yet acquired (task F-5); tabular, not a resolution layer.
     source: null
+
+# Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
+# ZZZ's fixture rasters are generated at whatever resolution
+# scripts/generate_zzz_fixture.py chose, not the real cross-country
+# source resolutions `layers` above describes -- confirmed by reading
+# the generator script itself (a fixture, not a "native metadata" read,
+# since there is no external product here to read metadata from).
+# Empty for every real country.
+country_overrides:
+  ZZZ:
+    land_cover:
+      expected_resolution_deg: 0.01
+      source: "scripts/generate_zzz_fixture.py -- fixture raster written at the 0.01 deg analysis-grid resolution directly, not a real ESA WorldCover tile."
+    elevation:
+      expected_resolution_deg: 0.01
+      source: "scripts/generate_zzz_fixture.py -- fixture DEM written at 0.01 deg (matches the analysis grid, unlike the real 0.005 deg Copernicus DEM) so its pixel count matches the fixture design's decision-cell math exactly."
+    population:
+      expected_resolution_deg: 0.01
+      source: "scripts/generate_zzz_fixture.py -- fixture population raster written at 0.01 deg for the same reason as elevation above."
+    solar:
+      expected_resolution_deg: 0.01
+      source: "scripts/generate_zzz_fixture.py -- fixture PVOUT raster written at 0.01 deg (not the real Global Solar Atlas 0.00833 deg)."
+      unit: "kWh/kWp/day"
+      sanity_range: [4.5, 4.5]  # uniform constant fixture value, see generate_zzz_fixture.py::gen_solar()
+    wind:
+      expected_resolution_deg: 0.0025
+      source: "scripts/generate_zzz_fixture.py -- fixture GWA-style rasters written at the real GWA convention resolution (0.0025 deg) even though the underlying values are synthetic constants."
+    weibull_a:
+      expected_resolution_deg: 0.0025
+      source: "scripts/generate_zzz_fixture.py -- same convention as wind above."
+    weibull_k:
+      expected_resolution_deg: 0.0025
+      source: "scripts/generate_zzz_fixture.py -- same convention as wind above."
+    air_density:
+      expected_resolution_deg: 0.0025
+      source: "scripts/generate_zzz_fixture.py -- same convention as wind above."

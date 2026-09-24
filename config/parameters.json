@@ -389,7 +389,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "capex_usd_per_kw_source (task F1-3 item B): no India-specific solar PV TIC figure was found in the accessible IRENA 2025 Summary report (only a global 2024 figure and India's LCOE, USD 0.038/kWh, are given) — global weighted average used as a proxy, same convention already used for PRT/BRA's wind capex (also a global-average proxy, no country-specific figure found). Revisit if the full (non-summary) IRENA report or a country-specific benchmark tool run becomes available.",
+            "note": "capex_usd_per_kw_source (task F1-3 item B): no India-specific solar PV TIC figure was found in the accessible IRENA 2025 Summary report (only a global 2024 figure and India's LCOE, USD 0.038/kWh, are given) \u2014 global weighted average used as a proxy, same convention already used for PRT/BRA's wind capex (also a global-average proxy, no country-specific figure found). Revisit if the full (non-summary) IRENA report or a country-specific benchmark tool run becomes available.",
             "unit": "USD/kW",
             "tier": 3
           },
@@ -400,7 +400,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Same naming caveat as PRT/BRA's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component — IRENA's source does not split fixed/variable O&M for solar. Same global O&M numerator as PRT/BRA, divided by India's own (global-average-proxy) capex.",
+            "note": "Same naming caveat as PRT/BRA's field of the same name: this is TOTAL O&M as a % of CAPEX, not a fixed-only component \u2014 IRENA's source does not split fixed/variable O&M for solar. Same global O&M numerator as PRT/BRA, divided by India's own (global-average-proxy) capex.",
             "unit": "fraction/year",
             "tier": 3
           },
@@ -428,12 +428,12 @@
           },
           "discount_rate": {
             "value": 0.0708,
-            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific solar PV figure (7.08%), per web research 2026-09-23 (task F1-3 item B) — IRENA's benchmark-tool country breakdown (used for PRT/BRA's 2025-vintage figures) was not directly accessible this session; this is a different (older) IRENA WACC exercise, not the same benchmark tool run.",
+            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific solar PV figure (7.08%), per web research 2026-09-23 (task F1-3 item B) \u2014 IRENA's benchmark-tool country breakdown (used for PRT/BRA's 2025-vintage figures) was not directly accessible this session; this is a different (older) IRENA WACC exercise, not the same benchmark tool run.",
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "VINTAGE CAVEAT: sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session (unlike PRT/BRA's figures, which were manually cross-checked against the benchmark tool). Weaker verification than PRT/BRA's discount_rate entries — revisit once the primary IRENA WACC dataset for India can be read directly.",
+            "note": "VINTAGE CAVEAT: sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session (unlike PRT/BRA's figures, which were manually cross-checked against the benchmark tool). Weaker verification than PRT/BRA's discount_rate entries \u2014 revisit once the primary IRENA WACC dataset for India can be read directly.",
             "unit": "fraction",
             "tier": 3
           },
@@ -468,13 +468,13 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "No India-specific onshore wind TIC figure was found in the accessible IRENA 2025 Summary report — global weighted average used as a proxy, same convention as PRT/BRA's wind capex (976, an older-vintage global figure from a prior session; this session's search found the newer 2024-actuals global figure, 1041, used here instead of re-using the older 976 since it is the more current global average available this session).",
+            "note": "No India-specific onshore wind TIC figure was found in the accessible IRENA 2025 Summary report \u2014 global weighted average used as a proxy, same convention as PRT/BRA's wind capex (976, an older-vintage global figure from a prior session; this session's search found the newer 2024-actuals global figure, 1041, used here instead of re-using the older 976 since it is the more current global average available this session).",
             "unit": "USD/kW",
             "tier": 3
           },
           "opex_fixed_pct_of_capex": {
             "value": 0.0072,
-            "source": "IRENA 2025, Fig 3.5 — SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 1041 wind CAPEX (this entry's own capex_usd_per_kw)",
+            "source": "IRENA 2025, Fig 3.5 \u2014 SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 1041 wind CAPEX (this entry's own capex_usd_per_kw)",
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -507,12 +507,12 @@
           },
           "discount_rate": {
             "value": 0.0838,
-            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific onshore wind figure (8.38%), per web research 2026-09-23 (task F1-3 item B) — same vintage caveat as this entry's solar discount_rate.",
+            "source": "IRENA cost-of-capital / WACC survey, 2023 vintage, India-specific onshore wind figure (8.38%), per web research 2026-09-23 (task F1-3 item B) \u2014 same vintage caveat as this entry's solar discount_rate.",
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "VINTAGE CAVEAT: same as solar's discount_rate — sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session. Revisit once the primary IRENA WACC dataset for India can be read directly.",
+            "note": "VINTAGE CAVEAT: same as solar's discount_rate \u2014 sourced from a secondary summary of IRENA's 2023 cost-of-capital survey, not read directly from IRENA's primary document this session. Revisit once the primary IRENA WACC dataset for India can be read directly.",
             "unit": "fraction",
             "tier": 3
           },
@@ -534,7 +534,7 @@
             "verified_by": "Douglas",
             "verified_date": "2026-09-23",
             "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found, same as PRT/BRA — reuses biomass's agricultural-slope proxy value directly. Revisit if a wind-specific source is found later.",
+            "note": "No wind-specific source found, same as PRT/BRA \u2014 reuses biomass's agricultural-slope proxy value directly. Revisit if a wind-specific source is found later.",
             "unit": "degrees",
             "tier": 3
           }
@@ -566,9 +566,246 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Read directly from the legacy config this session, unlike PRT/BRA's same field — those were additionally confirmed pixel-exact against a legacy baseline terrain_score run (automated verification); no such India baseline run exists to check against, so this is manual_cross_check-quality confidence only (source value transcription), marked unverified/tier null pending an automated check if an India legacy baseline ever exists.",
+          "note": "Read directly from the legacy config this session, unlike PRT/BRA's same field \u2014 those were additionally confirmed pixel-exact against a legacy baseline terrain_score run (automated verification); no such India baseline run exists to check against, so this is manual_cross_check-quality confidence only (source value transcription), marked unverified/tier null pending an automated check if an India legacy baseline ever exists.",
           "unit": "degrees",
           "tier": null
+        }
+      }
+    },
+    "ZZZ": {
+      "technologies": {
+        "solar": {
+          "capex_usd_per_kw": {
+            "value": 1000.0,
+            "unit": "USD/kW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round CAPEX chosen so the annualized fixed cost (CRF x CAPEX, see hand-check in docs/phases/core.md D-core-018) is a clean number, not a sourced cost estimate for any real technology or country.",
+            "status": null,
+            "synthetic": true
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.05,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 5% O&M, chosen for a hand-computable annualized fixed cost, not a sourced O&M figure.",
+            "status": null,
+            "synthetic": true
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": 0.0,
+            "unit": "USD/MWh",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: zero, so it drops out of any hand-computed cost check cleanly. Not a claim that variable O&M is zero for a real technology.",
+            "status": null,
+            "synthetic": true
+          },
+          "lifetime_years": {
+            "value": 20,
+            "unit": "years",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 20-year lifetime chosen so the capital recovery factor (CRF = r/(1-(1+r)^-n)) at discount_rate=5% is a clean, hand-computable number (CRF = 0.080243817).",
+            "status": null,
+            "synthetic": true
+          },
+          "discount_rate": {
+            "value": 0.05,
+            "unit": "fraction",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 5% discount rate, paired with lifetime_years for a hand-computable capital recovery factor.",
+            "status": null,
+            "synthetic": true
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "unit": "fraction",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: zero, so discount_rate above is already the final rate used in the hand-computed CRF.",
+            "status": null,
+            "synthetic": true
+          },
+          "slope_threshold_deg": {
+            "value": 5.0,
+            "unit": "degrees",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value only, matching the real cross-country CriteriaParams exclusion-gate numbers by convention (solar=5, wind=25) for readability -- NOT exercised by any known-split hand-check: data_quality_audit's slope-inactivity diagnostic (audit.py run_audit_phase(), the only reader of this field) always evaluates against rasters.get('slope', {}), which is permanently empty at F1b for every country (slope does not exist as an F1b-acquired raster -- see docs/phases/core.md 'No slope entry' -- so slope_max_obs is always None and this check is structurally inactive for ZZZ exactly as it is for BRA/PRT/IND).",
+            "status": null,
+            "synthetic": true
+          }
+        },
+        "wind": {
+          "capex_usd_per_kw": {
+            "value": 1000.0,
+            "unit": "USD/kW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round CAPEX chosen so the annualized fixed cost (CRF x CAPEX, see hand-check in docs/phases/core.md D-core-018) is a clean number, not a sourced cost estimate for any real technology or country.",
+            "status": null,
+            "synthetic": true
+          },
+          "opex_fixed_pct_of_capex": {
+            "value": 0.05,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 5% O&M, chosen for a hand-computable annualized fixed cost, not a sourced O&M figure.",
+            "status": null,
+            "synthetic": true
+          },
+          "opex_variable_usd_per_kwh": {
+            "value": 0.0,
+            "unit": "USD/MWh",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: zero, so it drops out of any hand-computed cost check cleanly. Not a claim that variable O&M is zero for a real technology.",
+            "status": null,
+            "synthetic": true
+          },
+          "lifetime_years": {
+            "value": 20,
+            "unit": "years",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 20-year lifetime chosen so the capital recovery factor (CRF = r/(1-(1+r)^-n)) at discount_rate=5% is a clean, hand-computable number (CRF = 0.080243817).",
+            "status": null,
+            "synthetic": true
+          },
+          "discount_rate": {
+            "value": 0.05,
+            "unit": "fraction",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 5% discount rate, paired with lifetime_years for a hand-computable capital recovery factor.",
+            "status": null,
+            "synthetic": true
+          },
+          "discount_rate_increment": {
+            "value": 0.0,
+            "unit": "fraction",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: zero, so discount_rate above is already the final rate used in the hand-computed CRF.",
+            "status": null,
+            "synthetic": true
+          },
+          "slope_threshold_deg": {
+            "value": 25.0,
+            "unit": "degrees",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value only, matching the real cross-country CriteriaParams exclusion-gate numbers by convention (solar=5, wind=25) for readability -- NOT exercised by any known-split hand-check: data_quality_audit's slope-inactivity diagnostic (audit.py run_audit_phase(), the only reader of this field) always evaluates against rasters.get('slope', {}), which is permanently empty at F1b for every country (slope does not exist as an F1b-acquired raster -- see docs/phases/core.md 'No slope entry' -- so slope_max_obs is always None and this check is structurally inactive for ZZZ exactly as it is for BRA/PRT/IND).",
+            "status": null,
+            "synthetic": true
+          }
+        }
+      },
+      "criteria": {
+        "yield_by_land_cover": {
+          "value": {
+            "10": 10.0,
+            "40": 20.0
+          },
+          "unit": "dimensionless",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test values, one per land_cover class the ZZZ fixture actually generates (class 10 = southern half, class 40 = northern half, 300 pixels each, scripts/generate_zzz_fixture.py) -- round numbers (10 and 20) chosen so a class-weighted computation is trivial to check by hand, not a real biomass yield estimate.",
+          "status": null,
+          "synthetic": true
+        },
+        "terrain_slope_threshold_deg": {
+          "value": 10.0,
+          "unit": "degrees",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value chosen against the fixture's own known DEM geometry: the elevation ramp (elevation(row,col)=10*col m, scripts/generate_zzz_fixture.py) has a uniform east-west gradient of 10 m per 0.01 deg pixel at every row (a linear ramp's central-difference gradient is the same everywhere), which at this fixture's latitude (~-4.9 deg, dx = 0.01 * 111.32km * cos(4.9deg) = 1109.13 m) gives a uniform slope_deg = degrees(atan(10/1109.13)) = 0.5166 deg for every pixel (raster_alignment.derive_slope_from_dem()'s formula). At threshold=10.0, F2b's terrain_score = clip(1 - slope/threshold, 0, 1) predicts a uniform 0.94834 (1 - 0.5166/10) across the whole ZZZ suitability raster -- see docs/phases/core.md D-core-018's hand-check table for the value actually observed.",
+          "status": null,
+          "synthetic": true
         }
       }
     }

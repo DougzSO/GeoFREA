@@ -271,6 +271,17 @@ def run_audit_phase(
             product_cfg.expected_resolution_deg if isinstance(product_cfg, AuditLayerConfig) else None
         )
 
+    # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
+    # a synthetic country's fixture rasters are generated at whatever
+    # resolution its own generator script chose, not the real cross-
+    # country source resolutions `layers` above describes — replace
+    # (not merge-per-field) each overridden raster key's expectation so
+    # F1b audits ZZZ properly instead of reporting it not_audited or
+    # flagging a spurious mismatch against a real product's resolution.
+    # Empty for every real country — a no-op there.
+    for raster_key, override_cfg in audit_config.country_overrides.get(context.country_code, {}).items():
+        expected_resolutions[raster_key] = override_cfg.expected_resolution_deg
+
     res_alerts, not_audited = diagnose_consistency(
         rasters, expected_resolutions, audit_config.resolution_tolerance
     )

@@ -123,6 +123,24 @@ def shared_raw() -> Path:
     return _ensure_shared_raw_env()
 
 
+def data_root() -> Path:
+    """Get GEOFREA_DATA_DIR itself (not one of its conventional subdirectories).
+
+    Used by data_acquisition/local_layers.py to resolve a synthetic
+    country's fixture root (`countries.yaml`'s `synthetic_fixture_root`,
+    A-06/D-core-017) under the writable data directory, distinct from
+    every other helper here which returns a fixed subdirectory
+    (`outputs/`, `interim/`, ...) of it.
+
+    Returns:
+        GEOFREA_DATA_DIR as an absolute Path.
+
+    Raises:
+        MissingPathEnvironmentError: If GEOFREA_DATA_DIR is not set.
+    """
+    return _ensure_data_env()
+
+
 def fetched_raw(source: str, scope: str) -> Path:
     """Get the directory for a fetcher's raw data.
 

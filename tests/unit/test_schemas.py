@@ -577,7 +577,9 @@ def test_real_parameters_json_criteria_block_validates():
     assert result.criteria.road_max_dist_km.value == 15.0
     assert result.criteria.road_max_dist_km.verified is True
     assert result.criteria.terrain_slope_weight.value + result.criteria.terrain_tri_weight.value == 1.0
-    assert set(result.countries) == {"PRT", "BRA", "IND"}
+    # ZZZ (synthetic fixture, A-06/OQ-032) joined 2026-09-24 -- see
+    # docs/phases/core.md D-core-018.
+    assert set(result.countries) == {"PRT", "BRA", "IND", "ZZZ"}
     assert result.countries["PRT"].criteria.yield_by_land_cover.value[20] == 3.0
     assert result.countries["BRA"].criteria.yield_by_land_cover.value[20] == 4.0
     assert result.countries["PRT"].criteria.terrain_slope_threshold_deg.value == 10.0

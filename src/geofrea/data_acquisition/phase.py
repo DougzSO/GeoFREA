@@ -101,6 +101,7 @@ from geofrea.data_acquisition.local_layers import (
     resolve_population_path,
     resolve_roads_path,
     resolve_solar_path,
+    resolve_synthetic_fetched_layer,
 )
 from geofrea.data_acquisition.schemas import (
     IMPLEMENTED_FETCH_LAYER_NAMES,
@@ -508,10 +509,20 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
         error_location: str | None = None
         error_message: str | None = None
         try:
-            # Disjoint by construction (asserted above at import time),
-            # so at most one of these two ever applies to a given
-            # layer_name.
-            if fetch_handler:
+            # A synthetic country (countries.yaml's synthetic_fixture_root,
+            # A-06/D-core-017/OQ-032 verdict, playbook COMMAND ADJ-3) takes
+            # priority over a real fetcher for a "fetched"-provenance
+            # layer — resolve_synthetic_fetched_layer() returns None for
+            # every real country (no such key) and for a layer name
+            # outside its fixture map, so this is a no-op for BRA/PRT/IND
+            # and every other real country. Disjoint by construction
+            # (asserted above at import time), so at most one of
+            # fetch_handler/local_handler ever applies to a given
+            # layer_name once the synthetic override doesn't.
+            synthetic_override = resolve_synthetic_fetched_layer(context.country_code, spec.layer_name)
+            if synthetic_override is not None:
+                path = synthetic_override
+            elif fetch_handler:
                 path = fetch_handler(context)
             elif local_handler:
                 path = local_handler(context.country_code)

@@ -117,6 +117,21 @@ class VerifiedValue(BaseModel, Generic[T]):
             reported range, not a directly reported single figure").
         status: Optional free-text status for values that are not yet
             resolved (e.g. "pending_research").
+        synthetic: True marks this value as a TEST value belonging to a
+            synthetic country fixture (METHODOLOGY A-06/V-08, OQ-032's
+            verdict, docs/phases/core.md D-core-017/D-core-018) — chosen
+            for what it exercises (e.g. a slope threshold picked so a
+            known number of a fixture DEM's pixels fall on each side),
+            never a real evidentiary claim, and never read into a thesis
+            output. U-07's sourcing rule ("a methodological value without
+            a documented primary source is never assumed") governs values
+            that enter a result; it does not govern a fixture, but the
+            two must never mix — enforced here by the validator below
+            (synthetic and a real tier are mutually exclusive) and by
+            tests/unit/test_synthetic_value_separation.py (no real
+            country's parameters.json entry may set this True; ZZZ's
+            entry must set it True on every VerifiedValue). Defaults
+            False, so every existing real-country value is unaffected.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -132,6 +147,7 @@ class VerifiedValue(BaseModel, Generic[T]):
     verification_method: VerificationMethod
     note: str | None = None
     status: str | None = None
+    synthetic: bool = False
 
     @model_validator(mode="after")
     def _value_within_range_when_set(self) -> VerifiedValue:
@@ -139,6 +155,23 @@ class VerifiedValue(BaseModel, Generic[T]):
         if self.range is not None and self.value is not None and (self.value < self.range.min or self.value > self.range.max):
             raise ValueError(
                 f"value ({self.value}) must be within range [{self.range.min}, {self.range.max}]."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _synthetic_never_carries_a_real_tier(self) -> VerifiedValue:
+        """A test value's tier slot is never a real evidence tier (U-07), and vice versa.
+
+        Enforces the mutual exclusion the fixture/sourced separation rule
+        depends on: `synthetic=True` marks this as a test value, so
+        `tier` (a real evidentiary claim of 1/2/3) must be None; a real
+        tier, in turn, may only appear on a non-synthetic value.
+        """
+        if self.synthetic and self.tier is not None:
+            raise ValueError(
+                "VerifiedValue: synthetic=True values must not carry a real "
+                "evidence tier (tier must be None) — a test value is never "
+                "tiered evidence, per METHODOLOGY U-07/A-06."
             )
         return self
 
