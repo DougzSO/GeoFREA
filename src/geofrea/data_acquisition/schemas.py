@@ -64,6 +64,19 @@ from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 # path/paths source-of-truth consolidation).
 MULTI_FILE_LAYER_NAMES: frozenset[str] = frozenset({"land_cover"})
 
+# Single source of truth for the chunk size every sha256 file-hash in
+# this package reads in (unified 2026-09-24, ADJ-7 — phase.py and
+# fetchers/gadm.py each defined their own, 1 MiB and 8 MiB
+# respectively, for the same operation). 8 MiB chosen: phase.py hashes
+# the multi-GB layers (BRA land_cover 6.2 GB, population 4.2 GB,
+# docs/phases/core.md D-core-016) where fewer, larger reads reduce
+# syscall overhead without a meaningful memory cost; gadm.py's zips are
+# small enough that either size performs the same. Does not change any
+# hash value — sha256 over a file's bytes is chunk-size-invariant,
+# confirmed by rehashing one file at both the old and new chunk size
+# and comparing (docs/_audit/2026-09_embedded_values.md, action 3).
+HASH_CHUNK_BYTES: int = 8 * 1024 * 1024
+
 # Single source of truth for AcquiredLayer.fetch_status (see that
 # field's docstring). Canonically this is "which layer_names does
 # phase.py's _FETCHED_LAYER_HANDLERS dispatch to a real fetcher" — but

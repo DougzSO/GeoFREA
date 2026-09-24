@@ -52,6 +52,7 @@ from geofrea.core import paths
 from geofrea.core.config_loader import load_countries
 from geofrea.core.http_retry import get_with_retry
 from geofrea.core.paths import MissingPathEnvironmentError
+from geofrea.data_acquisition.schemas import HASH_CHUNK_BYTES
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.gadm")
 
@@ -59,7 +60,10 @@ _GADM_URL_TEMPLATE = "https://geodata.ucdavis.edu/gadm/gadm4.1/shp/gadm41_{code}
 
 _NATURALEARTH_ISO_COLUMNS = ("iso_a3", "ISO_A3", "ADM0_A3")
 
-_HASH_CHUNK_SIZE = 8 * 1024 * 1024
+# Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single
+# source of truth as of 2026-09-24, ADJ-7 — this module previously
+# defined its own 8 MiB constant locally; unchanged value, just no
+# longer a second definition of it).
 
 # Lazy-loaded cache for countries.yaml, same pattern as local_layers.py.
 _COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
@@ -88,7 +92,7 @@ def _load_countries_config() -> dict[str, dict[str, str | None]]:
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as f:
-        while chunk := f.read(_HASH_CHUNK_SIZE):
+        while chunk := f.read(HASH_CHUNK_BYTES):
             digest.update(chunk)
     return digest.hexdigest()
 

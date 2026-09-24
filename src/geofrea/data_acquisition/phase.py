@@ -104,6 +104,7 @@ from geofrea.data_acquisition.local_layers import (
     resolve_synthetic_fetched_layer,
 )
 from geofrea.data_acquisition.schemas import (
+    HASH_CHUNK_BYTES,
     IMPLEMENTED_FETCH_LAYER_NAMES,
     MULTI_FILE_LAYER_NAMES,
     AcquiredLayer,
@@ -260,7 +261,10 @@ assert not set(_LOCAL_MULTI_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
 # per country" ceiling the verdict itself specified.
 _HASH_BUDGET_S = 60.0
 
-_HASH_CHUNK_BYTES = 1 << 20  # 1 MiB
+# Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single
+# source of truth as of 2026-09-24, ADJ-7 — this module previously
+# defined its own 1 MiB constant; see that constant's docstring for why
+# 8 MiB was chosen over it).
 
 
 def _sha256_file(path: Path) -> str:
@@ -268,7 +272,7 @@ def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as f:
         while True:
-            chunk = f.read(_HASH_CHUNK_BYTES)
+            chunk = f.read(HASH_CHUNK_BYTES)
             if not chunk:
                 break
             digest.update(chunk)

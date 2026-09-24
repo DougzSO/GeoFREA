@@ -47,10 +47,6 @@ solar:
     - road_cost_usd_per_km
     - gamma  # Temperature coefficient (1/K, negative)
 
-  # Technology-specific thresholds and parameters
-  # OQ-005: IEC class selection rule per cell (location-dependent or fixed)
-  iec_class_rule: null  # Pending OQ-005
-
 wind:
   # Resource layers for this technology
   # Weibull parameters at three hub heights (M-F2b-03, M-F5-03)
@@ -101,3 +97,12 @@ wind:
     PRT: null  # Pending OQ-019
     BRA: null
     IND: null
+
+  # Technology-specific thresholds and parameters
+  # IEC turbine class selection is a wind concept (M-F5-03: "Reference
+  # turbine power curve per IEC class, class chosen per cell by the
+  # rule in technologies.yaml"). Moved here from solar 2026-09-24
+  # (ADJ-7) — it was a placeholder under the wrong technology, never a
+  # real rule for either. Still a placeholder: no rule decided yet.
+  # OQ-005: IEC class selection rule per cell (location-dependent or fixed)
+  iec_class_rule: null  # Pending OQ-005
