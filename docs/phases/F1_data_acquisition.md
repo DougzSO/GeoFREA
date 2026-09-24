@@ -49,6 +49,34 @@ Requires: configuration. Produces: layer registry artifact (`acquisition_registr
 - **D-F1-013 — Seismic removed; GADM resolves local-first with checksum (F6-2, 2026-09-22).** Seismic hazard was excluded from scope by METHODOLOGY S-08 but still had a full end-to-end implementation (layer registry entry, alignment handler, `seismic_suitability` criterion, audit range check, config parameters) — removed entirely from `src/`, `tests/`, and `config/`, closing the M-F1-02 gap F6-1's audit found. GADM boundary resolution now checks `GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>/` first (`config/countries.yaml`'s new `gadm_dir`/`gadm_level0_sha256` fields), verifying the recorded sha256 before trusting a local hit; a mismatch raises `GadmChecksumMismatchError` rather than silently re-fetching (A-09). Only a missing local entry falls through to the pre-existing `GEOFREA_DATA_DIR` cache/network/NaturalEarth chain, closing M-F1-07.
 - **D-F1-014 — M-F1-03 implemented fresh; GWA registry now distinguishes 12 product/height entries (task F1-2, 2026-09-23).** `fetchers/wind.py::fetch_gwa_product()` generalizes `fetch_wind()`'s verified endpoint pattern to `combined-Weibull-A`, `combined-Weibull-k`, `air-density` at 100/150/200m (`GWA_PRODUCTS`/`GWA_HEIGHTS_M`), raising `GwaProductNotFoundError` on a missing product/height rather than returning `None` — a fetch failure fails that one layer only (existing per-layer isolation), never silently registers an absent layer (A-09). `phase.py` generates 11 new `_LayerSpec`/`_FETCHED_LAYER_HANDLERS` entries from the product x height matrix (`_GWA_EXTRA_LAYER_SPECS`), alongside the existing `wind` entry (= wind-speed@100m, contract unchanged — still the layer `grid_alignment`/`suitability_criteria` consume as the resource layer). Real run, all three countries: 12/12 GWA layers resolved, each with `source_sha256` populated (`_hash_layer_files()`, D-core-016). Volume added: BRA 4.68 GB, PRT 137 MB, IND 1.77 GB (6.53 GB new, 33 files; `raw/gwa/` total across all three now 7.06 GB). `data_quality_audit` wired to match: `AuditInputs` gained `weibull_a_path`/`weibull_k_path`/`air_density_path` (representative 100m file, same "inspect one file" precedent as `wind_paths`), `audit.py`'s `_UNACQUIRED_GWA_PRODUCTS` emptied (all 4 products now fetched) in favor of `_GWA_PRODUCT_RASTER_KEYS`, which routes them through the normal raster-inspection path instead of an unconditional `not_audited` entry.
 
+## Layer quantities and units (confirmed 2026-09-24, ADJ-1)
+
+Read-only cross-check, direct file/metadata reads (not re-derived from config) — full evidence and
+per-country statistics in `docs/_audit/2026-09_layer_quantities.md`.
+
+- **solar (PVOUT)**: kWh/kWp/day, confirmed via `PVOUT.tif.xml`'s own abstract text ("kWh/kWp") plus
+  masked per-country statistics (BRA/PRT/IND means 4.25-4.28) consistent with a specific-yield band,
+  not horizontal irradiation. Matches M-F1-02 and `config/audit.yaml`'s existing `solar.unit`.
+- **elevation**: metres, EPSG:4326, 0.005 deg — BRA -45.5 to 6757.4 m, PRT -1.6 to 1971.5 m, IND
+  -177.8 to 8479.0 m, all physically plausible for Copernicus DEM. Matches configured resolution.
+- **population**: **counts per pixel, confirmed 2026-09-24 (ADJ-2)** — decided by summation, not
+  inference: summing every valid pixel inside each country's real GADM polygon reproduces the
+  country's 2020 reference population within 0.4-2.9% for BRA/PRT/IND; reading the same values as
+  density instead undershoots by ~117-140x. Cross-checked: the 99.9th percentile converts to
+  6,354/15,682/18,725 persons/km2 for BRA/PRT/IND respectively under the counts reading — plausible
+  dense-urban values, nothing anomalous. Full evidence: `docs/_audit/2026-09_layer_quantities.md`
+  §8. `config/audit.yaml` now carries a `population` entry (resolution, unit, sanity range), absent
+  before this pass.
+- **wind-speed / Weibull-A / Weibull-k / air-density**: m/s, m/s, dimensionless, kg/m³ respectively
+  — all match M-F5-03's expectations; ranges physically plausible for BRA/PRT/IND at 100 m,
+  including IND's thin-air minimum reflecting Himalayan altitude.
+- **land_cover**: categorical ESA WorldCover 2020 legend; classes sampled ({0,10,20,30,40,50,60,80,90,95})
+  are all legend-valid, matching the class keys `config/parameters.json`'s `yield_by_land_cover`
+  tables already use. `excluded_classes[tech]` (M-F2b-01's E5) does not exist in configuration yet —
+  F2b is not built (OQ-015 open) — so no legend-vs-exclusion-set mismatch is checkable today.
+- **slope**: not an F1/F1b layer — confirmed no file exists to audit; derived later by
+  `grid_alignment` from the DEM (D-F1b-004).
+
 ## Known issues
 
 - **OQ-024 resolved (2026-09-23) — `AcquiredLayer` now carries `source_sha256`.** See `docs/phases/core.md` D-core-016 for the full verdict (per-file hash computed at resolve time, null-for-cost rule, `layer_registry` schema bump to `"1.1"`). Every layer resolved by this phase is covered, not only wind.

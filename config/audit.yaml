@@ -32,6 +32,23 @@ layers:
     # (kWh/kWp/day); the code's prior "kWh/m2/day" label was wrong, not
     # METHODOLOGY.
 
+  population:
+    expected_resolution_deg: 0.00083333
+    source: "native metadata (GDAL transform) of WorldPop bra_pop_2020.tif, prt_pop_2020.tif and ind_pop_2020.tif, all three agreeing at 1/1200 deg — read 2026-09-24. Absent from this file until this entry; see docs/phases/F1b_data_quality_audit.md Known issues for the prior gap."
+    unit: "count (people per pixel)"
+    sanity_range: [0, 3692]
+    # unit and sanity_range source: docs/_audit/2026-09_layer_quantities.md section 8
+    # (ADJ-2, 2026-09-24) — decided by summation, not inference. Summing every valid
+    # pixel inside each country's real GADM polygon reproduces the country's 2020
+    # reference population within 0.4-2.9% for BRA/PRT/IND (counts signature);
+    # reading the same values as density instead undershoots the reference by a
+    # factor of ~117-140x (the inverse-pixel-area signature the density hypothesis
+    # would need). sanity_range is the observed max across the three countries
+    # (3691.75, rounded outward), not a percentile bound — a single dense-urban
+    # pixel spike is a legitimate value (cross-checked at the 99.9th percentile
+    # against plausible urban density in persons/km2 for all three countries), not
+    # an anomaly this gate should flag.
+
   elevation:
     expected_resolution_deg: 0.005
     source: "native metadata (GDAL transform) of Copernicus DEM 30m files BRA_elevation.tif and PRT_elevation.tif, both agreeing at 0.005 deg — read 2026-09-22"
