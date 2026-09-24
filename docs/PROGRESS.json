@@ -23,14 +23,14 @@
       "module": "core",
       "status": "in_progress",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-04/A-05/A-07/A-08/A-09/A-06/U-05/Section-9 done. ZZZ fixture runs F1-F2b end to end, no monkeypatch/network (~12s); OQ-032 closed (D-core-018). Grid-nesting bug found (get_mainland_gdf UTM round-trip + unguarded floor/ceil) -- playbook task G-3 to fix. CountryParams requirement is per-phase (D-core-013)."
+      "summary": "A-01/A-02/A-03/A-05/A-06/A-09/A-12/U-05/U-07 done; A-04 and Section-9 partial (technologies.yaml/experiments.yaml have no loader); A-07 partial (rasters are tiled GTiff, not true COG); A-08 and A-13 fail (see core.md D-core-006, A-13 row); A-10/A-11 not_started. ZZZ fixture runs F1-F2b end to end, no monkeypatch/network (~12s); OQ-032 closed (D-core-018). Grid-nesting bug found (get_mainland_gdf UTM round-trip + unguarded floor/ceil) -- playbook task G-3 to fix. CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned."
     },
     {
       "id": "F1",
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-02/M-F1-03/M-F1-07 closed. M-F1-03: 12 GWA product/height entries, source_sha256 each, fresh (no CRAEI wind code exists). OQ-012, OQ-024, OQ-027 closed."
+      "summary": "M-F1-03/M-F1-07 closed; M-F1-02 still fails (biomass-only inputs -- criteria.biomass_smooth_sigma, land_suitability, yield_by_land_cover -- still present, out of scope). M-F1-03: 12 GWA product/height entries, source_sha256 each, fresh (no CRAEI wind code exists). A-05 now pass (countries.yaml-driven, no hardcoded dicts). OQ-012, OQ-024, OQ-027 closed."
     },
     {
       "id": "F1b",

@@ -43,6 +43,36 @@ Requires: `acquisition_registry`. Produces: `audit_report` (per-layer summaries,
 - **D-F1b-008 — `_effective_crs()`'s two error paths confirmed reachable and covered (task F1-3 item A, 2026-09-23).** Both `MissingCrsWithNoReferenceError` (`raster_inspection.py:238`) and `CrsAssumptionMismatchError` (`raster_inspection.py:250`) are reachable from the public call sites: `inspect_raster()` (`raster_inspection.py:500`, whenever `country_gdf` is given) and, through it, `audit.py`'s `raster_map` loop (`audit.py:165-169`, for every raster layer — `assume_crs_from` is only non-`None` for `weibull_a`/`weibull_k`). Both raises are caught by `inspect_raster()`'s own broad `except Exception` (`raster_inspection.py:569`) and surface as `result["error"]`, never propagate as a raw exception to `audit.py` — consistent with M-F1b-02 (reports, never blocks). Neither path had a test before this task; both do now: `tests/unit/test_raster_inspection.py::test_inspect_raster_reports_missing_crs_error_with_no_reference_given` (a CRS-less synthetic raster, no `assume_crs_from`) and `::test_inspect_raster_reports_crs_assumption_mismatch_error` (a CRS-less raster with an `assume_crs_from` reference on a deliberately different grid). No source code change was needed — only the tests.
 - **D-F1b-009 — land_cover tile-cache key made content-stable, not content-and-mtime (task F1-3 item C, 2026-09-23).** `_land_cover_tile_cache_key()` (`raster_inspection.py`) previously concatenated `stat.st_mtime_ns`, `stat.st_size`, the tile's sha256 and the masking-polygon fingerprint into one string, compared whole (`_load_land_cover_tile_cache`, exact string equality) — so a re-fetch of byte-identical content (same URL, same bytes, new mtime) still missed the cache, because the *whole string* differed even though the embedded sha256 alone would have matched. This is the confirmed mechanism behind the "BRA F1b total runtime" entry below: F1-2's acquisition rerun rewrote all 111 BRA tiles (new mtimes), invalidating every cache entry regardless of whether that tile's bytes had actually changed. Fixed by dropping mtime/size from the key (`f"{sha256}:{geom_fingerprint}"` only) — correctness is unchanged (content that really changes still changes the sha256, still misses); only the false-invalidation-on-identical-content case is fixed. All three existing cache tests (`reuses_cached_tile_without_reopening_it`, `invalidates_cache_when_tile_changes`, `without_cache_dir_recomputes_every_time`) still pass unmodified. Tile-cache JSON files live under `outputs/<country>/data_quality_audit/land_cover_tile_cache/` — covered by the repo-wide `outputs/` entry in `.gitignore`, not a gap.
 
+## Embedded-value sweep (ADJ-6, A-04/A-05/U-05, 2026-09-24)
+
+Scoped to `src/geofrea/data_quality_audit/` and `main.py`'s references to it. Full
+classification table: `docs/_audit/2026-09_embedded_values.md`.
+
+- **Moved: none** — same outcome and reason as `F1_data_acquisition.md`'s sweep entry.
+- **Named explicitly (already known from prior sessions), per the command's action 2:**
+  `audit.py:72` `_TECHNOLOGIES = ("solar", "wind")` — the hardcoded technology tuple this
+  module iterates for the per-technology slope-threshold-inactivity check
+  (`run_audit_phase()`, ~L313-329, `context.require_country_params(f"technologies.{tech_name}")`).
+  Confirmed this iterates *every technology the schema supports* (A-04's registry), not
+  *which technologies this run targets* (`settings.yaml`'s `run.technologies`) — the two are
+  semantically different, so this is not simply a duplicate of an already-loaded key; it
+  belongs in `config/technologies.yaml`'s top-level key list once that file has a loader.
+  **Does not move now** — action 4's loader spec (below) is the prerequisite; owned by
+  whichever milestone writes it (see `docs/phases/core.md`'s A-04/Section-9 rows and Known
+  issues, ADJ-5).
+- **Stayed, operational-setting candidates with no existing `settings.yaml` home (kind b, not
+  moved):** `raster_inspection.py::_CHUNK_ROWS = 4_000` (windowed-read row chunk size),
+  `raster_inspection.py::_WINDOWED_READ_MAX_BYTES = 1_500_000_000` (~1.5 GB memory-safety
+  ceiling before switching to windowed reads — conceptually related to A-10's
+  `memory.max_batch_gb`, but `settings.yaml` has no `memory` section yet since F6/F7 are
+  `not_started`).
+- **Stayed, implementation constants (grouped, not itemized):** ~10 module-level constants —
+  internal bookkeeping dicts (`_UNACQUIRED_LAYERS`, `_GWA_PRODUCT_RASTER_KEYS`,
+  `_RASTER_LAYERS_WITH_RANGE`), a defensive column-name list for WDPA's own inconsistent
+  `IUCN_CAT` field naming (`vector_inspection.py::_IUCN_CATEGORY_COLUMNS`), and a sentinel
+  default object (`_EMPTY_GEOMETRY_REPAIR_REPORT`) — none is a domain-science value or a
+  mapping with an existing config home.
+
 ## Known issues
 
 - `audit_report`'s artifact `schema_version` was bumped to `"2.1"` 2026-09-22 (main.py `_AUDIT_REPORT_SCHEMA_VERSION`) when `AuditResult` gained the required `not_audited` field (D-F1b-002) — a manifest entry recorded under `"2.0"` or earlier now correctly raises `StaleManifestEntryError` on resume instead of a raw Pydantic `ValidationError`.

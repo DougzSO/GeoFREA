@@ -11,14 +11,14 @@ Requires: configuration. Produces: layer registry artifact (`acquisition_registr
 
 | Item | Requirement | Current state | Status |
 |---|---|---|---|
-| M-F1-01 | Registry with provenance | Implemented for 14 legacy layers; `provenance` and computed `fetch_status` verified in `data_acquisition/schemas.py:AcquiredLayer` (fetch_status, lines 238-248) and `data_acquisition/phase.py:run_acquisition_phase` (`_LAYER_REGISTRY`, `_LOCAL_PATH_HANDLERS`, lines 255-387) | pass |
+| M-F1-01 | Registry with provenance | Implemented for 14 legacy layers; `provenance` and computed `fetch_status` verified in `data_acquisition/schemas.py::AcquiredLayer.fetch_status` and `data_acquisition/phase.py::run_acquisition_phase()`, `phase.py::_LAYER_REGISTRY`, `phase.py::_LOCAL_PATH_HANDLERS` (cited by function name, not line number, since the file has grown past two prior line-number citations already — see `docs/_audit/2026-09_conformance_check.md` action 2) | pass |
 | M-F1-02 | Active layer set | Seismic removed (F6-2, 2026-09-22): no `seismic`/`seismic_path` field remains in `_LAYER_REGISTRY`, `AuditInputs`, `GridAlignmentInputs`/`Result`, or `SuitabilityCriteriaInputs`; `criteria.seismic_percentile_low/high` removed from `config/parameters.json`. Biomass-only inputs still present (`CountryCriteriaParams.yield_by_land_cover`, `CriteriaParams.land_suitability`'s biomass column) — out of scope for this pass | fail |
 | M-F1-03 | GWA Weibull A/k, air density, wind speed at 100/150/200 m | Implemented 2026-09-23 (task F1-2): `fetchers/wind.py::fetch_gwa_product()` fetches all 4 products x 3 heights; 12 registry entries per country (`wind` = wind-speed@100m, unchanged, plus 11 new `wind_speed_150m`/`_200m`, `weibull_a/k_100/150/200m`, `air_density_100/150/200m`), each with its own `source_sha256` (D-core-016). Real run for BRA, PRT, IND: 12/12 layers resolved for all three, no failures. No CRAEI counterpart exists to adapt — CRAEI excludes wind power from its own scope entirely (its D04, L07 decisions), confirmed by inventory (F1-1, 2026-09-23: zero wind/GWA references anywhere in CRAEI) — every line here is fresh, no A-11 header; the project's first real A-11 adaptation moves to the CMIP6 work of M-F1-04 (task F-3). Finding: `combined-Weibull-A`/`combined-Weibull-k` GeoTIFFs carry no embedded CRS at all (confirmed via `rasterio`: `crs=None`, no GCPs, no tags, for both BRA and PRT) — unlike `wind-speed`/`air-density`, which both declare EPSG:4326. Same transform/grid as the other two products, so almost certainly WGS84 in practice, but not assumed: F1b's audit correctly reports both as `[MISSING] ... Must pass either crs or epsg.` (a genuine inspection failure, M-F1b-02 non-blocking) rather than silently treating them as fine. | pass |
 | M-F1-04 | CMIP6 monthly rsds/tas/sfcWind and daily tasmax/pr | Not present in GeoFREA (CRAEI has daily tasmax/pr/tas 2041-2070 only) | fail |
 | M-F1-05 | ERA5 gust | Not present in GeoFREA | fail |
 | M-F1-06 | GEM solar and wind trackers | Not present (GPPD power plants exist) | fail |
 | M-F1-07 | GADM local-first with checksum | Implemented (F6-2, 2026-09-22): `fetchers/gadm.py::_local_database_level0()` checks `GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>/gadm41_<ISO3>_0.shp` first (per `config/countries.yaml`'s new `gadm_dir`/`gadm_level0_sha256` fields), verifying sha256 before trusting it — no network call on a match. A mismatch raises `GadmChecksumMismatchError` (A-09 fail-loud), never a silent re-download. Only when the local database has no entry (or no recorded checksum) does it fall through to the pre-existing `GEOFREA_DATA_DIR` cache/network/NaturalEarth chain. `gadm_dir`/`gadm_level0_sha256` populated for BRA, PRT, IND (the three in-scope countries); other `countries.yaml` entries left null, matching that field's existing null convention. Tests: `tests/unit/test_fetchers_gadm.py::test_fetch_borders_local_database_hit_performs_no_network_call`, `::test_fetch_borders_local_database_checksum_mismatch_raises`, `::test_fetch_borders_local_database_absent_falls_back_and_fetches` | pass |
-| A-05 | Country mappings in config | Dicts in `local_layers.py` and `fetchers/hydrosheds.py` | fail |
+| A-05 | Country mappings in config | Corrected 2026-09-24 (ADJ-5): the prior "hardcoded dicts" evidence is stale — both `local_layers.py::_load_countries_config()` and `fetchers/hydrosheds.py::_get_hydrosheds_region()` load `config/countries.yaml` directly, with no hardcoded country dict remaining in either module (confirmed by reading both functions; `_COUNTRY_TO_REGION` survives only as a docstring reference explaining the design, never a live dict). Matches `docs/phases/core.md`'s A-05 row, which was already correct — this row was the one the code contradicted. | pass |
 
 ## Active implementation decisions
 
@@ -76,6 +76,49 @@ per-country statistics in `docs/_audit/2026-09_layer_quantities.md`.
   F2b is not built (OQ-015 open) — so no legend-vs-exclusion-set mismatch is checkable today.
 - **slope**: not an F1/F1b layer — confirmed no file exists to audit; derived later by
   `grid_alignment` from the DEM (D-F1b-004).
+
+## Embedded-value sweep (ADJ-6, A-04/A-05/U-05, 2026-09-24)
+
+Scoped to `src/geofrea/data_acquisition/` and `main.py`'s references to it, per the sweep's
+stated boundary — `src/geofrea/suitability_criteria/` and `src/geofrea/core/` are explicitly
+out of scope (owned by Stage H and not yet swept, respectively). Full classification table:
+`docs/_audit/2026-09_embedded_values.md`.
+
+- **Moved: none.** No embedded value in this module both (a) had an unambiguous kind-b/c
+  destination and (b) an existing, loaded config key to move into. Every candidate below
+  lacked one or the other.
+- **Stayed, operational-setting candidates with no existing `settings.yaml` home (kind b, not
+  moved):** per-request HTTP timeouts (`fetchers/gadm.py:211` 120s, `fetchers/hydrosheds.py:216`
+  300s, `:247` 180s, `fetchers/power_plants.py:74` 60s, `fetchers/protected_planet.py:128` 60s,
+  `fetchers/wind.py:126,180` 60s each); hashing budget (`phase.py::_HASH_BUDGET_S` 60s).
+  `settings.yaml` has no `network`/`hashing` section today; adding one and wiring these in is
+  future work, not owned by any milestone yet.
+  **Hash chunk size single-sourced 2026-09-24 (ADJ-7):** the two-row inconsistency this sweep
+  originally found (`phase.py::_HASH_CHUNK_BYTES` 1 MiB vs. `fetchers/gadm.py::_HASH_CHUNK_SIZE`
+  8 MiB, same operation, unreconciled) is now one constant,
+  `data_acquisition/schemas.py::HASH_CHUNK_BYTES = 8 MiB`, read by both call sites (`phase.py`'s
+  and `fetchers/gadm.py`'s own `_sha256_file()`). Does not change any hash value — sha256 is
+  chunk-size-invariant, confirmed by rehashing `config/parameters.json` at both the old (1 MiB)
+  and new (8 MiB) chunk size and comparing digests (identical). This is the same value that
+  moves into `settings.yaml`'s (not-yet-existing) hashing section once one is added — the
+  `docs/_audit/2026-09_embedded_values.md` table's two chunk-size rows collapse into the one
+  above when that happens, since there is now only one constant to move.
+- **Stayed, scientific/methodological value without a source (kind d → OQ):**
+  `local_layers.py::_MIN_OVERLAP_DEG2 = 1e-6` (deg², land-cover tile inclusion threshold) —
+  **OQ-033** opened (`docs/OPEN_QUESTIONS.md`).
+- **Stayed, country/technology mapping with no loader (kind c):** the technology tuple is in
+  `data_quality_audit` (see that record), not here — noted for completeness since A-05's own
+  country-mapping dicts in this module were the ADJ-3b correction (see A-05's conformance
+  row above), not a new embedded-value finding.
+- **Stayed, implementation constants (grouped, not itemized):** ~30 module-level constants
+  across `data_acquisition/` and its `fetchers/` submodule — external API endpoints/URL
+  templates, a pinned commit SHA (`fetchers/power_plants.py::PINNED_COMMIT_SHA`, reproducibility
+  per A-12), the GWA product-code vocabulary and its three hub heights
+  (`fetchers/wind.py::GWA_PRODUCTS`/`GWA_HEIGHTS_M`, already cited to M-F1-03 in their own
+  comments), format strings/regexes for filename parsing, and internal dispatch dicts
+  (`_FETCHED_LAYER_HANDLERS`, `_LOCAL_PATH_HANDLERS`, `_LAYER_REGISTRY`) whose single-source-
+  of-truth status is itself an active decision (D-F1-003) — correct location, no move
+  candidate.
 
 ## Known issues
 

@@ -23,9 +23,9 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
 | `road_suitability` | Cost-driver distance, no normalization | rework |
 | `solar_resource` | PVOUT passthrough in kWh/kWp/day | rework |
 | `wind_resource` | Weibull A/k and air density passthrough per height | rework |
-| `river_biomass`, `lc_biomass`, `biomass_resource` | Removed (S-02) | remove |
+| `river_biomass`, `lc_biomass`, `biomass_resource` | Removed (S-02), but see Known issues — regression test coverage for `lc_biomass`/`biomass_resource` has not actually been dropped | remove |
 | `seismic_suitability` | Removed (S-08) | remove |
-| Percentile normalization per country | Removed (M-F2b-04) | remove |
+| Percentile normalization per country | **Still executing today — status corrected 2026-09-24 (ADJ-5), see Known issues** | rework (owned by H-2) |
 
 ## Active implementation decisions
 
@@ -48,8 +48,10 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
   (`core/geodesy.py::wgs84_km_per_degree`, per M-F2a-02, not a flat degrees-to-km constant) before
   comparing against the threshold. This conversion is owned by H-3 (the same stage OQ-002 assigns
   `pop_density_max` consolidation to) — not implemented as part of this read-only pass.
-- Regression fixtures `regression-fixtures-v1` cover the 14 legacy criteria; only E1-E3 layers remain under V-01.
+- Regression fixtures `regression-fixtures-v1` cover the 14 legacy criteria; only E1-E3 layers remain under V-01. **Confirmed 2026-09-24 (ADJ-5): `tests/regression/test_suitability_criteria_regression.py` still parametrizes `lc_biomass` and `biomass_resource`** (both "Removed (S-02)" per the table above) alongside `grid_suitability`, `river_solar`, `river_wind`, `pop_suitability`, `terrain_score` (all "rework") — the removed-criteria row's status describes the intended end-state, not the current regression suite, which still exercises them. Owned by MS-3/MS-4's refreeze, same as the rest of this bullet.
 - Parameters retired in H-2 (tier: null): criteria.slope_threshold_deg_solar, criteria.slope_threshold_deg_wind, criteria.slope_threshold_deg_biomass, criteria.road_max_dist_km, criteria.river_max_dist_biomass_km, criteria.grid_max_dist_km, criteria.normalization_min_percentile, criteria.normalization_max_percentile, criteria.seismic_percentile_low, criteria.seismic_percentile_high, criteria.linear_proximity_percentile_low, criteria.linear_proximity_percentile_high, criteria.terrain_slope_weight, criteria.terrain_tri_weight, criteria.tri_threshold_m, criteria.proximity_decay_sigma_km, criteria.proximity_smooth_sigma_px, criteria.proximity_plants_neutral_score, criteria.biomass_smooth_sigma, criteria.solar_pvout_weight, criteria.renewable_fuel_labels, criteria.protected_as_exclusion, criteria.land_suitability, countries.BRA.criteria.yield_by_land_cover, countries.PRT.criteria.yield_by_land_cover.
+- **`BiomassParams` (`core/schemas.py::BiomassParams`) added to H-2's retirement list (2026-09-24, ADJ-5).** Biomass is out of scope (S-02) and no `parameters.json` country entry has a `biomass` key under `technologies` for BRA, PRT, or IND — but the Pydantic schema class itself was not previously named on H-2's list, only the `criteria.biomass`-adjacent config fields above. Kept today per `tests/unit/test_config_loader.py`'s own comment, "for backward compatibility (`criteria.biomass` still exists)" — that compatibility reason disappears once H-2 removes the `criteria.biomass`-family fields listed above, at which point the class validates nothing real and should go with them.
+- **Percentile normalization is still executing today, not removed — status corrected 2026-09-24 (ADJ-5).** `config/parameters.json` still carries `normalization_min_percentile`/`normalization_max_percentile` (on the H-2 retirement list above, not yet acted on). Direct evidence it is live: `docs/phases/core.md` D-core-018's ZZZ hand-check (2026-09-24) found `solar_resource`/`wind_resource` both reporting a degenerate uniform mean of exactly 0.500 — the documented signature of a min-max/percentile normalizer given a zero-variance input (ZZZ's PVOUT and wind-speed rasters are uniform constants by design), not of a physical-units passthrough as M-F2b-03/M-F2b-04 require. Owned by H-2, same as the rest of this list.
 - **PRT's current `suitability_criteria` output is provisional (2026-09-22).** Produced by an unrequested force_rerun cascade (see `docs/phases/core.md`'s decision on the FD4c/FD4d/FD5 pass), not a deliberate F2b conformance run; overwritten once Stage H lands.
 
 ## History
