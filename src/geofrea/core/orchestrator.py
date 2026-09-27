@@ -518,12 +518,18 @@ class Orchestrator:
             dependents. Each name must be in the transitive closure of
             target_phases over `requires` (validated in run(), a
             MissingProducerError otherwise). After a named phase
-            completes, every phase in its transitive `consumers`
-            closure that currently holds a "success" manifest entry is
-            marked "stale_upstream" instead of being re-executed here;
-            a later run that needs a "stale_upstream" phase recomputes
-            it automatically, whether or not it is named in that run's
-            rerun_phases.
+            completes, every phase transitively downstream of it that
+            currently holds a "success" manifest entry is marked
+            "stale_upstream" instead of being re-executed here — derived
+            from the manifest's own recorded lineage
+            (`_mark_manifest_consumers_stale()`: each phase's
+            `consumed_run_ids` keys against `self.manifest.artifacts`'
+            producing phase), not from whichever `phase_specs` subset
+            this particular call happens to receive, so the result does
+            not depend on the rerun and its consumer being in the same
+            `run()` invocation. A later run that needs a
+            "stale_upstream" phase recomputes it automatically, whether
+            or not it is named in that run's rerun_phases.
         run_id: This run's identifier (see compute_run_id).
         dirty: Whether the working tree has uncommitted changes under
             src/ or config/ (see compute_dirty).
@@ -629,6 +635,64 @@ class Orchestrator:
                     spec.name, key, recorded_run_id, spec.name, current_entry.run_id,
                 )
 
+    def _mark_manifest_consumers_stale(self, produced_keys: set[str], invalidating_phase: str) -> None:
+        """Mark every manifest phase transitively downstream of `produced_keys` stale_upstream.
+
+        Derives "who consumes what" entirely from data already persisted
+        in `self.manifest` — each phase's own `consumed_run_ids` (whose
+        *keys* are exactly the artifact keys that phase read when it last
+        succeeded, see the success branch below) and `self.manifest.
+        artifacts[key].phase` (who produces a given key) — rather than
+        from the `consumers` graph built from whatever `phase_specs` this
+        particular `run()` call happened to receive.
+
+        This closes the gap named in `docs/phases/core.md` D-core-012's
+        correction: a `phase_specs` list narrower than the full
+        registered set (a targeted single-phase rerun utility, for
+        instance — matching how reruns have actually happened in this
+        project) previously produced a `consumers` graph blind to
+        phases outside that list, silently leaving their "success"
+        entries unmarked even though the manifest on disk already knew
+        they consumed the now-stale artifact. Reading `self.manifest`
+        instead makes the result the same no matter which `phase_specs`
+        subset a given call was given, as long as the manifest itself
+        holds the phases' recorded lineage — which every phase that has
+        ever completed successfully does.
+
+        Args:
+            produced_keys: Artifact keys just (re)produced by
+                `invalidating_phase`'s fresh success.
+            invalidating_phase: Name of the phase whose rerun triggered
+                this marking (recorded as `invalidated_by`).
+        """
+        frontier = set(produced_keys)
+        already_marked: set[str] = set()
+        while frontier:
+            newly_stale: list[str] = []
+            for name, entry in self.manifest.phases.items():
+                if name == invalidating_phase or name in already_marked:
+                    continue
+                if entry.status != "success":
+                    continue
+                if frontier & set(entry.consumed_run_ids.keys()):
+                    newly_stale.append(name)
+            if not newly_stale:
+                break
+            next_frontier: set[str] = set()
+            for name in newly_stale:
+                already_marked.add(name)
+                self.manifest.phases[name] = self.manifest.phases[name].model_copy(
+                    update={
+                        "status": "stale_upstream",
+                        "invalidated_by": invalidating_phase,
+                        "invalidated_in_run": self.run_id,
+                    }
+                )
+                next_frontier |= {
+                    key for key, art in self.manifest.artifacts.items() if art.phase == name
+                }
+            frontier = next_frontier
+
     def _verify_artifact_integrity(self, key: str) -> None:
         entry = self.manifest.artifacts.get(key)
         if entry is None:
@@ -671,10 +735,6 @@ class Orchestrator:
         deps: dict[str, set[str]] = {
             spec.name: {producer_of[key] for key in spec.requires} for spec in ordered
         }
-        consumers: dict[str, set[str]] = {spec.name: set() for spec in ordered}
-        for name, dep_names in deps.items():
-            for dep_name in dep_names:
-                consumers[dep_name].add(name)
 
         unknown_targets = [name for name in self.target_phases if name not in by_name]
         if unknown_targets:
@@ -885,16 +945,7 @@ class Orchestrator:
             # this phase's completion — its own entry and its dependents'
             # staleness — has been made. See docs/phases/core.md's
             # rerun_phases decision for the atomicity statement.
-            for consumer_name in _transitive_closure({spec.name}, consumers) - {spec.name}:
-                consumer_entry = self.manifest.phases.get(consumer_name)
-                if consumer_entry is not None and consumer_entry.status == "success":
-                    self.manifest.phases[consumer_name] = consumer_entry.model_copy(
-                        update={
-                            "status": "stale_upstream",
-                            "invalidated_by": spec.name,
-                            "invalidated_in_run": self.run_id,
-                        }
-                    )
+            self._mark_manifest_consumers_stale(set(new_artifacts.keys()), spec.name)
 
             self._write_manifest()
             logger.info("Phase '%s' completed.", spec.name)

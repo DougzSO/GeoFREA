@@ -482,6 +482,112 @@ def test_phase_whose_upstream_is_untouched_still_resumes(tmp_path):
     assert results["b"].status == "success"
 
 
+# ─── manifest-derived invalidation (F2-5 Part B) ──────────────────────────
+#
+# These exercise Orchestrator.run() being called with a NARROWER
+# phase_specs list on the rerun invocation than on the invocation that
+# first produced the consumer's "success" entry — the scenario a
+# targeted single-phase rerun utility produces, and how reruns in this
+# project have actually happened (docs/phases/core.md D-core-012's
+# correction). Before _mark_manifest_consumers_stale() (derived from
+# self.manifest.phases[*].consumed_run_ids / self.manifest.artifacts,
+# never from this call's own phase_specs argument), passing only [a] to
+# the rerun's run() left "b" silently unmarked, because the in-memory
+# `consumers` graph the old code built came from that call's own
+# phase_specs list and had never heard of "b".
+
+
+@pytest.mark.unit
+def test_rerun_alone_marks_consumer_stale_even_with_a_narrower_phase_specs_list(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+    assert first.manifest.phases["b"].status == "success"
+
+    # The rerun invocation only knows about "a" — as a targeted
+    # single-phase rerun script would, without reconstructing "b"'s
+    # PhaseSpec at all.
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([a])
+
+    assert second.manifest.phases["b"].status == "stale_upstream"
+    assert second.manifest.phases["b"].invalidated_by == "a"
+    assert second.manifest.phases["b"].invalidated_in_run == second.run_id
+
+
+@pytest.mark.unit
+def test_consumer_marked_stale_by_a_narrow_rerun_is_recomputed_when_next_needed(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([a])
+    assert second.manifest.phases["b"].status == "stale_upstream"
+
+    call_log.clear()
+    third = _orchestrator(tmp_path, ["b"])
+    results = third.run([a, b])
+
+    assert call_log == ["b"]
+    assert results["b"].status == "success"
+    assert third.manifest.phases["b"].status == "success"
+
+
+@pytest.mark.unit
+def test_consumer_whose_upstream_did_not_rerun_still_resumes_with_narrow_phase_specs(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+
+    # A later invocation that only resumes "a" (no rerun_phases at all)
+    # must not disturb "b", even though it never mentions "b"'s spec.
+    call_log.clear()
+    second = _orchestrator(tmp_path, ["a"])
+    second.run([a])
+
+    assert call_log == []
+    assert second.manifest.phases["a"].status == "success"
+    assert second.manifest.phases["b"].status == "success"
+
+
+@pytest.mark.unit
+def test_stale_marking_survives_a_crash_between_phases(tmp_path):
+    """The invalidation is persisted by the SAME manifest write that
+    records the rerun phase's own success (see _mark_manifest_consumers_
+    stale()'s call site, before the single _write_manifest() call).
+    Simulated crash: nothing at all runs between "a" completing and the
+    process dying — a brand-new Orchestrator reading the manifest back
+    from disk must already see "b" as stale_upstream, proving it was
+    not written by some later step that a crash could have skipped.
+    """
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"])
+    first.run([a, b])
+
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([a])
+
+    # Fresh process, fresh Orchestrator, reading only what is on disk —
+    # no in-memory state from `second` is reused.
+    reloaded = _orchestrator(tmp_path, ["a"])
+    assert reloaded.manifest.phases["b"].status == "stale_upstream"
+    assert reloaded.manifest.phases["b"].invalidated_by == "a"
+    assert reloaded.manifest.phases["b"].invalidated_in_run == second.run_id
+
+
 # ─── dirty flag ───────────────────────────────────────────────────────────
 
 
