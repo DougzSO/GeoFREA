@@ -37,6 +37,7 @@ from geofrea.core.constants import (
     WIND_HEIGHT_KEYS,
 )
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
+from geofrea.core.run_logging import PeriodicProgress
 from geofrea.grid_alignment.reference_grid import GridContext
 
 logger = logging.getLogger(__name__)
@@ -481,7 +482,14 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
     bounds_main = tuple(float(b) for b in country_gdf.total_bounds)
     used = skipped = 0
 
+    # A periodic INFO line (COMMAND ADJ-7), not a progress bar: this loop
+    # has taken up to ~66 minutes for BRA (155 tiles), and a bar's
+    # carriage-return redraw is unreadable once the console is
+    # redirected to a log file (CONVENTIONS.md "Long-running scripts").
+    progress = PeriodicProgress(logger, len(lc_tiles), "land_cover mosaic")
+
     for tile in lc_tiles:
+        progress.step()
         tile_path = Path(tile)
         tile_bounds: tuple[float, float, float, float] | None = None
         try:

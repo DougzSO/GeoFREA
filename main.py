@@ -60,6 +60,8 @@ import json
 import logging
 import re
 import sys
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -80,6 +82,7 @@ from geofrea.core.orchestrator import (
     compute_run_id,
 )
 from geofrea.core.paths import log_path, outputs_dir
+from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_acquisition_phase
@@ -96,7 +99,6 @@ from geofrea.suitability_criteria.schemas import (
     SuitabilityCriteriaResult,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("geofrea.main")
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -141,6 +143,31 @@ def _register_json_artifact(
     path = artifact_dir / f"{key}.json"
     path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
     context.register_artifact(key, path, schema_version)
+
+
+def _summarize_acquisition(output: AcquisitionResult) -> str:
+    """F1 completion summary: layer counts by resolution_status (COMMAND ADJ-7 action 3)."""
+    counts = Counter(layer.resolution_status for layer in output.layers)
+    return ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
+
+
+def _summarize_audit(output: AuditResult) -> str:
+    """F1b completion summary: audited/not_audited counts, alerts named (COMMAND ADJ-7 action 3)."""
+    n_layers = len(output.rasters) + len(output.vectors)
+    n_not_audited = len(output.not_audited)
+    n_audited = n_layers - n_not_audited
+    alerts_part = f"; alerts: {output.alerts}" if output.alerts else "; no alerts"
+    return f"{n_audited} audited, {n_not_audited} not_audited{alerts_part}"
+
+
+def _summarize_grid_alignment(output: GridAlignmentResult) -> str:
+    """F2a completion summary: raster dimensions and grid origin (COMMAND ADJ-7 action 3)."""
+    meta = output.grid_metadata
+    origin_x, origin_y = meta.transform[2], meta.transform[5]
+    return (
+        f"{meta.width}x{meta.height} px, resolution {meta.resolution_deg} deg, "
+        f"origin ({origin_x:.4f}, {origin_y:.4f}), crs {meta.crs}"
+    )
 
 
 def _build_audit_inputs(context: PhaseContext) -> AuditInputs:
@@ -379,6 +406,7 @@ def _build_phase_specs(
             requires=frozenset(),
             produces=frozenset({"layer_registry"}),
             produces_schema_versions={"layer_registry": _LAYER_REGISTRY_SCHEMA_VERSION},
+            summarize=_summarize_acquisition,
         ),
         PhaseSpec(
             name="data_quality_audit",
@@ -387,6 +415,7 @@ def _build_phase_specs(
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"audit_report"}),
             produces_schema_versions={"audit_report": _AUDIT_REPORT_SCHEMA_VERSION},
+            summarize=_summarize_audit,
         ),
         PhaseSpec(
             name="grid_alignment",
@@ -395,6 +424,7 @@ def _build_phase_specs(
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"aligned_rasters"})
             | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS},
+            summarize=_summarize_grid_alignment,
         ),
         PhaseSpec(
             name="suitability_criteria",
@@ -424,7 +454,7 @@ def run_geofrea(
     audit_config: AuditConfig,
     run_id: str,
     dirty: bool,
-) -> bool:
+) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
     Args:
@@ -442,16 +472,21 @@ def run_geofrea(
             geofrea.core.orchestrator.compute_dirty).
 
     Returns:
-        True if every one of target_phases ended "success", False if any
-        ended "failed" or "skipped_upstream_failed" (main()'s exit code
-        is derived from this — see module-level Usage note).
+        A tuple: (True if every one of target_phases ended "success",
+        False if any ended "failed" or "skipped_upstream_failed" —
+        main()'s exit code is derived from this; see module-level Usage
+        note), and the Orchestrator instance, whose `.manifest` and the
+        returned `results` together give main() everything the
+        end-of-run table (COMMAND ADJ-7 action 6) needs.
     """
-    # Set up file logging in addition to console logging
+    # Console: INFO and up, compact. File: everything any geofrea.*
+    # module logs (DEBUG and up), including phase-lifecycle and progress
+    # lines from orchestrator.py and from individual phase modules — see
+    # geofrea.core.run_logging's module docstring for why this replaced
+    # logging.basicConfig() + a FileHandler attached only to this
+    # module's own logger (which never received other modules' records).
     log_file_path = log_path(country_code, run_id)
-    log_file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
-    file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logger.addHandler(file_handler)
+    file_handler = configure_logging(log_file_path)
     logger.info("Starting run for %s with run_id %s", country_code, run_id)
 
     parameters = load_parameters(PARAMETERS_JSON)
@@ -484,7 +519,10 @@ def run_geofrea(
         )
     else:
         logger.info("Run completed for %s.", country_code)
-    return ok
+
+    logging.getLogger("geofrea").removeHandler(file_handler)
+    file_handler.close()
+    return ok, orchestrator, results
 
 
 def main() -> int:
@@ -528,8 +566,9 @@ def main() -> int:
     )
 
     all_ok = True
+    table_rows: list[dict] = []
     for country_code in countries:
-        ok = run_geofrea(
+        ok, orchestrator, results = run_geofrea(
             country_code,
             settings.run.target_phases,
             settings.run.rerun_phases,
@@ -539,6 +578,28 @@ def main() -> int:
             dirty,
         )
         all_ok = all_ok and ok
+        for phase_name, result in results.items():
+            elapsed_s = (
+                datetime.fromisoformat(result.finished_at)
+                - datetime.fromisoformat(result.started_at)
+            ).total_seconds()
+            artifact_count = sum(
+                1 for entry in orchestrator.manifest.artifacts.values() if entry.phase == phase_name
+            )
+            table_rows.append(
+                {
+                    "country": country_code,
+                    "phase": phase_name,
+                    "status": result.status,
+                    "elapsed_s": elapsed_s,
+                    "artifact_count": artifact_count,
+                }
+            )
+
+    # One table, phase x status x elapsed time x artifact count per
+    # country, plus the run id — COMMAND ADJ-7 action 6. Logged (not
+    # print()ed) so it lands in both the console and the run's log file.
+    logger.info("Run summary:\n%s", render_run_table(table_rows, run_id))
 
     return 0 if all_ok else 1
 

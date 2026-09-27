@@ -8,10 +8,8 @@ tests/unit/test_audit.py's module docstring for why *real* baseline
 geodata (as opposed to synthetic-but-real-format rasters) isn't used.
 """
 
-import importlib
 import logging
 import math
-import sys
 from pathlib import Path
 
 import geopandas as gpd
@@ -516,30 +514,20 @@ def test_inspect_land_cover_tiles_skips_window_outside_polygon_in_a_multi_window
 
 
 @pytest.mark.unit
-def test_inspect_land_cover_tiles_updates_progress_bar_status_when_tqdm_available(
-    tmp_path, monkeypatch
-):
-    # tqdm is a soft dependency — NOT installed in this project's own
-    # venv (confirmed by the fallback test below, which is why this
-    # branch is otherwise unreachable here). When a real tqdm-like object
-    # IS present (e.g. a dev's interactive environment per this module's
-    # own docstring), it should get a per-tile status message. Stubbed
-    # with a minimal object exposing the one method this code calls,
-    # rather than adding tqdm as a hard test dependency.
-    calls: list[dict] = []
-
-    class _FakePbar(list):
-        def set_postfix(self, info):
-            calls.append(info)
-
-    monkeypatch.setattr(raster_inspection, "tqdm", lambda iterable, **kw: _FakePbar(iterable))
-
+def test_inspect_land_cover_tiles_logs_periodic_progress_not_a_progress_bar(tmp_path, caplog):
+    # COMMAND ADJ-7: tqdm's progress bar was replaced by PeriodicProgress,
+    # a plain periodic INFO line — readable the same way in a terminal and
+    # in a log file, unlike a carriage-return-redrawn bar. A one-tile call
+    # always logs its first (== last) item per PeriodicProgress's contract.
     tile_path = tmp_path / "tile.tif"
     _write_raster(tile_path, np.full((_SIZE, _SIZE), 10, dtype=np.uint8))
 
-    inspect_land_cover_tiles([tile_path], country_gdf=_covering_gdf())
+    with caplog.at_level(logging.INFO, logger="geofrea.data_quality_audit.raster_inspection"):
+        inspect_land_cover_tiles([tile_path], country_gdf=_covering_gdf())
 
-    assert calls == [{"status": tile_path.name[-20:]}]
+    progress_lines = [r.message for r in caplog.records if "land_cover tile audit" in r.message]
+    assert len(progress_lines) == 1
+    assert progress_lines[0].startswith("land_cover tile audit: 1/1 done, elapsed ")
 
 
 @pytest.mark.unit
@@ -991,24 +979,3 @@ def test_inspect_power_plants_reports_error_for_malformed_columns():
 
     assert result["error"] is not None
 
-
-# ===========================================================================
-# tqdm soft-dependency fallback (l.41-42) — tqdm is optional; if it's ever
-# missing from the environment, iteration must still work without a
-# progress bar.
-# ===========================================================================
-
-
-@pytest.mark.unit
-def test_tqdm_fallback_passes_iterable_through_when_tqdm_is_missing(monkeypatch):
-    # Simulates tqdm being uninstalled by making it resolve to None in
-    # sys.modules (the standard technique for forcing ImportError), then
-    # reloads this module so its own `try: from tqdm import tqdm` re-runs
-    # and falls through to the local fallback definition.
-    monkeypatch.setitem(sys.modules, "tqdm", None)
-    try:
-        importlib.reload(raster_inspection)
-        assert list(raster_inspection.tqdm([1, 2, 3], desc="x")) == [1, 2, 3]
-    finally:
-        monkeypatch.undo()
-        importlib.reload(raster_inspection)

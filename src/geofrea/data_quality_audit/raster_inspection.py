@@ -10,8 +10,10 @@ friends) — see DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit
 phase for why the schema boundary is drawn there rather than in each
 helper.
 
-Not ported: legacy's `tqdm` progress bar is optional there and stays
-optional here (falls back to a no-op iterator wrapper).
+Not ported: legacy's `tqdm` progress bar. Replaced (COMMAND ADJ-7) with
+`PeriodicProgress`'s periodic INFO line — a bar's carriage-return redraw
+is unreadable once the console is redirected to a log file, whereas a
+line every N tiles reads the same in a terminal and in a file.
 """
 
 from __future__ import annotations
@@ -37,14 +39,7 @@ from shapely.geometry import box, mapping
 
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
 from geofrea.core.geodesy import wgs84_km_per_degree
-
-try:
-    from tqdm import tqdm
-except ImportError:
-
-    def tqdm(iterable, **kwargs):  # type: ignore[misc]
-        return iterable
-
+from geofrea.core.run_logging import PeriodicProgress
 
 logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 
@@ -693,14 +688,13 @@ def inspect_land_cover_tiles(
     country_bounds = country_gdf.total_bounds
     geom_fingerprint = _land_cover_geom_fingerprint(country_geom)
 
-    pbar = tqdm(tile_paths, desc="   [land_cover] Analyzing", unit="tile", leave=False)
+    progress = PeriodicProgress(logger, len(tile_paths), "land_cover tile audit")
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
 
-        for tile in pbar:
-            if hasattr(pbar, "set_postfix"):
-                pbar.set_postfix({"status": tile.name[-20:]})
+        for tile in tile_paths:
+            progress.step()
 
             if cache_dir is not None:
                 cached = _load_land_cover_tile_cache(cache_dir, tile, geom_fingerprint)

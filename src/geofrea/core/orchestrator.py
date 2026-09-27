@@ -26,6 +26,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import subprocess
+import time
+import traceback
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -394,6 +396,12 @@ class PhaseSpec:
             Populated by callers who want a schema bump on an artifact's
             content to invalidate old manifest entries — see
             StaleManifestEntryError.
+        summarize: Optional callable, `output -> str`, producing the
+            short result line logged on a fresh (non-resumed) success
+            (COMMAND ADJ-7 action 3) — e.g. F1's layer counts by status,
+            F1b's audited/not_audited counts, F2a's raster dimensions
+            and grid origin. A phase with no `summarize` logs completion
+            with elapsed time and artifacts only, no phase-specific line.
     """
 
     name: str
@@ -402,6 +410,7 @@ class PhaseSpec:
     requires: frozenset[str] = frozenset()
     produces: frozenset[str] = frozenset()
     produces_schema_versions: Mapping[str, str] = field(default_factory=dict)
+    summarize: Callable[[BaseModel], str] | None = None
 
 
 class PhaseExecutionError(RuntimeError):
@@ -735,6 +744,10 @@ class Orchestrator:
         deps: dict[str, set[str]] = {
             spec.name: {producer_of[key] for key in spec.requires} for spec in ordered
         }
+        consumers: dict[str, set[str]] = {name: set() for name in by_name}
+        for name, dep_names in deps.items():
+            for dep_name in dep_names:
+                consumers[dep_name].add(name)
 
         unknown_targets = [name for name in self.target_phases if name not in by_name]
         if unknown_targets:
@@ -808,9 +821,26 @@ class Orchestrator:
                     finished_at=existing.finished_at,
                 )
                 logger.info(
-                    "Phase '%s' already completed — resumed from manifest.", spec.name
+                    "Phase '%s' [%s]: resuming — manifest status 'success' from a prior "
+                    "run (started_at=%s, finished_at=%s), rerun_phases does not name it. "
+                    "Skipping re-execution.",
+                    spec.name,
+                    self.country_code,
+                    existing.started_at,
+                    existing.finished_at,
                 )
                 continue
+
+            start_reason = (
+                "named in rerun_phases (forced)"
+                if must_force
+                else f"manifest status {existing.status!r}, does not resume"
+                if existing is not None
+                else "no manifest entry yet"
+            )
+            logger.info(
+                "Phase '%s' [%s]: executing — %s.", spec.name, self.country_code, start_reason
+            )
 
             context = PhaseContext(
                 country_code=self.country_code,
@@ -819,6 +849,7 @@ class Orchestrator:
                 prior_results=results,
             )
             started_at = _now_iso()
+            start_monotonic = time.monotonic()
 
             try:
                 output = spec.run(context)
@@ -910,7 +941,27 @@ class Orchestrator:
                 self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump())
                 self.manifest.artifacts.update(new_artifacts)
                 self._write_manifest()
-                logger.exception("Phase '%s' failed", spec.name)
+
+                # One block naming what failed, where, and what it takes
+                # down with it (COMMAND ADJ-7 action 5) — instead of a bare
+                # traceback the reader has to scroll to correlate with
+                # "skipped_upstream_failed" lines that print later, one at
+                # a time, as attempt_order reaches each dependent.
+                tb = traceback.extract_tb(exc.__traceback__)
+                frame = tb[-1] if tb else None
+                location = f"{frame.filename}:{frame.lineno}" if frame is not None else "unknown"
+                dependents = sorted(
+                    (_transitive_closure({spec.name}, consumers) - {spec.name}) & to_attempt
+                )
+                logger.exception(
+                    "Phase '%s' [%s] FAILED\n"
+                    "  at: %s\n"
+                    "  dependents not run: %s",
+                    spec.name,
+                    self.country_code,
+                    location,
+                    dependents if dependents else "(none)",
+                )
                 continue
 
             finished_at = _now_iso()
@@ -948,6 +999,23 @@ class Orchestrator:
             self._mark_manifest_consumers_stale(set(new_artifacts.keys()), spec.name)
 
             self._write_manifest()
-            logger.info("Phase '%s' completed.", spec.name)
+
+            elapsed_s = time.monotonic() - start_monotonic
+            artifact_lines = "\n".join(
+                f"    {key}: {entry.path.resolve()} ({entry.size_bytes} bytes)"
+                for key, entry in sorted(new_artifacts.items())
+            )
+            summary_line = ""
+            if spec.summarize is not None:
+                summary_line = f"\n  summary: {spec.summarize(output)}"
+            logger.info(
+                "Phase '%s' [%s] completed in %.1fs\n"
+                "  artifacts:\n%s%s",
+                spec.name,
+                self.country_code,
+                elapsed_s,
+                artifact_lines if artifact_lines else "    (none)",
+                summary_line,
+            )
 
         return results

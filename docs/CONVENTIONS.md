@@ -92,6 +92,17 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 
 Scripts or validations expected to run longer than 30 seconds log progress with elapsed time and estimated remaining time, using flushed output.
 
+## Run legibility (COMMAND ADJ-7)
+
+A manual run must show what it is doing while it is doing it — a failure or a wrong result is visible as it happens, not only after the fact in a manifest or a report file.
+
+- **Console vs. file.** `main.py::run_geofrea()` calls `core/run_logging.py::configure_logging()` once per country, attaching both handlers to the shared `"geofrea"` ancestor logger (not the plain root logger — every `geofrea.*` module's logger is a descendant of it, so both handlers see every record any of them emits). Console: `logging.INFO` and up, compact format. File (`GEOFREA_DATA_DIR/logs/<ISO3>/<run_id>.log`): `logging.DEBUG` and up, includes the logger name — the complete record, always a superset of the console.
+- **Per phase, on start.** The orchestrator logs the phase name, the country, and one of: executing (no manifest entry, or `rerun_phases` names it — say which), or resuming (manifest status `"success"`, dates of the prior run). A resumed phase's line always says why it resumed — the manifest status that decided it — never just "skipped".
+- **Per phase, on completion.** Elapsed time, every artifact registered this run (path + size in bytes), and — for a phase whose `PhaseSpec.summarize` is set — one line telling you the numbers are plausible without opening a file (F1: layer counts by `resolution_status`; F1b: audited/not_audited counts and any alert; F2a: raster dimensions, resolution, and grid origin). A phase with no `summarize` still logs elapsed time and artifacts; `summarize` is optional, the rest is not.
+- **On failure.** One block: the phase name, the country, the exception type and message, its `file:line` (innermost traceback frame), and the full list of dependents that consequently will not run (computed immediately from the requires/produces graph, not discovered one line at a time as the orchestrator later reaches each of them).
+- **Long loops report progress, never a progress bar.** `core/run_logging.py::PeriodicProgress` (or its `periodic_progress()` wrapper) logs a `"<label>: <done>/<total> done, elapsed <Xs>"` line every N items (default 10) or every `min_interval_s` (default 30s), always on the first and last item. A progress bar's carriage-return redraw is unreadable once a console is redirected to a log file; a periodic INFO line reads identically in both. New long loops (mosaic building, tile-by-tile audits, any per-file loop over more than a handful of files) use `PeriodicProgress`, not `tqdm` or a hand-rolled bar.
+- **End of run.** `main.py::main()` logs one table (`core/run_logging.py::render_run_table()`): country, phase, status, elapsed time, artifact count — one row per phase attempted, across every country in the run — followed by the run id.
+
 ## Code reused from reference repositories
 
 Code copied from CRAEI (see METHODOLOGY A-11) must have a provenance header with repository, commit SHA, original path, and adaptation summary, placed directly above the `def` line — outside the docstring, since it documents where the *code* came from, not what it does. A-13's `Implements: M-<item>.` line is separate: it is the first line of the docstring body, documenting what the function *does* against the method. The two lines answer different questions and never merge into one:
