@@ -444,3 +444,64 @@ def test_adapter_corrupted_boundary_file_raises(tmp_path):
 
     with pytest.raises(DataSourceError):
         acquisition_result_to_audit_inputs(result)
+
+
+@pytest.mark.unit
+def test_adapter_resolves_cmip6_paths_from_none_when_registry_absent():
+    """No cmip6_registry.json under GEOFREA_DATA_DIR: both model fields are None."""
+    result = _result([])
+
+    audit_inputs = acquisition_result_to_audit_inputs(result)
+
+    assert audit_inputs.cmip6_gfdl_esm4_path is None
+    assert audit_inputs.cmip6_miroc6_path is None
+
+
+@pytest.mark.unit
+def test_adapter_resolves_cmip6_paths_from_the_registry_for_the_result_country(tmp_path):
+    """The representative historical/tas crop is picked up per model, for PRT only."""
+    from geofrea.core import paths as core_paths
+    from geofrea.data_acquisition.cmip6_registry import (
+        Cmip6CountryCrop,
+        Cmip6NativeGrid,
+        Cmip6Registry,
+        Cmip6RegistryEntry,
+    )
+
+    prt_crop_path = tmp_path / "gfdl_esm4_historical_tas_PRT.nc"
+    prt_crop_path.write_bytes(b"fake-crop-bytes")
+    bra_crop_path = tmp_path / "gfdl_esm4_historical_tas_BRA.nc"
+    bra_crop_path.write_bytes(b"fake-crop-bytes")
+
+    grid = Cmip6NativeGrid(
+        lat_resolution_deg=1.0, lon_resolution_deg=1.25,
+        lat_min=-89.5, lat_max=89.5, lon_min=0.625, lon_max=359.375,
+        n_lat=180, n_lon=288,
+    )
+    registry = Cmip6Registry()
+    registry.entries["cmip6/gfdl_esm4/historical/tas"] = Cmip6RegistryEntry(
+        model="gfdl_esm4",
+        experiment="historical",
+        variable="tas",
+        status="registered",
+        global_path=str(tmp_path / "global.nc"),
+        source_sha256="deadbeef",
+        realization="r1i1p1f1",
+        native_grid=grid,
+        country_crops=[
+            Cmip6CountryCrop(
+                country_code="PRT", path=str(prt_crop_path), cells_before=100, cells_after=10
+            ),
+            Cmip6CountryCrop(
+                country_code="BRA", path=str(bra_crop_path), cells_before=100, cells_after=20
+            ),
+        ],
+    )
+    registry_path = core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json"
+    registry.save(registry_path)
+
+    result = _result([])  # country_code="PRT"
+    audit_inputs = acquisition_result_to_audit_inputs(result)
+
+    assert audit_inputs.cmip6_gfdl_esm4_path == prt_crop_path
+    assert audit_inputs.cmip6_miroc6_path is None  # no miroc6 entry registered at all

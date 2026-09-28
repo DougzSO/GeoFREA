@@ -52,10 +52,15 @@ inside data_quality_audit/vector_inspection.py.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import geopandas as gpd
 import pandas as pd
 
+from geofrea.core import paths as core_paths
 from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
+from geofrea.data_acquisition.fetchers.cmip6 import CMIP6_MODELS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
     AcquisitionResult,
@@ -63,6 +68,11 @@ from geofrea.data_acquisition.schemas import (
     resolved_paths,
 )
 from geofrea.data_quality_audit.schemas import AuditInputs
+
+# Representative (model, experiment, variable) inspected per model — same
+# "one file inspected" precedent as wind_paths/weibull_a_path.
+_CMIP6_REPRESENTATIVE_EXPERIMENT = "historical"
+_CMIP6_REPRESENTATIVE_VARIABLE = "tas"
 
 # layer_name -> AuditInputs single-Path field. power_plants needs
 # special handling below (loaded, not just passed through); wind is
@@ -138,6 +148,7 @@ def acquisition_result_to_audit_inputs(
 
     plants_df = load_power_plants_df(layers.get("power_plants"))
     country_gdf = _load_mainland_boundary(layers.get("borders"))
+    cmip6_paths = _resolve_cmip6_representative_paths(result.country_code)
 
     return AuditInputs(
         **single_paths,
@@ -145,11 +156,46 @@ def acquisition_result_to_audit_inputs(
         weibull_a_path=weibull_a_path,
         weibull_k_path=weibull_k_path,
         air_density_path=air_density_path,
+        cmip6_gfdl_esm4_path=cmip6_paths.get("gfdl_esm4"),
+        cmip6_miroc6_path=cmip6_paths.get("miroc6"),
         land_cover_tiles=land_cover_tiles,
         plants_df=plants_df,
         country_gdf=country_gdf,
         skip_land_cover=skip_land_cover,
     )
+
+
+def _resolve_cmip6_representative_paths(country_code: str) -> dict[str, Path | None]:
+    """Resolve one representative country-crop path per CMIP6 model.
+
+    Reads directly from `cmip6_registry.json` (COMMAND F3-2), not from
+    AcquiredLayer/`_LAYER_REGISTRY` — CMIP6 resource-channel entries are
+    global objects with a nested per-country crop list, not a single
+    per-country path/paths pair, so they were registered in their own
+    JSON registry instead of distorting AcquiredLayer's shape (see
+    cmip6_registry.py's module docstring). This is the one place that
+    registry is read back for data_quality_audit's benefit.
+
+    Returns:
+        {"gfdl_esm4": Path|None, "miroc6": Path|None} — the historical/
+        tas crop for `country_code`, or None if that model's entry is
+        missing, not yet registered, or has no crop for this country.
+    """
+    registry_path = core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json"
+    registry = Cmip6Registry.load(registry_path)
+
+    result: dict[str, Path | None] = {}
+    for model in CMIP6_MODELS:
+        key = f"cmip6/{model}/{_CMIP6_REPRESENTATIVE_EXPERIMENT}/{_CMIP6_REPRESENTATIVE_VARIABLE}"
+        entry = registry.entries.get(key)
+        path = None
+        if entry is not None and entry.status == "registered":
+            for crop in entry.country_crops:
+                if crop.country_code == country_code:
+                    path = Path(crop.path)
+                    break
+        result[model] = path
+    return result
 
 
 def load_power_plants_df(layer: AcquiredLayer | None) -> pd.DataFrame | None:

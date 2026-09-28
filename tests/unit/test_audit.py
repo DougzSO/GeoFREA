@@ -93,6 +93,8 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
         "weibull_a",
         "weibull_k",
         "air_density",
+        "cmip6_gfdl_esm4",
+        "cmip6_miroc6",
     ):
         assert result.rasters[layer].error == "File not found"
     assert result.land_cover.error == "Tiles not found"
@@ -119,6 +121,8 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
         "weibull_a",
         "weibull_k",
         "air_density",
+        "cmip6_gfdl_esm4",
+        "cmip6_miroc6",
     }
     missing_vectors = {
         name

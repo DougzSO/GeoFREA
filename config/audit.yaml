@@ -77,9 +77,20 @@ layers:
       expected_resolution_deg: 0.0025
       source: "native metadata of air-density, read 2026-09-23: GDAL transform of BRA_air_density_100m.tif, PRT_air_density_100m.tif and IND_air_density_100m.tif, all three agreeing at 0.0025 deg — resolves OQ-027 for this product."
 
+  # Resource channel only (M-F1-04): each model keeps its own native
+  # grid (F3-1 action 5, no ISIMIP3b-style pre-regridding for raw CDS
+  # CMIP6), so — like wind's per-product nesting above — this is keyed
+  # per model, not one flat entry. Resolves OQ-028 for the resource
+  # channel (task F-3, COMMAND F3-2); the hazard channel (tasmax/pr,
+  # ISIMIP3b via CRAEI) is a separate acquisition (OQ-036) with its own
+  # resolution, not covered here.
   cmip6:
-    expected_resolution_deg: null  # OQ-028 — not yet acquired (task F-3).
-    source: null
+    gfdl_esm4:
+      expected_resolution_deg: 1.25
+      source: "native metadata of gfdl_esm4_historical_tas_BRA.nc (M-F1-04 country crop, task F-3/COMMAND F3-2), read 2026-09-27: GDAL/rasterio-reported pixel size 1.25 deg (native grid is 180x288, lat step 1.0 deg x lon step 1.25 deg, not square — 1.25 deg is the lon-axis value inspect_raster() actually reports and compares against). Resolves OQ-028 for GFDL-ESM4's resource channel. No embedded CRS (same gap as combined-Weibull-A/k above, D-F1b-005) — GeoTIFF EPSG:4326 assumed, not yet confirmed against a reference the way Weibull was; F1b's data_quality_audit run reports this as a [MISSING] CRS finding, not silently assumed."
+    miroc6:
+      expected_resolution_deg: 1.40625
+      source: "native metadata of miroc6_historical_tas_BRA.nc (M-F1-04 country crop, task F-3/COMMAND F3-2), read 2026-09-27: GDAL/rasterio-reported pixel size 1.40625 deg (native grid is 128x256, lat step ~1.400 deg x lon step 1.40625 deg, not square — 1.40625 deg is the lon-axis value inspect_raster() actually reports and compares against). Resolves OQ-028 for MIROC6's resource channel. No embedded CRS — same caveat as gfdl_esm4 above."
 
   era5_gust:
     expected_resolution_deg: null  # OQ-029 — not yet acquired (task F-4).

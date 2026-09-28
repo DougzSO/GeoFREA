@@ -47,9 +47,12 @@ class AuditConfig(BaseModel):
     `layers` is keyed by the same layer names AuditResult.rasters uses
     for simple layers (land_cover, solar, elevation) plus entries with
     no corresponding AuditInputs field yet — `wind` holds a nested dict
-    of GWA product name -> AuditLayerConfig (only `wind-speed` has a
-    fetched file today; the rest are OQ-pending), and
-    `cmip6`/`era5_gust`/`gem_existing_plants` are flat AuditLayerConfig
+    of GWA product name -> AuditLayerConfig (all four products fetched,
+    M-F1-03). `cmip6` holds a nested dict of model name ->
+    AuditLayerConfig (task F-3, COMMAND F3-2: resource channel only, one
+    entry per model since each keeps its own native grid, F3-1 action
+    5) — the hazard channel is a separate acquisition (OQ-036).
+    `era5_gust`/`gem_existing_plants` are flat AuditLayerConfig
     entries with no file to inspect yet at all, reported `not_audited`
     unconditionally. No `slope` key: slope is not an F1b layer at all
     (derived later, in grid_alignment) — see docs/phases/
@@ -111,6 +114,17 @@ class AuditInputs(BaseModel):
             at 100m — same rationale as weibull_a_path.
         air_density_path: Global Wind Atlas air-density raster path at
             100m — same rationale as weibull_a_path.
+        cmip6_gfdl_esm4_path: CMIP6 GFDL-ESM4 resource-channel raster
+            path (M-F1-04, task F-3) — the country crop of the
+            historical/tas combination, representative of this model's
+            native grid; config/audit.yaml's `cmip6.gfdl_esm4` entry is
+            not per-variable, same "one file inspected" precedent as
+            wind_paths/weibull_a_path above.
+        cmip6_miroc6_path: CMIP6 MIROC6 resource-channel raster path —
+            same rationale as cmip6_gfdl_esm4_path. A separate field
+            (not folded into one cmip6_path) because the two models keep
+            distinct native grids (F3-1 action 5) with independent
+            resolution expectations in config/audit.yaml.
         land_cover_tiles: ESA WorldCover tile paths.
         lakes_path: HydroLAKES vector path (global — clipped to
             country_gdf during inspection, see vector_inspection.py).
@@ -157,6 +171,8 @@ class AuditInputs(BaseModel):
     weibull_a_path: Path | None = None
     weibull_k_path: Path | None = None
     air_density_path: Path | None = None
+    cmip6_gfdl_esm4_path: Path | None = None
+    cmip6_miroc6_path: Path | None = None
     land_cover_tiles: list[Path] = []
     lakes_path: Path | None = None
     rivers_path: Path | None = None

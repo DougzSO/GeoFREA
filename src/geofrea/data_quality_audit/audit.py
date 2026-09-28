@@ -81,9 +81,18 @@ _TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 # replaced this tuple's old role for those three.
 _UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = ()
 _UNACQUIRED_LAYERS: dict[str, str] = {
-    "cmip6": "not yet acquired (task F-3)",
     "era5_gust": "not yet acquired (task F-4)",
     "gem_existing_plants": "not yet acquired (task F-5)",
+}
+
+# CMIP6 resource-channel models (task F-3, COMMAND F3-2): each model
+# keeps its own native grid (F3-1 action 5), so each gets its own
+# raster_map/config/audit.yaml entry — audit.yaml key -> AuditInputs
+# field / rasters dict key. Mirrors _GWA_PRODUCT_RASTER_KEYS's per-
+# product pattern, one level up (per-model instead of per-height).
+_CMIP6_MODEL_RASTER_KEYS: dict[str, str] = {
+    "gfdl_esm4": "cmip6_gfdl_esm4",
+    "miroc6": "cmip6_miroc6",
 }
 
 # audit.yaml product key -> (AuditInputs field's raster_map key, rasters
@@ -142,6 +151,8 @@ def run_audit_phase(
         "weibull_a": inputs.weibull_a_path,
         "weibull_k": inputs.weibull_k_path,
         "air_density": inputs.air_density_path,
+        "cmip6_gfdl_esm4": inputs.cmip6_gfdl_esm4_path,
+        "cmip6_miroc6": inputs.cmip6_miroc6_path,
     }
 
     solar_cfg = audit_config.layers.get("solar")
@@ -269,6 +280,13 @@ def run_audit_phase(
         product_cfg = wind_cfg.get(product_key) if isinstance(wind_cfg, dict) else None
         expected_resolutions[raster_key] = (
             product_cfg.expected_resolution_deg if isinstance(product_cfg, AuditLayerConfig) else None
+        )
+
+    cmip6_cfg = audit_config.layers.get("cmip6", {})
+    for model_key, raster_key in _CMIP6_MODEL_RASTER_KEYS.items():
+        model_cfg = cmip6_cfg.get(model_key) if isinstance(cmip6_cfg, dict) else None
+        expected_resolutions[raster_key] = (
+            model_cfg.expected_resolution_deg if isinstance(model_cfg, AuditLayerConfig) else None
         )
 
     # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
