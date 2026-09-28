@@ -30,7 +30,7 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (GFDL-ESM4/MIROC6, F-3/F3-2) -- hazard channel separate (OQ-036). M-F1-02 still fails (biomass-only inputs, out of scope). A-05 pass. OQ-012, OQ-024, OQ-027, OQ-028 closed."
+      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, real acquisition paused mid-run (OQ-038): PRT 17/20y, BRA 1/20y, IND 1/20y on disk. M-F1-02 still fails. OQ-012/024/027/028 closed."
     },
     {
       "id": "F1b",

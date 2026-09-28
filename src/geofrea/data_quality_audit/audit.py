@@ -81,9 +81,10 @@ _TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 # replaced this tuple's old role for those three.
 _UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = ()
 _UNACQUIRED_LAYERS: dict[str, str] = {
-    "era5_gust": "not yet acquired (task F-4)",
     "gem_existing_plants": "not yet acquired (task F-5)",
 }
+# era5_gust moved out of _UNACQUIRED_LAYERS (task F4-2): acquired,
+# routed through AuditInputs.era5_gust_path like any other raster below.
 
 # CMIP6 resource-channel models (task F-3, COMMAND F3-2): each model
 # keeps its own native grid (F3-1 action 5), so each gets its own
@@ -153,6 +154,7 @@ def run_audit_phase(
         "air_density": inputs.air_density_path,
         "cmip6_gfdl_esm4": inputs.cmip6_gfdl_esm4_path,
         "cmip6_miroc6": inputs.cmip6_miroc6_path,
+        "era5_gust": inputs.era5_gust_path,
     }
 
     solar_cfg = audit_config.layers.get("solar")

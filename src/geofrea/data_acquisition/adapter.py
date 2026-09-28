@@ -60,6 +60,7 @@ import pandas as pd
 from geofrea.core import paths as core_paths
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
+from geofrea.data_acquisition.era5_registry import Era5Registry
 from geofrea.data_acquisition.fetchers.cmip6 import CMIP6_MODELS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -149,6 +150,7 @@ def acquisition_result_to_audit_inputs(
     plants_df = load_power_plants_df(layers.get("power_plants"))
     country_gdf = _load_mainland_boundary(layers.get("borders"))
     cmip6_paths = _resolve_cmip6_representative_paths(result.country_code)
+    era5_gust_path = _resolve_era5_gust_path(result.country_code)
 
     return AuditInputs(
         **single_paths,
@@ -158,6 +160,7 @@ def acquisition_result_to_audit_inputs(
         air_density_path=air_density_path,
         cmip6_gfdl_esm4_path=cmip6_paths.get("gfdl_esm4"),
         cmip6_miroc6_path=cmip6_paths.get("miroc6"),
+        era5_gust_path=era5_gust_path,
         land_cover_tiles=land_cover_tiles,
         plants_df=plants_df,
         country_gdf=country_gdf,
@@ -196,6 +199,30 @@ def _resolve_cmip6_representative_paths(country_code: str) -> dict[str, Path | N
                     break
         result[model] = path
     return result
+
+
+def _resolve_era5_gust_path(country_code: str) -> Path | None:
+    """Resolve one country's polygon-cropped ERA5 gust source path.
+
+    Reads `era5_registry.json` (COMMAND F4-2), the same pattern as
+    `_resolve_cmip6_representative_paths()` above but simpler: ERA5's
+    registry is already keyed per country (`era5_registry.py`'s module
+    docstring explains why it is a separate, smaller registry rather
+    than an extension of `cmip6_registry.py`), so there is no
+    model/experiment axis to pick a representative entry from.
+
+    Returns:
+        The polygon-cropped daily-maximum source path, or None if that
+        country's entry is missing or not yet registered.
+    """
+    registry_path = core_paths.fetched_raw("era5", "_global") / "era5_registry.json"
+    registry = Era5Registry.load(registry_path)
+
+    key = f"era5/{country_code}/fg10"
+    entry = registry.entries.get(key)
+    if entry is not None and entry.status == "registered" and entry.source_path:
+        return Path(entry.source_path)
+    return None
 
 
 def load_power_plants_df(layer: AcquiredLayer | None) -> pd.DataFrame | None:

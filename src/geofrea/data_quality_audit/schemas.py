@@ -125,6 +125,12 @@ class AuditInputs(BaseModel):
             (not folded into one cmip6_path) because the two models keep
             distinct native grids (F3-1 action 5) with independent
             resolution expectations in config/audit.yaml.
+        era5_gust_path: ERA5 gust resource path (M-F1-05, task F4-2) —
+            the polygon-cropped daily-maximum source field (not the
+            annual-maxima reduction, which has no CRS-bearing native
+            grid of its own to audit beyond the source's), read from
+            `era5_registry.json` the same way cmip6_gfdl_esm4_path/
+            cmip6_miroc6_path are read from `cmip6_registry.json`.
         land_cover_tiles: ESA WorldCover tile paths.
         lakes_path: HydroLAKES vector path (global — clipped to
             country_gdf during inspection, see vector_inspection.py).
@@ -173,6 +179,7 @@ class AuditInputs(BaseModel):
     air_density_path: Path | None = None
     cmip6_gfdl_esm4_path: Path | None = None
     cmip6_miroc6_path: Path | None = None
+    era5_gust_path: Path | None = None
     land_cover_tiles: list[Path] = []
     lakes_path: Path | None = None
     rivers_path: Path | None = None
