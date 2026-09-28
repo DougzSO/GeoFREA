@@ -7,6 +7,14 @@
 
 ---
 
+## Addendum, 2026-09-28 (COMMAND F4-1/F4-2) — two CRAEI attributions in this map disproved
+
+This map's row-34 claim for **M-F1-03** ("CRAEI (GEAR secondary): GWA Weibull and air-density fetch logic") and row-36 claim for **M-F1-05** ("CRAEI: ERA5 gust fetch logic") are both **wrong**: CRAEI does not carry a GWA Weibull/air-density fetch (M-F1-03 was built fresh, D-F1-014) and CRAEI explicitly decided against ERA5 gust in its own `D12` (`docs/DECISIONS.md:14`, closed 2026-09-16) — there is no ERA5 product anywhere in CRAEI's code, config, or data directories to adapt (verified directly against `CRAEI_BASELINE_DIR`, COMMAND F4-1). M-F1-05 is corrected in `docs/METHODOLOGY.md` v1.3.0 to drop the CRAEI/A-11 attribution and state it is built fresh.
+
+**Only M-F1-04 (CMIP6) has had its CRAEI attribution actually checked** against CRAEI's own content (COMMAND F3-1, `docs/_audit/2026-09_craei_climate_reuse.md`) and confirmed true. Every other "CRAEI: ..." cell in the table below — the ones driving how Stages J–M were planned — is an **unverified attribution**, not a checked one: M-F1-02, M-F1-07, M-F2b-01, M-F2b-02, M-F2b-03, M-F3-01, M-F3-02, M-F4-01, M-F4-02, M-F4-03, M-F4-04, M-F4-05, M-F5-02, M-F5-03, M-F6-01, M-F6-02, M-F6-04, M-F7-01 through M-F7-10, M-F7b-01 through M-F7b-04. This audit does not re-check any of them (out of scope for COMMAND F4-2) — a later stage should verify each attribution against CRAEI's own content before planning implementation around it, the same way M-F1-03 and M-F1-05 turned out to be wrong.
+
+---
+
 ## Executive Summary
 
 This audit examines the current state of the GeoFREA pipeline against the complete method specification (METHODOLOGY.md Section 5, phases F1–F8 and E1) and checks conformance of each implementation against what phase records claim.

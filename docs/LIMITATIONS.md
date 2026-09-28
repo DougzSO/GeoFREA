@@ -24,6 +24,7 @@ Entry format: ID, statement, affected items, why it is accepted, where it is dec
 | L-014 | Extreme-wind context comes from ERA5 historical reanalysis and does not vary by SSP. | M-F1-05, M-F4-05, T-R10 | CMIP6 lacks consistent gust variables; low confidence in wind extremes trends. | |
 | L-015 | Hazards without Tier 1-2 loss functions are reported as context and do not affect robustness metrics. | M-F4-05, H4 | Avoids driving results with unsourced values; exposure is still reported (T-R10). | |
 | L-016 | External validation against existing plants measures plausibility, not accuracy, because plant locations reflect past auctions, policy, and grid access. | M-F7b-01 to M-F7b-04 | No ground truth for optimal siting exists. | |
+| L-017 | The gust indicator (`fg10`, annual maximum, 1995-2014) is raw ERA5 reanalysis with no bias adjustment against station or other observed data. It is internally consistent for comparison across cells and years but is not an observed local gust value. | M-F1-05, M-F4-05, T-R10 | No bias-adjusted gust product exists at the required resolution/coverage across BRA, PRT, IND; CRAEI (which does bias-adjust its ISIMIP3b hazard channel, D-F4-001) has no gust product at all to adapt (D12). | |
 
 ## Scope boundaries
 

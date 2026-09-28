@@ -154,7 +154,7 @@ Critical transitions:
 - **M-F1-02.** Active layers: country borders and admin1 (GADM 4.1), protected areas (WDPA via Protected Planet API v4), lakes and rivers (HydroSHEDS), land cover, elevation, population, transmission grid, roads (GRIP4), solar PVOUT (Global Solar Atlas, long-term average daily totals, kWh/kWp/day), wind (M-F1-03), CMIP6 (M-F1-04), ERA5 gust (M-F1-05), existing plants (M-F1-06). The seismic layer is not part of GeoFREA.
 - **M-F1-03.** Global Wind Atlas products at hub-relevant heights 100, 150, 200 m: `combined-Weibull-A`, `combined-Weibull-k`, `air-density`, and `wind-speed` (quality check only). Product existence is confirmed on the CDN response after redirect, never on the API redirect alone.
 - **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI per A-11.
-- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator). Adapted from CRAEI per A-11.
+- **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator), built fresh (CRAEI's own D12 decided against ERA5 gust, so there is no A-11 source to adapt). Reduction: annual maximum of `fg10` (10 m wind gust since previous post-processing). Reference period: 1995-2014, for coherence with S-05, since the indicator is declared scenario-invariant.
 - **M-F1-06.** Existing solar and wind plants from Global Energy Monitor trackers, used only in F7b. Never used to fit any parameter (V-06).
 - **M-F1-07.** GADM borders resolve local-first with checksum; network download is a fallback.
 
@@ -458,6 +458,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 1.3.0 | 2026-09-28 | M-F1-05 loses its CRAEI/A-11 attribution (CRAEI's own D12 decided against ERA5 gust — nothing to adapt, built fresh, task F4-1/F4-2) and gains its reduction (annual maximum of `fg10`) and reference period (1995-2014, coherent with S-05); no result changes since M-F1-05 was not yet implemented. |
 | 1.2.3 | 2026-09-23 | A-03 wording updated: `run.force_rerun` replaced by `run.rerun_phases` (exact re-execute scope; downstream consumers are marked stale and recomputed lazily, not re-executed eagerly — R-1, `docs/phases/core.md` D-core-012). |
 | 1.2.2 | 2026-09-22 | Section 9 adds `config/audit.yaml` (data_quality_audit diagnostic-gate configuration, M-F1b-01). |
 | 1.2.0 | 2026-09-22 | GEAR removed as an active reference repository (A-11, S-08, S-09, M-F1-04, M-F1-05, M-F4-05 now cite CRAEI only); M-F1-01's local-database variable renamed to its current name, `GEOFREA_SHARED_RAW_DIR`; A-12 adds that the run environment is declared in `.env.example` and loaded at startup. |
