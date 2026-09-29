@@ -229,15 +229,27 @@ def download_country_bbox_year(
 
 
 def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
-    """Concatenate per-year daily-max files along time into one bbox source file.
+    """Concatenate per-year hourly files along time into one bbox source file.
 
     Pure function, no network — the per-year files are already on disk
     once `download_country_bbox_year()` has run for the full reference
     period.
+
+    Streamed via dask, not `.load()`-ed into one array first (found in
+    real use, COMMAND F4-6/F4-7, 2026-09-28/29): `open_mfdataset()` is
+    already dask-backed by default (one chunk per input file, i.e. one
+    year), but the prior code called `.load()` before `.to_netcdf()`,
+    forcing the full 20-year hourly field into a single in-memory numpy
+    array first — `MemoryError: Unable to allocate 3.57 GiB for an
+    array with shape (175320, 52, 105)` on PRT's real 20-year merge
+    (52x105 is PRT's small CDS-side bbox grid; BRA's is far larger). `merged.to_netcdf(out_path)` on the still-dask-backed
+    dataset writes it chunk by chunk instead (`dask.array.store`'s
+    write path), keeping peak memory near one year's worth of data
+    (~150-200 MB) regardless of how many years are merged.
     """
     with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        merged.load().to_netcdf(out_path)
+        merged.to_netcdf(out_path)
     return out_path
 
 
@@ -312,7 +324,12 @@ def crop_to_country_polygon(
     country = gpd.read_file(country_polygon_path)
     geom = country.union_all()
 
-    with xr.open_dataset(bbox_path) as ds:
+    # chunks="auto" (COMMAND F4-7): dask-backed, same reason as
+    # merge_yearly_files() above -- bbox_path is already the full
+    # multi-year merged field by this point, so an eager open here
+    # would re-materialize the exact array `merge_yearly_files()` was
+    # just fixed to avoid holding in memory.
+    with xr.open_dataset(bbox_path, chunks="auto") as ds:
         lat_name = "latitude" if "latitude" in ds.variables else "lat"
         lon_name = "longitude" if "longitude" in ds.variables else "lon"
         lat = np.asarray(ds[lat_name].values, dtype=float)
@@ -338,7 +355,7 @@ def crop_to_country_polygon(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        cropped.load().to_netcdf(out_path)
+        cropped.to_netcdf(out_path)  # dask-backed write, see chunks= note above
 
     return cells_before, cells_after
 
@@ -357,8 +374,22 @@ def compute_daily_maxima(hourly_path: Path, variable: str = "fg10") -> xr.Datase
     product (dropped — see module docstring): this is the same
     reduction, computed locally over the raw hourly field instead of
     server-side.
+
+    Opened dask-backed (`chunks="auto"`, COMMAND F4-7) so the
+    resample-max reduction itself runs chunked rather than forcing the
+    full hourly field into memory first -- but still materialized
+    (`.load()`) before returning, inside this function's own `with`
+    block: `hourly_path` here is `crop_to_country_polygon()`'s output
+    (already reduced to the real country polygon's cells, not the full
+    CDS-side bbox rectangle `merge_yearly_files()`/
+    `crop_to_country_polygon()` had to fix for, COMMAND F4-6/F4-7's
+    real MemoryError), so this step's own memory footprint was not the
+    reported failure. Kept eager (rather than deferred like the two
+    steps above) because the returned Dataset must stay usable after
+    this function's own file handle closes -- `compute_annual_maxima()`
+    below documents its `xr.Dataset` input as already in-memory.
     """
-    with xr.open_dataset(hourly_path) as ds:
+    with xr.open_dataset(hourly_path, chunks="auto") as ds:
         time_name = "valid_time" if "valid_time" in ds.variables else "time"
         da = ds[variable]
         daily = da.resample({time_name: "1D"}).max()

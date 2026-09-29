@@ -61,6 +61,16 @@ class Era5RegistryEntry(BaseModel):
             against this hash before re-downloading it, so a crash or
             stall partway through the 20-year sequence never re-does
             years that already landed.
+        permanently_failed_years: Per-year failure reason, keyed by
+            year as a string, for a year that exhausted
+            `MAX_ATTEMPTS_PER_YEAR` retries (COMMAND F4-6, OQ-038
+            follow-up). Distinct from a year present in neither this
+            dict nor `year_sha256` (not yet attempted this run, or
+            transiently unresolved and eligible for a future resume)
+            and from a year in `year_sha256` (succeeded). A year here
+            is not retried automatically by a later resume — it is a
+            terminal state for that (country, year) pending manual
+            attention, not a transient one.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -80,6 +90,7 @@ class Era5RegistryEntry(BaseModel):
     cells_before: int | None = None
     cells_after: int | None = None
     year_sha256: dict[str, str] = {}
+    permanently_failed_years: dict[str, str] = {}
 
     @property
     def key(self) -> str:
