@@ -12,6 +12,7 @@ Run directly: `python scripts/acquire_era5_gust.py`
 
 from __future__ import annotations
 
+import gc
 import logging
 import shutil
 import time
@@ -452,6 +453,14 @@ def main() -> None:
                 permanently_failed_years=permanently_failed_years,
             )
             registry.save(registry_path)
+            # Memory safety (CLAUDE.md, added after a sibling framework's
+            # OOM crash): each iteration opens/writes a ~500MB+ file via
+            # cdsapi/dask; nothing here leaks in the Python-object sense,
+            # but an explicit collect keeps this long sequential run's
+            # working set from ratcheting up across ~40 years x 3
+            # countries instead of relying on whenever CPython would get
+            # around to it on its own.
+            gc.collect()
 
         if permanently_failed_years or len(year_sha256) < expected_year_count:
             # Correctness fix (COMMAND F4-5, extended F4-6): merge/crop/
@@ -540,6 +549,12 @@ def main() -> None:
             year_sha256=year_sha256,
         )
         registry.save(registry_path)
+        # Same rationale as the per-year collect() above: merge/crop/
+        # reduce opens several dask-backed datasets per country in
+        # sequence (bbox, cropped, annual-max); collect before starting
+        # the next country instead of letting three countries' worth of
+        # dask graph/chunk references accumulate across the whole run.
+        gc.collect()
 
     registered = sum(1 for e in registry.entries.values() if e.status == "registered")
     missing = sum(1 for e in registry.entries.values() if e.status == "missing")
