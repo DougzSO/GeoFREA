@@ -94,6 +94,10 @@ Before writing shared documents (`docs/METHODOLOGY.md`, `docs/phases/`, `docs/PR
 
 Any tile, extent, or coverage claim about a country is decided by intersection with the GADM country polygon, never by bounding box. A bounding box overstates coverage in every non-rectangular country. Precedent: the BRA S36W057 tile and the IND 28-tile case were both wrongly included/counted under bounding-box logic and corrected only after GADM polygon intersection was applied.
 
+## Memory safety
+
+`groupby(...).transform(lambda s: s.rolling(...))` or `.groupby(...).apply(...)` over a full, ungrouped-in-advance table materializes a Series per group and concatenates them — with many thousands of groups this can exhaust machine RAM and crash the desktop (observed in a sibling framework, COMANDO 15/17; not yet hit in GeoFREA, checked 2026-09-29). Same risk for `.load()` before `.to_netcdf()`/`.to_dataframe()` on a dataset larger than a single already-cropped country-year (the real MemoryError fixed in F4-7, `fetchers/era5.py`'s `merge_yearly_files()`/`crop_to_country_polygon()`). Any new large-table or multi-year raster reduction must process per (country, model) chunk with an explicit, bounded memory footprint, not a single groupby/load over the whole table.
+
 ## Scope reminders
 
 In scope: BRA, PRT, IND; solar PV and onshore wind; SSP1-2.6, SSP3-7.0, SSP5-8.5; windows 2041-2070 and 2071-2100. Out of scope: GHG abatement, biomass, seismic, transport decarbonisation, sea-level rise, wildfire. Do not add code for out-of-scope items.
