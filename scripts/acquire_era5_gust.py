@@ -483,6 +483,7 @@ def main() -> None:
 
         try:
             bbox_path = global_dir / f"{country}_fg10_hourly_bbox.nc"
+            print(f"[merge-start] {job.key}: merging {len(year_paths)} yearly files", flush=True)
             era5.merge_yearly_files(year_paths, bbox_path)
             # Re-validate the merged file itself, not just each year's
             # input -- a truncated to_netcdf() write from a killed/crashed
@@ -497,6 +498,7 @@ def main() -> None:
 
             country_dir = core_paths.fetched_raw("era5", country)
             source_path = country_dir / f"{country}_fg10_hourly.nc"
+            print(f"[crop-start] {job.key}: cropping to country polygon", flush=True)
             cells_before, cells_after = era5.crop_to_country_polygon(
                 bbox_path=bbox_path, country_polygon_path=border_path, out_path=source_path
             )
@@ -506,6 +508,7 @@ def main() -> None:
             grid = era5.read_native_grid(source_path)
 
             reduced_path = country_dir / f"{country}_fg10_annual_max.nc"
+            print(f"[reduce-start] {job.key}: computing annual maxima", flush=True)
             era5.write_annual_maxima_from_hourly(source_path, reduced_path)
             with xr.open_dataset(reduced_path) as _check:  # re-validate: see merge comment above
                 if "fg10" not in _check.data_vars or _check.sizes.get("year", 0) == 0:
