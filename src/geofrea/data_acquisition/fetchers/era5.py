@@ -61,15 +61,14 @@ this way; verified against COMMAND F4-1b's real probe file).
 
 from __future__ import annotations
 
+import multiprocessing as mp
 import shutil
 import threading
 import time
 import zipfile
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 import geopandas as gpd
 import numpy as np
@@ -77,15 +76,30 @@ import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 from dask.callbacks import Callback
 
-# 2026-09-30, real use: a `to_netcdf()` write on BRA's merge froze with
-# zero CPU and healthy RAM (no PageIn wait, unlike the separate
-# RAM-thrash stall this same day) -- an identical call against the
-# same files in a fresh process ran cleanly, so this was a one-off
-# stall in that process's state, not a reproducible code bug. No task
-# completed for the rest of that process's life. `_write_with_watchdog()`
-# below bounds any repeat of this: abandon (not kill -- Python cannot
-# kill a thread) a write whose task-completion count hasn't moved in
-# this many seconds.
+# 2026-09-30, real use: a `to_netcdf()` write on BRA's merge froze
+# twice -- zero CPU across *every* thread in the process, no PageIn
+# wait (unlike the separate RAM-thrash stall earlier the same day, and
+# system RAM was healthy both times). An identical call against the
+# same files ran cleanly in a fresh process, but a second repro against
+# those files also froze *while the first frozen process was still
+# alive*, and started working again immediately after killing it --
+# consistent with the frozen process holding some OS/disk-level
+# resource that blocked other processes' I/O on the same drive, not a
+# reproducible bug in this module's own logic. No Python stack trace
+# was obtainable (no signal-based introspection for a hung process on
+# Windows) to confirm the exact syscall.
+#
+# A same-process thread watchdog was tried first and did not work: all
+# threads showed zero CPU, including the polling thread itself -- if
+# the freeze holds the GIL (a C-extension call that does not release it
+# around a blocking syscall, which HDF5/netCDF4 are not guaranteed to
+# do on every code path), no thread in that same process can run Python
+# bytecode to notice or act on the stall. `_run_worker_with_watchdog()`
+# below runs the actual write in a **separate OS process**
+# (`multiprocessing`, not `threading`) instead: the parent polls a
+# shared counter and calls `Process.terminate()`/`.kill()` on stall,
+# both of which act at the OS level and do not depend on the child's
+# interpreter making any progress.
 WRITE_STALL_TIMEOUT_S = 15 * 60
 
 # Switched from the CDS derived daily-statistics dataset to the raw
@@ -257,27 +271,32 @@ class _LoggingProgress(Callback):
     log stays readable instead of spammed.
     """
 
-    def __init__(self, label: str, interval_s: float = 30.0) -> None:
+    def __init__(self, label: str, interval_s: float = 30.0, mp_progress=None) -> None:
         self.label = label
         self.interval_s = interval_s
+        self.mp_progress = mp_progress  # a multiprocessing.Value('l'), shared with the parent process's watchdog
         self._lock = threading.Lock()
         self._start = 0.0
         self._total = 0
         self._done = 0
         self._last_log = 0.0
 
-    def _start_state(self, dsk, state) -> None:  # noqa: ANN001 -- dask's own untyped Callback hook signature
+    def _start_state(self, dsk, state) -> None:
         self._start = time.time()
         self._total = sum(len(state[k]) for k in ("ready", "waiting", "running", "finished"))
         self._done = len(state["finished"])
         self._last_log = self._start
+        if self.mp_progress is not None:
+            self.mp_progress.value = self._done
         print(f"[{self.label}-progress] 0% (0/{self._total} tasks)", flush=True)
 
-    def _posttask(self, key, result, dsk, state, worker_id) -> None:  # noqa: ANN001
+    def _posttask(self, key, result, dsk, state, worker_id) -> None:
         with self._lock:
             self._done += 1
             now = time.time()
             done, total = self._done, self._total
+            if self.mp_progress is not None:
+                self.mp_progress.value = done
             if now - self._last_log < self.interval_s and done < total:
                 return
             self._last_log = now
@@ -287,54 +306,69 @@ class _LoggingProgress(Callback):
             flush=True,
         )
 
-    @property
-    def done(self) -> int:
-        with self._lock:
-            return self._done
 
-    @property
-    def total(self) -> int:
-        with self._lock:
-            return self._total
+def _run_worker_with_watchdog(
+    target, args: tuple, label: str, result_queue: mp.Queue | None = None
+):
+    """Run `target(*args, mp_progress[, result_queue])` in its own OS process; kill it if stalled.
 
+    See `WRITE_STALL_TIMEOUT_S`'s module-level comment for why this is
+    a *process* (`multiprocessing`), not a thread: a same-process
+    thread watchdog was tried first and could not detect the real
+    stall it was built for, because that stall showed zero CPU on
+    every thread including the watchdog's own polling thread -- a
+    same-process fallback offers no protection if the freeze holds the
+    GIL. `Process.terminate()`/`.kill()` act at the OS level and work
+    regardless of what the child's interpreter is doing.
 
-def _write_with_watchdog(write_fn: Callable[[], None], progress: _LoggingProgress, label: str) -> None:
-    """Run `write_fn()` (a `to_netcdf()` call) in its own thread; abandon it if stalled.
-
-    Polls `progress`'s own task-completion counter rather than a flat
-    wall-clock cap -- merge/crop/reduce durations vary by an order of
-    magnitude with dataset size (a small country vs. BRA), so a fixed
-    timeout would either be too tight for the largest country or too
-    loose to catch a real hang for the smallest. See
-    `WRITE_STALL_TIMEOUT_S`'s module-level comment for the real
-    incident this responds to. Abandon-not-join mirrors
-    `scripts/acquire_era5_gust.py::_run_with_timeout()`'s documented
-    pattern for the same underlying reason: Python cannot kill a
-    thread, so a stalled one is left to run out its life rather than
-    blocking the caller on `.join()`.
+    `target` must be an importable module-level function (Windows uses
+    the `spawn` start method, which pickles a reference to `target` by
+    qualified name, not a closure) whose last positional parameter is
+    `mp_progress: multiprocessing.sharedctypes.Synchronized` -- it must
+    update `mp_progress.value` as work progresses (the `_LoggingProgress`
+    callback's `mp_progress=` parameter does this automatically). If
+    `result_queue` is given, it is appended as the final argument and
+    `target` must `.put()` its return value onto it.
     """
-    pool = ThreadPoolExecutor(max_workers=1)
+    mp_progress = mp.Value("l", -1)
+    full_args = (*args, mp_progress) if result_queue is None else (*args, mp_progress, result_queue)
+    proc = mp.Process(target=target, args=full_args)
+    proc.start()
     try:
-        future = pool.submit(write_fn)
-        last_done = -1
+        last_value = -1
         last_progress_at = time.time()
         while True:
-            try:
-                future.result(timeout=30)
-                return
-            except FutureTimeoutError:
-                pass
-            done = progress.done
-            if done != last_done:
-                last_done = done
+            proc.join(timeout=10)
+            if not proc.is_alive():
+                break
+            value = mp_progress.value
+            if value != last_value:
+                last_value = value
                 last_progress_at = time.time()
-            elif time.time() - last_progress_at > WRITE_STALL_TIMEOUT_S:
+                continue
+            if time.time() - last_progress_at > WRITE_STALL_TIMEOUT_S:
+                proc.terminate()
+                proc.join(timeout=30)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join(timeout=30)
                 raise TimeoutError(
                     f"{label}: no write progress for {WRITE_STALL_TIMEOUT_S}s "
-                    f"({done}/{progress.total} tasks) -- treated as hung"
+                    f"(worker pid {proc.pid}, {value} tasks done) -- terminated as hung"
                 )
     finally:
-        pool.shutdown(wait=False)
+        if proc.is_alive():
+            proc.terminate()
+    if proc.exitcode != 0:
+        raise RuntimeError(f"{label}: worker subprocess exited with code {proc.exitcode}")
+
+
+def _merge_worker(year_paths: list[Path], out_path: Path, mp_progress) -> None:
+    """Subprocess entry point for `merge_yearly_files()` -- see `_run_worker_with_watchdog()`."""
+    with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with _LoggingProgress("merge", mp_progress=mp_progress):
+            merged.to_netcdf(out_path)
 
 
 def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
@@ -355,12 +389,14 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     dataset writes it chunk by chunk instead (`dask.array.store`'s
     write path), keeping peak memory near one year's worth of data
     (~150-200 MB) regardless of how many years are merged.
+
+    Runs in a watchdog-supervised subprocess (COMMAND 2026-09-30, see
+    `WRITE_STALL_TIMEOUT_S`) -- functionally identical to calling
+    `xr.open_mfdataset(...).to_netcdf(out_path)` directly, just immune
+    to hanging forever if the write itself freezes.
     """
-    with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        progress = _LoggingProgress("merge")
-        with progress:
-            _write_with_watchdog(lambda: merged.to_netcdf(out_path), progress, "merge")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _run_worker_with_watchdog(_merge_worker, (sorted(year_paths), out_path), "merge")
     return out_path
 
 
@@ -417,21 +453,10 @@ def read_native_grid(path: Path) -> NativeGrid:
         )
 
 
-def crop_to_country_polygon(
-    bbox_path: Path, country_polygon_path: Path, out_path: Path
-) -> tuple[int, int]:
-    """Crop `bbox_path` (CDS-side bbox download) to the real GADM country polygon.
-
-    Adapted from `cmip6.py::crop_to_country_polygon()` (same repository,
-    not A-11 — see module docstring): identical "keep whole native
-    cells, mask the rest to NaN, write EPSG:4326 explicitly" logic,
-    generalized for ERA5's `latitude`/`longitude` dimension names.
-
-    Returns:
-        (cells_before, cells_after): total native cells in the
-        bbox-downloaded file, and how many cell centers fall inside the
-        country polygon.
-    """
+def _crop_worker(
+    bbox_path: Path, country_polygon_path: Path, out_path: Path, mp_progress, result_queue
+) -> None:
+    """Subprocess entry point for `crop_to_country_polygon()` -- see `_run_worker_with_watchdog()`."""
     country = gpd.read_file(country_polygon_path)
     geom = country.union_all()
 
@@ -466,11 +491,36 @@ def crop_to_country_polygon(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        progress = _LoggingProgress("crop")  # dask-backed write, see chunks= note above
-        with progress:
-            _write_with_watchdog(lambda: cropped.to_netcdf(out_path), progress, "crop")
+        with _LoggingProgress("crop", mp_progress=mp_progress):  # dask-backed write, see chunks= note above
+            cropped.to_netcdf(out_path)
 
-    return cells_before, cells_after
+    result_queue.put((cells_before, cells_after))
+
+
+def crop_to_country_polygon(
+    bbox_path: Path, country_polygon_path: Path, out_path: Path
+) -> tuple[int, int]:
+    """Crop `bbox_path` (CDS-side bbox download) to the real GADM country polygon.
+
+    Adapted from `cmip6.py::crop_to_country_polygon()` (same repository,
+    not A-11 — see module docstring): identical "keep whole native
+    cells, mask the rest to NaN, write EPSG:4326 explicitly" logic,
+    generalized for ERA5's `latitude`/`longitude` dimension names.
+
+    Runs in a watchdog-supervised subprocess (COMMAND 2026-09-30, see
+    `WRITE_STALL_TIMEOUT_S`) for the same reason `merge_yearly_files()`
+    does.
+
+    Returns:
+        (cells_before, cells_after): total native cells in the
+        bbox-downloaded file, and how many cell centers fall inside the
+        country polygon.
+    """
+    result_queue: mp.Queue = mp.Queue()
+    _run_worker_with_watchdog(
+        _crop_worker, (bbox_path, country_polygon_path, out_path), "crop", result_queue=result_queue
+    )
+    return result_queue.get(timeout=30)
 
 
 def compute_daily_maxima(hourly_path: Path, variable: str = "fg10") -> xr.Dataset:
@@ -538,6 +588,17 @@ def compute_annual_maxima(daily_max_path: Path | xr.Dataset, variable: str = "fg
         return annual.load()
 
 
+def _reduce_worker(hourly_path: Path, out_path: Path, variable: str, mp_progress) -> None:
+    """Subprocess entry point for `write_annual_maxima_from_hourly()` -- see `_run_worker_with_watchdog()`."""
+    daily_ds = compute_daily_maxima(hourly_path, variable=variable)
+    annual = compute_annual_maxima(daily_ds, variable=variable)
+    ds_out = annual.to_dataset(name=variable)
+    ds_out = ds_out.rio.write_crs("EPSG:4326")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with _LoggingProgress("reduce", mp_progress=mp_progress):
+        ds_out.to_netcdf(out_path)
+
+
 def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable: str = "fg10") -> None:
     """Compute daily-then-annual maxima from a raw hourly field and persist the result.
 
@@ -547,12 +608,9 @@ def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable:
     hours, so the daily-maximum intermediate stays an explicit,
     auditable step even though `max` is associative and would give the
     same annual result either way.
+
+    Runs in a watchdog-supervised subprocess (COMMAND 2026-09-30, see
+    `WRITE_STALL_TIMEOUT_S`) for the same reason `merge_yearly_files()`
+    does.
     """
-    daily_ds = compute_daily_maxima(hourly_path, variable=variable)
-    annual = compute_annual_maxima(daily_ds, variable=variable)
-    ds_out = annual.to_dataset(name=variable)
-    ds_out = ds_out.rio.write_crs("EPSG:4326")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    progress = _LoggingProgress("reduce")
-    with progress:
-        _write_with_watchdog(lambda: ds_out.to_netcdf(out_path), progress, "reduce")
+    _run_worker_with_watchdog(_reduce_worker, (hourly_path, out_path, variable), "reduce")
