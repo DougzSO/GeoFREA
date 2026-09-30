@@ -62,6 +62,8 @@ this way; verified against COMMAND F4-1b's real probe file).
 from __future__ import annotations
 
 import shutil
+import threading
+import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,6 +73,7 @@ import geopandas as gpd
 import numpy as np
 import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
+from dask.callbacks import Callback
 
 # Switched from the CDS derived daily-statistics dataset to the raw
 # hourly reanalysis (task F4-2, 2026-09-28, Douglas's verdict): the
@@ -228,6 +231,50 @@ def download_country_bbox_year(
     return final_path
 
 
+class _LoggingProgress(Callback):
+    """Log periodic `dask.array.store()` task-completion progress to stdout.
+
+    2026-09-30: with no visibility inside a long `to_netcdf()` write,
+    Douglas had nothing between "still running" and "done" for over an
+    hour during BRA's crop step -- the target file's logical size is
+    fixed by NetCDF's own pre-allocation, so file size cannot answer
+    "how far along is this". Dask's own scheduler already knows task
+    completion counts; this just logs them, throttled to `interval_s`
+    (not per-task -- a chunked write can be thousands of tasks) so the
+    log stays readable instead of spammed.
+    """
+
+    def __init__(self, label: str, interval_s: float = 30.0) -> None:
+        self.label = label
+        self.interval_s = interval_s
+        self._lock = threading.Lock()
+        self._start = 0.0
+        self._total = 0
+        self._done = 0
+        self._last_log = 0.0
+
+    def _start_state(self, dsk, state) -> None:  # noqa: ANN001 -- dask's own untyped Callback hook signature
+        self._start = time.time()
+        self._total = sum(len(state[k]) for k in ("ready", "waiting", "running", "finished"))
+        self._done = len(state["finished"])
+        self._last_log = self._start
+        print(f"[{self.label}-progress] 0% (0/{self._total} tasks)", flush=True)
+
+    def _posttask(self, key, result, dsk, state, worker_id) -> None:  # noqa: ANN001
+        with self._lock:
+            self._done += 1
+            now = time.time()
+            done, total = self._done, self._total
+            if now - self._last_log < self.interval_s and done < total:
+                return
+            self._last_log = now
+        pct = round(100 * done / total) if total else 100
+        print(
+            f"[{self.label}-progress] {pct}% ({done}/{total} tasks, {now - self._start:.0f}s elapsed)",
+            flush=True,
+        )
+
+
 def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     """Concatenate per-year hourly files along time into one bbox source file.
 
@@ -249,7 +296,8 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     """
     with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        merged.to_netcdf(out_path)
+        with _LoggingProgress("merge"):
+            merged.to_netcdf(out_path)
     return out_path
 
 
@@ -355,7 +403,8 @@ def crop_to_country_polygon(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        cropped.to_netcdf(out_path)  # dask-backed write, see chunks= note above
+        with _LoggingProgress("crop"):  # dask-backed write, see chunks= note above
+            cropped.to_netcdf(out_path)
 
     return cells_before, cells_after
 
@@ -440,4 +489,5 @@ def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable:
     ds_out = annual.to_dataset(name=variable)
     ds_out = ds_out.rio.write_crs("EPSG:4326")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    ds_out.to_netcdf(out_path)
+    with _LoggingProgress("reduce"):
+        ds_out.to_netcdf(out_path)
