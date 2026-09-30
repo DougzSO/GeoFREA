@@ -65,15 +65,28 @@ import shutil
 import threading
 import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import geopandas as gpd
 import numpy as np
 import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 from dask.callbacks import Callback
+
+# 2026-09-30, real use: a `to_netcdf()` write on BRA's merge froze with
+# zero CPU and healthy RAM (no PageIn wait, unlike the separate
+# RAM-thrash stall this same day) -- an identical call against the
+# same files in a fresh process ran cleanly, so this was a one-off
+# stall in that process's state, not a reproducible code bug. No task
+# completed for the rest of that process's life. `_write_with_watchdog()`
+# below bounds any repeat of this: abandon (not kill -- Python cannot
+# kill a thread) a write whose task-completion count hasn't moved in
+# this many seconds.
+WRITE_STALL_TIMEOUT_S = 15 * 60
 
 # Switched from the CDS derived daily-statistics dataset to the raw
 # hourly reanalysis (task F4-2, 2026-09-28, Douglas's verdict): the
@@ -274,6 +287,55 @@ class _LoggingProgress(Callback):
             flush=True,
         )
 
+    @property
+    def done(self) -> int:
+        with self._lock:
+            return self._done
+
+    @property
+    def total(self) -> int:
+        with self._lock:
+            return self._total
+
+
+def _write_with_watchdog(write_fn: Callable[[], None], progress: _LoggingProgress, label: str) -> None:
+    """Run `write_fn()` (a `to_netcdf()` call) in its own thread; abandon it if stalled.
+
+    Polls `progress`'s own task-completion counter rather than a flat
+    wall-clock cap -- merge/crop/reduce durations vary by an order of
+    magnitude with dataset size (a small country vs. BRA), so a fixed
+    timeout would either be too tight for the largest country or too
+    loose to catch a real hang for the smallest. See
+    `WRITE_STALL_TIMEOUT_S`'s module-level comment for the real
+    incident this responds to. Abandon-not-join mirrors
+    `scripts/acquire_era5_gust.py::_run_with_timeout()`'s documented
+    pattern for the same underlying reason: Python cannot kill a
+    thread, so a stalled one is left to run out its life rather than
+    blocking the caller on `.join()`.
+    """
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = pool.submit(write_fn)
+        last_done = -1
+        last_progress_at = time.time()
+        while True:
+            try:
+                future.result(timeout=30)
+                return
+            except FutureTimeoutError:
+                pass
+            done = progress.done
+            if done != last_done:
+                last_done = done
+                last_progress_at = time.time()
+            elif time.time() - last_progress_at > WRITE_STALL_TIMEOUT_S:
+                raise TimeoutError(
+                    f"{label}: no write progress for {WRITE_STALL_TIMEOUT_S}s "
+                    f"({done}/{progress.total} tasks) -- treated as hung"
+                )
+    finally:
+        pool.shutdown(wait=False)
+
 
 def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     """Concatenate per-year hourly files along time into one bbox source file.
@@ -296,8 +358,9 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     """
     with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress("merge"):
-            merged.to_netcdf(out_path)
+        progress = _LoggingProgress("merge")
+        with progress:
+            _write_with_watchdog(lambda: merged.to_netcdf(out_path), progress, "merge")
     return out_path
 
 
@@ -403,8 +466,9 @@ def crop_to_country_polygon(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress("crop"):  # dask-backed write, see chunks= note above
-            cropped.to_netcdf(out_path)
+        progress = _LoggingProgress("crop")  # dask-backed write, see chunks= note above
+        with progress:
+            _write_with_watchdog(lambda: cropped.to_netcdf(out_path), progress, "crop")
 
     return cells_before, cells_after
 
@@ -489,5 +553,6 @@ def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable:
     ds_out = annual.to_dataset(name=variable)
     ds_out = ds_out.rio.write_crs("EPSG:4326")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with _LoggingProgress("reduce"):
-        ds_out.to_netcdf(out_path)
+    progress = _LoggingProgress("reduce")
+    with progress:
+        _write_with_watchdog(lambda: ds_out.to_netcdf(out_path), progress, "reduce")
