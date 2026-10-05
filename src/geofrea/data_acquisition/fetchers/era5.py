@@ -597,7 +597,9 @@ def _crop_cell_counts(bbox_path: Path, country_polygon_path: Path) -> tuple[int,
     return cells_before, cells_after
 
 
-_CROP_BATCH_YEARS = 5  # years per intermediate crop batch -- see crop_to_country_polygon() docstring
+_CROP_BATCH_YEARS = 1  # years per intermediate crop batch (lowered from 5, COMMAND 2026-10-05: smaller
+# batches bound how much work a watchdog kill loses per retry, on top of the time-axis rechunk fix
+# above) -- see crop_to_country_polygon() docstring
 
 
 def _crop_year_batches(bbox_path: Path) -> list[tuple[int, int]]:
