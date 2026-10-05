@@ -505,6 +505,9 @@ def read_native_grid(path: Path) -> NativeGrid:
         )
 
 
+_CROP_TIME_CHUNK_SIZE = 500  # hours per chunk after rechunking -- see _crop_worker()'s rechunk comment
+
+
 def _crop_worker(
     bbox_path: Path,
     country_polygon_path: Path,
@@ -527,6 +530,19 @@ def _crop_worker(
         if year_range is not None:
             start, end = year_range
             ds = ds.sel({time_name: slice(f"{start}-01-01", f"{end}-12-31")})
+        # Rechunk the time axis to a small, fixed size (COMMAND 2026-10-05:
+        # BRA's crop-batch1of4 stalled at exactly 301/535 tasks three times
+        # in a row across separate run attempts, same batch, different
+        # worker pids -- not plausible as pure random external-drive I/O
+        # timing, since that would not reproduce the identical task index.
+        # `chunks="auto"` above sizes chunks from the *full* multi-year
+        # file before this batch's year_range slice is applied, so one
+        # inherited chunk can land disproportionately large for this
+        # batch and consistently exceed WRITE_STALL_TIMEOUT_S. Rechunking
+        # to a small, uniform time-chunk size after slicing bounds every
+        # write task to roughly the same size regardless of which batch
+        # or file boundary it falls on.
+        ds = ds.chunk({time_name: _CROP_TIME_CHUNK_SIZE})
         lat_name = "latitude" if "latitude" in ds.variables else "lat"
         lon_name = "longitude" if "longitude" in ds.variables else "lon"
         lat = np.asarray(ds[lat_name].values, dtype=float)
