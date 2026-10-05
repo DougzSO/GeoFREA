@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "methodology_version": "1.3.0",
-  "last_updated": "2026-09-28",
+  "last_updated": "2026-10-05",
   "current_milestone": "MS-1",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -30,14 +30,14 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, OQ-038 resolved (retry/timeout policy, D-F1-019), acquisition not yet resumed: PRT 17/20y, BRA 1/20y, IND 1/20y on disk. M-F1-02 still fails. OQ-012/024/027/028 closed."
+      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, OQ-038 resolved (retry/timeout policy, D-F1-019), M-F1-05 ERA5 gust acquired and registered for BRA/PRT/IND (D-F1-022, 2026-10-05; not yet F1b-audited, OQ-029 closed). M-F1-02 still fails. OQ-012/024/027/028 closed."
     },
     {
       "id": "F1b",
       "module": "data_quality_audit",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1b_data_quality_audit.md",
-      "summary": "GWA products moved to real inspection. Weibull-A/k CRS gap fixed. IND parameters.json filled, F1b runs clean (0 alerts). CMIP6 resource channel (GFDL-ESM4/MIROC6) moved out of not_audited, 0 alerts, BRA/PRT/IND clean. ERA5/GEM still not_audited."
+      "summary": "GWA products moved to real inspection. Weibull-A/k CRS gap fixed. IND parameters.json filled, F1b runs clean (0 alerts). CMIP6 resource channel (GFDL-ESM4/MIROC6) moved out of not_audited, 0 alerts, BRA/PRT/IND clean. ERA5 (now acquired)/GEM still not_audited."
     },
     {
       "id": "F2a",
@@ -54,7 +54,7 @@
       "summary": "Existing code is the legacy 14-criteria MCDA design (suitability_criteria); rebuild as exclusion, cost-driver and resource layers."
     },
     {"id": "F3", "module": "land_eligibility", "status": "not_started", "record": "docs/phases/F3_land_eligibility.md", "summary": ""},
-    {"id": "F4", "module": "climate_forcing", "status": "not_started", "record": "docs/phases/F4_climate_forcing.md", "summary": "No code yet. Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel data location open (OQ-036)."},
+    {"id": "F4", "module": "climate_forcing", "status": "not_started", "record": "docs/phases/F4_climate_forcing.md", "summary": "No code yet. Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel ISIMIP3b copied and registered (OQ-036 closed); ERA5 gust annual maxima acquired for BRA/PRT/IND (F4-6)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
     {"id": "F7", "module": "robustness_analysis", "status": "not_started", "record": "docs/phases/F7_robustness_analysis.md", "summary": ""},

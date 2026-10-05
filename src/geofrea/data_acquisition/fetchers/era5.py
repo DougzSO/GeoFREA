@@ -494,8 +494,11 @@ def read_native_grid(path: Path) -> NativeGrid:
         if lat.size < 2 or lon.size < 2:
             raise OSError(f"{path}: degenerate grid (n_lat={lat.size}, n_lon={lon.size})")
         return NativeGrid(
-            lat_resolution_deg=float(np.abs(np.diff(lat)).mean()),
-            lon_resolution_deg=float(np.abs(np.diff(lon)).mean()),
+            # Median, not mean: a polygon-cropped axis drops rows/columns with no
+            # in-polygon cell (islands: PRT, IND), so some steps are multiples of
+            # the native step and the mean would overstate the resolution.
+            lat_resolution_deg=float(np.median(np.abs(np.diff(lat)))),
+            lon_resolution_deg=float(np.median(np.abs(np.diff(lon)))),
             lat_min=float(lat.min()),
             lat_max=float(lat.max()),
             lon_min=float(lon.min()),

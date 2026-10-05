@@ -68,6 +68,20 @@ def test_read_native_grid_uses_latitude_longitude_names(tmp_path):
 
 
 @pytest.mark.unit
+def test_read_native_grid_resolution_survives_gaps_from_polygon_crop(tmp_path):
+    path = tmp_path / "gappy.nc"
+    # Mainland rows plus a far island row/column: the axis has a 4.5-degree gap.
+    lat = np.array([37.0, 36.75, 36.5, 32.0])
+    lon = np.array([-28.5, -9.5, -9.25, -9.0])
+    _write_daily_netcdf(path, lat=lat, lon=lon, dates=["2010-01-01"])
+
+    grid = era5.read_native_grid(path)
+
+    assert grid.lat_resolution_deg == pytest.approx(0.25)
+    assert grid.lon_resolution_deg == pytest.approx(0.25)
+
+
+@pytest.mark.unit
 def test_is_complete_download_distinguishes_partial_from_complete(tmp_path):
     final_path = tmp_path / "a.nc"
     tmp_download_path = tmp_path / "a.part.nc"

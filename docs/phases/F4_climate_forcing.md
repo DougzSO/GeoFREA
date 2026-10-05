@@ -28,7 +28,7 @@ Requires: CMIP6 and ERA5 layers from `acquisition_registry`, cell grid from F3. 
 
 ## Known issues
 
-- **ERA5 gust real acquisition paused mid-run (OQ-038), blocks the M-F1-05 real artifact.** Code is complete and tested (`docs/phases/F1_data_acquisition.md` D-F1-017/018); the real CDS acquisition itself is partial (PRT 17/20 years, BRA 1/20, IND 1/20) and paused because the CDS's request latency for this dataset varies too widely (minutes to 50+) for the current fixed-timeout retry logic to have a principled value. No `forcing.parquet`/`hazard_context.parquet` work depends on this being finished immediately — it only blocks the specific M-F1-05 artifact, not F4's other channels.
+- **ERA5 gust acquired (resolved 2026-10-05, COMMAND F4-6).** BRA, IND and PRT each have a registered 20-year annual-maximum `fg10` raster (1995-2014, 0.25 deg native, sha256-verified); see `docs/phases/F1_data_acquisition.md` D-F1-022. The per-cell per-year product is ready for task J-4's period mean (D-F4-009). Caveats for J-4: the cropped axes are irregular for PRT/IND (island rows/columns), and OQ-037 (UTC vs local day) remains open.
 
 ## History
 
