@@ -795,3 +795,187 @@ def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable:
     does.
     """
     _run_worker_with_watchdog(_reduce_worker, (hourly_path, out_path, variable), "reduce")
+
+
+# ---------------------------------------------------------------------------
+# Incremental (per-year, checkpointed) reduction -- COMMAND 2026-10-05
+#
+# merge -> crop -> reduce above materializes a ~12 GB multi-year bbox
+# file and a ~16 GB cropped hourly file just to end with a ~35 KB annual
+# maximum, and loses everything in the stage that fails (BRA's
+# merge-final died at 24% of 3146 tasks with an HDF write error on a
+# 5.9 GB-RAM machine). The annual maximum of year Y only depends on year
+# Y's own file (every ERA5 yearly file spans exactly Jan 1 - Dec 31 UTC,
+# so UTC days never straddle two files), so it is computed here one year
+# at a time, one month in memory at a time, and checkpointed as a tiny
+# per-year file. A crash/kill loses at most the year in progress.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CountryMask:
+    """Whole-native-cell polygon mask on a bbox grid (same logic as `_crop_worker()`)."""
+
+    lat_keep: np.ndarray  # bool, over the bbox file's latitude axis
+    lon_keep: np.ndarray  # bool, over the bbox file's longitude axis
+    sub_mask: np.ndarray  # bool (n_lat_keep, n_lon_keep): cell center inside polygon
+    cells_before: int
+    cells_after: int
+
+
+def build_country_mask(sample_year_path: Path, country_polygon_path: Path) -> CountryMask:
+    """Compute the polygon mask once per country from any one of its yearly bbox files."""
+    geom = gpd.read_file(country_polygon_path).union_all()
+    with xr.open_dataset(sample_year_path) as ds:
+        lat_name = "latitude" if "latitude" in ds.variables else "lat"
+        lon_name = "longitude" if "longitude" in ds.variables else "lon"
+        lat = np.asarray(ds[lat_name].values, dtype=float)
+        lon = np.asarray(ds[lon_name].values, dtype=float)
+    lon_wrapped = np.where(lon > 180, lon - 360, lon)
+    lon_grid, lat_grid = np.meshgrid(lon_wrapped, lat)
+    points = gpd.points_from_xy(lon_grid.ravel(), lat_grid.ravel())
+    mask_flat = gpd.GeoSeries(points, crs="EPSG:4326").intersects(geom).to_numpy()
+    mask = mask_flat.reshape(lat_grid.shape)
+    lat_keep = mask.any(axis=1)
+    lon_keep = mask.any(axis=0)
+    return CountryMask(
+        lat_keep=lat_keep,
+        lon_keep=lon_keep,
+        sub_mask=mask[np.ix_(lat_keep, lon_keep)],
+        cells_before=int(lat.size * lon.size),
+        cells_after=int(mask_flat.sum()),
+    )
+
+
+def _annual_year_worker(
+    year_path: Path,
+    year: int,
+    mask: CountryMask,
+    out_path: Path,
+    variable: str,
+    mp_progress,
+) -> None:
+    """Subprocess entry point: one year -> one tiny (lat, lon) annual-maximum file.
+
+    Peak memory is one month of the cropped hourly field (~100 MB for
+    BRA), not a year or the 20-year stack. daily max -> annual max is
+    kept as the explicit two-step reduction of `write_annual_maxima_from_hourly()`.
+    """
+    with xr.open_dataset(year_path) as ds:
+        time_name = "valid_time" if "valid_time" in ds.variables else "time"
+        lat_name = "latitude" if "latitude" in ds.variables else "lat"
+        lon_name = "longitude" if "longitude" in ds.variables else "lon"
+        times = ds[time_name].to_index()
+        years = sorted(set(times.year))
+        if years != [year]:
+            raise OSError(f"{year_path}: expected only year {year}, found {years}")
+        da = ds[variable].isel({lat_name: mask.lat_keep, lon_name: mask.lon_keep})
+        running = None
+        mp_progress.value = 0
+        for month in sorted(set(times.month)):
+            idx = np.flatnonzero(times.month == month)
+            block = da.isel({time_name: slice(int(idx[0]), int(idx[-1]) + 1)}).load()
+            month_max = block.resample({time_name: "1D"}).max().max(dim=time_name).values
+            running = month_max if running is None else np.fmax(running, month_max)
+            mp_progress.value += 1
+        lat_vals = da[lat_name].values
+        lon_vals = da[lon_name].values
+    annual = np.where(mask.sub_mask, running, np.nan).astype("float32")
+    out = xr.Dataset(
+        {variable: ((lat_name, lon_name), annual)},
+        coords={lat_name: lat_vals, lon_name: lon_vals},
+    ).expand_dims(year=[year])
+    out.to_netcdf(out_path)
+
+
+def _year_checkpoint_ok(path: Path, year: int, variable: str) -> bool:
+    if not path.exists():
+        return False
+    try:
+        with xr.open_dataset(path) as ds:
+            return variable in ds.data_vars and list(ds["year"].values) == [year]
+    except Exception:  # noqa: BLE001 -- unreadable checkpoint = redo that year
+        return False
+
+
+def _fmt_dur(seconds: float) -> str:
+    seconds = int(max(seconds, 0))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}h{m:02d}m" if h else f"{m}m{s:02d}s"
+
+
+def write_annual_maxima_incremental(
+    year_paths: list[Path],
+    country_polygon_path: Path,
+    out_path: Path,
+    work_dir: Path,
+    label: str,
+    variable: str = "fg10",
+) -> tuple[int, int]:
+    """Per-year, checkpointed, low-RAM replacement for merge -> crop -> reduce.
+
+    Each year is reduced in its own watchdog-supervised subprocess to
+    `work_dir/<label>_<year>.nc` (atomic `.part.nc` -> rename). Years
+    whose checkpoint already exists and validates are skipped, so a
+    re-run resumes where it stopped. The final concat of the (tiny)
+    checkpoints is atomic as well. Logs `[annual] i/N` lines with the
+    mean time per year computed in this run and an ETA.
+
+    Returns:
+        (cells_before, cells_after), as `crop_to_country_polygon()`.
+    """
+    work_dir.mkdir(parents=True, exist_ok=True)
+    sorted_paths = sorted(year_paths)
+    mask = build_country_mask(sorted_paths[0], country_polygon_path)
+    n = len(sorted_paths)
+    checkpoints: list[Path] = []
+    done_this_run: list[float] = []
+    t_run = time.time()
+
+    for i, year_path in enumerate(sorted_paths, start=1):
+        year = int(year_path.stem.rsplit("_", 1)[-1])
+        ckpt = work_dir / f"{label}_{year}.nc"
+        checkpoints.append(ckpt)
+        if _year_checkpoint_ok(ckpt, year, variable):
+            print(f"[annual-skip] {label} {year}: checkpoint intact ({i}/{n})", flush=True)
+            continue
+        tmp = ckpt.with_suffix(".part.nc")
+        tmp.unlink(missing_ok=True)
+        t0 = time.time()
+        _run_worker_with_watchdog(
+            _annual_year_worker, (year_path, year, mask, tmp, variable), f"annual-{label}-{year}"
+        )
+        ckpt.unlink(missing_ok=True)
+        tmp.rename(ckpt)
+        dt = time.time() - t0
+        done_this_run.append(dt)
+        # Years after this one that still need work (not already checkpointed).
+        todo = sum(
+            1
+            for p in sorted_paths[i:]
+            if not _year_checkpoint_ok(work_dir / f"{label}_{p.stem.rsplit('_', 1)[-1]}.nc", int(p.stem.rsplit("_", 1)[-1]), variable)
+        )
+        eta = (sum(done_this_run) / len(done_this_run)) * todo
+        print(
+            f"[annual] {label} {year}: {i}/{n} years | this year {_fmt_dur(dt)} | "
+            f"run elapsed {_fmt_dur(time.time() - t_run)} | ETA {_fmt_dur(eta)} "
+            f"({todo} to go)",
+            flush=True,
+        )
+
+    tmp_final = out_path.with_suffix(".part.nc")
+    tmp_final.unlink(missing_ok=True)
+    parts = [xr.open_dataset(c) for c in checkpoints]
+    try:
+        combined = xr.concat(parts, dim="year").sortby("year")
+        combined = combined.rio.write_crs("EPSG:4326")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        combined.to_netcdf(tmp_final)
+    finally:
+        for p in parts:
+            p.close()
+    out_path.unlink(missing_ok=True)
+    tmp_final.rename(out_path)
+    print(f"[annual-done] {label}: {n} years -> {out_path.name}", flush=True)
+    return mask.cells_before, mask.cells_after

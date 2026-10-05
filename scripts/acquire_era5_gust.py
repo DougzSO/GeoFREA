@@ -482,39 +482,35 @@ def main() -> None:
             continue
 
         try:
-            bbox_path = global_dir / f"{country}_fg10_hourly_bbox.nc"
-            print(f"[merge-start] {job.key}: merging {len(year_paths)} yearly files", flush=True)
-            era5.merge_yearly_files(year_paths, bbox_path)
-            # Re-validate the merged file itself, not just each year's
-            # input -- a truncated to_netcdf() write from a killed/crashed
-            # process would otherwise leave a right-sized-looking but
-            # unreadable/incomplete file that a later `exists()`-only
-            # resume check could not catch.
-            era5.validate_downloaded_netcdf(bbox_path)
-            print(
-                f"[merge] {job.key}: {len(year_paths)} yearly files -> {bbox_path.name}",
-                flush=True,
-            )
-
+            # COMMAND 2026-10-05: per-year, checkpointed, low-RAM reduction
+            # replaces merge -> crop -> reduce (which materialized ~12 GB +
+            # ~16 GB intermediates to end with a ~35 KB product, and lost
+            # the whole stage on any failure). One watchdog-supervised
+            # subprocess per year, one month in RAM at a time; each year's
+            # tiny checkpoint survives a kill; log shows i/N + ETA.
             country_dir = core_paths.fetched_raw("era5", country)
-            source_path = country_dir / f"{country}_fg10_hourly.nc"
-            print(f"[crop-start] {job.key}: cropping to country polygon", flush=True)
-            cells_before, cells_after = era5.crop_to_country_polygon(
-                bbox_path=bbox_path, country_polygon_path=border_path, out_path=source_path
-            )
-            era5.validate_downloaded_netcdf(source_path)  # re-validate: see merge comment above
-            print(f"[crop] {job.key}: {cells_before} -> {cells_after} cells", flush=True)
-
-            grid = era5.read_native_grid(source_path)
-
             reduced_path = country_dir / f"{country}_fg10_annual_max.nc"
-            print(f"[reduce-start] {job.key}: computing annual maxima", flush=True)
-            era5.write_annual_maxima_from_hourly(source_path, reduced_path)
-            with xr.open_dataset(reduced_path) as _check:  # re-validate: see merge comment above
-                if "fg10" not in _check.data_vars or _check.sizes.get("year", 0) == 0:
+            print(f"[annual-start] {job.key}: per-year reduction of {len(year_paths)} files", flush=True)
+            cells_before, cells_after = era5.write_annual_maxima_incremental(
+                year_paths=year_paths,
+                country_polygon_path=border_path,
+                out_path=reduced_path,
+                work_dir=global_dir / "_annual_ckpt" / country,
+                label=country,
+            )
+            with xr.open_dataset(reduced_path) as _check:  # re-validate the final product
+                if "fg10" not in _check.data_vars or _check.sizes.get("year", 0) != expected_year_count:
                     raise OSError(
-                        f"{reduced_path}: reduced product missing data or empty 'year' dim"
+                        f"{reduced_path}: reduced product missing data or wrong 'year' dim "
+                        f"(expected {expected_year_count})"
                     )
+            # The polygon-cropped hourly file is no longer materialized (that
+            # was the 16 GB step); the raw per-year downloads (year_sha256)
+            # are the re-acquirable source, and the registry's source_path
+            # now points at the annual-max raster consumed by the audit.
+            source_path = reduced_path
+            grid = era5.read_native_grid(reduced_path)
+            print(f"[crop] {job.key}: {cells_before} -> {cells_after} cells", flush=True)
         except Exception as exc:  # noqa: BLE001 -- recorded as "missing" below
             print(f"[FAILED] {job.key}: post-download step: {type(exc).__name__}: {exc}", flush=True)
             registry.entries[job.key] = Era5RegistryEntry(
@@ -530,7 +526,7 @@ def main() -> None:
         registry.entries[job.key] = Era5RegistryEntry(
             country_code=country,
             status="registered",
-            bbox_path=str(bbox_path),
+            bbox_path=None,
             source_path=str(source_path),
             source_sha256=sha256_file(source_path),
             reduced_path=str(reduced_path),
