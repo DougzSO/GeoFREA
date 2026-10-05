@@ -363,12 +363,33 @@ def _run_worker_with_watchdog(
         raise RuntimeError(f"{label}: worker subprocess exited with code {proc.exitcode}")
 
 
-def _merge_worker(year_paths: list[Path], out_path: Path, mp_progress) -> None:
+def _merge_worker(year_paths: list[Path], out_path: Path, label: str, mp_progress) -> None:
     """Subprocess entry point for `merge_yearly_files()` -- see `_run_worker_with_watchdog()`."""
     with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress("merge", mp_progress=mp_progress):
+        with _LoggingProgress(label, mp_progress=mp_progress):
             merged.to_netcdf(out_path)
+
+
+def _merge_to(paths: list[Path], out_path: Path, label: str) -> None:
+    """Run one watchdog-supervised merge, atomically (`.part.nc` tmp name, renamed on success).
+
+    A killed attempt (watchdog timeout, crash, power loss) leaves only
+    the tmp file behind -- `out_path` only ever exists fully written,
+    so callers can use `out_path.exists()` as a trustworthy
+    skip-if-intact check, same as the per-year download's `.part.nc`
+    pattern (`download_country_bbox_year()`).
+    """
+    tmp_path = out_path.with_suffix(".part.nc")
+    if tmp_path.exists():
+        tmp_path.unlink()
+    _run_worker_with_watchdog(_merge_worker, (sorted(paths), tmp_path, label), label)
+    if out_path.exists():
+        out_path.unlink()
+    tmp_path.rename(out_path)
+
+
+_MERGE_BATCH_SIZE = 5  # years per intermediate merge batch -- see merge_yearly_files() docstring
 
 
 def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
@@ -394,9 +415,40 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     `WRITE_STALL_TIMEOUT_S`) -- functionally identical to calling
     `xr.open_mfdataset(...).to_netcdf(out_path)` directly, just immune
     to hanging forever if the write itself freezes.
+
+    Batched (COMMAND 2026-10-01: BRA's merge itself stalled at 0 tasks
+    under the watchdog on a re-run, same intermittent external-drive
+    I/O hang already seen on the crop step -- see `WRITE_STALL_TIMEOUT_S`'s
+    comment; not a code bug, the watchdog caught it correctly). Years
+    are merged in groups of `_MERGE_BATCH_SIZE` first, each batch
+    written atomically to its own intermediate file
+    (`<out_path stem>_batch<N>of<M>.nc`) before a final merge combines
+    the batches into `out_path`. A watchdog-killed attempt only loses
+    the one batch (or final merge) in progress -- already-finished
+    batches are kept and skipped on retry, the same skip-if-intact
+    resume pattern used for the per-year downloads. With
+    `len(year_paths) <= _MERGE_BATCH_SIZE` there is only one batch,
+    merged directly to `out_path` with no intermediate file.
     """
+    sorted_years = sorted(year_paths)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_worker_with_watchdog(_merge_worker, (sorted(year_paths), out_path), "merge")
+    batches = [sorted_years[i : i + _MERGE_BATCH_SIZE] for i in range(0, len(sorted_years), _MERGE_BATCH_SIZE)]
+
+    if len(batches) == 1:
+        _merge_to(batches[0], out_path, "merge")
+        return out_path
+
+    n = len(batches)
+    batch_out_paths = [out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)]
+    for i, (batch, batch_out) in enumerate(zip(batches, batch_out_paths), start=1):
+        if batch_out.exists():
+            print(f"[merge-skip] batch {i}/{n} already merged: {batch_out.name}", flush=True)
+            continue
+        _merge_to(batch, batch_out, f"merge-batch{i}of{n}")
+
+    _merge_to(batch_out_paths, out_path, "merge-final")
+    for batch_out in batch_out_paths:
+        batch_out.unlink(missing_ok=True)
     return out_path
 
 
@@ -454,7 +506,12 @@ def read_native_grid(path: Path) -> NativeGrid:
 
 
 def _crop_worker(
-    bbox_path: Path, country_polygon_path: Path, out_path: Path, mp_progress, result_queue
+    bbox_path: Path,
+    country_polygon_path: Path,
+    out_path: Path,
+    year_range: tuple[int, int] | None,
+    mp_progress,
+    result_queue,
 ) -> None:
     """Subprocess entry point for `crop_to_country_polygon()` -- see `_run_worker_with_watchdog()`."""
     country = gpd.read_file(country_polygon_path)
@@ -466,6 +523,10 @@ def _crop_worker(
     # would re-materialize the exact array `merge_yearly_files()` was
     # just fixed to avoid holding in memory.
     with xr.open_dataset(bbox_path, chunks="auto") as ds:
+        time_name = "valid_time" if "valid_time" in ds.variables else "time"
+        if year_range is not None:
+            start, end = year_range
+            ds = ds.sel({time_name: slice(f"{start}-01-01", f"{end}-12-31")})
         lat_name = "latitude" if "latitude" in ds.variables else "lat"
         lon_name = "longitude" if "longitude" in ds.variables else "lon"
         lat = np.asarray(ds[lat_name].values, dtype=float)
@@ -497,6 +558,72 @@ def _crop_worker(
     result_queue.put((cells_before, cells_after))
 
 
+def _crop_cell_counts(bbox_path: Path, country_polygon_path: Path) -> tuple[int, int]:
+    """Cheaply recompute (cells_before, cells_after) without writing any netcdf.
+
+    Same lat/lon-only mask logic as `_crop_worker()`, minus the actual
+    crop-and-write -- used when every crop batch was already on disk
+    from a prior run, so there is no fresh worker result to read.
+    """
+    country = gpd.read_file(country_polygon_path)
+    geom = country.union_all()
+    with xr.open_dataset(bbox_path) as ds:
+        lat_name = "latitude" if "latitude" in ds.variables else "lat"
+        lon_name = "longitude" if "longitude" in ds.variables else "lon"
+        lat = np.asarray(ds[lat_name].values, dtype=float)
+        lon = np.asarray(ds[lon_name].values, dtype=float)
+        cells_before = int(lat.size * lon.size)
+        lon_wrapped = np.where(lon > 180, lon - 360, lon)
+        lon_grid, lat_grid = np.meshgrid(lon_wrapped, lat)
+        points = gpd.points_from_xy(lon_grid.ravel(), lat_grid.ravel())
+        mask_flat = gpd.GeoSeries(points, crs="EPSG:4326").intersects(geom).to_numpy()
+        cells_after = int(mask_flat.sum())
+    return cells_before, cells_after
+
+
+_CROP_BATCH_YEARS = 5  # years per intermediate crop batch -- see crop_to_country_polygon() docstring
+
+
+def _crop_year_batches(bbox_path: Path) -> list[tuple[int, int]]:
+    """Split `bbox_path`'s valid_time span into `_CROP_BATCH_YEARS`-year (start, end) ranges."""
+    with xr.open_dataset(bbox_path) as ds:
+        time_name = "valid_time" if "valid_time" in ds.variables else "time"
+        years = sorted({int(y) for y in ds[time_name].dt.year.values})
+    return [
+        (years[i], years[min(i + _CROP_BATCH_YEARS, len(years)) - 1])
+        for i in range(0, len(years), _CROP_BATCH_YEARS)
+    ]
+
+
+def _crop_to(
+    bbox_path: Path,
+    country_polygon_path: Path,
+    out_path: Path,
+    label: str,
+    year_range: tuple[int, int] | None = None,
+) -> tuple[int, int]:
+    """Run one watchdog-supervised crop, atomically (`.part.nc` tmp name, renamed on success).
+
+    Same atomic-write pattern as `_merge_to()` -- see that function's
+    docstring.
+    """
+    tmp_path = out_path.with_suffix(".part.nc")
+    if tmp_path.exists():
+        tmp_path.unlink()
+    result_queue: mp.Queue = mp.Queue()
+    _run_worker_with_watchdog(
+        _crop_worker,
+        (bbox_path, country_polygon_path, tmp_path, year_range),
+        label,
+        result_queue=result_queue,
+    )
+    cells = result_queue.get(timeout=30)
+    if out_path.exists():
+        out_path.unlink()
+    tmp_path.rename(out_path)
+    return cells
+
+
 def crop_to_country_polygon(
     bbox_path: Path, country_polygon_path: Path, out_path: Path
 ) -> tuple[int, int]:
@@ -511,16 +638,52 @@ def crop_to_country_polygon(
     `WRITE_STALL_TIMEOUT_S`) for the same reason `merge_yearly_files()`
     does.
 
+    Batched (COMMAND 2026-10-05: BRA's and IND's crop steps kept
+    stalling under the watchdog -- same intermittent external-drive I/O
+    hang as `merge_yearly_files()`'s own batching fix, just hitting the
+    crop write instead of the merge write). `bbox_path`'s time span is
+    split into groups of `_CROP_BATCH_YEARS` years, each cropped and
+    written atomically to its own intermediate file
+    (`<out_path stem>_batch<N>of<M>.nc`) before a final concat combines
+    the batches into `out_path`. A watchdog-killed attempt only loses
+    the one batch (or final concat) in progress -- already-finished
+    batches are kept and skipped on retry, same skip-if-intact resume
+    pattern as the merge batching. With a single year-range covering the
+    whole file there is only one batch, cropped directly to `out_path`
+    with no intermediate file.
+
     Returns:
         (cells_before, cells_after): total native cells in the
         bbox-downloaded file, and how many cell centers fall inside the
         country polygon.
     """
-    result_queue: mp.Queue = mp.Queue()
-    _run_worker_with_watchdog(
-        _crop_worker, (bbox_path, country_polygon_path, out_path), "crop", result_queue=result_queue
-    )
-    return result_queue.get(timeout=30)
+    year_batches = _crop_year_batches(bbox_path)
+
+    if len(year_batches) == 1:
+        return _crop_to(bbox_path, country_polygon_path, out_path, "crop", year_batches[0])
+
+    n = len(year_batches)
+    batch_out_paths = [out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)]
+    cells: tuple[int, int] | None = None
+    for i, (year_range, batch_out) in enumerate(zip(year_batches, batch_out_paths), start=1):
+        if batch_out.exists():
+            print(f"[crop-skip] batch {i}/{n} already cropped: {batch_out.name}", flush=True)
+            continue
+        cells = _crop_to(bbox_path, country_polygon_path, batch_out, f"crop-batch{i}of{n}", year_range)
+
+    _merge_to(batch_out_paths, out_path, "crop-final")
+    for batch_out in batch_out_paths:
+        batch_out.unlink(missing_ok=True)
+
+    if cells is None:
+        # Every batch was already cropped on a prior run (all skipped
+        # above, so no `_crop_to()` call ran to hand back a result).
+        # cells_before/cells_after depend only on bbox_path's lat/lon
+        # grid and the country polygon, not on which years a batch
+        # covers, so recomputing the mask directly is cheap and exact
+        # -- no need to re-run any crop.
+        cells = _crop_cell_counts(bbox_path, country_polygon_path)
+    return cells
 
 
 def compute_daily_maxima(hourly_path: Path, variable: str = "fg10") -> xr.Dataset:
