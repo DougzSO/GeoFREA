@@ -126,15 +126,13 @@ IND:
   hydrosheds_region: "as"  # Central and South-East Asia (HydroRIVERS)
   elevation_dir: "India"
   land_cover_dir: "India"
-  # GRIP4 region for IND is Region_5_South_Asia per
-  # GEOFREA_SHARED_RAW_DIR/infrastructure/roads/regions_lookup.json.
-  # The on-disk directory is mislabeled Region_5_Middle_East_Central_Asia
-  # (a naming defect in the shared read-only database, not GeoFREA's;
-  # renaming it is out of scope). This value points at the real on-disk
-  # name so fetches resolve correctly. Douglas-authorized 2026-09-23
-  # per OQ-012 / docs/_audit/2026-09_data_coverage.md Finding 2.
-  grip4_region_dir: "Region_5_Middle_East_Central_Asia"
-  grip4_region_file: "GRIP4_region5.shp"
+  # GRIP4 region for IND: the on-disk `Region_6_Central_East_Asia/GRIP4_region6.shp` (bounds lon 60.5-155.9,
+  # lat -10.9-53.9), which holds 848,558 road features inside IND's bounding box. Corrected 2026-10-06: the
+  # earlier value (Region_5, "South Asia" in regions_lookup.json, OQ-012, 2026-09-23) holds 0 features inside
+  # India (bounds lat 12.3-73.8, Middle East / Central Asia), so grid_alignment produced no roads layer; the
+  # lookup file's numbering does not match the shapefiles (same defect DECISIONS.md 2026-09 recorded for BRA/PRT).
+  grip4_region_dir: "Region_6_Central_East_Asia"
+  grip4_region_file: "GRIP4_region6.shp"
   gadm_dir: "India"
   gadm_level0_sha256: "6d53f0bd76c64d1c28453b8716642632aee7fcb6c447a2d13f413dc42f241263"
 
