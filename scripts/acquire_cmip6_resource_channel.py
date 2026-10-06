@@ -13,8 +13,11 @@ Run directly: `python scripts/acquire_cmip6_resource_channel.py`
 
 from __future__ import annotations
 
+import argparse
 import logging
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,43 +93,47 @@ class _CaptureHandler(logging.Handler):
         self.capture.handler(record)
 
 
-def main() -> None:
-    load_dotenv(REPO_ROOT / ".env", override=False)
-    client = cdsapi.Client()
+def _acquire_job(
+    job,
+    client,
+    registry: Cmip6Registry,
+    registry_path: Path,
+    global_dir: Path,
+    lock: threading.Lock,
+    labels_by_model: dict[str, dict[str, str]],
+    time_requests: bool,
+) -> int:
+    """Download, validate and register one job; return the bytes downloaded (0 if skipped/failed).
 
-    global_dir = core_paths.fetched_raw("cmip6", "_global")
-    registry_path = global_dir / "cmip6_registry.json"
-    registry = Cmip6Registry.load(registry_path)
+    Registry mutation and saves go through `lock`, so jobs can run in parallel threads.
+    """
+    with lock:
+        complete = registry.is_complete(job.key)
+        if complete:
+            labels_by_model.setdefault(job.model, {})[job.key] = registry.entries[job.key].realization
+    if complete:
+        print(f"[skip] {job.key}: already registered and intact", flush=True)
+        return 0
 
-    jobs = cmip6.build_jobs()
-    print(f"{len(jobs)} jobs to acquire (resume-aware).", flush=True)
-
-    total_bytes = 0
-    labels_by_model: dict[str, dict[str, str]] = {}
-
-    for job in jobs:
-        if registry.is_complete(job.key):
-            print(f"[skip] {job.key}: already registered and intact", flush=True)
-            entry = registry.entries[job.key]
-            labels_by_model.setdefault(job.model, {})[job.key] = entry.realization
-            continue
-
-        capture = _TimingCapture()
-        cds_logger = logging.getLogger("cdsapi")
-        handler = _CaptureHandler(capture)
+    # Queue/processing timing parses the shared "cdsapi" logger, so it is only
+    # meaningful when one request runs at a time.
+    capture = _TimingCapture()
+    cds_logger = logging.getLogger("cdsapi")
+    handler = _CaptureHandler(capture)
+    if time_requests:
         cds_logger.addHandler(handler)
-        t0 = time.time()
-        try:
-            path = cmip6.download_global(client, job, global_dir)
-            cmip6.validate_downloaded_netcdf(path)
-        except Exception as exc:  # noqa: BLE001 -- recorded as "missing" below
-            queue_s, processing_s = capture.report()
-            elapsed = time.time() - t0
-            print(
-                f"[FAILED] {job.key}: {type(exc).__name__}: {exc} "
-                f"(queue={queue_s}, processing={processing_s}, elapsed={elapsed:.1f}s)",
-                flush=True,
-            )
+    t0 = time.time()
+    try:
+        path = cmip6.download_global(client, job, global_dir)
+        cmip6.validate_downloaded_netcdf(path)
+    except Exception as exc:  # noqa: BLE001 -- recorded as "missing" below
+        queue_s, processing_s = capture.report()
+        print(
+            f"[FAILED] {job.key}: {type(exc).__name__}: {exc} "
+            f"(queue={queue_s}, processing={processing_s}, elapsed={time.time() - t0:.1f}s)",
+            flush=True,
+        )
+        with lock:
             registry.entries[job.key] = Cmip6RegistryEntry(
                 model=job.model,
                 experiment=job.experiment,
@@ -135,35 +142,34 @@ def main() -> None:
                 missing_reason=f"{type(exc).__name__}: {exc}",
             )
             registry.save(registry_path)
-            continue
-        finally:
+        return 0
+    finally:
+        if time_requests:
             cds_logger.removeHandler(handler)
 
-        elapsed = time.time() - t0
-        size = path.stat().st_size
-        total_bytes += size
-        queue_s, processing_s = capture.report()
-
-        label = cmip6.read_variant_label(path)
+    elapsed = time.time() - t0
+    size = path.stat().st_size
+    queue_s, processing_s = capture.report()
+    label = cmip6.read_variant_label(path)
+    grid = cmip6.read_native_grid(path)
+    start_year, end_year = cmip6.YEAR_RANGES[job.experiment]
+    sha = sha256_file(path)
+    print(
+        f"[ok] {job.key}: queue={queue_s}, processing={processing_s}, "
+        f"total={elapsed:.1f}s, bytes={size}, years={start_year}-{end_year}, "
+        f"realization={label}, grid={grid.n_lat}x{grid.n_lon} "
+        f"({grid.lat_resolution_deg:.3f}x{grid.lon_resolution_deg:.3f} deg)",
+        flush=True,
+    )
+    with lock:
         labels_by_model.setdefault(job.model, {})[job.key] = label
-        grid = cmip6.read_native_grid(path)
-        start_year, end_year = cmip6.YEAR_RANGES[job.experiment]
-
-        print(
-            f"[ok] {job.key}: queue={queue_s}, processing={processing_s}, "
-            f"total={elapsed:.1f}s, bytes={size}, years={start_year}-{end_year}, "
-            f"realization={label}, grid={grid.n_lat}x{grid.n_lon} "
-            f"({grid.lat_resolution_deg:.3f}x{grid.lon_resolution_deg:.3f} deg)",
-            flush=True,
-        )
-
         registry.entries[job.key] = Cmip6RegistryEntry(
             model=job.model,
             experiment=job.experiment,
             variable=job.variable,
             status="registered",
             global_path=str(path),
-            source_sha256=sha256_file(path),
+            source_sha256=sha,
             temporal_coverage_start=start_year,
             temporal_coverage_end=end_year,
             realization=label,
@@ -179,6 +185,53 @@ def main() -> None:
             ),
         )
         registry.save(registry_path)
+    return size
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--models",
+        default=",".join(cmip6.CMIP6_MODELS),
+        help="comma-separated CDS model names (default: the S-04 minimum, cmip6.CMIP6_MODELS)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="parallel CDS requests (default 1: sequential, with queue/processing timing)",
+    )
+    args = parser.parse_args()
+    models = tuple(m.strip() for m in args.models.split(",") if m.strip())
+
+    load_dotenv(REPO_ROOT / ".env", override=False)
+
+    global_dir = core_paths.fetched_raw("cmip6", "_global")
+    registry_path = global_dir / "cmip6_registry.json"
+    registry = Cmip6Registry.load(registry_path)
+
+    jobs = cmip6.build_jobs(models=models)
+    print(
+        f"{len(jobs)} jobs to acquire for {len(models)} model(s), {args.workers} worker(s) "
+        "(resume-aware).",
+        flush=True,
+    )
+
+    lock = threading.Lock()
+    labels_by_model: dict[str, dict[str, str]] = {}
+    # One client per worker thread (requests sessions are not shared across threads).
+    local = threading.local()
+
+    def _run(job) -> int:
+        if not hasattr(local, "client"):
+            local.client = cdsapi.Client()
+        return _acquire_job(
+            job, local.client, registry, registry_path, global_dir, lock, labels_by_model,
+            time_requests=args.workers == 1,
+        )
+
+    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        total_bytes = sum(pool.map(_run, jobs))
 
     # Realization consistency, per model, across every registered job.
     for model, labels in labels_by_model.items():
