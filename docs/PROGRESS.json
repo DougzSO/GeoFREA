@@ -53,7 +53,7 @@
       "record": "docs/phases/F2b_siting_layers.md",
       "summary": "Existing code is the legacy 14-criteria MCDA design (suitability_criteria); rebuild as exclusion, cost-driver and resource layers."
     },
-    {"id": "F3", "module": "land_eligibility", "status": "not_started", "record": "docs/phases/F3_land_eligibility.md", "summary": ""},
+    {"id": "F3", "module": "land_eligibility", "status": "in_progress", "record": "docs/phases/F3_land_eligibility.md", "summary": "cells.py kernels built on synthetic grids (global 0.05 degree lattice, cell_id, 5x5 aggregation, candidate filter); no real data until F2b/H-3."},
     {"id": "F4", "module": "climate_forcing", "status": "in_progress", "record": "docs/phases/F4_climate_forcing.md", "summary": "M-F4-03/04 kernels built (change_factors.py, tested on synthetic fields; no member/cell wiring). Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel ISIMIP3b copied and registered (OQ-036 closed); ERA5 gust annual maxima acquired for BRA/PRT/IND (F4-6, OQ-037 closed: UTC day). PRT is mainland-only (D-F1-024, OQ-039 closed)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
