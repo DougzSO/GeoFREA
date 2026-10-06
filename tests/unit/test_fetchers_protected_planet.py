@@ -93,6 +93,33 @@ def test_fetch_protected_areas_happy_path_single_page(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
+def test_fetch_protected_areas_reuses_a_cached_non_empty_collection_without_the_network(tmp_path, monkeypatch):
+    monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
+    cached = paths.fetched_raw("wdpa", "PRT") / "PRT_protected_areas_wdpa.geojson"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps({"type": "FeatureCollection", "features": [{"type": "Feature"}]}), encoding="utf-8")
+    get = Mock(side_effect=AssertionError("network must not be touched"))
+    monkeypatch.setattr(protected_planet, "get_with_retry", get)
+
+    assert protected_planet.fetch_protected_areas(tmp_path, "PRT") == cached
+    get.assert_not_called()
+
+
+@pytest.mark.unit
+def test_fetch_protected_areas_refetches_when_the_cache_is_empty(tmp_path, monkeypatch):
+    monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
+    cached = paths.fetched_raw("wdpa", "PRT") / "PRT_protected_areas_wdpa.geojson"
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+    page = _page_response([_pa("Serra da Estrela", "II", 1001)])
+    monkeypatch.setattr(protected_planet, "get_with_retry", Mock(return_value=page))
+
+    result = protected_planet.fetch_protected_areas(tmp_path, "PRT")
+
+    assert len(json.loads(result.read_text(encoding="utf-8"))["features"]) == 1
+
+
+@pytest.mark.unit
 def test_fetch_protected_areas_paginates_until_short_page(tmp_path, monkeypatch):
     monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
     full_page = _page_response([_pa(f"PA{i}", "II", i) for i in range(protected_planet._PER_PAGE)])

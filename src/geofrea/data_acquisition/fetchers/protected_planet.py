@@ -71,6 +71,18 @@ def _require_token(api_token: str | None) -> str:
     return token
 
 
+def _cached_collection_is_usable(path: Path) -> bool:
+    """True if `path` is a readable GeoJSON FeatureCollection with at least one feature.
+
+    An empty collection is not reused: it may be the result of a failed or truncated earlier fetch.
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return data.get("type") == "FeatureCollection" and bool(data.get("features"))
+
+
 def fetch_protected_areas(
     outputs_dir: Path, country_code: str, *, api_token: str | None = None
 ) -> Path | None:
@@ -110,6 +122,13 @@ def fetch_protected_areas(
             error would.
     """
     token = _require_token(api_token)
+
+    cached = paths.fetched_raw("wdpa", country_code) / f"{country_code}_protected_areas_wdpa.geojson"
+    if _cached_collection_is_usable(cached):
+        # Re-paging the whole country from the API takes hours for BRA/IND (observed 2026-10-06: IND silent for
+        # over an hour) and a re-run must not change the data under a frozen run, same as fetch_gwa_product().
+        logger.info("Protected areas for %s: reusing %s", country_code, cached)
+        return cached
 
     features: list[dict[str, Any]] = []
     page = 1
