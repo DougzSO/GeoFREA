@@ -368,9 +368,9 @@ def test_registry_loads_old_shape_without_permanently_failed_years_field(tmp_pat
     """Forward-compatibility: a registry written before this field existed
     (no `permanently_failed_years` key at all) must still load, per the
     same pattern D-core-016 already uses for other additive fields."""
-    from geofrea.data_acquisition.era5_registry import Era5Registry
-
     import json
+
+    from geofrea.data_acquisition.era5_registry import Era5Registry
 
     path = tmp_path / "era5_registry.json"
     path.write_text(
