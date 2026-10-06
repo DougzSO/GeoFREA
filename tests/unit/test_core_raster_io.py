@@ -126,3 +126,56 @@ def test_gdal_quiet_is_a_safe_noop_context_manager():
     # in this environment — see module docstring.
     with gdal_quiet():
         pass
+
+
+@pytest.mark.unit
+def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(tmp_path, monkeypatch):
+    from geofrea.core import raster_io
+
+    real_open, calls = rasterio.open, []
+
+    def flaky(path, mode="r", **kw):
+        calls.append(path)
+        if len(calls) < 3:
+            raise rasterio.errors.RasterioIOError("Deleting x.tif failed: Permission denied")
+        return real_open(path, mode, **kw)
+
+    monkeypatch.setattr(raster_io.rasterio, "open", flaky)
+    monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0, 0.0))
+    profile = dict(driver="GTiff", height=2, width=2, count=1, dtype="float32")
+
+    with safe_raster_write(tmp_path / "out.tif", **profile) as dst:
+        dst.write(np.ones((2, 2), dtype="float32"), 1)
+
+    assert len(calls) == 3
+    assert (tmp_path / "out.tif").exists()
+
+
+@pytest.mark.unit
+def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_waits(tmp_path, monkeypatch):
+    from geofrea.core import raster_io
+
+    attempts = []
+
+    def always(path, mode="r", **kw):
+        attempts.append(1)
+        raise rasterio.errors.RasterioIOError("Permission denied")
+
+    monkeypatch.setattr(raster_io.rasterio, "open", always)
+    monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0))
+    with pytest.raises(rasterio.errors.RasterioIOError):
+        with safe_raster_write(tmp_path / "o.tif", driver="GTiff"):
+            pass
+    assert len(attempts) == 3  # first try + two retries
+
+    attempts.clear()
+
+    def other(path, mode="r", **kw):
+        attempts.append(1)
+        raise rasterio.errors.RasterioIOError("no such file")
+
+    monkeypatch.setattr(raster_io.rasterio, "open", other)
+    with pytest.raises(rasterio.errors.RasterioIOError):
+        with safe_raster_write(tmp_path / "o2.tif", driver="GTiff"):
+            pass
+    assert len(attempts) == 1

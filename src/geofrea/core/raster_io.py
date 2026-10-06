@@ -14,12 +14,14 @@ geo_utils.py's module docstring).
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import rasterio
+from rasterio._err import CPLE_BaseError
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +57,27 @@ def safe_raster_open(file_path: str | Path) -> Generator[rasterio.DatasetReader,
         src.close()
 
 
+_WRITE_RETRY_WAITS_S = (2.0, 5.0, 10.0, 20.0)
+
+
+def _open_for_write(file_path: Path, kwargs: dict[str, Any]):
+    """rasterio.open(..., "w") that retries when Windows holds the file it must overwrite.
+
+    GDAL deletes an existing file before creating it; a search indexer or antivirus scanning a file written
+    moments earlier makes that delete fail with "Permission denied" (observed 2026-10-06 on the BRA wind layers,
+    D:). The lock clears by itself, so wait and retry a bounded number of times, then raise the original error.
+    """
+    for wait in (*_WRITE_RETRY_WAITS_S, None):
+        try:
+            return rasterio.open(str(file_path), "w", **kwargs)
+        except (rasterio.errors.RasterioIOError, CPLE_BaseError) as exc:
+            if wait is None or "Permission denied" not in str(exc):
+                raise
+            logger.warning("%s is locked (%s); retrying in %.0fs", file_path.name, exc, wait)
+            time.sleep(wait)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 @contextmanager
 def safe_raster_write(file_path: str | Path, **kwargs: Any) -> Generator[rasterio.DatasetWriter, None, None]:
     """Open a raster file for writing, creating parent directories as needed.
@@ -73,7 +96,7 @@ def safe_raster_write(file_path: str | Path, **kwargs: Any) -> Generator[rasteri
 
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    dst = rasterio.open(str(file_path), "w", **kwargs)
+    dst = _open_for_write(file_path, kwargs)
     try:
         yield dst
     finally:
