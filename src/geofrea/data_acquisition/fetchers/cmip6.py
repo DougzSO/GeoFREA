@@ -222,6 +222,51 @@ def is_complete_download(final_path: Path, tmp_path: Path) -> Literal["complete"
     return "absent"
 
 
+class IncompleteTemporalCoverageError(OSError):
+    """A downloaded file does not hold every month of the requested years (A-09: fail loud, never register)."""
+
+
+def check_temporal_coverage(path: Path, start_year: int, end_year: int, label: str = "") -> None:
+    """Raise unless `path` holds exactly the monthly steps of start_year..end_year, one per month.
+
+    `validate_downloaded_netcdf()` only proves the file opens and its last step reads; it cannot tell a
+    one-year file from a 20-year one. This is the check the request promised.
+    """
+    expected = (end_year - start_year + 1) * 12
+    with xr.open_dataset(path) as ds:
+        if "time" not in ds.variables:
+            raise IncompleteTemporalCoverageError(f"{label or path}: no 'time' coordinate found")
+        years = ds["time"].dt.year.values
+        months = ds["time"].dt.month.values
+        n = int(ds["time"].size)
+    pairs = set(zip(years.tolist(), months.tolist(), strict=True))
+    wanted = {(y, m) for y in range(start_year, end_year + 1) for m in range(1, 13)}
+    if n != expected or pairs != wanted:
+        raise IncompleteTemporalCoverageError(
+            f"{label or path}: expected {expected} monthly steps for {start_year}-{end_year}, "
+            f"found {n} ({int(years.min())}-{int(years.max())}, {len(pairs)} distinct months)"
+        )
+
+
+def _merge_zip_members(zf: zipfile.ZipFile, members: list[str], out_path: Path) -> None:
+    """Extract several time-chunk .nc members and write them as one time-ordered NetCDF at `out_path`."""
+    scratch = out_path.with_suffix(".members")
+    shutil.rmtree(scratch, ignore_errors=True)
+    scratch.mkdir(parents=True)
+    try:
+        paths = []
+        for i, name in enumerate(members):
+            target = scratch / f"{i:04d}.nc"
+            with zf.open(name) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+            paths.append(target)
+        with xr.open_mfdataset(paths, combine="by_coords", data_vars="minimal", coords="minimal", compat="override") as ds:
+            merged = ds.sortby("time")
+            merged.to_netcdf(out_path)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
 def download_global(client, job: Cmip6Job, out_dir: Path) -> Path:
     """Download one (model, experiment, variable) global monthly file.
 
@@ -257,14 +302,25 @@ def download_global(client, job: Cmip6Job, out_dir: Path) -> Path:
     # returns one directly) is handled too, so this does not assume either.
     if zipfile.is_zipfile(tmp_download):
         with zipfile.ZipFile(tmp_download) as zf:
-            nc_members = [n for n in zf.namelist() if n.endswith(".nc")]
+            nc_members = sorted(n for n in zf.namelist() if n.endswith(".nc"))
             if not nc_members:
                 raise OSError(f"{job.key}: downloaded zip contains no .nc file")
-            with zf.open(nc_members[0]) as src, open(tmp_path, "wb") as dst:
-                shutil.copyfileobj(src, dst)
+            if len(nc_members) == 1:
+                with zf.open(nc_members[0]) as src, open(tmp_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+            else:
+                # Some models (observed 2026-10-06: AWI-CM-1-1-MR) come back as one .nc per time chunk;
+                # taking only the first member silently dropped every later year.
+                _merge_zip_members(zf, nc_members, tmp_path)
         tmp_download.unlink()
     else:
         tmp_download.rename(tmp_path)
+
+    try:
+        check_temporal_coverage(tmp_path, start_year, end_year, label=job.key)
+    except IncompleteTemporalCoverageError:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
     if final_path.exists():
         final_path.unlink()

@@ -6,6 +6,8 @@ fixtures on disk and drives the module's pure functions directly.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import geopandas as gpd
 import numpy as np
 import pytest
@@ -15,8 +17,15 @@ from shapely.geometry import box
 from geofrea.data_acquisition.fetchers import cmip6
 
 
-def _write_netcdf(path, lat, lon, variant_label="r1i1p1f1", n_time=12):
-    time = np.arange(n_time)
+def _write_netcdf(path, lat, lon, variant_label="r1i1p1f1", n_time=12, years=None):
+    # `years` gives a real monthly time axis (one step per month of each year); default is an integer axis.
+    if years is not None:
+        time = np.concatenate(
+            [np.arange(f"{y}-01", f"{y + 1}-01", dtype="datetime64[M]").astype("datetime64[ns]") for y in years]
+        )
+        n_time = len(time)
+    else:
+        time = np.arange(n_time)
     data = np.random.rand(n_time, len(lat), len(lon))
     ds = xr.Dataset(
         {"tas": (("time", "lat", "lon"), data)},
@@ -147,7 +156,7 @@ class _FakeClient:
 
     def retrieve(self, dataset, request, target):
         self.calls.append((dataset, dict(request), target))
-        _write_netcdf(target, lat=self.lat, lon=self.lon)
+        _write_netcdf(target, lat=self.lat, lon=self.lon, years=[int(y) for y in request["year"]])
 
 
 @pytest.mark.unit
@@ -176,6 +185,47 @@ def test_download_global_never_registers_an_empty_download(tmp_path, monkeypatch
     with pytest.raises(OSError, match="empty file"):
         cmip6.download_global(_EmptyClient(), job, tmp_path)
     assert not (tmp_path / "gfdl_esm4_historical_tas.nc").exists()
+
+
+class _ZipClient:
+    """CDS client whose reply is a zip with one .nc per chunk of years (AWI-CM-1-1-MR behaviour)."""
+
+    def __init__(self, chunks):
+        self.chunks = chunks
+
+    def retrieve(self, dataset, request, target):
+        import zipfile
+
+        with zipfile.ZipFile(target, "w") as zf:
+            for i, years in enumerate(self.chunks):
+                member = Path(target).parent / f"chunk{i}.nc"
+                _write_netcdf(member, lat=[0.0, 1.0], lon=[0.0, 1.0], years=years)
+                zf.write(member, f"chunk{i}.nc")
+                member.unlink()
+
+
+@pytest.mark.unit
+def test_download_global_merges_every_member_of_a_multi_file_zip(tmp_path):
+    job = cmip6.Cmip6Job(model="gfdl_esm4", experiment="historical", variable="tas")
+    client = _ZipClient([range(2005, 2015), range(1995, 2005)])  # out of order on purpose
+
+    result = cmip6.download_global(client, job, tmp_path)
+
+    with xr.open_dataset(result) as ds:
+        assert ds["time"].size == 240
+        assert int(ds["time"].dt.year.min()) == 1995 and int(ds["time"].dt.year.max()) == 2014
+        assert bool(ds["time"].to_index().is_monotonic_increasing)
+
+
+@pytest.mark.unit
+def test_download_global_rejects_a_file_with_missing_years_and_leaves_nothing(tmp_path):
+    job = cmip6.Cmip6Job(model="gfdl_esm4", experiment="historical", variable="tas")
+    client = _ZipClient([range(1995, 1996)])  # one year only: the AWI defect
+
+    with pytest.raises(cmip6.IncompleteTemporalCoverageError, match="expected 240"):
+        cmip6.download_global(client, job, tmp_path)
+    assert not (tmp_path / "gfdl_esm4_historical_tas.nc").exists()
+    assert not list(tmp_path.glob("*.part*"))
 
 
 @pytest.mark.unit
