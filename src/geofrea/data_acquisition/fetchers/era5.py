@@ -61,6 +61,7 @@ this way; verified against COMMAND F4-1b's real probe file).
 
 from __future__ import annotations
 
+import hashlib
 import multiprocessing as mp
 import shutil
 import threading
@@ -824,6 +825,19 @@ class CountryMask:
     cells_before: int
     cells_after: int
 
+    @property
+    def fingerprint(self) -> str:
+        """Identity of the crop (which rows/columns/cells), stamped on every year checkpoint.
+
+        A checkpoint written for a different polygon (e.g. before a country became
+        mainland-only) must not be reused: its grid and cells would silently survive.
+        """
+        h = hashlib.sha256()
+        for arr in (self.lat_keep, self.lon_keep, self.sub_mask):
+            h.update(np.ascontiguousarray(arr).tobytes())
+            h.update(str(arr.shape).encode())
+        return h.hexdigest()[:16]
+
 
 def _contiguous_range(any_flags: np.ndarray) -> np.ndarray:
     """Bool array True from the first to the last True of `any_flags` (all False stays all False)."""
@@ -900,15 +914,20 @@ def _annual_year_worker(
         {variable: ((lat_name, lon_name), annual)},
         coords={lat_name: lat_vals, lon_name: lon_vals},
     ).expand_dims(year=[year])
+    out.attrs["mask_fingerprint"] = mask.fingerprint
     out.to_netcdf(out_path)
 
 
-def _year_checkpoint_ok(path: Path, year: int, variable: str) -> bool:
+def _year_checkpoint_ok(path: Path, year: int, variable: str, fingerprint: str) -> bool:
     if not path.exists():
         return False
     try:
         with xr.open_dataset(path) as ds:
-            return variable in ds.data_vars and list(ds["year"].values) == [year]
+            return (
+                variable in ds.data_vars
+                and list(ds["year"].values) == [year]
+                and ds.attrs.get("mask_fingerprint") == fingerprint
+            )
     except Exception:  # noqa: BLE001 -- unreadable checkpoint = redo that year
         return False
 
@@ -952,7 +971,7 @@ def write_annual_maxima_incremental(
         year = int(year_path.stem.rsplit("_", 1)[-1])
         ckpt = work_dir / f"{label}_{year}.nc"
         checkpoints.append(ckpt)
-        if _year_checkpoint_ok(ckpt, year, variable):
+        if _year_checkpoint_ok(ckpt, year, variable, mask.fingerprint):
             print(f"[annual-skip] {label} {year}: checkpoint intact ({i}/{n})", flush=True)
             continue
         tmp = ckpt.with_suffix(".part.nc")
@@ -969,7 +988,12 @@ def write_annual_maxima_incremental(
         todo = sum(
             1
             for p in sorted_paths[i:]
-            if not _year_checkpoint_ok(work_dir / f"{label}_{p.stem.rsplit('_', 1)[-1]}.nc", int(p.stem.rsplit("_", 1)[-1]), variable)
+            if not _year_checkpoint_ok(
+                work_dir / f"{label}_{p.stem.rsplit('_', 1)[-1]}.nc",
+                int(p.stem.rsplit("_", 1)[-1]),
+                variable,
+                mask.fingerprint,
+            )
         )
         eta = (sum(done_this_run) / len(done_this_run)) * todo
         print(

@@ -325,3 +325,19 @@ def test_era5_registry_entry_missing_status_requires_reason():
 def test_era5_registry_entry_registered_status_requires_paths_and_hashes():
     with pytest.raises(ValueError, match="requires source_path"):
         Era5RegistryEntry(country_code="BRA", status="registered")
+
+
+@pytest.mark.unit
+def test_year_checkpoint_from_a_different_polygon_is_not_reused(tmp_path):
+    """A checkpoint stamped with another mask's fingerprint must be recomputed."""
+    ckpt = tmp_path / "PRT_2010.nc"
+    out = xr.Dataset(
+        {"fg10": (("latitude", "longitude"), np.ones((2, 2), dtype="float32"))},
+        coords={"latitude": [1.0, 0.0], "longitude": [0.0, 1.0]},
+    ).expand_dims(year=[2010])
+    out.attrs["mask_fingerprint"] = "aaaa"
+    out.to_netcdf(ckpt)
+
+    assert era5._year_checkpoint_ok(ckpt, 2010, "fg10", "aaaa")
+    assert not era5._year_checkpoint_ok(ckpt, 2010, "fg10", "bbbb")  # polygon changed
+    assert not era5._year_checkpoint_ok(ckpt, 2011, "fg10", "aaaa")  # wrong year
