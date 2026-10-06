@@ -25,7 +25,7 @@ and writes to the same path. This preserves PhaseContext.prior_results'
 read-only contract (core/orchestrator.py) — no phase mutates or
 implicitly depends on another phase's internal artifact.
 
-Resolution and distance_cap_km: resolution_deg/adaptive_* below are resolved from settings.yaml's
+Resolution and distance_cap_km: resolution_deg below is resolved from settings.yaml's
 `geospatial.resolutions` section (ResolutionsConfig) by main.py and passed into GridAlignmentInputs by
 adapter.py::acquisition_result_to_grid_alignment_inputs(), same precedent as slope_threshold_deg
 (DECISIONS.md 2026-08-20): a settings.yaml field once a verdict was reached, not a silent Pydantic default.
@@ -36,7 +36,6 @@ distance_cap_km (`geospatial.distance_cap_km`) is the threshold of the `distance
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
 
 import geopandas as gpd
 import pandas as pd
@@ -102,17 +101,8 @@ class GridAlignmentInputs(BaseModel):
             grid. Without country_gdf there is no reference grid to
             align anything to, so the field being required is not a
             style choice, it is the phase's one true precondition.
-        resolution_deg: Fixed resolution in decimal degrees, or the
-            literal string "adaptive" — resolved from settings.yaml's
-            `geospatial.resolutions.suitability` by main.py/adapter.py.
-            Default 0.01 matches the value that generated the frozen
-            PRT/BRA baseline (see module docstring).
-        adaptive_target_pixels/adaptive_min_deg/adaptive_pixel_ceiling_deg:
-            Only consulted when resolution_deg == "adaptive" — from
-            settings.yaml's `geospatial.resolutions.adaptive`. The
-            ceiling field's old name was renamed 2026-09-22 — the
-            value is numerically 0.05 by coincidence, unrelated to
-            S-06's 0.05deg decision cell.
+        resolution_deg: Fixed resolution in decimal degrees, from settings.yaml's
+            `geospatial.resolutions.suitability` via main.py/adapter.py (no default here).
         distance_cap_km: Threshold (km) of the `distance_capped` flag rasters
             written beside the roads/grid/rivers distance rasters (M-F2a-03,
             OQ-040); it never truncates a stored distance. From settings.yaml's
@@ -133,10 +123,7 @@ class GridAlignmentInputs(BaseModel):
     rivers_path: Path | None = None
     plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame
-    resolution_deg: float | Literal["adaptive"] = 0.01
-    adaptive_target_pixels: int = 50000
-    adaptive_min_deg: float = 0.001
-    adaptive_pixel_ceiling_deg: float = 0.05
+    resolution_deg: float
     distance_cap_km: float
 
 

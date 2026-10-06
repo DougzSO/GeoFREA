@@ -163,7 +163,10 @@ VALID_RUN_CONFIG = {
     "rerun_phases": [],
 }
 
-VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG, "geospatial": {"distance_cap_km": 100.0}}
+VALID_SETTINGS_FILE = {
+    "run": VALID_RUN_CONFIG,
+    "geospatial": {"resolutions": {"suitability": 0.01}, "distance_cap_km": 100.0},
+}
 
 # tech_name -> (model class, valid payload) - shared across the tech-model tests below.
 TECH_MODELS = {
@@ -272,6 +275,23 @@ def test_run_config_empty_target_phases_raises():
 def test_settings_file_accepts_valid_payload():
     result = SettingsFile.model_validate(VALID_SETTINGS_FILE)
     assert result.run.countries == []
+
+
+@pytest.mark.unit
+def test_geospatial_values_have_no_schema_defaults_and_adaptive_mode_is_gone():
+    """CONVENTIONS (no duplicated defaults) and G-3: resolution and distance threshold live only in settings.yaml."""
+    from geofrea.core.schemas import GeospatialConfig, ResolutionsConfig
+
+    with pytest.raises(ValidationError):
+        ResolutionsConfig()
+    with pytest.raises(ValidationError):
+        GeospatialConfig(resolutions={"suitability": 0.01})  # distance_cap_km missing
+    with pytest.raises(ValidationError):
+        SettingsFile.model_validate({"run": VALID_RUN_CONFIG})  # geospatial missing
+    with pytest.raises(ValidationError):
+        ResolutionsConfig(suitability="adaptive")
+    with pytest.raises(ValidationError):
+        ResolutionsConfig(suitability=0.01, adaptive={"target_pixels": 1})  # the adaptive block no longer exists
 
 
 # ─── Required-field tests: one parametrized case per field ──────────────

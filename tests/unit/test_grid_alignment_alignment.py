@@ -28,6 +28,7 @@ PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 def _inputs(**kwargs) -> GridAlignmentInputs:
     """GridAlignmentInputs with the settings.yaml-sourced fields a real run always supplies."""
     kwargs.setdefault("distance_cap_km", 100.0)
+    kwargs.setdefault("resolution_deg", 0.01)
     return GridAlignmentInputs(**kwargs)
 
 
@@ -540,48 +541,6 @@ def test_run_grid_alignment_phase_honors_explicit_fixed_resolution(tmp_path):
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
     assert result.grid_metadata.resolution_deg == pytest.approx(0.02)
-
-
-@pytest.mark.unit
-def test_run_grid_alignment_phase_adaptive_mode_computes_resolution_from_area(tmp_path):
-    # "adaptive" is an explicit opt-in (not the default) — when
-    # selected, reproduces legacy's own formula: sqrt(area/target_pixels)
-    # / sqrt(lat_km*lon_km), clipped to [min_deg, adaptive_pixel_ceiling_deg].
-    # Using an unrealistically small target_pixels forces the clip to
-    # the ceiling,
-    # giving a value independent of the exact WGS84 scale-factor
-    # arithmetic (covered separately by test_core_geodesy.py) and
-    # trivial to assert on.
-    country_gdf = _country_gdf()
-    inputs = _inputs(
-        country_gdf=country_gdf,
-        resolution_deg="adaptive",
-        adaptive_target_pixels=1,
-        adaptive_min_deg=0.001,
-        adaptive_pixel_ceiling_deg=0.03,
-    )
-
-    result = run_grid_alignment_phase(_context(tmp_path), inputs)
-
-    assert result.grid_metadata.resolution_deg == pytest.approx(0.03)
-
-
-@pytest.mark.unit
-def test_run_grid_alignment_phase_adaptive_mode_respects_min_deg_clip(tmp_path):
-    # Symmetric case: an unrealistically large target_pixels forces the
-    # clip to min_deg instead.
-    country_gdf = _country_gdf()
-    inputs = _inputs(
-        country_gdf=country_gdf,
-        resolution_deg="adaptive",
-        adaptive_target_pixels=10_000_000_000,
-        adaptive_min_deg=0.005,
-        adaptive_pixel_ceiling_deg=0.05,
-    )
-
-    result = run_grid_alignment_phase(_context(tmp_path), inputs)
-
-    assert result.grid_metadata.resolution_deg == pytest.approx(0.005)
 
 
 # ─── distance_cap_km: flag threshold shared by roads/grid/rivers (OQ-040, M-F2a-03) ───

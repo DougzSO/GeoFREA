@@ -61,27 +61,7 @@ geospatial:
   distance_cap_km: 100.0
 
   resolutions:
-    # Fixed degrees, or the literal string "adaptive" to compute it
-    # dynamically from country area (see the "adaptive" block below).
-    # 0.01 (~1km) matches legacy's own actual configured value — "~1 km,
-    # consistent with global climate datasets" — and is what generated
-    # the frozen PRT/BRA baseline this project regression-tests against
-    # (docs/architecture/baseline-manifest.md). Legacy's "adaptive" code
-    # path existed but was never the value legacy's own settings.yaml
-    # actually used.
+    # Fixed analysis-grid resolution, degrees (M-F2a-01). 0.01 (~1 km) is the value that generated the
+    # frozen PRT/BRA baseline (docs/architecture/baseline-manifest.md). The grid is snapped so 0.05 degree
+    # cells (S-06) nest exactly 5 x 5. The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
-
-    # Only consulted if suitability: "adaptive" above. Ported as-is from
-    # legacy's fallback dict — target_pixels has no documented
-    # calibration and, for large countries, has no effect in practice
-    # (max_deg saturates first; e.g. BRA's unclamped ideal resolution is
-    # ~0.175deg, far past max_deg). Not the default — see suitability's
-    # own comment above.
-    adaptive:
-      target_pixels: 50000
-      min_deg: 0.001
-      # Renamed from max_deg 2026-09-22: this is an unused dead-code
-      # ceiling for the (inactive) adaptive-pixel-resolution formula,
-      # numerically 0.05 by coincidence — unrelated to S-06's 0.05deg
-      # decision cell. Do not confuse the two.
-      adaptive_pixel_ceiling_deg: 0.05

@@ -151,8 +151,5 @@ def acquisition_result_to_grid_alignment_inputs(
         plants_df=plants_df,
         country_gdf=country_gdf,
         resolution_deg=resolutions.suitability,
-        adaptive_target_pixels=resolutions.adaptive.target_pixels,
-        adaptive_min_deg=resolutions.adaptive.min_deg,
-        adaptive_pixel_ceiling_deg=resolutions.adaptive.adaptive_pixel_ceiling_deg,
         distance_cap_km=distance_cap_km,
     )

@@ -87,7 +87,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -95,11 +94,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
-import numpy as np
 
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import read_clipped_to_country
-from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
@@ -301,24 +298,8 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         cache_path = processed_dir / f"{layer_name}_clipped.gpkg"
         return _read_clipped_with_cache(source_path, inputs.country_gdf, cache_path)
 
-    # Resolution decided 2026-09-09 (see docs/DECISIONS.md same date,
-    # grid_alignment Passo 4 item 3): inputs.resolution_deg comes from
-    # settings.yaml's geospatial.resolutions.suitability, default 0.01
-    # (fixed, matching the frozen PRT/BRA baseline) — "adaptive" is an
-    # explicit opt-in, not the default, computed here exactly as legacy
-    # did (same formula, now via core.geodesy.wgs84_km_per_degree() for
-    # the WGS84 scale factors — see that module's docstring).
-    if inputs.resolution_deg == "adaptive":
-        minx, miny, maxx, maxy = inputs.country_gdf.total_bounds
-        lat_mid = (miny + maxy) / 2.0
-        lat_km, lon_km = wgs84_km_per_degree(lat_mid)
-        area_km2 = (maxx - minx) * lon_km * (maxy - miny) * lat_km
-        computed_res = math.sqrt(area_km2 / inputs.adaptive_target_pixels) / math.sqrt(lat_km * lon_km)
-        resolution_deg = float(
-            np.clip(computed_res, inputs.adaptive_min_deg, inputs.adaptive_pixel_ceiling_deg)
-        )
-    else:
-        resolution_deg = float(inputs.resolution_deg)
+    # Fixed resolution (M-F2a-01), from settings.yaml's geospatial.resolutions.suitability.
+    resolution_deg = float(inputs.resolution_deg)
 
     grid = build_reference_grid(inputs.country_gdf, resolution_deg, nesting_pixels=CELL_NESTING_PIXELS)
     aligned: dict[str, Path | None] = {}
