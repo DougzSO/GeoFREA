@@ -1,6 +1,6 @@
 # F4 climate_forcing
 
-Status: `not_started`
+Status: `in_progress`
 Methodology items: M-F4-01 to M-F4-06, A-11, L-002, L-003, L-005, L-008
 
 ## Contract
@@ -11,6 +11,8 @@ Requires: CMIP6 and ERA5 layers from `acquisition_registry`, cell grid from F3. 
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
+| M-F4-03 | Delta-change factors from monthly climatologies (ratio rsds/sfcWind, difference tas) | `climate_forcing/change_factors.py:compute_change_factor`, `monthly_climatology`, `change_factor` (kernel only; no member or cell wiring yet) | `tests/unit/test_climate_forcing_change_factors.py` | partial |
+| M-F4-04 | Bilinear interpolation of the factors to 0.05 degree cell centers | `climate_forcing/change_factors.py:bilinear_to_points` (kernel; needs the F3 cell grid for the centers) | same file | partial |
 
 ## Active implementation decisions
 
