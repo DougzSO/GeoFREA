@@ -95,6 +95,7 @@ from pathlib import Path
 
 import geopandas as gpd
 
+from geofrea.core import paths as core_paths
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import read_clipped_to_country
 from geofrea.core.orchestrator import PhaseContext
@@ -264,9 +265,11 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
             dimensions don't match the reference grid — propagates
             uncaught, see _verify_alignment()'s own docstring.
     """
-    out_dir = context.outputs_dir / context.country_code / "grid_alignment"
+    # METHODOLOGY A-08: phase outputs under outputs/<ISO3>/<phase>/<kind>/, intermediate caches under
+    # interim/<ISO3>/<layer>/ (core.paths.interim(), from GEOFREA_DATA_DIR).
+    out_dir = context.outputs_dir / context.country_code / "grid_alignment" / "artifacts"
     out_dir.mkdir(parents=True, exist_ok=True)
-    processed_dir = context.outputs_dir / context.country_code / "processed"
+    interim_dir = core_paths.interim(context.country_code, "grid_alignment")
 
     timestamp = datetime.now(UTC).isoformat()
     timings: dict[str, float] = {}
@@ -295,7 +298,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     def _clipped_gdf(source_path: Path | None, layer_name: str) -> gpd.GeoDataFrame | None:
         if not _exists(source_path):
             return None
-        cache_path = processed_dir / f"{layer_name}_clipped.gpkg"
+        cache_path = interim_dir / f"{layer_name}_clipped.gpkg"
         return _read_clipped_with_cache(source_path, inputs.country_gdf, cache_path)
 
     # Fixed resolution (M-F2a-01), from settings.yaml's geospatial.resolutions.suitability.
@@ -319,8 +322,8 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     def _align_slope() -> Path | None:
         slope_src = inputs.slope_path
         if not _exists(slope_src):
-            slope_src = processed_dir / f"{context.country_code}_slope_native.tif"
-            processed_dir.mkdir(parents=True, exist_ok=True)
+            slope_src = interim_dir / f"{context.country_code}_slope_native.tif"
+            interim_dir.mkdir(parents=True, exist_ok=True)
             if derive_slope_from_dem(inputs.elevation_path, slope_src) is None:
                 return None
         return reproject_to_grid(slope_src, _path("slope"), grid)

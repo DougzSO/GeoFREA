@@ -11,6 +11,7 @@ from rasterio.transform import from_origin
 from shapely.geometry import LineString, Polygon
 
 import geofrea.grid_alignment.alignment as alignment_module
+from geofrea.core import paths
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.grid_alignment.alignment import (
@@ -23,6 +24,12 @@ from geofrea.grid_alignment.schemas import GridAlignmentInputs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
+
+
+@pytest.fixture(autouse=True)
+def _data_dir(tmp_path, monkeypatch):
+    """Interim caches (A-08, `paths.interim()`) live under GEOFREA_DATA_DIR: isolate it per test."""
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path / "data_dir"))
 
 
 def _inputs(**kwargs) -> GridAlignmentInputs:
@@ -227,7 +234,7 @@ def test_run_grid_alignment_phase_recomputes_when_cached_raster_dims_mismatch(tm
     inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
     context = _context(tmp_path)
 
-    stale_path = context.outputs_dir / "PRT" / "grid_alignment" / "PRT_elevation_aligned.tif"
+    stale_path = context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_elevation_aligned.tif"
     stale_path.parent.mkdir(parents=True)
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with rasterio.open(
@@ -285,7 +292,7 @@ def test_run_grid_alignment_phase_saves_grid_metadata_json(tmp_path):
 
     result = run_grid_alignment_phase(context, inputs)
 
-    meta_path = context.outputs_dir / "PRT" / "grid_alignment" / "PRT_grid_metadata.json"
+    meta_path = context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_grid_metadata.json"
     assert meta_path.exists()
     import json
 
@@ -411,7 +418,7 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
     country_gdf = _country_gdf()
     context = _context(tmp_path)
 
-    cache_path = context.outputs_dir / "PRT" / "processed" / "roads_clipped.gpkg"
+    cache_path = paths.interim("PRT", "grid_alignment") / "roads_clipped.gpkg"
     cache_path.parent.mkdir(parents=True)
     pre_clipped = gpd.GeoDataFrame(
         geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
@@ -443,7 +450,7 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
 def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp_path):
     country_gdf = _country_gdf()
     context = _context(tmp_path)
-    processed_dir = context.outputs_dir / "PRT" / "processed"
+    processed_dir = paths.interim("PRT", "grid_alignment")
     processed_dir.mkdir(parents=True)
 
     lake = gpd.GeoDataFrame(geometry=[_square(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.03)], crs="EPSG:4326")
