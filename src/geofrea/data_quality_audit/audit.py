@@ -107,6 +107,40 @@ _GWA_PRODUCT_RASTER_KEYS: dict[str, str] = {
 }
 
 
+# Vector layers that must hold features inside the country: a source that exists but covers none of it
+# (IND roads from GRIP4 region 5, 2026-10-06, D-F1-025) is a data defect, and F2a cannot align an empty layer.
+# Lakes, rivers and protected areas are not listed: a country may legitimately have none.
+_COVERAGE_REQUIRED_LAYERS = ("grid", "roads")
+
+
+class LayerCoverageError(ValueError):
+    """A required vector layer was found but holds no feature inside the country (A-09: fail loud)."""
+
+
+def check_vector_coverage(vectors: dict[str, dict], country_code: str) -> None:
+    """Raise LayerCoverageError for every required layer that is present, readable and empty in-country.
+
+    Implements: M-F1b-01 (audit of acquired layers). Absent files and read errors keep their own reporting;
+    this only catches the case the "found" flag cannot: a real file with zero features in the country.
+
+    Raises:
+        LayerCoverageError: naming each empty layer and the country.
+    """
+    empty = [
+        name
+        for name in _COVERAGE_REQUIRED_LAYERS
+        if (v := vectors.get(name))
+        and v.get("found")
+        and not v.get("error")
+        and v.get("n_features") == 0
+    ]
+    if empty:
+        raise LayerCoverageError(
+            f"{country_code}: layer(s) {', '.join(empty)} exist but hold no feature inside the country; "
+            "check the source file/region configured in countries.yaml."
+        )
+
+
 def run_audit_phase(
     context: PhaseContext, inputs: AuditInputs, audit_config: AuditConfig
 ) -> AuditResult:
@@ -237,6 +271,8 @@ def run_audit_phase(
                 iucn_breakdown=iucn_breakdown,
                 cache_path=cache_path,
             )
+
+    check_vector_coverage(vectors, context.country_code)
 
     # ── Land cover ──────────────────────────────────────────────────
     if inputs.skip_land_cover:

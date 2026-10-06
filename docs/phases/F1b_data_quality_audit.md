@@ -76,6 +76,8 @@ classification table: `docs/_audit/2026-09_embedded_values.md`.
   default object (`_EMPTY_GEOMETRY_REPAIR_REPORT`) — none is a domain-science value or a
   mapping with an existing config home.
 
+- **D-F1b-012 — Coverage check: a required vector layer that exists but is empty in the country fails the audit (2026-10-06).** The audit reported "Roads (GRIP4): [OK] found" for IND while the configured GRIP4 region held no road inside India (D-F1-025); only `grid_alignment` noticed, much later. `audit.py::check_vector_coverage()` now raises `LayerCoverageError`, naming the country and layers, when `grid` or `roads` is found, readable and has `n_features == 0` after clipping. Absent files and read errors keep their existing reporting; lakes, rivers and protected areas are not required (a country may have none). Fail loud instead of an alert, because F2a cannot align an empty layer and the cause is a source/configuration defect. Tests: `tests/unit/test_audit.py` (2 new). PRT, IND and BRA pass it (their audits ran green after the fix).
+
 ## Known issues
 
 - `audit_report`'s artifact `schema_version` was bumped to `"2.1"` 2026-09-22 (main.py `_AUDIT_REPORT_SCHEMA_VERSION`) when `AuditResult` gained the required `not_audited` field (D-F1b-002) — a manifest entry recorded under `"2.0"` or earlier now correctly raises `StaleManifestEntryError` on resume instead of a raw Pydantic `ValidationError`.

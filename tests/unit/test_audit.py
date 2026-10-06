@@ -430,3 +430,30 @@ def test_run_audit_phase_roads_is_clipped(tmp_path):
     assert roads.error is None
     assert roads.clipped_to_country is True
     assert roads.n_features == 1
+
+
+@pytest.mark.unit
+def test_vector_coverage_check_names_a_required_layer_that_is_present_but_empty():
+    from geofrea.data_quality_audit.audit import LayerCoverageError, check_vector_coverage
+
+    vectors = {
+        "roads": {"found": True, "n_features": 0},  # IND from GRIP4 region 5
+        "grid": {"found": True, "n_features": 120},
+        "lakes": {"found": True, "n_features": 0},  # may legitimately be empty
+    }
+    with pytest.raises(LayerCoverageError, match=r"IND: layer\(s\) roads"):
+        check_vector_coverage(vectors, "IND")
+
+
+@pytest.mark.unit
+def test_vector_coverage_check_leaves_missing_unreadable_and_populated_layers_alone():
+    from geofrea.data_quality_audit.audit import check_vector_coverage
+
+    check_vector_coverage(
+        {
+            "roads": {"found": False},
+            "grid": {"found": True, "n_features": None, "error": "boom", "error_type": "read_error"},
+        },
+        "PRT",
+    )
+    check_vector_coverage({"roads": {"found": True, "n_features": 5}, "grid": {"found": True, "n_features": 9}}, "PRT")
