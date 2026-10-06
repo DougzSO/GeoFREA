@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 1.2.3 |
+| Version | 2.0.0 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-09-23 |
+| Updated | 2026-10-06 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -167,7 +167,7 @@ Critical transitions:
 
 - **M-F2a-01.** Analysis grid: EPSG:4326, fixed 0.01 degree resolution, snapped so that 0.05 degree cells nest exactly (5 x 5 pixels).
 - **M-F2a-02.** All distances and areas are geodesic (`core/geodesy.py`), including slope derivation from the DEM.
-- **M-F2a-03.** Distance rasters to transmission grid, roads, and rivers are computed up to `distance_cap_km` (parameter). Pixels beyond the cap carry the cap value and a `distance_capped` flag.
+- **M-F2a-03.** Distance rasters to transmission grid, roads, and rivers store the **uncapped geodesic distance**. `distance_cap_km` (parameter, `geospatial.distance_cap_km` in `settings.yaml`) is only the threshold of a `distance_capped` flag raster written beside each distance raster (uint8, 1 where the distance exceeds the threshold): a quality indicator. No stored distance is truncated, because the connection-cost model (M-F6-01) bills the real distance (OQ-040; evidence in `docs/_audit/2026-10_distance_connection_cost_evidence.md`).
 - **M-F2a-04.** Wind products are aligned per height; no combination across heights happens in F2a.
 
 ### F2b siting_layers
@@ -194,7 +194,7 @@ Critical transitions:
   - `excluded_area_km2_<Ek>`: area excluded by each constraint (overlapping, any-cause).
   - `dominant_exclusion`: constraint with the largest excluded area.
   - Resource attributes as eligible-area-weighted means: `pvout_kwh_kwp_day` (solar); `weibull_A_<h>`, `weibull_k_<h>`, `air_density_<h>` for each height (wind).
-  - `dist_grid_km`, `dist_road_km`: eligible-area-weighted mean distances, plus `distance_capped` share.
+  - `dist_grid_km`, `dist_road_km`: eligible-area-weighted mean of the uncapped distance, plus `distance_capped` share (eligible-area share beyond the `distance_cap_km` threshold; a quality indicator, not a cost input).
 - **M-F3-04.** A cell enters the candidate set if `eligible_area_km2 >= min_eligible_area_km2[tech]`.
 - **M-F3-05.** Outputs: `candidates_<tech>.parquet` (one row per candidate cell, stable `cell_id`), pixel and cell eligibility COGs, dominant-exclusion COG.
 - **M-F3-06.** A 0.1 degree aggregation of the same pixels is produced for the scale check (V-07).
@@ -243,6 +243,7 @@ Critical transitions:
   - `E_t = E_m * (1 - d)^(t-1)`, `t = 1..n`
   - `LCOE = [CAPEX_total + sum_t OPEX_t/(1+r)^t] / [sum_t E_t/(1+r)^t]` (USD2024/MWh, real terms)
   - Climate of the member window is held constant over the asset lifetime.
+  - `dist_grid_km` and `dist_road_km` are the real (uncapped) distances from F3. The linear distance terms are a first-order approximation of connection cost, declared in `LIMITATIONS.md` (L-019); the direction for a richer connection-cost model (voltage, technology, capacity, route, losses) is tracked in OQ-041.
 - **M-F6-02.** Parameter samples `s` drawn by Latin hypercube over the uncertain parameters declared in `experiments.yaml` (U-03), with recorded seed. Sample `s0` is the nominal vector.
 - **M-F6-03.** If a C3 loss function passes OQ-007, it enters as an OPEX adder per member.
 - **M-F6-04.** Streaming: per member, samples are processed in batches. Persisted per (`cell_id`, `member`): nominal LCOE, mean, variance, p10, p50, p90 over samples. The design matrix is persisted. The full sample-level array is not.
@@ -458,6 +459,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 2.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F2a-03 stores the uncapped geodesic distance and `distance_cap_km` becomes only the threshold of a `distance_capped` flag raster; M-F3-03 weights the uncapped distance and reports the flag share as a quality indicator; M-F6-01 gains a note that it bills the real distance and that its linear form is a first-order approximation (L-019). Resolves OQ-040 (Douglas's authorization, 2026-10-06). Header version and date brought in line with the changelog (the header still read 1.2.3). |
 | 1.3.0 | 2026-09-28 | M-F1-05 loses its CRAEI/A-11 attribution (CRAEI's own D12 decided against ERA5 gust — nothing to adapt, built fresh, task F4-1/F4-2) and gains its reduction (annual maximum of `fg10`) and reference period (1995-2014, coherent with S-05); no result changes since M-F1-05 was not yet implemented. |
 | 1.2.3 | 2026-09-23 | A-03 wording updated: `run.force_rerun` replaced by `run.rerun_phases` (exact re-execute scope; downstream consumers are marked stale and recomputed lazily, not re-executed eagerly — R-1, `docs/phases/core.md` D-core-012). |
 | 1.2.2 | 2026-09-22 | Section 9 adds `config/audit.yaml` (data_quality_audit diagnostic-gate configuration, M-F1b-01). |

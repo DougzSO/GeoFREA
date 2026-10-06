@@ -13,7 +13,7 @@ Requires: `acquisition_registry`. Produces: `aligned_layers` (COGs on the 0.01 d
 |---|---|---|---|
 | M-F2a-01 | 0.01 degree grid snapped for exact 5 x 5 nesting | `reference_grid.py:build_reference_grid(..., nesting_pixels=5)` (called with `core.constants.CELL_NESTING_PIXELS`) snaps the bounds to multiples of 0.05 degree with a float-noise-tolerant snap and raises if the grid is not a whole number of 5 x 5 cells; the global 0.05 degree lattice origin is `CELL_ORIGIN_LAT/LON` (90N, 180W). Tests: `test_grid_alignment_reference_grid.py` (nesting, edges on the 0.05 lattice, exact when bounds already lie on it). Refreeze of V-01 fixtures is G-4. | pass |
 | M-F2a-02 | Geodesic distances, areas, and slope | Geodesic except `derive_slope_from_dem` (`KM_PER_DEG_LAT = 111.32`) | fail |
-| M-F2a-03 | Distance cap as parameter with flag | `LINEAR_FEATURE_MAX_DIST_KM = 100.0` hardcoded, no flag | fail |
+| M-F2a-03 | Raw distances; `distance_cap_km` only flags | `vector_alignment.py:rasterize_linear_distance`, `align_rivers` write the uncapped geodesic distance and a uint8 `<name>_capped.tif` flag raster (`distance_capped_path`, `_write_distance_and_flag`); threshold from `settings.yaml` `geospatial.distance_cap_km` (100 km, provisional, no source); result fields `roads/grid/rivers_distance_capped`; tests in `test_grid_alignment_vector_alignment.py`, `..._alignment.py`. | pass |
 | M-F2a-04 | Per-height wind alignment, no cross-height combination | AHP combination code present (`WIND_AHP_MATRIX`) | fail |
 | V-01 | Frozen parity for aligned rasters | Legacy-baseline parity; fixtures to refreeze after M-F2a-02 | fail |
 | CONVENTIONS | no duplicated defaults | Pydantic schema defaults duplicate settings.yaml values in ResolutionsConfig/AdaptiveResolutionConfig/GeospatialConfig/SettingsFile | fail |
@@ -26,6 +26,8 @@ Requires: `acquisition_registry`. Produces: `aligned_layers` (COGs on the 0.01 d
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-09 - Passo 4: os 4 veredictos metodológicos de grid_alignment
 - **D-F2a-003 — Fail-loud on corrupted land-cover tiles.** `mosaic_land_cover` fails loudly when a tile overlapping the country is corrupted, rather than silently absorbing an integrity failure of a file that is present.
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - grid_alignment: mosaic_land_cover fail-loud em tile corrompido
+
+- **D-F2a-004 — Distances are stored uncapped; `distance_cap_km` only flags (OQ-040, METHODOLOGY 2.0.0, Douglas's authorization 2026-10-06).** D-F2a-002 unified the cap at 100 km, which was inert while distances only fed 5-30 km proximity decays. Once distances became monetized cost drivers (M-F6-01) a cap understates the connection CAPEX, and the LCOE, of remote cells. The literature gives no universal distance limit and puts distance into site cost continuously (`docs/_audit/2026-10_distance_connection_cost_evidence.md`). So the rasters keep the real geodesic distance, the old constant `LINEAR_FEATURE_MAX_DIST_KM` is removed, and `distance_cap_km` (a `settings.yaml` value, 100 km provisional and unsourced, L-019) only defines the flag raster written beside each distance raster, a quality indicator (the eligible-area share beyond it is reported per cell by F3). Douglas's stated direction for the cost side, beyond this change, is to model connection cost as a function of the real distance and of infrastructure characteristics (OQ-041); that needs sourced data per country and is not done here.
 
 ## Known issues
 

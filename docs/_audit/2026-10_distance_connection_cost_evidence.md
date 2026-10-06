@@ -1,7 +1,9 @@
 # Distance to grid/roads and the connection-cost model — literature evidence and what applies to GeoFREA
 
-Date: 2026-10-06. Status: evidence recorded; methodology change **awaiting Douglas's authorization** (OQ-040);
-extension of the cost model deferred (OQ-041). Related: `distance_cap_km` (M-F2a-03), `dist_grid_km`/`dist_road_km`
+Date: 2026-10-06. Status: evidence recorded; the methodology change (section 5) was **authorized and implemented on 2026-10-06**
+(OQ-040 closed, METHODOLOGY 2.0.0, D-F2a-004); Douglas's stated direction for the cost model (OQ-041) is to preserve
+the real distance and model connection cost as a function of distance and infrastructure characteristics; the
+extension is deferred until sourced data exists. Related: `distance_cap_km` (M-F2a-03), `dist_grid_km`/`dist_road_km`
 (M-F3-03), the CAPEX formula (M-F6-01), cost parameters (OQ-001), limitations L-018 and L-019.
 
 The research below was written by Douglas (chat of 2026-10-06, "Evidências da literatura e implicações para o
@@ -90,7 +92,7 @@ utility-scale plant. Declared as L-018.
 4. **Not proposed now.** No piecewise function, no loss model, no voltage/technology/route model, no exclusion by
    distance, and no new cost parameter without a sourced range.
 
-Until authorized, the current behaviour (cap 100 km, no flag) is unchanged.
+Implemented: raw distances and flag rasters (`docs/phases/F2a_grid_alignment.md` D-F2a-004); METHODOLOGY bumped to 2.0.0 (MAJOR, because a result definition changes; the proposal text above said "minor", which did not follow the change protocol in METHODOLOGY section 0).
 
 ## 6. Leads for OQ-001 (grid, substation and road cost parameters) — Stage R input, not values
 
