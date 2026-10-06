@@ -433,6 +433,72 @@ def _stats_chunked(
         return None, None
 
 
+def _stats_all_bands(
+    src: rasterio.DatasetReader,
+    country_gdf: gpd.GeoDataFrame | None,
+    effective_crs: rasterio.crs.CRS | None,
+) -> dict[str, Any] | None:
+    """Statistics over EVERY band of a multi-band raster (e.g. a 20-year ERA5 stack).
+
+    The single-band readers above (`src.read(1, ...)`) would describe band 1
+    only -- the first year/month of a time-stacked file. The polygon mask is
+    computed once and applied to batches of bands sized to the same float32
+    budget as `_WINDOWED_READ_MAX_BYTES`. min/max/mean/valid_pct aggregate over
+    all bands; `area_km2` is the area of the cells valid in at least one band;
+    `analysis_shape` stays the 2-D (rows, cols) window.
+
+    Returns None when even one band of the window exceeds the budget, so the
+    caller falls back to the (band-1, chunked) path and says so.
+    """
+    if country_gdf is not None:
+        geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
+        window = _country_window(geom_in_src_crs.total_bounds, src.transform, src.width, src.height)
+        shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
+    else:
+        window = rasterio.windows.Window(0, 0, src.width, src.height)
+        shapes = None
+    height, width = round(window.height), round(window.width)
+    band_bytes = height * width * np.dtype(np.float32).itemsize
+    if band_bytes > _WINDOWED_READ_MAX_BYTES:
+        return None
+    win_transform = src.window_transform(window)
+    if shapes is not None:
+        poly_mask = geometry_mask(shapes, out_shape=(height, width), transform=win_transform, invert=True)
+    else:
+        poly_mask = np.ones((height, width), dtype=bool)
+
+    bands_per_batch = max(1, _WINDOWED_READ_MAX_BYTES // max(band_bytes, 1))
+    g_min, g_max, g_sum = np.inf, -np.inf, 0.0
+    g_valid_px = g_total_px = 0
+    any_valid = np.zeros((height, width), dtype=bool)
+    for first in range(1, src.count + 1, bands_per_batch):
+        indexes = list(range(first, min(first + bands_per_batch, src.count + 1)))
+        block = src.read(indexes, window=window).astype(np.float32)
+        valid = np.isfinite(block) & (block != np.float32(MASK_FILL)) & poly_mask[None, :, :]
+        if src.nodata is not None and src.nodata != MASK_FILL:
+            valid &= _nodata_mask(block, src.nodata)
+        vals = block[valid].astype(np.float64)
+        if vals.size:
+            g_min, g_max = min(g_min, float(vals.min())), max(g_max, float(vals.max()))
+            g_sum += float(vals.sum())
+        g_valid_px += vals.size
+        g_total_px += block.size
+        any_valid |= valid.any(axis=0)
+
+    stats: dict[str, Any] = {"analysis_shape": (height, width), "valid_px": g_valid_px}
+    if g_valid_px == 0:
+        return {**stats, "min": None, "max": None, "mean": None, "valid_pct": 0.0, "area_km2": 0.0}
+    row_areas = row_area_km2((height, width), win_transform)
+    return {
+        **stats,
+        "min": round(g_min, 4),
+        "max": round(g_max, 4),
+        "mean": round(g_sum / g_valid_px, 4),
+        "valid_pct": round(100.0 * g_valid_px / g_total_px, 1),
+        "area_km2": round(float((row_areas * any_valid.sum(axis=1)).sum()), 1),
+    }
+
+
 def inspect_raster(
     path: Path,
     country_gdf: gpd.GeoDataFrame | None = None,
@@ -497,6 +563,23 @@ def inspect_raster(
             result["resolution"] = round(abs(src.res[0]), 8)
             result["global_shape"] = (src.height, src.width)
             result["nodata"] = src.nodata
+
+            if src.count > 1:
+                multi = _stats_all_bands(src, country_gdf, effective_crs)
+                if multi is not None:
+                    result["masked_by"] = (
+                        "full file" if country_gdf is None else "country polygon (windowed)"
+                    )
+                    result["analysis_shape"] = multi["analysis_shape"]
+                    for key in ("min", "max", "mean", "valid_pct", "area_km2"):
+                        result[key] = multi[key]
+                    return result
+                logger.warning(
+                    "  [%s] %d bands but one band alone exceeds the windowed-read budget — "
+                    "statistics below describe band 1 only",
+                    path.stem,
+                    src.count,
+                )
 
             if country_gdf is not None:
                 data, transform = None, None

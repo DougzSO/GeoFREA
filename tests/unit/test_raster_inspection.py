@@ -979,3 +979,48 @@ def test_inspect_power_plants_reports_error_for_malformed_columns():
 
     assert result["error"] is not None
 
+
+def _write_stack(path: Path, bands: list[np.ndarray]) -> None:
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=bands[0].shape[0],
+        width=bands[0].shape[1],
+        count=len(bands),
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=np.nan,
+    ) as dst:
+        for i, band in enumerate(bands, start=1):
+            dst.write(band.astype("float32"), i)
+
+
+@pytest.mark.unit
+def test_inspect_raster_statistics_cover_every_band_not_only_the_first(tmp_path):
+    # A 3-year stack: band 1 spans 1..4, band 3 reaches 30 -- reading band 1 alone
+    # would report max 4.
+    base = np.arange(1, 5, dtype="float32").reshape(2, 2)
+    path = tmp_path / "stack.nc.tif"
+    _write_stack(path, [base, base * 2, base * 10])
+
+    for gdf in (None, _covering_gdf()):
+        meta = inspect_raster(path, country_gdf=gdf)
+        assert meta["error"] is None
+        assert (meta["min"], meta["max"]) == (1.0, 40.0)
+        assert meta["mean"] == pytest.approx(np.mean([base, base * 2, base * 10]), abs=1e-3)
+        assert meta["valid_pct"] == 100.0
+
+
+@pytest.mark.unit
+def test_inspect_raster_multiband_valid_pct_counts_nan_cells_across_all_bands(tmp_path):
+    band = np.array([[1.0, np.nan], [3.0, 4.0]], dtype="float32")
+    path = tmp_path / "stack_nan.tif"
+    _write_stack(path, [band, band, band])
+
+    meta = inspect_raster(path, country_gdf=_covering_gdf())
+
+    assert meta["valid_pct"] == 75.0
+    assert meta["max"] == 4.0
