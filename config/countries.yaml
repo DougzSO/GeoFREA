@@ -32,6 +32,8 @@
 # correct for India and other extended-scope countries.
 
 BRA:
+  # Islands (e.g. Fernando de Noronha) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
+  mainland_only: true
   hydrosheds_region: "sa"  # South America (HydroRIVERS)
   elevation_dir: "Brazil"
   land_cover_dir: "Brazil"
@@ -113,6 +115,8 @@ PRT:
   gadm_level0_sha256: "9bf13b07b5b687037fe09a161ce641c29f40e64377a68ad5e9667fe231f07183"
 
 IND:
+  # Islands (Andaman and Nicobar, Lakshadweep) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
+  mainland_only: true
   # HydroRIVERS region = "as" (Central and South-East Asia), per
   # HydroRIVERS_TechDoc_v10.pdf p.4 (raw/hydrology/rivers/, and
   # GEOFREA_DATA_DIR/raw/hydrosheds/*/HydroRIVERS_v10_*_shp/): the
