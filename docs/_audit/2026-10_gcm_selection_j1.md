@@ -89,6 +89,27 @@ An earlier two-model table in this section (GFDL-ESM4 and MIROC6) was superseded
 the pre-mainland IND crop; the values above use the M-F4-03 climatology kernel and the mainland crops (for example IND
 GFDL-ESM4 dT 1.241 K, not 1.267 K).
 
+## Alternatives for the verdict (OQ-009), computed 2026-10-06
+
+Farthest-point sets seeded with GFDL-ESM4 and MIROC6 over the 14 models (27 standardized columns: 3 countries x 3
+factors). "Radius" = the largest distance from any of the 14 models to its nearest member (smaller is better);
+"range covered" = share of each column's min-max range spanned by the set (mean over the 9 columns, and the worst column).
+
+| Option | Members | Radius | Range covered (mean / worst) | Dual-channel members* |
+|---|---|---:|---|---:|
+| A. k = 4 with IPSL | GFDL-ESM4, MIROC6, ACCESS-CM2, IPSL-CM6A-LR | 3.96 | 68% / 41% | 2 |
+| B. k = 5 with IPSL | A + CNRM-CM6-1 | 3.70 | 71% / 43% | 2 |
+| **C. k = 6 with IPSL (script proposal)** | B + MRI-ESM2-0 | 3.41 | 82% / 54% | 3 |
+| D. k = 6 without IPSL | GFDL-ESM4, MIROC6, ACCESS-CM2, MRI-ESM2-0, CNRM-CM6-1, FGOALS-f3-L | 4.57 | 82% / 54% | 2 |
+| E. k = 7 with IPSL (needs a documented deviation, S-04) | C + FGOALS-f3-L | 3.22 | 89% / 54% | 3 |
+
+*Members with an ISIMIP3b counterpart for the hazard channel (D-F4-003): GFDL-ESM4, MRI-ESM2-0, IPSL-CM6A-LR.
+
+Reading: dropping IPSL-CM6A-LR (TCR 2.32 K, 0.12 K above the likely range, inside the very-likely 1.2-2.4) widens the
+radius from 3.41 to 4.57 at k = 6 and loses one of three dual-channel members; the "worst column" coverage does not
+improve with a seventh member, so a deviation above six buys range on the average column only. Members = GCM x SSP x
+window, so k = 6 gives 36 members and k = 7 gives 42. These are diagnostics over change factors, not over impacts.
+
 ## Data issues found while computing criterion 3 (2026-10-06)
 
 - **CESM2 excluded: realization mismatch.** Its historical and scenario files carry different realizations, so a change
