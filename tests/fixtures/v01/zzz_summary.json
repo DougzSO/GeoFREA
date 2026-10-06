@@ -1,0 +1,245 @@
+{
+  "f2a/ZZZ_elevation_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 290.0,
+    "sum": 87000.0
+  },
+  "f2a/ZZZ_grid_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 17.71979522705078,
+    "sum": 5027.992124557495
+  },
+  "f2a/ZZZ_grid_aligned_capped": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 0.0,
+    "sum": 0.0
+  },
+  "f2a/ZZZ_lakes_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "sum": 4.0
+  },
+  "f2a/ZZZ_land_cover_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 10.0,
+    "max": 40.0,
+    "sum": 15000.0
+  },
+  "f2a/ZZZ_plants_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "sum": 3.0
+  },
+  "f2a/ZZZ_population_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 1.1368683772161603e-12,
+    "max": 380.0,
+    "sum": 114000.00000000003
+  },
+  "f2a/ZZZ_rivers_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 11.074872970581055,
+    "sum": 3322.4617624282837
+  },
+  "f2a/ZZZ_rivers_aligned_capped": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 0.0,
+    "sum": 0.0
+  },
+  "f2a/ZZZ_roads_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 16.612308502197266,
+    "sum": 4983.6926555633545
+  },
+  "f2a/ZZZ_roads_aligned_capped": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 0.0,
+    "sum": 0.0
+  },
+  "f2a/ZZZ_slope_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.5164860486984253,
+    "max": 0.5166319012641907,
+    "sum": 309.9351096153259
+  },
+  "f2a/ZZZ_solar_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 4.5,
+    "max": 4.5,
+    "sum": 2700.0
+  },
+  "f2a/ZZZ_wind_air_density_100m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 1.2000000476837158,
+    "max": 1.2000000476837158,
+    "sum": 720.0000286102295
+  },
+  "f2a/ZZZ_wind_air_density_150m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 1.1799999475479126,
+    "max": 1.1799999475479126,
+    "sum": 707.9999685287476
+  },
+  "f2a/ZZZ_wind_air_density_200m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 1.159999966621399,
+    "max": 1.159999966621399,
+    "sum": 695.9999799728394
+  },
+  "f2a/ZZZ_wind_weibull_a_100m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 8.199999809265137,
+    "max": 8.199999809265137,
+    "sum": 4919.999885559082
+  },
+  "f2a/ZZZ_wind_weibull_a_150m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 8.600000381469727,
+    "max": 8.600000381469727,
+    "sum": 5160.000228881836
+  },
+  "f2a/ZZZ_wind_weibull_a_200m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 9.0,
+    "max": 9.0,
+    "sum": 5400.0
+  },
+  "f2a/ZZZ_wind_weibull_k_100m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 2.0999999046325684,
+    "max": 2.0999999046325684,
+    "sum": 1259.999942779541
+  },
+  "f2a/ZZZ_wind_weibull_k_150m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 2.200000047683716,
+    "max": 2.200000047683716,
+    "sum": 1320.0000286102295
+  },
+  "f2a/ZZZ_wind_weibull_k_200m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 2.299999952316284,
+    "max": 2.299999952316284,
+    "sum": 1379.9999713897705
+  },
+  "f2a/ZZZ_wind_wind_speed_100m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 7.0,
+    "max": 7.0,
+    "sum": 4200.0
+  },
+  "f2a/ZZZ_wind_wind_speed_150m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 7.5,
+    "max": 7.5,
+    "sum": 4500.0
+  },
+  "f2a/ZZZ_wind_wind_speed_200m_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 8.0,
+    "max": 8.0,
+    "sum": 4800.0
+  },
+  "e2_water": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "sum": 596.0
+  },
+  "e1_protected": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 1.0,
+    "sum": 575.0
+  }
+}

@@ -70,8 +70,8 @@
   },
   "regression": {
     "workflow": ".github/workflows/regression.yml",
-    "fixtures_release": "regression-fixtures-v1",
-    "status": "Fixtures cover the legacy F2b criteria; they must be reduced to V-01 scope (F1, F2a, exclusions E1-E3) and refrozen in MS-3/MS-4."
+    "fixtures": "tests/fixtures/v01/zzz.npz",
+    "status": "V-01 refrozen 2026-10-06 (G-4): F1, F2a and E1-E3 on the ZZZ country, in-repo fixtures, no external download. Legacy PRT/BRA baseline retired."
   },
   "open_questions": "docs/OPEN_QUESTIONS.md",
   "limitations": "docs/LIMITATIONS.md",

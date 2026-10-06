@@ -23,6 +23,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, Point, box
@@ -134,7 +135,7 @@ def gen_protected() -> None:
     x0, x1 = WEST, WEST + 5 * PIXEL_DEG
     y1, y0 = NORTH, NORTH - 5 * PIXEL_DEG
     gdf = gpd.GeoDataFrame(
-        {"WDPAID": [900001], "NAME": ["Synthetica Reserve"]},
+        {"WDPAID": [900001], "NAME": ["Synthetica Reserve"], "IUCN_CAT": ["Ia"]},
         geometry=[box(x0, y0, x1, y1)],
         crs=CRS,
     )
@@ -252,19 +253,21 @@ def gen_power_plants() -> None:
         Point(WEST + 15 * PIXEL_DEG, NORTH - 10 * PIXEL_DEG),
         Point(WEST + 28 * PIXEL_DEG, NORTH - 18 * PIXEL_DEG),
     ]
-    gdf = gpd.GeoDataFrame(
+    # The loader (data_acquisition/local_layers.py, adapter.load_power_plants_df) reads a CSV with
+    # latitude/longitude columns, like the real GPPD extract; this generator had drifted to a GPKG.
+    df = pd.DataFrame(
         {
             "gppd_idnr": ["ZZZ0001", "ZZZ0002", "ZZZ0003"],
             "capacity_mw": [20.0, 30.0, 50.0],
             "primary_fuel": ["Solar", "Wind", "Solar"],
             "country": ["ZZZ", "ZZZ", "ZZZ"],
-        },
-        geometry=pts,
-        crs=CRS,
+            "latitude": [p.y for p in pts],
+            "longitude": [p.x for p in pts],
+        }
     )
-    out = RAW / "power_plants" / "zzz_power_plants.gpkg"
+    out = RAW / "power_plants" / "zzz_power_plants.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
-    gdf.to_file(out, driver="GPKG")
+    df.to_csv(out, index=False)
 
 
 def main() -> None:

@@ -48,7 +48,7 @@ testpaths = ["tests"]
 addopts = "--strict-markers"
 markers = [
     "unit: fast tests with no external data dependency",
-    "regression: compares GeoFREA output against outputs_baseline_fc7b43d/, requires local baseline data",
+    "regression: V-01 frozen regression on the synthetic ZZZ country (tests/fixtures/v01)",
 ]
 
 [tool.ruff]
