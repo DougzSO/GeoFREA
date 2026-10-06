@@ -713,9 +713,8 @@ def compute_daily_maxima(hourly_path: Path, variable: str = "fg10") -> xr.Datase
     Pure function, no network dependency. M-F1-05 does not state a
     timezone for the daily reduction it describes — ERA5's own
     `valid_time` coordinate is UTC and is used as-is here rather than
-    converted to a per-country local time; this default is registered
-    as OQ-037 (docs/OPEN_QUESTIONS.md), not resolved silently (task
-    F4-2, Douglas's verdict pending).
+    converted to a per-country local time. Douglas's verdict (OQ-037,
+    2026-10-06): UTC is kept -- see docs/phases/F4_climate_forcing.md D-F4-011.
 
     Replaces the CDS's own `daily_statistic: "daily_maximum"` derived
     product (dropped — see module docstring): this is the same
@@ -826,6 +825,15 @@ class CountryMask:
     cells_after: int
 
 
+def _contiguous_range(any_flags: np.ndarray) -> np.ndarray:
+    """Bool array True from the first to the last True of `any_flags` (all False stays all False)."""
+    keep = np.zeros_like(any_flags, dtype=bool)
+    idx = np.flatnonzero(any_flags)
+    if idx.size:
+        keep[idx[0] : idx[-1] + 1] = True
+    return keep
+
+
 def build_country_mask(sample_year_path: Path, country_polygon_path: Path) -> CountryMask:
     """Compute the polygon mask once per country from any one of its yearly bbox files."""
     geom = gpd.read_file(country_polygon_path).union_all()
@@ -839,8 +847,12 @@ def build_country_mask(sample_year_path: Path, country_polygon_path: Path) -> Co
     points = gpd.points_from_xy(lon_grid.ravel(), lat_grid.ravel())
     mask_flat = gpd.GeoSeries(points, crs="EPSG:4326").intersects(geom).to_numpy()
     mask = mask_flat.reshape(lat_grid.shape)
-    lat_keep = mask.any(axis=1)
-    lon_keep = mask.any(axis=0)
+    # Contiguous bounding range, not "rows/columns with any in-polygon cell":
+    # dropping interior rows (islands far from the mainland) leaves an
+    # irregular axis that GDAL cannot georeference (identity transform,
+    # resolution reported as 1.0). Cells outside the polygon stay NaN.
+    lat_keep = _contiguous_range(mask.any(axis=1))
+    lon_keep = _contiguous_range(mask.any(axis=0))
     return CountryMask(
         lat_keep=lat_keep,
         lon_keep=lon_keep,

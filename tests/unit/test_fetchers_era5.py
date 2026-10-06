@@ -82,6 +82,31 @@ def test_read_native_grid_resolution_survives_gaps_from_polygon_crop(tmp_path):
 
 
 @pytest.mark.unit
+def test_build_country_mask_keeps_regular_axis_across_a_gap_between_polygons(tmp_path):
+    """A far island must not make the cropped axis irregular: GDAL cannot georeference that."""
+    lat = np.arange(40.0, 36.0, -0.25)  # 16 rows
+    lon = np.arange(-10.0, -6.0, 0.25)  # 16 columns
+    path = tmp_path / "year.nc"
+    _write_daily_netcdf(path, lat=lat, lon=lon, dates=["2010-01-01"])
+    # Mainland box at the top-left and a one-cell "island" at the bottom-right,
+    # leaving several fully-empty rows and columns between them.
+    poly = gpd.GeoDataFrame(
+        geometry=[box(-10.0, 39.0, -9.0, 40.0).union(box(-6.5, 36.1, -6.2, 36.4))], crs="EPSG:4326"
+    )
+    poly_path = tmp_path / "border.geojson"
+    poly.to_file(poly_path, driver="GeoJSON")
+
+    mask = era5.build_country_mask(path, poly_path)
+
+    n_rows, n_cols = int(mask.lat_keep.sum()), int(mask.lon_keep.sum())
+    kept = np.flatnonzero(mask.lat_keep)
+    assert (np.diff(kept) == 1).all()  # contiguous rows, no interior row dropped
+    assert mask.sub_mask.shape == (n_rows, n_cols)
+    assert mask.sub_mask.sum() == mask.cells_after
+    assert n_rows > mask.sub_mask.any(axis=1).sum()  # empty interior rows kept, to be NaN
+
+
+@pytest.mark.unit
 def test_is_complete_download_distinguishes_partial_from_complete(tmp_path):
     final_path = tmp_path / "a.nc"
     tmp_download_path = tmp_path / "a.part.nc"
