@@ -422,3 +422,69 @@ def test_mosaic_land_cover_first_tile_wins_on_overlap(tmp_path):
         data = src.read(1)
     assert (data[grid.country_mask] == 30).any()
     assert not (data[grid.country_mask] == 70).any()
+
+
+def _write_ramp_with_nan_mismatch(path: Path) -> None:
+    """120x120 float32 at 0.005 deg, value = row*1000 + col, declared nodata -9999 but literal NaN cells inside."""
+    size = 120
+    data = (np.arange(size)[:, None] * 1000.0 + np.arange(size)[None, :]).astype("float32")
+    data[30:40, 50:70] = np.nan
+    with rasterio.open(
+        path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326",
+        transform=rasterio.transform.from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.005, 0.005), nodata=-9999.0,
+    ) as dst:
+        dst.write(data, 1)
+
+
+@pytest.mark.unit
+def test_windowed_strips_give_the_same_raster_as_a_single_pass(tmp_path):
+    grid = _grid()
+    src_path = tmp_path / "ramp.tif"
+    _write_ramp_with_nan_mismatch(src_path)
+
+    one = reproject_to_grid(src_path, tmp_path / "one.tif", grid)  # fits in one window
+    many = reproject_to_grid(src_path, tmp_path / "many.tif", grid, max_window_bytes=20_000)  # forced strips
+
+    with rasterio.open(one) as a, rasterio.open(many) as b:
+        da, db = a.read(1), b.read(1)
+    assert np.array_equal(da, db, equal_nan=True)  # strip seams change nothing
+
+
+@pytest.mark.unit
+def test_reproject_never_reads_the_whole_source_when_it_exceeds_the_window_budget(tmp_path, monkeypatch):
+    from geofrea.grid_alignment import raster_alignment
+
+    grid = _grid()
+    src_path = tmp_path / "ramp.tif"
+    _write_ramp_with_nan_mismatch(src_path)
+    full_bytes = 120 * 120 * 4
+    sizes = []
+    real = raster_alignment.reproject
+
+    def spy(**kwargs):
+        sizes.append(kwargs["source"].nbytes)
+        return real(**kwargs)
+
+    monkeypatch.setattr(raster_alignment, "reproject", spy)
+
+    reproject_to_grid(src_path, tmp_path / "out.tif", grid, max_window_bytes=20_000)
+
+    assert len(sizes) > 1  # several strips
+    assert max(sizes) < full_bytes  # no call saw the whole raster
+
+
+@pytest.mark.unit
+def test_source_that_does_not_overlap_the_grid_yields_all_nodata(tmp_path):
+    grid = _grid()
+    src_path = tmp_path / "far.tif"
+    with rasterio.open(
+        src_path, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32", crs="EPSG:4326",
+        transform=rasterio.transform.from_origin(100.0, 10.0, 0.01, 0.01), nodata=-9999.0,
+    ) as dst:
+        dst.write(np.ones((10, 10), dtype="float32"), 1)
+
+    out = reproject_to_grid(src_path, tmp_path / "out.tif", grid)
+
+    with rasterio.open(out) as src:
+        data = src.read(1)
+    assert (data == NODATA_FLOAT).all()

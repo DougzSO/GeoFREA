@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.enums import Resampling
-from rasterio.warp import reproject
-from rasterio.windows import Window
+from rasterio.warp import reproject, transform_bounds
+from rasterio.windows import Window, from_bounds
 
 from geofrea.core.constants import (
     AHP_RANDOM_INDEX,
@@ -43,6 +43,27 @@ from geofrea.grid_alignment.reference_grid import GridContext
 logger = logging.getLogger(__name__)
 
 
+# Peak size of one source window read by reproject_to_grid(), in bytes of the source dtype. Bounds memory:
+# BRA's population raster is (46814, 54172) float32 = 9.45 GiB, which a whole-raster read cannot allocate on
+# a 6 GB machine (docs/phases/F2a_grid_alignment.md known issue, 2026-09-22).
+_REPROJECT_WINDOW_BYTES = 400_000_000
+
+
+def _source_window(src, grid: GridContext, row_start: int, row_end: int, pad_px: int) -> Window | None:
+    """Window of `src` covering destination rows [row_start, row_end) plus `pad_px` pixels, or None if disjoint."""
+    left, top = grid.transform * (0, row_start)
+    right, bottom = grid.transform * (grid.width, row_end)
+    bounds = transform_bounds(grid.crs, src.crs, left, bottom, right, top, densify_pts=21)
+    win = from_bounds(*bounds, transform=src.transform)
+    col_off = max(int(np.floor(win.col_off)) - pad_px, 0)
+    row_off = max(int(np.floor(win.row_off)) - pad_px, 0)
+    col_end = min(int(np.ceil(win.col_off + win.width)) + pad_px, src.width)
+    row_end_src = min(int(np.ceil(win.row_off + win.height)) + pad_px, src.height)
+    if col_end <= col_off or row_end_src <= row_off:
+        return None
+    return Window(col_off, row_off, col_end - col_off, row_end_src - row_off)
+
+
 def reproject_to_grid(
     src_path,
     out_path,
@@ -50,8 +71,15 @@ def reproject_to_grid(
     resampling: Resampling = Resampling.bilinear,
     nodata_out: float = NODATA_FLOAT,
     dtype_out: str = "float32",
+    max_window_bytes: int = _REPROJECT_WINDOW_BYTES,
 ):
     """Reproject a source raster into the GridContext reference frame.
+
+    The source is read through windows, never whole: the destination is processed in horizontal
+    strips, each strip reading only the source window it covers (plus a pad wide enough for the
+    resampling kernel, so strip seams give the same values as a single pass), sized so one window
+    stays under `max_window_bytes`. A source whose window for the whole grid already fits is read
+    in one piece.
 
     Args:
         src_path: Path to the source raster.
@@ -60,6 +88,7 @@ def reproject_to_grid(
         resampling: Rasterio resampling algorithm.
         nodata_out: NoData value for the output raster.
         dtype_out: Output data type ("float32" or "uint8").
+        max_window_bytes: Upper bound on one source window read, in bytes.
 
     Returns:
         Path to the reprojected output raster.
@@ -73,7 +102,10 @@ def reproject_to_grid(
 
     with safe_raster_open(src_path) as src:
         src_nodata = src.nodata
-        source = rasterio.band(src, 1)
+        itemsize = np.dtype(src.dtypes[0]).itemsize
+        # Pad: the resampling footprint (destination pixel size in source pixels) plus a margin.
+        src_res = max(abs(src.transform.a), 1e-12)
+        pad_px = int(np.ceil(abs(grid.transform.a) / src_res)) + 4
 
         # Data-integrity guard (docs/DECISIONS.md 2026-09-11, "elevation
         # NaN leak"): some source rasters declare a finite nodata
@@ -91,31 +123,44 @@ def reproject_to_grid(
         # the source has no such mismatch, and left alone when the
         # source's OWN declared nodata is itself NaN (some DEM products
         # legitimately encode nodata that way, and GDAL already handles
-        # that case correctly).
-        if dtype_out != "uint8" and src_nodata is not None and not np.isnan(src_nodata):
-            src_array = src.read(1)
-            nan_mask = np.isnan(src_array)
-            if nan_mask.any():
+        # that case correctly). Applied per window now (not on a whole-raster read).
+        sanitize_nan = dtype_out != "uint8" and src_nodata is not None and not np.isnan(src_nodata)
+
+        full = _source_window(src, grid, 0, grid.height, pad_px)
+        if full is not None:
+            n_strips = max(1, int(np.ceil(full.width * full.height * itemsize / max_window_bytes)))
+            strip_rows = int(np.ceil(grid.height / n_strips))
+            nan_total = 0
+            for row_start in range(0, grid.height, strip_rows):
+                row_end = min(row_start + strip_rows, grid.height)
+                win = _source_window(src, grid, row_start, row_end, pad_px)
+                if win is None:
+                    continue
+                block = src.read(1, window=win)
+                if sanitize_nan:
+                    nan_mask = np.isnan(block)
+                    if nan_mask.any():
+                        nan_total += int(nan_mask.sum())
+                        block = np.where(nan_mask, src_nodata, block).astype(block.dtype)
+                reproject(
+                    source=block,
+                    destination=data_out[row_start:row_end],
+                    src_transform=src.window_transform(win),
+                    src_crs=src.crs,
+                    dst_transform=grid.transform * rasterio.Affine.translation(0, row_start),
+                    dst_crs=grid.crs,
+                    resampling=resampling,
+                    src_nodata=src_nodata,
+                    dst_nodata=nd_out,
+                )
+            if nan_total:
                 logger.warning(
                     "    %s: %d source pixels are literal NaN despite a finite "
-                    "declared nodata (%s) -- sanitizing to nodata before reproject.",
+                    "declared nodata (%s) -- sanitized to nodata before reproject.",
                     Path(src_path).name,
-                    int(nan_mask.sum()),
+                    nan_total,
                     src_nodata,
                 )
-                source = np.where(nan_mask, src_nodata, src_array).astype(src_array.dtype)
-
-        reproject(
-            source=source,
-            destination=data_out,
-            src_transform=src.transform,
-            src_crs=src.crs,
-            dst_transform=grid.transform,
-            dst_crs=grid.crs,
-            resampling=resampling,
-            src_nodata=src_nodata,
-            dst_nodata=nd_out,
-        )
 
     data_out[~grid.country_mask] = nd_out
 
