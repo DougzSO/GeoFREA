@@ -138,6 +138,15 @@ def timer(label: str, timings: dict[str, float]) -> Generator[None, None, None]:
         logger.info("  [%s] completed in %.1fs", label, elapsed)
 
 
+def _clip_cache_key(path: Path, country_gdf: gpd.GeoDataFrame) -> str:
+    """Identity of a clip: the source file (path, size, mtime) and the country polygon it was clipped to."""
+    import hashlib
+
+    st = Path(path).stat()
+    geom = hashlib.sha256(b"".join(g.wkb for g in country_gdf.geometry)).hexdigest()
+    return f"{Path(path).resolve()}|{st.st_size}|{st.st_mtime_ns}|{geom}"
+
+
 def _read_clipped_with_cache(
     path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path
 ) -> gpd.GeoDataFrame:
@@ -164,8 +173,12 @@ def _read_clipped_with_cache(
         The clipped GeoDataFrame, from cache if present, else freshly
         computed and cached for next time.
     """
-    if cache_path.exists():
+    key_path = cache_path.with_suffix(".key")
+    key = _clip_cache_key(path, country_gdf)
+    if cache_path.exists() and key_path.exists() and key_path.read_text(encoding="utf-8") == key:
         return gpd.read_file(str(cache_path))
+    # No key, or a key for a different source file or country polygon: the cached clip is stale (a cache
+    # clipped from another source, e.g. IND roads from the wrong GRIP4 region, is rebuilt, never reused).
 
     clipped, repair_report = read_clipped_to_country(path, country_gdf)
     if repair_report.n_invalid:
@@ -184,6 +197,7 @@ def _read_clipped_with_cache(
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         clipped.to_file(cache_path, driver="GPKG")
+        key_path.write_text(key, encoding="utf-8")
     except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail alignment
         logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
     return clipped

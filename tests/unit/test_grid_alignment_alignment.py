@@ -351,6 +351,11 @@ def test_run_grid_alignment_phase_multi_polygon_country_gdf_does_not_crash(tmp_p
 # ─── _read_clipped_with_cache() / cache-by-path-convention reuse ───
 
 
+def _seed_key(cache_path, source, country_gdf):
+    """Mark a pre-seeded clip cache as produced from `source` and `country_gdf` (the cache identity)."""
+    cache_path.with_suffix(".key").write_text(alignment_module._clip_cache_key(source, country_gdf), encoding="utf-8")
+
+
 @pytest.mark.unit
 def test_read_clipped_with_cache_computes_and_writes_when_absent(tmp_path):
     country_gdf = _country_gdf()
@@ -398,14 +403,38 @@ def test_read_clipped_with_cache_reads_from_cache_without_calling_read_clipped_t
     cache_path.parent.mkdir(parents=True)
     pre_seeded = gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326")
     pre_seeded.to_file(cache_path, driver="GPKG")
+    source = tmp_path / "src_never_read.geojson"
+    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(source, driver="GeoJSON")
+    _seed_key(cache_path, source, country_gdf)
 
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() must not be called when cache exists")
 
     with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
-        result = _read_clipped_with_cache(Path("irrelevant_never_read.shp"), country_gdf, cache_path)
+        result = _read_clipped_with_cache(source, country_gdf, cache_path)
 
     assert len(result) == 1
+
+
+@pytest.mark.unit
+def test_read_clipped_with_cache_rebuilds_a_cache_made_from_another_source(tmp_path):
+    # An empty clip cached from the wrong source file (IND roads from GRIP4 region 5, 2026-10-06) must not be
+    # reused once the source changes, nor when there is no key at all.
+    country_gdf = _country_gdf()
+    cache_path = tmp_path / "cache" / "roads_clipped.gpkg"
+    cache_path.parent.mkdir(parents=True)
+    gpd.GeoDataFrame(geometry=[], crs="EPSG:4326").to_file(cache_path, driver="GPKG")
+    source = tmp_path / "new_source.geojson"
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])], crs="EPSG:4326"
+    ).to_file(source, driver="GeoJSON")
+
+    keyless = _read_clipped_with_cache(source, country_gdf, cache_path)
+    assert len(keyless) == 1  # rebuilt from the source, key written
+
+    cache_path.with_suffix(".key").write_text("another-source|1|2|3", encoding="utf-8")
+    gpd.GeoDataFrame(geometry=[], crs="EPSG:4326").to_file(cache_path, driver="GPKG")
+    assert len(_read_clipped_with_cache(source, country_gdf, cache_path)) == 1
 
 
 @pytest.mark.unit
@@ -425,6 +454,9 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
         crs="EPSG:4326",
     )
     pre_clipped.to_file(cache_path, driver="GPKG")
+    roads_source = tmp_path / "roads_source_never_read.shp"
+    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(roads_source)
+    _seed_key(cache_path, roads_source, country_gdf)
 
     # roads_source must still exist on disk (the same real acquisition
     # file both phases would read in production — Passo 1 argues
@@ -432,8 +464,6 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
     # against the raw source file being present), but must NEVER
     # actually be read: read_clipped_to_country() is mocked to fail
     # loudly if called, proving the cache is what actually got used.
-    roads_source = tmp_path / "roads_source_never_read.shp"
-    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(roads_source)
     inputs = _inputs(roads_source=roads_source, country_gdf=country_gdf)
 
     def fail_if_called(*a, **k):
@@ -465,6 +495,8 @@ def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp
     rivers_source = tmp_path / "rivers_source_never_read.shp"
     gpd.GeoDataFrame(geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:4326").to_file(lakes_source)
     gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(rivers_source)
+    _seed_key(processed_dir / "lakes_clipped.gpkg", lakes_source, country_gdf)
+    _seed_key(processed_dir / "rivers_clipped.gpkg", rivers_source, country_gdf)
     inputs = _inputs(lakes_path=lakes_source, rivers_path=rivers_source, country_gdf=country_gdf)
 
     def fail_if_called(*a, **k):
