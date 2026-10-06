@@ -62,6 +62,17 @@ def test_a_truncated_period_fails_loud():
 
 
 @pytest.mark.unit
+def test_nan_cells_outside_a_crop_are_not_read_as_missing_months():
+    da = _monthly(lambda y, m: 2.0)
+    da[:, 0, 0] = np.nan  # a cell outside the country polygon, NaN at every time step
+
+    out = cf.annual_mean_of_climatology(da, (1995, 2014))
+
+    assert bool(np.isnan(out.isel(lat=0, lon=0)))
+    assert float(out.isel(lat=1, lon=1)) == pytest.approx(2.0)
+
+
+@pytest.mark.unit
 def test_ratio_over_a_non_positive_reference_fails_loud_and_nan_cells_stay_nan():
     ref = xr.DataArray([[1.0, np.nan], [0.0, 2.0]], dims=("lat", "lon"))
     win = xr.DataArray([[2.0, 2.0], [1.0, 4.0]], dims=("lat", "lon"))

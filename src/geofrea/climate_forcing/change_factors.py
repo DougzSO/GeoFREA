@@ -55,7 +55,8 @@ def monthly_climatology(da: xr.DataArray, years: tuple[int, int]) -> xr.DataArra
         raise IncompletePeriodError(
             f"{start}-{end}: expected {expected} monthly steps, found {window.sizes['time']}"
         )
-    per_year = window.groupby("time.year").count("time")
+    # count the time steps themselves: counting data values would read NaN cells outside a crop as missing months
+    per_year = window["time"].groupby("time.year").count()
     if not (per_year == 12).all():
         raise IncompletePeriodError(f"{start}-{end}: not every year has 12 months")
     return window.groupby("time.month").mean("time")
