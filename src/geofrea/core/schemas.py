@@ -685,11 +685,16 @@ class GeospatialConfig(BaseModel):
 
     Args:
         resolutions: grid_alignment's target-resolution configuration.
+        distance_cap_km: Threshold (km) of the `distance_capped` QC flag written beside the
+            distance-to-grid/roads/rivers rasters (M-F2a-03). It never truncates a distance:
+            the connection-cost model bills the real one (OQ-040, METHODOLOGY 1.4.0).
+            The value lives only in settings.yaml (no default here, CONVENTIONS).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     resolutions: ResolutionsConfig = ResolutionsConfig()
+    distance_cap_km: PositiveFloat
 
 
 class SettingsFile(BaseModel):
@@ -709,7 +714,7 @@ class SettingsFile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     run: RunConfig
-    geospatial: GeospatialConfig = GeospatialConfig()
+    geospatial: GeospatialConfig
 
 
 class GeometryRepairSummary(BaseModel):

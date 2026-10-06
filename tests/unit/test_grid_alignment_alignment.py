@@ -24,6 +24,13 @@ from geofrea.grid_alignment.schemas import GridAlignmentInputs
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 
+
+def _inputs(**kwargs) -> GridAlignmentInputs:
+    """GridAlignmentInputs with the settings.yaml-sourced fields a real run always supplies."""
+    kwargs.setdefault("distance_cap_km", 100.0)
+    return GridAlignmentInputs(**kwargs)
+
+
 _ORIGIN_LON, _ORIGIN_LAT = -9.0, 39.0
 _RES = 0.01
 
@@ -109,7 +116,7 @@ def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path
     country_gdf = _country_gdf()
     elev_path = tmp_path / "elev.tif"
     _write_raster(elev_path, value=100.0)
-    inputs = GridAlignmentInputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
     context = _context(tmp_path)
 
     def bad_reproject(src_path, out_path, grid, *args, **kwargs):
@@ -172,7 +179,7 @@ def test_run_grid_alignment_phase_reuses_already_aligned_raster_on_second_call(t
     country_gdf = _country_gdf()
     elev_path = tmp_path / "elev.tif"
     _write_raster(elev_path, value=55.0)
-    inputs = GridAlignmentInputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
     context = _context(tmp_path)
 
     first = run_grid_alignment_phase(context, inputs)
@@ -200,7 +207,7 @@ def test_run_grid_alignment_phase_logs_and_returns_none_when_layer_fn_yields_not
     )
     grid_source = tmp_path / "grid_far.geojson"
     far_away_grid_line.to_file(grid_source, driver="GeoJSON")
-    inputs = GridAlignmentInputs(grid_source=grid_source, country_gdf=country_gdf)
+    inputs = _inputs(grid_source=grid_source, country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -216,7 +223,7 @@ def test_run_grid_alignment_phase_recomputes_when_cached_raster_dims_mismatch(tm
     country_gdf = _country_gdf()
     elev_path = tmp_path / "elev.tif"
     _write_raster(elev_path, value=55.0)
-    inputs = GridAlignmentInputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
     context = _context(tmp_path)
 
     stale_path = context.outputs_dir / "PRT" / "grid_alignment" / "PRT_elevation_aligned.tif"
@@ -243,7 +250,7 @@ def test_run_grid_alignment_phase_minimal_inputs_produces_result(tmp_path):
     country_gdf = _country_gdf()
     elev_path = tmp_path / "elev.tif"
     _write_raster(elev_path, value=123.0)
-    inputs = GridAlignmentInputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -259,7 +266,7 @@ def test_run_grid_alignment_phase_minimal_inputs_produces_result(tmp_path):
 @pytest.mark.unit
 def test_run_grid_alignment_phase_missing_layers_leave_none_without_error(tmp_path):
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(country_gdf=country_gdf)  # nothing else provided
+    inputs = _inputs(country_gdf=country_gdf)  # nothing else provided
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -271,7 +278,7 @@ def test_run_grid_alignment_phase_missing_layers_leave_none_without_error(tmp_pa
 @pytest.mark.unit
 def test_run_grid_alignment_phase_saves_grid_metadata_json(tmp_path):
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(country_gdf=country_gdf)
+    inputs = _inputs(country_gdf=country_gdf)
     context = _context(tmp_path)
 
     result = run_grid_alignment_phase(context, inputs)
@@ -302,7 +309,7 @@ def test_run_grid_alignment_phase_reprojects_source_with_different_crs(tmp_path)
     ) as dst:
         dst.write(np.full((60, 60), 77.0, dtype="float32"), 1)
 
-    inputs = GridAlignmentInputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -325,7 +332,7 @@ def test_run_grid_alignment_phase_multi_polygon_country_gdf_does_not_crash(tmp_p
     islet = _square(_ORIGIN_LON + 5.0, _ORIGIN_LAT - 5.0, 0.02)
     country_gdf = gpd.GeoDataFrame(geometry=[mainland, islet], crs="EPSG:4326")
 
-    inputs = GridAlignmentInputs(country_gdf=country_gdf)
+    inputs = _inputs(country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -418,7 +425,7 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
     # loudly if called, proving the cache is what actually got used.
     roads_source = tmp_path / "roads_source_never_read.shp"
     gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(roads_source)
-    inputs = GridAlignmentInputs(roads_source=roads_source, country_gdf=country_gdf)
+    inputs = _inputs(roads_source=roads_source, country_gdf=country_gdf)
 
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() was called — cache was NOT reused!")
@@ -449,7 +456,7 @@ def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp
     rivers_source = tmp_path / "rivers_source_never_read.shp"
     gpd.GeoDataFrame(geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:4326").to_file(lakes_source)
     gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(rivers_source)
-    inputs = GridAlignmentInputs(lakes_path=lakes_source, rivers_path=rivers_source, country_gdf=country_gdf)
+    inputs = _inputs(lakes_path=lakes_source, rivers_path=rivers_source, country_gdf=country_gdf)
 
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() was called — cache was NOT reused!")
@@ -488,7 +495,7 @@ def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(
     ) as dst:
         dst.write(np.full((60, 60), 10, dtype="uint8"), 1)
 
-    inputs = GridAlignmentInputs(land_cover_tiles=[tile], country_gdf=country_gdf)
+    inputs = _inputs(land_cover_tiles=[tile], country_gdf=country_gdf)
 
     call_count = {"n": 0}
     real_mosaic = alignment_module.mosaic_land_cover
@@ -517,7 +524,7 @@ def test_run_grid_alignment_phase_defaults_to_fixed_0_01_resolution(tmp_path):
     # baseline. No target_pixels/min_deg/adaptive_pixel_ceiling_deg
     # formula involved when this default is used.
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(country_gdf=country_gdf)
+    inputs = _inputs(country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -527,7 +534,7 @@ def test_run_grid_alignment_phase_defaults_to_fixed_0_01_resolution(tmp_path):
 @pytest.mark.unit
 def test_run_grid_alignment_phase_honors_explicit_fixed_resolution(tmp_path):
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(country_gdf=country_gdf, resolution_deg=0.02)
+    inputs = _inputs(country_gdf=country_gdf, resolution_deg=0.02)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -545,7 +552,7 @@ def test_run_grid_alignment_phase_adaptive_mode_computes_resolution_from_area(tm
     # arithmetic (covered separately by test_core_geodesy.py) and
     # trivial to assert on.
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(
+    inputs = _inputs(
         country_gdf=country_gdf,
         resolution_deg="adaptive",
         adaptive_target_pixels=1,
@@ -563,7 +570,7 @@ def test_run_grid_alignment_phase_adaptive_mode_respects_min_deg_clip(tmp_path):
     # Symmetric case: an unrealistically large target_pixels forces the
     # clip to min_deg instead.
     country_gdf = _country_gdf()
-    inputs = GridAlignmentInputs(
+    inputs = _inputs(
         country_gdf=country_gdf,
         resolution_deg="adaptive",
         adaptive_target_pixels=10_000_000_000,
@@ -576,14 +583,13 @@ def test_run_grid_alignment_phase_adaptive_mode_respects_min_deg_clip(tmp_path):
     assert result.grid_metadata.resolution_deg == pytest.approx(0.005)
 
 
-# ─── max_dist_km unification (2026-09-09, grid_alignment Passo 4 item 2) ───
+# ─── distance_cap_km: flag threshold shared by roads/grid/rivers (OQ-040, M-F2a-03) ───
 
 
 @pytest.mark.unit
-def test_run_grid_alignment_phase_passes_inputs_max_dist_km_to_roads_and_rivers(tmp_path):
-    # roads/grid/rivers all used to hardcode their own max_dist_km
-    # (100.0 for roads/grid, an inline 50.0 for rivers). Both now read
-    # inputs.max_dist_km — confirmed here with a non-default value,
+def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_rivers(tmp_path):
+    # roads/grid/rivers read one threshold, inputs.distance_cap_km (it only sets the
+    # `distance_capped` flag, never truncates) — confirmed here with a non-default value,
     # captured via mocks rather than assumed.
     country_gdf = _country_gdf()
     roads_source = tmp_path / "roads_source.shp"
@@ -596,28 +602,30 @@ def test_run_grid_alignment_phase_passes_inputs_max_dist_km_to_roads_and_rivers(
         geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
         crs="EPSG:4326",
     ).to_file(rivers_source)
-    inputs = GridAlignmentInputs(
-        roads_source=roads_source, rivers_path=rivers_source, country_gdf=country_gdf, max_dist_km=77.0
+    inputs = _inputs(
+        roads_source=roads_source, rivers_path=rivers_source, country_gdf=country_gdf, distance_cap_km=77.0
     )
 
     real_rasterize = alignment_module.rasterize_linear_distance
     real_align_rivers = alignment_module.align_rivers
     captured: dict[str, float] = {}
 
-    def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, max_dist_km):
+    def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km):
         if label == "roads":
-            captured["roads"] = max_dist_km
-        return real_rasterize(gdf, out_path, country_gdf_arg, grid, label, max_dist_km)
+            captured["roads"] = distance_cap_km
+        return real_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km)
 
-    def spy_align_rivers(gdf, out_path, grid, max_dist_km):
-        captured["rivers"] = max_dist_km
-        return real_align_rivers(gdf, out_path, grid, max_dist_km)
+    def spy_align_rivers(gdf, out_path, grid, distance_cap_km):
+        captured["rivers"] = distance_cap_km
+        return real_align_rivers(gdf, out_path, grid, distance_cap_km)
 
     with (
         patch.object(alignment_module, "rasterize_linear_distance", side_effect=spy_rasterize),
         patch.object(alignment_module, "align_rivers", side_effect=spy_align_rivers),
     ):
-        run_grid_alignment_phase(_context(tmp_path), inputs)
+        result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
+    assert result.roads_distance_capped is not None and result.rivers_distance_capped is not None
+    assert result.grid_distance_capped is None  # no grid source in this run
     assert captured["roads"] == 77.0
     assert captured["rivers"] == 77.0

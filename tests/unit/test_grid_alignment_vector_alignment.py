@@ -16,6 +16,7 @@ from geofrea.grid_alignment.vector_alignment import (
     align_plants,
     align_rivers,
     calculate_wgs84_isotropic_distance,
+    distance_capped_path,
     load_vector_bbox,
     rasterize_linear_distance,
 )
@@ -107,23 +108,29 @@ def test_rasterize_linear_distance_returns_none_for_empty_or_none_gdf(tmp_path):
 
 
 @pytest.mark.unit
-def test_rasterize_linear_distance_respects_max_dist_km_cap(tmp_path):
+def test_rasterize_linear_distance_stores_the_raw_distance_and_flags_beyond_the_cap(tmp_path):
+    # OQ-040 (M-F2a-03, METHODOLOGY 1.4.0): the distance is never truncated; distance_cap_km only
+    # sets the `distance_capped` flag raster written beside it.
     grid = _grid()
     country_gdf = _country_gdf()
-    # A line through the middle of the country -> far corners should be
-    # capped at max_dist_km rather than the true (larger) distance.
     line = gpd.GeoDataFrame(geometry=[LineString([(0.0, -0.2), (0.0, 0.2)])], crs="EPSG:4326")
 
     out_path = rasterize_linear_distance(
-        line, tmp_path / "out.tif", country_gdf, grid, "roads", max_dist_km=5.0
+        line, tmp_path / "out.tif", country_gdf, grid, "roads", distance_cap_km=5.0
     )
 
     assert out_path is not None
     with rasterio.open(out_path) as src:
         data = src.read(1)
+    with rasterio.open(distance_capped_path(out_path)) as src:
+        flag = src.read(1)
     in_country = data[grid.country_mask]
-    assert in_country.max() <= 5.0 + 1e-3
+    assert in_country.max() > 5.0 + 1.0  # far corners keep their real, larger distance
     assert in_country.min() == pytest.approx(0.0, abs=0.5)  # pixels on the line itself
+    inside_flag = flag[grid.country_mask]
+    assert set(np.unique(inside_flag)) <= {0, 1}
+    assert np.array_equal(inside_flag == 1, in_country > 5.0)  # flag marks exactly the raw distances above the cap
+    assert (flag[~grid.country_mask] == NODATA_UINT8).all()
 
 
 @pytest.mark.unit
@@ -137,7 +144,7 @@ def test_rasterize_linear_distance_masks_output_outside_country():
 
     with tempfile.TemporaryDirectory() as td:
         out_path = rasterize_linear_distance(
-            line, Path(td) / "out.tif", country_gdf, grid, "roads", max_dist_km=5.0
+            line, Path(td) / "out.tif", country_gdf, grid, "roads", distance_cap_km=5.0
         )
         with rasterio.open(out_path) as src:
             data = src.read(1)
@@ -167,7 +174,7 @@ def test_rasterize_linear_distance_returns_none_when_feature_does_not_intersect_
     line_outside = _line_in_bbox_corner_outside_diamond()
 
     result = rasterize_linear_distance(
-        line_outside, tmp_path / "out.tif", country_gdf, grid, "roads", max_dist_km=100.0
+        line_outside, tmp_path / "out.tif", country_gdf, grid, "roads", distance_cap_km=100.0
     )
 
     assert result is None
@@ -205,17 +212,18 @@ def test_align_rivers_returns_none_for_empty_or_none_gdf(tmp_path):
 
 
 @pytest.mark.unit
-def test_align_rivers_caps_distance_at_max_dist_km(tmp_path):
-    # Unified to 100km 2026-09-09 (was a separate hardcoded 50km — see
-    # docs/DECISIONS.md same date, grid_alignment Passo 4 item 2).
+def test_align_rivers_stores_the_raw_distance_and_flags_beyond_the_cap(tmp_path):
     grid = _grid()
     line = gpd.GeoDataFrame(geometry=[LineString([(0.0, -0.2), (0.0, 0.2)])], crs="EPSG:4326")
 
-    out_path = align_rivers(line, tmp_path / "rivers.tif", grid, 100.0)
+    out_path = align_rivers(line, tmp_path / "rivers.tif", grid, 5.0)
 
     with rasterio.open(out_path) as src:
         data = src.read(1)
-    assert data[grid.country_mask].max() <= 100.0 + 1e-3
+    with rasterio.open(distance_capped_path(out_path)) as src:
+        flag = src.read(1)
+    assert data[grid.country_mask].max() > 6.0  # not truncated at the 5 km threshold
+    assert np.array_equal(flag[grid.country_mask] == 1, data[grid.country_mask] > 5.0)
 
 
 @pytest.mark.unit

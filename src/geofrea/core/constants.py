@@ -24,16 +24,6 @@ MASK_FILL: float = -9999.0
 NODATA_FLOAT: float = -9999.0
 NODATA_UINT8: int = 255
 
-# Maximum distance (km) encoded in grid_alignment's linear-feature
-# distance rasters (roads, grid, rivers) before clipping. Unified
-# 2026-09-09 (see docs/DECISIONS.md same date, grid_alignment Passo 4
-# item 2) — legacy diverged (100.0 for roads/grid, an undocumented
-# separate 50.0 for rivers) with no found justification, and the
-# divergence was confirmed functionally inert (downstream
-# criteria_builder.py's own proximity-decay distances, 5-30km, sit well
-# below both former caps regardless of which was used).
-LINEAR_FEATURE_MAX_DIST_KM: float = 100.0
-
 # Decision-unit cell (S-06, M-F3-03): 0.05 degree = exactly 5 x 5 pixels of the 0.01 degree
 # analysis grid. The F2a grid is snapped to multiples of CELL_DEG so every cell nests
 # exactly (M-F2a-01); the F3 cell index is anchored on the same lattice (CELL_ORIGIN_*).

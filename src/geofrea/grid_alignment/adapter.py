@@ -93,7 +93,7 @@ def _layers_by_name(result: AcquisitionResult) -> dict[str, AcquiredLayer]:
 
 
 def acquisition_result_to_grid_alignment_inputs(
-    result: AcquisitionResult, resolutions: ResolutionsConfig | None = None
+    result: AcquisitionResult, resolutions: ResolutionsConfig, distance_cap_km: float
 ) -> GridAlignmentInputs:
     """Build GridAlignmentInputs from an AcquisitionResult.
 
@@ -101,8 +101,8 @@ def acquisition_result_to_grid_alignment_inputs(
         result: The data_acquisition phase's output for one country.
         resolutions: settings.yaml's `geospatial.resolutions` (see
             docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
-            None (default) falls back to ResolutionsConfig()'s own
-            defaults — 0.01 fixed, matching the frozen baseline.
+        distance_cap_km: settings.yaml's `geospatial.distance_cap_km`, the threshold of
+            the `distance_capped` flag rasters (M-F2a-03, OQ-040).
 
     Returns:
         A GridAlignmentInputs instance.
@@ -111,7 +111,6 @@ def acquisition_result_to_grid_alignment_inputs(
         GridAlignmentRequiresBordersError: If `result` has no `borders`
             layer, or that layer's `path` is None — see module docstring.
     """
-    resolutions = resolutions or ResolutionsConfig()
     layers = _layers_by_name(result)
 
     source_paths = {
@@ -146,4 +145,5 @@ def acquisition_result_to_grid_alignment_inputs(
         adaptive_target_pixels=resolutions.adaptive.target_pixels,
         adaptive_min_deg=resolutions.adaptive.min_deg,
         adaptive_pixel_ceiling_deg=resolutions.adaptive.adaptive_pixel_ceiling_deg,
+        distance_cap_km=distance_cap_km,
     )

@@ -25,17 +25,12 @@ and writes to the same path. This preserves PhaseContext.prior_results'
 read-only contract (core/orchestrator.py) — no phase mutates or
 implicitly depends on another phase's internal artifact.
 
-Resolution and max_dist_km, decided 2026-09-09 (see docs/DECISIONS.md
-same date, grid_alignment Passo 4): resolution_deg/adaptive_* below are
-resolved from settings.yaml's new `geospatial.resolutions` section
-(config_loader.py/schemas.py's ResolutionsConfig) by main.py, then
-passed through into GridAlignmentInputs by
-adapter.py::acquisition_result_to_grid_alignment_inputs() — same
-precedent as slope_threshold_deg (DECISIONS.md 2026-08-20), landing as
-a settings.yaml field once a verdict was reached, not baked in as a
-silent Pydantic default here. max_dist_km is unified across roads/grid/
-rivers (core.constants.LINEAR_FEATURE_MAX_DIST_KM), confirmed
-functionally inert either way (see that constant's own docstring).
+Resolution and distance_cap_km: resolution_deg/adaptive_* below are resolved from settings.yaml's
+`geospatial.resolutions` section (ResolutionsConfig) by main.py and passed into GridAlignmentInputs by
+adapter.py::acquisition_result_to_grid_alignment_inputs(), same precedent as slope_threshold_deg
+(DECISIONS.md 2026-08-20): a settings.yaml field once a verdict was reached, not a silent Pydantic default.
+distance_cap_km (`geospatial.distance_cap_km`) is the threshold of the `distance_capped` flag rasters
+(M-F2a-03, OQ-040); it never truncates a stored distance.
 """
 
 from __future__ import annotations
@@ -46,8 +41,6 @@ from typing import Literal
 import geopandas as gpd
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
-
-from geofrea.core.constants import LINEAR_FEATURE_MAX_DIST_KM
 
 
 class GridAlignmentInputs(BaseModel):
@@ -120,9 +113,10 @@ class GridAlignmentInputs(BaseModel):
             ceiling field's old name was renamed 2026-09-22 — the
             value is numerically 0.05 by coincidence, unrelated to
             S-06's 0.05deg decision cell.
-        max_dist_km: Maximum distance (km) encoded in the roads/grid/
-            rivers distance rasters before clipping — unified value,
-            see core.constants.LINEAR_FEATURE_MAX_DIST_KM.
+        distance_cap_km: Threshold (km) of the `distance_capped` flag rasters
+            written beside the roads/grid/rivers distance rasters (M-F2a-03,
+            OQ-040); it never truncates a stored distance. From settings.yaml's
+            `geospatial.distance_cap_km`.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -143,7 +137,7 @@ class GridAlignmentInputs(BaseModel):
     adaptive_target_pixels: int = 50000
     adaptive_min_deg: float = 0.001
     adaptive_pixel_ceiling_deg: float = 0.05
-    max_dist_km: float = LINEAR_FEATURE_MAX_DIST_KM
+    distance_cap_km: float
 
 
 class GridMetadata(BaseModel):
@@ -212,18 +206,18 @@ class GridAlignmentResult(BaseModel):
         population: Bilinear-reprojected float32 population raster, or
             None if population_path was missing.
         roads: Geodesic distance-to-road raster (km, float32,
-            capped — cap value pending, see module docstring), or None
-            if roads_source was missing.
+            raw, never truncated; OQ-040), or None if roads_source was missing.
         grid: Geodesic distance-to-power-grid raster (km, float32,
-            capped — cap value pending), or None if grid_source was
-            missing.
+            raw, never truncated; OQ-040), or None if grid_source was missing.
         lakes: Binary water-body mask (uint8), or None if no lakes
             were found within the country.
         rivers: Geodesic distance-to-river raster (km, float32,
-            capped — cap value pending, see module docstring), or None
-            if no rivers were found within the country.
+            raw, never truncated; OQ-040), or None if no rivers were found within the country.
         plants: Binary existing-power-plant mask, or None if plants_df
             was empty/None.
+        roads_distance_capped/grid_distance_capped/rivers_distance_capped:
+            uint8 flag rasters (1 = raw distance above `distance_cap_km`),
+            written beside the distance rasters (M-F2a-03, OQ-040).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -242,3 +236,6 @@ class GridAlignmentResult(BaseModel):
     lakes: Path | None = None
     rivers: Path | None = None
     plants: Path | None = None
+    roads_distance_capped: Path | None = None
+    grid_distance_capped: Path | None = None
+    rivers_distance_capped: Path | None = None

@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import logging
 import math
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -146,13 +147,49 @@ def calculate_wgs84_isotropic_distance(feature_mask_inv: np.ndarray, grid: GridC
     return (dist_pixels * px_scale_km).astype(np.float32)
 
 
+def distance_capped_path(distance_path) -> Path:
+    """Path of the `distance_capped` flag raster written beside a distance raster (M-F2a-03, OQ-040)."""
+    distance_path = Path(distance_path)
+    return distance_path.with_name(f"{distance_path.stem}_capped{distance_path.suffix}")
+
+
+def _write_distance_and_flag(dist_km: np.ndarray, out_path, grid: GridContext, distance_cap_km: float) -> None:
+    """Write the raw geodesic distance raster and its `distance_capped` flag raster.
+
+    OQ-040 (METHODOLOGY 1.4.0, M-F2a-03): the distance is stored as computed, never truncated, because the
+    connection-cost model bills the real distance. `distance_cap_km` is only the threshold of the flag
+    (uint8: 1 where distance > threshold, 0 elsewhere, nodata outside the country), a quality indicator.
+    """
+    flag = np.where(dist_km > distance_cap_km, 1, 0).astype(np.uint8)
+    flag[~grid.country_mask] = NODATA_UINT8
+    dist_km = dist_km.copy()
+    dist_km[~grid.country_mask] = NODATA_FLOAT
+    common = {
+        "width": grid.width,
+        "height": grid.height,
+        "count": 1,
+        "crs": grid.crs,
+        "transform": grid.transform,
+        "compress": "lzw",
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with safe_raster_write(out_path, driver="GTiff", dtype="float32", nodata=NODATA_FLOAT, **common) as dst:
+        dst.write(dist_km, 1)
+    with safe_raster_write(
+        distance_capped_path(out_path), driver="GTiff", dtype="uint8", nodata=NODATA_UINT8, **common
+    ) as dst:
+        dst.write(flag, 1)
+
+
 def rasterize_linear_distance(
     gdf: gpd.GeoDataFrame | None,
     out_path,
     country_gdf: gpd.GeoDataFrame,
     grid: GridContext,
     label: str,
-    max_dist_km: float,
+    distance_cap_km: float,
 ) -> object | None:
     """Rasterize linear features and compute a geodesic distance-to-feature raster.
 
@@ -170,18 +207,9 @@ def rasterize_linear_distance(
             `mainland_geometry`).
         grid: Target GridContext.
         label: Feature-type label for logging.
-        max_dist_km: Maximum distance to encode, in kilometres. Unified
-            to 100.0 across roads/grid/rivers 2026-09-09 (see
-            docs/DECISIONS.md same date, grid_alignment Passo 4 item 2)
-            — legacy diverged here (100.0 for roads/grid, a separately
-            hardcoded 50.0 for rivers, align_rivers() below) with no
-            documented justification. Confirmed functionally inert
-            either way: downstream criteria_builder.py applies its own,
-            much smaller proximity-decay distances (roads 5-15km, grid
-            20km, rivers 5-30km) well below both former caps — no
-            output ever depended on which of the two values was used.
-            No default here so the value stays visible at every call
-            site, same as before.
+        distance_cap_km: Threshold of the `distance_capped` flag raster written beside the distance raster, in
+            kilometres (M-F2a-03). It never truncates the stored distance (OQ-040, METHODOLOGY 1.4.0): the
+            connection-cost model bills the real distance. No default, so the value stays visible at every call site.
 
     Returns:
         Path to the output distance raster, or None if gdf is empty/None
@@ -213,25 +241,7 @@ def rasterize_linear_distance(
         feature_mask = feature_mask & grid.country_mask.astype(np.uint8)
 
         dist_km = calculate_wgs84_isotropic_distance((feature_mask == 0).astype(np.uint8), grid)
-        dist_km = np.clip(dist_km, 0, max_dist_km)
-        dist_km[~grid.country_mask] = NODATA_FLOAT
-
-        profile = {
-            "driver": "GTiff",
-            "dtype": "float32",
-            "width": grid.width,
-            "height": grid.height,
-            "count": 1,
-            "crs": grid.crs,
-            "transform": grid.transform,
-            "nodata": NODATA_FLOAT,
-            "compress": "lzw",
-            "tiled": True,
-            "blockxsize": 256,
-            "blockysize": 256,
-        }
-        with safe_raster_write(out_path, **profile) as dst:
-            dst.write(dist_km, 1)
+        _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
 
         return out_path
     except Exception as e:  # noqa: BLE001 — one bad layer must not abort alignment
@@ -287,7 +297,7 @@ def align_lakes(
 
 
 def align_rivers(
-    rivers_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext, max_dist_km: float
+    rivers_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext, distance_cap_km: float
 ) -> object | None:
     """Rasterize river networks and compute a geodesic distance-to-river raster.
 
@@ -305,9 +315,8 @@ def align_rivers(
             read_clipped_to_country(), see module docstring), or None.
         out_path: Output path for the river distance raster.
         grid: Target GridContext.
-        max_dist_km: Maximum distance to encode, in kilometres — see
-            rasterize_linear_distance()'s own docstring for the
-            unification rationale.
+        distance_cap_km: Threshold of the `distance_capped` flag raster, in kilometres — see
+            rasterize_linear_distance()'s docstring.
 
     Returns:
         Path to the output distance raster, or None if no rivers were found.
@@ -332,22 +341,7 @@ def align_rivers(
     )
 
     dist_km = calculate_wgs84_isotropic_distance((river_mask == 0).astype(np.uint8), grid)
-    dist_km = np.clip(dist_km, 0, max_dist_km)
-    dist_km[~grid.country_mask] = NODATA_FLOAT
-
-    profile = {
-        "driver": "GTiff",
-        "dtype": "float32",
-        "width": grid.width,
-        "height": grid.height,
-        "count": 1,
-        "crs": grid.crs,
-        "transform": grid.transform,
-        "nodata": NODATA_FLOAT,
-        "compress": "lzw",
-    }
-    with safe_raster_write(out_path, **profile) as dst:
-        dst.write(dist_km, 1)
+    _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
     return out_path
 
 

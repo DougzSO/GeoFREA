@@ -54,6 +54,12 @@ run:
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
 # docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
 geospatial:
+  # Threshold of the `distance_capped` QC flag raster beside the distance-to-grid/roads/rivers
+  # rasters (M-F2a-03, OQ-040). It NEVER truncates a distance: rasters store the real geodesic
+  # distance and the connection cost (M-F6-01) bills it. 100 km is provisional, no source
+  # (LIMITATIONS L-019); it only decides what the flag marks for quality control.
+  distance_cap_km: 100.0
+
   resolutions:
     # Fixed degrees, or the literal string "adaptive" to compute it
     # dynamically from country area (see the "adaptive" block below).

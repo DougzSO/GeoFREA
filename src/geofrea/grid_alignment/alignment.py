@@ -114,6 +114,7 @@ from geofrea.grid_alignment.vector_alignment import (
     align_lakes,
     align_plants,
     align_rivers,
+    distance_capped_path,
     load_vector_bbox,
     rasterize_linear_distance,
 )
@@ -395,7 +396,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 inputs.country_gdf,
                 grid,
                 "grid",
-                inputs.max_dist_km,
+                inputs.distance_cap_km,
             ),
             _exists(inputs.grid_source),
         )
@@ -409,7 +410,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 inputs.country_gdf,
                 grid,
                 "roads",
-                inputs.max_dist_km,
+                inputs.distance_cap_km,
             ),
             _exists(inputs.roads_source),
         )
@@ -425,10 +426,14 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         aligned["rivers"] = _execute_or_load(
             "rivers",
             lambda: align_rivers(
-                _clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid, inputs.max_dist_km
+                _clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid, inputs.distance_cap_km
             ),
             _exists(inputs.rivers_path),
         )
+
+    for layer in ("roads", "grid", "rivers"):
+        flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
+        aligned[f"{layer}_distance_capped"] = flag_path if flag_path and flag_path.exists() else None
 
     with timer("plants", timings):
         aligned["plants"] = _execute_or_load(

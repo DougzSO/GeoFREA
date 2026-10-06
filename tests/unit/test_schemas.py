@@ -163,7 +163,7 @@ VALID_RUN_CONFIG = {
     "rerun_phases": [],
 }
 
-VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG}
+VALID_SETTINGS_FILE = {"run": VALID_RUN_CONFIG, "geospatial": {"distance_cap_km": 100.0}}
 
 # tech_name -> (model class, valid payload) - shared across the tech-model tests below.
 TECH_MODELS = {

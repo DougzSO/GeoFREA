@@ -216,7 +216,7 @@ def _audit_run(context: PhaseContext, audit_config: AuditConfig) -> AuditResult:
 
 
 def _build_grid_alignment_inputs(
-    context: PhaseContext, resolutions: ResolutionsConfig
+    context: PhaseContext, resolutions: ResolutionsConfig, distance_cap_km: float
 ) -> GridAlignmentInputs:
     """Build GridAlignmentInputs from data_acquisition's output.
 
@@ -243,7 +243,7 @@ def _build_grid_alignment_inputs(
             grid_alignment/adapter.py).
     """
     acquisition_output = context.prior_results["data_acquisition"].output
-    return acquisition_result_to_grid_alignment_inputs(acquisition_output, resolutions)
+    return acquisition_result_to_grid_alignment_inputs(acquisition_output, resolutions, distance_cap_km)
 
 
 def _build_suitability_criteria_inputs(
@@ -324,6 +324,9 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "lakes",
     "rivers",
     "plants",
+    "roads_distance_capped",
+    "grid_distance_capped",
+    "rivers_distance_capped",
 )
 
 
@@ -343,7 +346,10 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
 
 
 def _build_phase_specs(
-    resolutions: ResolutionsConfig, criteria: CriteriaParams, audit_config: AuditConfig
+    resolutions: ResolutionsConfig,
+    distance_cap_km: float,
+    criteria: CriteriaParams,
+    audit_config: AuditConfig,
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -385,7 +391,7 @@ def _build_phase_specs(
 
     def grid_alignment_run(context: PhaseContext) -> GridAlignmentResult:
         result = run_grid_alignment_phase(
-            context, inputs=_build_grid_alignment_inputs(context, resolutions)
+            context, inputs=_build_grid_alignment_inputs(context, resolutions, distance_cap_km)
         )
         _register_json_artifact(context, "aligned_rasters", result)
         _register_aligned_rasters(context, result)
@@ -451,6 +457,7 @@ def run_geofrea(
     target_phases: list[str],
     rerun_phases: list[str],
     resolutions: ResolutionsConfig,
+    distance_cap_km: float,
     audit_config: AuditConfig,
     run_id: str,
     dirty: bool,
@@ -461,6 +468,8 @@ def run_geofrea(
         country_code: ISO-3166-alpha-3 code, must be a key in parameters.json.
         target_phases: RunConfig.target_phases for this run.
         rerun_phases: RunConfig.rerun_phases for this run.
+        distance_cap_km: settings.yaml's `geospatial.distance_cap_km`, the `distance_capped` flag
+            threshold (OQ-040), threaded to grid_alignment.
         resolutions: settings.yaml's `geospatial.resolutions`, threaded
             through to grid_alignment's PhaseSpec (see
             _build_phase_specs()).
@@ -508,7 +517,7 @@ def run_geofrea(
     )
 
     results = orchestrator.run(
-        _build_phase_specs(resolutions, parameters.criteria, audit_config)
+        _build_phase_specs(resolutions, distance_cap_km, parameters.criteria, audit_config)
     )
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
@@ -573,6 +582,7 @@ def main() -> int:
             settings.run.target_phases,
             settings.run.rerun_phases,
             settings.geospatial.resolutions,
+            settings.geospatial.distance_cap_km,
             audit_config,
             run_id,
             dirty,

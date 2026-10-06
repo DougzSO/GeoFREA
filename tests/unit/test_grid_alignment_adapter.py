@@ -57,7 +57,7 @@ def test_adapter_raises_when_borders_layer_is_absent(tmp_path):
     result = _result([_layer("elevation", tmp_path / "elev.tif")])
 
     with pytest.raises(GridAlignmentRequiresBordersError, match="PRT"):
-        acquisition_result_to_grid_alignment_inputs(result)
+        acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
 
 @pytest.mark.unit
@@ -65,7 +65,7 @@ def test_adapter_raises_when_borders_layer_path_is_none(tmp_path):
     result = _result([_layer("borders", path=None)])
 
     with pytest.raises(GridAlignmentRequiresBordersError):
-        acquisition_result_to_grid_alignment_inputs(result)
+        acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
 
 @pytest.mark.unit
@@ -73,7 +73,7 @@ def test_adapter_with_only_borders_produces_mainland_filtered_country_gdf(tmp_pa
     boundary_path = _boundary_path(tmp_path)
     result = _result([_layer("borders", boundary_path)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert isinstance(inputs, GridAlignmentInputs)
     assert len(inputs.country_gdf) == 1  # mainland only, islet dropped
@@ -98,7 +98,7 @@ def test_adapter_maps_source_path_fields(tmp_path):
         ]
     )
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert inputs.elevation_path == elevation_path
     # Deliberately renamed fields (see schemas.py/adapter.py module
@@ -118,7 +118,7 @@ def test_adapter_does_not_map_protected_admin1_or_borders_passthrough(tmp_path):
         ]
     )
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     # GridAlignmentInputs has no protected_path/admin1_path/borders_path
     # fields at all — confirmed by extra="forbid" already covered in
@@ -135,7 +135,7 @@ def test_adapter_wraps_single_wind_path_into_one_element_list(tmp_path):
     wind_path = Path("/fake/wind_100m.tif")
     result = _result([_layer("borders", boundary_path), _layer("wind", wind_path)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert inputs.wind_paths == [wind_path]
 
@@ -146,7 +146,7 @@ def test_adapter_maps_land_cover_tiles_list(tmp_path):
     tiles = [Path("/fake/tile1.tif"), Path("/fake/tile2.tif")]
     result = _result([_layer("borders", boundary_path), _layer("land_cover", paths=tiles)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert inputs.land_cover_tiles == tiles
 
@@ -158,7 +158,7 @@ def test_adapter_loads_power_plants_csv(tmp_path):
     plants_path.write_text("latitude,longitude,capacity_mw\n0.5,0.5,100\n", encoding="utf-8")
     result = _result([_layer("borders", boundary_path), _layer("power_plants", plants_path)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert isinstance(inputs.plants_df, pd.DataFrame)
     assert len(inputs.plants_df) == 1
@@ -175,7 +175,7 @@ def test_adapter_defaults_resolution_to_fixed_0_01_when_no_resolutions_given(tmp
     boundary_path = _boundary_path(tmp_path)
     result = _result([_layer("borders", boundary_path)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result)
+    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
     assert inputs.resolution_deg == 0.01
 
@@ -186,7 +186,7 @@ def test_adapter_threads_fixed_resolution_from_resolutions_config(tmp_path):
     result = _result([_layer("borders", boundary_path)])
 
     inputs = acquisition_result_to_grid_alignment_inputs(
-        result, ResolutionsConfig(suitability=0.02)
+        result, ResolutionsConfig(suitability=0.02), 100.0
     )
 
     assert inputs.resolution_deg == 0.02
@@ -205,6 +205,7 @@ def test_adapter_threads_adaptive_resolution_and_its_fallback_knobs(tmp_path):
                 target_pixels=1000, min_deg=0.002, adaptive_pixel_ceiling_deg=0.03
             ),
         ),
+        100.0,
     )
 
     assert inputs.resolution_deg == "adaptive"
