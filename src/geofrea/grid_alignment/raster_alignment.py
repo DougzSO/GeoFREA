@@ -22,10 +22,10 @@ from rasterio.warp import reproject, transform_bounds
 from rasterio.windows import Window, from_bounds
 
 from geofrea.core.constants import (
-    KM_PER_DEG_LAT,
     NODATA_FLOAT,
     NODATA_UINT8,
 )
+from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.grid_alignment.reference_grid import GridContext
@@ -190,12 +190,16 @@ def derive_slope_from_dem(dem_path, out_path):
     and computing slope on the target grid) is the legacy's deliberate
     order; kept as STRUCTURAL_PRESERVE (docs/DECISIONS.md 2026-09-11).
 
-    Method (verbatim from legacy, STRUCTURAL_PRESERVE):
+    Method (STRUCTURAL_PRESERVE except the pixel spacing, see G-1 below):
       - central-difference gradient via numpy.gradient, NOT the Horn
         8-neighbour method gdaldem uses;
-      - latitude-corrected pixel spacing: dy = res_y * KM_PER_DEG_LAT *
-        1000 (constant, N-S); dx = res_x * KM_PER_DEG_LAT * 1000 *
-        cos(lat) per row (E-W, shrinks toward the poles);
+      - GEODESIC pixel spacing per row (M-F2a-02, G-1, 2026-10-06): the
+        metres per degree of latitude and longitude at the row's latitude
+        come from core.geodesy.wgs84_km_per_degree() (WGS84 ellipsoid), so
+        dy = res_y * lat_m(lat) and dx = res_x * lon_m(lat). The legacy
+        used one flat constant (111.32 km/deg) for dy and 111.32*cos(lat)
+        for dx, a spherical approximation that the rest of F2a no longer
+        uses;
       - slope_deg = degrees(arctan(hypot(dz/dx, dz/dy))) — degrees, not
         percent or radians;
       - processed in 512-row blocks with +/-1 row of padding so the
@@ -237,7 +241,6 @@ def derive_slope_from_dem(dem_path, out_path):
 
         res_x, res_y = src.res
         nodata_val = float(src.nodata) if src.nodata is not None else NODATA_FLOAT
-        dy = res_y * KM_PER_DEG_LAT * 1000.0  # metres per pixel, N-S (constant)
 
         profile = src.profile.copy()
         profile.update(
@@ -272,11 +275,13 @@ def derive_slope_from_dem(dem_path, out_path):
                 rows_idx = np.arange(win_y_start, win_y_end)
                 _xs, y_coords = src.xy(rows_idx, np.zeros(len(rows_idx)))
                 lat_grid = np.asarray(y_coords, dtype=np.float64).reshape(-1, 1)
-                dx_block = res_x * KM_PER_DEG_LAT * 1000.0 * np.cos(np.radians(lat_grid))
+                lat_km, lon_km = wgs84_km_per_degree(lat_grid)
+                dx_block = res_x * lon_km * 1000.0  # metres per pixel, E-W, at each row's latitude
+                dy_block = res_y * lat_km * 1000.0  # metres per pixel, N-S, at each row's latitude
 
                 dz_drow, dz_dcol = np.gradient(work, 1.0, 1.0)
                 dz_dx = dz_dcol / dx_block
-                dz_dy = dz_drow / dy
+                dz_dy = dz_drow / dy_block
 
                 slope_deg = np.degrees(np.arctan(np.sqrt(dz_dx**2 + dz_dy**2)))
                 # (1) non-finite gradient = stencil touched nodata; (2)

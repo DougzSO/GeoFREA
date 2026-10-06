@@ -16,15 +16,17 @@ import pytest
 import rasterio
 from rasterio.transform import from_origin
 
-from geofrea.core.constants import KM_PER_DEG_LAT, NODATA_FLOAT
+from geofrea.core.constants import NODATA_FLOAT
+from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.grid_alignment.raster_alignment import derive_slope_from_dem
 
-# Raster placed on the equator so cos(lat) == 1 and the E-W pixel size is
-# exactly res_x * KM_PER_DEG_LAT * 1000 m — makes the analytic slope of a
+# Raster placed on the equator, where the geodesic E-W pixel size is
+# res_x * lon_km(0) * 1000 m (core.geodesy, WGS84) to well below the test
+# tolerance across the +-0.03 degree extent — makes the analytic slope of a
 # planar DEM a single number for every interior pixel.
 _RES = 0.01
 _ORIGIN_LON, _ORIGIN_LAT = 0.0, 0.03  # 6 rows span lat +0.03 .. -0.03, centred on 0
-_DX_M = _RES * KM_PER_DEG_LAT * 1000.0
+_DX_M = _RES * float(wgs84_km_per_degree(0.0)[1]) * 1000.0
 
 
 def _write_dem(path, data, nodata=NODATA_FLOAT):
@@ -156,3 +158,34 @@ def test_derive_slope_block_seam_matches_single_block(tmp_path):
         ra._SLOPE_BLOCK_HEIGHT = original
 
     assert np.allclose(full, blocked, atol=1e-5, equal_nan=True)
+
+
+@pytest.mark.unit
+def test_derive_slope_uses_geodesic_spacing_at_high_latitude(tmp_path):
+    """G-1 (M-F2a-02): metres per degree come from the WGS84 ellipsoid at each row's latitude, not a flat constant.
+
+    A DEM tilted 4 m per pixel in both directions at ~60 N: the analytic slope uses lon_km(60) for the E-W step and
+    lat_km(60) for the N-S step, which differ from the legacy 111.32 km/deg (cos-corrected) values.
+    """
+    lat0 = 60.03
+    ii, jj = np.meshgrid(np.arange(7), np.arange(8), indexing="ij")
+    z = (4.0 * jj + 4.0 * ii).astype(np.float32)
+    path = tmp_path / "hi_lat.tif"
+    data = np.asarray(z, dtype=np.float32)
+    with rasterio.open(
+        path, "w", driver="GTiff", height=7, width=8, count=1, dtype="float32", crs="EPSG:4326",
+        transform=from_origin(10.0, lat0, _RES, _RES), nodata=NODATA_FLOAT,
+    ) as dst:
+        dst.write(data, 1)
+
+    slope, _nd = _read(derive_slope_from_dem(path, tmp_path / "slope.tif"))
+
+    lat_mid = lat0 - 3 * _RES  # the middle row
+    lat_km, lon_km = wgs84_km_per_degree(lat_mid)
+    dx_m, dy_m = _RES * lon_km * 1000.0, _RES * lat_km * 1000.0
+    # rows increase southward, so dz/drow = 4 per pixel and dz/dcol = 4 per pixel
+    expected = np.degrees(np.arctan(np.hypot(4.0 / dx_m, 4.0 / dy_m)))
+    assert slope[3, 4] == pytest.approx(expected, abs=1e-3)
+    legacy_dx = _RES * 111.32 * 1000.0 * np.cos(np.radians(lat_mid))
+    legacy = np.degrees(np.arctan(np.hypot(4.0 / legacy_dx, 4.0 / (_RES * 111.32 * 1000.0))))
+    assert abs(float(slope[3, 4]) - legacy) > 1e-4  # the geodesic result is not the old spherical one

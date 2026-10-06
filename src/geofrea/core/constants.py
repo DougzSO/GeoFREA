@@ -35,16 +35,6 @@ CELL_NESTING_PIXELS: int = 5
 CELL_ORIGIN_LAT: float = 90.0
 CELL_ORIGIN_LON: float = -180.0
 
-# Flat mean kilometres-per-degree-of-latitude, used ONLY by
-# grid_alignment's slope-from-DEM derivation (derive_slope_from_dem()),
-# ported verbatim from legacy's src/core/constants.py::KM_PER_DEG_LAT for
-# STRUCTURAL_PRESERVE parity with RasterProcessor.calculate_slope (see
-# docs/DECISIONS.md 2026-09-11). Deliberately NOT
-# core.geodesy.wgs84_km_per_degree(): the legacy slope code used this
-# single constant (and cos(lat) only for the E-W term), and reproducing
-# its numbers means using the same scale factor it used.
-KM_PER_DEG_LAT: float = 111.32
-
 # ESA WorldCover land-cover class codes -> human-readable names.
 ESA_CLASS_NAMES: dict[int, str] = {
     10: "Tree cover",
