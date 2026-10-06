@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 2.0.0 |
+| Version | 2.1.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-06 |
 | Owner | Douglas |
@@ -207,6 +207,7 @@ Critical transitions:
   2. Transient climate response within the IPCC AR6 likely range (screening for the hot-model problem; Hausfather et al. 2022).
   3. Spread of annual-mean change factors for `rsds`, `tas`, `sfcWind` over each country in 2041-2070 under SSP3-7.0, selecting models that span the ensemble range.
   4. GFDL-ESM4 and MIROC6 are included unless they fail criterion 1 or 2.
+  5. Recorded exception (OQ-009, 2026-10-06): IPSL-CM6A-LR (AR6 TCR 2.32 K, 0.12 K above the likely range 1.4-2.2 K, inside the very-likely range 1.2-2.4 K) is kept because it is one of three models with an ISIMIP3b counterpart for the hazard channel (D-F4-003) and it widens the change-factor spread (J-1 audit). It is flagged in `members.yaml` as `tcr_exception: true` so results can be shown with and without it.
 - **M-F4-03.** Change factors (delta-change), computed on each GCM's native grid from monthly climatologies:
   - `delta_rsds = mean_window(rsds) / mean_ref(rsds)` (multiplicative)
   - `delta_wind = mean_window(sfcWind) / mean_ref(sfcWind)` (multiplicative)
@@ -459,6 +460,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 2.1.0 | 2026-10-06 | MINOR: M-F4-02 gains item 5, a recorded exception keeping IPSL-CM6A-LR (TCR 2.32 K, above the likely range) with a `tcr_exception` flag, per Douglas's verdict on OQ-009 (option C: GFDL-ESM4, MIROC6, ACCESS-CM2, IPSL-CM6A-LR, CNRM-CM6-1, MRI-ESM2-0). No existing result changes. |
 | 2.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F2a-03 stores the uncapped geodesic distance and `distance_cap_km` becomes only the threshold of a `distance_capped` flag raster; M-F3-03 weights the uncapped distance and reports the flag share as a quality indicator; M-F6-01 gains a note that it bills the real distance and that its linear form is a first-order approximation (L-019). Resolves OQ-040 (Douglas's authorization, 2026-10-06). Header version and date brought in line with the changelog (the header still read 1.2.3). |
 | 1.3.0 | 2026-09-28 | M-F1-05 loses its CRAEI/A-11 attribution (CRAEI's own D12 decided against ERA5 gust — nothing to adapt, built fresh, task F4-1/F4-2) and gains its reduction (annual maximum of `fg10`) and reference period (1995-2014, coherent with S-05); no result changes since M-F1-05 was not yet implemented. |
 | 1.2.3 | 2026-09-23 | A-03 wording updated: `run.force_rerun` replaced by `run.rerun_phases` (exact re-execute scope; downstream consumers are marked stale and recomputed lazily, not re-executed eagerly — R-1, `docs/phases/core.md` D-core-012). |

@@ -4,8 +4,8 @@ Unresolved items only. When an item is resolved, record the resolution in the re
 
 Entry fields: blocking phase, question, resolution protocol, owner, status (`open`, `research_in_progress`, `awaiting_verdict`).
 
-Recently resolved (kept here one cycle for traceability, then this note can be deleted): **OQ-029**, **OQ-037**, **OQ-039** and **OQ-040** resolved
-2026-10-06 (ERA5 native resolution 0.25 deg; UTC day kept — `docs/phases/F4_climate_forcing.md` D-F4-011; PRT mainland-only — `docs/phases/F1_data_acquisition.md` D-F1-024; uncapped distances — `docs/phases/F2a_grid_alignment.md` D-F2a-004, METHODOLOGY 2.0.0), **OQ-036** resolved
+Recently resolved (kept here one cycle for traceability, then this note can be deleted): **OQ-009**, **OQ-029**, **OQ-037**, **OQ-039** and **OQ-040** resolved
+2026-10-06 (ERA5 native resolution 0.25 deg; UTC day kept — `docs/phases/F4_climate_forcing.md` D-F4-011; PRT mainland-only — `docs/phases/F1_data_acquisition.md` D-F1-024; uncapped distances — `docs/phases/F2a_grid_alignment.md` D-F2a-004, METHODOLOGY 2.0.0; GCM ensemble — `docs/phases/F4_climate_forcing.md` D-F4-012, METHODOLOGY 2.1.0), **OQ-036** resolved
 2026-10-05, route (b) — see `docs/phases/F4_climate_forcing.md` D-F4-010 for the decision and
 `src/geofrea/data_acquisition/isimip3b_registry.py` for the resulting registry.
 
@@ -19,7 +19,6 @@ Recently resolved (kept here one cycle for traceability, then this note can be d
 | OQ-006 | F4, F5 | Global Wind Atlas reference period and the reference height of the `capacity-factor_IEC` layers. | Official GWA documentation; inspect GeoTIFF metadata of one downloaded CF layer. CF layers are used only as a cross-check of M-F5-03. | Douglas | open |
 | OQ-007 | F5, F6 | Loss functions for C2 (extreme heat on PV and inverters, extreme wind cut-out and tracker stow) and C3 (extreme precipitation and flooding on PV). | Targeted literature search; classify each by evidence tier; Tier 1-2 enters F5 or F6, Tier 3 becomes context indicator. | Douglas | open |
 | OQ-008 | F7 | Satisficing threshold `tau` (LCOE) per country and technology, and `CF_min` per technology. | Anchor `tau` to recent auction or benchmark prices per country; `CF_min` from bankability literature; ranges tested in sensitivity. | Douglas | open |
-| OQ-009 | F4 | Final GCM ensemble. | Screening done against AR6 Table 7.SM.5 (J-1, D-F4-012 draft); candidate set being acquired (J-2). Next: criterion-3 spread over the downloaded set, then Douglas's verdict on the final 4-6 and on keeping the borderline IPSL-CM6A-LR. | Douglas | awaiting_verdict |
 | OQ-010 | F7 | National capacity targets for the top-k sensitivity. | Official planning documents per country, horizon-matched. | Douglas | open |
 | OQ-011 | F1, F2b | Transmission grid layer source per country, voltage attribute availability, minimum voltage for connection. | Inspect local grid data; document source and coverage; decide voltage filter only if attribute is consistent across countries. | Douglas | open |
 | OQ-013 | E1 | Explorer technology stack and hosting. | Decide after F7 artifacts exist; static bundle preferred. | Douglas | open |

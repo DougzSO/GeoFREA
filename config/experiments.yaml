@@ -23,6 +23,20 @@ members:
   #   ssp: "SSP3-7.0"
   #   window: "2041-2070"
 
+# GCM ensemble (M-F4-02, OQ-009 verdict 2026-10-06, option C; evidence docs/_audit/2026-10_gcm_selection_j1.md).
+# Members are the full factorial gcm x ssp x window (U-01): 6 x 3 x 2 = 36. F4 expands this list into
+# members.yaml (M-F4-06) with provenance. `hazard_channel` = ISIMIP3b counterpart exists (D-F4-003/004).
+gcm_ensemble:
+  ssps: ["SSP1-2.6", "SSP3-7.0", "SSP5-8.5"]
+  windows: ["2041-2070", "2071-2100"]
+  gcms:
+    - {name: "GFDL-ESM4",    cds_name: "gfdl_esm4",    tcr_ar6_k: null, hazard_channel: true,  note: "S-04 mandatory; no TCR in AR6 Table 7.SM.5"}
+    - {name: "MIROC6",       cds_name: "miroc6",       tcr_ar6_k: 1.55, hazard_channel: false, note: "S-04 mandatory"}
+    - {name: "ACCESS-CM2",   cds_name: "access_cm2",   tcr_ar6_k: 2.10, hazard_channel: false}
+    - {name: "IPSL-CM6A-LR", cds_name: "ipsl_cm6a_lr", tcr_ar6_k: 2.32, hazard_channel: true,  tcr_exception: true, note: "above the likely TCR range; kept by M-F4-02 item 5"}
+    - {name: "CNRM-CM6-1",   cds_name: "cnrm_cm6_1",   tcr_ar6_k: 2.14, hazard_channel: false}
+    - {name: "MRI-ESM2-0",   cds_name: "mri_esm2_0",   tcr_ar6_k: 1.64, hazard_channel: true}
+
 # Time windows (M-F4-01, S-05)
 windows:
   # Historical reference climatology (M-F4-03: delta change base period)
