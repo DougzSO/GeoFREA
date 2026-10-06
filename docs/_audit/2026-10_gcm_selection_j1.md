@@ -24,27 +24,48 @@ GFDL-ESM4 and MIROC6 are `r1i1p1f1` for every variable/experiment.
 
 ## Criterion 2 — TCR against the AR6 likely range (1.4-2.2 K)
 
-**Provenance gap, stated plainly:** the authoritative per-model source named by M-F4-02 (IPCC AR6 Table 7.SM.5,
-or Hausfather et al. 2022) could not be retrieved in this session (PMC pages blocked by a CAPTCHA, supplement not
-reachable). The values below are Gregory-method TCR from Nijsse et al. 2020 Table 1, which covers only part of the
-catalogue. They are for screening orientation and should be checked against AR6 Table 7.SM.5 before the verdict.
+Source: IPCC AR6 WGI, Table 7.SM.5 (CMIP6 TCR from Schlund et al. 2020, Meehl et al. 2020, Zelinka et al. 2020),
+supplied by Douglas in `D:\Douglas\DOUTORADO\AR6.md` on 2026-10-06 (this replaces the earlier Nijsse et al. 2020
+screening, which covered only part of the models). Range used: 1.4-2.2 K, the AR6 *likely* TCR range. The AR6 text
+that states that range is **not** in `AR6.md` (the paragraphs below the table are climate-metric definitions), so the
+range itself is taken from M-F4-02's wording and should be confirmed against AR6 §7.5.5.
 
-| Model | TCR (K) | In 1.4-2.2? | Source |
-|---|---|---|---|
-| MIROC6 | 1.52 | yes | Nijsse et al. 2020 T1 |
-| MRI-ESM2-0 | 1.56 | yes | Nijsse et al. 2020 T1 |
-| BCC-CSM2-MR | 1.59 | yes | Nijsse et al. 2020 T1 |
-| CNRM-ESM2-1 | 1.92 | yes | Nijsse et al. 2020 T1 |
-| CNRM-CM6-1 | 2.08 | yes | Nijsse et al. 2020 T1 |
-| CESM2 | 2.08 | yes | Nijsse et al. 2020 T1 |
-| IPSL-CM6A-LR | 2.32 | **no (hot)** | Nijsse et al. 2020 T1 |
-| UKESM1-0-LL | 2.72 | **no (hot)** | Nijsse et al. 2020 T1 |
-| CanESM5 | 2.66 | **no (hot)** | Nijsse et al. 2020 T1 (also fails criterion 1) |
-| GFDL-ESM4 | ~1.6 | yes | secondary (web search summary of AR6/Hausfather); not in Nijsse T1 (only GFDL-CM4 is) |
-| NorESM2-MM, MPI-ESM1-2-LR, INM-CM4-8, INM-CM5-0, FGOALS-g3, TaiESM1, ACCESS-CM2, others | not retrieved | unknown | needs AR6 Table 7.SM.5 |
+Models that pass criterion 1 (22), with Table 7.SM.5 TCR:
 
-Effect of criterion 2 where evidence exists: IPSL-CM6A-LR and UKESM1-0-LL (two of the five ISIMIP3b primary
-models) are screened out as hot models; CanESM5 too.
+| Model | TCR (K) | Verdict (1.4-2.2) |
+|---|---|---|
+| FGOALS-g3 | 1.54 | pass |
+| MIROC-ES2L | 1.55 | pass |
+| MIROC6 | 1.55 | pass |
+| MRI-ESM2-0 | 1.64 | pass |
+| BCC-CSM2-MR | 1.72 | pass |
+| MPI-ESM1-2-LR | 1.84 | pass |
+| CNRM-ESM2-1 | 1.86 | pass |
+| FGOALS-f3-L | 1.94 | pass |
+| CESM2 | 2.06 | pass |
+| AWI-CM-1-1-MR | 2.06 | pass |
+| CMCC-CM2-SR5 | 2.09 | pass |
+| ACCESS-CM2 | 2.10 | pass |
+| CNRM-CM6-1 | 2.14 | pass |
+| IPSL-CM6A-LR | 2.32 | **out (hot)**; inside the AR6 *very likely* 1.2-2.4 |
+| TaiESM1 | 2.34 | **out (hot)**; inside 1.2-2.4 |
+| CNRM-CM6-1-HR | 2.48 | **out (hot)** |
+| UKESM1-0-LL | 2.79 | **out (hot)** |
+| INM-CM4-8 | 1.33 | **out (cold)**; inside 1.2-2.4 |
+| NorESM2-MM | 1.33 | **out (cold)**; inside 1.2-2.4 |
+| GFDL-ESM4 | **NA** | not assessable: Table 7.SM.5 has no ECS or TCR for GFDL-ESM4 (only a feedback decomposition) |
+| INM-CM5-0 | NA | not assessable (TCR NA) |
+| CanESM5-CanOE | not in table | not assessable (parent CanESM5: 2.74, hot) |
+
+Consequences:
+- 13 models pass criteria 1 and 2 outright; 6 are screened out (CNRM-CM6-1-HR, INM-CM4-8, IPSL-CM6A-LR, NorESM2-MM,
+  TaiESM1, UKESM1-0-LL); 3 cannot be screened for lack of a TCR (GFDL-ESM4, INM-CM5-0, CanESM5-CanOE).
+- **GFDL-ESM4 has no TCR in the AR6 table.** S-04 requires it unless it fails criterion 1 or 2; it passes 1 and cannot
+  be failed on 2, so it stays (criterion 4). An earlier "~1.6 K" figure came from a secondary web summary and is not
+  supported by the table; it should not be quoted.
+- IPSL-CM6A-LR (an ISIMIP3b model, so the only way to a third dual-channel member besides GFDL-ESM4 and MRI-ESM2-0)
+  fails the *likely* range by 0.12 K but passes the *very likely* range. It is acquired as a borderline candidate; keeping
+  it is a methodological call for Douglas (a narrower range is what M-F4-02 asks for).
 
 ## Criterion 3 — change-factor spread (only partly computable now)
 
@@ -68,14 +89,14 @@ when the production change factors are built (J-3).
 
 ## Criterion 4 — mandatory models
 
-GFDL-ESM4 and MIROC6 pass criterion 1; both are inside the TCR likely range (MIROC6 1.52 measured, GFDL-ESM4 ~1.6
-from a secondary source). Both stay (S-04).
+MIROC6 (TCR 1.55) passes 1 and 2. GFDL-ESM4 passes 1 and has no TCR to screen on (see above). Both stay (S-04).
 
-## Proposal (for verdict, not a decision)
+## Proposal and what was done (for verdict, not a decision)
 
-Six candidates to acquire in J-2, all passing criterion 1 and, where a value exists, criterion 2:
-**GFDL-ESM4, MIROC6** (fixed), **MRI-ESM2-0** (also has an ISIMIP3b hazard counterpart), **CNRM-CM6-1**,
-**CESM2**, **BCC-CSM2-MR**. Final 4-6 chosen after J-2, from the criterion-3 spread over the downloaded set; a
-candidate whose AR6 TCR turns out to be outside 1.4-2.2 K is dropped. Hazard-channel coverage follows D-F4-003:
-only GFDL-ESM4 and MRI-ESM2-0 would carry both channels (IPSL-CM6A-LR, MPI-ESM1-2-HR and UKESM1-0-LL are not
-usable: hot or unavailable); the other members would be resource-only.
+Douglas agreed (2026-10-06) to acquire every model that can contribute to the methodology. J-2's acquisition was
+launched for GFDL-ESM4 and MIROC6 (already on disk) plus the 12 models that pass criteria 1 and 2 (MRI-ESM2-0,
+CNRM-CM6-1, CESM2, BCC-CSM2-MR, ACCESS-CM2, AWI-CM-1-1-MR, CMCC-CM2-SR5, CNRM-ESM2-1, FGOALS-f3-L, FGOALS-g3,
+MIROC-ES2L, MPI-ESM1-2-LR) and IPSL-CM6A-LR as a borderline. The final 4-6 members are chosen from the criterion-3
+spread over that downloaded set, in a follow-up step that still needs Douglas's verdict. Hazard-channel coverage
+follows D-F4-003: only GFDL-ESM4, MRI-ESM2-0 and (if kept) IPSL-CM6A-LR have an ISIMIP3b counterpart; MPI-ESM1-2-HR,
+the ISIMIP3b model, is not available on the CDS for this variable set (MPI-ESM1-2-LR is its sibling).
