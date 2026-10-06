@@ -39,11 +39,15 @@ logger = logging.getLogger(__name__)
 _REPROJECT_WINDOW_BYTES = 400_000_000
 
 
-def _source_window(src, grid: GridContext, row_start: int, row_end: int, pad_px: int) -> Window | None:
+class MissingSourceCrsError(ValueError):
+    """A source raster has no CRS and the caller supplied none (A-09: never guess a projection)."""
+
+
+def _source_window(src, grid: GridContext, row_start: int, row_end: int, pad_px: int, src_crs) -> Window | None:
     """Window of `src` covering destination rows [row_start, row_end) plus `pad_px` pixels, or None if disjoint."""
     left, top = grid.transform * (0, row_start)
     right, bottom = grid.transform * (grid.width, row_end)
-    bounds = transform_bounds(grid.crs, src.crs, left, bottom, right, top, densify_pts=21)
+    bounds = transform_bounds(grid.crs, src_crs, left, bottom, right, top, densify_pts=21)
     win = from_bounds(*bounds, transform=src.transform)
     col_off = max(int(np.floor(win.col_off)) - pad_px, 0)
     row_off = max(int(np.floor(win.row_off)) - pad_px, 0)
@@ -62,6 +66,7 @@ def reproject_to_grid(
     nodata_out: float = NODATA_FLOAT,
     dtype_out: str = "float32",
     max_window_bytes: int = _REPROJECT_WINDOW_BYTES,
+    src_crs=None,
 ):
     """Reproject a source raster into the GridContext reference frame.
 
@@ -79,6 +84,8 @@ def reproject_to_grid(
         nodata_out: NoData value for the output raster.
         dtype_out: Output data type ("float32" or "uint8").
         max_window_bytes: Upper bound on one source window read, in bytes.
+        src_crs: CRS to use when the source file declares none (the caller must have verified it; see
+            alignment.py::_gwa_crs_for). A source with no CRS and no `src_crs` raises MissingSourceCrsError.
 
     Returns:
         Path to the reprojected output raster.
@@ -91,6 +98,9 @@ def reproject_to_grid(
         nd_out = nodata_out
 
     with safe_raster_open(src_path) as src:
+        crs_in = src.crs or src_crs
+        if crs_in is None:
+            raise MissingSourceCrsError(f"{src_path}: the raster declares no CRS and none was supplied")
         src_nodata = src.nodata
         itemsize = np.dtype(src.dtypes[0]).itemsize
         # Pad: the resampling footprint (destination pixel size in source pixels) plus a margin.
@@ -116,14 +126,14 @@ def reproject_to_grid(
         # that case correctly). Applied per window now (not on a whole-raster read).
         sanitize_nan = dtype_out != "uint8" and src_nodata is not None and not np.isnan(src_nodata)
 
-        full = _source_window(src, grid, 0, grid.height, pad_px)
+        full = _source_window(src, grid, 0, grid.height, pad_px, crs_in)
         if full is not None:
             n_strips = max(1, int(np.ceil(full.width * full.height * itemsize / max_window_bytes)))
             strip_rows = int(np.ceil(grid.height / n_strips))
             nan_total = 0
             for row_start in range(0, grid.height, strip_rows):
                 row_end = min(row_start + strip_rows, grid.height)
-                win = _source_window(src, grid, row_start, row_end, pad_px)
+                win = _source_window(src, grid, row_start, row_end, pad_px, crs_in)
                 if win is None:
                     continue
                 block = src.read(1, window=win)
@@ -136,7 +146,7 @@ def reproject_to_grid(
                     source=block,
                     destination=data_out[row_start:row_end],
                     src_transform=src.window_transform(win),
-                    src_crs=src.crs,
+                    src_crs=crs_in,
                     dst_transform=grid.transform * rasterio.Affine.translation(0, row_start),
                     dst_crs=grid.crs,
                     resampling=resampling,

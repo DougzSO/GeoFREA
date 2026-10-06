@@ -101,6 +101,7 @@ from geofrea.core.geo_utils import read_clipped_to_country
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
+    MissingSourceCrsError,
     derive_slope_from_dem,
     mosaic_land_cover,
     reproject_to_grid,
@@ -247,6 +248,30 @@ def _save_grid_metadata(
     return meta
 
 
+def _gwa_crs_for(key: str, path: Path, wind_layers: dict[str, Path]):
+    """CRS for a GWA layer: its own, or, when the file declares none, the sibling wind-speed file's.
+
+    The GWA API serves the Weibull A/k tiles without a CRS tag (observed 2026-10-06 for PRT, BRA and IND), but
+    on the same grid as the wind-speed tile of the same height, which does declare EPSG:4326. The sibling's
+    CRS is used only when its transform and shape are identical; otherwise this raises (A-09).
+
+    Implements: M-F2a-04.
+    """
+    import rasterio
+
+    with rasterio.open(path) as own:
+        if own.crs is not None:
+            return None
+        height = key.rsplit("_", 1)[-1]
+        sibling = wind_layers.get(f"wind_speed_{height}")
+        if sibling is None:
+            raise MissingSourceCrsError(f"{path}: no CRS and no wind-speed sibling at {height} to take it from")
+        with rasterio.open(sibling) as sib:
+            if sib.crs is None or sib.transform != own.transform or sib.shape != own.shape:
+                raise MissingSourceCrsError(f"{path}: no CRS and the {height} wind-speed sibling is not on the same grid")
+            return sib.crs
+
+
 def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs) -> GridAlignmentResult:
     """Reproject every input layer onto one reference grid for `context.country_code`.
 
@@ -349,7 +374,9 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         with timer(f"wind_{key}", timings), gdal_quiet():
             out = _execute_or_load(
                 f"wind_{key}",
-                lambda wind_src=wind_src, key=key: reproject_to_grid(wind_src, _path(f"wind_{key}"), grid),
+                lambda wind_src=wind_src, key=key: reproject_to_grid(
+                    wind_src, _path(f"wind_{key}"), grid, src_crs=_gwa_crs_for(key, wind_src, inputs.wind_layers)
+                ),
                 _exists(wind_src),
             )
         if out is not None:

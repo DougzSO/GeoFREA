@@ -11,6 +11,7 @@ from shapely.geometry import Polygon
 
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.grid_alignment.raster_alignment import (
+    MissingSourceCrsError,
     mosaic_land_cover,
     reproject_to_grid,
 )
@@ -338,3 +339,48 @@ def test_source_that_does_not_overlap_the_grid_yields_all_nodata(tmp_path):
     with rasterio.open(out) as src:
         data = src.read(1)
     assert (data == NODATA_FLOAT).all()
+
+
+def _strip_crs(path: Path) -> None:
+    with rasterio.open(path) as src:
+        data, profile = src.read(1), src.profile
+    profile.pop("crs")
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(data, 1)
+
+
+@pytest.mark.unit
+def test_source_without_crs_fails_loud_unless_a_crs_is_supplied(tmp_path):
+    grid = _grid()
+    src_path = tmp_path / "nocrs.tif"
+    _write_raster(src_path, value=7.0)
+    _strip_crs(src_path)
+
+    with pytest.raises(MissingSourceCrsError):
+        reproject_to_grid(src_path, tmp_path / "out.tif", grid)
+
+    out = reproject_to_grid(src_path, tmp_path / "out2.tif", grid, src_crs="EPSG:4326")
+    with rasterio.open(out) as ds:
+        assert np.allclose(ds.read(1)[grid.country_mask], 7.0, atol=0.01)
+
+
+@pytest.mark.unit
+def test_gwa_crs_comes_from_the_same_height_wind_speed_sibling_only_when_grids_match(tmp_path):
+    from geofrea.grid_alignment.alignment import _gwa_crs_for
+
+    speed, weibull = tmp_path / "speed.tif", tmp_path / "weibull.tif"
+    _write_raster(speed, 5.0)
+    _write_raster(weibull, 2.0)
+    _strip_crs(weibull)
+    layers = {"wind_speed_100m": speed, "weibull_a_100m": weibull}
+
+    assert _gwa_crs_for("weibull_a_100m", weibull, layers) == rasterio.crs.CRS.from_epsg(4326)
+    assert _gwa_crs_for("wind_speed_100m", speed, layers) is None  # declares its own
+
+    other = tmp_path / "other.tif"
+    _write_raster(other, 2.0, size=50)
+    _strip_crs(other)
+    with pytest.raises(MissingSourceCrsError, match="same grid"):
+        _gwa_crs_for("weibull_a_100m", other, layers)
+    with pytest.raises(MissingSourceCrsError, match="no wind-speed sibling"):
+        _gwa_crs_for("weibull_a_150m", weibull, layers)
