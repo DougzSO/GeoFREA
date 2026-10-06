@@ -54,7 +54,7 @@
       "summary": "Existing code is the legacy 14-criteria MCDA design (suitability_criteria); rebuild as exclusion, cost-driver and resource layers."
     },
     {"id": "F3", "module": "land_eligibility", "status": "not_started", "record": "docs/phases/F3_land_eligibility.md", "summary": ""},
-    {"id": "F4", "module": "climate_forcing", "status": "not_started", "record": "docs/phases/F4_climate_forcing.md", "summary": "No code yet. Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel ISIMIP3b copied and registered (OQ-036 closed); ERA5 gust annual maxima acquired for BRA/PRT/IND (F4-6, OQ-037 closed: UTC day). PRT mainland-only scope pending (OQ-039)."},
+    {"id": "F4", "module": "climate_forcing", "status": "not_started", "record": "docs/phases/F4_climate_forcing.md", "summary": "No code yet. Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel ISIMIP3b copied and registered (OQ-036 closed); ERA5 gust annual maxima acquired for BRA/PRT/IND (F4-6, OQ-037 closed: UTC day). PRT is mainland-only (D-F1-024, OQ-039 closed)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
     {"id": "F7", "module": "robustness_analysis", "status": "not_started", "record": "docs/phases/F7_robustness_analysis.md", "summary": ""},

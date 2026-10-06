@@ -42,6 +42,15 @@ def _data_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(tmp_path / "shared_raw_unused"))
 
 
+@pytest.fixture(autouse=True)
+def _no_mainland_filter_by_default(monkeypatch):
+    # The real countries.yaml sets mainland_only for PRT (OQ-039); these
+    # tests exercise resolution with fake shapefile bytes under the code
+    # "PRT", so they must not inherit that flag. The mainland tests at the
+    # bottom opt in explicitly.
+    monkeypatch.setattr(gadm, "_mainland_only", lambda country_code: False)
+
+
 def _make_gadm_zip_bytes(country_code: str, levels: tuple[int, ...] = (0, 1, 2)) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -340,3 +349,43 @@ def test_fetch_borders_local_database_absent_falls_back_and_fetches(tmp_path, mo
     mock_get.assert_called_once()
     assert result is not None
     assert result.name == "gadm41_PRT_0.shp"
+
+
+def _write_country_with_island(tmp_path):
+    """Level-0 = big mainland square + a small far island; level-1 = mainland district + island unit."""
+    mainland, island = box(0, 0, 4, 4), box(10, 10, 10.5, 10.5)
+    level0 = tmp_path / "raw" / "gadm41_PRT_0.shp"
+    level0.parent.mkdir(parents=True)
+    gpd.GeoDataFrame({"GID_0": ["PRT"]}, geometry=[mainland.union(island)], crs="EPSG:4326").to_file(level0)
+    level1 = tmp_path / "raw" / "gadm41_PRT_1.shp"
+    gpd.GeoDataFrame(
+        {"NAME_1": ["Continente", "Ilha"]}, geometry=[box(0, 0, 2, 2), island], crs="EPSG:4326"
+    ).to_file(level1)
+    return level0, level1
+
+
+@pytest.mark.unit
+def test_mainland_only_country_gets_a_mainland_borders_and_admin1(tmp_path, monkeypatch):
+    level0, level1 = _write_country_with_island(tmp_path)
+    monkeypatch.setattr(gadm, "_resolve_level0", lambda outputs_dir, cc: level0)
+    monkeypatch.setattr(gadm, "_resolve_level1", lambda outputs_dir, cc: level1)
+    monkeypatch.setattr(gadm, "_mainland_only", lambda country_code: True)
+
+    borders = gadm.fetch_borders(tmp_path, "PRT")
+    admin1 = gadm.fetch_admin1(tmp_path, "PRT")
+
+    assert borders != level0
+    geom = gpd.read_file(borders).union_all()
+    assert geom.geom_type == "Polygon" and geom.area == pytest.approx(16.0)  # island dropped
+    assert list(gpd.read_file(admin1)["NAME_1"]) == ["Continente"]
+    assert len(gpd.read_file(level0).explode(index_parts=False)) == 2  # raw file untouched
+
+
+@pytest.mark.unit
+def test_country_without_mainland_only_keeps_the_raw_borders_and_admin1(tmp_path, monkeypatch):
+    level0, level1 = _write_country_with_island(tmp_path)
+    monkeypatch.setattr(gadm, "_resolve_level0", lambda outputs_dir, cc: level0)
+    monkeypatch.setattr(gadm, "_resolve_level1", lambda outputs_dir, cc: level1)
+
+    assert gadm.fetch_borders(tmp_path, "PRT") == level0
+    assert gadm.fetch_admin1(tmp_path, "PRT") == level1

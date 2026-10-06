@@ -101,6 +101,9 @@ BRA:
     - "ESA_WorldCover_10m_2020_v100_S33W072_Map.tif"
 
 PRT:
+  # Madeira and the Azores are outside the analyses and the rest of the framework
+  # (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
+  mainland_only: true
   hydrosheds_region: "eu"  # Europe and Middle East (HydroRIVERS)
   elevation_dir: "PRT"
   land_cover_dir: "Portugal"

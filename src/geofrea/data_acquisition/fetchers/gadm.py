@@ -50,6 +50,7 @@ import pandas as pd
 
 from geofrea.core import paths
 from geofrea.core.config_loader import load_countries
+from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.http_retry import get_with_retry
 from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.data_acquisition.schemas import HASH_CHUNK_BYTES
@@ -279,8 +280,8 @@ def _naturalearth_fallback(outputs_dir: Path, country_code: str) -> Path | None:
     return out_path
 
 
-def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
-    """Resolve GADM 4.1 boundaries and return the level-0 (country) shapefile.
+def _resolve_level0(outputs_dir: Path, country_code: str) -> Path | None:
+    """Resolve GADM 4.1 boundaries and return the raw level-0 (country) shapefile.
 
     METHODOLOGY M-F1-07: checks the local database
     (GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>, countries.yaml)
@@ -318,8 +319,8 @@ def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
     return any_shp[0] if any_shp else None
 
 
-def fetch_admin1(outputs_dir: Path, country_code: str) -> Path | None:
-    """Locate the GADM level-1 (admin1) shapefile.
+def _resolve_level1(outputs_dir: Path, country_code: str) -> Path | None:
+    """Locate the raw GADM level-1 (admin1) shapefile.
 
     METHODOLOGY M-F1-07: reuses fetch_borders()'s local-database check —
     a checksum-verified level-0 hit means the same local directory's
@@ -351,3 +352,67 @@ def fetch_admin1(outputs_dir: Path, country_code: str) -> Path | None:
 
     level1 = sorted(extract_dir.rglob("*_1.shp"))
     return level1[0] if level1 else None
+
+
+def _mainland_only(country_code: str) -> bool:
+    """`mainland_only: true` in countries.yaml (OQ-039): drop every island/exclave of the country."""
+    return bool(_load_countries_config().get(country_code, {}).get("mainland_only", False))
+
+
+def _derived_is_fresh(derived: Path, source: Path) -> bool:
+    return derived.exists() and derived.stat().st_mtime >= source.stat().st_mtime
+
+
+def _mainland_level0(source: Path, country_code: str) -> Path:
+    """Level-0 reduced to its largest polygon, written once under GEOFREA_DATA_DIR/raw/gadm.
+
+    Derived from `source` (never modifies it, so the local database's recorded
+    sha256 stays valid); the derived file is what every acquisition consumer
+    (polygon crops, land-cover tile filter, registries) then sees.
+    """
+    dest = paths.fetched_raw("gadm", country_code) / f"gadm41_{country_code}_0_mainland.shp"
+    if _derived_is_fresh(dest, source):
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    load_mainland_boundary(source).to_file(dest)
+    return dest
+
+
+def _mainland_level1(level1_source: Path, mainland_level0: Path, country_code: str) -> Path:
+    """Level-1 units that touch the mainland polygon (drops e.g. Madeira/Azores for PRT)."""
+    dest = paths.fetched_raw("gadm", country_code) / f"gadm41_{country_code}_1_mainland.shp"
+    if _derived_is_fresh(dest, level1_source) and _derived_is_fresh(dest, mainland_level0):
+        return dest
+    import geopandas as gpd
+
+    units = gpd.read_file(level1_source)
+    mainland = gpd.read_file(mainland_level0).to_crs(units.crs)
+    geom = mainland.union_all() if hasattr(mainland, "union_all") else mainland.unary_union
+    kept = units[units.intersects(geom)]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    kept.to_file(dest)
+    return dest
+
+
+def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
+    """Level-0 (country) shapefile; mainland-only when countries.yaml says so (OQ-039).
+
+    Resolution (local database, cache, network, NaturalEarth) is
+    `_resolve_level0()`. With `mainland_only: true` the returned path is
+    the derived mainland-only file instead of the raw GADM one.
+    """
+    raw = _resolve_level0(outputs_dir, country_code)
+    if raw is None or not _mainland_only(country_code):
+        return raw
+    return _mainland_level0(raw, country_code)
+
+
+def fetch_admin1(outputs_dir: Path, country_code: str) -> Path | None:
+    """Level-1 (admin1) shapefile; only mainland units when `mainland_only` (OQ-039)."""
+    raw = _resolve_level1(outputs_dir, country_code)
+    if raw is None or not _mainland_only(country_code):
+        return raw
+    level0 = fetch_borders(outputs_dir, country_code)
+    if level0 is None:
+        return raw
+    return _mainland_level1(raw, level0, country_code)
