@@ -34,6 +34,17 @@ NODATA_UINT8: int = 255
 # below both former caps regardless of which was used).
 LINEAR_FEATURE_MAX_DIST_KM: float = 100.0
 
+# Decision-unit cell (S-06, M-F3-03): 0.05 degree = exactly 5 x 5 pixels of the 0.01 degree
+# analysis grid. The F2a grid is snapped to multiples of CELL_DEG so every cell nests
+# exactly (M-F2a-01); the F3 cell index is anchored on the same lattice (CELL_ORIGIN_*).
+CELL_DEG: float = 0.05
+CELL_NESTING_PIXELS: int = 5
+# Global cell lattice origin (north-west corner), degrees. Both are exact multiples of CELL_DEG
+# (90 / 0.05 = 1800, -180 / 0.05 = -3600), so the 0.01 pixels (5 x 5) and the 0.1 degree
+# V-07 cells (2 x 2) nest exactly in the same index.
+CELL_ORIGIN_LAT: float = 90.0
+CELL_ORIGIN_LON: float = -180.0
+
 # Flat mean kilometres-per-degree-of-latitude, used ONLY by
 # grid_alignment's slope-from-DEM derivation (derive_slope_from_dem()),
 # ported verbatim from legacy's src/core/constants.py::KM_PER_DEG_LAT for

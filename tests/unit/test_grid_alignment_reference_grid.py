@@ -3,7 +3,7 @@
 import geopandas as gpd
 import numpy as np
 import pytest
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 
 from geofrea.grid_alignment.reference_grid import GridContext, build_reference_grid
 
@@ -74,3 +74,28 @@ def test_build_reference_grid_multi_polygon_masks_the_union():
     row_has_true = grid.country_mask.any(axis=1)
     true_row_indices = np.where(row_has_true)[0]
     assert true_row_indices.max() - true_row_indices.min() > 5
+
+
+@pytest.mark.unit
+def test_build_reference_grid_with_nesting_holds_whole_0_05_cells_on_the_global_lattice():
+    # A country whose raw bounds are far from the 0.05 lattice
+    country_gdf = gpd.GeoDataFrame(geometry=[box(-8.97, 37.03, -6.18, 41.91)], crs="EPSG:4326")
+
+    grid = build_reference_grid(country_gdf, resolution_deg=0.01, nesting_pixels=5)
+
+    assert grid.width % 5 == 0 and grid.height % 5 == 0
+    west, north = grid.transform.c, grid.transform.f
+    east, south = west + grid.width * 0.01, north - grid.height * 0.01
+    for edge in (west, north, east, south):
+        assert abs(edge / 0.05 - round(edge / 0.05)) < 1e-9  # edges sit on multiples of 0.05
+    # the grid still covers the raw bounds
+    assert west <= -8.97 and east >= -6.18 and south <= 37.03 and north >= 41.91
+
+
+@pytest.mark.unit
+def test_build_reference_grid_snap_is_exact_when_bounds_already_lie_on_the_lattice():
+    country_gdf = gpd.GeoDataFrame(geometry=[box(-9.0, 37.0, -8.0, 38.0)], crs="EPSG:4326")
+
+    grid = build_reference_grid(country_gdf, resolution_deg=0.01, nesting_pixels=5)
+
+    assert (grid.width, grid.height) == (100, 100)  # no spurious extra row/column from float noise

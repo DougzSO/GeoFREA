@@ -97,6 +97,7 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 
+from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import read_clipped_to_country
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.orchestrator import PhaseContext
@@ -319,7 +320,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     else:
         resolution_deg = float(inputs.resolution_deg)
 
-    grid = build_reference_grid(inputs.country_gdf, resolution_deg)
+    grid = build_reference_grid(inputs.country_gdf, resolution_deg, nesting_pixels=CELL_NESTING_PIXELS)
     aligned: dict[str, Path | None] = {}
 
     with timer("elevation", timings), gdal_quiet():

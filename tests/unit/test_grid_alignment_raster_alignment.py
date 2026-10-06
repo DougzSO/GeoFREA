@@ -34,8 +34,13 @@ def _square(cx: float, cy: float, half_side: float) -> Polygon:
     )
 
 
+def _triangle(cx: float, cy: float, half_side: float) -> Polygon:
+    """Right triangle: half of its bounding grid lies outside the country mask, whatever the snapping."""
+    return Polygon([(cx - half_side, cy - half_side), (cx + half_side, cy - half_side), (cx - half_side, cy + half_side)])
+
+
 def _country_gdf() -> gpd.GeoDataFrame:
-    return gpd.GeoDataFrame(geometry=[_square(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.15)], crs="EPSG:4326")
+    return gpd.GeoDataFrame(geometry=[_triangle(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.15)], crs="EPSG:4326")
 
 
 def _grid():

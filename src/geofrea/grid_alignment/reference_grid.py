@@ -40,28 +40,46 @@ class GridContext:
     country_mask: np.ndarray
 
 
-def build_reference_grid(country_gdf: gpd.GeoDataFrame, resolution_deg: float) -> GridContext:
+def _snap(value: float, step: float, *, up: bool) -> float:
+    """Round `value` down/up to a multiple of `step`, tolerant to float noise (36.99999999 -> 37)."""
+    q = value / step
+    q = np.ceil(q - 1e-9) if up else np.floor(q + 1e-9)
+    return float(q * step)
+
+
+def build_reference_grid(
+    country_gdf: gpd.GeoDataFrame, resolution_deg: float, nesting_pixels: int = 1
+) -> GridContext:
     """Construct the master spatial reference grid from the country geometry.
 
-    Bounds are snapped to multiples of resolution_deg so every pixel
-    aligns exactly on the grid, regardless of the country's raw extent.
+    Bounds are snapped to multiples of `resolution_deg * nesting_pixels`, so every pixel
+    aligns exactly on the grid and, with `nesting_pixels=5` (M-F2a-01), the grid holds a whole
+    number of 0.05 degree cells (5 x 5 pixels each) whose edges sit on the global 0.05 degree
+    lattice, regardless of the country's raw extent.
 
     Args:
         country_gdf: Country polygon(s) the grid is built to cover.
         resolution_deg: Grid resolution, in decimal degrees.
+        nesting_pixels: Pixels per side of the coarser cell the grid must nest (1 = snap to the
+            pixel only).
 
     Returns:
         GridContext with aligned transform, dimensions, and country mask.
     """
     minx, miny, maxx, maxy = country_gdf.total_bounds
 
-    minx = np.floor(minx / resolution_deg) * resolution_deg
-    miny = np.floor(miny / resolution_deg) * resolution_deg
-    maxx = np.ceil(maxx / resolution_deg) * resolution_deg
-    maxy = np.ceil(maxy / resolution_deg) * resolution_deg
+    step = resolution_deg * nesting_pixels
+    minx = _snap(minx, step, up=False)
+    miny = _snap(miny, step, up=False)
+    maxx = _snap(maxx, step, up=True)
+    maxy = _snap(maxy, step, up=True)
 
     width = round((maxx - minx) / resolution_deg)
     height = round((maxy - miny) / resolution_deg)
+    if width % nesting_pixels or height % nesting_pixels:
+        raise AssertionError(
+            f"grid {height}x{width} px is not a whole number of {nesting_pixels}x{nesting_pixels} cells"
+        )
     crs = "EPSG:4326"
     transform = transform_from_bounds(minx, miny, maxx, maxy, width, height)
 
