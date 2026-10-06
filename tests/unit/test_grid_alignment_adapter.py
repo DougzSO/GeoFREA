@@ -130,14 +130,21 @@ def test_adapter_does_not_map_protected_admin1_or_borders_passthrough(tmp_path):
 
 
 @pytest.mark.unit
-def test_adapter_wraps_single_wind_path_into_one_element_list(tmp_path):
+def test_adapter_maps_every_gwa_product_and_height_to_its_own_wind_layer(tmp_path):
     boundary_path = _boundary_path(tmp_path)
-    wind_path = Path("/fake/wind_100m.tif")
-    result = _result([_layer("borders", boundary_path), _layer("wind", wind_path)])
+    wind_100 = Path("/fake/wind_100m.tif")
+    weibull_a_150 = Path("/fake/weibull_a_150m.tif")
+    result = _result(
+        [
+            _layer("borders", boundary_path),
+            _layer("wind", wind_100),  # wind_speed at 100 m keeps the bare registry name "wind"
+            _layer("weibull_a_150m", weibull_a_150),
+        ]
+    )
 
     inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(), 100.0)
 
-    assert inputs.wind_paths == [wind_path]
+    assert inputs.wind_layers == {"wind_speed_100m": wind_100, "weibull_a_150m": weibull_a_150}
 
 
 @pytest.mark.unit

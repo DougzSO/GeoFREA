@@ -45,60 +45,6 @@ CELL_ORIGIN_LON: float = -180.0
 # its numbers means using the same scale factor it used.
 KM_PER_DEG_LAT: float = 111.32
 
-# Wind height variants combined by grid_alignment's AHP weighting
-# (_combine_wind_layers()) and the Saaty pairwise-comparison matrix
-# used to derive their weights. Ported as-is from legacy
-# (src/core/constants.py). Reviewed in detail 2026-09-09 (see
-# docs/DECISIONS.md same date, grid_alignment Passo 4 item 4) — kept as
-# STRUCTURAL_PRESERVE, but the specific pairwise judgments below (200m
-# 3x over 100m, 5x over 50m; 100m 3x over 50m) have NO cited source
-# anywhere in the legacy codebase/docs/git history. This is DISTINCT
-# from the AHP application legacy's docs/memory/04-algorithms.md cites
-# Al Garni & Awasthi (2017) for — that reference covers Phase 3's
-# suitability-criteria weighting (suitability_builder.py, not yet built
-# in GeoFREA), a different AHP use of the same math, not this one.
-# The consistency-ratio machinery below (RC, 0.10 threshold,
-# AHP_RANDOM_INDEX) IS literature-grounded (Saaty, 1980) — only the
-# matrix's own judgments are unsourced. Measured against this exact
-# matrix: RC ≈ 0.034 (well under 0.10 — the uniform-weight fallback
-# never triggers for it), inducing weights ≈ 63.3%/26.0%/10.6% for
-# 200m/100m/50m. OPEN QUESTION, not resolved here (Douglas, 2026-09-09):
-# revisit when suitability_criteria (Phase 3) is designed and its own
-# criteria sourcing gets formalized — decide then whether this specific
-# lack of a cited source is acceptable as-is or needs independent
-# justification/replacement before being relied on in the thesis.
-WIND_HEIGHT_KEYS: list[str] = ["200m", "100m", "50m"]
-WIND_AHP_MATRIX: list[list[float]] = [
-    [1.0, 3.0, 5.0],
-    [1 / 3, 1.0, 3.0],
-    [1 / 5, 1 / 3, 1.0],
-]
-
-# Saaty Random Index (RI) table, keyed by matrix size n — used to
-# compute the Consistency Ratio (CR = CI/RI) that decides whether
-# _compute_ahp_weights()'s result is accepted or discarded in favor of
-# uniform weights. Ported as-is from legacy (src/core/constants.py).
-# RC > 0.10 threshold confirmed literature-standard (Saaty, 1980), not
-# an arbitrary legacy choice — see docs/DECISIONS.md 2026-09-09,
-# grid_alignment Passo 4 item 4.
-AHP_RANDOM_INDEX: dict[int, float] = {
-    1: 0.00,
-    2: 0.00,
-    3: 0.58,
-    4: 0.90,
-    5: 1.12,
-    6: 1.24,
-    7: 1.32,
-    8: 1.41,
-    9: 1.45,
-    10: 1.49,
-    11: 1.51,
-    12: 1.53,
-    13: 1.56,
-    14: 1.57,
-    15: 1.59,
-}
-
 # ESA WorldCover land-cover class codes -> human-readable names.
 ESA_CLASS_NAMES: dict[int, str] = {
     10: "Tree cover",

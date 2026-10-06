@@ -103,7 +103,6 @@ from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
-    combine_wind_layers,
     derive_slope_from_dem,
     mosaic_land_cover,
     reproject_to_grid,
@@ -359,12 +358,18 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
             _exists(inputs.solar_path),
         )
 
-    with timer("wind", timings), gdal_quiet():
-        aligned["wind"] = _execute_or_load(
-            "wind",
-            lambda: combine_wind_layers(inputs.wind_paths, _path("wind"), grid),
-            bool(inputs.wind_paths),
-        )
+    # M-F2a-04 (G-2): every GWA product at every height is aligned on its own; nothing is
+    # combined across heights. Keys are "<product>_<height>m" (e.g. "weibull_a_150m").
+    wind_layers: dict[str, Path] = {}
+    for key, wind_src in inputs.wind_layers.items():
+        with timer(f"wind_{key}", timings), gdal_quiet():
+            out = _execute_or_load(
+                f"wind_{key}",
+                lambda wind_src=wind_src, key=key: reproject_to_grid(wind_src, _path(f"wind_{key}"), grid),
+                _exists(wind_src),
+            )
+        if out is not None:
+            wind_layers[key] = out
 
     with timer("land_cover", timings):
         # Cache filename mismatch fixed 2026-09-09 (see module
@@ -449,11 +454,12 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     # Passo 3, item 2. A RuntimeError here propagates uncaught out of
     # run_grid_alignment_phase(), to the orchestrator's single
     # try/except, becoming PhaseExecutionError.
-    _verify_alignment(aligned, grid)
+    _verify_alignment({**aligned, **{f"wind_{k}": v for k, v in wind_layers.items()}}, grid)
 
     return GridAlignmentResult(
         country_code=context.country_code,
         timestamp=timestamp,
         grid_metadata=grid_metadata,
+        wind_layers=wind_layers,
         **aligned,
     )

@@ -28,7 +28,6 @@ _ALIGNED_RASTER_FIELDS: tuple[str, ...] = (
     "elevation",
     "slope",
     "solar",
-    "wind",
     "land_cover",
     "population",
     "roads",
@@ -77,6 +76,9 @@ def build_suitability_criteria_inputs(
     layers = {layer.layer_name: layer for layer in acquisition_result.layers}
 
     aligned = {field: getattr(grid_result, field) for field in _ALIGNED_RASTER_FIELDS}
+    # Legacy F2b criterion (`wind_resource`, to be replaced by H-4's per-height resource layers): F2a no longer
+    # combines heights (M-F2a-04, G-2), so it receives the 100 m wind speed, one height, not a combination.
+    aligned["wind"] = grid_result.wind_layers.get("wind_speed_100m")
 
     wdpa_path = resolved_path(layers.get("protected"))
 

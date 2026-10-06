@@ -85,6 +85,7 @@ from geofrea.core.paths import log_path, outputs_dir
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
+from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_acquisition_phase
 from geofrea.data_acquisition.schemas import AcquisitionResult
 from geofrea.data_quality_audit.audit import run_audit_phase
@@ -316,7 +317,6 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "elevation",
     "slope",
     "solar",
-    "wind",
     "land_cover",
     "population",
     "roads",
@@ -328,6 +328,11 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "grid_distance_capped",
     "rivers_distance_capped",
 )
+
+
+# Per-height wind layers (M-F2a-04): "<product>_<height>m" for every GWA product and height; each aligned
+# raster is its own artifact "aligned/wind_<product>_<height>m".
+_WIND_LAYER_KEYS = tuple(f"{p}_{h}m" for p in GWA_PRODUCTS for h in GWA_HEIGHTS_M)
 
 
 def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult) -> None:
@@ -343,6 +348,8 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
         path = getattr(result, layer_key)
         if path is not None:
             context.register_artifact(f"aligned/{layer_key}", path, "1.0")
+    for wind_key, path in result.wind_layers.items():
+        context.register_artifact(f"aligned/wind_{wind_key}", path, "1.0")
 
 
 def _build_phase_specs(
@@ -429,7 +436,8 @@ def _build_phase_specs(
             run=grid_alignment_run,
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"aligned_rasters"})
-            | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS},
+            | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS}
+            | {f"aligned/wind_{key}" for key in _WIND_LAYER_KEYS},
             summarize=_summarize_grid_alignment,
         ),
         PhaseSpec(

@@ -1,19 +1,12 @@
 """Raster reprojection/combination logic for the grid_alignment phase.
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
-(`_reproject_to_grid()` L196-261, `_compute_ahp_weights()` L268-287,
-`_combine_wind_layers()` L290-455, `_mosaic_land_cover()` L458-543)
+(`_reproject_to_grid()` L196-261, `_mosaic_land_cover()` L458-543)
 with no logic changes — see docs/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3.
 
-`_compute_ahp_weights()`/`_combine_wind_layers()` consume
-WIND_AHP_MATRIX/AHP_RANDOM_INDEX (core/constants.py) as-is. Reviewed in
-detail 2026-09-09 (see that module's own comment block and
-docs/DECISIONS.md same date, grid_alignment Passo 4 item 4) — kept
-STRUCTURAL_PRESERVE: the RC/0.10-threshold machinery is
-literature-grounded (Saaty, 1980), the specific pairwise judgments are
-unsourced but plausible, flagged as an open question for when
-suitability_criteria (Phase 3) is designed, not a blocker here.
+Wind products are aligned per height by `reproject_to_grid()` (M-F2a-04); the legacy AHP combination across heights
+(`compute_ahp_weights`, `combine_wind_layers`) was removed in G-2 (2026-10-06).
 """
 
 from __future__ import annotations
@@ -29,12 +22,9 @@ from rasterio.warp import reproject, transform_bounds
 from rasterio.windows import Window, from_bounds
 
 from geofrea.core.constants import (
-    AHP_RANDOM_INDEX,
     KM_PER_DEG_LAT,
     NODATA_FLOAT,
     NODATA_UINT8,
-    WIND_AHP_MATRIX,
-    WIND_HEIGHT_KEYS,
 )
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.run_logging import PeriodicProgress
@@ -300,147 +290,6 @@ def derive_slope_from_dem(dem_path, out_path):
                 offset_top = 1 if y > 0 else 0
                 final_block = slope_deg[offset_top : offset_top + h, :]
                 dst.write(final_block, 1, window=Window(0, y, src.width, h))
-
-    return out_path
-
-
-def compute_ahp_weights(matrix: np.ndarray) -> tuple[np.ndarray, float]:
-    """Compute AHP weights via the Principal Eigenvector method.
-
-    Args:
-        matrix: Saaty pairwise comparison matrix (n x n).
-
-    Returns:
-        Tuple of (normalized weight vector, Consistency Ratio).
-    """
-    col_sum = matrix.sum(axis=0)
-    weights = (matrix / col_sum).mean(axis=1)
-    lam_max = float((matrix @ weights / weights).mean())
-    n = matrix.shape[0]
-    ci = (lam_max - n) / (n - 1)
-    # AHP_RANDOM_INDEX (Saaty, 1980) confirmed literature-standard, not
-    # arbitrary — see docs/DECISIONS.md 2026-09-09, grid_alignment
-    # Passo 4 item 4.
-    ri = AHP_RANDOM_INDEX.get(n, 1.12)
-    rc = ci / ri if ri > 0 else 0.0
-    return weights, rc
-
-
-def combine_wind_layers(wind_paths: list, out_path, grid: GridContext):
-    """Aggregate multiple wind-height rasters using AHP-derived weights.
-
-    Handles flexible naming: each path's height is parsed from its
-    filename (WIND_HEIGHT_KEYS), falling back to "100m" for the first
-    unidentified file and discarding the rest.
-
-    Args:
-        wind_paths: Wind raster paths (50m/100m/200m variants).
-        out_path: Output path for the aggregated wind raster.
-        grid: Target GridContext.
-
-    Returns:
-        Path to the aggregated wind raster.
-
-    Raises:
-        ValueError: If wind_paths is empty or no file could be mapped
-            to a recognized height key.
-    """
-    if not wind_paths:
-        raise ValueError("No wind raster paths provided")
-
-    mapped: dict[str, object] = {}
-
-    for p in wind_paths:
-        name_lower = p.name.lower()
-        matched = False
-
-        for key in WIND_HEIGHT_KEYS:
-            if key in name_lower:
-                mapped[key] = p
-                matched = True
-                logger.info("    Wind layer '%s' -> %s", p.name, key)
-                break
-
-        if not matched:
-            if len(mapped) == 0:
-                mapped["100m"] = p
-                logger.warning(
-                    "    Wind layer '%s' unidentified -> defaulting to 100m.", p.name
-                )
-            else:
-                logger.warning(
-                    "    Wind layer '%s' discarded (filename does not contain a "
-                    "standard height key).",
-                    p.name,
-                )
-
-    if not mapped:
-        raise ValueError("No wind files were successfully mapped.")
-
-    present = list(mapped.keys())
-
-    # WIND_AHP_MATRIX reviewed 2026-09-09 (see core/constants.py's own
-    # comment block) — kept as-is, STRUCTURAL_PRESERVE, pairwise
-    # judgments unsourced but flagged as an open question, not a blocker.
-    if len(present) == 3:
-        matrix = np.array(WIND_AHP_MATRIX, dtype=np.float64)
-        w_arr, rc = compute_ahp_weights(matrix)
-        weight_map = dict(zip(WIND_HEIGHT_KEYS, w_arr))
-        if rc > 0.10:
-            logger.warning("    RC=%.3f > 0.10 -> falling back to uniform weights.", rc)
-            weight_map = {k: 1.0 / len(present) for k in present}
-    else:
-        weight_map = {k: 1.0 / len(present) for k in present}
-
-    logger.info("    Combining %d wind layers: %s", len(present), ", ".join(present))
-
-    combined = np.zeros((grid.height, grid.width), dtype=np.float64)
-    weight_acc = np.zeros((grid.height, grid.width), dtype=np.float64)
-
-    for key in present:
-        logger.info("    Reprojecting %s...", key)
-        layer = np.full((grid.height, grid.width), NODATA_FLOAT, dtype=np.float32)
-
-        with safe_raster_open(mapped[key]) as src:
-            reproject(
-                source=rasterio.band(src, 1),
-                destination=layer,
-                src_transform=src.transform,
-                src_crs=src.crs,
-                dst_transform=grid.transform,
-                dst_crs=grid.crs,
-                resampling=Resampling.bilinear,
-                src_nodata=src.nodata,
-                dst_nodata=NODATA_FLOAT,
-            )
-
-        valid = (layer != NODATA_FLOAT) & np.isfinite(layer) & (layer >= 0)
-
-        w = weight_map[key]
-        combined[valid] += layer[valid].astype(np.float64) * w
-        weight_acc[valid] += w
-
-    result = np.full((grid.height, grid.width), NODATA_FLOAT, dtype=np.float32)
-    has = weight_acc > 0
-    result[has] = (combined[has] / weight_acc[has]).astype(np.float32)
-    result[~grid.country_mask] = NODATA_FLOAT
-
-    profile = {
-        "driver": "GTiff",
-        "dtype": "float32",
-        "width": grid.width,
-        "height": grid.height,
-        "count": 1,
-        "crs": grid.crs,
-        "transform": grid.transform,
-        "nodata": NODATA_FLOAT,
-        "compress": "lzw",
-        "tiled": True,
-        "blockxsize": 256,
-        "blockysize": 256,
-    }
-    with safe_raster_write(out_path, **profile) as dst:
-        dst.write(result, 1)
 
     return out_path
 

@@ -33,7 +33,7 @@ def test_grid_alignment_inputs_accepts_country_gdf_only():
     assert inputs.elevation_path is None
     assert inputs.roads_source is None
     assert inputs.grid_source is None
-    assert inputs.wind_paths == []
+    assert inputs.wind_layers == {}
     assert inputs.land_cover_tiles == []
 
 

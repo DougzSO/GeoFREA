@@ -270,9 +270,10 @@ def test_run_grid_alignment_phase_missing_layers_leave_none_without_error(tmp_pa
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
-    for field in ("elevation", "slope", "solar", "wind", "land_cover", "population",
+    for field in ("elevation", "slope", "solar", "land_cover", "population",
                   "roads", "grid", "lakes", "rivers", "plants"):
         assert getattr(result, field) is None
+    assert result.wind_layers == {}
 
 
 @pytest.mark.unit
@@ -629,3 +630,32 @@ def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_riv
     assert result.grid_distance_capped is None  # no grid source in this run
     assert captured["roads"] == 77.0
     assert captured["rivers"] == 77.0
+
+
+@pytest.mark.unit
+def test_run_grid_alignment_phase_aligns_each_wind_height_on_its_own_without_combining(tmp_path):
+    """M-F2a-04 (G-2): one aligned raster per product and height; no cross-height combination."""
+    country_gdf = _country_gdf()
+    sources = {}
+    for key, value in (("wind_speed_100m", 5.0), ("wind_speed_200m", 7.0), ("weibull_k_150m", 2.0)):
+        path = tmp_path / f"{key}.tif"
+        with rasterio.open(
+            path, "w", driver="GTiff", height=60, width=60, count=1, dtype="float32", crs="EPSG:4326",
+            transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.01, 0.01), nodata=-9999.0,
+        ) as dst:
+            dst.write(np.full((60, 60), value, dtype="float32"), 1)
+        sources[key] = path
+    inputs = _inputs(country_gdf=country_gdf, wind_layers=sources)
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    assert set(result.wind_layers) == set(sources)  # exactly the heights/products given
+    means = {}
+    for key, path in result.wind_layers.items():
+        with rasterio.open(path) as src:
+            data = src.read(1)
+        valid = data[data != src.nodata]
+        means[key] = float(valid.mean())
+    assert means["wind_speed_100m"] == pytest.approx(5.0, abs=1e-3)  # not blended with the 200 m layer
+    assert means["wind_speed_200m"] == pytest.approx(7.0, abs=1e-3)
+    assert means["weibull_k_150m"] == pytest.approx(2.0, abs=1e-3)

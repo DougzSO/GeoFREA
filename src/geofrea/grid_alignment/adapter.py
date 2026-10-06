@@ -49,9 +49,12 @@ a data_acquisition-schema change, not an adapter concern).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.adapter import load_power_plants_df
+from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
     AcquisitionResult,
@@ -119,8 +122,14 @@ def acquisition_result_to_grid_alignment_inputs(
         if layer_name in layers
     }
 
-    wind_path = resolved_path(layers.get("wind"))
-    wind_paths = [wind_path] if wind_path else []
+    wind_layers: dict[str, Path] = {}
+    for product in GWA_PRODUCTS:
+        for height in GWA_HEIGHTS_M:
+            # wind_speed at 100 m is registered under the bare name "wind" (F1, unchanged)
+            layer_name = "wind" if (product, height) == ("wind_speed", 100) else f"{product}_{height}m"
+            path = resolved_path(layers.get(layer_name))
+            if path:
+                wind_layers[f"{product}_{height}m"] = path
 
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
@@ -137,7 +146,7 @@ def acquisition_result_to_grid_alignment_inputs(
 
     return GridAlignmentInputs(
         **source_paths,
-        wind_paths=wind_paths,
+        wind_layers=wind_layers,
         land_cover_tiles=land_cover_tiles,
         plants_df=plants_df,
         country_gdf=country_gdf,

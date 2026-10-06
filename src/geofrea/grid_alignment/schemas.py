@@ -124,7 +124,7 @@ class GridAlignmentInputs(BaseModel):
     elevation_path: Path | None = None
     slope_path: Path | None = None
     solar_path: Path | None = None
-    wind_paths: list[Path] = []
+    wind_layers: dict[str, Path] = {}
     population_path: Path | None = None
     land_cover_tiles: list[Path] = []
     roads_source: Path | None = None
@@ -228,7 +228,7 @@ class GridAlignmentResult(BaseModel):
     elevation: Path | None = None
     slope: Path | None = None
     solar: Path | None = None
-    wind: Path | None = None
+    wind_layers: dict[str, Path] = {}
     land_cover: Path | None = None
     population: Path | None = None
     roads: Path | None = None
