@@ -26,9 +26,7 @@ GFDL-ESM4 and MIROC6 are `r1i1p1f1` for every variable/experiment.
 
 Source: IPCC AR6 WGI, Table 7.SM.5 (CMIP6 TCR from Schlund et al. 2020, Meehl et al. 2020, Zelinka et al. 2020),
 supplied by Douglas in `D:\Douglas\DOUTORADO\AR6.md` on 2026-10-06 (this replaces the earlier Nijsse et al. 2020
-screening, which covered only part of the models). Range used: 1.4-2.2 K, the AR6 *likely* TCR range. The AR6 text
-that states that range is **not** in `AR6.md` (the paragraphs below the table are climate-metric definitions), so the
-range itself is taken from M-F4-02's wording and should be confirmed against AR6 §7.5.5.
+screening, which covered only part of the models). Range used: 1.4-2.2 K, the AR6 *likely* TCR range. AR6 WGI Chapter 7 assesses TCR at a best estimate of 1.8 K, likely range 1.4-2.2 K, very likely 1.2-2.4 K, and Hausfather et al. (2022) screen CMIP6 models on the *likely* range. Confirmed on 2026-10-06 through secondary sources reporting those AR6 numbers (Hausfather et al. 2022 as cited in Carbon Brief's guest post and in the Journal of Climate 2024 hot-model study); the IPCC page itself returned HTTP 403 and the primary Chapter 7 text was not read, so the exact AR6 section number is unverified.
 
 Models that pass criterion 1 (22), with Table 7.SM.5 TCR:
 
