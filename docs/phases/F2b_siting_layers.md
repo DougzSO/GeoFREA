@@ -19,10 +19,10 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
 | `terrain_score` | E4 slope (TRI term removed) | rework |
 | (legacy F3 land-cover exclusions) | E5 land cover | new |
 | `pop_suitability` | E6 population (binary threshold) | rework |
-| `grid_suitability` | Cost-driver distance, no normalization | rework |
-| `road_suitability` | Cost-driver distance, no normalization | rework |
-| `solar_resource` | PVOUT passthrough in kWh/kWp/day | rework |
-| `wind_resource` | Weibull A/k and air density passthrough per height | rework |
+| `grid_suitability` | Cost-driver distance, no normalization | **built (H-4)**: `dist_grid_km` in `physical_layers.py`; the legacy function still exists until H-5/H-6 retire it |
+| `road_suitability` | Cost-driver distance, no normalization | **built (H-4)**: `dist_road_km` in `physical_layers.py` |
+| `solar_resource` | PVOUT passthrough in kWh/kWp/day | **built (H-4)**: `pvout_kwh_kwp_day` |
+| `wind_resource` | Weibull A/k and air density passthrough per height | **built (H-4)**: `weibull_a/k_<h>m`, `air_density_<h>m` for 100/150/200 m |
 | `river_biomass`, `lc_biomass`, `biomass_resource` | Removed (S-02), but see Known issues — regression test coverage for `lc_biomass`/`biomass_resource` has not actually been dropped | remove |
 | `seismic_suitability` | Removed (S-08) | remove |
 | Percentile normalization per country | **Still executing today — status corrected 2026-09-24 (ADJ-5), see Known issues** | rework (owned by H-2) |
@@ -36,6 +36,8 @@ The current module `suitability_criteria` implements 14 normalized criteria for 
 - **D-F2b-003 — Nodata-safe terrain handling.** A pixel adjacent to nodata/NaN in the DEM never receives a corrupted terrain value; this nodata-safety pattern (originally applied to slope and the now-removed TRI term) carries forward to `E4 slope` in the rebuild.
   Archive: docs/_archive/2026-09/DECISIONS.md 2026-09-11 - suitability_criteria: TRI (terrain_score) não herda contaminação de NaN/nodata
 - **D-F2b-004 — WDPA invalid-geometry repair moved to the shared clip path.** `compute_protected_areas()`'s own `make_valid()` repair (and `WdpaGeometryRepairReport`) was removed 2026-09-21; `core/geo_utils.py::clip_vector_to_country()` now repairs invalid geometries unconditionally for every caller (data_quality_audit included, not just this phase), returning the shared `GeometryRepairReport`. `compute_protected_areas()`'s `ProtectedResult` carries that report through; `SuitabilityCriteriaSummary.protected_wdpa_repair` replaces the old four flat `protected_wdpa_*` fields. V-01 regression (`test_protected_areas_footprint_matches_frozen`, PRT+BRA) confirmed max abs diff = 0.0 against the pre-refactor implementation. Carries forward into the F2b rebuild as-is (see History for the "pending migration" note this resolves).
+
+- **D-F2b-005 — Cost-driver and resource layers are passthroughs in physical units (H-4, 2026-10-06).** `suitability_criteria/physical_layers.py::build_physical_layers()` writes 12 float32 GeoTIFFs from the aligned layers: `dist_grid_km`, `dist_road_km` (the uncapped F2a distances, OQ-040), `pvout_kwh_kwp_day`, and `weibull_a_<h>m` (m/s), `weibull_k_<h>m` (-), `air_density_<h>m` (kg/m3) for h = 100, 150, 200 (M-F2b-02/03). The only change to a value is that invalid pixels (non-finite or the source nodata) become `NODATA_FLOAT`; nothing is rescaled, clipped, normalized or weighted (M-F2b-04), and each file records `units` and `normalized=false` as tags. A missing required layer raises `MissingPhysicalLayerError` naming it (no silent skip). `wind_speed` is not an M-F2b-03 layer and is not written here. No CRAEI counterpart was found (no Weibull, PVOUT or distance-to-grid code in the baseline), so the module is new and carries no provenance header, which also corrects the unverified "CRAEI: ..." cell of the provenance map for M-F2b-02/03. Tests: `tests/unit/test_suitability_physical_layers.py` (4). Not done: wiring into `main.py` and the A-08 output location (`outputs/<ISO3>/siting_layers/layers/`), which belongs with H-5/H-6 together with retiring the legacy normalized criteria.
 
 ## Known issues
 
