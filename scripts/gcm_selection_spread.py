@@ -23,6 +23,7 @@ import numpy as np
 import xarray as xr
 from dotenv import load_dotenv
 
+from geofrea.climate_forcing.change_factors import IncompletePeriodError, annual_mean_of_climatology
 from geofrea.core import paths as core_paths
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 
@@ -35,11 +36,16 @@ REF, WINDOW = (1995, 2014), (2041, 2070)
 
 
 def _window_mean(path: str, var: str, years: tuple[int, int]) -> float:
-    """Mean over the window of the annual means, then over in-polygon cells (NaN-aware)."""
+    """Annual mean of the monthly climatology (M-F4-03 kernel), then the in-polygon cell mean (NaN-aware).
+
+    Fails loud (IncompletePeriodError) on a truncated series: a one-year file must never yield a factor.
+    """
     with xr.open_dataset(path) as ds:
-        da = ds[var].sel(time=slice(str(years[0]), str(years[1])))
-        annual = da.groupby("time.year").mean("time")
-        return float(np.nanmean(annual.mean("year").values))
+        try:
+            annual = annual_mean_of_climatology(ds[var], years)
+        except IncompletePeriodError as exc:
+            raise IncompletePeriodError(f"{path}: {exc}") from exc
+        return float(np.nanmean(annual.values))
 
 
 def _crop_path(entry, country: str) -> str | None:
