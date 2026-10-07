@@ -29,6 +29,7 @@ branch when one of its inputs failed (A-09). The manifest is `outputs/<ISO3>/man
 | 6 | `climate_forcing` | F4 (J-3) | `aligned_rasters`, `audit_report`, `external_inputs` | `forcing`, `forcing_masked`, `members` | yes |
 | 7 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
 | 8 | `climate_maps` | F4 (J-5) | `forcing`, `forcing_masked` | `climate_maps` (one PNG per member) | yes |
+| 9 | `overview` | visual QC | `aligned_rasters`, `siting_layers`, `forcing`, `forcing_masked`, `hazard_context` | `overview` (2 PNG + 1 markdown table per country under `outputs/<ISO3>/overview/`; nothing recomputed) | yes (added 2026-10-07) |
 | — | `suitability_criteria` | legacy F2b | `aligned_rasters`, `layer_registry` | `suitability_criteria_result` | **no** (registered, run only if named) |
 
 Consistency of this graph is checked by `tests/unit/test_main.py` (every required artifact has exactly one producer).

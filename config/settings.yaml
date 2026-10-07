@@ -43,6 +43,7 @@ run:
     - climate_forcing
     - hazard_context
     - climate_maps
+    - overview
 
   # Technologies to run (METHODOLOGY A-04). Non-empty, required,
   # validated against config/technologies.yaml keys at config load.

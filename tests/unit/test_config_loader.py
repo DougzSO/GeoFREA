@@ -82,6 +82,7 @@ def test_load_real_settings_yaml_validates():
         "climate_forcing",
         "hazard_context",
         "climate_maps",
+        "overview",
     ]
     assert result.run.rerun_phases == []
 

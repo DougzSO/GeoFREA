@@ -100,6 +100,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "climate_forcing",
         "hazard_context",
         "climate_maps",
+        "overview",
         "suitability_criteria",
     ]
 

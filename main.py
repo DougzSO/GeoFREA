@@ -105,6 +105,7 @@ from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditRe
 from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_inputs
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
+from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
 from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
 from geofrea.suitability_criteria.physical_layers import SitingLayersResult, build_physical_layers
@@ -453,6 +454,12 @@ def _build_phase_specs(
         _register_json_artifact(context, "climate_maps", result)
         return result
 
+    def overview_run(context: PhaseContext) -> OverviewSummary:
+        """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
+        result = build_overview(context.country_code)
+        _register_json_artifact(context, "overview", result)
+        return result
+
     def suitability_criteria_run(context: PhaseContext) -> SuitabilityCriteriaResult:
         result = run_suitability_criteria_phase(
             context, inputs=_build_suitability_criteria_inputs(context, criteria)
@@ -533,6 +540,14 @@ def _build_phase_specs(
             requires=frozenset({"forcing", "forcing_masked"}),
             produces=frozenset({"climate_maps"}),
             summarize=lambda out: f"{out.n_figures} figures",
+        ),
+        PhaseSpec(
+            name="overview",
+            output_model=OverviewSummary,
+            run=overview_run,
+            requires=frozenset({"aligned_rasters", "siting_layers", "forcing", "forcing_masked", "hazard_context"}),
+            produces=frozenset({"overview"}),
+            summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),
         PhaseSpec(
             name="suitability_criteria",
