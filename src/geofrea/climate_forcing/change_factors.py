@@ -90,12 +90,31 @@ def compute_change_factor(
     scenario: xr.DataArray,
     reference_years: tuple[int, int],
     window_years: tuple[int, int],
+    neighbourhood: int | None = None,
 ) -> xr.DataArray:
-    """One member's change factor for `variable` on the model's native grid (M-F4-03)."""
+    """One member's change factor for `variable` on the model's native grid (M-F4-03).
+
+    Args:
+        neighbourhood: For a ratio factor only: size n of the n x n native-cell neighbourhood over which the
+            window and reference annual means are averaged before the ratio is taken (OQ-042, option A). None keeps
+            the per-cell ratio. A difference factor (tas) ignores it.
+    """
     _, kind = FACTOR_DEFINITIONS[variable]
     ref = annual_mean_of_climatology(historical, reference_years)
     win = annual_mean_of_climatology(scenario, window_years)
+    if neighbourhood and kind == "ratio":
+        ref, win = neighbourhood_mean(ref, neighbourhood), neighbourhood_mean(win, neighbourhood)
     return change_factor(ref, win, kind)
+
+
+def neighbourhood_mean(field: xr.DataArray, size: int) -> xr.DataArray:
+    """Mean over the size x size native cells centred on each cell (NaN-aware, shrinks at the array edge).
+
+    Longitude is not wrapped: callers pass a subset that already extends beyond the area of interest.
+    """
+    if size < 1 or size % 2 == 0:
+        raise ValueError("neighbourhood size must be an odd positive integer")
+    return field.rolling(lat=size, lon=size, center=True, min_periods=1).mean()
 
 
 def _with_periodic_longitude(field: xr.DataArray) -> xr.DataArray:

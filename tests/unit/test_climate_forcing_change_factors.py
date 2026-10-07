@@ -128,3 +128,37 @@ def test_bilinear_does_not_extrapolate_or_fill_nan_neighbours():
 
     assert np.isnan(out[0])  # one of its four native neighbours is NaN
     assert np.isnan(out[1])  # outside the latitude range
+
+
+def _spike_fields():
+    times = pd.date_range("1995-01-01", "2070-12-01", freq="MS")
+    shape = (len(times), 5, 5)
+    ref = np.full(shape, 4.0)
+    win = np.full(shape, 4.4)
+    ref[:, 2, 2], win[:, 2, 2] = 0.002, 0.5  # one native cell whose reference wind is near zero
+    mk = lambda a: xr.DataArray(  # noqa: E731
+        a, dims=("time", "lat", "lon"), coords={"time": times, "lat": np.arange(5.0), "lon": np.arange(5.0)}
+    )
+    return mk(ref), mk(win)
+
+
+@pytest.mark.unit
+def test_wind_neighbourhood_ratio_keeps_a_near_zero_reference_cell_from_exploding():
+    ref, win = _spike_fields()
+
+    per_cell = cf.compute_change_factor("sfcWind", ref, win, (1995, 2014), (2041, 2070))
+    smoothed = cf.compute_change_factor("sfcWind", ref, win, (1995, 2014), (2041, 2070), neighbourhood=3)
+
+    assert float(per_cell.max()) == pytest.approx(250.0)
+    assert float(smoothed.max()) < 1.2 and float(smoothed.min()) == pytest.approx(1.1)
+
+
+@pytest.mark.unit
+def test_neighbourhood_applies_to_ratio_factors_only_and_must_be_odd():
+    ref, win = _spike_fields()
+    diff_a = cf.compute_change_factor("tas", ref, win, (1995, 2014), (2041, 2070))
+    diff_b = cf.compute_change_factor("tas", ref, win, (1995, 2014), (2041, 2070), neighbourhood=3)
+    xr.testing.assert_allclose(diff_a, diff_b)  # dT is a difference: untouched
+
+    with pytest.raises(ValueError, match="odd"):
+        cf.neighbourhood_mean(ref.isel(time=0), 2)

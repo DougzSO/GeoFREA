@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import geopandas as gpd
+import rasterio
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 import xarray as xr
-from shapely.geometry import box
 
 from geofrea.climate_forcing import forcing as fc
 from geofrea.climate_forcing import members as mem
@@ -112,24 +111,41 @@ def test_members_manifest_fails_loud_on_a_realization_mismatch_or_a_missing_file
         mem.members_manifest(members, _registry(tmp_path, skip=("ipsl_cm6a_lr", "ssp126", "tas")))
 
 
+def _mask_raster(tmp_path, valid_blocks, shape=(20, 30), origin=(1.2, 20.0)):
+    """A 0.01 degree raster on the lattice (rows x cols multiple of 5); valid_blocks = [(r0, r1, c0, c1)] pixels."""
+    from rasterio.transform import from_origin
+
+    data = np.full(shape, -9999.0, dtype="float32")
+    for r0, r1, c0, c1 in valid_blocks:
+        data[r0:r1, c0:c1] = 1.0
+    path = tmp_path / "mask.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", dtype="float32", width=shape[1], height=shape[0], count=1,
+        crs="EPSG:4326", transform=from_origin(origin[1], origin[0], 0.01, 0.01), nodata=-9999.0,
+    ) as dst:
+        dst.write(data, 1)
+    return path
+
+
 @pytest.mark.unit
-def test_country_cells_are_the_lattice_cells_that_intersect_the_polygon():
-    mainland = gpd.GeoDataFrame(geometry=[box(20.0, 1.0, 20.12, 1.07)], crs="EPSG:4326")
+def test_country_cells_are_the_cells_with_at_least_one_in_country_pixel(tmp_path):
+    # one in-country pixel in cell (0,0), a 5x5 block in cell (1,2), nothing elsewhere
+    mask = _mask_raster(tmp_path, [(0, 1, 0, 1), (5, 10, 10, 15)])
 
-    cells = fc.country_cells(mainland)
+    cells = fc.country_cells(mask)
 
-    # lon 20.00-20.12 touches columns of 0.05 deg: 20.00-20.05, 20.05-20.10, 20.10-20.15 ; lat 1.00-1.07: two rows
-    assert len(cells) == 6
+    assert len(cells) == 2
     row, col = cell_row_col(cells["lat_c"].to_numpy(), cells["lon_c"].to_numpy())
     assert (cell_id(row, col) == cells["cell_id"].to_numpy()).all()
     assert cells["cell_id"].is_monotonic_increasing and cells["cell_id"].is_unique
+    # centers: cell (0,0) of a grid whose NW corner is (lat 1.2, lon 20.0): lat 1.175, lon 20.025
+    assert cells["lat_c"].round(3).tolist() == [1.175, 1.125] and cells["lon_c"].round(3).tolist() == [20.025, 20.125]
 
 
 @pytest.mark.unit
 def test_forcing_gives_the_known_factors_for_every_cell_and_member_and_identity_for_m0(tmp_path):
     reg = _registry(tmp_path, rsds_ratio=1.1, dt=2.0)
-    mainland = gpd.GeoDataFrame(geometry=[box(20.0, 1.0, 20.3, 1.2)], crs="EPSG:4326")
-    cells = fc.country_cells(mainland)
+    cells = fc.country_cells(_mask_raster(tmp_path, [(0, 20, 0, 30)]))
     members = mem.resolve_members(ENSEMBLE)
 
     out = tmp_path / "forcing.parquet"
@@ -153,8 +169,7 @@ def test_forcing_interpolates_bilinearly_between_native_cells(tmp_path):
     for g in ENSEMBLE.gcms:
         path = tmp_path / f"{g.cds_name}_ssp126_rsds.nc"
         _write(path, "rsds", (2041, 2100), lambda y: (lambda la, lo: 200.0 * (1 + 0.01 * (lo - 18.0)) + 0.0 * la))
-    mainland = gpd.GeoDataFrame(geometry=[box(20.0, 1.0, 20.1, 1.1)], crs="EPSG:4326")
-    cells = fc.country_cells(mainland)
+    cells = fc.country_cells(_mask_raster(tmp_path, [(5, 15, 0, 10)]))
     members = [m for m in mem.resolve_members(ENSEMBLE) if m.member_id == "m_gfdl_esm4_ssp126_2041_2070"]
 
     frame = next(fc.forcing_frames(cells, members, reg))
@@ -166,8 +181,7 @@ def test_forcing_interpolates_bilinearly_between_native_cells(tmp_path):
 @pytest.mark.unit
 def test_a_cell_outside_the_native_field_fails_loud_instead_of_being_filled(tmp_path):
     reg = _registry(tmp_path)
-    far = gpd.GeoDataFrame(geometry=[box(40.0, 1.0, 40.1, 1.1)], crs="EPSG:4326")  # lon 40 is beyond the file
-    cells = fc.country_cells(far)
+    cells = fc.country_cells(_mask_raster(tmp_path, [(0, 10, 0, 10)], origin=(1.2, 40.0)))  # lon 40 is beyond the file
     members = [m for m in mem.resolve_members(ENSEMBLE) if m.member_id == "m_gfdl_esm4_ssp126_2041_2070"]
 
     with pytest.raises((fc.ForcingGapError, ValueError, IndexError)):

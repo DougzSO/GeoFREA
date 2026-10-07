@@ -27,6 +27,10 @@ members:
 # Members are the full factorial gcm x ssp x window (U-01): 6 x 3 x 2 = 36. F4 expands this list into
 # members.yaml (M-F4-06) with provenance. `hazard_channel` = ISIMIP3b counterpart exists (D-F4-003/004).
 gcm_ensemble:
+  # OQ-042 option A (Douglas, 2026-10-06): delta_wind is the ratio of n x n native-cell neighbourhood means of the
+  # window and reference annual means, so a near-zero reference wind in one cell (MIROC6 over the Amazon) cannot
+  # make the ratio explode. delta_rsds and dT keep the per-cell definition. 3 = the interpolation footprint.
+  wind_ratio_neighbourhood_cells: 3
   ssps: ["SSP1-2.6", "SSP3-7.0", "SSP5-8.5"]
   windows: ["2041-2070", "2071-2100"]
   gcms:

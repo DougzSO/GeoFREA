@@ -16,14 +16,14 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import shapely
+import rasterio
 import xarray as xr
 
 from geofrea.climate_forcing.change_factors import FACTOR_DEFINITIONS, bilinear_to_points, compute_change_factor
 from geofrea.climate_forcing.members import REFERENCE_WINDOW, VARIABLES, Gcm, Member, MemberResolutionError
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
-from geofrea.land_eligibility.cells import cell_center, cell_id
+from geofrea.land_eligibility.cells import cell_center, cell_id, grid_cell_origin
 
 _MARGIN_NATIVE_CELLS = 3
 
@@ -32,30 +32,29 @@ class ForcingGapError(ValueError):
     """A cell has no valid change factor (NaN after interpolation); never filled silently (A-09)."""
 
 
-def country_cells(mainland) -> pd.DataFrame:
-    """Lattice cells (0.05 degree, global ids) that intersect the mainland polygon(s).
+def country_cells(mask_path: Path) -> pd.DataFrame:
+    """Lattice cells (0.05 degree, global ids) that hold at least one in-country pixel of the F2a grid.
+
+    This is the definition F3 uses (`aggregate_to_cells` keeps a cell when its in-country area is positive), so the
+    forcing covers exactly the cells F3 can later make candidates. It reads the F2a aligned raster's own valid
+    pixels instead of intersecting boxes with the country polygon: on IND's coastline (millions of vertices) the
+    polygon test did not finish in 40 minutes, the raster test takes seconds.
 
     Args:
-        mainland: GeoDataFrame in EPSG:4326 holding the mainland polygon(s).
+        mask_path: An aligned F2a raster whose valid pixels are the in-country pixels (e.g. `<ISO3>_grid_aligned.tif`).
 
     Returns:
         DataFrame with `cell_id`, `lat_c`, `lon_c`, sorted by `cell_id`.
     """
-    geom = shapely.union_all(mainland.geometry.values)
-    xmin, ymin, xmax, ymax = geom.bounds
-    row0 = int(np.floor((CELL_ORIGIN_LAT - ymax) / CELL_DEG))
-    row1 = int(np.floor((CELL_ORIGIN_LAT - ymin) / CELL_DEG))
-    col0 = int(np.floor((xmin - CELL_ORIGIN_LON) / CELL_DEG))
-    col1 = int(np.floor((xmax - CELL_ORIGIN_LON) / CELL_DEG))
-    rows, cols = np.meshgrid(np.arange(row0, row1 + 1), np.arange(col0, col1 + 1), indexing="ij")
-    rows, cols = rows.ravel(), cols.ravel()
-    west = CELL_ORIGIN_LON + cols * CELL_DEG
-    north = CELL_ORIGIN_LAT - rows * CELL_DEG
-    boxes = shapely.box(west, north - CELL_DEG, west + CELL_DEG, north)
-    shapely.prepare(geom)
-    # a cell that only touches the polygon along an edge shares no area with the country: not included
-    keep = shapely.intersects(boxes, geom) & ~shapely.touches(boxes, geom)
-    rows, cols = rows[keep], cols[keep]
+    with rasterio.open(mask_path) as src:
+        band = src.read(1)
+        valid = np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        transform, height, width = src.transform, src.height, src.width
+    k = CELL_NESTING_PIXELS
+    row0, col0 = grid_cell_origin(transform, height, width)
+    any_valid = valid.reshape(height // k, k, width // k, k).any(axis=(1, 3))
+    r, c = np.nonzero(any_valid)
+    rows, cols = r + row0, c + col0
     lat_c, lon_c = cell_center(rows, cols)
     out = pd.DataFrame({"cell_id": cell_id(rows, cols), "lat_c": lat_c, "lon_c": lon_c})
     return out.sort_values("cell_id").reset_index(drop=True)
@@ -89,9 +88,20 @@ def _load_variable(entry, variable: str, lat_range, lon_range) -> xr.DataArray:
 
 
 def member_factor_fields(
-    registry: Cmip6Registry, gcm: Gcm, experiment: str, window: tuple[int, int], lat_range, lon_range
+    registry: Cmip6Registry,
+    gcm: Gcm,
+    experiment: str,
+    window: tuple[int, int],
+    lat_range,
+    lon_range,
+    wind_neighbourhood: int | None = None,
 ) -> dict[str, xr.DataArray]:
-    """Native-grid change-factor fields (delta_rsds, delta_wind, dT) of one GCM, scenario and window."""
+    """Native-grid change-factor fields (delta_rsds, delta_wind, dT) of one GCM, scenario and window.
+
+    `wind_neighbourhood` applies OQ-042 option A to `delta_wind` only: the ratio of n x n neighbourhood means, so a
+    native cell whose reference wind is near zero does not make the ratio explode. `delta_rsds` and `dT` keep the
+    per-cell definition.
+    """
     fields: dict[str, xr.DataArray] = {}
     for variable in VARIABLES:
         hist = registry.entries[f"cmip6/{gcm.cds_name}/historical/{variable}"]
@@ -103,12 +113,16 @@ def member_factor_fields(
             _load_variable(scen, variable, lat_range, lon_range),
             REFERENCE_WINDOW,
             window,
+            neighbourhood=wind_neighbourhood if variable == "sfcWind" else None,
         )
     return fields
 
 
 def forcing_frames(
-    cells: pd.DataFrame, members: list[Member], registry: Cmip6Registry
+    cells: pd.DataFrame,
+    members: list[Member],
+    registry: Cmip6Registry,
+    wind_neighbourhood: int | None = None,
 ) -> Iterator[pd.DataFrame]:
     """One DataFrame per member (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), in member order.
 
@@ -133,7 +147,9 @@ def forcing_frames(
             continue
         key = (m.gcm.cds_name, m.experiment, m.window)
         if key not in cache:
-            fields = member_factor_fields(registry, m.gcm, m.experiment, m.window, lat_range, lon_range)
+            fields = member_factor_fields(
+                registry, m.gcm, m.experiment, m.window, lat_range, lon_range, wind_neighbourhood
+            )
             cache.clear()  # keep memory bounded: one member's interpolated fields at a time
             cache[key] = {col: bilinear_to_points(field, lat, lon) for col, field in fields.items()}
         values = cache[key]

@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 2.1.0 |
+| Version | 3.0.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-06 |
 | Owner | Douglas |
@@ -210,7 +210,7 @@ Critical transitions:
   5. Recorded exception (OQ-009, 2026-10-06): IPSL-CM6A-LR (AR6 TCR 2.32 K, 0.12 K above the likely range 1.4-2.2 K, inside the very-likely range 1.2-2.4 K) is kept because it is one of three models with an ISIMIP3b counterpart for the hazard channel (D-F4-003) and it widens the change-factor spread (J-1 audit). It is flagged in `members.yaml` as `tcr_exception: true` so results can be shown with and without it.
 - **M-F4-03.** Change factors (delta-change), computed on each GCM's native grid from monthly climatologies:
   - `delta_rsds = mean_window(rsds) / mean_ref(rsds)` (multiplicative)
-  - `delta_wind = mean_window(sfcWind) / mean_ref(sfcWind)` (multiplicative)
+  - `delta_wind = nbhd_mean(mean_window(sfcWind)) / nbhd_mean(mean_ref(sfcWind))` (multiplicative), where `nbhd_mean` is the mean over the `wind_ratio_neighbourhood_cells` x `wind_ratio_neighbourhood_cells` native cells centred on each cell (3 x 3, `config/experiments.yaml`). The neighbourhood keeps the ratio from exploding where a GCM's reference wind is near zero in a single cell (OQ-042); `delta_rsds` and `dT` stay per cell.
   - `dT = mean_window(tas) - mean_ref(tas)` (additive, K)
   - Reference period 1995-2014; annual means of the monthly climatology.
 - **M-F4-04.** Change factors are bilinearly interpolated to 0.05 degree cell centers.
@@ -460,6 +460,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 3.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F4-03 `delta_wind` becomes the ratio of 3 x 3 native-cell neighbourhood means of the window and reference annual means instead of a per-cell ratio (Douglas's verdict, option A of OQ-042). `delta_rsds` and `dT` unchanged. Residual noted: MIROC6 over Brazil still gives extreme factors in part of the Amazon (OQ-042 stays open for that residual). |
 | 2.1.0 | 2026-10-06 | MINOR: M-F4-02 gains item 5, a recorded exception keeping IPSL-CM6A-LR (TCR 2.32 K, above the likely range) with a `tcr_exception` flag, per Douglas's verdict on OQ-009 (option C: GFDL-ESM4, MIROC6, ACCESS-CM2, IPSL-CM6A-LR, CNRM-CM6-1, MRI-ESM2-0). No existing result changes. |
 | 2.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F2a-03 stores the uncapped geodesic distance and `distance_cap_km` becomes only the threshold of a `distance_capped` flag raster; M-F3-03 weights the uncapped distance and reports the flag share as a quality indicator; M-F6-01 gains a note that it bills the real distance and that its linear form is a first-order approximation (L-019). Resolves OQ-040 (Douglas's authorization, 2026-10-06). Header version and date brought in line with the changelog (the header still read 1.2.3). |
 | 1.3.0 | 2026-09-28 | M-F1-05 loses its CRAEI/A-11 attribution (CRAEI's own D12 decided against ERA5 gust — nothing to adapt, built fresh, task F4-1/F4-2) and gains its reduction (annual maximum of `fg10`) and reference period (1995-2014, coherent with S-05); no result changes since M-F1-05 was not yet implemented. |

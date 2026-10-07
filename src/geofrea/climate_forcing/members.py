@@ -52,6 +52,7 @@ class Ensemble:
     gcms: tuple[Gcm, ...]
     ssps: tuple[str, ...]
     windows: tuple[tuple[int, int], ...]
+    wind_ratio_neighbourhood_cells: int | None = None  # OQ-042, option A
 
 
 def _parse_window(text: str) -> tuple[int, int]:
@@ -78,7 +79,12 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
         )
         for g in cfg["gcms"]
     )
-    return Ensemble(gcms=gcms, ssps=tuple(cfg["ssps"]), windows=tuple(_parse_window(w) for w in cfg["windows"]))
+    return Ensemble(
+        gcms=gcms,
+        ssps=tuple(cfg["ssps"]),
+        windows=tuple(_parse_window(w) for w in cfg["windows"]),
+        wind_ratio_neighbourhood_cells=cfg.get("wind_ratio_neighbourhood_cells"),
+    )
 
 
 def member_id(cds_name: str, ssp: str, window: tuple[int, int]) -> str:
