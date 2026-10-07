@@ -71,6 +71,33 @@ def test_reproject_to_grid_preserves_constant_value_inside_country_mask(tmp_path
 
 
 @pytest.mark.unit
+def test_sum_resampling_keeps_the_total_of_a_count_raster_when_coarsening(tmp_path):
+    """Population (counts per pixel) must be summed, not sampled: 12 x 12 fine pixels of 1 person give 144 per pixel."""
+    from rasterio.enums import Resampling
+
+    grid = _grid()
+    fine = _RES / 12
+    size = 60 * 12
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, fine, fine)
+    path = tmp_path / "pop.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326",
+        transform=transform, nodata=-9999.0,
+    ) as dst:
+        dst.write(np.ones((size, size), dtype="float32"), 1)
+
+    summed = reproject_to_grid(path, tmp_path / "sum.tif", grid, resampling=Resampling.sum)
+    sampled = reproject_to_grid(path, tmp_path / "bil.tif", grid)  # the old default
+    with rasterio.open(summed) as a, rasterio.open(sampled) as b:
+        s, bil = a.read(1), b.read(1)
+    inside = grid.country_mask & (s != NODATA_FLOAT)
+    assert inside.any()
+    interior = s[inside][s[inside] > 100]
+    assert np.allclose(interior, 144.0)
+    assert np.allclose(bil[inside], 1.0, atol=0.01)  # one person per pixel: 1/144 of the count
+
+
+@pytest.mark.unit
 def test_reproject_to_grid_uint8_dtype_uses_zero_nodata_default(tmp_path):
     grid = _grid()
     src_path = tmp_path / "src.tif"

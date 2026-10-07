@@ -94,6 +94,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
+from rasterio.enums import Resampling
 
 from geofrea.core import paths as core_paths
 from geofrea.core.constants import CELL_NESTING_PIXELS
@@ -407,7 +408,11 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     with timer("population", timings), gdal_quiet():
         aligned["population"] = _execute_or_load(
             "population",
-            lambda: reproject_to_grid(inputs.population_path, _path("population"), grid),
+            # Counts per pixel are SUMMED onto the coarser grid: bilinear took about one 100 m sample per 1.1 km pixel and
+            # left 1/144 of the population (D-F2a-014).
+            lambda: reproject_to_grid(
+                inputs.population_path, _path("population"), grid, resampling=Resampling.sum
+            ),
             _exists(inputs.population_path),
         )
 
