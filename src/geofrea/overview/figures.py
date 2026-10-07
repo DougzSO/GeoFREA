@@ -6,6 +6,7 @@ displaced, clipped or implausible is visible at a glance before F3 builds on it.
 Written under `outputs/<ISO3>/overview/`:
   - `figures/<ISO3>_aligned_layers.png`: the 12 F2a layers that F2b/F3 read (elevation, slope, land cover, population,
     distances to lakes/rivers/roads/grid in km, PVOUT, wind speed, Weibull k and air density at 100 m);
+  - `figures/<ISO3>_eligibility.png`: F3 eligible share of each 0.05 degree cell and its dominant exclusion, per technology;
   - `figures/<ISO3>_hazard_context.png`: ISIMIP3b/ERA5 context indicators, mean over the hazard members, with changes;
   - `tables/<ISO3>_overview.md`: per-layer statistics, per-member change-factor ranges and masked counts, per-member
     hazard means.
@@ -122,6 +123,48 @@ def plot_aligned_layers(iso: str, out_path: Path) -> Path:
         fig.colorbar(im, ax=ax, shrink=0.75)
         ax.tick_params(labelsize=7)
     fig.suptitle(f"{iso}: F2a aligned layers (colour limits at the 1st-99th percentile)", fontsize=13)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=100)
+    plt.close(fig)
+    return out_path
+
+
+EXCLUSION_LABELS = ("none", "E1 protected", "E2 water", "E3 riparian", "E4 slope", "E5 land cover", "E6 population")
+
+
+def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: Path) -> Path:
+    """One column per technology: eligible share of each cell (top) and the dominant exclusion (bottom)."""
+    from matplotlib.colors import BoundaryNorm, ListedColormap
+
+    techs = sorted(cell_tables)
+    all_rows = np.concatenate([cell_tables[t]["row"].to_numpy() for t in techs])
+    all_cols = np.concatenate([cell_tables[t]["col"].to_numpy() for t in techs])
+    r0, r1, c0, c1 = int(all_rows.min()), int(all_rows.max()), int(all_cols.min()), int(all_cols.max())
+    extent = (
+        CELL_ORIGIN_LON + c0 * CELL_DEG,
+        CELL_ORIGIN_LON + (c1 + 1) * CELL_DEG,
+        CELL_ORIGIN_LAT - (r1 + 1) * CELL_DEG,
+        CELL_ORIGIN_LAT - r0 * CELL_DEG,
+    )
+    colors = ["#f0f0f0", "#1b9e77", "#1f78b4", "#6baed6", "#a65628", "#e6ab02", "#d95f02"]
+    cmap, norm = ListedColormap(colors), BoundaryNorm(np.arange(-0.5, 7.5), len(colors))
+    fig, axes = plt.subplots(2, len(techs), figsize=(7 * len(techs), 13), constrained_layout=True, squeeze=False)
+    codes = {name: i + 1 for i, name in enumerate(("E1", "E2", "E3", "E4", "E5", "E6"))}
+    for j, tech in enumerate(techs):
+        cells = cell_tables[tech]
+        rows, cols = cells["row"].to_numpy() - r0, cells["col"].to_numpy() - c0
+        share = np.full((r1 - r0 + 1, c1 - c0 + 1), np.nan, dtype=np.float32)
+        share[rows, cols] = (cells["eligible_area_km2"] / cells["cell_area_km2"]).to_numpy()
+        dom = np.full(share.shape, np.nan, dtype=np.float32)
+        dom[rows, cols] = cells["dominant_exclusion"].map(codes).fillna(0).to_numpy()
+        im = axes[0, j].imshow(share, extent=extent, cmap="YlGn", vmin=0, vmax=1, interpolation="nearest")
+        fig.colorbar(im, ax=axes[0, j], shrink=0.7, label="eligible share of the cell")
+        axes[0, j].set_title(f"{tech}: eligible share ({100 * cells['eligible_area_km2'].sum() / cells['cell_area_km2'].sum():.1f}% of the land)")
+        im2 = axes[1, j].imshow(dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest")
+        cb = fig.colorbar(im2, ax=axes[1, j], shrink=0.7, ticks=range(7))
+        cb.ax.set_yticklabels(EXCLUSION_LABELS)
+        axes[1, j].set_title(f"{tech}: dominant exclusion per cell")
+    fig.suptitle(f"{iso}: F3 land eligibility, central parameters (open questions OQ-046 to OQ-049)", fontsize=13)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=100)
     plt.close(fig)
@@ -246,6 +289,10 @@ def build_overview(iso: str) -> OverviewSummary:
         plot_aligned_layers(iso, out / "figures" / f"{iso}_aligned_layers.png"),
         plot_hazard_context(iso, hazard, out / "figures" / f"{iso}_hazard_context.png"),
     ]
+    eligibility_dir = core_paths.phase_dir(iso, "land_eligibility", "artifacts")
+    cell_tables = {p.stem.removeprefix("cells_"): pd.read_parquet(p) for p in sorted(eligibility_dir.glob("cells_*.parquet")) if "0p1deg" not in p.stem}
+    if cell_tables:
+        figures.append(plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png"))
     table = out / "tables" / f"{iso}_overview.md"
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(build_tables(iso, forcing, masked, hazard), encoding="utf-8")

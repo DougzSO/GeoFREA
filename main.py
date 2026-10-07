@@ -583,7 +583,9 @@ def _build_phase_specs(
             name="overview",
             output_model=OverviewSummary,
             run=overview_run,
-            requires=frozenset({"aligned_rasters", "siting_layers", "forcing", "forcing_masked", "hazard_context"}),
+            requires=frozenset(
+                {"aligned_rasters", "siting_layers", "land_eligibility", "forcing", "forcing_masked", "hazard_context"}
+            ),
             produces=frozenset({"overview"}),
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),

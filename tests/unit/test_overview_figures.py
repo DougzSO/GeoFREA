@@ -89,3 +89,20 @@ def test_a_missing_layer_is_shown_as_missing_not_hidden(data_dir):
     result = build_overview(ISO)
     text = result.table.read_text(encoding="utf-8")
     assert "| Slope (degrees) | missing |" in text
+
+
+def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
+    _write_aligned(data_dir)
+    _write_climate(data_dir)
+    art = data_dir / "outputs" / ISO / "land_eligibility" / "artifacts"
+    art.mkdir(parents=True)
+    ids = _cell_ids()
+    for tech in ("solar", "wind"):
+        rows, cols = ids // 7200, ids % 7200
+        pd.DataFrame(
+            {"cell_id": ids, "row": rows, "col": cols, "cell_area_km2": 30.0,
+             "eligible_area_km2": np.linspace(0, 30, len(ids)), "dominant_exclusion": ["E5"] * 10 + [None] * 5 + ["E3"] * 5}
+        ).to_parquet(art / f"cells_{tech}.parquet", index=False)
+    pd.DataFrame({"cell_0p1deg_id": [0]}).to_parquet(art / "cells_0p1deg_solar.parquet", index=False)  # must be ignored
+    result = build_overview(ISO)
+    assert f"{ISO}_eligibility.png" in [p.name for p in result.figures]
