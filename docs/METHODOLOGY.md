@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 5.0.0 |
+| Version | 6.0.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-07 |
 | Owner | Douglas |
@@ -189,7 +189,9 @@ Critical transitions:
 
 ### F3 land_eligibility
 
-- **M-F3-01.** Pixel eligibility per technology: the eligible share of a pixel is `valid * (1 - E1) * (1 - E2) * (1 - E3) * (1 - E4) * (1 - E5) * (1 - E6)`, where `valid` is 1 only if all required layers have a value and the E-terms are the excluded shares of M-F2b-01. Shares of different constraints are combined as independent, which counts overlapping constraints twice and so understates the eligible area (conservative). A missing value is never read as free land.
+- **M-F2a-06.** Land cover enters F3 as class counts, not as one class per pixel: for every grid pixel, the number of 10 m ESA WorldCover samples in each class, block-counted from the native tiles (exact when the grid is a whole multiple of the tile pixel and on its edges; anything else is an error). The point-sample mosaic stays as a display layer. (D-F2a-015.)
+- **M-F2a-07.** Slope enters F3 as a distribution, not a pixel mean: Copernicus DEM GLO-30 (30 m) tiles are acquired per country (`scripts/acquire_dem30.py`, pinned by sha256 in `raw/copernicus_dem30/<ISO3>/manifest.json`), slope is computed on the native samples (central differences, WGS84 geodesic spacing) and each sample is counted into the 1 degree slope bin of the grid pixel that contains its centre (41 bands, the last open ended). The share of a pixel above any slope maximum is read from the bins, so the maximum can be a range. The 0.005 degree DEM of F1 stays for elevation and display. (D-F2a-016.)
+- **M-F3-01.** Pixel eligibility per technology: the eligible share of a pixel is `valid * (1 - E1) * (1 - E2) * (1 - E3) * (1 - E4) * (1 - E5) * (1 - E6)`, where `valid` is 1 only if all required layers have a value and the E-terms are the excluded shares of M-F2b-01; E4 is the share of the pixel's 30 m samples steeper than the slope maximum (M-F2a-07); E5 is the share of the pixel's 10 m land-cover samples that lie outside an allowed class (samples of no class, such as open sea, count as not allowed). Shares of different constraints are combined as independent, which counts overlapping constraints twice and so understates the eligible area (conservative). A missing value is never read as free land.
 - **M-F3-02.** Eligibility is computed for the `central` land-availability variant and for every variant declared in `experiments.yaml` (U-06).
 - **M-F3-03.** Cell aggregation to 0.05 degree (5 x 5 pixels). Per cell and technology:
   - `cell_area_km2`: geodesic land area inside the country.
@@ -464,6 +466,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 6.0.0 | 2026-10-07 | MAJOR (changes a result definition): E5 of M-F3-01 becomes a share of the pixel from per-class sample counts instead of the class of one sample, and E4 of M-F3-01 becomes the share of 30 m samples above the slope maximum (new M-F2a-07, D-F2a-016); new M-F2a-06 (D-F2a-015); new riparian discharge parameter (`riparian_min_discharge_m3s`, D-F3-005). The land-cover change leaves country totals nearly unchanged and moves cell values; the slope change lowers the eligible land (PRT solar 31.2% to 23.9%). The planned sampled land-availability ranges (OQ-049) will be the next MAJOR. |
 | 5.0.0 | 2026-10-07 | MAJOR (changes a result definition): M-F3-01 eligibility becomes an eligible share per pixel; E1-E3 are excluded shares measured on sub-pixels (M-F2b-01, OQ-045 option c); new M-F2a-05 (counts are summed, which corrects the aligned population layer, D-F2a-014); new M-F2b-06 (land-availability parameters as ranges in `land_availability`); parameter values proposed in `docs/_audit/2026-10_f3_parameter_research.md` and approved by Douglas on 2026-10-07 (cropland excluded for solar). |
 | 4.1.0 | 2026-10-07 | MINOR (removes an unused input, no result definition changes): the WRI GPPD layer is withdrawn from F1, F1b and F2a (no `power_plants` acquisition, no `plants` aligned raster, no plant statistics in the audit); M-F1-06 states that GEM is the only existing-plant source (D-F1-027). The F2a outputs lose the `aligned/plants` artifact and the V-01 frozen fixture drops `f2a/ZZZ_plants_aligned` (every other frozen layer is identical). |
 | 4.0.0 | 2026-10-07 | MAJOR (changes a result definition): new M-F4-07 masks cell-members whose `delta_wind` is outside `wind_factor_valid_range` (OQ-042 option C, Douglas's verdict), so `forcing.parquet` no longer holds a row for them and `forcing_masked.parquet` declares the absence; M-F4-06 lists the masked-cell file, the hazard-context indicators and the per-window hazard-channel declaration (2071-2100 hazard data not acquired). |
