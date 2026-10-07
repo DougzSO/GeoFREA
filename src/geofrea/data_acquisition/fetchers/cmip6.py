@@ -260,9 +260,15 @@ def _merge_zip_members(zf: zipfile.ZipFile, members: list[str], out_path: Path) 
             with zf.open(name) as src, open(target, "wb") as dst:
                 shutil.copyfileobj(src, dst)
             paths.append(target)
-        with xr.open_mfdataset(paths, combine="by_coords", data_vars="minimal", coords="minimal", compat="override") as ds:
-            merged = ds.sortby("time")
-            merged.to_netcdf(out_path)
+        # Loaded eagerly and concatenated in memory, no dask: the lazy open_mfdataset + to_netcdf route made the
+        # AWI merges take 30-75 minutes each and deadlocked a unit test (2026-10-07). A chunk is a few years of one
+        # variable on one model grid, so the whole series fits in memory.
+        parts = []
+        for path in paths:
+            with xr.open_dataset(path) as chunk:
+                parts.append(chunk.load())
+        merged = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal", compat="override").sortby("time")
+        merged.to_netcdf(out_path)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 

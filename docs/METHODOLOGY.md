@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 3.0.0 |
+| Version | 4.0.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-06 |
 | Owner | Douglas |
@@ -218,7 +218,8 @@ Critical transitions:
   - C1 (mean resource) always enters F5 through M-F4-03.
   - C2 (operational extremes: extreme heat, extreme wind) and C3 (damage and cost: extreme precipitation) enter F5 or F6 quantitatively only with a loss function of evidence Tier 1 or 2 (resolved in OQ-007). Otherwise they are computed as per-cell context indicators per member and reported in T-R10, never entering regret or satisficing.
   - Hazard indicator processors adapted from CRAEI per A-11.
-- **M-F4-06.** Outputs: `forcing.parquet` (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), `hazard_context.parquet`, `members.yaml` (resolved member list with provenance).
+- **M-F4-06.** Outputs: `forcing.parquet` (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), `forcing_masked.parquet` (the cell-members removed by M-F4-07, with the rejected `delta_wind`), `hazard_context.parquet` (context indicators per cell and member that carries the hazard channel: `tx35_days`, `tx40_days`, `rx5day_mm`, `wet_p95_exceed_freq`, their reference values, and the scenario-invariant ERA5 `gust_mean_annual_max_ms`), `members.yaml` (resolved member list with provenance, channels per member and window, masked counts).
+- **M-F4-07.** Validity mask for the wind factor: a cell-member whose `delta_wind` lies outside `wind_factor_valid_range` (`config/experiments.yaml`, 0.5-1.5, plausibility bound with no source) is masked: it has no row in `forcing.parquet`, the member is absent in that cell, and the cell-member is listed in `forcing_masked.parquet`. Nothing is replaced by another value. Any consumer of the forcing (F5) must verify that every candidate cell and member is either in `forcing.parquet` or declared in `forcing_masked.parquet`, and that no factor is out of range (`climate_forcing/forcing.py::assert_forcing_usable`); otherwise it fails (OQ-042 option C, Douglas 2026-10-06).
 
 ### F5 technical_potential
 
@@ -460,6 +461,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 4.0.0 | 2026-10-07 | MAJOR (changes a result definition): new M-F4-07 masks cell-members whose `delta_wind` is outside `wind_factor_valid_range` (OQ-042 option C, Douglas's verdict), so `forcing.parquet` no longer holds a row for them and `forcing_masked.parquet` declares the absence; M-F4-06 lists the masked-cell file, the hazard-context indicators and the per-window hazard-channel declaration (2071-2100 hazard data not acquired). |
 | 3.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F4-03 `delta_wind` becomes the ratio of 3 x 3 native-cell neighbourhood means of the window and reference annual means instead of a per-cell ratio (Douglas's verdict, option A of OQ-042). `delta_rsds` and `dT` unchanged. Residual noted: MIROC6 over Brazil still gives extreme factors in part of the Amazon (OQ-042 stays open for that residual). |
 | 2.1.0 | 2026-10-06 | MINOR: M-F4-02 gains item 5, a recorded exception keeping IPSL-CM6A-LR (TCR 2.32 K, above the likely range) with a `tcr_exception` flag, per Douglas's verdict on OQ-009 (option C: GFDL-ESM4, MIROC6, ACCESS-CM2, IPSL-CM6A-LR, CNRM-CM6-1, MRI-ESM2-0). No existing result changes. |
 | 2.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F2a-03 stores the uncapped geodesic distance and `distance_cap_km` becomes only the threshold of a `distance_capped` flag raster; M-F3-03 weights the uncapped distance and reports the flag share as a quality indicator; M-F6-01 gains a note that it bills the real distance and that its linear form is a first-order approximation (L-019). Resolves OQ-040 (Douglas's authorization, 2026-10-06). Header version and date brought in line with the changelog (the header still read 1.2.3). |

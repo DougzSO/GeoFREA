@@ -51,7 +51,10 @@ exist once the orchestrator has actually run that phase for this
 country.
 
 Usage:
-    python main.py
+    python main.py PRT              # one country, every phase in settings.yaml's target_phases
+    python main.py PRT BRA IND      # several, one after the other
+    python main.py BRA --phases grid_alignment --rerun grid_alignment
+    python main.py                  # run.countries from settings.yaml, else every thesis country
 """
 
 from __future__ import annotations
@@ -81,7 +84,15 @@ from geofrea.core.orchestrator import (
     compute_git_commit,
     compute_run_id,
 )
-from geofrea.core.paths import log_path, outputs_dir
+from geofrea.climate_forcing.pipeline import (
+    ForcingSummary,
+    HazardSummary,
+    MapsSummary,
+    build_forcing,
+    build_hazard_context,
+    build_maps,
+)
+from geofrea.core.paths import log_path, outputs_dir, phase_dir
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
@@ -94,6 +105,7 @@ from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
+from geofrea.suitability_criteria.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
 from geofrea.suitability_criteria.schemas import (
     SuitabilityCriteriaInputs,
@@ -114,6 +126,7 @@ COUNTRIES_YAML = REPO_ROOT / "config" / "countries.yaml"
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
+EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
@@ -404,6 +417,36 @@ def _build_phase_specs(
         _register_aligned_rasters(context, result)
         return result
 
+    def siting_layers_run(context: PhaseContext) -> SitingLayersResult:
+        """F2b (H-4): cost-driver and resource layers in physical units, from the aligned rasters."""
+        grid_output = context.prior_results["grid_alignment"].output
+        layers = build_physical_layers(
+            grid_output, phase_dir(context.country_code, "siting_layers", "artifacts")
+        )
+        result = SitingLayersResult(country_code=context.country_code, layers=layers)
+        _register_json_artifact(context, "siting_layers", result)
+        return result
+
+    def climate_forcing_run(context: PhaseContext) -> ForcingSummary:
+        """F4 (J-3): per-cell change factors for every member, the masked cell-members and members.yaml."""
+        result = build_forcing(context.country_code, EXPERIMENTS_YAML)
+        context.register_artifact("forcing", result.forcing, "1.0")
+        context.register_artifact("forcing_masked", result.forcing_masked, "1.0")
+        context.register_artifact("members", result.members, "1.0")
+        return result
+
+    def hazard_context_run(context: PhaseContext) -> HazardSummary:
+        """F4 (J-4): hazard context indicators for the members that carry the hazard channel."""
+        result = build_hazard_context(context.country_code, EXPERIMENTS_YAML)
+        context.register_artifact("hazard_context", result.hazard_context, "1.0")
+        return result
+
+    def climate_maps_run(context: PhaseContext) -> MapsSummary:
+        """F4 (J-5): one diagnostic map per member."""
+        result = build_maps(context.country_code)
+        _register_json_artifact(context, "climate_maps", result)
+        return result
+
     def suitability_criteria_run(context: PhaseContext) -> SuitabilityCriteriaResult:
         result = run_suitability_criteria_phase(
             context, inputs=_build_suitability_criteria_inputs(context, criteria)
@@ -439,6 +482,41 @@ def _build_phase_specs(
             | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS}
             | {f"aligned/wind_{key}" for key in _WIND_LAYER_KEYS},
             summarize=_summarize_grid_alignment,
+        ),
+        PhaseSpec(
+            name="siting_layers",
+            output_model=SitingLayersResult,
+            run=siting_layers_run,
+            requires=frozenset({"aligned_rasters"}),
+            produces=frozenset({"siting_layers"}),
+            summarize=lambda out: f"{len(out.layers)} physical-unit layers",
+        ),
+        PhaseSpec(
+            name="climate_forcing",
+            output_model=ForcingSummary,
+            run=climate_forcing_run,
+            requires=frozenset({"aligned_rasters"}),
+            produces=frozenset({"forcing", "forcing_masked", "members"}),
+            summarize=lambda out: (
+                f"{out.n_cells} cells x {out.n_members} members = {out.n_rows} rows; "
+                f"{out.n_masked_cell_members} masked cell-members"
+            ),
+        ),
+        PhaseSpec(
+            name="hazard_context",
+            output_model=HazardSummary,
+            run=hazard_context_run,
+            requires=frozenset({"members", "aligned_rasters"}),
+            produces=frozenset({"hazard_context"}),
+            summarize=lambda out: f"{out.n_cells} cells x {out.n_hazard_members} hazard members",
+        ),
+        PhaseSpec(
+            name="climate_maps",
+            output_model=MapsSummary,
+            run=climate_maps_run,
+            requires=frozenset({"forcing", "forcing_masked"}),
+            produces=frozenset({"climate_maps"}),
+            summarize=lambda out: f"{out.n_figures} figures",
         ),
         PhaseSpec(
             name="suitability_criteria",
@@ -542,7 +620,32 @@ def run_geofrea(
     return ok, orchestrator, results
 
 
-def main() -> int:
+def _parse_args(argv: list[str]):
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="python main.py",
+        description="Run the GeoFREA pipeline: every phase a country needs, in dependency order.",
+    )
+    parser.add_argument(
+        "countries",
+        nargs="*",
+        metavar="ISO3",
+        help="country codes to run (e.g. PRT BRA IND); default: run.countries in settings.yaml, else every thesis country",
+    )
+    parser.add_argument(
+        "--phases",
+        help="comma-separated target phases (default: run.target_phases in settings.yaml); upstream phases are added automatically",
+    )
+    parser.add_argument(
+        "--rerun",
+        help="comma-separated phases to execute again even if the manifest records success (default: run.rerun_phases)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv or [])
     settings = load_settings(SETTINGS_YAML)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
@@ -566,14 +669,17 @@ def main() -> int:
     default_countries = [
         c for c in parameters.countries if not countries_config.get(c, {}).get("synthetic_fixture_root")
     ]
-    countries = settings.run.countries or default_countries
+    countries = [c.upper() for c in args.countries] or settings.run.countries or default_countries
     unknown = [c for c in countries if c not in countries_config]
     if unknown:
         logger.error(
-            "settings.yaml's run.countries lists %s, not present in countries.yaml.",
+            "Requested countries %s are not present in countries.yaml (known: %s).",
             unknown,
+            sorted(c for c in countries_config if not countries_config[c].get("synthetic_fixture_root")),
         )
         return 1
+    target_phases = [p.strip() for p in args.phases.split(",") if p.strip()] if args.phases else settings.run.target_phases
+    rerun_phases = [p.strip() for p in args.rerun.split(",") if p.strip()] if args.rerun else settings.run.rerun_phases
 
     methodology_version = _read_methodology_version(METHODOLOGY_MD)
     git_commit = compute_git_commit(REPO_ROOT)
@@ -587,8 +693,8 @@ def main() -> int:
     for country_code in countries:
         ok, orchestrator, results = run_geofrea(
             country_code,
-            settings.run.target_phases,
-            settings.run.rerun_phases,
+            target_phases,
+            rerun_phases,
             settings.geospatial.resolutions,
             settings.geospatial.distance_cap_km,
             audit_config,
@@ -623,4 +729,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

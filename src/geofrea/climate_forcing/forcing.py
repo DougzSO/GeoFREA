@@ -123,8 +123,14 @@ def forcing_frames(
     members: list[Member],
     registry: Cmip6Registry,
     wind_neighbourhood: int | None = None,
+    wind_valid_range: tuple[float, float] | None = None,
+    masked_sink: list[pd.DataFrame] | None = None,
 ) -> Iterator[pd.DataFrame]:
     """One DataFrame per member (`cell_id`, `member`, `delta_rsds`, `dT`, `delta_wind`), in member order.
+
+    With `wind_valid_range` (OQ-042, option C) a cell-member whose `delta_wind` lies outside the range is masked:
+    its row is dropped from the frame and appended to `masked_sink` (`cell_id`, `member`, `delta_wind`) so the
+    absence is declared and the rejected value is kept; nothing is replaced by another value.
 
     Raises:
         ForcingGapError: if any cell gets a NaN factor.
@@ -165,6 +171,13 @@ def forcing_frames(
         bad = frame[["delta_rsds", "dT", "delta_wind"]].isna().any(axis=1)
         if bad.any():
             raise ForcingGapError(f"{m.member_id}: {int(bad.sum())} of {len(frame)} cells have no valid change factor")
+        if wind_valid_range is not None:
+            lo, hi = wind_valid_range
+            invalid = (frame["delta_wind"] < lo) | (frame["delta_wind"] > hi)
+            if invalid.any():
+                if masked_sink is not None:
+                    masked_sink.append(frame.loc[invalid, ["cell_id", "member", "delta_wind"]].copy())
+                frame = frame.loc[~invalid].reset_index(drop=True)
         yield frame
 
 
@@ -185,3 +198,39 @@ def write_forcing(frames: Iterator[pd.DataFrame], out_path: Path) -> int:
         if writer is not None:
             writer.close()
     return n
+
+
+class ForcingContractError(ValueError):
+    """The forcing a consumer reads breaks the contract: a factor out of range or an undeclared absence (A-09)."""
+
+
+def assert_forcing_usable(
+    forcing: pd.DataFrame,
+    masked: pd.DataFrame,
+    candidate_cell_ids,
+    members: list[str],
+    wind_valid_range: tuple[float, float],
+) -> None:
+    """Guard F5 calls before using the forcing of a country (OQ-042 option C; D-F4-004).
+
+    Raises ForcingContractError if (1) any `delta_wind` in the candidate cells is outside `wind_valid_range`, or
+    (2) any (candidate cell, member) is neither a row of `forcing` nor listed in `masked`: an absence must always be
+    declared, never discovered by a missing row.
+    """
+    lo, hi = wind_valid_range
+    cand = pd.Index(np.asarray(candidate_cell_ids)).unique()
+    f = forcing[forcing["cell_id"].isin(cand)]
+    bad = f[(f["delta_wind"] < lo) | (f["delta_wind"] > hi)]
+    if len(bad):
+        raise ForcingContractError(
+            f"{len(bad)} candidate cell-members have delta_wind outside {wind_valid_range} "
+            f"(e.g. {bad['member'].astype(str).iloc[0]}, {bad['delta_wind'].max():.2f}); mask them (OQ-042) before F5"
+        )
+    expected = len(cand) * len(members)
+    present = f[f["member"].astype(str).isin(members)][["cell_id", "member"]]
+    declared = masked[masked["cell_id"].isin(cand) & masked["member"].astype(str).isin(members)][["cell_id", "member"]]
+    if len(present.drop_duplicates()) + len(declared.drop_duplicates()) != expected:
+        raise ForcingContractError(
+            f"{expected - len(present.drop_duplicates()) - len(declared.drop_duplicates())} candidate cell-members are "
+            "neither in forcing.parquet nor declared in forcing_masked.parquet"
+        )

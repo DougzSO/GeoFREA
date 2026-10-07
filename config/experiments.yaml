@@ -31,6 +31,15 @@ gcm_ensemble:
   # window and reference annual means, so a near-zero reference wind in one cell (MIROC6 over the Amazon) cannot
   # make the ratio explode. delta_rsds and dT keep the per-cell definition. 3 = the interpolation footprint.
   wind_ratio_neighbourhood_cells: 3
+  # OQ-042 option C (Douglas, 2026-10-06): a cell-member whose delta_wind falls outside this range is MASKED: no row
+  # in forcing.parquet, the member is absent in that cell, and the cell-member is listed in forcing_masked.parquet
+  # with the value that was rejected. No value is invented. The range is a plausibility bound for a 30-year change in
+  # mean wind speed and has NO source (flagged unsourced, like distance_cap_km); revisit if a better option is chosen.
+  wind_factor_valid_range: [0.5, 1.5]
+  # Hazard channel (ISIMIP3b tasmax/pr, D-F4-001/002): windows whose daily data are on disk. 2071-2100 was accepted in
+  # D-F4-002 but has NOT been acquired (the CRAEI archive holds 2041-2070 only; ~183 GB), so members of that window have
+  # a resource row and NO hazard row, declared per member in members.yaml (D-F4-004).
+  hazard_windows_available: ["2041-2070"]
   ssps: ["SSP1-2.6", "SSP3-7.0", "SSP5-8.5"]
   windows: ["2041-2070", "2071-2100"]
   gcms:

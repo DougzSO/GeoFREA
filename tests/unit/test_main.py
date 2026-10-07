@@ -95,8 +95,30 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
+        "siting_layers",
+        "climate_forcing",
+        "hazard_context",
+        "climate_maps",
         "suitability_criteria",
     ]
+
+
+@pytest.mark.unit
+def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
+    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())
+    produced = {key for spec in specs for key in spec.produces}
+    for spec in specs:
+        assert spec.requires <= produced, (spec.name, spec.requires - produced)
+    assert len(produced) == sum(len(spec.produces) for spec in specs)  # no artifact key has two producers
+
+
+@pytest.mark.unit
+def test_cli_parses_countries_phases_and_rerun_and_defaults_to_nothing():
+    args = main._parse_args(["prt", "BRA", "--phases", "grid_alignment,climate_forcing", "--rerun", "grid_alignment"])
+    assert args.countries == ["prt", "BRA"]
+    assert args.phases == "grid_alignment,climate_forcing" and args.rerun == "grid_alignment"
+    empty = main._parse_args([])
+    assert empty.countries == [] and empty.phases is None and empty.rerun is None
 
 
 @pytest.mark.unit

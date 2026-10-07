@@ -13,12 +13,22 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
 from geofrea.core.constants import NODATA_FLOAT
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 
 WIND_HEIGHTS_M = (100, 150, 200)
+
+
+class SitingLayersResult(BaseModel):
+    """Output model of the `siting_layers` phase: the physical-unit layers written for one country (H-4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    country_code: str
+    layers: dict[str, Path]
 
 
 @dataclass(frozen=True)

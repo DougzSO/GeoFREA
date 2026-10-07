@@ -53,6 +53,8 @@ class Ensemble:
     ssps: tuple[str, ...]
     windows: tuple[tuple[int, int], ...]
     wind_ratio_neighbourhood_cells: int | None = None  # OQ-042, option A
+    wind_factor_valid_range: tuple[float, float] | None = None  # OQ-042, option C
+    hazard_windows_available: tuple[tuple[int, int], ...] = ()  # windows with ISIMIP3b daily data on disk
 
 
 def _parse_window(text: str) -> tuple[int, int]:
@@ -84,6 +86,8 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
         ssps=tuple(cfg["ssps"]),
         windows=tuple(_parse_window(w) for w in cfg["windows"]),
         wind_ratio_neighbourhood_cells=cfg.get("wind_ratio_neighbourhood_cells"),
+        wind_factor_valid_range=tuple(cfg["wind_factor_valid_range"]) if cfg.get("wind_factor_valid_range") else None,
+        hazard_windows_available=tuple(_parse_window(w) for w in cfg.get("hazard_windows_available", [])),
     )
 
 
@@ -111,7 +115,14 @@ def _entry(registry: Cmip6Registry, gcm: Gcm, experiment: str, variable: str):
     return entry
 
 
-def members_manifest(members: list[Member], registry: Cmip6Registry) -> dict:
+def has_hazard_channel(member: Member, hazard_windows: tuple[tuple[int, int], ...]) -> bool:
+    """True if the member has hazard data: an ISIMIP3b model whose daily data cover the member's window (D-F4-004)."""
+    return member.gcm is not None and member.gcm.hazard_channel and member.window in hazard_windows
+
+
+def members_manifest(
+    members: list[Member], registry: Cmip6Registry, hazard_windows: tuple[tuple[int, int], ...] = ()
+) -> dict:
     """The content of `members.yaml`: each member, its channels and the files its factors come from.
 
     Raises MemberResolutionError if a needed file is not registered, or if a GCM's historical and scenario files
@@ -125,7 +136,7 @@ def members_manifest(members: list[Member], registry: Cmip6Registry) -> dict:
                     "member": m.member_id,
                     "description": "reference climatology, no change (delta_rsds = delta_wind = 1, dT = 0)",
                     "window": "1995-2014",
-                    "channels": {"resource": True, "hazard": True},
+                    "channels": {"resource": True, "hazard": False},
                 }
             )
             continue
@@ -144,7 +155,7 @@ def members_manifest(members: list[Member], registry: Cmip6Registry) -> dict:
             "gcm": m.gcm.name,
             "ssp": m.ssp,
             "window": f"{m.window[0]}-{m.window[1]}",
-            "channels": {"resource": True, "hazard": m.gcm.hazard_channel},
+            "channels": {"resource": True, "hazard": has_hazard_channel(m, hazard_windows)},
             "realization": next(iter(realizations)),
             "native_grid": grid.model_dump() if grid else None,
             "tcr_ar6_k": m.gcm.tcr_ar6_k,

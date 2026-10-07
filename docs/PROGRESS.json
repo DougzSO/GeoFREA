@@ -1,17 +1,17 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "3.0.0",
-  "last_updated": "2026-10-06",
-  "current_milestone": "MS-1",
+  "methodology_version": "4.0.0",
+  "last_updated": "2026-10-07",
+  "current_milestone": "MS-5",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
-    {"id": "MS-1", "title": "Core DAG orchestration and configuration schemas", "status": "not_started"},
-    {"id": "MS-2", "title": "F1 and F1b conformance, India wiring", "status": "not_started"},
-    {"id": "MS-3", "title": "F2a conformance", "status": "not_started"},
-    {"id": "MS-4", "title": "F2b rebuild as siting_layers", "status": "not_started"},
+    {"id": "MS-1", "title": "Core DAG orchestration and configuration schemas", "status": "done"},
+    {"id": "MS-2", "title": "F1 and F1b conformance, India wiring", "status": "done"},
+    {"id": "MS-3", "title": "F2a conformance", "status": "done"},
+    {"id": "MS-4", "title": "F2b rebuild as siting_layers", "status": "in_progress"},
     {"id": "MS-5", "title": "F3 land_eligibility", "status": "not_started"},
     {"id": "MS-6", "title": "Parameter research (OQ-001 to OQ-023)", "status": "not_started"},
-    {"id": "MS-7", "title": "F4 climate_forcing", "status": "not_started"},
+    {"id": "MS-7", "title": "F4 climate_forcing", "status": "in_progress"},
     {"id": "MS-8", "title": "F5 technical_potential", "status": "not_started"},
     {"id": "MS-9", "title": "F6 lcoe_modeling", "status": "not_started"},
     {"id": "MS-10", "title": "F7 robustness_analysis and F7b external_validation", "status": "not_started"},
@@ -44,17 +44,17 @@
       "module": "grid_alignment",
       "status": "built_pending_conformance",
       "record": "docs/phases/F2a_grid_alignment.md",
-      "summary": "PRT aligned (provisional, see Known issues); BRA failed on population reproject (OOM, deleted). Needs geodesic slope, wind AHP removal, distance cap parameter."
+      "summary": "Green for PRT (93,149 px), IND (2.61M px) and BRA (7.10M px) with mainland scope, uncapped distances plus flags, per-height wind, geodesic slope, windowed reprojection, keyed clip caches. V-01 refrozen on ZZZ (G-4). See D-F2a-004..011."
     },
     {
       "id": "F2b",
       "module": "siting_layers",
-      "status": "rework_required",
+      "status": "in_progress",
       "record": "docs/phases/F2b_siting_layers.md",
-      "summary": "Existing code is the legacy 14-criteria MCDA design (suitability_criteria); rebuild as exclusion, cost-driver and resource layers."
+      "summary": "H-4 done and wired: phase siting_layers writes 12 physical-unit layers (no normalization). Exclusions E1-E6 (H-3) blocked on Stage R; legacy suitability_criteria still registered but not in the default run (D-F2b-005)."
     },
     {"id": "F3", "module": "land_eligibility", "status": "in_progress", "record": "docs/phases/F3_land_eligibility.md", "summary": "cells.py kernels built on synthetic grids (global 0.05 degree lattice, cell_id, 5x5 aggregation, candidate filter); no real data until F2b/H-3."},
-    {"id": "F4", "module": "climate_forcing", "status": "in_progress", "record": "docs/phases/F4_climate_forcing.md", "summary": "M-F4-03/04 kernels built (change_factors.py, tested on synthetic fields; no member/cell wiring). Resource-channel input for the S-04 minimum (GFDL-ESM4, MIROC6) acquired in F1 (F-3/F3-2); M-F4-03 itself not implemented. Hazard-channel ISIMIP3b copied and registered (OQ-036 closed); ERA5 gust annual maxima acquired for BRA/PRT/IND (F4-6, OQ-037 closed: UTC day). PRT is mainland-only (D-F1-024, OQ-039 closed)."},
+    {"id": "F4", "module": "climate_forcing", "status": "in_progress", "record": "docs/phases/F4_climate_forcing.md", "summary": "J-1 to J-5 done: ensemble decided (option C, 36 members), forcing.parquet with masked cell-members (OQ-042 option C), members.yaml, hazard_context.parquet for the core window, one map per member; all wired in main.py. Open: ISIMIP3b 2071-2100 hazard data not acquired, loss functions (OQ-007)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
     {"id": "F7", "module": "robustness_analysis", "status": "not_started", "record": "docs/phases/F7_robustness_analysis.md", "summary": ""},
@@ -63,9 +63,9 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "ran_with_issues", "F1b": "ran_with_issues", "F2a": "ran_with_issues", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "PRT": {"F1": "ran_clean", "F1b": "ran_with_issues", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "IND": {"F1": "success", "F1b": "ran_clean", "F2a": "not_run", "F2b": "not_run", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "not_run", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
   "regression": {

@@ -28,12 +28,20 @@ run:
   # the requires/produces DAG (docs/phases/core.md D-core-001) — this
   # no longer needs to list upstream phases just to unblock a
   # downstream one, unlike the old per-phase boolean toggle map.
-  # Currently only these four have real phase runners wired in main.py.
+  # Phases wired in main.py, in pipeline order (the orchestrator derives the real order from the
+  # requires/produces graph): F1 data_acquisition, F1b data_quality_audit, F2a grid_alignment,
+  # F2b siting_layers (physical-unit layers), F4 climate_forcing (change factors, members.yaml),
+  # F4 hazard_context, F4 climate_maps (diagnostic maps). F3 land_eligibility, F5-F8 are not built yet.
+  # `suitability_criteria` is the legacy F2b module (normalized criteria, contradicts M-F2b-04); it stays
+  # registered and can be named explicitly with --phases, but it is no longer part of the default run.
   target_phases:
     - data_acquisition
     - data_quality_audit
     - grid_alignment
-    - suitability_criteria
+    - siting_layers
+    - climate_forcing
+    - hazard_context
+    - climate_maps
 
   # Technologies to run (METHODOLOGY A-04). Non-empty, required,
   # validated against config/technologies.yaml keys at config load.

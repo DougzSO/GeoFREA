@@ -89,7 +89,7 @@ def test_load_ensemble_reads_the_real_experiments_yaml():
 
 @pytest.mark.unit
 def test_members_manifest_declares_channels_provenance_and_the_tcr_exception(tmp_path):
-    manifest = mem.members_manifest(mem.resolve_members(ENSEMBLE), _registry(tmp_path))
+    manifest = mem.members_manifest(mem.resolve_members(ENSEMBLE), _registry(tmp_path), ((2041, 2070),))
 
     by_id = {m["member"]: m for m in manifest["members"]}
     ipsl = by_id["m_ipsl_cm6a_lr_ssp126_2041_2070"]
@@ -97,6 +97,9 @@ def test_members_manifest_declares_channels_provenance_and_the_tcr_exception(tmp
     assert ipsl["tcr_exception"] is True and ipsl["channels"] == {"resource": True, "hazard": True}
     assert ipsl["realization"] == "r1i1p1f1"
     assert len(ipsl["sources"]) == 6 and ipsl["sources"]["historical/tas"]["sha256"] == "ab" * 32
+    # the hazard channel exists only where ISIMIP3b daily data cover the window (2071-2100 not acquired)
+    assert by_id["m_ipsl_cm6a_lr_ssp126_2071_2100"]["channels"] == {"resource": True, "hazard": False}
+    assert by_id["m0"]["channels"]["hazard"] is False
     assert "tcr_exception" not in by_id["m_gfdl_esm4_ssp126_2041_2070"]
     assert by_id["m0"]["channels"]["resource"] is True
 
@@ -186,3 +189,53 @@ def test_a_cell_outside_the_native_field_fails_loud_instead_of_being_filled(tmp_
 
     with pytest.raises((fc.ForcingGapError, ValueError, IndexError)):
         next(fc.forcing_frames(cells, members, reg))
+
+
+def _spike_registry(tmp_path):
+    """Registry whose sfcWind file has one native cell with a near-zero reference (factor 250 per cell)."""
+    reg = _registry(tmp_path)
+    for g in ENSEMBLE.gcms:
+        for experiment, years, base in (("historical", (1995, 2014), 4.0), ("ssp126", (2041, 2100), 4.2)):
+            def fn(y, b=base, exp=experiment):
+                def f(la, lo):
+                    out = b + 0.0 * la
+                    return np.where((la == 3.0) & (lo == 21.0), 0.002 if exp == "historical" else 0.5, out)
+                return f
+            _write(tmp_path / f"{g.cds_name}_{experiment}_sfcWind.nc", "sfcWind", years, fn)
+    return reg
+
+
+@pytest.mark.unit
+def test_cells_whose_wind_factor_is_out_of_range_are_masked_declared_and_never_filled(tmp_path):
+    reg = _spike_registry(tmp_path)
+    cells = fc.country_cells(_mask_raster(tmp_path, [(0, 20, 0, 30)], origin=(3.2, 20.9)))
+    members = [m for m in mem.resolve_members(ENSEMBLE) if m.member_id in ("m0", "m_gfdl_esm4_ssp126_2041_2070")]
+    masked: list = []
+
+    frames = list(fc.forcing_frames(cells, members, reg, None, (0.5, 1.5), masked))
+
+    scen = frames[1]
+    masked_df = pd.concat(masked)
+    assert len(masked_df) > 0 and (masked_df["delta_wind"] > 1.5).all()
+    assert set(masked_df["cell_id"]).isdisjoint(set(scen["cell_id"]))  # absent from forcing
+    assert len(scen) + len(masked_df) == len(cells)  # every cell is either a row or declared
+    assert scen["delta_wind"].between(0.5, 1.5).all()
+    assert len(frames[0]) == len(cells)  # m0 is never masked
+
+
+@pytest.mark.unit
+def test_f5_guard_rejects_out_of_range_factors_and_undeclared_absences():
+    forcing = pd.DataFrame(
+        {"cell_id": [1, 1, 2], "member": ["a", "b", "a"], "delta_wind": [1.0, 1.1, 1.2], "delta_rsds": 1.0, "dT": 1.0}
+    )
+    masked = pd.DataFrame({"cell_id": [2], "member": ["b"], "delta_wind": [9.0]})
+    members = ["a", "b"]
+
+    fc.assert_forcing_usable(forcing, masked, [1, 2], members, (0.5, 1.5))  # complete and in range: passes
+
+    with pytest.raises(fc.ForcingContractError, match="neither in forcing"):
+        fc.assert_forcing_usable(forcing, masked.iloc[0:0], [1, 2], members, (0.5, 1.5))  # (2, b) undeclared
+    bad = forcing.copy()
+    bad.loc[0, "delta_wind"] = 78.0
+    with pytest.raises(fc.ForcingContractError, match="outside"):
+        fc.assert_forcing_usable(bad, masked, [1, 2], members, (0.5, 1.5))
