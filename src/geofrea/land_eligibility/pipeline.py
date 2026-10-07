@@ -127,6 +127,20 @@ def _read_class_counts(path: Path | None) -> tuple[np.ndarray, tuple[int, ...], 
     return counts, classes, ~outside & (counts.sum(axis=0, dtype=np.uint32) > 0), int(tags["samples_per_pixel"])
 
 
+def _read_slope_counts(path: Path | None) -> tuple[np.ndarray, np.ndarray]:
+    """(30 m sample counts per 1 degree slope bin, valid mask) from the aligned slope-bin raster; fails loudly if absent."""
+    if path is None or not Path(path).exists():
+        raise LandEligibilityError(
+            "the aligned slope bins (F2a `slope_counts`) are missing: run `python scripts/acquire_dem30.py`, then rerun grid_alignment"
+        )
+    with safe_raster_open(path) as src:
+        counts = src.read()
+        nodata = src.nodata
+    outside = (counts == nodata).all(axis=0)
+    counts[:, outside] = 0
+    return counts, ~outside & (counts.sum(axis=0, dtype=np.uint32) > 0)
+
+
 def _clipped(path: Path | None, name: str, country_gdf: gpd.GeoDataFrame, interim: Path) -> gpd.GeoDataFrame | None:
     """The vector clipped to the country, through a cache keyed by the source identity and the polygon."""
     if path is None or not Path(path).exists():
@@ -221,7 +235,7 @@ def build_eligibility(
     interim = core_paths.interim(iso, "land_eligibility")
     interim.mkdir(parents=True, exist_ok=True)
 
-    slope = _read(grid_result.slope, "slope")
+    slope_counts, slope_valid = _read_slope_counts(grid_result.slope_counts)
     population = _read(grid_result.population, "population")
     land_cover_counts, land_cover_classes, land_cover_valid, samples_per_pixel = _read_class_counts(grid_result.land_cover_counts)
     # the distance-to-grid raster is valid on exactly the in-country pixels of the F2a grid (as in F4, `aligned_mask_path`)
@@ -278,7 +292,8 @@ def build_eligibility(
         layers = EligibilityLayers(
             country_mask=country_mask,
             pixel_area_km2=pixel_area,
-            slope_deg=slope,
+            slope_counts=slope_counts,
+            slope_valid=slope_valid,
             population_count=population,
             land_cover_counts=land_cover_counts,
             land_cover_classes=land_cover_classes,

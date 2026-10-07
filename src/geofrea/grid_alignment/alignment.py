@@ -112,6 +112,7 @@ from geofrea.grid_alignment.raster_alignment import (
     land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
+    slope_class_counts,
 )
 from geofrea.grid_alignment.reference_grid import GridContext, build_reference_grid
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult, GridMetadata
@@ -411,6 +412,13 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
                 inputs.land_cover_tiles, _path("land_cover_counts"), grid, inputs.country_gdf
             ),
             bool(inputs.land_cover_tiles),
+        )
+
+    with timer("slope_counts", timings):
+        aligned["slope_counts"] = _execute_or_load(
+            "slope_counts",
+            lambda: slope_class_counts(inputs.slope_dem_tiles, _path("slope_counts"), grid),
+            bool(inputs.slope_dem_tiles),
         )
 
     with timer("population", timings), gdal_quiet():

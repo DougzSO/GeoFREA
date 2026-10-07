@@ -70,6 +70,7 @@ class GridAlignmentInputs(BaseModel):
             each filename) — every path here is used, not just the
             first.
         population_path: Population raster path.
+        slope_dem_tiles: Copernicus GLO-30 (30 m) tile paths for the slope bins (D-F2a-016); empty if not acquired.
         land_cover_tiles: ESA WorldCover tile paths (mosaicked, not
             reprojected individually).
         roads_source: Raw GRIP4 regional shapefile path, unclipped —
@@ -114,6 +115,7 @@ class GridAlignmentInputs(BaseModel):
     wind_layers: dict[str, Path] = {}
     population_path: Path | None = None
     land_cover_tiles: list[Path] = []
+    slope_dem_tiles: list[Path] = []
     roads_source: Path | None = None
     grid_source: Path | None = None
     lakes_path: Path | None = None
@@ -188,6 +190,8 @@ class GridAlignmentResult(BaseModel):
             (uint8), or None if no land_cover_tiles were given.
         land_cover_counts: Per-pixel counts of 10 m WorldCover samples in each class (uint16, one band per class in
             WORLDCOVER_CLASSES, D-F2a-015), or None if no land_cover_tiles were given.
+        slope_counts: Per-pixel counts of 30 m DEM samples in each 1 degree slope bin (uint16, 41 bands, D-F2a-016), or None
+            if no Copernicus GLO-30 tiles were acquired.
         population: Bilinear-reprojected float32 population raster, or
             None if population_path was missing.
         roads: Geodesic distance-to-road raster (km, float32,
@@ -214,6 +218,7 @@ class GridAlignmentResult(BaseModel):
     wind_layers: dict[str, Path] = {}
     land_cover: Path | None = None
     land_cover_counts: Path | None = None
+    slope_counts: Path | None = None
     population: Path | None = None
     roads: Path | None = None
     grid: Path | None = None

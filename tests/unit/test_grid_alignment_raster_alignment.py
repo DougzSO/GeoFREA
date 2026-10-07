@@ -10,11 +10,13 @@ from rasterio.transform import from_origin
 from shapely.geometry import Polygon
 
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
+from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
     land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
+    slope_class_counts,
 )
 from geofrea.grid_alignment.reference_grid import build_reference_grid
 
@@ -458,3 +460,43 @@ def test_land_cover_class_counts_refuse_a_tile_not_on_the_grid_edges(tmp_path):
         dst.write(np.full((grid.height * 10, grid.width * 10), 30, dtype="uint8"), 1)
     with pytest.raises(RuntimeError, match="could not be used"):
         land_cover_class_counts([tile], tmp_path / "counts.tif", grid, country_gdf)
+
+
+def _glo30_tile(path: Path, sp: int, z: np.ndarray) -> None:
+    """A synthetic GLO-30-style tile for the 1 degree cell with corner (38 N, 9 W): first sample on the integer corner."""
+    with rasterio.open(
+        path, "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs="EPSG:4326",
+        transform=from_origin(-9.0 - 0.5 / sp, 39.0 + 0.5 / sp, 1 / sp, 1 / sp),
+    ) as dst:
+        dst.write(z.astype("float32"), 1)
+
+
+@pytest.mark.unit
+def test_slope_class_counts_put_every_sample_in_the_bin_of_its_true_slope(tmp_path):
+    grid, sp = _grid(), 400  # 4 x 4 samples per 0.01 degree pixel
+    lat = 39.0 - np.arange(sp) / sp
+    _, lon_km = wgs84_km_per_degree(lat.reshape(-1, 1))
+    dx_m = lon_km * 1000.0 / sp
+    z = np.arange(sp)[None, :] * np.tan(np.radians(20.5)) * dx_m  # a ramp rising eastward at 20.5 degrees
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+    out = slope_class_counts([tile], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp)
+    with rasterio.open(out) as src:
+        counts = src.read()
+        nodata = src.nodata
+    inside = grid.country_mask
+    assert (counts[20][inside] == 16).all()
+    assert counts[:, inside].sum() == 16 * inside.sum()  # nothing in any other bin
+    assert (counts[:, ~inside] == nodata).all()
+
+
+@pytest.mark.unit
+def test_slope_class_counts_leave_pixels_without_a_tile_empty(tmp_path):
+    grid, sp = _grid(), 400
+    other = tmp_path / "Copernicus_DSM_COG_10_N10_00_E010_00_DEM.tif"  # far from the country
+    with rasterio.open(
+        other, "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs="EPSG:4326",
+        transform=from_origin(10 - 0.5 / sp, 11 + 0.5 / sp, 1 / sp, 1 / sp),
+    ) as dst:
+        dst.write(np.zeros((sp, sp), dtype="float32"), 1)
+    assert slope_class_counts([other], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp) is None

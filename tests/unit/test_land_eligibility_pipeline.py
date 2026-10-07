@@ -40,6 +40,23 @@ def _counts(class_map: np.ndarray, shares: dict[int, float] | None = None) -> np
     return out
 
 
+def _slope_counts(slope_map: np.ndarray) -> np.ndarray:
+    """uint16 (bin, row, col) with every pixel's SPP samples at its slope, in 1 degree bins (last bin open ended)."""
+    out = np.zeros((41,) + slope_map.shape, dtype=np.uint16)
+    bins = np.clip(np.floor(slope_map).astype(int), 0, 40)
+    for b in range(41):
+        out[b][bins == b] = SPP
+    return out
+
+
+def _write_slope_counts(path: Path, counts: np.ndarray) -> Path:
+    with rasterio.open(
+        path, "w", driver="GTiff", height=H, width=W, count=41, dtype="uint16", crs="EPSG:4326", transform=TRANSFORM, nodata=65535
+    ) as dst:
+        dst.write(counts)
+    return path
+
+
 def _write_counts(path: Path, counts: np.ndarray) -> Path:
     with rasterio.open(
         path, "w", driver="GTiff", height=H, width=W, count=len(CLASSES), dtype="uint16", crs="EPSG:4326", transform=TRANSFORM,
@@ -74,6 +91,7 @@ def world(tmp_path, monkeypatch):
         population=_write(base / "pop.tif", population),
         land_cover=_write(base / "lc.tif", land_cover),
         land_cover_counts=_write_counts(base / "lcc.tif", _counts(land_cover)),
+        slope_counts=_write_slope_counts(base / "sc.tif", _slope_counts(slope)),
         grid=_write(base / "grid.tif", np.full((H, W), 7.0)),
         grid_distance_capped=_write(base / "gcap.tif", flag, "uint8", 0),
         roads_distance_capped=_write(base / "rcap.tif", flag, "uint8", 0),
@@ -141,7 +159,8 @@ def _layers(shape, **over):
     base = {
         "country_mask": np.ones(shape, bool),
         "pixel_area_km2": np.ones(shape),
-        "slope_deg": np.zeros(shape),
+        "slope_counts": _slope_counts(np.zeros(shape)),
+        "slope_valid": np.ones(shape, bool),
         "population_count": np.zeros(shape),
         "land_cover_counts": _counts(np.full(shape, 30)),
         "land_cover_classes": CLASSES,
@@ -218,3 +237,19 @@ def test_riparian_share_is_bilinear_in_setback_and_discharge_and_falls_with_disc
     assert e3(0.625, 5.0) == pytest.approx(0.35)  # halfway in both: (0.1 + 0.6) / 2
     with pytest.raises(MissingExclusionLayerError):
         e3(1.0, 20.0)  # beyond the prepared discharges: never extrapolated
+
+
+def test_steep_share_reads_whole_bins_and_a_proportion_of_the_bin_holding_the_threshold():
+    counts = np.zeros((41, 1, 1), dtype=np.uint16)
+    counts[5, 0, 0], counts[10, 0, 0], counts[12, 0, 0], counts[40, 0, 0] = 100, 100, 100, 100  # 400 samples
+    layers = _layers((1, 1), slope_counts=counts)
+
+    def e4(limit):
+        return eligible_fraction(layers, ParameterSet(limit, 100.0, 0.5, 0.1, (10,), ("ia",)))[1]["E4"][0, 0]
+
+    assert e4(10.0) == pytest.approx(0.75)  # bins 10-11, 12-13 and 40+ are above 10 degrees
+    assert e4(10.5) == pytest.approx(0.625)  # half of the 10-11 bin counts
+    assert e4(11.0) == pytest.approx(0.5)
+    assert e4(40.0) == pytest.approx(0.25)  # only the open-ended bin
+    with pytest.raises(MissingExclusionLayerError):
+        e4(45.0)

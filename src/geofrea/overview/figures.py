@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict
 from geofrea.core import paths as core_paths
 from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
 from geofrea.land_eligibility.cells import row_col_from_id
+from geofrea.overview import style
 
 MAX_PIXELS = 700  # longest side of a drawn raster
 
@@ -102,6 +103,9 @@ def layer_stats(path: Path) -> dict:
 
 def plot_aligned_layers(iso: str, out_path: Path) -> Path:
     fig, axes = plt.subplots(3, 4, figsize=(18, 13), constrained_layout=True)
+    loaded = style.load_relief(_aligned_path(iso, "elevation"))
+    relief = loaded[0] if loaded else None
+    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
     for ax, (stem, title, cmap, kind) in zip(axes.ravel(), ALIGNED_PANELS, strict=True):
         path = _aligned_path(iso, stem)
         ax.set_title(title, fontsize=10)
@@ -111,6 +115,9 @@ def plot_aligned_layers(iso: str, out_path: Path) -> Path:
             continue
         arr, extent = read_layer(path)
         kwargs: dict = {"cmap": cmap, "interpolation": "nearest", "extent": extent}
+        if relief is not None and stem != "elevation":
+            style.draw_backdrop(ax, relief, extent)
+            kwargs.update(alpha=0.78, zorder=1)
         if kind == "log":
             arr = np.log10(np.where(arr > 0, arr, np.nan))
         elif kind == "categorical":
@@ -120,6 +127,9 @@ def plot_aligned_layers(iso: str, out_path: Path) -> Path:
             if hi > lo:
                 kwargs.update(vmin=lo, vmax=hi)
         im = ax.imshow(arr, **kwargs)
+        if stem == "elevation" and relief is not None:  # terrain colours shaded by the relief
+            ax.imshow(relief, extent=extent, cmap="Greys_r", vmin=0.0, vmax=1.0, alpha=0.35, interpolation="bilinear", zorder=2)
+        style.draw_overlay(ax, outline, rivers, extent)
         fig.colorbar(im, ax=ax, shrink=0.75)
         ax.tick_params(labelsize=7)
     fig.suptitle(f"{iso}: F2a aligned layers (colour limits at the 1st-99th percentile)", fontsize=13)
@@ -149,6 +159,8 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
     colors = ["#f0f0f0", "#1b9e77", "#1f78b4", "#6baed6", "#a65628", "#e6ab02", "#d95f02"]
     cmap, norm = ListedColormap(colors), BoundaryNorm(np.arange(-0.5, 7.5), len(colors))
     fig, axes = plt.subplots(2, len(techs), figsize=(7 * len(techs), 13), constrained_layout=True, squeeze=False)
+    loaded = style.load_relief(_aligned_path(iso, "elevation"))
+    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
     codes = {name: i + 1 for i, name in enumerate(("E1", "E2", "E3", "E4", "E5", "E6"))}
     for j, tech in enumerate(techs):
         cells = cell_tables[tech]
@@ -157,10 +169,15 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
         share[rows, cols] = (cells["eligible_area_km2"] / cells["cell_area_km2"]).to_numpy()
         dom = np.full(share.shape, np.nan, dtype=np.float32)
         dom[rows, cols] = cells["dominant_exclusion"].map(codes).fillna(0).to_numpy()
-        im = axes[0, j].imshow(share, extent=extent, cmap="YlGn", vmin=0, vmax=1, interpolation="nearest")
+        for k in (0, 1):
+            if loaded:
+                style.draw_backdrop(axes[k, j], loaded[0], loaded[1])
+        im = axes[0, j].imshow(share, extent=extent, cmap="YlGn", vmin=0, vmax=1, interpolation="nearest", alpha=0.8, zorder=1)
         fig.colorbar(im, ax=axes[0, j], shrink=0.7, label="eligible share of the cell")
         axes[0, j].set_title(f"{tech}: eligible share ({100 * cells['eligible_area_km2'].sum() / cells['cell_area_km2'].sum():.1f}% of the land)")
-        im2 = axes[1, j].imshow(dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest")
+        im2 = axes[1, j].imshow(dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest", alpha=0.85, zorder=1)
+        for k in (0, 1):
+            style.draw_overlay(axes[k, j], outline, rivers, extent)
         cb = fig.colorbar(im2, ax=axes[1, j], shrink=0.7, ticks=range(7))
         cb.ax.set_yticklabels(EXCLUSION_LABELS)
         axes[1, j].set_title(f"{tech}: dominant exclusion per cell")
@@ -190,15 +207,20 @@ def plot_hazard_context(iso: str, hazard: pd.DataFrame, out_path: Path) -> Path:
         CELL_ORIGIN_LAT - r0 * CELL_DEG,
     )
     fig, axes = plt.subplots(2, 3, figsize=(16, 10), constrained_layout=True)
+    loaded = style.load_relief(_aligned_path(iso, "elevation"))
+    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
     for ax, (col, title, cmap) in zip(axes.ravel(), HAZARD_PANELS, strict=True):
+        if loaded:
+            style.draw_backdrop(ax, loaded[0], loaded[1])
         img = np.full((r1 - r0 + 1, c1 - c0 + 1), np.nan, dtype=np.float32)
         img[rows - r0, cols - c0] = means[col].to_numpy()
         vals = img[np.isfinite(img)]
-        kwargs: dict = {"cmap": cmap, "extent": extent, "interpolation": "nearest"}
+        kwargs: dict = {"cmap": cmap, "extent": extent, "interpolation": "nearest", "alpha": 0.85, "zorder": 1}
         if "change" in col and vals.size:
             half = float(np.nanmax(np.abs(np.nanpercentile(vals, [1, 99])))) or 1.0
             kwargs.update(vmin=-half, vmax=half)
         im = ax.imshow(img, **kwargs)
+        style.draw_overlay(ax, outline, rivers, extent)
         ax.set_title(title, fontsize=10)
         fig.colorbar(im, ax=ax, shrink=0.8)
     n = hazard["member"].nunique()

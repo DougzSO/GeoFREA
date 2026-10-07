@@ -4,7 +4,7 @@
 
 E1 (protected areas), E2 (lakes) and E3 (riparian setback) are shares of the pixel in [0, 1] measured on sub-pixels
 (`fractions.py`). E5 is the share of the pixel's 10 m land-cover samples that are not in an allowed class (D-F2a-015): samples of
-no class (open sea) count as not allowed. E4 (slope above the maximum) and E6 (population density above the maximum) are 0 or 1.
+no class (open sea) count as not allowed. E4 is the share of the pixel's 30 m samples steeper than the slope maximum (D-F2a-016) and E6 (population density above the maximum) is 0 or 1.
 Shares of different constraints are combined as independent, which counts overlapping constraints (a lake inside a riparian
 setback) twice and so understates the eligible area: the conservative direction (docs/_audit/2026-10_f3_parameter_research.md).
 
@@ -33,7 +33,8 @@ class EligibilityLayers:
 
     country_mask: np.ndarray  # bool, True inside the country
     pixel_area_km2: np.ndarray  # float, geodesic area of each pixel
-    slope_deg: np.ndarray  # NaN where missing
+    slope_counts: np.ndarray  # uint16 (1 degree bin, row, col): 30 m samples per slope bin; the last bin is open ended
+    slope_valid: np.ndarray  # bool, False where the pixel has no slope sample at all
     population_count: np.ndarray  # people per pixel, NaN where missing
     land_cover_counts: np.ndarray  # uint16 (class, row, col): 10 m samples per WorldCover class in each pixel
     land_cover_classes: tuple[int, ...]  # WorldCover code of each band of `land_cover_counts`
@@ -68,6 +69,23 @@ def _riparian_for(setback_km: float, discharge_m3s: float, shares: dict[tuple[fl
         raise MissingExclusionLayerError(f"riparian share for (discharge, setback) {exc.args[0]} was not prepared") from exc
 
 
+def _steep_share(counts: np.ndarray, threshold_deg: float) -> np.ndarray:
+    """Share of the pixel's 30 m samples with a slope above `threshold_deg`, from 1 degree bin counts.
+
+    Whole bins above the threshold count fully; the bin that contains it counts in proportion (samples assumed uniform within a
+    degree). The last bin is open ended (40 degrees and above), so thresholds above 40 degrees cannot be resolved and raise.
+    """
+    n_bins = counts.shape[0]
+    if not 0 <= threshold_deg <= n_bins - 1:
+        raise MissingExclusionLayerError(f"slope maximum {threshold_deg} deg is outside the resolvable range 0-{n_bins - 1} deg")
+    lo = int(np.floor(threshold_deg))
+    above = counts[lo + 1 :].sum(axis=0, dtype=np.float32) + np.float32(lo + 1 - threshold_deg) * counts[lo]
+    total = counts.sum(axis=0, dtype=np.float32)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share = np.where(total > 0, above / total, 0.0)
+    return np.clip(share, 0.0, 1.0).astype(np.float32)
+
+
 def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np.ndarray:
     """E5: 1 minus the share of the pixel's samples that lie in a class which is not excluded."""
     excluded = set(params.excluded_classes)
@@ -88,7 +106,7 @@ def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict
         raise MissingExclusionLayerError(f"no protected-area share prepared for IUCN categories {key}")
     with np.errstate(invalid="ignore"):
         density = layers.population_count / layers.pixel_area_km2
-        e4 = (layers.slope_deg > params.slope_max_deg).astype(np.float32)
+        e4 = _steep_share(layers.slope_counts, params.slope_max_deg)
         e6 = (density > params.pop_density_max_per_km2).astype(np.float32)
         e5 = _excluded_class_share(layers, params)
     return {
@@ -103,7 +121,7 @@ def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict
 
 def valid_pixels(layers: EligibilityLayers) -> np.ndarray:
     """Pixels inside the country where slope, land cover (any sample), population and every required resource layer have a value."""
-    ok = layers.country_mask & np.isfinite(layers.slope_deg) & layers.land_cover_valid
+    ok = layers.country_mask & layers.slope_valid & layers.land_cover_valid
     ok &= np.isfinite(layers.population_count)
     for valid in layers.required_valid.values():
         ok &= valid

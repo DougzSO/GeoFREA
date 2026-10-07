@@ -100,6 +100,25 @@ def gen_elevation() -> None:
     _write_raster(RAW / "elevation" / "Synthetica" / "ZZZ_elevation.tif", arr, "float32", nodata=-9999.0)
 
 
+def gen_dem30() -> None:
+    """One Copernicus GLO-30-style 1 degree tile (S05 E020, 3600 x 3600 samples) with the same eastward ramp as `gen_elevation`.
+
+    10 m per 0.01 degree is 10/36 m per 30 m sample, a slope near 0.5 degrees everywhere (bin 0) except where the stencil leaves
+    the tile. Written beside the pinned-tile manifest the acquisition script would write, under GEOFREA_DATA_DIR/raw/copernicus_dem30/ZZZ.
+    """
+    sp = 3600
+    dest = Path(os.environ["GEOFREA_DATA_DIR"]) / "raw" / "copernicus_dem30" / "ZZZ"
+    dest.mkdir(parents=True, exist_ok=True)
+    name = "Copernicus_DSM_COG_10_S05_00_E020_00_DEM"
+    z = np.tile(np.arange(sp, dtype="float32") * (10.0 / 36.0), (sp, 1))
+    with rasterio.open(
+        dest / f"{name}.tif", "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs=CRS,
+        transform=from_origin(20.0 - 0.5 / sp, -4.0 + 0.5 / sp, 1 / sp, 1 / sp), compress="deflate",
+    ) as dst:
+        dst.write(z, 1)
+    (dest / "manifest.json").write_text(json.dumps({"source": "synthetic ZZZ", "tiles": [{"name": name}], "absent_tiles": []}))
+
+
 def gen_population() -> None:
     """Population: value(row, col) = row * 20. Known sum, known threshold crossing.
 
@@ -250,6 +269,7 @@ def main() -> None:
     gen_borders()
     gen_admin1()
     gen_elevation()
+    gen_dem30()
     gen_population()
     gen_land_cover()
     gen_protected()

@@ -339,6 +339,7 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "solar",
     "land_cover",
     "land_cover_counts",
+    "slope_counts",
     "population",
     "roads",
     "grid",

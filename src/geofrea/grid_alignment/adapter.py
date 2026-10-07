@@ -52,7 +52,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.core.schemas import ResolutionsConfig
+from geofrea.data_acquisition.fetchers import copernicus_dem30
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -88,6 +90,14 @@ class GridAlignmentRequiresBordersError(ValueError):
     so it must fail loudly at adapter construction time rather than
     surface later as a confusing failure inside run_grid_alignment_phase().
     """
+
+
+def _slope_dem_tiles(country_code: str) -> list[Path]:
+    """The pinned Copernicus GLO-30 tiles of the country, or none if they were never acquired (F3 then refuses to run)."""
+    try:
+        return copernicus_dem30.load_tiles(country_code)
+    except (FileNotFoundError, MissingPathEnvironmentError):
+        return []
 
 
 def _layers_by_name(result: AcquisitionResult) -> dict[str, AcquiredLayer]:
@@ -131,6 +141,7 @@ def acquisition_result_to_grid_alignment_inputs(
                 wind_layers[f"{product}_{height}m"] = path
 
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
+    slope_dem_tiles = _slope_dem_tiles(result.country_code)
 
     borders_path = resolved_path(layers.get("borders"))
     if borders_path is None:
@@ -145,6 +156,7 @@ def acquisition_result_to_grid_alignment_inputs(
         **source_paths,
         wind_layers=wind_layers,
         land_cover_tiles=land_cover_tiles,
+        slope_dem_tiles=slope_dem_tiles,
         country_gdf=country_gdf,
         resolution_deg=resolutions.suitability,
         distance_cap_km=distance_cap_km,

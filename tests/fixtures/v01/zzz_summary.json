@@ -107,6 +107,15 @@
     "max": 0.5166319012641907,
     "sum": 309.9351096153259
   },
+  "f2a/ZZZ_slope_counts_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 1225.0,
+    "max": 1296.0,
+    "sum": 775801.0
+  },
   "f2a/ZZZ_solar_aligned": {
     "shape": [
       20,

@@ -346,6 +346,127 @@ def _bbox_overlaps(
     return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
 
 
+SLOPE_BINS = 41  # 1 degree bins 0-1 ... 39-40 and a last one for 40 degrees and above
+SLOPE_COUNT_NODATA = 65535
+_GLO30_SAMPLES_PER_DEGREE = 3600
+_GLO30_TILE_RE = re.compile(r"_([NS])(\d{2})_00_([EW])(\d{3})_00_DEM")
+_SLOPE_STRIP_GRID_ROWS = 4
+
+
+def _glo30_tile_index(tiles: list) -> dict[tuple[int, int], Path]:
+    """South-west corner (lat0, lon0) -> path, from the Copernicus GLO-30 file names."""
+    index = {}
+    for tile in tiles:
+        m = _GLO30_TILE_RE.search(Path(tile).name)
+        if m is None:
+            raise ValueError(f"{Path(tile).name!r} is not a Copernicus GLO-30 tile name")
+        lat0 = int(m.group(2)) * (1 if m.group(1) == "N" else -1)
+        lon0 = int(m.group(4)) * (1 if m.group(3) == "E" else -1)
+        index[(lat0, lon0)] = Path(tile)
+    return index
+
+
+def _read_dem_block(index: dict[tuple[int, int], Path], g0: int, g1: int, c0: int, c1: int, sp: int) -> np.ndarray:
+    """DEM samples for global rows g0..g1-1 and columns c0..c1-1 (NaN where no tile covers them).
+
+    Global indices count samples from 90 N and 180 W: row G has its centre at latitude 90 - G/sp, column C at longitude
+    C/sp - 180, which is how a GLO-30 tile lays out its samples (the first sample of a tile sits on its integer corner).
+    """
+    out = np.full((g1 - g0, c1 - c0), np.nan, dtype=np.float32)
+    for lat0 in range(int(np.floor(90 - g1 / sp)), int(np.ceil(90 - g0 / sp)) + 1):
+        for lon0 in range(int(np.floor(c0 / sp - 180)), int(np.ceil(c1 / sp - 180)) + 1):
+            path = index.get((lat0, lon0))
+            if path is None:
+                continue
+            tg0, tc0 = (90 - (lat0 + 1)) * sp, (lon0 + 180) * sp  # global index of the tile's first sample
+            r0, r1 = max(g0, tg0), min(g1, tg0 + sp)
+            q0, q1 = max(c0, tc0), min(c1, tc0 + sp)
+            if r0 >= r1 or q0 >= q1:
+                continue
+            with rasterio.open(path) as src:
+                if (src.height, src.width) != (sp, sp):
+                    raise ValueError(f"{Path(path).name}: expected {sp} x {sp} samples, got {src.height} x {src.width}")
+                block = src.read(1, window=Window(q0 - tc0, r0 - tg0, q1 - q0, r1 - r0)).astype(np.float32)
+                if src.nodata is not None:
+                    block[block == src.nodata] = np.nan
+            out[r0 - g0 : r1 - g0, q0 - c0 : q1 - c0] = block
+    return out
+
+
+def slope_class_counts(
+    dem_tiles: list, out_path, grid: GridContext, samples_per_degree: int = _GLO30_SAMPLES_PER_DEGREE
+):
+    """Per grid pixel, how many 30 m DEM samples have a slope in each 1 degree bin (D-F2a-016).
+
+    Slope is computed on the native 30 m samples (central differences with WGS84 geodesic spacing per row, as in
+    `derive_slope_from_dem`) and each sample is counted into the grid pixel that contains its centre; centres exactly on a pixel
+    edge go to the pixel below and to the east. Band i holds the samples with slope in [i, i+1) degrees; the last band holds
+    40 degrees and above. A sample whose stencil touches a missing value is counted in no band, so a pixel with no valid sample
+    has all bands zero. Because the slope is kept as a distribution, the share above any threshold can be read later, which is
+    what lets the slope maximum be a range. Pixels outside the country are SLOPE_COUNT_NODATA. Returns the output path, or
+    None if no sample was valid.
+    """
+    index = _glo30_tile_index(dem_tiles)
+    sp = samples_per_degree
+    res = abs(grid.transform.a)
+    g_left, g_top = grid.transform.c, grid.transform.f
+    counts = np.zeros((SLOPE_BINS, grid.height, grid.width), dtype=np.uint16)
+    progress = PeriodicProgress(logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "slope class counts")
+    for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
+        progress.step()
+        r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
+        lat_hi, lat_lo = g_top - r0 * res, g_top - r1 * res
+        g_lo = int(np.floor((90 - lat_hi) * sp)) - 1
+        g_hi = int(np.ceil((90 - lat_lo) * sp)) + 1
+        c_lo = int(np.floor((g_left + 180) * sp)) - 1
+        c_hi = int(np.ceil((g_left + grid.width * res + 180) * sp)) + 1
+        z = _read_dem_block(index, g_lo - 1, g_hi + 1, c_lo - 1, c_hi + 1, sp)  # one extra sample all round for the stencil
+        if not np.isfinite(z).any():
+            continue
+        lat_c = 90 - np.arange(g_lo - 1, g_hi + 1) / sp
+        lat_km, lon_km = wgs84_km_per_degree(lat_c.reshape(-1, 1))
+        dz_drow, dz_dcol = np.gradient(z, 1.0, 1.0)
+        dz_dy = -dz_drow / (lat_km * 1000.0 / sp)  # rows run southwards
+        dz_dx = dz_dcol / (lon_km * 1000.0 / sp)
+        slope = np.degrees(np.arctan(np.hypot(dz_dx, dz_dy)))[1:-1, 1:-1]
+        slope[~np.isfinite(z[1:-1, 1:-1])] = np.nan
+        rows_c = 90 - np.arange(g_lo, g_hi) / sp
+        cols_c = np.arange(c_lo, c_hi) / sp - 180
+        grow = np.floor((g_top - rows_c) / res + 1e-6).astype(np.int64) - r0
+        gcol = np.floor((cols_c - g_left) / res + 1e-6).astype(np.int64)
+        keep_r, keep_c = (grow >= 0) & (grow < r1 - r0), (gcol >= 0) & (gcol < grid.width)
+        sub = slope[np.ix_(keep_r, keep_c)]
+        valid = np.isfinite(sub)
+        if not valid.any():
+            continue
+        bins = np.clip(np.floor(np.where(valid, sub, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
+        key = (grow[keep_r][:, None] * grid.width + gcol[keep_c][None, :]) * SLOPE_BINS + bins
+        flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
+        counts[:, r0:r1, :] = flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+    if not counts.any():
+        return None
+    counts[:, ~grid.country_mask] = SLOPE_COUNT_NODATA
+    profile = {
+        "driver": "GTiff",
+        "dtype": "uint16",
+        "width": grid.width,
+        "height": grid.height,
+        "count": SLOPE_BINS,
+        "crs": grid.crs,
+        "transform": grid.transform,
+        "nodata": SLOPE_COUNT_NODATA,
+        "compress": "deflate",
+        "predictor": 2,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with safe_raster_write(out_path, **profile) as dst:
+        dst.write(counts)
+        dst.update_tags(slope_bins_deg="1", last_bin_open="true", samples_per_degree=str(sp))
+    return Path(out_path)
+
+
 WORLDCOVER_CLASSES = (10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100)
 LAND_COVER_COUNT_NODATA = 65535
 _STRIP_GRID_ROWS = 8  # grid rows read at once from a tile (8 x 120 source rows)
