@@ -95,6 +95,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
+        "external_inputs",
         "siting_layers",
         "climate_forcing",
         "hazard_context",

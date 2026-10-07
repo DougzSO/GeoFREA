@@ -39,6 +39,7 @@ run:
     - data_quality_audit
     - grid_alignment
     - siting_layers
+    - external_inputs
     - climate_forcing
     - hazard_context
     - climate_maps

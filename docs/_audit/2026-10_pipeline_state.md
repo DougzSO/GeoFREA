@@ -24,10 +24,11 @@ branch when one of its inputs failed (A-09). The manifest is `outputs/<ISO3>/man
 | 1 | `data_acquisition` | F1 | nothing | `layer_registry` | yes |
 | 2 | `data_quality_audit` | F1b | `layer_registry` | `audit_report` | yes |
 | 3 | `grid_alignment` | F2a | `layer_registry` | `aligned_rasters`, `aligned/<layer>` (elevation, slope, solar, land cover, population, roads, grid, lakes, rivers, the three `distance_capped` flags, 12 wind layers; the GPPD `plants` raster was removed on 2026-10-07, D-F1-027) | yes |
-| 4 | `siting_layers` | F2b (H-4) | `aligned_rasters` | `siting_layers` (12 physical-unit layers, no normalization) | yes |
-| 5 | `climate_forcing` | F4 (J-3) | `aligned_rasters` | `forcing`, `forcing_masked`, `members` | yes |
-| 6 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
-| 7 | `climate_maps` | F4 (J-5) | `forcing`, `forcing_masked` | `climate_maps` (one PNG per member) | yes |
+| 4 | `external_inputs` | F4 input check | nothing | `external_inputs` (report: CMIP6, ISIMIP3b and ERA5 files present, registered, ERA5 hash verified) | yes (added 2026-10-07) |
+| 5 | `siting_layers` | F2b (H-4) | `aligned_rasters`, `audit_report` | `siting_layers` (12 physical-unit layers, no normalization) | yes |
+| 6 | `climate_forcing` | F4 (J-3) | `aligned_rasters`, `audit_report`, `external_inputs` | `forcing`, `forcing_masked`, `members` | yes |
+| 7 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
+| 8 | `climate_maps` | F4 (J-5) | `forcing`, `forcing_masked` | `climate_maps` (one PNG per member) | yes |
 | — | `suitability_criteria` | legacy F2b | `aligned_rasters`, `layer_registry` | `suitability_criteria_result` | **no** (registered, run only if named) |
 
 Consistency of this graph is checked by `tests/unit/test_main.py` (every required artifact has exactly one producer).
@@ -74,9 +75,13 @@ loud (named error) if they are absent:
 
 ## 6. Gaps in the wiring itself
 
-- `hazard_context` and `climate_forcing` read the CMIP6 registry, ISIMIP3b and ERA5 from fixed locations under
-  `GEOFREA_DATA_DIR/raw`; a missing file raises a named error, but there is no phase that acquires them.
-- The orchestrator manifest of PRT, IND and BRA recorded the older artifact keys of `grid_alignment`; a changed `produces` set
-  raises `StaleManifestEntryError`, so the first `python main.py <ISO3>` after this change needs `--rerun grid_alignment`.
-- `climate_forcing`, `hazard_context` and `climate_maps` do not yet depend on `data_quality_audit`; the audit does not gate them.
+- The external inputs (CMIP6, ISIMIP3b, ERA5) are still acquired by scripts, but the new `external_inputs` phase checks them
+  before F4 (2026-10-07; D-F4-019): a missing, unregistered or altered file stops `climate_forcing` and `hazard_context` with
+  one message listing every problem. It checks existence and registry status, the ERA5 hash and ISIMIP3b sizes; CMIP6 and
+  ISIMIP3b hashes (about 29 GB) only with `check_external_inputs(..., full_hash=True)`. No phase downloads them.
+- A changed `produces` set raises `StaleManifestEntryError`, so the first `python main.py <ISO3>` after such a change needs
+  `--rerun <phase>` (done for `grid_alignment` and `data_quality_audit` when the GPPD layer was removed). Since D-core-020 a
+  re-executed phase also drops the keys it no longer produces.
+- `siting_layers`, `climate_forcing`, `hazard_context` and `climate_maps` now depend on `data_quality_audit` (directly or through
+  an upstream phase), so a failed audit stops them. `grid_alignment` itself still does not wait for the audit.
 - No phase writes the thesis outputs (T-R, T-O); that is F8.

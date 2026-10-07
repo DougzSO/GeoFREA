@@ -70,6 +70,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from geofrea.climate_forcing.external_inputs import ExternalInputsReport, check_external_inputs
 from geofrea.climate_forcing.pipeline import (
     ForcingSummary,
     HazardSummary,
@@ -426,6 +427,12 @@ def _build_phase_specs(
         _register_json_artifact(context, "siting_layers", result)
         return result
 
+    def external_inputs_run(context: PhaseContext) -> ExternalInputsReport:
+        """Check the CMIP6, ISIMIP3b and ERA5 files acquired by scripts (registry, existence, hashes)."""
+        report = check_external_inputs(context.country_code, EXPERIMENTS_YAML)
+        _register_json_artifact(context, "external_inputs", report)
+        return report
+
     def climate_forcing_run(context: PhaseContext) -> ForcingSummary:
         """F4 (J-3): per-cell change factors for every member, the masked cell-members and members.yaml."""
         result = build_forcing(context.country_code, EXPERIMENTS_YAML)
@@ -483,6 +490,16 @@ def _build_phase_specs(
             summarize=_summarize_grid_alignment,
         ),
         PhaseSpec(
+            name="external_inputs",
+            output_model=ExternalInputsReport,
+            run=external_inputs_run,
+            requires=frozenset(),
+            produces=frozenset({"external_inputs"}),
+            summarize=lambda out: (
+                f"{out.cmip6_files} CMIP6, {out.isimip3b_files} ISIMIP3b, {out.era5_files} ERA5 files present and registered"
+            ),
+        ),
+        PhaseSpec(
             name="siting_layers",
             output_model=SitingLayersResult,
             run=siting_layers_run,
@@ -494,7 +511,7 @@ def _build_phase_specs(
             name="climate_forcing",
             output_model=ForcingSummary,
             run=climate_forcing_run,
-            requires=frozenset({"aligned_rasters", "audit_report"}),
+            requires=frozenset({"aligned_rasters", "audit_report", "external_inputs"}),
             produces=frozenset({"forcing", "forcing_masked", "members"}),
             summarize=lambda out: (
                 f"{out.n_cells} cells x {out.n_members} members = {out.n_rows} rows; "
