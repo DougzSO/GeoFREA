@@ -147,7 +147,14 @@ def fetch_protected_areas(
                 timeout=60,
             )
             data = resp.json()
-            protected_areas = data.get("protected_areas", [])
+            if "protected_areas" not in data:
+                # An error or rate-limit body has no such key; treating it as an empty page ended the download early and
+                # saved a partial country (IND: 90 features, 0.7% of its land, found 2026-10-07).
+                raise ValueError(
+                    f"page {page} of {country_code} has no 'protected_areas' key (keys: {sorted(data)}): "
+                    "refusing to treat it as the end of the data"
+                )
+            protected_areas = data["protected_areas"]
 
             for pa in protected_areas:
                 geojson_feature = pa.get("geojson")

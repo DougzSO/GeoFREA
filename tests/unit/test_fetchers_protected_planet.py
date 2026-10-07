@@ -135,6 +135,21 @@ def test_fetch_protected_areas_paginates_until_short_page(tmp_path, monkeypatch)
 
 
 @pytest.mark.unit
+def test_fetch_protected_areas_error_body_mid_download_is_not_the_end_of_the_data(tmp_path, monkeypatch):
+    """A page without `protected_areas` (rate limit or error body) must fail the fetch, never save a partial country."""
+    monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
+    full_page = _page_response([_pa(f"PA{i}", "II", i) for i in range(protected_planet._PER_PAGE)])
+    error_page = Mock()
+    error_page.json = Mock(return_value={"error": "rate limit exceeded"})
+    monkeypatch.setattr(protected_planet, "get_with_retry", Mock(side_effect=[full_page, error_page]))
+
+    result = protected_planet.fetch_protected_areas(tmp_path, "IND")
+
+    assert result is None
+    assert not (tmp_path / "raw" / "wdpa" / "IND" / "IND_protected_areas_wdpa.geojson").exists()
+
+
+@pytest.mark.unit
 def test_fetch_protected_areas_empty_result_saves_empty_feature_collection(tmp_path, monkeypatch):
     monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
     monkeypatch.setattr(protected_planet, "get_with_retry", Mock(return_value=_page_response([])))
