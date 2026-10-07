@@ -85,6 +85,7 @@ from geofrea.core.config_loader import (
     load_parameters,
     load_settings,
 )
+from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
@@ -99,12 +100,16 @@ from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_acquisition_phase
-from geofrea.data_acquisition.schemas import AcquisitionResult
+from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
-from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_inputs
+from geofrea.grid_alignment.adapter import (
+    GridAlignmentRequiresBordersError,
+    acquisition_result_to_grid_alignment_inputs,
+)
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
+from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
 from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
@@ -428,6 +433,28 @@ def _build_phase_specs(
         _register_json_artifact(context, "siting_layers", result)
         return result
 
+    def land_eligibility_run(context: PhaseContext) -> EligibilitySummary:
+        """F3: eligibility per technology, 0.05 degree cells, candidate tables (nominal land-availability parameters)."""
+        acquisition = context.prior_results["data_acquisition"].output
+        layers = {layer.layer_name: layer for layer in acquisition.layers}
+        borders = resolved_path(layers.get("borders"))
+        if borders is None:
+            raise GridAlignmentRequiresBordersError(
+                f"land_eligibility requires a resolved 'borders' layer for {context.country_code!r}"
+            )
+        result = build_eligibility(
+            context.country_code,
+            EXPERIMENTS_YAML,
+            context.prior_results["grid_alignment"].output,
+            context.prior_results["siting_layers"].output,
+            load_mainland_boundary(borders),
+            resolved_path(layers.get("protected")),
+            resolved_path(layers.get("lakes")),
+            resolved_path(layers.get("rivers")),
+        )
+        _register_json_artifact(context, "land_eligibility", result)
+        return result
+
     def external_inputs_run(context: PhaseContext) -> ExternalInputsReport:
         """Check the CMIP6, ISIMIP3b and ERA5 files acquired by scripts (registry, existence, hashes)."""
         report = check_external_inputs(context.country_code, EXPERIMENTS_YAML)
@@ -513,6 +540,17 @@ def _build_phase_specs(
             requires=frozenset({"aligned_rasters", "audit_report"}),
             produces=frozenset({"siting_layers"}),
             summarize=lambda out: f"{len(out.layers)} physical-unit layers",
+        ),
+        PhaseSpec(
+            name="land_eligibility",
+            output_model=EligibilitySummary,
+            run=land_eligibility_run,
+            requires=frozenset({"aligned_rasters", "siting_layers", "layer_registry", "audit_report"}),
+            produces=frozenset({"land_eligibility"}),
+            summarize=lambda out: "; ".join(
+                f"{t}: {s.n_candidates:,} candidate cells, {100 * s.eligible_share:.1f}% of the land eligible"
+                for t, s in out.technologies.items()
+            ),
         ),
         PhaseSpec(
             name="climate_forcing",

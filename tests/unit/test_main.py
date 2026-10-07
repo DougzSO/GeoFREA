@@ -97,6 +97,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "grid_alignment",
         "external_inputs",
         "siting_layers",
+        "land_eligibility",
         "climate_forcing",
         "hazard_context",
         "climate_maps",
@@ -130,7 +131,7 @@ def test_every_phase_after_alignment_depends_on_the_audit_gate():
                 todo += [producer[k] for k in specs[p].requires]
         return seen
 
-    for name in ("siting_layers", "climate_forcing", "hazard_context", "climate_maps"):
+    for name in ("siting_layers", "land_eligibility", "climate_forcing", "hazard_context", "climate_maps"):
         assert "data_quality_audit" in upstream(name), name
 
 

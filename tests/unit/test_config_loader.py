@@ -78,6 +78,7 @@ def test_load_real_settings_yaml_validates():
         "data_quality_audit",
         "grid_alignment",
         "siting_layers",
+        "land_eligibility",
         "external_inputs",
         "climate_forcing",
         "hazard_context",

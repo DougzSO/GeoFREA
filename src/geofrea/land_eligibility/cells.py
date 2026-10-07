@@ -143,7 +143,7 @@ def aggregate_to_cells(
     row0, col0 = grid_cell_origin(transform, height, width)
     area_row = pixel_row_area_km2(transform, height)
     area = np.repeat(area_row[:, None], width, axis=1) * country_mask
-    eligible_area = area * eligible
+    eligible_area = area * np.asarray(eligible, dtype=float)  # bool or an eligible share in [0, 1]
 
     n_r, n_c = height // k, width // k
     cell_area = _block_sum(area, k)
@@ -163,7 +163,7 @@ def aggregate_to_cells(
 
     excluded = {}
     for name, mask in exclusions.items():
-        excluded[name] = _block_sum(area * mask.astype(bool), k)
+        excluded[name] = _block_sum(area * np.asarray(mask, dtype=float), k)  # bool or a share in [0, 1]
         frame[f"excluded_area_km2_{name}"] = excluded[name].ravel()
     if excluded:
         names = list(excluded)

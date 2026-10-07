@@ -141,6 +141,104 @@ land_variants:
     # - Lower population density threshold
     # - Reduced land-cover exclusions
 
+# Land-availability parameters as ranges (E1-E6, minimum area; Douglas, 2026-10-07)
+# Each continuous parameter has a central value (`nominal`, feeds F4-F7) and, where a source gives one, a `low`-`high` range;
+# a parameter without a sourced range keeps low/high null and is held at nominal (declared, not filled in). Categorical
+# parameters are named `levels`. Sources and the evidence behind every value: docs/_audit/2026-10_f3_parameter_research.md.
+# This block is meant to replace the strict/lenient `land_variants` above once METHODOLOGY U-06 is changed (awaiting Douglas).
+land_availability:
+  technologies:
+    solar:
+      slope_max_deg:
+        nominal: 10.0
+        unit: degrees
+        source: "MAPRE site-suitability set (Patankar et al., arXiv:2211.05062, Table B1; Owusu-Obeng et al., arXiv:2401.16626; both cite Leslie et al. and Wu et al.)"
+        status: range_pending
+        note: "Range leads not opened: 3.1 deg (85% of the 100 largest operating PV sites) and 14.04 deg (25%)."
+      pop_density_max_per_km2:
+        nominal: 100.0
+        low: 100.0
+        high: 200.0
+        unit: persons/km2
+        source: "low = nominal: MAPRE Table B1 (LandScan, 1 km); high: the earlier unverified project value (parameters.json pop_density_threshold, DECISIONS 2026-09-10)"
+        status: sourced_low_unverified_high
+      riparian_setback_km:
+        nominal: 0.5
+        low: 0.25
+        high: 1.0
+        unit: km
+        source: "MAPRE Table B1 (250 m, water bodies and rivers); McKenna et al. 2022 Table 2 (water bodies 0-1 km); nominal = earlier unverified value (Brazilian Forest Code scale)"
+        status: sourced
+        note: "Computed at 100 m and aggregated as an excluded share per 0.01 degree pixel (OQ-045, option c)."
+      min_eligible_area_km2:
+        nominal: 0.1
+        unit: km2
+        source: "ENSPRESO 2 (JRC144438): 10 ha suitable land for one 3 MW turbine; applied to solar by analogy (no solar source)"
+        status: range_pending
+      excluded_classes:
+        nominal: cropland_excluded
+        levels:
+          cropland_excluded: [10, 40, 50, 70, 80, 90, 95]
+          cropland_allowed: [10, 50, 70, 80, 90, 95]
+        source: "ESMAP Global PV Potential by Country (forests, cropland, water, urban); ENSPRESO 2 key (wetlands, snow); cropland excluded by Douglas, 2026-10-07 (conservative: land in use)"
+        status: sourced
+      iucn_categories:
+        nominal: ia_ib_ii
+        levels:
+          ia_ib_ii: [ia, ib, ii]
+          ia_ib: [ia, ib]
+          all_assigned: [ia, ib, ii, iii, iv, v, vi]
+          all_designated: ['*']  # every WDPA polygon, also those with no IUCN category (Not Reported: most of Natura 2000)
+        source: "Franke et al. 2024 (Enertile) via Brooks et al., arXiv:2511.23339 (Ia, Ib, II); ESMAP excludes every IUCN category"
+        status: sourced
+        note: "The ia_ib level has no source (candidate)."
+    wind:
+      slope_max_deg:
+        nominal: 16.7
+        low: 10.2
+        high: 30.0
+        unit: degrees
+        source: "30% = 16.7 deg (Ryberg et al. 2020, quoted by ENSPRESO 2, JRC144438); low 18% = 10.2 deg (ENSPRESO 2); high 30 deg (upper end of McKenna et al. 2022 Table 2, 1-30 deg)"
+        status: sourced
+      pop_density_max_per_km2:
+        nominal: 100.0
+        low: 100.0
+        high: 200.0
+        unit: persons/km2
+        source: "same as solar"
+        status: sourced_low_unverified_high
+      riparian_setback_km:
+        nominal: 0.5
+        low: 0.25
+        high: 1.0
+        unit: km
+        source: "same as solar"
+        status: sourced
+        note: "Computed at 100 m and aggregated as an excluded share per 0.01 degree pixel (OQ-045, option c)."
+      min_eligible_area_km2:
+        nominal: 0.1
+        unit: km2
+        source: "ENSPRESO 2 (JRC144438): 10 ha suitable land for one 3 MW turbine"
+        status: range_pending
+      excluded_classes:
+        nominal: forest_excluded
+        levels:
+          forest_excluded: [10, 50, 70, 80, 90, 95]
+          forest_allowed: [50, 70, 80, 90, 95]
+          forest_and_cropland_excluded: [10, 40, 50, 70, 80, 90, 95]
+        source: "ENSPRESO 2 land-cover key (forest, wetlands, water excluded; arable land and pasture allowed); McKenna et al. 2022 (forest from full exclusion to partial allowance)"
+        status: sourced
+      iucn_categories:
+        nominal: ia_ib_ii
+        levels:
+          ia_ib_ii: [ia, ib, ii]
+          ia_ib: [ia, ib]
+          all_assigned: [ia, ib, ii, iii, iv, v, vi]
+          all_designated: ['*']  # every WDPA polygon, also those with no IUCN category (Not Reported: most of Natura 2000)
+        source: "same as solar"
+        status: sourced
+        note: "The ia_ib level has no source (candidate)."
+
 # Output thresholds (M-F7-04, M-F7-05)
 thresholds:
   # Satisficing LCOE threshold (M-F7-04)
