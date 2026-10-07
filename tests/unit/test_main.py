@@ -113,6 +113,26 @@ def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
 
 
 @pytest.mark.unit
+def test_every_phase_after_alignment_depends_on_the_audit_gate():
+    """F1b gates the F2b and F4 phases: a failed audit must stop them (A-09), directly or through an upstream phase."""
+    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())}
+    producer = {key: spec.name for spec in specs.values() for key in spec.produces}
+
+    def upstream(name: str) -> set[str]:
+        seen: set[str] = set()
+        todo = [producer[k] for k in specs[name].requires]
+        while todo:
+            p = todo.pop()
+            if p not in seen:
+                seen.add(p)
+                todo += [producer[k] for k in specs[p].requires]
+        return seen
+
+    for name in ("siting_layers", "climate_forcing", "hazard_context", "climate_maps"):
+        assert "data_quality_audit" in upstream(name), name
+
+
+@pytest.mark.unit
 def test_cli_parses_countries_phases_and_rerun_and_defaults_to_nothing():
     args = main._parse_args(["prt", "BRA", "--phases", "grid_alignment,climate_forcing", "--rerun", "grid_alignment"])
     assert args.countries == ["prt", "BRA"]

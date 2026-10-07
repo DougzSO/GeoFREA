@@ -486,7 +486,7 @@ def _build_phase_specs(
             name="siting_layers",
             output_model=SitingLayersResult,
             run=siting_layers_run,
-            requires=frozenset({"aligned_rasters"}),
+            requires=frozenset({"aligned_rasters", "audit_report"}),
             produces=frozenset({"siting_layers"}),
             summarize=lambda out: f"{len(out.layers)} physical-unit layers",
         ),
@@ -494,7 +494,7 @@ def _build_phase_specs(
             name="climate_forcing",
             output_model=ForcingSummary,
             run=climate_forcing_run,
-            requires=frozenset({"aligned_rasters"}),
+            requires=frozenset({"aligned_rasters", "audit_report"}),
             produces=frozenset({"forcing", "forcing_masked", "members"}),
             summarize=lambda out: (
                 f"{out.n_cells} cells x {out.n_members} members = {out.n_rows} rows; "
