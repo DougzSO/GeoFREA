@@ -34,7 +34,8 @@ gcm_ensemble:
   # OQ-042 option C (Douglas, 2026-10-06): a cell-member whose delta_wind falls outside this range is MASKED: no row
   # in forcing.parquet, the member is absent in that cell, and the cell-member is listed in forcing_masked.parquet
   # with the value that was rejected. No value is invented. The range is a plausibility bound for a 30-year change in
-  # mean wind speed and has NO source (flagged unsourced, like distance_cap_km); revisit if a better option is chosen.
+  # mean wind speed and has NO source (flagged unsourced, like distance_cap_km; tracked as OQ-043 with its sensitivity,
+  D-F4-018: only BRA is sensitive, 1.0% masked at 0.4-1.6 to 4.3% at 0.7-1.3); revisit if a better option is chosen.
   wind_factor_valid_range: [0.5, 1.5]
   # Hazard channel (ISIMIP3b tasmax/pr, D-F4-001/002): windows whose daily data are on disk. 2071-2100 was accepted in
   # D-F4-002 but has NOT been acquired (the CRAEI archive holds 2041-2070 only; ~183 GB), so members of that window have
