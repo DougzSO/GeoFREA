@@ -142,7 +142,7 @@ def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(t
 
     monkeypatch.setattr(raster_io.rasterio, "open", flaky)
     monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0, 0.0))
-    profile = dict(driver="GTiff", height=2, width=2, count=1, dtype="float32")
+    profile = {"driver": "GTiff", "height": 2, "width": 2, "count": 1, "dtype": "float32"}
 
     with safe_raster_write(tmp_path / "out.tif", **profile) as dst:
         dst.write(np.ones((2, 2), dtype="float32"), 1)
@@ -163,9 +163,8 @@ def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_wa
 
     monkeypatch.setattr(raster_io.rasterio, "open", always)
     monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0))
-    with pytest.raises(rasterio.errors.RasterioIOError):
-        with safe_raster_write(tmp_path / "o.tif", driver="GTiff"):
-            pass
+    with pytest.raises(rasterio.errors.RasterioIOError), safe_raster_write(tmp_path / "o.tif", driver="GTiff"):
+        pass
     assert len(attempts) == 3  # first try + two retries
 
     attempts.clear()
@@ -175,7 +174,6 @@ def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_wa
         raise rasterio.errors.RasterioIOError("no such file")
 
     monkeypatch.setattr(raster_io.rasterio, "open", other)
-    with pytest.raises(rasterio.errors.RasterioIOError):
-        with safe_raster_write(tmp_path / "o2.tif", driver="GTiff"):
-            pass
+    with pytest.raises(rasterio.errors.RasterioIOError), safe_raster_write(tmp_path / "o2.tif", driver="GTiff"):
+        pass
     assert len(attempts) == 1

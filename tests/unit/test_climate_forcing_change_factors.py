@@ -136,7 +136,7 @@ def _spike_fields():
     ref = np.full(shape, 4.0)
     win = np.full(shape, 4.4)
     ref[:, 2, 2], win[:, 2, 2] = 0.002, 0.5  # one native cell whose reference wind is near zero
-    mk = lambda a: xr.DataArray(  # noqa: E731
+    mk = lambda a: xr.DataArray(
         a, dims=("time", "lat", "lon"), coords={"time": times, "lat": np.arange(5.0), "lon": np.arange(5.0)}
     )
     return mk(ref), mk(win)

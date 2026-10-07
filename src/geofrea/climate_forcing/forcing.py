@@ -19,8 +19,18 @@ import pyarrow.parquet as pq
 import rasterio
 import xarray as xr
 
-from geofrea.climate_forcing.change_factors import FACTOR_DEFINITIONS, bilinear_to_points, compute_change_factor
-from geofrea.climate_forcing.members import REFERENCE_WINDOW, VARIABLES, Gcm, Member, MemberResolutionError
+from geofrea.climate_forcing.change_factors import (
+    FACTOR_DEFINITIONS,
+    bilinear_to_points,
+    compute_change_factor,
+)
+from geofrea.climate_forcing.members import (
+    REFERENCE_WINDOW,
+    VARIABLES,
+    Gcm,
+    Member,
+    MemberResolutionError,
+)
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 from geofrea.land_eligibility.cells import cell_center, cell_id, grid_cell_origin

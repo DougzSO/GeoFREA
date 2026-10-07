@@ -18,7 +18,7 @@ import numpy as np
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(REPO_ROOT), str(REPO_ROOT / "src")]
 
-from tests.regression.v01_run import run_zzz  # noqa: E402
+from tests.regression.v01_run import run_zzz
 
 
 def main() -> None:

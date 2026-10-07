@@ -15,9 +15,8 @@ Definitions adapted from CRAEI per A-11 (see the provenance comments above each 
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd

@@ -70,6 +70,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from geofrea.climate_forcing.pipeline import (
+    ForcingSummary,
+    HazardSummary,
+    MapsSummary,
+    build_forcing,
+    build_hazard_context,
+    build_maps,
+)
 from geofrea.core.config_loader import (
     load_audit_config,
     load_countries,
@@ -84,14 +92,6 @@ from geofrea.core.orchestrator import (
     compute_git_commit,
     compute_run_id,
 )
-from geofrea.climate_forcing.pipeline import (
-    ForcingSummary,
-    HazardSummary,
-    MapsSummary,
-    build_forcing,
-    build_hazard_context,
-    build_maps,
-)
 from geofrea.core.paths import log_path, outputs_dir, phase_dir
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
@@ -105,8 +105,8 @@ from geofrea.grid_alignment.adapter import acquisition_result_to_grid_alignment_
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
-from geofrea.suitability_criteria.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
+from geofrea.suitability_criteria.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.suitability_criteria.schemas import (
     SuitabilityCriteriaInputs,
     SuitabilityCriteriaResult,

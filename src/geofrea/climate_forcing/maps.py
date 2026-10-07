@@ -13,12 +13,12 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON  # noqa: E402
-from geofrea.land_eligibility.cells import row_col_from_id  # noqa: E402
+from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.land_eligibility.cells import row_col_from_id
 
 PANELS = (
     ("delta_rsds", "Solar radiation ratio (window / reference)", "RdBu", "ratio"),

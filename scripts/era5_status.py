@@ -42,9 +42,9 @@ NEXT_START = {"merge": "crop-start", "crop": "reduce-start"}
 def _any_python_running() -> bool:
     try:
         out = subprocess.run(
-            ["tasklist"], capture_output=True, text=True, timeout=10
+            ["tasklist"], capture_output=True, text=True, timeout=10, check=False
         ).stdout
-    except Exception:
+    except (OSError, subprocess.SubprocessError):  # no tasklist, or it timed out: status unknown
         return False
     return "python.exe" in out.lower()
 

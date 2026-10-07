@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-import rasterio
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
+import rasterio
 import xarray as xr
 
 from geofrea.climate_forcing import forcing as fc
 from geofrea.climate_forcing import members as mem
-from geofrea.data_acquisition.cmip6_registry import Cmip6NativeGrid, Cmip6Registry, Cmip6RegistryEntry
+from geofrea.data_acquisition.cmip6_registry import (
+    Cmip6NativeGrid,
+    Cmip6Registry,
+    Cmip6RegistryEntry,
+)
 from geofrea.land_eligibility.cells import cell_id, cell_row_col
 
 ENSEMBLE = mem.Ensemble(

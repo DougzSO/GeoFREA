@@ -1,7 +1,6 @@
 """Unit tests for geofrea.data_quality_audit.vector_inspection."""
 
 from pathlib import Path
-
 from unittest.mock import patch
 
 import geopandas as gpd

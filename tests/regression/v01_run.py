@@ -22,7 +22,10 @@ import rasterio
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.geo_utils import load_mainland_boundary
-from geofrea.suitability_criteria.criteria_functions import compute_lakes_exclusion, compute_protected_areas
+from geofrea.suitability_criteria.criteria_functions import (
+    compute_lakes_exclusion,
+    compute_protected_areas,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,7 +45,7 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
         capture_output=True,
     )
     settings = main.load_settings(main.SETTINGS_YAML)
-    ok, orchestrator, results = main.run_geofrea(
+    ok, _orchestrator, results = main.run_geofrea(
         "ZZZ",
         ["data_acquisition", "grid_alignment"],
         [],
