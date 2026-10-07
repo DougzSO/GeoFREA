@@ -17,10 +17,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import logging
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 from scipy.spatial import cKDTree
+
+logger = logging.getLogger(__name__)
 
 KELVIN_OFFSET_C = 273.15  # CRAEI hazards/pet.py KELVIN_OFFSET_C
 PR_FLUX_TO_MM_PER_DAY = 86400.0  # kg m-2 s-1 -> mm d-1 (CRAEI hazards/loading.py)
@@ -109,8 +113,13 @@ def to_mm_per_day(pr_flux: xr.DataArray) -> xr.DataArray:
 
 
 def sample_nearest(
-    field: xr.DataArray, lat: np.ndarray, lon: np.ndarray, max_distance_deg: float, skip_nan: bool = True
-) -> np.ndarray:
+    field: xr.DataArray,
+    lat: np.ndarray,
+    lon: np.ndarray,
+    max_distance_deg: float,
+    skip_nan: bool = True,
+    return_distance: bool = False,
+):
     """Value of the nearest native cell for each (lat, lon); raises if any is farther than the tolerance.
 
     Counts and extremes are not interpolated (bilinear would blend thresholds). With `skip_nan` (ERA5, whose crop
@@ -129,6 +138,8 @@ def sample_nearest(
         raise HazardDataError(
             f"{int((dist > max_distance_deg).sum())} cells have no native cell within {max_distance_deg} degrees"
         )
+    if return_distance:
+        return values[keep][idx], dist
     return values[keep][idx]
 
 
@@ -139,7 +150,14 @@ def era5_gust_mean_annual_max(era5_annual_max: Path, lat: np.ndarray, lon: np.nd
     """
     with xr.open_dataset(era5_annual_max) as ds:
         field = ds["fg10"].mean("year").rename({"latitude": "lat", "longitude": "lon"}).load()
-    return sample_nearest(field, lat, lon, max_distance_deg=0.25 * 1.5)
+    # Tolerance 2 native cells (0.5 degree): the ERA5 crop keeps only cells whose center lies inside the country
+    # polygon, so a lattice cell on a narrow coastal strip or an island (IND, Pamban, 0.43 degree from the nearest
+    # valid cell) has no valid cell within one. Cells beyond one native cell are counted in the log, never hidden.
+    values, dist = sample_nearest(field, lat, lon, max_distance_deg=0.5, return_distance=True)
+    n_far = int((dist > 0.25).sum())
+    if n_far:
+        logger.warning("ERA5 gust: %d of %d cells use a native cell more than 0.25 degree away", n_far, len(lat))
+    return values
 
 
 def load_daily(path: Path, variable: str, start: int, end: int) -> xr.DataArray:
