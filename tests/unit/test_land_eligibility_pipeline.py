@@ -28,6 +28,28 @@ LON0, LAT0 = 10.0, 5.0  # on the 0.05 degree lattice
 TRANSFORM = from_origin(LON0, LAT0, 0.01, 0.01)
 
 
+CLASSES = (10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100)
+SPP = 144  # samples per pixel in the synthetic counts
+
+
+def _counts(class_map: np.ndarray, shares: dict[int, float] | None = None) -> np.ndarray:
+    """uint16 (class, row, col) counts: every pixel wholly of its class, or split by `shares` (class -> share) where given."""
+    out = np.zeros((len(CLASSES),) + class_map.shape, dtype=np.uint16)
+    for band, code in enumerate(CLASSES):
+        out[band][class_map == code] = SPP
+    return out
+
+
+def _write_counts(path: Path, counts: np.ndarray) -> Path:
+    with rasterio.open(
+        path, "w", driver="GTiff", height=H, width=W, count=len(CLASSES), dtype="uint16", crs="EPSG:4326", transform=TRANSFORM,
+        nodata=65535,
+    ) as dst:
+        dst.write(counts)
+        dst.update_tags(worldcover_classes=",".join(map(str, CLASSES)), samples_per_pixel=str(SPP))
+    return path
+
+
 def _write(path: Path, data: np.ndarray, dtype="float32", nodata=-9999.0) -> Path:
     with rasterio.open(
         path, "w", driver="GTiff", height=H, width=W, count=1, dtype=dtype, crs="EPSG:4326", transform=TRANSFORM, nodata=nodata
@@ -51,6 +73,7 @@ def world(tmp_path, monkeypatch):
         slope=_write(base / "slope.tif", slope),
         population=_write(base / "pop.tif", population),
         land_cover=_write(base / "lc.tif", land_cover),
+        land_cover_counts=_write_counts(base / "lcc.tif", _counts(land_cover)),
         grid=_write(base / "grid.tif", np.full((H, W), 7.0)),
         grid_distance_capped=_write(base / "gcap.tif", flag, "uint8", 0),
         roads_distance_capped=_write(base / "rcap.tif", flag, "uint8", 0),
@@ -64,7 +87,9 @@ def world(tmp_path, monkeypatch):
     country = gpd.GeoDataFrame(geometry=[box(LON0, LAT0 - 0.2, LON0 + 0.3, LAT0)], crs="EPSG:4326")
     protected = gpd.GeoDataFrame({"IUCN_CAT": ["II"]}, geometry=[box(LON0 + 0.10, LAT0 - 0.2, LON0 + 0.15, LAT0)], crs="EPSG:4326")
     protected.to_file(tmp_path / "wdpa.gpkg", driver="GPKG")
-    rivers = gpd.GeoDataFrame(geometry=[LineString([(LON0 + 0.205, LAT0), (LON0 + 0.205, LAT0 - 0.2)])], crs="EPSG:4326")
+    rivers = gpd.GeoDataFrame(
+        {"DIS_AV_CMS": [50.0]}, geometry=[LineString([(LON0 + 0.205, LAT0), (LON0 + 0.205, LAT0 - 0.2)])], crs="EPSG:4326"
+    )
     rivers.to_file(tmp_path / "rivers.gpkg", driver="GPKG")
     return SimpleNamespace(
         grid_result=grid_result, siting=siting, country=country, protected=tmp_path / "wdpa.gpkg", rivers=tmp_path / "rivers.gpkg"
@@ -118,10 +143,13 @@ def _layers(shape, **over):
         "pixel_area_km2": np.ones(shape),
         "slope_deg": np.zeros(shape),
         "population_count": np.zeros(shape),
-        "land_cover": np.full(shape, 30.0),
+        "land_cover_counts": _counts(np.full(shape, 30)),
+        "land_cover_classes": CLASSES,
+        "land_cover_valid": np.ones(shape, bool),
+        "samples_per_pixel": SPP,
         "lakes_fraction": np.zeros(shape),
         "protected_fraction": {("ia",): np.zeros(shape)},
-        "riparian_fraction": {0.5: np.zeros(shape)},
+        "riparian_fraction": {(0.0, 0.5): np.zeros(shape)},
         "required_valid": {},
     }
     base.update(over)
@@ -142,8 +170,51 @@ def test_population_density_uses_count_over_geodesic_area():
 
 def test_riparian_share_is_interpolated_between_prepared_setbacks_and_never_extrapolated():
     shape = (1, 1)
-    layers = _layers(shape, riparian_fraction={0.25: np.full(shape, 0.2), 1.0: np.full(shape, 0.8)})
+    layers = _layers(shape, riparian_fraction={(0.0, 0.25): np.full(shape, 0.2), (0.0, 1.0): np.full(shape, 0.8)})
     _, mid = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.625, 0.1, (10,), ("ia",)))
     assert mid["E3"][0, 0] == pytest.approx(0.5)
     with pytest.raises(MissingExclusionLayerError):
         eligible_fraction(layers, ParameterSet(10.0, 100.0, 2.0, 0.1, (10,), ("ia",)))
+
+
+def test_excluded_land_cover_is_the_share_of_samples_not_in_an_allowed_class():
+    counts = _counts(np.full((1, 2), 30))
+    counts[CLASSES.index(30), 0, 0] = 100  # pixel 0: 100 of 144 samples grassland, 44 forest
+    counts[CLASSES.index(10), 0, 0] = 44
+    layers = _layers((1, 2), land_cover_counts=counts)
+    eligible, excl = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
+    assert excl["E5"][0, 0] == pytest.approx(44 / 144, abs=1e-6) and excl["E5"][0, 1] == 0.0
+    assert eligible[0, 0] == pytest.approx(100 / 144, abs=1e-6)
+
+
+def test_samples_of_no_class_count_as_not_allowed_and_a_pixel_without_any_sample_is_invalid():
+    counts = _counts(np.full((1, 2), 30))
+    counts[CLASSES.index(30), 0, 0] = 72  # the other half of the pixel is open sea (no class)
+    counts[:, 0, 1] = 0
+    layers = _layers((1, 2), land_cover_counts=counts, land_cover_valid=np.array([[True, False]]))
+    eligible, _ = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
+    assert eligible.tolist() == [[0.5, 0.0]]
+
+
+def test_an_excluded_class_missing_from_the_bands_is_an_error():
+    with pytest.raises(MissingExclusionLayerError):
+        eligible_fraction(_layers((1, 1)), ParameterSet(10.0, 100.0, 0.5, 0.1, (11,), ("ia",)))
+
+
+def test_riparian_share_is_bilinear_in_setback_and_discharge_and_falls_with_discharge():
+    shape = (1, 1)
+    shares = {
+        (0.0, 0.25): np.full(shape, 0.2), (0.0, 1.0): np.full(shape, 0.8),
+        (10.0, 0.25): np.full(shape, 0.0), (10.0, 1.0): np.full(shape, 0.4),
+    }
+    layers = _layers(shape, riparian_fraction=shares)
+
+    def e3(setback, q):
+        params = ParameterSet(10.0, 100.0, setback, 0.1, (10,), ("ia",), riparian_min_discharge_m3s=q)
+        return eligible_fraction(layers, params)[1]["E3"][0, 0]
+
+    assert e3(1.0, 0.0) == pytest.approx(0.8) and e3(1.0, 10.0) == pytest.approx(0.4)
+    assert e3(1.0, 5.0) == pytest.approx(0.6)  # halfway in discharge
+    assert e3(0.625, 5.0) == pytest.approx(0.35)  # halfway in both: (0.1 + 0.6) / 2
+    with pytest.raises(MissingExclusionLayerError):
+        e3(1.0, 20.0)  # beyond the prepared discharges: never extrapolated

@@ -346,6 +346,109 @@ def _bbox_overlaps(
     return not (a[2] < b[0] or a[0] > b[2] or a[3] < b[1] or a[1] > b[3])
 
 
+WORLDCOVER_CLASSES = (10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100)
+LAND_COVER_COUNT_NODATA = 65535
+_STRIP_GRID_ROWS = 8  # grid rows read at once from a tile (8 x 120 source rows)
+
+
+def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country_gdf):
+    """Per grid pixel, how many 10 m ESA WorldCover samples fall in each class (D-F2a-015).
+
+    The point-sample mosaic (`mosaic_land_cover`) labels a 1.1 km pixel with the class of the one source sample under
+    its centre, which makes every cell share noisy (about +-10 percentage points at a 50 % share). Here the tiles are
+    block-counted instead: output band i holds, per pixel, the number of source samples of class WORLDCOVER_CLASSES[i]
+    (uint16, 0 to k*k with k = grid pixel / tile pixel, 120 for a 0.01 degree grid). Samples of no class (nodata 0, for
+    instance open sea) are counted in no band, so the bands of a pixel sum to less than k*k there. The grid must be an
+    exact multiple of the tile pixel and aligned to it (true for the 0.05 degree lattice and 3 degree tiles); anything
+    else raises, since a misaligned block count would be silently wrong (A-09). A tile that cannot be read but overlaps
+    the country raises, as in `mosaic_land_cover`. Pixels outside the country are LAND_COVER_COUNT_NODATA in every band.
+
+    Returns the output path, or None if no tile overlapped the country.
+    """
+    bounds_main = tuple(float(b) for b in country_gdf.total_bounds)
+    grid_res = abs(grid.transform.a)
+    g_left, g_top = grid.transform.c, grid.transform.f
+    n_classes = len(WORLDCOVER_CLASSES)
+    counts = np.zeros((n_classes, grid.height, grid.width), dtype=np.uint16)
+    lut = np.zeros(256, dtype=np.uint8)
+    for i, cls in enumerate(WORLDCOVER_CLASSES):
+        lut[cls] = i + 1
+    used = skipped = 0
+    progress = PeriodicProgress(logger, len(lc_tiles), "land_cover class counts")
+    for tile in lc_tiles:
+        progress.step()
+        tile_path = Path(tile)
+        tile_bounds = None
+        try:
+            with rasterio.open(str(tile)) as src:
+                tile_bounds = tuple(float(b) for b in src.bounds)
+                if not _bbox_overlaps(tile_bounds, bounds_main):
+                    skipped += 1
+                    continue
+                t_res = abs(src.transform.a)
+                k = round(grid_res / t_res)
+                if k < 1 or abs(k * t_res - grid_res) > 1e-9 * grid_res or abs(abs(src.transform.e) - t_res) > 1e-12:
+                    raise ValueError(f"grid pixel {grid_res} is not a whole multiple of tile pixel {t_res}")
+                off_c = (src.transform.c - g_left) / grid_res
+                off_r = (g_top - src.transform.f) / grid_res
+                if abs(off_c - round(off_c)) > 1e-6 or abs(off_r - round(off_r)) > 1e-6:
+                    raise ValueError("tile edges are not on the grid pixel edges")
+                c_t, r_t = round(off_c), round(off_r)  # grid column/row of the tile's top-left corner (may be negative)
+                t_cols, t_rows = src.width // k, src.height // k
+                gr0, gr1 = max(r_t, 0), min(r_t + t_rows, grid.height)
+                gc0, gc1 = max(c_t, 0), min(c_t + t_cols, grid.width)
+                if gr0 >= gr1 or gc0 >= gc1:
+                    skipped += 1
+                    continue
+                n_c = gc1 - gc0
+                rb = (np.arange(_STRIP_GRID_ROWS * k) // k)[:, None]
+                cb = (np.arange(n_c * k) // k)[None, :]
+                base = ((rb * n_c + cb) * (n_classes + 1)).astype(np.int32)
+                for r in range(gr0, gr1, _STRIP_GRID_ROWS):
+                    nr = min(_STRIP_GRID_ROWS, gr1 - r)
+                    win = Window((gc0 - c_t) * k, (r - r_t) * k, n_c * k, nr * k)
+                    block = src.read(1, window=win)
+                    key = lut[block].astype(np.int32) + base[: nr * k]
+                    flat = np.bincount(key.ravel(), minlength=nr * n_c * (n_classes + 1))
+                    per = flat.reshape(nr, n_c, n_classes + 1)
+                    for i in range(n_classes):
+                        counts[i, r : r + nr, gc0:gc1] = per[:, :, i + 1]
+                used += 1
+        except Exception as exc:
+            footprint = tile_bounds or _esa_worldcover_tile_bounds(tile_path.name)
+            if footprint is not None and _bbox_overlaps(footprint, bounds_main):
+                raise RuntimeError(
+                    f"land_cover_class_counts: tile {tile_path.name!r} could not be used ({type(exc).__name__}: {exc}) "
+                    f"and its footprint {footprint} overlaps the country, which would leave a coverage gap."
+                ) from exc
+            skipped += 1
+            logger.warning("    Land cover tile %s skipped (%s: %s).", tile_path.name, type(exc).__name__, exc)
+    logger.info("    Land cover class counts: %d tiles used, %d skipped.", used, skipped)
+    if used == 0:
+        return None
+    counts[:, ~grid.country_mask] = LAND_COVER_COUNT_NODATA
+    profile = {
+        "driver": "GTiff",
+        "dtype": "uint16",
+        "width": grid.width,
+        "height": grid.height,
+        "count": n_classes,
+        "crs": grid.crs,
+        "transform": grid.transform,
+        "nodata": LAND_COVER_COUNT_NODATA,
+        "compress": "deflate",
+        "predictor": 2,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    with safe_raster_write(out_path, **profile) as dst:
+        dst.write(counts)
+        dst.update_tags(worldcover_classes=",".join(str(c) for c in WORLDCOVER_CLASSES), samples_per_pixel=str(k * k))
+    return Path(out_path)
+
+
+
 def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
     """Build an ESA WorldCover mosaic from multiple tiles.
 

@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
+    land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
 )
@@ -411,3 +412,49 @@ def test_gwa_crs_comes_from_the_same_height_wind_speed_sibling_only_when_grids_m
         _gwa_crs_for("weibull_a_100m", other, layers)
     with pytest.raises(MissingSourceCrsError, match="no wind-speed sibling"):
         _gwa_crs_for("weibull_a_150m", weibull, layers)
+
+
+def _fine_tile(path: Path, grid, k: int, pattern) -> None:
+    """A tile with k x k source samples per grid pixel, exactly on the grid edges; `pattern(rows, cols)` gives the classes."""
+    res = abs(grid.transform.a) / k
+    rows, cols = np.indices((grid.height * k, grid.width * k))
+    with rasterio.open(
+        path, "w", driver="GTiff", height=grid.height * k, width=grid.width * k, count=1, dtype="uint8", crs="EPSG:4326",
+        transform=from_origin(grid.transform.c, grid.transform.f, res, res), nodata=0,
+    ) as dst:
+        dst.write(pattern(rows, cols).astype("uint8"), 1)
+
+
+@pytest.mark.unit
+def test_land_cover_class_counts_are_exact_per_pixel_block(tmp_path):
+    grid, country_gdf, k = _grid(), _country_gdf(), 10
+    # left half of every pixel grassland (30), right half forest (10), except the top pixel row, which is open sea (0)
+    tile = tmp_path / "ESA_WorldCover_10m_2020_v100_N36W012_Map.tif"
+    _fine_tile(tile, grid, k, lambda r, c: np.where(r < k, 0, np.where(c % k < k // 2, 30, 10)))
+    out = land_cover_class_counts([tile], tmp_path / "counts.tif", grid, country_gdf)
+    with rasterio.open(out) as src:
+        counts = src.read()
+        tags = src.tags()
+        nodata = src.nodata
+    classes = [int(c) for c in tags["worldcover_classes"].split(",")]
+    assert int(tags["samples_per_pixel"]) == k * k
+    inside = grid.country_mask.copy()
+    inside[0, :] = False
+    assert (counts[classes.index(30)][inside] == k * k // 2).all()
+    assert (counts[classes.index(10)][inside] == k * k // 2).all()
+    assert (counts[:, 0, :][:, grid.country_mask[0]].sum(axis=0) == 0).all()  # sea row: counted in no class
+    assert (counts[:, ~grid.country_mask] == nodata).all()
+
+
+@pytest.mark.unit
+def test_land_cover_class_counts_refuse_a_tile_not_on_the_grid_edges(tmp_path):
+    grid, country_gdf = _grid(), _country_gdf()
+    res = abs(grid.transform.a) / 10
+    tile = tmp_path / "ESA_WorldCover_10m_2020_v100_N36W012_Map.tif"
+    with rasterio.open(
+        tile, "w", driver="GTiff", height=grid.height * 10, width=grid.width * 10, count=1, dtype="uint8", crs="EPSG:4326",
+        transform=from_origin(grid.transform.c + res * 3, grid.transform.f, res, res), nodata=0,
+    ) as dst:
+        dst.write(np.full((grid.height * 10, grid.width * 10), 30, dtype="uint8"), 1)
+    with pytest.raises(RuntimeError, match="could not be used"):
+        land_cover_class_counts([tile], tmp_path / "counts.tif", grid, country_gdf)

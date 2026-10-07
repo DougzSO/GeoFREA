@@ -72,6 +72,7 @@ class TechParameters(BaseModel):
     slope_max_deg: Ranged
     pop_density_max_per_km2: Ranged
     riparian_setback_km: Ranged
+    riparian_min_discharge_m3s: Ranged
     min_eligible_area_km2: Ranged
     excluded_classes: Levels
     iucn_categories: Levels
@@ -80,7 +81,19 @@ class TechParameters(BaseModel):
 class LandAvailability(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # discharge thresholds (m3/s) at which the riparian shares are computed; a draw between them is interpolated
+    riparian_discharge_grid_m3s: list[float]
     technologies: dict[str, TechParameters]
+
+    @model_validator(mode="after")
+    def _grid_covers_ranges(self) -> LandAvailability:
+        grid = sorted(self.riparian_discharge_grid_m3s)
+        for tech, p in self.technologies.items():
+            q = p.riparian_min_discharge_m3s
+            lo, hi = (q.low, q.high) if q.has_range else (q.nominal, q.nominal)
+            if lo < grid[0] or hi > grid[-1]:
+                raise ValueError(f"{tech}: discharge range [{lo}, {hi}] is outside the grid {grid}")
+        return self
 
 
 @dataclass(frozen=True)
@@ -93,6 +106,7 @@ class ParameterSet:
     min_eligible_area_km2: float
     excluded_classes: tuple[int, ...]
     iucn_categories: tuple[str, ...]
+    riparian_min_discharge_m3s: float = 0.0
     label: str = "nominal"
 
 
@@ -114,6 +128,7 @@ def nominal_set(params: TechParameters) -> ParameterSet:
         slope_max_deg=params.slope_max_deg.nominal,
         pop_density_max_per_km2=params.pop_density_max_per_km2.nominal,
         riparian_setback_km=params.riparian_setback_km.nominal,
+        riparian_min_discharge_m3s=params.riparian_min_discharge_m3s.nominal,
         min_eligible_area_km2=params.min_eligible_area_km2.nominal,
         excluded_classes=tuple(int(c) for c in params.excluded_classes.levels[params.excluded_classes.nominal]),
         iucn_categories=tuple(str(c).lower() for c in params.iucn_categories.levels[params.iucn_categories.nominal]),
@@ -125,4 +140,13 @@ def riparian_thresholds_km(params: TechParameters) -> list[float]:
     """Setbacks the riparian fraction must be computed for: the nominal value and both ends of its range."""
     r = params.riparian_setback_km
     values = {r.nominal} | ({r.low, r.high} if r.has_range else set())
+    return sorted(values)
+
+
+def riparian_discharges_m3s(la: LandAvailability) -> list[float]:
+    """Discharge thresholds the riparian fraction must be computed for: the configured grid plus every nominal and range end."""
+    values = set(la.riparian_discharge_grid_m3s)
+    for p in la.technologies.values():
+        q = p.riparian_min_discharge_m3s
+        values |= {q.nominal} | ({q.low, q.high} if q.has_range else set())
     return sorted(values)

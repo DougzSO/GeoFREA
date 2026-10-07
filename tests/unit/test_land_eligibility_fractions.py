@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import geopandas as gpd
 import numpy as np
+import pytest
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, box
 
-from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_setback_fractions
+from geofrea.land_eligibility.fractions import (
+    polygon_coverage_fraction,
+    river_fractions,
+    river_setback_fractions,
+)
 
 # 20 x 20 pixels of 0.01 degree at the equator: about 1.11 km per pixel
 TRANSFORM = from_origin(10.0, 0.2, 0.01, 0.01)
@@ -62,3 +67,14 @@ def test_strips_give_the_same_result_as_one_pass():
         polygon_coverage_fraction(poly, TRANSFORM, SHAPE, strip_rows=3),
         atol=1e-6,
     )
+
+
+def test_discharge_threshold_drops_small_streams_and_needs_the_column():
+    big = LineString([(10.095, 0.0), (10.095, 0.2)])
+    small = LineString([(10.045, 0.0), (10.045, 0.2)])
+    rivers = gpd.GeoDataFrame({"DIS_AV_CMS": [20.0, 0.5]}, geometry=[big, small], crs="EPSG:4326")
+    fr = river_fractions(rivers, TRANSFORM, SHAPE, [0.5], [0.0, 1.0])
+    assert fr[(0.0, 0.5)][10, 4] > 0.5 and fr[(1.0, 0.5)][10, 4] == 0.0  # the small stream only counts at q = 0
+    assert np.allclose(fr[(0.0, 0.5)][10, 9], fr[(1.0, 0.5)][10, 9])  # the big one counts either way
+    with pytest.raises(ValueError, match="DIS_AV_CMS"):
+        river_fractions(_gdf(big), TRANSFORM, SHAPE, [0.5], [1.0])

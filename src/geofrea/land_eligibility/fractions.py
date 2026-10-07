@@ -118,3 +118,31 @@ def river_setback_fractions(
         for t in thresholds_km:
             out[t][r0:r1] = _block_mean((dist[inner] <= t).astype(np.float32), factor)
     return out
+
+
+DISCHARGE_COLUMN = "DIS_AV_CMS"
+
+
+def river_fractions(
+    lines: gpd.GeoDataFrame | None,
+    transform: rasterio.Affine,
+    shape: tuple[int, int],
+    setbacks_km: list[float],
+    discharges_m3s: list[float],
+    **kwargs,
+) -> dict[tuple[float, float], np.ndarray]:
+    """Riparian share per pixel for every (minimum mean discharge in m3/s, setback in km) pair.
+
+    A river counts for a discharge threshold q only if its long-term mean discharge is at least q (HydroRIVERS `DIS_AV_CMS`);
+    q = 0 keeps every stream. A positive threshold with no discharge column is an error, not an unfiltered result (A-09).
+    """
+    out: dict[tuple[float, float], np.ndarray] = {}
+    for q in discharges_m3s:
+        subset = lines
+        if q > 0 and lines is not None and len(lines):
+            if DISCHARGE_COLUMN not in lines.columns:
+                raise ValueError(f"rivers have no {DISCHARGE_COLUMN} column, so a discharge threshold of {q} m3/s cannot be applied")
+            subset = lines[lines[DISCHARGE_COLUMN] >= q]
+        for t, arr in river_setback_fractions(subset, transform, shape, setbacks_km, **kwargs).items():
+            out[(float(q), float(t))] = arr
+    return out

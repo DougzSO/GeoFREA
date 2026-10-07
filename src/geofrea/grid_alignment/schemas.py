@@ -186,6 +186,8 @@ class GridAlignmentResult(BaseModel):
             wind_paths were given.
         land_cover: Nearest-neighbour mosaicked ESA WorldCover raster
             (uint8), or None if no land_cover_tiles were given.
+        land_cover_counts: Per-pixel counts of 10 m WorldCover samples in each class (uint16, one band per class in
+            WORLDCOVER_CLASSES, D-F2a-015), or None if no land_cover_tiles were given.
         population: Bilinear-reprojected float32 population raster, or
             None if population_path was missing.
         roads: Geodesic distance-to-road raster (km, float32,
@@ -211,6 +213,7 @@ class GridAlignmentResult(BaseModel):
     solar: Path | None = None
     wind_layers: dict[str, Path] = {}
     land_cover: Path | None = None
+    land_cover_counts: Path | None = None
     population: Path | None = None
     roads: Path | None = None
     grid: Path | None = None

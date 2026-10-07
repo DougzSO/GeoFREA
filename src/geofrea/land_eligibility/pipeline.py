@@ -47,12 +47,13 @@ from geofrea.land_eligibility.eligibility import (
     eligible_fraction,
     valid_pixels,
 )
-from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_setback_fractions
+from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
 from geofrea.land_eligibility.parameters import (
     LandAvailability,
     ParameterSet,
     load_land_availability,
     nominal_set,
+    riparian_discharges_m3s,
     riparian_thresholds_km,
 )
 from geofrea.suitability_criteria.physical_layers import SitingLayersResult
@@ -110,6 +111,20 @@ def _read(path: Path | None, name: str) -> np.ndarray:
         arr[arr == nodata] = np.nan
     arr[~np.isfinite(arr)] = np.nan
     return arr
+
+
+def _read_class_counts(path: Path | None) -> tuple[np.ndarray, tuple[int, ...], np.ndarray, int]:
+    """(counts per class, class codes, valid mask, samples per pixel) from the aligned class-count raster; fails loudly if absent."""
+    if path is None or not Path(path).exists():
+        raise LandEligibilityError("the aligned land-cover class counts (F2a `land_cover_counts`) are missing; rerun grid_alignment")
+    with safe_raster_open(path) as src:
+        counts = src.read()
+        tags = src.tags()
+        nodata = src.nodata
+    classes = tuple(int(c) for c in tags["worldcover_classes"].split(","))
+    outside = (counts == nodata).all(axis=0)
+    counts[:, outside] = 0
+    return counts, classes, ~outside & (counts.sum(axis=0, dtype=np.uint32) > 0), int(tags["samples_per_pixel"])
 
 
 def _clipped(path: Path | None, name: str, country_gdf: gpd.GeoDataFrame, interim: Path) -> gpd.GeoDataFrame | None:
@@ -208,7 +223,7 @@ def build_eligibility(
 
     slope = _read(grid_result.slope, "slope")
     population = _read(grid_result.population, "population")
-    land_cover = _read(grid_result.land_cover, "land_cover")
+    land_cover_counts, land_cover_classes, land_cover_valid, samples_per_pixel = _read_class_counts(grid_result.land_cover_counts)
     # the distance-to-grid raster is valid on exactly the in-country pixels of the F2a grid (as in F4, `aligned_mask_path`)
     grid_ref = Path(grid_result.grid)
     country_mask = np.isfinite(_read(grid_ref, "grid"))
@@ -242,12 +257,13 @@ def build_eligibility(
         )
         protected_fraction[cats] = arrays["a"]
     thr = sorted(thresholds)
+    discharges = riparian_discharges_m3s(la)
     rip = _fraction_cache(
         interim / "riparian_fraction.npz",
-        _key("rivers", rivers_path, Path(rivers_path).stat().st_mtime_ns if rivers_path else 0, thr, *id_parts),
-        lambda: {f"t{t}": a for t, a in river_setback_fractions(rivers_gdf, transform, shape, thr).items()},
+        _key("rivers", rivers_path, Path(rivers_path).stat().st_mtime_ns if rivers_path else 0, thr, discharges, *id_parts),
+        lambda: {f"q{q}_t{t}": a for (q, t), a in river_fractions(rivers_gdf, transform, shape, thr, discharges).items()},
     )
-    riparian_fraction = {t: rip[f"t{t}"] for t in thr}
+    riparian_fraction = {(q, t): rip[f"q{q}_t{t}"] for q in discharges for t in thr}
 
     flags = {
         "dist_grid_capped_share": _read(grid_result.grid_distance_capped, "grid_distance_capped") == 1,
@@ -264,7 +280,10 @@ def build_eligibility(
             pixel_area_km2=pixel_area,
             slope_deg=slope,
             population_count=population,
-            land_cover=land_cover,
+            land_cover_counts=land_cover_counts,
+            land_cover_classes=land_cover_classes,
+            land_cover_valid=land_cover_valid,
+            samples_per_pixel=samples_per_pixel,
             lakes_fraction=lakes_fraction,
             protected_fraction=protected_fraction,
             riparian_fraction=riparian_fraction,

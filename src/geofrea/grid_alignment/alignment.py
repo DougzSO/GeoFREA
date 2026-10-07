@@ -109,6 +109,7 @@ from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
     derive_slope_from_dem,
+    land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
 )
@@ -401,6 +402,13 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
             "land_cover",
             lambda: mosaic_land_cover(
                 inputs.land_cover_tiles, _path("land_cover"), grid, inputs.country_gdf
+            ),
+            bool(inputs.land_cover_tiles),
+        )
+        aligned["land_cover_counts"] = _execute_or_load(
+            "land_cover_counts",
+            lambda: land_cover_class_counts(
+                inputs.land_cover_tiles, _path("land_cover_counts"), grid, inputs.country_gdf
             ),
             bool(inputs.land_cover_tiles),
         )
