@@ -156,12 +156,13 @@ land_availability:
         status: range_pending
         note: "Range leads not opened: 3.1 deg (85% of the 100 largest operating PV sites) and 14.04 deg (25%)."
       pop_density_max_per_km2:
-        nominal: 100.0
-        low: 100.0
-        high: 200.0
+        nominal: 200.0
+        low: 150.0
+        high: 300.0
         unit: persons/km2
-        source: "low = nominal: MAPRE Table B1 (LandScan, 1 km); high: the earlier unverified project value (parameters.json pop_density_threshold, DECISIONS 2026-09-10)"
-        status: sourced_low_unverified_high
+        source: "range 150-300 set by Douglas on 2026-10-07 (an example, not a citation) after the 100 persons/km2 of MAPRE (Table B1, US West) excluded 78% of IND; nominal 200 is the earlier project value (parameters.json pop_density_threshold, DECISIONS 2026-09-10)"
+        status: range_set_by_douglas_unsourced
+        note: "Literature range still to be found (OQ-047); 100 persons/km2 (MAPRE) is below the range."
       riparian_setback_km:
         nominal: 0.5
         low: 0.25
@@ -183,13 +184,13 @@ land_availability:
         source: "ESMAP Global PV Potential by Country (forests, cropland, water, urban); ENSPRESO 2 key (wetlands, snow); cropland excluded by Douglas, 2026-10-07 (conservative: land in use)"
         status: sourced
       iucn_categories:
-        nominal: ia_ib_ii
+        nominal: all_designated
         levels:
           ia_ib_ii: [ia, ib, ii]
           ia_ib: [ia, ib]
           all_assigned: [ia, ib, ii, iii, iv, v, vi]
           all_designated: ['*']  # every WDPA polygon, also those with no IUCN category (Not Reported: most of Natura 2000)
-        source: "Franke et al. 2024 (Enertile) via Brooks et al., arXiv:2511.23339 (Ia, Ib, II); ESMAP excludes every IUCN category"
+        source: "central = every designation, Douglas 2026-10-07 (conservative: do not understate protection; most PRT sites are Not Reported). ESMAP excludes every IUCN status; ENSPRESO 2 excludes Natura 2000 plus 500 m; Franke et al. 2024 (Enertile) via Brooks et al., arXiv:2511.23339 use Ia, Ib, II only"
         status: sourced
         note: "The ia_ib level has no source (candidate)."
     wind:
@@ -201,12 +202,12 @@ land_availability:
         source: "30% = 16.7 deg (Ryberg et al. 2020, quoted by ENSPRESO 2, JRC144438); low 18% = 10.2 deg (ENSPRESO 2); high 30 deg (upper end of McKenna et al. 2022 Table 2, 1-30 deg)"
         status: sourced
       pop_density_max_per_km2:
-        nominal: 100.0
-        low: 100.0
-        high: 200.0
+        nominal: 200.0
+        low: 150.0
+        high: 300.0
         unit: persons/km2
         source: "same as solar"
-        status: sourced_low_unverified_high
+        status: range_set_by_douglas_unsourced
       riparian_setback_km:
         nominal: 0.5
         low: 0.25
@@ -229,7 +230,7 @@ land_availability:
         source: "ENSPRESO 2 land-cover key (forest, wetlands, water excluded; arable land and pasture allowed); McKenna et al. 2022 (forest from full exclusion to partial allowance)"
         status: sourced
       iucn_categories:
-        nominal: ia_ib_ii
+        nominal: all_designated
         levels:
           ia_ib_ii: [ia, ib, ii]
           ia_ib: [ia, ib]
