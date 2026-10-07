@@ -81,7 +81,7 @@ _TECHNOLOGIES = ("solar", "wind")  # Per METHODOLOGY S-02 scope
 # replaced this tuple's old role for those three.
 _UNACQUIRED_GWA_PRODUCTS: tuple[str, ...] = ()
 _UNACQUIRED_LAYERS: dict[str, str] = {
-    "gem_existing_plants": "not yet acquired (task F-5)",
+    "gem_existing_plants": "acquired (F5-1) but tabular and validation-only (V-06): pinned by sha256 in gem_snapshot.json, not a raster",
 }
 # era5_gust moved out of _UNACQUIRED_LAYERS (task F4-2): acquired,
 # routed through AuditInputs.era5_gust_path like any other raster below.

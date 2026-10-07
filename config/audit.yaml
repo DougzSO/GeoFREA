@@ -97,7 +97,7 @@ layers:
     source: "native grid of the acquired ERA5 reanalysis-era5-single-levels fg10 files (CDS, 0.25 deg regular lat/lon), read 2026-10-06 from era5_registry.json native_grid (median step, 0.25 x 0.25 for BRA, IND and PRT) and confirmed by GDAL/rasterio on the per-country annual-maximum rasters (EPSG:4326, 0.25 deg). Resolves OQ-029."
 
   gem_existing_plants:
-    expected_resolution_deg: null  # not yet acquired (task F-5); tabular, not a resolution layer.
+    expected_resolution_deg: null  # acquired 2026-10-07 (F5-1); tabular, not a resolution layer.
     source: null
 
 # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):

@@ -30,7 +30,7 @@
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, OQ-038 resolved (retry/timeout policy, D-F1-019), M-F1-05 ERA5 gust acquired, registered and F1b-audited for BRA/PRT/IND (D-F1-022/023, 2026-10-06; OQ-029/OQ-037 closed). M-F1-02 still fails. OQ-012/024/027/028 closed."
+      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, OQ-038 resolved (retry/timeout policy, D-F1-019), M-F1-05 ERA5 gust acquired, registered and F1b-audited for BRA/PRT/IND (D-F1-022/023, 2026-10-06; OQ-029/OQ-037 closed). M-F1-02 still fails. OQ-012/024/027/028 closed. F5-1 done: GEM trackers pinned (snapshot 2026-08-09) and clipped per country, validation-only (V-06 tests); GEM replaces GPPD for F7b (D-F1-026)."
     },
     {
       "id": "F1b",
@@ -58,7 +58,7 @@
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
     {"id": "F7", "module": "robustness_analysis", "status": "not_started", "record": "docs/phases/F7_robustness_analysis.md", "summary": ""},
-    {"id": "F7b", "module": "external_validation", "status": "not_started", "record": "docs/phases/F7b_external_validation.md", "summary": ""},
+    {"id": "F7b", "module": "external_validation", "status": "not_started", "record": "docs/phases/F7b_external_validation.md", "summary": "Inventory input ready (D-F7b-001): GEM solar/wind per country, validation-only. No F7b code."},
     {"id": "F8", "module": "results_synthesis", "status": "not_started", "record": "docs/phases/F8_results_synthesis.md", "summary": ""},
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],

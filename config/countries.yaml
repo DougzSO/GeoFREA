@@ -32,6 +32,7 @@
 # correct for India and other extended-scope countries.
 
 BRA:
+  gem_country_name: "Brazil"  # F5-1: spelling of Country/area in the GEM tracker (label only)
   # Islands (e.g. Fernando de Noronha) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
   mainland_only: true
   hydrosheds_region: "sa"  # South America (HydroRIVERS)
@@ -103,6 +104,7 @@ BRA:
     - "ESA_WorldCover_10m_2020_v100_S33W072_Map.tif"
 
 PRT:
+  gem_country_name: "Portugal"  # F5-1: spelling of Country/area in the GEM tracker (label only)
   # Madeira and the Azores are outside the analyses and the rest of the framework
   # (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
   mainland_only: true
@@ -115,6 +117,7 @@ PRT:
   gadm_level0_sha256: "9bf13b07b5b687037fe09a161ce641c29f40e64377a68ad5e9667fe231f07183"
 
 IND:
+  gem_country_name: "India"  # F5-1: spelling of Country/area in the GEM tracker (label only)
   # Islands (Andaman and Nicobar, Lakshadweep) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
   mainland_only: true
   # HydroRIVERS region = "as" (Central and South-East Asia), per
