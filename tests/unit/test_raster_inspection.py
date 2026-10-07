@@ -14,7 +14,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import pytest
 import rasterio
 from rasterio.errors import WindowError
@@ -30,7 +29,6 @@ from geofrea.data_quality_audit.raster_inspection import (
     _stats_chunked,
     diagnose_consistency,
     inspect_land_cover_tiles,
-    inspect_power_plants,
     inspect_raster,
     row_area_km2,
 )
@@ -194,38 +192,6 @@ def test_inspect_raster_without_country_gdf_reads_full_file(tmp_path):
     assert result["error"] is None
     assert result["masked_by"] == "full file"
     assert result["mean"] == pytest.approx(3.0)
-
-
-@pytest.mark.unit
-def test_inspect_power_plants_with_capacity_and_fuel():
-    df = pd.DataFrame(
-        {
-            "Capacity_MW": [10.0, 5.0, 20.0],
-            "Primary_Fuel": ["Solar", "Wind", "Solar"],
-        }
-    )
-
-    result = inspect_power_plants(df)
-
-    assert result["total_plants"] == 3
-    assert result["total_capacity_mw"] == pytest.approx(35.0)
-    assert result["by_fuel"]["Solar"] == pytest.approx(30.0)
-    assert result["by_fuel"]["Wind"] == pytest.approx(5.0)
-
-
-@pytest.mark.unit
-def test_inspect_power_plants_empty_dataframe_returns_error():
-    result = inspect_power_plants(pd.DataFrame())
-
-    assert result["error"] is not None
-    assert result["total_plants"] == 0
-
-
-@pytest.mark.unit
-def test_inspect_power_plants_none_returns_error():
-    result = inspect_power_plants(None)
-
-    assert result["error"] is not None
 
 
 @pytest.mark.unit
@@ -964,20 +930,6 @@ def test_nodata_mask_falls_back_to_finite_when_nodata_overflows_dtype():
 # ===========================================================================
 # inspect_power_plants — malformed-input error branch (l.517-518).
 # ===========================================================================
-
-
-@pytest.mark.unit
-def test_inspect_power_plants_reports_error_for_malformed_columns():
-    # A CSV with a blank/duplicate header cell gets an integer column
-    # label from pandas (e.g. an "Unnamed: N" column renumbered to N) —
-    # a real malformed-source-file failure mode. .strip() on that integer
-    # label raises AttributeError, caught by this function's own
-    # exception handler.
-    df = pd.DataFrame({"Capacity_MW": [10.0, 5.0], 0: ["x", "y"]})
-
-    result = inspect_power_plants(df)
-
-    assert result["error"] is not None
 
 
 def _write_stack(path: Path, bands: list[np.ndarray]) -> None:

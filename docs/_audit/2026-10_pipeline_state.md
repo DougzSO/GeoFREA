@@ -23,7 +23,7 @@ branch when one of its inputs failed (A-09). The manifest is `outputs/<ISO3>/man
 |---|---|---|---|---|---|
 | 1 | `data_acquisition` | F1 | nothing | `layer_registry` | yes |
 | 2 | `data_quality_audit` | F1b | `layer_registry` | `audit_report` | yes |
-| 3 | `grid_alignment` | F2a | `layer_registry` | `aligned_rasters`, `aligned/<layer>` (elevation, slope, solar, land cover, population, roads, grid, lakes, rivers, plants, the three `distance_capped` flags, 12 wind layers) | yes |
+| 3 | `grid_alignment` | F2a | `layer_registry` | `aligned_rasters`, `aligned/<layer>` (elevation, slope, solar, land cover, population, roads, grid, lakes, rivers, the three `distance_capped` flags, 12 wind layers; the GPPD `plants` raster was removed on 2026-10-07, D-F1-027) | yes |
 | 4 | `siting_layers` | F2b (H-4) | `aligned_rasters` | `siting_layers` (12 physical-unit layers, no normalization) | yes |
 | 5 | `climate_forcing` | F4 (J-3) | `aligned_rasters` | `forcing`, `forcing_masked`, `members` | yes |
 | 6 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
@@ -42,7 +42,7 @@ loud (named error) if they are absent:
 | CMIP6 monthly `rsds`, `tas`, `sfcWind`, 14 models, `historical` + 3 SSPs, global files + registry | `scripts/acquire_cmip6_resource_channel.py` | `climate_forcing` | complete (CESM2 excluded by realization mismatch) |
 | ISIMIP3b daily `tasmax`, `pr` crops (5 GCMs, 4 experiments, 3 countries) | copy from CRAEI (OQ-036) | `hazard_context` | **2041-2070 only**; 2071-2100 not acquired (see section 5) |
 | ERA5 gust annual maxima, 1995-2014 | `scripts/acquire_era5_gust.py` | `hazard_context` | complete, mainland only |
-| Existing-plant trackers (GEM) | F5-1 (not started) | F7b | not acquired |
+| Existing-plant trackers (GEM) | `scripts/acquire_gem_trackers.py` (F5-1) | F7b | pinned snapshot 2026-08-09, clipped per country; the only plant source (GPPD removed, D-F1-027) |
 
 ## 4. Code that exists but is not a phase, and phases that do not exist
 

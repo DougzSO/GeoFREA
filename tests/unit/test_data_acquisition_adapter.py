@@ -5,8 +5,8 @@ no SDK — see adapter.py's module docstring), so these tests exercise it
 with actual small CSV/GeoJSON fixtures on disk, not just empty inputs.
 
 The "malformed" tests below are CHARACTERIZATION tests: they document
-current (non-defensive) behavior — load_power_plants_df()/
-_load_mainland_boundary() have no try/except, per adapter.py's module
+current (non-defensive) behavior — _load_mainland_boundary()
+has no try/except, per adapter.py's module
 docstring, third known gap — not a spec for how failures *should* be
 handled. If that gap is ever fixed (pending Douglas's authorization),
 these specific assertions are expected to change.
@@ -15,7 +15,6 @@ these specific assertions are expected to change.
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 import pytest
 from pydantic import ValidationError
 from pyogrio.errors import DataSourceError
@@ -59,7 +58,6 @@ def test_adapter_with_no_resolved_layers_returns_empty_audit_inputs():
     assert isinstance(audit_inputs, AuditInputs)
     assert audit_inputs.solar_path is None
     assert audit_inputs.elevation_path is None
-    assert audit_inputs.plants_df is None
     assert audit_inputs.country_gdf is None
     assert audit_inputs.wind_paths == []
     assert audit_inputs.land_cover_tiles == []
@@ -319,29 +317,6 @@ def test_land_cover_with_a_stray_single_path_is_rejected_at_construction():
 
 
 @pytest.mark.unit
-def test_adapter_loads_power_plants_csv(tmp_path):
-    csv_path = tmp_path / "plants.csv"
-    csv_path.write_text("capacity_mw,primary_fuel\n10.0,Hydro\n5.0,Solar\n", encoding="utf-8")
-
-    result = _result(
-        [
-            AcquiredLayer(
-                layer_name="power_plants",
-                provenance="local_only",
-                auth_required=False,
-                path=csv_path,
-            )
-        ]
-    )
-
-    audit_inputs = acquisition_result_to_audit_inputs(result)
-
-    assert audit_inputs.plants_df is not None
-    assert len(audit_inputs.plants_df) == 2
-    assert list(audit_inputs.plants_df["primary_fuel"]) == ["Hydro", "Solar"]
-
-
-@pytest.mark.unit
 def test_adapter_loads_and_mainland_filters_boundary(tmp_path):
     mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
     island = Polygon([(10, 10), (10.1, 10), (10.1, 10.1), (10, 10.1)])
@@ -381,50 +356,6 @@ def test_adapter_passes_through_skip_land_cover_flag():
 
 
 # ─── Characterization tests: current (non-defensive) failure behavior ───
-
-
-@pytest.mark.unit
-def test_adapter_empty_power_plants_csv_raises(tmp_path):
-    csv_path = tmp_path / "empty.csv"
-    csv_path.write_text("", encoding="utf-8")
-    result = _result(
-        [
-            AcquiredLayer(
-                layer_name="power_plants",
-                provenance="local_only",
-                auth_required=False,
-                path=csv_path,
-            )
-        ]
-    )
-
-    with pytest.raises(pd.errors.EmptyDataError):
-        acquisition_result_to_audit_inputs(result)
-
-
-@pytest.mark.unit
-def test_adapter_garbage_power_plants_csv_does_not_raise_but_parses_garbage(tmp_path):
-    # Not every malformed CSV raises: pandas happily parses binary
-    # garbage into a nonsense 1-row DataFrame instead of erroring. This
-    # is the scarier failure mode of the two — a silent data-quality
-    # problem, not a loud one — documented here rather than assumed.
-    csv_path = tmp_path / "garbage.csv"
-    csv_path.write_bytes(b"\x00\x01\x02not,a,real\ncsv\x00\x00")
-    result = _result(
-        [
-            AcquiredLayer(
-                layer_name="power_plants",
-                provenance="local_only",
-                auth_required=False,
-                path=csv_path,
-            )
-        ]
-    )
-
-    audit_inputs = acquisition_result_to_audit_inputs(result)
-
-    assert audit_inputs.plants_df is not None
-    assert "capacity_mw" not in [c.lower() for c in audit_inputs.plants_df.columns]
 
 
 @pytest.mark.unit

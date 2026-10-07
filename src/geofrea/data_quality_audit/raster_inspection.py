@@ -30,7 +30,6 @@ from typing import Any
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import rasterio
 from rasterio.errors import WindowError
 from rasterio.features import geometry_mask
@@ -906,52 +905,6 @@ def inspect_land_cover_tiles(
         "total_area_km2": round(total_area, 1),
         "errors": errors,
     }
-
-
-def inspect_power_plants(plants_df: pd.DataFrame | None) -> dict[str, Any]:
-    """Aggregate statistics from existing power-generation plants.
-
-    Args:
-        plants_df: DataFrame with power plant records.
-
-    Returns:
-        Dict matching geofrea.data_quality_audit.schemas.PowerPlantsInspection's fields.
-    """
-    if plants_df is None or plants_df.empty:
-        return {"error": "Data not available", "total_plants": 0}
-
-    result: dict[str, Any] = {
-        "total_plants": len(plants_df),
-        "total_capacity_mw": 0.0,
-        "by_fuel": {},
-        "error": None,
-    }
-    try:
-        df = plants_df.copy()
-        df.columns = [c.strip().lower() for c in df.columns]
-
-        cap_col = next((c for c in ["capacity_mw", "capacity_in_mw"] if c in df.columns), None)
-        if cap_col:
-            result["total_capacity_mw"] = round(
-                float(pd.to_numeric(df[cap_col], errors="coerce").sum()), 1
-            )
-
-        fuel_col = next(
-            (c for c in ["primary_fuel", "fuel1", "fuel"] if c in df.columns), None
-        )
-        if fuel_col and cap_col:
-            by_fuel = (
-                df.groupby(fuel_col)[cap_col]
-                .apply(lambda x: pd.to_numeric(x, errors="coerce").sum())
-                .sort_values(ascending=False)
-            )
-            result["by_fuel"] = {
-                str(f): round(float(c), 1) for f, c in by_fuel.items() if float(c or 0) > 0
-            }
-    except Exception as exc:  # noqa: BLE001 — malformed plant records must not abort the audit
-        result["error"] = str(exc)
-
-    return result
 
 
 def diagnose_consistency(

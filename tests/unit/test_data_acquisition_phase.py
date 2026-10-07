@@ -46,7 +46,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 
 _FETCHER_NAMES = (
-    "fetch_power_plants",
     "fetch_wind",
     "fetch_lakes",
     "fetch_rivers",
@@ -188,7 +187,6 @@ def test_run_acquisition_phase_global_layers_have_no_country_code(tmp_path):
         "solar",
         "lakes",
         "rivers",
-        "power_plants",
         "protected",
         "roads",
     ):
@@ -234,7 +232,6 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
         "wind",
         "lakes",
         "rivers",
-        "power_plants",
         "protected",
     } | _GWA_EXTRA_LAYER_NAMES
     assert local_only == {
@@ -272,7 +269,6 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
         by_status[layer.fetch_status].add(layer.layer_name)
 
     assert by_status["implemented"] == {
-        "power_plants",
         "wind",
         "lakes",
         "rivers",
@@ -294,7 +290,7 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
 @pytest.mark.unit
 @pytest.mark.parametrize(
     "layer_name",
-    ["power_plants", "wind", "lakes", "rivers", "borders", "admin1", "protected"],
+    ["wind", "lakes", "rivers", "borders", "admin1", "protected"],
 )
 def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     tmp_path, monkeypatch, layer_name
@@ -302,7 +298,6 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
     fake_path = tmp_path / f"{layer_name}.fake"
     fake_path.write_bytes(b"fake layer bytes")  # real bytes: resolution now hashes the file
     handler_name = {
-        "power_plants": "fetch_power_plants",
         "wind": "fetch_wind",
         "lakes": "fetch_lakes",
         "rivers": "fetch_rivers",
@@ -321,16 +316,14 @@ def test_run_acquisition_phase_populates_path_when_fetcher_succeeds(
 
 @pytest.mark.unit
 def test_run_acquisition_phase_does_not_call_fetchers_for_unrelated_layers(tmp_path, monkeypatch):
-    # Only the 7 layers in _FETCHED_LAYER_HANDLERS should ever invoke a
+    # Only the 6 layers in _FETCHED_LAYER_HANDLERS should ever invoke a
     # fetcher — every other layer_name must never trigger a call.
     called = []
-    monkeypatch.setattr(
-        phase_module, "fetch_power_plants", lambda *a, **k: called.append("power_plants") or None
-    )
+    monkeypatch.setattr(phase_module, "fetch_lakes", lambda *a, **k: called.append("lakes") or None)
 
     run_acquisition_phase(_context(tmp_path))
 
-    assert called == ["power_plants"]
+    assert called == ["lakes"]
 
 
 @pytest.mark.unit
@@ -529,7 +522,7 @@ def test_acquired_layer_round_trips_through_dumped_fetch_status():
     # extra="forbid". schemas.py's _drop_computed_fetch_status before-
     # validator strips it; this asserts the round trip now succeeds and
     # is lossless.
-    layer = AcquiredLayer(layer_name="power_plants", provenance="fetched", auth_required=False)
+    layer = AcquiredLayer(layer_name="lakes", provenance="fetched", auth_required=False)
     dumped = layer.model_dump(mode="json")
 
     assert "fetch_status" in dumped  # sanity: the bug requires this key to be present
@@ -546,7 +539,7 @@ def test_acquired_layer_still_rejects_unrelated_extra_fields():
     # it must not turn into a blanket extra="ignore" that would hide a
     # genuinely corrupted/mistyped manifest entry.
     dumped = AcquiredLayer(
-        layer_name="power_plants", provenance="fetched", auth_required=False
+        layer_name="lakes", provenance="fetched", auth_required=False
     ).model_dump(mode="json")
     dumped["typo_field_that_should_not_exist"] = "oops"
 

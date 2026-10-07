@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import pytest
 import rasterio
 from shapely.geometry import LineString, Point, Polygon
@@ -13,7 +12,6 @@ from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.grid_alignment.reference_grid import build_reference_grid
 from geofrea.grid_alignment.vector_alignment import (
     align_lakes,
-    align_plants,
     align_rivers,
     calculate_wgs84_isotropic_distance,
     distance_capped_path,
@@ -280,42 +278,3 @@ def test_rasterize_linear_distance_catches_rasterize_failure_and_returns_none(tm
         result = rasterize_linear_distance(line, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0)
 
     assert result is None
-
-
-@pytest.mark.unit
-def test_align_plants_returns_none_when_missing_or_empty():
-    grid = _grid()
-    country_gdf = _country_gdf()
-    assert align_plants(None, "out.tif", country_gdf, grid) is None
-    assert align_plants(pd.DataFrame(), "out.tif", country_gdf, grid) is None
-
-
-@pytest.mark.unit
-def test_align_plants_returns_none_when_lat_lon_columns_missing():
-    grid = _grid()
-    country_gdf = _country_gdf()
-    df = pd.DataFrame({"name": ["Plant A"], "capacity_mw": [10.0]})
-    assert align_plants(df, "out.tif", country_gdf, grid) is None
-
-
-@pytest.mark.unit
-def test_align_plants_accepts_lat_lon_column_aliases(tmp_path):
-    grid = _grid()
-    country_gdf = _country_gdf()
-    df = pd.DataFrame({"Lat": [0.0], "Long": [0.0]})
-
-    out_path = align_plants(df, tmp_path / "plants.tif", country_gdf, grid)
-
-    assert out_path is not None
-    with rasterio.open(out_path) as src:
-        data = src.read(1)
-    assert (data[grid.country_mask] == 1).any()
-
-
-@pytest.mark.unit
-def test_align_plants_drops_points_outside_country_and_returns_none_if_all_dropped(tmp_path):
-    grid = _grid()
-    country_gdf = _country_gdf()
-    df = pd.DataFrame({"latitude": [80.0], "longitude": [80.0]})
-
-    assert align_plants(df, tmp_path / "plants.tif", country_gdf, grid) is None

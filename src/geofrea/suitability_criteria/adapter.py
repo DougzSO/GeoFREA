@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import CountryCriteriaParams, CriteriaParams
-from geofrea.data_acquisition.adapter import load_power_plants_df
 from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.suitability_criteria.schemas import SuitabilityCriteriaInputs
@@ -34,7 +33,6 @@ _ALIGNED_RASTER_FIELDS: tuple[str, ...] = (
     "grid",
     "lakes",
     "rivers",
-    "plants",
 )
 
 
@@ -82,8 +80,6 @@ def build_suitability_criteria_inputs(
 
     wdpa_path = resolved_path(layers.get("protected"))
 
-    plants_df = load_power_plants_df(layers.get("power_plants"))
-
     borders_path = resolved_path(layers.get("borders"))
     if borders_path is None:
         raise SuitabilityCriteriaRequiresBordersError(
@@ -102,5 +98,4 @@ def build_suitability_criteria_inputs(
         wdpa_path=wdpa_path,
         mainland_gdf=mainland_gdf,
         context_gdf=None,
-        plants_df=plants_df,
     )

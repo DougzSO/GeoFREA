@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 4.0.0 |
+| Version | 4.1.0 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-06 |
+| Updated | 2026-10-07 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -155,7 +155,7 @@ Critical transitions:
 - **M-F1-03.** Global Wind Atlas products at hub-relevant heights 100, 150, 200 m: `combined-Weibull-A`, `combined-Weibull-k`, `air-density`, and `wind-speed` (quality check only). Product existence is confirmed on the CDN response after redirect, never on the API redirect alone.
 - **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and both windows (hazard indicators). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI per A-11.
 - **M-F1-05.** ERA5 gust reanalysis (scenario-invariant extreme-wind indicator), built fresh (CRAEI's own D12 decided against ERA5 gust, so there is no A-11 source to adapt). Reduction: annual maximum of `fg10` (10 m wind gust since previous post-processing). Reference period: 1995-2014, for coherence with S-05, since the indicator is declared scenario-invariant.
-- **M-F1-06.** Existing solar and wind plants from Global Energy Monitor trackers, used only in F7b. Never used to fit any parameter (V-06).
+- **M-F1-06.** Existing solar and wind plants from Global Energy Monitor trackers, used only in F7b. Never used to fit any parameter (V-06). GEM is the only existing-plant source: the WRI Global Power Plant Database (records to 2020) is not acquired, aligned or audited, and no rasterized plant layer exists in F2a.
 - **M-F1-07.** GADM borders resolve local-first with checksum; network download is a fallback.
 
 ### F1b data_quality_audit
@@ -337,7 +337,7 @@ Definitions for one country and technology. `C` = candidate cells; futures `f = 
 - **A-06. Synthetic country.** A small synthetic country fixture runs F1-F7 in CI.
 - **A-07. Formats.** Rasters are Cloud Optimized GeoTIFF, EPSG:4326. Tables are parquet with a Pydantic schema and a `schema_version`. Run ID = hash of configuration, methodology version, and code commit.
 - **A-08. Outputs layout.** All data stored in GEOFREA_DATA_DIR (environment variable, never under repository root). Structure:
-  - `raw/<source>/<ISO3|_global>/`: fetched raw data (GADM, HydroSHEDS, WRI GPPD, WDPA, GWA)
+  - `raw/<source>/<ISO3|_global>/`: fetched raw data (GADM, HydroSHEDS, GEM trackers, WDPA, GWA)
   - `interim/<ISO3>/<layer>/`: intermediate processing caches
   - `outputs/<ISO3>/manifest.json`: run manifest per country
   - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports)
@@ -461,6 +461,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 4.1.0 | 2026-10-07 | MINOR (removes an unused input, no result definition changes): the WRI GPPD layer is withdrawn from F1, F1b and F2a (no `power_plants` acquisition, no `plants` aligned raster, no plant statistics in the audit); M-F1-06 states that GEM is the only existing-plant source (D-F1-027). The F2a outputs lose the `aligned/plants` artifact and the V-01 frozen fixture drops `f2a/ZZZ_plants_aligned` (every other frozen layer is identical). |
 | 4.0.0 | 2026-10-07 | MAJOR (changes a result definition): new M-F4-07 masks cell-members whose `delta_wind` is outside `wind_factor_valid_range` (OQ-042 option C, Douglas's verdict), so `forcing.parquet` no longer holds a row for them and `forcing_masked.parquet` declares the absence; M-F4-06 lists the masked-cell file, the hazard-context indicators and the per-window hazard-channel declaration (2071-2100 hazard data not acquired). |
 | 3.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F4-03 `delta_wind` becomes the ratio of 3 x 3 native-cell neighbourhood means of the window and reference annual means instead of a per-cell ratio (Douglas's verdict, option A of OQ-042). `delta_rsds` and `dT` unchanged. Residual noted: MIROC6 over Brazil still gives extreme factors in part of the Amazon (OQ-042 stays open for that residual). |
 | 2.1.0 | 2026-10-06 | MINOR: M-F4-02 gains item 5, a recorded exception keeping IPSL-CM6A-LR (TCR 2.32 K, above the likely range) with a `tcr_exception` flag, per Douglas's verdict on OQ-009 (option C: GFDL-ESM4, MIROC6, ACCESS-CM2, IPSL-CM6A-LR, CNRM-CM6-1, MRI-ESM2-0). No existing result changes. |

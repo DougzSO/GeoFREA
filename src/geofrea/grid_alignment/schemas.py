@@ -38,7 +38,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
 
@@ -82,8 +81,6 @@ class GridAlignmentInputs(BaseModel):
         lakes_path: HydroLAKES vector path (global — clipped internally
             by this phase, same approach data_quality_audit uses).
         rivers_path: HydroRIVERS vector path (global — clipped internally).
-        plants_df: Existing power-plant records — rasterized to a
-            binary existing-plant mask, not reprojected from a file.
         country_gdf: Country polygon (mainland-filtered, from
             core.geo_utils.get_mainland_gdf()) — the geometry the
             output grid is built from (build_reference_grid() in
@@ -121,7 +118,6 @@ class GridAlignmentInputs(BaseModel):
     grid_source: Path | None = None
     lakes_path: Path | None = None
     rivers_path: Path | None = None
-    plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame
     resolution_deg: float
     distance_cap_km: float
@@ -200,8 +196,6 @@ class GridAlignmentResult(BaseModel):
             were found within the country.
         rivers: Geodesic distance-to-river raster (km, float32,
             raw, never truncated; OQ-040), or None if no rivers were found within the country.
-        plants: Binary existing-power-plant mask, or None if plants_df
-            was empty/None.
         roads_distance_capped/grid_distance_capped/rivers_distance_capped:
             uint8 flag rasters (1 = raw distance above `distance_cap_km`),
             written beside the distance rasters (M-F2a-03, OQ-040).
@@ -222,7 +216,6 @@ class GridAlignmentResult(BaseModel):
     grid: Path | None = None
     lakes: Path | None = None
     rivers: Path | None = None
-    plants: Path | None = None
     roads_distance_capped: Path | None = None
     grid_distance_capped: Path | None = None
     rivers_distance_capped: Path | None = None

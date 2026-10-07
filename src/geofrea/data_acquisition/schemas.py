@@ -86,7 +86,7 @@ HASH_CHUNK_BYTES: int = 8 * 1024 * 1024
 # set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, so the
 # two cannot silently drift apart.
 IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
-    {"power_plants", "wind", "lakes", "rivers", "borders", "admin1", "protected"}
+    {"wind", "lakes", "rivers", "borders", "admin1", "protected"}
     # M-F1-03 (2026-09-23, task F1-2): 11 more GWA product/height
     # registry entries, alongside "wind" (= wind_speed at 100 m,
     # unchanged) — see phase.py's _GWA_EXTRA_LAYER_SPECS for the full

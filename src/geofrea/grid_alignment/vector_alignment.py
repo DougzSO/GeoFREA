@@ -65,7 +65,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 from rasterio.features import rasterize
 from scipy import ndimage
 from shapely.geometry import mapping
@@ -344,77 +343,3 @@ def align_rivers(
     _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
     return out_path
 
-
-def align_plants(
-    plants_df: pd.DataFrame | None, out_path, country_gdf: gpd.GeoDataFrame, grid: GridContext
-) -> object | None:
-    """Rasterize existing power-plant locations as a binary mask.
-
-    Args:
-        plants_df: DataFrame with 'latitude'/'longitude' columns (case-
-            insensitive, some aliases accepted — see legacy behavior below).
-        out_path: Output path for the raster.
-        country_gdf: Country GeoDataFrame, for the intersects filter.
-        grid: Target GridContext.
-
-    Returns:
-        Path to the output raster, or None if no plants were found.
-    """
-    if plants_df is None or plants_df.empty:
-        logger.info("    [plants] No plants data available.")
-        return None
-
-    df = plants_df.copy()
-    df.columns = [c.strip().lower() for c in df.columns]
-    lat_col = next((c for c in ["latitude", "lat"] if c in df.columns), None)
-    lon_col = next((c for c in ["longitude", "lon", "long"] if c in df.columns), None)
-
-    if lat_col is None or lon_col is None:
-        logger.warning("    [plants] Missing lat/lon columns.")
-        return None
-
-    gdf = gpd.GeoDataFrame(
-        df, geometry=gpd.points_from_xy(df[lon_col], df[lat_col]), crs="EPSG:4326"
-    )
-    country_union = (
-        country_gdf.geometry.union_all()
-        if hasattr(country_gdf.geometry, "union_all")
-        else country_gdf.geometry.unary_union
-    )
-    gdf = gdf[gdf.intersects(country_union)]
-
-    if gdf.empty:
-        logger.info("    [plants] No plants intersect country geometry.")
-        return None
-
-    logger.info("    [plants] %d plants rasterized.", len(gdf))
-
-    shapes = [(mapping(g), 1) for g in gdf.geometry]
-    plant_mask = rasterize(
-        shapes=shapes,
-        out_shape=(grid.height, grid.width),
-        transform=grid.transform,
-        fill=0,
-        all_touched=True,
-        dtype=np.uint8,
-    )
-    plant_mask[~grid.country_mask] = NODATA_UINT8
-
-    profile = {
-        "driver": "GTiff",
-        "dtype": "uint8",
-        "width": grid.width,
-        "height": grid.height,
-        "count": 1,
-        "crs": grid.crs,
-        "transform": grid.transform,
-        "nodata": NODATA_UINT8,
-        "compress": "lzw",
-        "tiled": True,
-        "blockxsize": 256,
-        "blockysize": 256,
-    }
-    with safe_raster_write(out_path, **profile) as dst:
-        dst.write(plant_mask, 1)
-
-    return out_path

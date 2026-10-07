@@ -279,7 +279,7 @@ def test_run_grid_alignment_phase_missing_layers_leave_none_without_error(tmp_pa
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
     for field in ("elevation", "slope", "solar", "land_cover", "population",
-                  "roads", "grid", "lakes", "rivers", "plants"):
+                  "roads", "grid", "lakes", "rivers"):
         assert getattr(result, field) is None
     assert result.wind_layers == {}
 

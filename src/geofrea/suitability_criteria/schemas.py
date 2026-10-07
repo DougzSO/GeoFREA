@@ -78,7 +78,7 @@ class SuitabilityCriteriaInputs(BaseModel):
 
     Args:
         elevation/slope/solar/wind/land_cover/population/roads/grid/
-        lakes/rivers/plants: Aligned raster paths from
+        lakes/rivers: Aligned raster paths from
             grid_alignment (GridAlignmentResult), or None if that layer
             was not produced.
         grid_metadata: The reference-grid parameters from grid_alignment

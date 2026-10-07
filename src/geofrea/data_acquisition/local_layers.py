@@ -310,7 +310,6 @@ _SYNTHETIC_FETCHED_LAYER_RELPATHS: dict[str, str] = {
     "protected": "protected_areas/wdpa_synthetic.gpkg",
     "lakes": "hydrology/lakes/zzz_lakes.gpkg",
     "rivers": "hydrology/rivers/zzz_rivers.gpkg",
-    "power_plants": "power_plants/zzz_power_plants.csv",
     "wind": "wind/gwa/ZZZ_wind_speed_100m.tif",
     "wind_speed_150m": "wind/gwa/ZZZ_wind_speed_150m.tif",
     "wind_speed_200m": "wind/gwa/ZZZ_wind_speed_200m.tif",

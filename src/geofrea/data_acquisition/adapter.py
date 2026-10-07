@@ -32,17 +32,15 @@ staying single-path and land_cover getting a list field were each a
 deliberate call, not the same fix applied twice.
 
 THIRD KNOWN GAP, NOT defensive by design (flagged, not fixed — see
-DECISIONS.md 2026-08-24): load_power_plants_df()/_load_mainland_boundary()
-below have no try/except. A malformed CSV either silently parses into
-garbage (pandas does not always raise) or raises pandas.errors.
-EmptyDataError; a corrupted/non-geospatial file at the boundary path
-raises pyogrio's DataSourceError. Both propagate straight out of this
+DECISIONS.md 2026-08-24): _load_mainland_boundary() below has no
+try/except. A corrupted/non-geospatial file at the boundary path
+raises pyogrio's DataSourceError. It propagates straight out of this
 adapter today — unlike data_quality_audit's inspect_raster() and (as of
 2026-08-24) inspect_vector_layer(), both of which catch broadly and
 report {"error": str(exc)} instead of raising. Left as-is pending
 authorization — see tests/unit/test_data_acquisition_adapter.py's
 characterization tests for the exact exceptions each failure mode
-raises. Note this gap is specific to load_power_plants_df()/
+raises. Note this gap is specific to
 _load_mainland_boundary() — the plain pass-through Path fields added
 2026-08-24 (protected_path, admin1_path, grid_path, roads_path,
 borders_path) never open the file here at all, so there is nothing to
@@ -55,7 +53,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 
 from geofrea.core import paths as core_paths
 from geofrea.core.geo_utils import load_mainland_boundary
@@ -75,8 +72,7 @@ from geofrea.data_quality_audit.schemas import AuditInputs
 _CMIP6_REPRESENTATIVE_EXPERIMENT = "historical"
 _CMIP6_REPRESENTATIVE_VARIABLE = "tas"
 
-# layer_name -> AuditInputs single-Path field. power_plants needs
-# special handling below (loaded, not just passed through); wind is
+# layer_name -> AuditInputs single-Path field. wind is
 # wrapped into a list; land_cover uses .paths — see module docstring
 # "wind vs. land_cover".
 #
@@ -147,7 +143,6 @@ def acquisition_result_to_audit_inputs(
 
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
-    plants_df = load_power_plants_df(layers.get("power_plants"))
     country_gdf = _load_mainland_boundary(layers.get("borders"))
     cmip6_paths = _resolve_cmip6_representative_paths(result.country_code)
     era5_gust_path = _resolve_era5_gust_path(result.country_code)
@@ -162,7 +157,6 @@ def acquisition_result_to_audit_inputs(
         cmip6_miroc6_path=cmip6_paths.get("miroc6"),
         era5_gust_path=era5_gust_path,
         land_cover_tiles=land_cover_tiles,
-        plants_df=plants_df,
         country_gdf=country_gdf,
         skip_land_cover=skip_land_cover,
     )
@@ -223,23 +217,6 @@ def _resolve_era5_gust_path(country_code: str) -> Path | None:
     if entry is not None and entry.status == "registered" and entry.source_path:
         return Path(entry.source_path)
     return None
-
-
-def load_power_plants_df(layer: AcquiredLayer | None) -> pd.DataFrame | None:
-    """Load the power-plants CSV, if a path was resolved for it.
-
-    Public (not `_`-prefixed, unlike the rest of this module's small
-    per-field loaders): grid_alignment/adapter.py needs the identical
-    logic for its own plants_df field and imports this directly rather
-    than duplicating it — see docs/DECISIONS.md 2026-09-08,
-    grid_alignment orchestrator wiring, for why (same "don't
-    mechanically duplicate" care already applied to the mainland-
-    boundary derivation below).
-    """
-    path = resolved_path(layer)
-    if path is None:
-        return None
-    return pd.read_csv(path)
 
 
 def _load_mainland_boundary(layer: AcquiredLayer | None) -> gpd.GeoDataFrame | None:

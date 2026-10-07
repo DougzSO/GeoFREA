@@ -47,7 +47,6 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.raster_inspection import (
     diagnose_consistency,
     inspect_land_cover_tiles,
-    inspect_power_plants,
     inspect_raster,
     timer,
 )
@@ -58,7 +57,6 @@ from geofrea.data_quality_audit.schemas import (
     AuditResult,
     AuditSummary,
     LandCoverInspection,
-    PowerPlantsInspection,
     RasterInspection,
     RasterLayerSummary,
     SlopeThresholdCheck,
@@ -295,14 +293,6 @@ def run_audit_phase(
         land_cover = {"error": "Tiles not found"}
         timings["land_cover"] = 0.0
 
-    # ── Power plants ────────────────────────────────────────────────
-    if inputs.plants_df is not None:
-        with timer("power_plants", timings):
-            power_plants = inspect_power_plants(inputs.plants_df)
-    else:
-        power_plants = {"error": "Data not available", "total_plants": 0}
-        timings["power_plants"] = 0.0
-
     # ── Consistency diagnostics ─────────────────────────────────────
     wind_cfg = audit_config.layers.get("wind", {})
     wind_speed_cfg = wind_cfg.get("wind-speed") if isinstance(wind_cfg, dict) else None
@@ -387,7 +377,7 @@ def run_audit_phase(
     # ── Assemble + validate ─────────────────────────────────────────
     n_wind = len(inputs.wind_paths)
     summary = _build_summary(
-        rasters, vectors, land_cover, power_plants, alerts, n_wind, not_audited
+        rasters, vectors, land_cover, alerts, n_wind, not_audited
     )
     elapsed_total = round((datetime.now(UTC) - started_at).total_seconds(), 1)
 
@@ -396,7 +386,6 @@ def run_audit_phase(
         timestamp=started_at.isoformat(),
         rasters={k: RasterInspection.model_validate(v) for k, v in rasters.items()},
         land_cover=LandCoverInspection.model_validate(land_cover),
-        power_plants=PowerPlantsInspection.model_validate(power_plants),
         vectors={k: VectorLayerInspection.model_validate(v) for k, v in vectors.items()},
         alerts=alerts,
         slope_threshold_check=slope_threshold_check,
@@ -428,7 +417,6 @@ def _build_summary(
     rasters: dict[str, dict],
     vectors: dict[str, dict],
     land_cover: dict,
-    power_plants: dict,
     alerts: list[str],
     n_wind: int,
     not_audited: dict[str, str],
@@ -436,13 +424,12 @@ def _build_summary(
     """Build a concise summary from the raw audit dicts.
 
     `layers` covers AuditResult.rasters + AuditResult.vectors' combined
-    13 names (see AuditSummary.layers' docstring for why land_cover/
-    power_plants stay separate) — added 2026-08-24 (see DECISIONS.md
+    13 names (see AuditSummary.layers' docstring for why land_cover
+    stays separate) — added 2026-08-24 (see DECISIONS.md
     same date, "AuditSummary refactor to layer-keyed dict"), replacing
     the flat layers_ok/layers_missing/n_wind_files/*_range fields.
     """
     lc = land_cover or {}
-    pp = power_plants or {}
 
     layers: dict[str, RasterLayerSummary | VectorLayerSummary] = {}
 
@@ -486,8 +473,6 @@ def _build_summary(
         lc_tiles_total=lc.get("n_tiles", 0),
         lc_total_area_km2=lc.get("total_area_km2", 0),
         lc_classes=len(lc.get("class_stats", {})),
-        total_plants=pp.get("total_plants", 0),
-        total_cap_mw=pp.get("total_capacity_mw", 0),
         n_alerts=len(alerts),
         n_not_audited=len(not_audited),
     )
@@ -614,24 +599,6 @@ def _format_report(result: AuditResult, audit_config: AuditConfig) -> str:
 
     blank()
     sep("-")
-    pp = result.power_plants
-    t_pp = result.timings.get("power_plants", 0)
-    lines.append(f"  EXISTING POWER PLANTS  [{t_pp:.1f}s]")
-    sep("-")
-    if pp.error and not pp.total_plants:
-        lines.append(f"  [MISSING] {pp.error}")
-    else:
-        row("Total plants", pp.total_plants)
-        row("Total capacity", f"{pp.total_capacity_mw:,.0f} MW")
-        if pp.by_fuel:
-            blank()
-            lines.append("    Fuel                           |    MW")
-            lines.append("    " + "-" * 38)
-            for fuel, cap in list(pp.by_fuel.items())[:12]:
-                lines.append(f"    {fuel:<32}| {cap:>8,.0f}")
-
-    blank()
-    sep("-")
     lines.append("  CONSISTENCY ALERTS")
     sep("-")
     if not result.alerts:
@@ -714,8 +681,6 @@ def _format_report(result: AuditResult, audit_config: AuditConfig) -> str:
         status = vector_summary.status if vector_summary is not None else "missing"
         row(label, _VECTOR_STATUS_DISPLAY[status])
 
-    row("Power plants", s.total_plants)
-    row("Installed capacity", f"{s.total_cap_mw:,.0f} MW")
     row("Alerts", s.n_alerts)
     row("Not audited", s.n_not_audited)
 

@@ -1,6 +1,6 @@
 """QC: how far are existing power plants from the OSM grid layer? (L-018, OQ-041 evidence)
 
-Existing plants (WRI GPPD) are connected to the grid in reality. If many sit far from the mapped OSM grid, the OSM
+Existing plants (GEM Global Integrated Power Tracker, operating units, all fuels; the pinned snapshot of F5-1) are connected to the grid in reality. If many sit far from the mapped OSM grid, the OSM
 layer has holes there, and a large `dist_grid_km` is a mapping gap rather than a real absence of grid. Samples the
 aligned F2a grid-distance raster at each plant inside the country mainland and prints distribution tables.
 
@@ -13,17 +13,27 @@ import argparse
 import os
 from pathlib import Path
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+
+from geofrea.core.config_loader import load_countries
+from geofrea.data_acquisition.fetchers import gem_trackers
 
 COUNTRIES = ("PRT", "IND", "BRA")
 THRESHOLDS_KM = (5, 10, 25, 50, 100)
 
 
-def plants_for(csv: Path, iso: str) -> pd.DataFrame:
-    df = pd.read_csv(csv, usecols=["country", "capacity_mw", "primary_fuel", "latitude", "longitude"], low_memory=False)
-    return df[df["country"] == iso].dropna(subset=["latitude", "longitude"]).copy()
+def plants_for(xlsx: Path, iso: str, gem_name: str, boundary: Path) -> pd.DataFrame:
+    """Operating GEM units of every fuel inside the mainland polygon; columns match what main() expects."""
+    df = pd.read_excel(xlsx, sheet_name=gem_trackers.SHEET)
+    df = df[(df["Country/area"] == gem_name) & (df["Status"] == "operating")]
+    df = df.rename(columns={"Type": "tech", "Status": "status", "Latitude": "lat", "Longitude": "lon"})
+    df["capacity_mw"] = pd.to_numeric(df["Capacity (MW)"], errors="coerce")
+    df = df.dropna(subset=["lat", "lon", "capacity_mw"])
+    clipped = gem_trackers.clip_country(df[["Country/area", "tech", "status", "lat", "lon", "capacity_mw"]], iso, gem_name, gpd.read_file(boundary))
+    return clipped.rename(columns={"tech": "primary_fuel", "lat": "latitude", "lon": "longitude"})
 
 
 def sample(raster: Path, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
@@ -51,11 +61,13 @@ def main() -> None:
     ap.add_argument("--min-mw", type=float, default=1.0)
     args = ap.parse_args()
     data = Path(os.environ["GEOFREA_DATA_DIR"])
-    csv = data / "raw" / "wri_gppd" / "_global" / "global_power_plant_database.csv"
+    xlsx = data / "raw" / "gem" / "_global" / gem_trackers.load_pin()["file"]
+    countries = load_countries(Path(__file__).resolve().parents[1] / "config" / "countries.yaml")
     print(f"Plants with capacity >= {args.min_mw} MW inside the mainland, distance to the OSM grid (km, aligned F2a raster)\n")
     for iso in COUNTRIES:
         raster = data / "outputs" / iso / "grid_alignment" / "artifacts" / f"{iso}_grid_aligned.tif"
-        df = plants_for(csv, iso)
+        boundary = data / "raw" / "gadm" / iso / f"gadm41_{iso}_0_mainland.shp"
+        df = plants_for(xlsx, iso, countries[iso]["gem_country_name"], boundary)
         df = df[df["capacity_mw"] >= args.min_mw]
         df["dist_km"] = sample(raster, df["latitude"].to_numpy(), df["longitude"].to_numpy())
         inside = df.dropna(subset=["dist_km"])

@@ -23,10 +23,9 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import LineString, box
 
 # --- Extent -----------------------------------------------------------
 WEST, EAST = 20.00, 20.30
@@ -246,30 +245,6 @@ def gen_wind() -> None:
             dst.write(arr, 1)
 
 
-def gen_power_plants() -> None:
-    """3 power plants at known pixel locations, known total capacity_mw = 100."""
-    pts = [
-        Point(WEST + 2 * PIXEL_DEG, NORTH - 2 * PIXEL_DEG),
-        Point(WEST + 15 * PIXEL_DEG, NORTH - 10 * PIXEL_DEG),
-        Point(WEST + 28 * PIXEL_DEG, NORTH - 18 * PIXEL_DEG),
-    ]
-    # The loader (data_acquisition/local_layers.py, adapter.load_power_plants_df) reads a CSV with
-    # latitude/longitude columns, like the real GPPD extract; this generator had drifted to a GPKG.
-    df = pd.DataFrame(
-        {
-            "gppd_idnr": ["ZZZ0001", "ZZZ0002", "ZZZ0003"],
-            "capacity_mw": [20.0, 30.0, 50.0],
-            "primary_fuel": ["Solar", "Wind", "Solar"],
-            "country": ["ZZZ", "ZZZ", "ZZZ"],
-            "latitude": [p.y for p in pts],
-            "longitude": [p.x for p in pts],
-        }
-    )
-    out = RAW / "power_plants" / "zzz_power_plants.csv"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out, index=False)
-
-
 def main() -> None:
     RAW.mkdir(parents=True, exist_ok=True)
     gen_borders()
@@ -284,7 +259,6 @@ def main() -> None:
     gen_grid()
     gen_solar()
     gen_wind()
-    gen_power_plants()
 
     manifest = {
         "extent": {"west": WEST, "east": EAST, "south": SOUTH, "north": NORTH},

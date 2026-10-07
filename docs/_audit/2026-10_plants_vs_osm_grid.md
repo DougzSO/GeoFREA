@@ -1,5 +1,68 @@
 # Existing power plants against the OSM grid layer — is a large `dist_grid_km` a mapping gap? (L-018, OQ-041)
 
+## Update 2026-10-07: repeated with GEM (GPPD replaced, D-F1-026)
+
+The first run (below, 2026-10-06) used WRI GPPD, whose records stop at 2020. It was repeated with the Global Energy Monitor
+Global Integrated Power Tracker (snapshot 2026-08-09, operating units of every fuel, >= 1 MW, inside the mainland polygon),
+which holds 3 to 13 times more solar and wind units. `scripts/qc_plants_vs_grid.py` now reads GEM. **The reading does not change.**
+
+| Country | Plants (GEM) | Median km | > 50 km (% of plants) | > 50 km (% of MW) | > 100 km (% of plants) | Reading |
+|---|---:|---:|---:|---:|---:|---|
+| PRT | 595 | 1.0 | 0.0 | 0.0 | 0.0 | OSM grid complete (every plant within 14 km). |
+| BRA | 6,042 | 1.1 | 0.4 | 0.0 | 0.0 | Consistent with the real network; the few far units are small solar plants (one 2 MW unit at 430 km). |
+| IND | 5,727 | 2.1 | 12.7 | 14.3 | 4.8 | **Incomplete OSM grid**: 24% of wind, 11% of solar and 41% of hydro units sit more than 50 km from a mapped feature. Same pattern as with GPPD (15.7% of plants, 14.7% of MW). |
+
+Caveat: GEM locations carry an accuracy flag (`Location accuracy`) that this check does not use, so part of the far solar and
+wind units may be mislocated rather than disconnected; the hydro and nuclear points show the same gap in IND. Output as printed
+by the script (GEM):
+
+```
+Plants with capacity >= 1.0 MW inside the mainland, distance to the OSM grid (km, aligned F2a raster)
+
+## PRT: 600 plants, 595 inside the mainland grid, 20757 MW
+| group | n | median_km | p90_km | max_km | >5km_%n | >10km_%n | >25km_%n | >50km_%n | >100km_%n | >50km_%MW |
+|---|---|---|---|---|---|---|---|---|---|---|
+| all | 595 | 1.0 | 2.8 | 13.7 | 3.4 | 0.2 | 0.0 | 0.0 | 0.0 | 0.0 |
+| bioenergy | 12 | 0.0 | 0.9 | 1.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| hydropower | 35 | 0.0 | 1.0 | 6.6 | 2.9 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| oil/gas | 19 | 0.0 | 1.0 | 1.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| utility-scale solar | 168 | 1.0 | 3.9 | 9.6 | 7.7 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| wind | 361 | 1.0 | 2.8 | 13.7 | 1.7 | 0.3 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+farthest 5: wind 3 MW at 14 km; utility-scale solar 14 MW at 10 km; utility-scale solar 2 MW at 9 km; utility-scale solar 1 MW at 9 km; utility-scale solar 2 MW at 9 km 
+
+## IND: 5738 plants, 5727 inside the mainland grid, 475720 MW
+| group | n | median_km | p90_km | max_km | >5km_%n | >10km_%n | >25km_%n | >50km_%n | >100km_%n | >50km_%MW |
+|---|---|---|---|---|---|---|---|---|---|---|
+| all | 5727 | 2.1 | 63.7 | 284.6 | 36.9 | 29.5 | 20.5 | 12.7 | 4.8 | 14.3 |
+| bioenergy | 136 | 1.5 | 29.7 | 112.1 | 36.0 | 23.5 | 14.7 | 5.1 | 1.5 | 4.1 |
+| coal | 858 | 0.0 | 22.6 | 165.7 | 20.3 | 16.1 | 9.7 | 5.1 | 2.3 | 5.5 |
+| hydropower | 212 | 15.7 | 162.2 | 239.0 | 57.1 | 53.3 | 47.2 | 41.0 | 28.8 | 53.3 |
+| nuclear | 19 | 0.0 | 88.6 | 88.6 | 31.6 | 31.6 | 31.6 | 21.1 | 0.0 | 14.1 |
+| oil/gas | 99 | 0.0 | 29.9 | 219.1 | 21.2 | 13.1 | 11.1 | 9.1 | 7.1 | 3.6 |
+| utility-scale solar | 3724 | 2.4 | 54.7 | 284.6 | 38.6 | 30.1 | 19.8 | 11.0 | 2.9 | 19.7 |
+| wind | 679 | 3.9 | 106.6 | 169.9 | 44.6 | 39.6 | 32.1 | 24.0 | 10.9 | 19.9 |
+
+farthest 5: utility-scale solar 1 MW at 285 km; utility-scale solar 1 MW at 249 km; utility-scale solar 3 MW at 244 km; hydropower 180 MW at 239 km; utility-scale solar 2 MW at 238 km 
+
+## BRA: 6052 plants, 6042 inside the mainland grid, 203697 MW
+| group | n | median_km | p90_km | max_km | >5km_%n | >10km_%n | >25km_%n | >50km_%n | >100km_%n | >50km_%MW |
+|---|---|---|---|---|---|---|---|---|---|---|
+| all | 6042 | 1.1 | 7.6 | 430.3 | 14.7 | 5.3 | 1.3 | 0.4 | 0.0 | 0.0 |
+| bioenergy | 621 | 1.1 | 8.7 | 75.1 | 18.2 | 8.7 | 1.1 | 0.3 | 0.0 | 0.1 |
+| coal | 13 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| hydropower | 193 | 0.0 | 1.5 | 14.4 | 3.1 | 1.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| oil/gas | 132 | 0.0 | 1.1 | 4.9 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| utility-scale solar | 3946 | 1.5 | 8.7 | 430.3 | 15.9 | 5.9 | 1.9 | 0.5 | 0.1 | 0.2 |
+| wind | 1135 | 1.5 | 5.6 | 20.8 | 12.5 | 2.6 | 0.0 | 0.0 | 0.0 | 0.0 |
+
+farthest 5: utility-scale solar 2 MW at 430 km; utility-scale solar 4 MW at 172 km; utility-scale solar 3 MW at 87 km; utility-scale solar 1 MW at 76 km; bioenergy 3 MW at 75 km
+```
+
+---
+
+## Original run 2026-10-06 (WRI GPPD)
+
 Date: 2026-10-06. Script: `scripts/qc_plants_vs_grid.py` (reads the aligned F2a grid-distance rasters and the WRI GPPD
 plant list; run with `GEOFREA_DATA_DIR` set). Question raised by the distance QC in `docs/phases/F2a_grid_alignment.md`
 D-F2a-011: 23% of BRA and 9% of IND lie more than 100 km from the mapped grid. Existing plants are connected to the real

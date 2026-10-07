@@ -19,7 +19,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import pytest
 import rasterio
 from rasterio.transform import from_origin
@@ -99,7 +98,6 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
     ):
         assert result.rasters[layer].error == "File not found"
     assert result.land_cover.error == "Tiles not found"
-    assert result.power_plants.error is not None
     for vname in ("borders", "admin1", "grid", "roads", "protected", "lakes", "rivers"):
         assert result.vectors[vname].found is False
     # AuditSummary.layers replaced the flat layers_ok/layers_missing
@@ -286,19 +284,6 @@ def test_run_audit_phase_skip_land_cover_flag(tmp_path):
 
     assert result.land_cover.skipped is True
     assert "land_cover" in result.skipped
-
-
-@pytest.mark.unit
-def test_run_audit_phase_inspects_power_plants(tmp_path):
-    plants_df = pd.DataFrame(
-        {"capacity_mw": [12.0, 8.0], "primary_fuel": ["Hydro", "Hydro"]}
-    )
-    inputs = AuditInputs(plants_df=plants_df)
-    result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
-
-    assert result.power_plants.total_plants == 2
-    assert result.power_plants.total_capacity_mw == pytest.approx(20.0)
-    assert result.power_plants.by_fuel["Hydro"] == pytest.approx(20.0)
 
 
 @pytest.mark.unit

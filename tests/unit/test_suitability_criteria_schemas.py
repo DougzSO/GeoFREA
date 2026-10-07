@@ -140,7 +140,7 @@ def test_inputs_reject_unexpected_field():
 @pytest.mark.unit
 def test_inputs_optional_layers_default_to_none():
     result = SuitabilityCriteriaInputs.model_validate(_valid_inputs())
-    for layer in ("wind", "population", "roads", "grid", "lakes", "rivers", "plants"):
+    for layer in ("wind", "population", "roads", "grid", "lakes", "rivers"):
         assert getattr(result, layer) is None
 
 

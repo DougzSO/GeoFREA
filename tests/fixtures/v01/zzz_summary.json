@@ -44,15 +44,6 @@
     "max": 40.0,
     "sum": 15000.0
   },
-  "f2a/ZZZ_plants_aligned": {
-    "shape": [
-      20,
-      30
-    ],
-    "min": 0.0,
-    "max": 1.0,
-    "sum": 3.0
-  },
   "f2a/ZZZ_population_aligned": {
     "shape": [
       20,

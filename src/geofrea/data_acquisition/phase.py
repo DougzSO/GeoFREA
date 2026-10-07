@@ -86,7 +86,6 @@ import geopandas as gpd
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
-from geofrea.data_acquisition.fetchers.power_plants import fetch_power_plants
 from geofrea.data_acquisition.fetchers.protected_planet import fetch_protected_areas
 from geofrea.data_acquisition.fetchers.wind import (
     GWA_HEIGHTS_M,
@@ -151,7 +150,6 @@ class DataAcquisitionLayerFailedError(RuntimeError):
 # (surfaced via the Orchestrator's own PhaseExecutionError) rather
 # than silently degrade to path=None like a real network error would.
 _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
-    "power_plants": lambda ctx: fetch_power_plants(ctx.outputs_dir),
     "wind": lambda ctx: fetch_wind(ctx.outputs_dir, ctx.country_code),
     "lakes": lambda ctx: fetch_lakes(ctx.outputs_dir),
     "rivers": lambda ctx: fetch_rivers(ctx.outputs_dir, ctx.country_code),
@@ -453,14 +451,13 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
     _LayerSpec("solar", "local_only", False, "local bundled file (global PVOUT, no confirmed automatable source)", False),
     _LayerSpec("lakes", "fetched", False, "HydroSHEDS (HydroLAKES global file, data.hydrosheds.org)", False),
     _LayerSpec("rivers", "fetched", False, "HydroSHEDS (HydroRIVERS regional tile, data.hydrosheds.org)", False),
-    _LayerSpec("power_plants", "fetched", False, "WRI Global Power Plant Database (GitHub, pinned commit)", False),
 )
 
 
 def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     """Build an AcquisitionResult for one country.
 
-    7 layers (power_plants, wind, lakes, rivers, borders, admin1,
+    6 layers (wind, lakes, rivers, borders, admin1,
     protected — see _FETCHED_LAYER_HANDLERS) call a real fetcher and
     may have a real `path` populated. 6 more (elevation, population,
     grid, roads, land_cover, solar — see _LOCAL_PATH_HANDLERS /

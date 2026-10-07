@@ -97,9 +97,12 @@ import geopandas as gpd
 
 from geofrea.core import paths as core_paths
 from geofrea.core.constants import CELL_NESTING_PIXELS
-from geofrea.core.geo_utils import clip_cache_is_current, write_clip_cache_key
+from geofrea.core.geo_utils import (
+    clip_cache_is_current,
+    read_clipped_to_country,
+    write_clip_cache_key,
+)
 from geofrea.core.geo_utils import clip_cache_key as _clip_cache_key
-from geofrea.core.geo_utils import read_clipped_to_country
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
@@ -112,7 +115,6 @@ from geofrea.grid_alignment.reference_grid import GridContext, build_reference_g
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult, GridMetadata
 from geofrea.grid_alignment.vector_alignment import (
     align_lakes,
-    align_plants,
     align_rivers,
     distance_capped_path,
     load_vector_bbox,
@@ -456,13 +458,6 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     for layer in ("roads", "grid", "rivers"):
         flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
         aligned[f"{layer}_distance_capped"] = flag_path if flag_path and flag_path.exists() else None
-
-    with timer("plants", timings):
-        aligned["plants"] = _execute_or_load(
-            "plants",
-            lambda: align_plants(inputs.plants_df, _path("plants"), inputs.country_gdf, grid),
-            inputs.plants_df is not None,
-        )
 
     grid_metadata = _save_grid_metadata(context.country_code, out_dir, grid, resolution_deg)
 

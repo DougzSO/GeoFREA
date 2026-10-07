@@ -53,7 +53,6 @@ from pathlib import Path
 
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import ResolutionsConfig
-from geofrea.data_acquisition.adapter import load_power_plants_df
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -64,7 +63,7 @@ from geofrea.data_acquisition.schemas import (
 from geofrea.grid_alignment.schemas import GridAlignmentInputs
 
 # layer_name -> GridAlignmentInputs single-Path field. wind/land_cover/
-# plants_df/country_gdf need special handling below — see module
+# country_gdf need special handling below — see module
 # docstring.
 _SOURCE_PATH_FIELDS: dict[str, str] = {
     "elevation": "elevation_path",
@@ -133,8 +132,6 @@ def acquisition_result_to_grid_alignment_inputs(
 
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
 
-    plants_df = load_power_plants_df(layers.get("power_plants"))
-
     borders_path = resolved_path(layers.get("borders"))
     if borders_path is None:
         raise GridAlignmentRequiresBordersError(
@@ -148,7 +145,6 @@ def acquisition_result_to_grid_alignment_inputs(
         **source_paths,
         wind_layers=wind_layers,
         land_cover_tiles=land_cover_tiles,
-        plants_df=plants_df,
         country_gdf=country_gdf,
         resolution_deg=resolutions.suitability,
         distance_cap_km=distance_cap_km,

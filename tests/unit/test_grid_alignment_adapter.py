@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import geopandas as gpd
-import pandas as pd
 import pytest
 from shapely.geometry import Polygon
 
@@ -156,19 +155,6 @@ def test_adapter_maps_land_cover_tiles_list(tmp_path):
     inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
 
     assert inputs.land_cover_tiles == tiles
-
-
-@pytest.mark.unit
-def test_adapter_loads_power_plants_csv(tmp_path):
-    boundary_path = _boundary_path(tmp_path)
-    plants_path = tmp_path / "plants.csv"
-    plants_path.write_text("latitude,longitude,capacity_mw\n0.5,0.5,100\n", encoding="utf-8")
-    result = _result([_layer("borders", boundary_path), _layer("power_plants", plants_path)])
-
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
-
-    assert isinstance(inputs.plants_df, pd.DataFrame)
-    assert len(inputs.plants_df) == 1
 
 
 # ─── resolutions threading (2026-09-09, grid_alignment Passo 4 item 3) ───

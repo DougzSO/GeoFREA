@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import geopandas as gpd
-import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from geofrea.core.schemas import GeometryRepairSummary
@@ -161,7 +160,6 @@ class AuditInputs(BaseModel):
             data_quality_audit at inspection time (clip=True) — no
             longer the country-scoped, unclipped OSM Overpass file the
             original skeleton assumed.
-        plants_df: Existing power-plant records.
         country_gdf: Country polygon (mainland-filtered) used to mask
             every raster to the real country boundary, not a bounding box.
         skip_land_cover: If True, skip ESA tile analysis (the slowest step).
@@ -188,7 +186,6 @@ class AuditInputs(BaseModel):
     admin1_path: Path | None = None
     grid_path: Path | None = None
     roads_path: Path | None = None
-    plants_df: pd.DataFrame | None = None
     country_gdf: gpd.GeoDataFrame | None = None
     skip_land_cover: bool = False
 
@@ -301,17 +298,6 @@ class VectorLayerInspection(BaseModel):
     error_type: Literal["read_error", "processing_error"] | None = None
 
 
-class PowerPlantsInspection(BaseModel):
-    """Aggregated statistics from existing power-generation plants."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    total_plants: int = 0
-    total_capacity_mw: float = 0.0
-    by_fuel: dict[str, float] = {}
-    error: str | None = None
-
-
 class RasterLayerSummary(BaseModel):
     """Concise per-layer status for one audited raster (see AuditSummary.layers).
 
@@ -378,13 +364,11 @@ class AuditSummary(BaseModel):
     "AuditSummary refactor to layer-keyed dict") — one dict, keyed by
     layer name, covering the same 12 names as AuditResult.rasters
     (5) + AuditResult.vectors (7) combined (confirmed disjoint — no
-    name collision between the two namespaces). land_cover and
-    power_plants deliberately stay OUT of `layers`, as their own
-    dedicated fields below — they are aggregates over many files/
-    records, not a single-file "layer" in the same sense as the other
-    12, and AuditResult itself already keeps them as separate top-level
-    fields rather than folding them into `rasters`/`vectors` — `layers`
-    mirrors that same structural split, not a new one.
+    name collision between the two namespaces). land_cover
+    deliberately stays OUT of `layers`, as its own dedicated field below — it is an aggregate over many files,
+    not a single-file "layer" in the same sense as the other 12, and AuditResult itself already keeps it as a
+    separate top-level field rather than folding it into `rasters`/`vectors` — `layers` mirrors that same
+    structural split, not a new one.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -394,8 +378,6 @@ class AuditSummary(BaseModel):
     lc_tiles_total: int
     lc_total_area_km2: float
     lc_classes: int
-    total_plants: int
-    total_cap_mw: float
     n_alerts: int
     n_not_audited: int
 
@@ -441,7 +423,6 @@ class AuditResult(BaseModel):
         rasters: One RasterInspection per inspected raster layer
             (solar, elevation, slope, population, wind).
         land_cover: ESA WorldCover aggregate statistics.
-        power_plants: Existing power-plant aggregate statistics.
         vectors: One VectorLayerInspection per inspected vector layer
             (borders, admin1, grid, roads, protected, lakes, rivers —
             see DECISIONS.md 2026-08-24 "vector layer audit depth").
@@ -476,7 +457,6 @@ class AuditResult(BaseModel):
     timestamp: str
     rasters: dict[str, RasterInspection]
     land_cover: LandCoverInspection
-    power_plants: PowerPlantsInspection
     vectors: dict[str, VectorLayerInspection]
     alerts: list[str]
     slope_threshold_check: dict[str, SlopeThresholdCheck]
