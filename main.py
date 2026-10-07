@@ -336,7 +336,6 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "grid",
     "lakes",
     "rivers",
-    "plants",
     "roads_distance_capped",
     "grid_distance_capped",
     "rivers_distance_capped",
