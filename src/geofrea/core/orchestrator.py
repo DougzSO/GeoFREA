@@ -988,6 +988,13 @@ class Orchestrator:
                 finished_at=finished_at,
                 consumed_run_ids=consumed_run_ids,
             )
+            # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
+            # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
+            # registry forever and make every later resume raise StaleManifestEntryError.
+            for stale_key in [
+                k for k, e in self.manifest.artifacts.items() if e.phase == spec.name and k not in new_artifacts
+            ]:
+                del self.manifest.artifacts[stale_key]
             self.manifest.artifacts.update(new_artifacts)
 
             # Same write as the success entry above (one _write_manifest()

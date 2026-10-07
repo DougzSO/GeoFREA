@@ -639,6 +639,27 @@ def test_resume_with_missing_recorded_key_raises_stale_manifest_entry_error(tmp_
 
 
 @pytest.mark.unit
+def test_rerun_drops_artifact_keys_the_phase_no_longer_produces(tmp_path):
+    """A phase whose `produces` shrank (an output removed) must not leave the old key in the registry.
+
+    Found 2026-10-07: after the F2a `plants` raster was removed, `--rerun grid_alignment` succeeded but the old
+    `aligned/plants` entry stayed registered, so the next plain run raised StaleManifestEntryError.
+    """
+    call_log: list[str] = []
+    spec_v1 = _make_spec("a", call_log, produces=frozenset({"a_out", "a_old"}))
+    _orchestrator(tmp_path, ["a"]).run([spec_v1])
+
+    spec_v2 = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
+    second.run([spec_v2])
+    assert set(second.manifest.artifacts) == {"a_out"}
+
+    third = _orchestrator(tmp_path, ["a"])  # a plain resume must now pass the staleness check
+    results = third.run([spec_v2])
+    assert results["a"].status == "success"
+
+
+@pytest.mark.unit
 def test_resume_with_schema_version_mismatch_raises_stale_manifest_entry_error(tmp_path):
     call_log: list[str] = []
     spec_v1 = _make_spec("a", call_log, produces=frozenset({"a_out"}))
