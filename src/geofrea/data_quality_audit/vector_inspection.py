@@ -76,7 +76,14 @@ from typing import Any
 
 import geopandas as gpd
 
-from geofrea.core.geo_utils import GeometryRepairReport, get_local_utm_crs, read_clipped_to_country
+from geofrea.core.geo_utils import (
+    GeometryRepairReport,
+    clip_cache_is_current,
+    clip_cache_key,
+    get_local_utm_crs,
+    read_clipped_to_country,
+    write_clip_cache_key,
+)
 
 _EMPTY_GEOMETRY_REPAIR_REPORT = GeometryRepairReport(0, 0, 0, 0, {}, False)
 
@@ -121,7 +128,8 @@ def _read_clipped_with_cache(
     core/geo_utils.py) never runs; the cached file is already clipped
     and was reported on when it was first written.
     """
-    if cache_path is not None and Path(cache_path).exists():
+    key = clip_cache_key(path, country_gdf) if cache_path is not None else None
+    if cache_path is not None and clip_cache_is_current(cache_path, key):
         return gpd.read_file(str(cache_path)), _EMPTY_GEOMETRY_REPAIR_REPORT
 
     clipped, repair_report = read_clipped_to_country(path, country_gdf)
@@ -130,6 +138,7 @@ def _read_clipped_with_cache(
         try:
             Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
             clipped.to_file(cache_path, driver="GPKG")
+            write_clip_cache_key(cache_path, key)
         except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail the inspection
             logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
 

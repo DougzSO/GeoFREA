@@ -581,3 +581,27 @@ def read_clipped_to_country(
 
     gdf = gpd.read_file(str(path), bbox=bbox)
     return clip_vector_to_country(gdf, country_gdf)
+
+
+def clip_cache_key(path: str | Path, country_gdf: gpd.GeoDataFrame) -> str:
+    """Identity of a clip: the source file (path, size, mtime) and the country polygon it is clipped to.
+
+    A clip cache is reusable only while its stored key equals this one; a cache clipped from another source
+    (IND roads from the wrong GRIP4 region, 2026-10-06) or another polygon is rebuilt, never reused.
+    """
+    import hashlib
+
+    st = Path(path).stat()
+    geom = hashlib.sha256(b"".join(g.wkb for g in country_gdf.geometry)).hexdigest()
+    return f"{Path(path).resolve()}|{st.st_size}|{st.st_mtime_ns}|{geom}"
+
+
+def clip_cache_is_current(cache_path: str | Path, key: str) -> bool:
+    """True if the clip cache file exists and its `.key` sidecar equals `key`."""
+    cache_path = Path(cache_path)
+    key_path = cache_path.with_suffix(".key")
+    return cache_path.exists() and key_path.exists() and key_path.read_text(encoding="utf-8") == key
+
+
+def write_clip_cache_key(cache_path: str | Path, key: str) -> None:
+    Path(cache_path).with_suffix(".key").write_text(key, encoding="utf-8")

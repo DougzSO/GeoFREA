@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from unittest.mock import patch
+
 import geopandas as gpd
 import pytest
 from shapely.geometry import LineString, box
@@ -210,14 +212,29 @@ def test_inspect_vector_layer_uses_cache_without_touching_source_on_second_call(
     first = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
     assert cache_path.exists()
 
-    # Corrupt the source file — a second call must not need to read it
-    # at all if the cache is used, so this must still succeed cleanly.
-    path.write_text("this is not valid geojson", encoding="utf-8")
+    # A second call on the unchanged source must not read it at all if the cache is used: make any read fail.
+    def fail_if_called(*a, **k):
+        raise AssertionError("the source was read although the cache is current")
 
-    second = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    with patch("geofrea.data_quality_audit.vector_inspection.read_clipped_to_country", side_effect=fail_if_called):
+        second = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
 
     assert second["error"] is None
     assert second["n_features"] == first["n_features"] == 1
+
+
+@pytest.mark.unit
+def test_inspect_vector_layer_rebuilds_the_cache_when_the_source_changes(tmp_path):
+    # IND roads were audited from a stale, empty cache clipped from the wrong GRIP4 region (2026-10-06).
+    country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+    cache_path = tmp_path / "cache" / "roads_clipped.gpkg"
+    old = tmp_path / "old.geojson"
+    gpd.GeoDataFrame(geometry=[box(10, 10, 11, 11)], crs="EPSG:4326").to_file(old, driver="GeoJSON")  # outside
+    assert inspect_vector_layer(old, country_gdf=country_gdf, clip=True, cache_path=cache_path)["n_features"] == 0
+
+    new = tmp_path / "new.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(new, driver="GeoJSON")
+    assert inspect_vector_layer(new, country_gdf=country_gdf, clip=True, cache_path=cache_path)["n_features"] == 1
 
 
 @pytest.mark.unit
