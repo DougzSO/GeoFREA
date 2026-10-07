@@ -26,10 +26,11 @@ branch when one of its inputs failed (A-09). The manifest is `outputs/<ISO3>/man
 | 3 | `grid_alignment` | F2a | `layer_registry` | `aligned_rasters`, `aligned/<layer>` (elevation, slope, solar, land cover, population, roads, grid, lakes, rivers, the three `distance_capped` flags, 12 wind layers; the GPPD `plants` raster was removed on 2026-10-07, D-F1-027) | yes |
 | 4 | `external_inputs` | F4 input check | nothing | `external_inputs` (report: CMIP6, ISIMIP3b and ERA5 files present, registered, ERA5 hash verified) | yes (added 2026-10-07) |
 | 5 | `siting_layers` | F2b (H-4) | `aligned_rasters`, `audit_report` | `siting_layers` (12 physical-unit layers, no normalization) | yes |
-| 6 | `climate_forcing` | F4 (J-3) | `aligned_rasters`, `audit_report`, `external_inputs` | `forcing`, `forcing_masked`, `members` | yes |
-| 7 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
-| 8 | `climate_maps` | F4 (J-5) | `forcing`, `forcing_masked` | `climate_maps` (one PNG per member) | yes |
-| 9 | `overview` | visual QC | `aligned_rasters`, `siting_layers`, `forcing`, `forcing_masked`, `hazard_context` | `overview` (2 PNG + 1 markdown table per country under `outputs/<ISO3>/overview/`; nothing recomputed) | yes (added 2026-10-07) |
+| 6 | `land_eligibility` | F3 | `aligned_rasters`, `siting_layers`, `layer_registry`, `audit_report` | `land_eligibility` (per technology: `cells_<tech>`, `candidates_<tech>`, `cells_0p1deg_<tech>` parquet; pixel and cell eligibility rasters and dominant exclusion; added 2026-10-07, D-F3-002) | yes |
+| 7 | `climate_forcing` | F4 (J-3) | `aligned_rasters`, `audit_report`, `external_inputs` | `forcing`, `forcing_masked`, `members` | yes |
+| 8 | `hazard_context` | F4 (J-4) | `members`, `aligned_rasters` | `hazard_context` | yes |
+| 9 | `climate_maps` | F4 (J-5) | `forcing`, `forcing_masked` | `climate_maps` (one PNG per member) | yes |
+| 10 | `overview` | visual QC | `aligned_rasters`, `siting_layers`, `forcing`, `forcing_masked`, `hazard_context` | `overview` (2 PNG + 1 markdown table per country under `outputs/<ISO3>/overview/`; nothing recomputed) | yes (added 2026-10-07) |
 | — | `suitability_criteria` | legacy F2b | `aligned_rasters`, `layer_registry` | `suitability_criteria_result` | **no** (registered, run only if named) |
 
 Consistency of this graph is checked by `tests/unit/test_main.py` (every required artifact has exactly one producer).
@@ -50,9 +51,8 @@ loud (named error) if they are absent:
 
 | Piece | State |
 |---|---|
-| `land_eligibility/cells.py` (F3) | kernels on synthetic grids: global 0.05 degree lattice, `cell_id`, 5 x 5 aggregation, candidate filter. **No phase, no real data.** |
-| F3 phase, `candidates_<tech>.parquet`, COGs | not built (I-2, I-3) |
-| Exclusion layers E1-E6 (H-3) | not built; E1 (WDPA) and E2 (lakes) exist only as legacy criteria, E3 needs `riparian_setback_km` (OQ-002), E4 slope threshold, E5 land-cover classes (OQ-015), E6 population density (OQ-003). Blocked on research (Stage R). |
+| `land_eligibility/` (F3) | now a phase: `cells.py` (lattice, `cell_id`, aggregation), `parameters.py`, `fractions.py`, `eligibility.py`, `pipeline.py`; run for PRT, IND and BRA with the central parameters (D-F3-004) |
+| E1-E6 exclusions (H-3) | built inside `eligibility.py` and `fractions.py` (E1-E3 as sub-pixel shares); results depend on OQ-046 to OQ-049 |
 | F5 technical_potential, F6 lcoe_modeling, F7 robustness_analysis, F7b external_validation, F8 results_synthesis, E1 explorer | directories exist, **no code** |
 | Legacy `suitability_criteria` (2,187 lines) | still in the repository and registered. It computes 14 normalized criteria for a weighted overlay, which M-F2b-04 forbids; it is kept only because its E1-E3 pieces are to be reused in H-3 and its removal is part of H-5/H-6. It is not in the default run. |
 | `siting_layers` outputs | written under `outputs/<ISO3>/siting_layers/artifacts/`; no consumer yet (F3 will read them) |

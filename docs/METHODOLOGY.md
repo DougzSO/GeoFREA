@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 4.1.0 |
+| Version | 5.0.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-07 |
 | Owner | Douglas |
@@ -169,6 +169,7 @@ Critical transitions:
 - **M-F2a-02.** All distances and areas are geodesic (`core/geodesy.py`), including slope derivation from the DEM.
 - **M-F2a-03.** Distance rasters to transmission grid, roads, and rivers store the **uncapped geodesic distance**. `distance_cap_km` (parameter, `geospatial.distance_cap_km` in `settings.yaml`) is only the threshold of a `distance_capped` flag raster written beside each distance raster (uint8, 1 where the distance exceeds the threshold): a quality indicator. No stored distance is truncated, because the connection-cost model (M-F6-01) bills the real distance (OQ-040; evidence in `docs/_audit/2026-10_distance_connection_cost_evidence.md`).
 - **M-F2a-04.** Wind products are aligned per height; no combination across heights happens in F2a.
+- **M-F2a-05.** Layers that hold counts (population) are brought to the analysis grid by summing the source pixels under each target pixel, never by sampling or interpolating; population density is the count over the geodesic pixel area. (Sampling had left 1/144 of the population, D-F2a-014.)
 
 ### F2b siting_layers
 
@@ -176,17 +177,19 @@ Critical transitions:
   - `E1 protected`: WDPA areas in the configured IUCN category list.
   - `E2 water`: lakes.
   - `E3 riparian`: distance to rivers below `riparian_setback_km`.
+  - E1, E2 and E3 are excluded **shares of each pixel** in [0, 1], measured on 10 x 10 sub-pixels per pixel (about 110 m); the setback is a geodesic distance on that finer grid. E4 and E6 are 0 or 1 per pixel; E5 is 0 or 1 at the pixel's land-cover sample until class shares replace it. At the 0.01 degree pixel size a setback below about 1.1 km would otherwise mean only "the pixel contains a river" (OQ-045).
   - `E4 slope`: slope above `slope_max_deg[tech]`.
   - `E5 land_cover`: land-cover classes in `excluded_classes[tech]`; forest classes controlled by `forest_excluded` (land-availability variant, U-06).
   - `E6 population`: population density above `pop_density_max[tech]`.
 - **M-F2b-02.** Cost-driver layers: distance to transmission grid (km), distance to roads (km).
 - **M-F2b-03.** Resource layers: solar PVOUT (kWh/kWp/day); wind Weibull A (m/s), Weibull k (-), and air density (kg/m³) at 100, 150, 200 m.
 - **M-F2b-04.** No normalization, weighting, or scoring of any layer. Values keep physical units.
+- **M-F2b-06.** The parameters of E1-E6 and the minimum eligible area are declared as ranges in `config/experiments.yaml` under `land_availability`: a central value (feeds F4-F7) and, where a source gives one, a `low`-`high` range; a parameter without a sourced range is held at its central value and declared so. Categorical parameters (excluded land-cover classes, IUCN categories) are named levels with one central level. The strict and lenient variants of U-06 are to be replaced by sampling these ranges (pending Douglas's confirmation of the design).
 - **M-F2b-05.** Fail-loud on integrity failures of present files (corrupted tiles, invalid WDPA files); `assumed_free` only for genuinely absent optional data, recorded in the artifact metadata.
 
 ### F3 land_eligibility
 
-- **M-F3-01.** Pixel eligibility per technology: `eligible = NOT (E1 OR ... OR E6) AND all required layers valid`.
+- **M-F3-01.** Pixel eligibility per technology: the eligible share of a pixel is `valid * (1 - E1) * (1 - E2) * (1 - E3) * (1 - E4) * (1 - E5) * (1 - E6)`, where `valid` is 1 only if all required layers have a value and the E-terms are the excluded shares of M-F2b-01. Shares of different constraints are combined as independent, which counts overlapping constraints twice and so understates the eligible area (conservative). A missing value is never read as free land.
 - **M-F3-02.** Eligibility is computed for the `central` land-availability variant and for every variant declared in `experiments.yaml` (U-06).
 - **M-F3-03.** Cell aggregation to 0.05 degree (5 x 5 pixels). Per cell and technology:
   - `cell_area_km2`: geodesic land area inside the country.
@@ -461,6 +464,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 5.0.0 | 2026-10-07 | MAJOR (changes a result definition): M-F3-01 eligibility becomes an eligible share per pixel; E1-E3 are excluded shares measured on sub-pixels (M-F2b-01, OQ-045 option c); new M-F2a-05 (counts are summed, which corrects the aligned population layer, D-F2a-014); new M-F2b-06 (land-availability parameters as ranges in `land_availability`); parameter values proposed in `docs/_audit/2026-10_f3_parameter_research.md` and approved by Douglas on 2026-10-07 (cropland excluded for solar). |
 | 4.1.0 | 2026-10-07 | MINOR (removes an unused input, no result definition changes): the WRI GPPD layer is withdrawn from F1, F1b and F2a (no `power_plants` acquisition, no `plants` aligned raster, no plant statistics in the audit); M-F1-06 states that GEM is the only existing-plant source (D-F1-027). The F2a outputs lose the `aligned/plants` artifact and the V-01 frozen fixture drops `f2a/ZZZ_plants_aligned` (every other frozen layer is identical). |
 | 4.0.0 | 2026-10-07 | MAJOR (changes a result definition): new M-F4-07 masks cell-members whose `delta_wind` is outside `wind_factor_valid_range` (OQ-042 option C, Douglas's verdict), so `forcing.parquet` no longer holds a row for them and `forcing_masked.parquet` declares the absence; M-F4-06 lists the masked-cell file, the hazard-context indicators and the per-window hazard-channel declaration (2071-2100 hazard data not acquired). |
 | 3.0.0 | 2026-10-06 | MAJOR (changes a result definition): M-F4-03 `delta_wind` becomes the ratio of 3 x 3 native-cell neighbourhood means of the window and reference annual means instead of a per-cell ratio (Douglas's verdict, option A of OQ-042). `delta_rsds` and `dT` unchanged. Residual noted: MIROC6 over Brazil still gives extreme factors in part of the Amazon (OQ-042 stays open for that residual). |
