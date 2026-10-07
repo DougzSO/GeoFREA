@@ -71,13 +71,14 @@ def test_load_real_settings_yaml_validates():
     # Empty = run every country in parameters.json, per RunConfig's contract.
     assert result.run.countries == []
     # target_phases replaces the old per-phase boolean toggle map (see
-    # docs/phases/core.md D-core-001) — the default run is F1, F1b, F2a, the F2b physical-unit layers and the
-    # F4 climate phases; the legacy suitability_criteria stays registered but is not a default target.
+    # docs/phases/core.md D-core-001) — the default run is F1, F1b, F2a, the F2b physical-unit layers, the F4 input
+    # check and the F4 climate phases; the legacy suitability_criteria stays registered but is not a default target.
     assert result.run.target_phases == [
         "data_acquisition",
         "data_quality_audit",
         "grid_alignment",
         "siting_layers",
+        "external_inputs",
         "climate_forcing",
         "hazard_context",
         "climate_maps",

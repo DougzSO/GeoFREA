@@ -9,8 +9,8 @@ Cost: existence and registry status for every file the ensemble needs; sha256 on
 MB) and, with `full_hash=True`, for the large CMIP6 and ISIMIP3b files (about 29 GB, minutes). ISIMIP3b is checked by
 size, as `Isimip3bRegistry.is_complete` does.
 
-The GEM trackers are not checked here: no phase reads them before F7b, and V-06 keeps the plant data out of the
-pipeline (`scripts/acquire_gem_trackers.py` pins them and records their sha256).
+The existing-plant trackers are not checked here: no phase reads them before F7b, and V-06 keeps the plant data out
+of the pipeline (their own acquisition script pins them and records their sha256).
 """
 
 from __future__ import annotations
