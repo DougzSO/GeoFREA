@@ -121,8 +121,11 @@ from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
+from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
+from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
 
 logger = logging.getLogger("geofrea.main")
 
@@ -140,6 +143,7 @@ SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
 TECHNOLOGIES_YAML = REPO_ROOT / "config" / "technologies.yaml"
+POWER_CURVES_DIR = REPO_ROOT / "config" / "power_curves"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
@@ -362,6 +366,8 @@ def _build_phase_specs(
     resolutions: ResolutionsConfig,
     distance_cap_km: float,
     audit_config: AuditConfig,
+    technologies: tuple[str, ...] = (),
+    production: bool = False,
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -388,6 +394,9 @@ def _build_phase_specs(
             docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
         audit_config: config/audit.yaml, closed over by
             data_quality_audit's run closure (M-F1b-01).
+        technologies: settings.yaml's `run.technologies`, closed over by technical_potential
+            (F5), whose `produces` names one artifact per technology and land scenario.
+        production: whether this is a production run; F5 refuses a synthetic power curve in one.
 
     Returns:
         The registered PhaseSpecs.
@@ -460,6 +469,28 @@ def _build_phase_specs(
         """F4 (J-5): one diagnostic map per member."""
         result = build_maps(context.country_code)
         _register_json_artifact(context, "climate_maps", result)
+        return result
+
+    def technical_potential_run(context: PhaseContext) -> PotentialSummary:
+        """F5: capacity, capacity factor and energy per cell, member and land scenario; fails loudly while parameters are absent."""
+        result = build_potential(
+            context.country_code,
+            load_technologies(TECHNOLOGIES_YAML),
+            context.require_country_params("technologies"),
+            technologies,
+            EXPERIMENTS_YAML,
+            POWER_CURVES_DIR,
+            production=production,
+        )
+        for tech, potential in result.technologies.items():
+            for scenario, entry in potential.scenarios.items():
+                context.register_artifact(
+                    f"potential_{tech}__{scenario}", entry.path, POTENTIAL_TABLE_SCHEMA_VERSION
+                )
+            context.register_artifact(
+                f"potential_aggregates_{tech}", potential.aggregates, POTENTIAL_TABLE_SCHEMA_VERSION
+            )
+        _register_json_artifact(context, "technical_potential", result)
         return result
 
     def overview_run(context: PhaseContext) -> OverviewSummary:
@@ -557,6 +588,24 @@ def _build_phase_specs(
             ),
         ),
         PhaseSpec(
+            name="technical_potential",
+            output_model=PotentialSummary,
+            run=technical_potential_run,
+            requires=frozenset({"land_eligibility", "forcing", "forcing_masked", "members"}),
+            produces=frozenset({"technical_potential"})
+            | {
+                f"potential_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            }
+            | {f"potential_aggregates_{tech}" for tech in technologies},
+            summarize=lambda out: "; ".join(
+                f"{t}: "
+                + ", ".join(f"{s} {e.p_gw_reference:.3g} GW" for s, e in p.scenarios.items())
+                for t, p in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
             name="hazard_context",
             output_model=HazardSummary,
             run=hazard_context_run,
@@ -612,6 +661,8 @@ def run_geofrea(
     run_id: str,
     dirty: bool,
     revalidate_phases: list[str] | None = None,
+    technologies: tuple[str, ...] = (),
+    production: bool = False,
 ) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
@@ -630,6 +681,8 @@ def run_geofrea(
             geofrea.core.orchestrator.compute_run_id).
         dirty: Whether the working tree has uncommitted changes (see
             geofrea.core.orchestrator.compute_dirty).
+        technologies: settings.yaml's `run.technologies`, threaded to technical_potential.
+        production: Whether this is a production run, threaded to technical_potential.
 
     Returns:
         A tuple: (True if every one of target_phases ended "success",
@@ -671,7 +724,9 @@ def run_geofrea(
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
-    results = orchestrator.run(_build_phase_specs(resolutions, distance_cap_km, audit_config))
+    results = orchestrator.run(
+        _build_phase_specs(resolutions, distance_cap_km, audit_config, technologies, production)
+    )
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
         logger.error(
@@ -820,6 +875,8 @@ def main(argv: list[str] | None = None) -> int:
             run_id,
             dirty,
             revalidate_phases,
+            tuple(settings.run.technologies),
+            args.production,
         )
         all_ok = all_ok and ok
         for phase_name, result in results.items():

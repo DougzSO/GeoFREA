@@ -94,6 +94,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "siting_layers",
         "land_eligibility",
         "climate_forcing",
+        "technical_potential",
         "hazard_context",
         "climate_maps",
         "overview",
@@ -453,7 +454,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
 
 @pytest.mark.unit
 def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypatch):
-    def _failing_specs(resolutions, distance_cap_km, audit_config):
+    def _failing_specs(resolutions, distance_cap_km, audit_config, *_extra):
         def run(context):
             raise ValueError("boom")
 
@@ -487,7 +488,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
 def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(
     tmp_path, monkeypatch
 ):
-    def _specs(resolutions, distance_cap_km, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config, *_extra):
         def failing_run(context):
             raise ValueError("boom")
 
@@ -529,7 +530,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
 
 @pytest.mark.unit
 def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, monkeypatch):
-    def _specs(resolutions, distance_cap_km, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config, *_extra):
         def run(context):
             return _acquisition_phase_result([]).output
 
@@ -571,7 +572,7 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 
 @pytest.mark.unit
 def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, monkeypatch):
-    def _specs(resolutions, distance_cap_km, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config, *_extra):
         def run(context):
             # Reads country_code only, never country_params — same shape
             # as the real data_acquisition PhaseSpec.
@@ -663,7 +664,7 @@ def test_run_geofrea_still_succeeds_for_bra_and_prt(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "outputs_dir", lambda: tmp_path)
     for country in ("BRA", "PRT"):
 
-        def _specs(resolutions, distance_cap_km, audit_config):
+        def _specs(resolutions, distance_cap_km, audit_config, *_extra):
             def run(context):
                 assert context.country_params is not None
                 return _acquisition_phase_result([]).output

@@ -112,7 +112,9 @@ wind:
   # provenance live in config/power_curves/<curve_id>.yaml. No real curve exists until OQ-005 closes.
   power_curves: null  # Pending OQ-005
 
-  # IEC class per cell (M-F5-03, D-F5-004): from the mean wind speed at hub height in the reference
-  # climate, fixed across members. The thresholds of the classes are pending OQ-005.
+  # IEC class per cell (M-F5-03, D-F5-004, D-F5-017): a siting rule, not a property of a turbine curve. The class is taken from
+  # the annual mean wind speed at hub height in the reference climate and is fixed across members. A list of
+  # {iec_class, mean_speed_upper_ms, source}, lowest class first, the last upper bound null (no limit); the classes must be
+  # those of power_curves. All null until OQ-005 closes (the thresholds come from the IEC standard, sourced by the author).
   # (Moved here from solar 2026-09-24, ADJ-7.)
   iec_class_rule: null  # Pending OQ-005

@@ -1,6 +1,6 @@
 # F5 technical_potential
 
-Status: `in_progress`
+Status: `built_pending_conformance`
 Methodology items: M-F5-01 to M-F5-06, M-F4-07, V-02, V-03
 
 ## Contract
@@ -19,6 +19,16 @@ Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restri
 | M-F5-05 | `E = P_MW * CF * 8760` | `capacity.py:annual_energy_mwh`; constant `core/constants.py:HOURS_PER_YEAR` | `test_capacity_and_energy_closed_form` | pass (the value 8760 awaits the author's check in the diff, D-F5-009) |
 | D-F5-008 | Rescale of the stored CF to another `gamma` or `eta_loss` | `rescale.py:rescale_cf_wind`, `rescale_cf_solar` | `test_rescale_*` | pass |
 | V-02 | Weibull CF against integration; PVOUT units; power-law interpolation | see the rows above | `test_technical_potential_functions.py` | pass |
+| M-F5-03 | IEC class per cell from the mean speed at hub height in the reference climate, fixed across members (D-F5-004) | `iec_class.py:assign_by_mean_speed`; `config_schemas.py:IecClassBound`; `cf_models.py:WeibullWithAirDensity` | `test_class_follows_the_mean_speed_with_the_last_class_unbounded`, `test_class_rule_rejects_malformed_rules`, `test_registry_rule_and_curves_must_name_the_same_classes` | pass |
+| A-04 | CF model chosen by the registry string; resource columns and required parameters read from the registry; no technology name in the package | `cf_models.py:CF_MODELS`, `get_cf_model`; `pipeline.py:resolve_technology` | `test_no_technology_name_appears_in_technical_potential`, `test_registry_resource_layers_are_the_columns_f3_writes`, `test_unknown_cf_model_and_undeclared_required_parameter_raise` | pass |
+| M-F4-07 | `assert_forcing_usable` before any computation; a declared masked cell-member has no row and is counted | `pipeline.py:build_technology_potential` | `test_declared_masked_cell_member_has_no_row_and_is_counted`, `test_an_undeclared_absence_raises_before_anything_is_written`, `test_wind_factor_out_of_range_in_a_candidate_cell_raises` | pass |
+| M-F5-06 | `potential_<tech>__<scenario>.parquet` for the three land scenarios; `potential_aggregates_<tech>.parquet` with the all-present and like-for-like series (D-F5-005, D-F5-006) | `pipeline.py:build_potential`, `aggregates.py:aggregate_scenario`, `table_schemas.py` | `test_zzz_produces_the_potential_files_for_three_scenarios_and_the_aggregates`, `test_like_for_like_series_excludes_the_masked_cell_and_the_climate_effect_uses_it`, `test_aggregate_scenario_hand_example` | pass |
+| V-03 | `0 <= CF <= 1`; `P_MW` equal across members; country capacity equals the sum of cells; land range ordered | `pipeline.py:_check_cf`, `aggregates.py` | `test_invariants_cf_range_capacity_constant_across_members_and_sum_equals_aggregate`, `test_land_range_is_ordered_across_scenarios`, `test_a_capacity_factor_above_one_raises` | pass |
+| A-09 | Absent parameters, curves or class rule raise `MissingParameterError` listing all of them, before any input is read; BRA, PRT and IND fail this way today | `pipeline.py:resolve_technology`, `build_potential`; `cf_models.py:MissingParameterError` | `test_real_countries_fail_loud_listing_the_missing_parameters_and_write_nothing`, `test_missing_parameter_error_is_raised_before_inputs_are_read`, `test_a_synthetic_curve_is_refused_in_a_production_run` | pass |
+| A-02, D-F5-009, D-F5-010 | Parameters, curve hash, `rho0`, hours, integration method and `c2_applied: false` in the table metadata | `pipeline.py:_provenance`, `core/tables.py:write_table(extra_metadata=)` | `test_table_metadata_records_the_parameters_curve_hash_and_that_c2_is_not_applied` | pass |
+| A-01, A-03 | `PhaseSpec` `technical_potential` (requires `land_eligibility`, `forcing`, `forcing_masked`, `members`; produces per-technology, per-scenario keys) | `main.py:_build_phase_specs` | `test_main.py::test_build_phase_specs_returns_all_phases_in_order` | pass |
+| A-06, V-08 | Synthetic country runs F5 end to end (D-F5-013: candidate tables and forcing built in the test, ZZZ test values of `parameters.json`) | `tests/unit/test_technical_potential_pipeline.py` | `test_zzz_*`, `test_solar_values_follow_the_method`, `test_wind_values_follow_the_method` | pass (F3 and F4 do not run on ZZZ yet, see Known issues) |
+
 
 ## Active implementation decisions
 
@@ -40,12 +50,17 @@ Recorded before any code (Douglas's verdicts of 2026-10-08 on `docs/_audit/2026-
 - **D-F5-014 — Memory (D14; A-10).** A loop over members, one member in memory at a time; no `memory` section in `settings.yaml` for F5.
 - **D-F5-015 — Maps (D15; A-07, A-08).** The first commit has tables only; a second commit adds the COG of `P_MW/cell_area` and `CF` at `m0` (central scenario) and the T-R1 figure.
 - **D-F5-016 — Phase and DAG (D16; A-01, A-02).** `requires`: candidates per scenario, `forcing`, `forcing_masked`, `members`, registry, parameters. `produces`: the two potential artifacts. Staleness follows content (A-02).
+- **D-F5-017 — Implementation details of D-F5-004, D-F5-011 and D-F5-013 (2026-10-08).** (a) The IEC class thresholds are a siting rule, not a property of a turbine curve (author's ruling): `iec_class_rule` in `technologies.yaml` is a list of `{iec_class, mean_speed_upper_ms, source}`, lowest class first, the last bound `null`, all `null` until OQ-005 closes; `power_curves` maps each class to a curve id and the schema requires the same classes in both. The curve file and `PowerCurve` carry no threshold. The synthetic rule (one class, no bound) is part of the test registry. (b) `MissingParameterError` collects every missing item of every technology of the run (parameter, curve, rule) and is raised before any input file is read. (c) The test of the synthetic country builds the candidate tables in the F3 schema and the forcing itself; it is not the output of F3 or F4 on ZZZ. (d) `potential_maps` is a support phase of its own (like `climate_maps`), so the scientific tables and the presentation are separate artifacts.
 
 ## Known issues
 
 - The registry names and comments of `technologies.yaml` were wrong (Weibull A and k swapped, no `m` suffix, solar layer `pvout`); corrected 2026-10-08 to the F3 candidate column names. F3 still hardcodes the layer names in `land_eligibility/pipeline.py::_required_resources`; F5 reads the registry.
-- No `forcing.parquet` exists for ZZZ (D-F5-013).
+- No `forcing.parquet` exists for ZZZ and F3 has not run on it (D-F5-013; F4 on ZZZ goes to COMMAND 16).
+- The METHODOLOGY section 4.1 list of support phases does not name `potential_maps` (needs a PATCH line, with the author's authorization).
+- `settings.yaml` `figures` is honoured by `potential_maps` only; `climate_maps` and `overview` draw their figures regardless.
+- F5 is registered but not in `run.target_phases`: it fails loudly for BRA, PRT and IND until OQ-004, OQ-005 and OQ-023 give values (run with `--phases technical_potential,potential_maps`).
 
 ## History
 
 - 2026-10-08: design report and verdicts D1 to D16; METHODOLOGY 7.1.0; `parameters.json` and `technologies.yaml` extended; no phase code.
+- 2026-10-08: pipeline, CF models, aggregates, table schemas and `PhaseSpec` `technical_potential`; run on the synthetic country; BRA, PRT and IND fail with `MissingParameterError` (9 missing items each).

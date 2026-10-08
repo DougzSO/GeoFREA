@@ -15,6 +15,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from geofrea.land_eligibility.parameters import LandAvailability
 
 
+class IecClassBound(BaseModel):
+    """One class of the siting rule `iec_class_rule` (M-F5-03, D-F5-017): the class is taken by a cell whose annual mean wind
+    speed at hub height is at most `mean_speed_upper_ms`; `null` marks the highest class (no upper limit)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    iec_class: str
+    mean_speed_upper_ms: float | None
+    source: str | None
+
+
 class TechnologyConfig(BaseModel):
     """One entry of `technologies.yaml`: resources, capacity-factor model, exclusions, cost drivers, uncertain-parameter keys."""
 
@@ -31,7 +42,19 @@ class TechnologyConfig(BaseModel):
     power_curves: dict[str, str] | None = (
         None  # wind only: IEC class -> curve id in config/power_curves/ (OQ-005, D-F5-004)
     )
-    iec_class_rule: str | None = None  # wind only (OQ-005, D-F5-004)
+    iec_class_rule: list[IecClassBound] | None = (
+        None  # wind only: lowest class first, last bound null (OQ-005, D-F5-017)
+    )
+
+    @model_validator(mode="after")
+    def _curves_match_the_class_rule(self) -> TechnologyConfig:
+        if self.iec_class_rule is not None and self.power_curves is not None:
+            classes = [b.iec_class for b in self.iec_class_rule]
+            if len(set(classes)) != len(classes) or set(classes) != set(self.power_curves):
+                raise ValueError(
+                    f"iec_class_rule classes {classes} must be the same distinct classes as power_curves {sorted(self.power_curves)}"
+                )
+        return self
 
 
 class TechnologiesFile(BaseModel):

@@ -48,11 +48,18 @@ def validate_columns(df: pd.DataFrame, row_model: type[BaseModel]) -> None:
         raise TableSchemaError(f"{row_model.__name__}: a row does not validate: {exc}") from exc
 
 
-def table_metadata(schema: pa.Schema, schema_version: str, row_model: type[BaseModel]) -> pa.Schema:
-    """`schema` with the schema version and the row-model name added to its metadata."""
+def table_metadata(
+    schema: pa.Schema,
+    schema_version: str,
+    row_model: type[BaseModel],
+    extra: dict[str, str] | None = None,
+) -> pa.Schema:
+    """`schema` with the schema version, the row-model name and any `extra` text entries added to its metadata."""
     meta = dict(schema.metadata or {})
     meta[SCHEMA_VERSION_KEY] = schema_version.encode()
     meta[SCHEMA_NAME_KEY] = row_model.__name__.encode()
+    for key, value in (extra or {}).items():
+        meta[key.encode()] = value.encode()
     return schema.with_metadata(meta)
 
 
@@ -63,8 +70,11 @@ def write_table(
     schema_version: str,
     row_model: type[BaseModel],
     compression: str = "snappy",
+    extra_metadata: dict[str, str] | None = None,
 ) -> Path:
     """Validate `df` against `row_model` and write it as Parquet with the schema version in the file metadata.
+
+    `extra_metadata` adds text entries to the Parquet metadata (for example the parameters a table was computed with).
 
     Implements: A-07.
     """
@@ -72,7 +82,7 @@ def write_table(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     table = pa.Table.from_pandas(df, preserve_index=False)
-    table = table.cast(table_metadata(table.schema, schema_version, row_model))
+    table = table.cast(table_metadata(table.schema, schema_version, row_model, extra_metadata))
     pq.write_table(table, path, compression=compression)
     return path
 
