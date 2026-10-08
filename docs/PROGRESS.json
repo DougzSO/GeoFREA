@@ -53,7 +53,7 @@
       "record": "docs/phases/F2b_siting_layers.md",
       "summary": "H-4 done and wired: phase siting_layers writes 12 physical-unit layers (no normalization). Exclusions E1-E6 (H-3) blocked on Stage R; legacy suitability_criteria still registered but not in the default run (D-F2b-005)."
     },
-    {"id": "F3", "module": "land_eligibility", "status": "built_pending_conformance", "record": "docs/phases/F3_land_eligibility.md", "summary": "Engine built and run for PRT, IND and BRA with the final central land-availability parameters (D-F3-006): E1-E3 as sub-pixel shares, E4 from 30 m slope bins, E5 from class counts, riparian discharge parameter built (D-F3-005); solar / wind eligible land PRT 23.9 / 31.7%, IND 4.9 / 17.2%, BRA 18.0 / 25.8%. Not built: sampling of the parameter ranges, the cell-by-draw matrix and METHODOLOGY 7.0.0 (OQ-049). Literature for the density, discharge and solar-slope upper ends is pending (Stage R)."},
+    {"id": "F3", "module": "land_eligibility", "status": "built_pending_conformance", "record": "docs/phases/F3_land_eligibility.md", "summary": "Clean rerun of the three countries on 2026-10-08 (D-F3-009): three named land scenarios (central, restrictive, permissive) with a candidate-set stability table; IND land cover from the exact 10 m tiles (hardly different from the 100 m round). Central solar / wind eligible land PRT 23.9 / 31.7%, IND 4.9 / 17.2%, BRA 18.0 / 25.8%. Not built: the full-factorial range report. Open and affecting results: OQ-047 (Tier 3 density) and OQ-049 (unsourced ranges); literature for the density, discharge and solar-slope upper ends is pending (Stage R)."},
     {"id": "F4", "module": "climate_forcing", "status": "in_progress", "record": "docs/phases/F4_climate_forcing.md", "summary": "J-1 to J-5 done: ensemble decided (option C, 36 members), forcing.parquet with masked cell-members (OQ-042 option C), members.yaml, hazard_context.parquet for the core window, one map per member; all wired in main.py. Open: ISIMIP3b 2071-2100 hazard data not acquired, loss functions (OQ-007)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},
@@ -63,11 +63,12 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_with_issues", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_with_issues", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_with_issues", "F4": "ran_clean", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "not_run", "F4": "not_run", "F5": "not_run", "F6": "not_run", "F7": "not_run", "F7b": "not_run"}
   },
+  "country_issues": {"F3": {"PRT": "OQ-047 (density 200 persons/km2 is Tier 3; E6 excludes 9.6% of the land), OQ-049 (unsourced ranges held central)", "IND": "OQ-047 (density 200 persons/km2 is Tier 3; E6 excludes 53.2% of the land; candidate-set stability, L-020), OQ-049 (unsourced ranges held central)", "BRA": "none that affects the result: OQ-047 touches 1.1% of the land, OQ-046 and OQ-049 only the unsourced ranges (scenarios held central)"}, "F4": {"IND": "climate_forcing, hazard_context, climate_maps and overview are stale_upstream after the grid_alignment rerun of 2026-10-08; their content does not depend on the land cover (D-F3-009)"}},
   "regression": {
     "workflow": ".github/workflows/regression.yml",
     "fixtures": "tests/fixtures/v01/zzz.npz",
