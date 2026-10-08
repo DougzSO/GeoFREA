@@ -82,8 +82,10 @@ from geofrea.climate_forcing.pipeline import (
 from geofrea.core.config_loader import (
     load_audit_config,
     load_countries,
+    load_experiments,
     load_parameters,
     load_settings,
+    load_technologies,
 )
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.orchestrator import (
@@ -95,6 +97,14 @@ from geofrea.core.orchestrator import (
     compute_run_id,
 )
 from geofrea.core.paths import log_path, outputs_dir, phase_dir
+from geofrea.core.production import (
+    ConfigConsistencyError,
+    ProductionRunError,
+    audit_parameters,
+    enforce_production,
+    validate_registry,
+    validate_run_technologies,
+)
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.schemas import ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
@@ -128,6 +138,7 @@ PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
+TECHNOLOGIES_YAML = REPO_ROOT / "config" / "technologies.yaml"
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)
@@ -618,6 +629,7 @@ def run_geofrea(
         dirty=dirty,
     )
 
+    orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
     results = orchestrator.run(
         _build_phase_specs(resolutions, distance_cap_km, audit_config)
     )
@@ -654,6 +666,11 @@ def _parse_args(argv: list[str]):
         help="comma-separated target phases (default: run.target_phases in settings.yaml); upstream phases are added automatically",
     )
     parser.add_argument(
+        "--production",
+        action="store_true",
+        help="production run: refuse to start if a consumed parameter is a proxy or an uncertain parameter lacks a value or range",
+    )
+    parser.add_argument(
         "--rerun",
         help="comma-separated phases to execute again even if the manifest records success (default: run.rerun_phases)",
     )
@@ -665,6 +682,15 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings(SETTINGS_YAML)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
+    technologies = load_technologies(TECHNOLOGIES_YAML)
+    experiments = load_experiments(EXPERIMENTS_YAML)
+    try:
+        validate_run_technologies(settings.run.technologies, technologies)
+        validate_registry(technologies, experiments)
+    except ConfigConsistencyError as exc:
+        logger.error("%s", exc)
+        return 1
+
     # "Known" is defined by countries.yaml (A-05's single source of
     # country-specific mappings), not parameters.json: a country can be
     # wired for data_acquisition/grid_alignment before its economics are
@@ -695,6 +721,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     target_phases = [p.strip() for p in args.phases.split(",") if p.strip()] if args.phases else settings.run.target_phases
     rerun_phases = [p.strip() for p in args.rerun.split(",") if p.strip()] if args.rerun else settings.run.rerun_phases
+
+    parameter_audit = audit_parameters(parameters, technologies, countries, settings.run.technologies)
+    for finding in parameter_audit.warnings:
+        logger.warning("parameter contract: %s", finding)
+    if args.production:
+        try:
+            enforce_production(parameter_audit)
+        except ProductionRunError as exc:
+            logger.error("%s", exc)
+            return 1
+    else:
+        for finding in parameter_audit.errors:
+            logger.warning("parameter contract (blocks a production run): %s", finding)
 
     methodology_version = _read_methodology_version(METHODOLOGY_MD)
     git_commit = compute_git_commit(REPO_ROOT)

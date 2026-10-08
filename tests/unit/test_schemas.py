@@ -54,7 +54,7 @@ VALID_PENDING_VALUE = {
 
 VALID_BIOMASS = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 3606},
-    "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.04},
+    "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.04},
     "opex_variable_usd_per_kwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
@@ -63,7 +63,7 @@ VALID_BIOMASS = {
 
 VALID_SOLAR = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 823},
-    "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0092},
+    "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.0092},
     "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
@@ -72,7 +72,7 @@ VALID_SOLAR = {
 
 VALID_WIND = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 976},
-    "opex_fixed_pct_of_capex": {**VALID_VERIFIED_VALUE, "value": 0.0348},
+    "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.0348},
     "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
@@ -137,7 +137,7 @@ TECH_MODELS = {
 
 REQUIRED_TECH_FIELDS = [
     "capex_usd_per_kw",
-    "opex_fixed_pct_of_capex",
+    "opex_fixed_frac",
     "opex_variable_usd_per_kwh",
     "lifetime_years",
     "discount_rate",
@@ -378,10 +378,10 @@ def test_settings_file_rejects_unexpected_field():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
-def test_opex_fixed_pct_of_capex_out_of_range_raises(tech_name):
+def test_opex_fixed_frac_out_of_range_raises(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = copy.deepcopy(valid)
-    data["opex_fixed_pct_of_capex"]["value"] = 1.5
+    data["opex_fixed_frac"]["value"] = 1.5
     with pytest.raises(ValidationError):
         model_cls.model_validate(data)
 

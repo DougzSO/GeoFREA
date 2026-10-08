@@ -11,6 +11,7 @@ from pathlib import Path
 
 import yaml
 
+from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.schemas import ParametersFile, SettingsFile
 from geofrea.data_quality_audit.schemas import AuditConfig
 
@@ -73,6 +74,29 @@ def load_settings(path: Path) -> SettingsFile:
             "(never their dependents); an empty list means normal resume behavior."
         )
     return SettingsFile.model_validate(raw)
+
+
+def load_technologies(path: Path) -> TechnologiesFile:
+    """Load and validate config/technologies.yaml (A-04).
+
+    Raises:
+        pydantic.ValidationError: If the file's content doesn't match the schema.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return TechnologiesFile.model_validate({"technologies": raw})
+
+
+def load_experiments(path: Path) -> ExperimentsFile:
+    """Load and validate config/experiments.yaml (Section 9).
+
+    Whether every uncertain parameter has a range in parameters.json is not checked here: that check is mandatory only in a
+    production run (`geofrea.core.production.audit_parameters`), so open research (MS-6) does not block development.
+
+    Raises:
+        pydantic.ValidationError: If the file's content doesn't match the schema.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return ExperimentsFile.model_validate(raw)
 
 
 def load_audit_config(path: Path) -> AuditConfig:

@@ -324,6 +324,7 @@ class RunManifest(BaseModel):
     country_code: str
     phases: dict[str, PhaseManifestEntry] = {}
     artifacts: dict[str, ArtifactEntry] = {}
+    seeds: dict[str, int] = {}  # random seeds of the run by name (A-12); recorded with `Orchestrator.record_seed`
 
 
 @dataclass(frozen=True)
@@ -588,6 +589,18 @@ class Orchestrator:
         # RunManifest.schema_version is a Literal["2.3"].
         data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
+
+    def record_seed(self, name: str, seed: int) -> None:
+        """Record a random seed in the manifest and persist it (A-12).
+
+        Raises:
+            ValueError: `name` already holds a different seed in this manifest (one name, one seed per run).
+        """
+        recorded = self.manifest.seeds.get(name)
+        if recorded is not None and recorded != seed:
+            raise ValueError(f"seed {name!r} is recorded as {recorded}; refusing to overwrite it with {seed}")
+        self.manifest.seeds[name] = seed
+        self._write_manifest()
 
     def _write_manifest(self) -> None:
         self.manifest_path.parent.mkdir(parents=True, exist_ok=True)

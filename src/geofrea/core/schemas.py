@@ -132,6 +132,11 @@ class VerifiedValue(BaseModel, Generic[T]):
             country's parameters.json entry may set this True; ZZZ's
             entry must set it True on every VerifiedValue). Defaults
             False, so every existing real-country value is unaffected.
+        proxy: True only when the value is of a different quantity or a different
+            technology (U-05, V6; example: BRA and IND wind fixed O&M taken from solar
+            O&M). Regional or global transfers of the same quantity and technology are
+            Tier 2 (U-07), not proxies. A production run fails if a consumed parameter
+            has proxy=True (`geofrea.core.production`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -148,6 +153,7 @@ class VerifiedValue(BaseModel, Generic[T]):
     note: str | None = None
     status: str | None = None
     synthetic: bool = False
+    proxy: bool = False
 
     @model_validator(mode="after")
     def _value_within_range_when_set(self) -> VerifiedValue:
@@ -181,7 +187,7 @@ class _TechnologyEconomicParams(BaseModel):
 
     Args:
         capex_usd_per_kw: Capital expenditure, USD per kW installed.
-        opex_fixed_pct_of_capex: O&M cost as a fraction of total
+        opex_fixed_frac: O&M cost as a fraction of total
             installed cost. For biomass this is genuinely the fixed-
             only component (source splits fixed/variable); for solar
             and wind, the source reports only a combined/total O&M
@@ -206,7 +212,7 @@ class _TechnologyEconomicParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     capex_usd_per_kw: VerifiedValue[float]
-    opex_fixed_pct_of_capex: VerifiedValue[UnitInterval]
+    opex_fixed_frac: VerifiedValue[UnitInterval]
     opex_variable_usd_per_kwh: VerifiedValue[float]
     lifetime_years: VerifiedValue[PositiveInt]
     discount_rate: VerifiedValue[NonNegativeFloat]
@@ -259,7 +265,7 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     opex_variable_usd_per_kwh is an unpopulated placeholder (value=
     None, verified=False, status="pending_research"): IRENA's source
     data reports only a combined/total O&M figure for solar, not split
-    into fixed+variable components like biomass — opex_fixed_pct_of_capex
+    into fixed+variable components like biomass — opex_fixed_frac
     actually carries the full O&M burden here despite its name.
 
     discount_rate_increment is 0.0 because discount_rate above is

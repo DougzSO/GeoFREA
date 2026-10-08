@@ -637,6 +637,20 @@ def test_manifest_records_methodology_version(tmp_path):
     }
 
 
+@pytest.mark.unit
+def test_seed_is_recorded_in_the_manifest_and_survives_a_reload(tmp_path):
+    """A-12: seeds are recorded in the manifest; a different seed under the same name is refused."""
+    orchestrator = _orchestrator(tmp_path, ["phase_a"])
+    orchestrator.record_seed("sampler", 42)
+    on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
+    assert on_disk["seeds"] == {"sampler": 42}
+    reloaded = _orchestrator(tmp_path, ["phase_a"])
+    assert reloaded.manifest.seeds == {"sampler": 42}
+    reloaded.record_seed("sampler", 42)
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        reloaded.record_seed("sampler", 7)
+
+
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
 
 

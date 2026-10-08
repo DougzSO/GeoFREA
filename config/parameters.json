@@ -14,7 +14,7 @@
             "unit": "USD/kW",
             "tier": 2
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0092,
             "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 823 CAPEX",
             "verified": true,
@@ -33,7 +33,7 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "IRENA 2025 reports only a combined/total O&M figure for solar (see opex_fixed_pct_of_capex, which actually carries the full O&M burden), not split into fixed+variable components like biomass. This field is a structural placeholder for schema consistency across technologies, not a real data gap requiring further sourcing in the near term.",
+            "note": "IRENA 2025 reports only a combined/total O&M figure for solar (see opex_fixed_frac, which actually carries the full O&M burden), not split into fixed+variable components like biomass. This field is a structural placeholder for schema consistency across technologies, not a real data gap requiring further sourcing in the near term.",
             "unit": "USD/MWh",
             "tier": null
           },
@@ -81,7 +81,7 @@
             "unit": "USD/kW",
             "tier": 2
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0348,
             "source": "IRENA 2025, Fig 2.9, approximate regional Europe O&M average ~34 USD/kW/yr divided by 976 CAPEX",
             "verified": true,
@@ -100,7 +100,7 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "IRENA 2025 reports only a combined/total O&M figure for wind (see opex_fixed_pct_of_capex), not split into fixed+variable components like biomass. Structural placeholder for schema consistency, same as solar.",
+            "note": "IRENA 2025 reports only a combined/total O&M figure for wind (see opex_fixed_frac), not split into fixed+variable components like biomass. Structural placeholder for schema consistency, same as solar.",
             "unit": "USD/MWh",
             "tier": null
           },
@@ -151,7 +151,7 @@
             "unit": "USD/kW",
             "tier": 1
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0112,
             "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 672 CAPEX",
             "verified": true,
@@ -218,7 +218,7 @@
             "unit": "USD/kW",
             "tier": 2
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0077,
             "source": "IRENA 2025, Fig 3.5 \u00e2\u20ac\u201d SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 976 wind CAPEX",
             "verified": true,
@@ -227,7 +227,8 @@
             "verification_method": "manual_cross_check",
             "note": "PROXY QUALITY: WEAK. No wind-specific O&M data for Brazil (or wind generally, beyond PRT's chart-read Fig 2.9 estimate) was found in sources reviewed this session. This value borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in \u00e2\u20ac\u201d it is NOT a wind-specific source, unlike every other technology/country combination in this dataset, which use regional proxies but with technology-matched sources. verification_method=manual_cross_check here only confirms the arithmetic (7.54/976), not that this is a sound wind O&M estimate. Weakest-sourced value in the dataset so far \u00e2\u20ac\u201d revisit if a better source is found.",
             "unit": "fraction/year",
-            "tier": 3
+            "tier": 3,
+            "proxy": true
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -237,7 +238,7 @@
             "verified_date": null,
             "verification_method": "unverified",
             "status": "pending_research",
-            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for wind (and here, not even a wind-specific one \u00e2\u20ac\u201d see opex_fixed_pct_of_capex's proxy-quality caveat). Structural placeholder for schema consistency.",
+            "note": "Same as PRT: IRENA 2025 reports only a combined/total O&M figure for wind (and here, not even a wind-specific one \u00e2\u20ac\u201d see opex_fixed_frac's proxy-quality caveat). Structural placeholder for schema consistency.",
             "unit": "USD/MWh",
             "tier": null
           },
@@ -289,7 +290,7 @@
             "unit": "USD/kW",
             "tier": 3
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0109,
             "source": "IRENA 2025, Fig 3.5, global weighted-average total O&M = 7.54 USD/kW/yr divided by 691 CAPEX (this entry's own capex_usd_per_kw)",
             "verified": false,
@@ -357,7 +358,7 @@
             "unit": "USD/kW",
             "tier": 3
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.0072,
             "source": "IRENA 2025, Fig 3.5 \u2014 SOLAR's global total O&M figure (7.54 USD/kW/yr) used as a stand-in, divided by 1041 wind CAPEX (this entry's own capex_usd_per_kw)",
             "verified": false,
@@ -366,7 +367,8 @@
             "verification_method": "unverified",
             "note": "PROXY QUALITY: WEAK, same as BRA's field of the same name. No wind-specific O&M data for India was found in sources reviewed this session; borrows SOLAR's global O&M figure as an unvalidated arithmetic stand-in.",
             "unit": "fraction/year",
-            "tier": 3
+            "tier": 3,
+            "proxy": true
           },
           "opex_variable_usd_per_kwh": {
             "value": null,
@@ -432,7 +434,7 @@
             "status": null,
             "synthetic": true
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.05,
             "unit": "fraction/year",
             "source": null,
@@ -518,7 +520,7 @@
             "status": null,
             "synthetic": true
           },
-          "opex_fixed_pct_of_capex": {
+          "opex_fixed_frac": {
             "value": 0.05,
             "unit": "fraction/year",
             "source": null,
