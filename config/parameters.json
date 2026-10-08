@@ -67,17 +67,6 @@
             "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 5.0,
-            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value \u00e2\u20ac\u201d a reasonable starting point, not a definitive figure.",
-            "unit": "degrees",
-            "tier": 3
           }
         },
         "wind": {
@@ -145,17 +134,6 @@
             "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 8.5,
-            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, per Douglas's instruction.",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found \u00e2\u20ac\u201d reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later.",
-            "unit": "degrees",
-            "tier": 3
           }
         }
       },
@@ -177,16 +155,6 @@
           "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
           "unit": "dimensionless",
           "tier": null
-        },
-        "terrain_slope_threshold_deg": {
-          "value": 10.0,
-          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.PRT.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate). Confirmed pixel-exact vs outputs_baseline_fc7b43d/PRT terrain_score (2026-09-10).",
-          "verified": true,
-          "verified_by": "Douglas",
-          "verified_date": "2026-09-10",
-          "verification_method": "automated",
-          "unit": "degrees",
-          "tier": 3
         }
       }
     },
@@ -256,17 +224,6 @@
             "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 5.0,
-            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "Slopes above 5 deg were classified as less suitable for utility-scale solar PV in this case study, due to construction complexity, mounting-system cost, and erosion risk. Single case-study source, not a multi-region consensus value \u00e2\u20ac\u201d a reasonable starting point, not a definitive figure. Same value/source used for both PRT and BRA (no country-specific slope-suitability source found this session).",
-            "unit": "degrees",
-            "tier": 3
           }
         },
         "wind": {
@@ -334,17 +291,6 @@
             "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 8.5,
-            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, per Douglas's instruction.",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-08-20",
-            "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found \u00e2\u20ac\u201d reuses biomass's agricultural-slope proxy value directly, not an independent wind-specific figure. Revisit if a wind-specific source is found later.",
-            "unit": "degrees",
-            "tier": 3
           }
         }
       },
@@ -366,16 +312,6 @@
           "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
           "unit": "dimensionless",
           "tier": null
-        },
-        "terrain_slope_threshold_deg": {
-          "value": 12.0,
-          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.BRA.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate). Confirmed pixel-exact vs outputs_baseline_fc7b43d/BRA terrain_score (2026-09-10).",
-          "verified": true,
-          "verified_by": "Douglas",
-          "verified_date": "2026-09-10",
-          "verification_method": "automated",
-          "unit": "degrees",
-          "tier": 3
         }
       }
     },
@@ -447,17 +383,6 @@
             "note": "Same reasoning as PRT/BRA: discount_rate above is already the final technology-specific value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 5.0,
-            "source": "MDPI, Ikorodu (Nigeria) PV site-selection case study",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-09-23",
-            "verification_method": "manual_cross_check",
-            "note": "Same non-country-specific case-study value already used for PRT and BRA (no India-specific slope-suitability source found either, this session or before).",
-            "unit": "degrees",
-            "tier": 3
           }
         },
         "wind": {
@@ -526,17 +451,6 @@
             "note": "Same reasoning as PRT/BRA/solar: discount_rate above is already the final technology-specific value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
             "unit": "fraction",
             "tier": 2
-          },
-          "slope_threshold_deg": {
-            "value": 8.5,
-            "source": "No wind-specific slope threshold found in literature reviewed this session; reuses biomass's agricultural-slope proxy value and rationale directly, same as PRT/BRA, per Douglas's instruction.",
-            "verified": true,
-            "verified_by": "Douglas",
-            "verified_date": "2026-09-23",
-            "verification_method": "manual_cross_check",
-            "note": "No wind-specific source found, same as PRT/BRA \u2014 reuses biomass's agricultural-slope proxy value directly. Revisit if a wind-specific source is found later.",
-            "unit": "degrees",
-            "tier": 3
           }
         }
       },
@@ -557,17 +471,6 @@
           "verification_method": "unverified",
           "note": "Whole-table verification block, not per-cell. Per-country biomass yield; diverges across countries in the legacy config (PRT/BRA/EGY/IND/RUS confirmed).",
           "unit": "dimensionless",
-          "tier": null
-        },
-        "terrain_slope_threshold_deg": {
-          "value": 12.0,
-          "source": "legacy geoworld_framework @ fc7b43d - configs/parameters.json countries.IND.slope_threshold_deg (country-level; the continuous terrain_score denominator, distinct from the Fase 2b/3 exclusion gate).",
-          "verified": false,
-          "verified_by": null,
-          "verified_date": null,
-          "verification_method": "unverified",
-          "note": "Read directly from the legacy config this session, unlike PRT/BRA's same field \u2014 those were additionally confirmed pixel-exact against a legacy baseline terrain_score run (automated verification); no such India baseline run exists to check against, so this is manual_cross_check-quality confidence only (source value transcription), marked unverified/tier null pending an automated check if an India legacy baseline ever exists.",
-          "unit": "degrees",
           "tier": null
         }
       }
@@ -658,20 +561,6 @@
             "note": "Test value: zero, so discount_rate above is already the final rate used in the hand-computed CRF.",
             "status": null,
             "synthetic": true
-          },
-          "slope_threshold_deg": {
-            "value": 5.0,
-            "unit": "degrees",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value only, matching the real cross-country CriteriaParams exclusion-gate numbers by convention (solar=5, wind=25) for readability -- NOT exercised by any known-split hand-check: data_quality_audit's slope-inactivity diagnostic (audit.py run_audit_phase(), the only reader of this field) always evaluates against rasters.get('slope', {}), which is permanently empty at F1b for every country (slope does not exist as an F1b-acquired raster -- see docs/phases/core.md 'No slope entry' -- so slope_max_obs is always None and this check is structurally inactive for ZZZ exactly as it is for BRA/PRT/IND).",
-            "status": null,
-            "synthetic": true
           }
         },
         "wind": {
@@ -758,20 +647,6 @@
             "note": "Test value: zero, so discount_rate above is already the final rate used in the hand-computed CRF.",
             "status": null,
             "synthetic": true
-          },
-          "slope_threshold_deg": {
-            "value": 25.0,
-            "unit": "degrees",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value only, matching the real cross-country CriteriaParams exclusion-gate numbers by convention (solar=5, wind=25) for readability -- NOT exercised by any known-split hand-check: data_quality_audit's slope-inactivity diagnostic (audit.py run_audit_phase(), the only reader of this field) always evaluates against rasters.get('slope', {}), which is permanently empty at F1b for every country (slope does not exist as an F1b-acquired raster -- see docs/phases/core.md 'No slope entry' -- so slope_max_obs is always None and this check is structurally inactive for ZZZ exactly as it is for BRA/PRT/IND).",
-            "status": null,
-            "synthetic": true
           }
         }
       },
@@ -792,55 +667,11 @@
           "note": "Test values, one per land_cover class the ZZZ fixture actually generates (class 10 = southern half, class 40 = northern half, 300 pixels each, scripts/generate_zzz_fixture.py) -- round numbers (10 and 20) chosen so a class-weighted computation is trivial to check by hand, not a real biomass yield estimate.",
           "status": null,
           "synthetic": true
-        },
-        "terrain_slope_threshold_deg": {
-          "value": 10.0,
-          "unit": "degrees",
-          "source": null,
-          "tier": null,
-          "range": null,
-          "verified": false,
-          "verified_by": null,
-          "verified_date": null,
-          "verification_method": "unverified",
-          "note": "Test value chosen against the fixture's own known DEM geometry: the elevation ramp (elevation(row,col)=10*col m, scripts/generate_zzz_fixture.py) has a uniform east-west gradient of 10 m per 0.01 deg pixel at every row (a linear ramp's central-difference gradient is the same everywhere), which at this fixture's latitude (~-4.9 deg, dx = 0.01 * 111.32km * cos(4.9deg) = 1109.13 m) gives a uniform slope_deg = degrees(atan(10/1109.13)) = 0.5166 deg for every pixel (raster_alignment.derive_slope_from_dem()'s formula). At threshold=10.0, F2b's terrain_score = clip(1 - slope/threshold, 0, 1) predicts a uniform 0.94834 (1 - 0.5166/10) across the whole ZZZ suitability raster -- see docs/phases/core.md D-core-018's hand-check table for the value actually observed.",
-          "status": null,
-          "synthetic": true
         }
       }
     }
   },
   "criteria": {
-    "slope_threshold_deg_solar": {
-      "value": 5.0,
-      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (GIS siting suitability literature: solar 5 deg cutoff; search 2026-09-10, not systematic review)",
-      "verified": false,
-      "verified_by": null,
-      "verified_date": null,
-      "verification_method": "unverified",
-      "unit": "degrees",
-      "tier": null
-    },
-    "slope_threshold_deg_wind": {
-      "value": 25.0,
-      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (GIS siting suitability literature: wind 15-25 deg favorable, >25 deg unsuitable)",
-      "verified": false,
-      "verified_by": null,
-      "verified_date": null,
-      "verification_method": "unverified",
-      "unit": "degrees",
-      "tier": null
-    },
-    "slope_threshold_deg_biomass": {
-      "value": 15.0,
-      "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (interpolated between solar/wind, no direct source)",
-      "verified": false,
-      "verified_by": null,
-      "verified_date": null,
-      "verification_method": "unverified",
-      "unit": "degrees",
-      "tier": null
-    },
     "river_safety_buffer_km": {
       "value": 0.5,
       "source": "docs/DECISIONS.md 2026-09-10 - suitability_criteria parameter calibration (upper bound of Brazil Codigo Florestal, Lei 12.651/2012 Art. 4 riparian buffer scale; no consistent cross-country standard, checked BR/PT/IN/PH/US)",

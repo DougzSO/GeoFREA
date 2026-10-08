@@ -78,7 +78,7 @@ def test_adapter_maps_aligned_rasters_and_wdpa(tmp_path):
     assert inputs.elevation is None
     assert inputs.wdpa_path is not None and inputs.wdpa_path.name == "wdpa.shp"
     assert inputs.yield_by_land_cover == {10: 8.0, 20: 3.0, 30: 5.0, 40: 6.0, 90: 0.0, 95: 0.0}
-    assert inputs.terrain_slope_threshold_deg == 10.0
+    assert inputs.terrain_slope_threshold_deg == 16.7  # highest nominal land_availability slope maximum (wind)
     assert inputs.grid_metadata.n_valid_pixels == 93149
     assert not inputs.mainland_gdf.empty
 

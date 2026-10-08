@@ -150,3 +150,23 @@ def riparian_discharges_m3s(la: LandAvailability) -> list[float]:
         q = p.riparian_min_discharge_m3s
         values |= {q.nominal} | ({q.low, q.high} if q.has_range else set())
     return sorted(values)
+
+
+def default_experiments_yaml() -> Path:
+    """`config/experiments.yaml` of this repository (for consumers outside F3 that need the land-availability ranges)."""
+    return Path(__file__).resolve().parents[3] / "config" / "experiments.yaml"
+
+
+def strictest_slope_max_deg(la: LandAvailability, technology: str) -> float:
+    """The lowest slope maximum the technology's range allows (its `low` end, or the nominal value if it has no range).
+
+    Used by the audit to ask whether the slope exclusion could bite at all: if even the strictest maximum is above every
+    observed slope, the exclusion is inactive for any parameter choice.
+    """
+    q = la.technologies[technology].slope_max_deg
+    return q.low if q.has_range else q.nominal
+
+
+def legacy_terrain_slope_deg(la: LandAvailability) -> float:
+    """Denominator of the legacy terrain score: the highest nominal slope maximum over the technologies (legacy phase only)."""
+    return max(t.slope_max_deg.nominal for t in la.technologies.values())

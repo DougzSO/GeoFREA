@@ -479,7 +479,7 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 # (IND, at the time this was written — see config/countries.yaml and
 # OQ-012) must still be able to run phases that read no CountryParams
 # field. Only a phase that actually reads one (data_quality_audit's
-# slope_threshold_deg, suitability_criteria's criteria) fails loud,
+# suitability_criteria's criteria) fails loud,
 # naming the country and the field, via
 # PhaseContext.require_country_params().
 
@@ -520,28 +520,9 @@ def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, 
 
 
 @pytest.mark.unit
-def test_audit_run_fails_loud_naming_country_and_field_when_params_absent(tmp_path):
-    context = PhaseContext(
-        country_code="IND",
-        country_params=None,
-        outputs_dir=tmp_path,
-        prior_results={},
-    )
-
-    with pytest.raises(CountryParamsRequiredError) as exc_info:
-        main._audit_run(context, _audit_config())
-
-    assert exc_info.value.country_code == "IND"
-    assert exc_info.value.field == "technologies.solar"
-    assert "IND" in str(exc_info.value)
-    assert "technologies.solar" in str(exc_info.value)
-
-
-@pytest.mark.unit
-def test_orchestrator_records_audit_as_failed_not_raised_when_params_absent(tmp_path):
-    # A- 09: an exception from spec.run() becomes a "failed" PhaseResult,
-    # never propagates out of Orchestrator.run() — same contract as any
-    # other phase failure, confirmed here for the new error specifically.
+def test_audit_runs_for_a_country_without_country_params(tmp_path):
+    # The audit's slope check reads the land_availability ranges, shared by all countries (2026-10-08), so a country absent
+    # from parameters.json no longer stops it (it used to fail loud naming `technologies.solar`).
     def stub_acquisition_run(context):
         context.register_artifact("layer_registry", tmp_path / "dummy.txt", "1.0")
         (tmp_path / "dummy.txt").write_text("x", encoding="utf-8")
@@ -577,9 +558,7 @@ def test_orchestrator_records_audit_as_failed_not_raised_when_params_absent(tmp_
     results = orchestrator.run(specs)
 
     assert results["data_acquisition"].status == "success"
-    assert results["data_quality_audit"].status == "failed"
-    assert "IND" in results["data_quality_audit"].error
-    assert "technologies.solar" in results["data_quality_audit"].error
+    assert results["data_quality_audit"].status == "success"
 
 
 @pytest.mark.unit

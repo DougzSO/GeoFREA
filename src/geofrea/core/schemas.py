@@ -225,31 +225,12 @@ class _TechnologySitingParams(BaseModel):
     without touching the economic base. See docs/DECISIONS.md
     2026-08-20 - slope_threshold_deg moved to parameters.json.
 
-    Args:
-        slope_threshold_deg: Maximum terrain slope, in degrees, for this
-            technology, as used by data_quality_audit's slope-inactivity
-            diagnostic heuristic. Constrained to >= 0.
-
-            NOT unified with suitability_criteria's siting exclusion
-            gate: Fase 2b/3 uses its own fixed cross-country thresholds
-            (CriteriaParams.slope_threshold_deg_{solar,wind,biomass} =
-            5/25/15 deg), a deliberately separate value with a different
-            purpose and different numbers. This per-technology per-
-            country field stays as-is for the audit diagnostic, which is
-            already in production and validated (see docs/DECISIONS.md
-            2026-08-20 - slope_threshold_deg moved to parameters.json).
-            The two are not merged by design — merging would change a
-            live diagnostic's behavior only for schema tidiness, exactly
-            the kind of cross-phase coupling this project avoids
-            (PhaseContext.prior_results read-only). See docs/DECISIONS.md
-            2026-09-10 - suitability_criteria parameter calibration.
-            FUTURE: revisit unification when data_quality_audit is next
-            worked on, not before.
+    The slope maximum used to live here (a per-technology, per-country value for the audit's slope-inactivity diagnostic). It
+    now comes from `land_availability` in `config/experiments.yaml`, a range shared by every country (2026-10-08, Douglas), so
+    this base carries no field at present.
     """
 
     model_config = ConfigDict(extra="forbid")
-
-    slope_threshold_deg: VerifiedValue[NonNegativeFloat]
 
 
 class BiomassParams(_TechnologyEconomicParams, _TechnologySitingParams):
@@ -346,22 +327,11 @@ class CountryCriteriaParams(BaseModel):
             suitability-score table is separate and global
             (CriteriaParams.land_suitability). Ported verbatim from
             legacy geoworld_framework @ fc7b43d.
-        terrain_slope_threshold_deg: Denominator (degrees) for
-            terrain_score's continuous slope sub-score
-            (clip(1 - slope/threshold, 0, 1)). NOT an exclusion gate —
-            that is CriteriaParams.slope_threshold_deg_{tech}, fixed
-            cross-country. This one is per-country in the legacy
-            (PRT=10, BRA=12) and is the FOURTH distinct slope-threshold
-            use in the pipeline (see docs/DECISIONS.md 2026-09-10 -
-            suitability_criteria: terrain_score denominator is per-
-            country). Ported verbatim from the legacy's country-level
-            `slope_threshold_deg` field @ fc7b43d.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     yield_by_land_cover: VerifiedValue[dict[int, float]]
-    terrain_slope_threshold_deg: VerifiedValue[SlopeDegrees]
 
 
 class CountryParams(BaseModel):
@@ -429,13 +399,8 @@ class CriteriaParams(BaseModel):
     sec 8a and docs/DECISIONS.md 2026-09-10 - suitability_criteria
     parameter calibration).
 
-    slope_threshold_deg_{solar,wind,biomass}: the Fase 2b/3 siting
-    exclusion thresholds (pixel excluded when slope exceeds the value).
-    Fixed cross-country, replacing the legacy's uncited additive offset
-    (country base + 5/10/20 deg). DISTINCT from
-    _TechnologySitingParams.slope_threshold_deg (the audit diagnostic
-    heuristic) — see that field's docstring; the two are not unified by
-    design.
+    The slope maxima of the siting exclusion no longer live here: they are the `land_availability` ranges of
+    `config/experiments.yaml` (2026-10-08).
 
     road_max_dist_km / river_max_dist_biomass_km: confirmed by pixel-
     exact regression against outputs_baseline_fc7b43d/PRT (2026-09-10)
@@ -443,9 +408,6 @@ class CriteriaParams(BaseModel):
     function-signature fallbacks (5.0 / 10.0) are dead code, not ported.
 
     Args:
-        slope_threshold_deg_solar: Max slope (deg) for solar siting.
-        slope_threshold_deg_wind: Max slope (deg) for wind siting.
-        slope_threshold_deg_biomass: Max slope (deg) for biomass siting.
         river_safety_buffer_km: Riparian setback (km) — pixels closer
             than this to a river are excluded for solar/wind (a real
             hard exclusion in Fase 3, not a soft preference).
@@ -492,9 +454,6 @@ class CriteriaParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    slope_threshold_deg_solar: VerifiedValue[SlopeDegrees]
-    slope_threshold_deg_wind: VerifiedValue[SlopeDegrees]
-    slope_threshold_deg_biomass: VerifiedValue[SlopeDegrees]
     river_safety_buffer_km: VerifiedValue[NonNegativeFloat]
     pop_density_threshold: VerifiedValue[PositiveFloat]
     road_max_dist_km: VerifiedValue[PositiveFloat]

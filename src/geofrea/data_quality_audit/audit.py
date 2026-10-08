@@ -64,6 +64,11 @@ from geofrea.data_quality_audit.schemas import (
     VectorLayerSummary,
 )
 from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
+from geofrea.land_eligibility.parameters import (
+    default_experiments_yaml,
+    load_land_availability,
+    strictest_slope_max_deg,
+)
 
 logger = logging.getLogger("geofrea.data_quality_audit.audit")
 
@@ -357,10 +362,10 @@ def run_audit_phase(
     )
 
     slope_threshold_check: dict[str, SlopeThresholdCheck] = {}
+    land_availability = load_land_availability(default_experiments_yaml())
     for tech_name in _TECHNOLOGIES:
-        country_params = context.require_country_params(f"technologies.{tech_name}")
-        tech_params = getattr(country_params.technologies, tech_name)
-        threshold = tech_params.slope_threshold_deg.value
+        # the strictest slope maximum of the land-availability range (2026-10-08): inactive means inactive for any choice
+        threshold = strictest_slope_max_deg(land_availability, tech_name)
         inactive = slope_max_obs is not None and slope_max_obs < threshold
         slope_threshold_check[tech_name] = SlopeThresholdCheck(
             threshold_deg=threshold, max_observed_deg=slope_max_obs, inactive=inactive

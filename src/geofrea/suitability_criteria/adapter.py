@@ -17,6 +17,11 @@ from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.schemas import CountryCriteriaParams, CriteriaParams
 from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.grid_alignment.schemas import GridAlignmentResult
+from geofrea.land_eligibility.parameters import (
+    default_experiments_yaml,
+    legacy_terrain_slope_deg,
+    load_land_availability,
+)
 from geofrea.suitability_criteria.schemas import SuitabilityCriteriaInputs
 
 # GridAlignmentResult field -> SuitabilityCriteriaInputs field. Same
@@ -94,7 +99,7 @@ def build_suitability_criteria_inputs(
         grid_metadata=grid_result.grid_metadata,
         criteria=criteria,
         yield_by_land_cover=country_criteria.yield_by_land_cover.value,
-        terrain_slope_threshold_deg=country_criteria.terrain_slope_threshold_deg.value,
+        terrain_slope_threshold_deg=legacy_terrain_slope_deg(load_land_availability(default_experiments_yaml())),
         wdpa_path=wdpa_path,
         mainland_gdf=mainland_gdf,
         context_gdf=None,

@@ -55,8 +55,7 @@ def _fetch(name: str, dest: Path) -> dict | None:
             r.raise_for_status()
             expected = int(r.headers["Content-Length"])
             with open(part, "wb") as f:
-                for block in r.iter_content(1 << 20):
-                    f.write(block)
+                f.writelines(r.iter_content(1 << 20))
     except requests.RequestException as exc:
         raise WorldCoverDownloadError(f"{name}: {exc}") from exc
     if part.stat().st_size != expected:

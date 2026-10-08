@@ -227,16 +227,15 @@ def test_run_audit_phase_flags_pvout_unit_mismatch(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_path):
-    # No slope raster: threshold_deg still reads from parameters.json per
-    # technology, max_observed_deg is None, nothing is "inactive" without
-    # data to judge that against.
+    # No slope raster: threshold_deg is the strictest end of the land_availability range of the technology (2026-10-08),
+    # max_observed_deg is None, nothing is "inactive" without data to judge that against.
     # Updated 2026-09-21: per METHODOLOGY S-02 scope (solar and wind only),
     # biomass was removed from _TECHNOLOGIES in audit.py.
     result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
     assert set(result.slope_threshold_check.keys()) == {"solar", "wind"}
-    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
-    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(8.5)
+    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(10.0)  # solar range 10-15
+    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(10.2)  # wind range 10.2-30
     for check in result.slope_threshold_check.values():
         assert check.max_observed_deg is None
         assert check.inactive is False
@@ -244,19 +243,15 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
-    # PRT thresholds: solar=5.0, wind=8.5. A max observed
-    # slope of exactly 5.0 must be inactive for wind (8.5 > 5.0)
-    # but NOT for solar (5.0 is not strictly less than its own 5.0
-    # threshold) — this is the per-technology behavior criterion 3/4
-    # asked for, replacing the old single per-country 15.0 fallback.
-    # Updated 2026-09-21: biomass was removed per METHODOLOGY S-02.
+    # Strictest slope maxima: solar 10.0, wind 10.2 (low ends of the land_availability ranges). A max observed slope of 10.1
+    # is inactive for wind (10.1 < 10.2) but not for solar (10.1 is not below 10.0).
     slope_path = tmp_path / "slope.tif"
-    _write_raster(slope_path, np.full((_SIZE, _SIZE), 5.0, dtype=np.float32))
+    _write_raster(slope_path, np.full((_SIZE, _SIZE), 10.1, dtype=np.float32))
 
     inputs = AuditInputs(slope_path=slope_path, country_gdf=_covering_gdf())
     result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
-    assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(5.0)
+    assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(10.1)
     assert result.slope_threshold_check["solar"].inactive is False
     assert result.slope_threshold_check["wind"].inactive is True
 
@@ -265,16 +260,12 @@ def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
 
 
 @pytest.mark.unit
-def test_run_audit_phase_slope_threshold_check_reads_bra_values(tmp_path):
-    # BRA shares the same slope_threshold_deg values as PRT in
-    # parameters.json (no country-specific slope source found this
-    # session) — confirms the read goes through context.country_params
-    # for the actual requested country, not a hardcoded PRT assumption.
-    # Updated 2026-09-21: biomass was removed per METHODOLOGY S-02.
+def test_run_audit_phase_slope_threshold_check_is_the_same_for_every_country(tmp_path):
+    # The slope maxima come from the land_availability ranges, shared by all countries (2026-10-08), not from a per-country value.
     result = run_audit_phase(_context(tmp_path, country_code="BRA"), AuditInputs(), audit_config=_audit_config())
 
-    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(5.0)
-    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(8.5)
+    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(10.0)
+    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(10.2)
 
 
 @pytest.mark.unit

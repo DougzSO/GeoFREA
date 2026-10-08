@@ -62,7 +62,6 @@ VALID_BIOMASS = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
-    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 8.5},
 }
 
 VALID_SOLAR = {
@@ -72,7 +71,6 @@ VALID_SOLAR = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
-    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 5.0},
 }
 
 VALID_WIND = {
@@ -82,7 +80,6 @@ VALID_WIND = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
-    "slope_threshold_deg": {**VALID_VERIFIED_VALUE, "value": 8.5},
 }
 
 VALID_TECHNOLOGIES = {"solar": VALID_SOLAR, "wind": VALID_WIND}
@@ -115,9 +112,6 @@ def _cv(value):
 
 
 VALID_CRITERIA = {
-    "slope_threshold_deg_solar": _cv(5.0),
-    "slope_threshold_deg_wind": _cv(25.0),
-    "slope_threshold_deg_biomass": _cv(15.0),
     "river_safety_buffer_km": _cv(0.5),
     "pop_density_threshold": _cv(200.0),
     "road_max_dist_km": _cv(15.0),
@@ -143,7 +137,6 @@ VALID_CRITERIA = {
 
 VALID_COUNTRY_CRITERIA = {
     "yield_by_land_cover": dict(VALID_YIELD_BY_LAND_COVER),
-    "terrain_slope_threshold_deg": _cv(10.0),
 }
 
 VALID_COUNTRY = {
@@ -182,7 +175,6 @@ REQUIRED_TECH_FIELDS = [
     "lifetime_years",
     "discount_rate",
     "discount_rate_increment",
-    "slope_threshold_deg",
 ]
 
 
@@ -202,7 +194,6 @@ def test_biomass_params_accepts_valid_payload():
     assert result.capex_usd_per_kw.value == 3606
     assert result.discount_rate.value == 0.05
     assert result.opex_variable_usd_per_kwh.value == 0.004
-    assert result.slope_threshold_deg.value == 8.5
 
 
 @pytest.mark.unit
@@ -213,7 +204,6 @@ def test_solar_params_accepts_valid_payload():
     # solar's source doesn't split fixed/variable OPEX - variable stays unpopulated.
     assert result.opex_variable_usd_per_kwh.value is None
     assert result.opex_variable_usd_per_kwh.status == "pending_research"
-    assert result.slope_threshold_deg.value == 5.0
 
 
 @pytest.mark.unit
@@ -223,8 +213,6 @@ def test_wind_params_accepts_valid_payload():
     assert result.discount_rate.value == 0.037
     assert result.opex_variable_usd_per_kwh.value is None
     assert result.opex_variable_usd_per_kwh.status == "pending_research"
-    # Same value as biomass: no wind-specific slope-threshold source found.
-    assert result.slope_threshold_deg.value == 8.5
 
 
 @pytest.mark.unit
@@ -451,16 +439,6 @@ def test_discount_rate_out_of_range_raises(tech_name):
         model_cls.model_validate(data)
 
 
-@pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
-def test_slope_threshold_deg_out_of_range_raises(tech_name):
-    model_cls, valid = TECH_MODELS[tech_name]
-    data = copy.deepcopy(valid)
-    data["slope_threshold_deg"]["value"] = -1.0
-    with pytest.raises(ValidationError):
-        model_cls.model_validate(data)
-
-
 # ─── CriteriaParams / LandCoverSuitability (Fase 2b, added 2026-09-10) ───
 
 
@@ -498,7 +476,6 @@ def test_land_cover_suitability_score_out_of_range_raises():
 def test_criteria_params_accepts_valid_payload():
     result = CriteriaParams.model_validate(copy.deepcopy(VALID_CRITERIA))
     assert result.road_max_dist_km.value == 15.0
-    assert result.slope_threshold_deg_wind.value == 25.0
     assert result.iucn_strict_categories.value == ["ia", "ib", "ii"]
     assert result.land_suitability.value[30].biomass == 0.9
     assert result.protected_as_exclusion.value is True
@@ -516,14 +493,6 @@ def test_criteria_params_missing_required_field_raises(field):
 @pytest.mark.unit
 def test_criteria_params_rejects_unexpected_field():
     data = {**copy.deepcopy(VALID_CRITERIA), "unexpected_key": _cv(1.0)}
-    with pytest.raises(ValidationError):
-        CriteriaParams.model_validate(data)
-
-
-@pytest.mark.unit
-def test_criteria_params_slope_threshold_out_of_range_raises():
-    data = copy.deepcopy(VALID_CRITERIA)
-    data["slope_threshold_deg_wind"]["value"] = 95.0
     with pytest.raises(ValidationError):
         CriteriaParams.model_validate(data)
 
@@ -558,22 +527,13 @@ def test_criteria_params_rejects_terrain_weights_not_summing_to_one():
 def test_country_criteria_params_accepts_valid_payload():
     result = CountryCriteriaParams.model_validate(copy.deepcopy(VALID_COUNTRY_CRITERIA))
     assert result.yield_by_land_cover.value[10] == 8.0  # string keys coerced to int
-    assert result.terrain_slope_threshold_deg.value == 10.0
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("field", ["yield_by_land_cover", "terrain_slope_threshold_deg"])
+@pytest.mark.parametrize("field", ["yield_by_land_cover"])
 def test_country_criteria_params_missing_required_field_raises(field):
     data = copy.deepcopy(VALID_COUNTRY_CRITERIA)
     del data[field]
-    with pytest.raises(ValidationError):
-        CountryCriteriaParams.model_validate(data)
-
-
-@pytest.mark.unit
-def test_country_criteria_params_terrain_threshold_out_of_range_raises():
-    data = copy.deepcopy(VALID_COUNTRY_CRITERIA)
-    data["terrain_slope_threshold_deg"]["value"] = 95.0
     with pytest.raises(ValidationError):
         CountryCriteriaParams.model_validate(data)
 
@@ -602,5 +562,3 @@ def test_real_parameters_json_criteria_block_validates():
     assert set(result.countries) == {"PRT", "BRA", "IND", "ZZZ"}
     assert result.countries["PRT"].criteria.yield_by_land_cover.value[20] == 3.0
     assert result.countries["BRA"].criteria.yield_by_land_cover.value[20] == 4.0
-    assert result.countries["PRT"].criteria.terrain_slope_threshold_deg.value == 10.0
-    assert result.countries["BRA"].criteria.terrain_slope_threshold_deg.value == 12.0
