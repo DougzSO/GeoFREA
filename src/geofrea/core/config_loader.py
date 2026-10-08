@@ -26,7 +26,6 @@ class CountryMappingError(KeyError):
     """
 
 
-
 def load_parameters(path: Path) -> ParametersFile:
     """Load and validate parameters.json.
 

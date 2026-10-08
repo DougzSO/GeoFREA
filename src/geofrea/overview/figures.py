@@ -75,7 +75,9 @@ def _aligned_path(iso: str, stem: str) -> Path:
     return core_paths.phase_dir(iso, "grid_alignment", "artifacts") / f"{iso}_{stem}_aligned.tif"
 
 
-def read_layer(path: Path, max_pixels: int = MAX_PIXELS) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+def read_layer(
+    path: Path, max_pixels: int = MAX_PIXELS
+) -> tuple[np.ndarray, tuple[float, float, float, float]]:
     """Band 1 as float32 with nodata -> NaN, downsampled so its longest side is `max_pixels`; and (W, E, S, N)."""
     with rasterio.open(path) as src:
         scale = max(1, int(np.ceil(max(src.height, src.width) / max_pixels)))
@@ -98,7 +100,12 @@ def layer_stats(path: Path) -> dict:
     v = arr[valid]
     if v.size == 0:
         return {"n_valid": 0, "min": None, "median": None, "max": None}
-    return {"n_valid": int(v.size), "min": float(v.min()), "median": float(np.median(v)), "max": float(v.max())}
+    return {
+        "n_valid": int(v.size),
+        "min": float(v.min()),
+        "median": float(np.median(v)),
+        "max": float(v.max()),
+    }
 
 
 def plot_aligned_layers(iso: str, out_path: Path) -> Path:
@@ -110,7 +117,9 @@ def plot_aligned_layers(iso: str, out_path: Path) -> Path:
         path = _aligned_path(iso, stem)
         ax.set_title(title, fontsize=10)
         if not path.exists():
-            ax.text(0.5, 0.5, f"missing\n{path.name}", ha="center", va="center", transform=ax.transAxes)
+            ax.text(
+                0.5, 0.5, f"missing\n{path.name}", ha="center", va="center", transform=ax.transAxes
+            )
             ax.set_axis_off()
             continue
         arr, extent = read_layer(path)
@@ -123,23 +132,46 @@ def plot_aligned_layers(iso: str, out_path: Path) -> Path:
         elif kind == "categorical":
             kwargs["cmap"] = "tab20"
         if np.isfinite(arr).any():
-            lo, hi = np.nanpercentile(arr, [1, 99]) if kind == "linear" else (np.nanmin(arr), np.nanmax(arr))
+            lo, hi = (
+                np.nanpercentile(arr, [1, 99])
+                if kind == "linear"
+                else (np.nanmin(arr), np.nanmax(arr))
+            )
             if hi > lo:
                 kwargs.update(vmin=lo, vmax=hi)
         im = ax.imshow(arr, **kwargs)
         if stem == "elevation" and relief is not None:  # terrain colours shaded by the relief
-            ax.imshow(relief, extent=extent, cmap="Greys_r", vmin=0.0, vmax=1.0, alpha=0.35, interpolation="bilinear", zorder=2)
+            ax.imshow(
+                relief,
+                extent=extent,
+                cmap="Greys_r",
+                vmin=0.0,
+                vmax=1.0,
+                alpha=0.35,
+                interpolation="bilinear",
+                zorder=2,
+            )
         style.draw_overlay(ax, outline, rivers, extent)
         fig.colorbar(im, ax=ax, shrink=0.75)
         ax.tick_params(labelsize=7)
-    fig.suptitle(f"{iso}: F2a aligned layers (colour limits at the 1st-99th percentile)", fontsize=13)
+    fig.suptitle(
+        f"{iso}: F2a aligned layers (colour limits at the 1st-99th percentile)", fontsize=13
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=100)
     plt.close(fig)
     return out_path
 
 
-EXCLUSION_LABELS = ("none", "E1 protected", "E2 water", "E3 riparian", "E4 slope", "E5 land cover", "E6 population")
+EXCLUSION_LABELS = (
+    "none",
+    "E1 protected",
+    "E2 water",
+    "E3 riparian",
+    "E4 slope",
+    "E5 land cover",
+    "E6 population",
+)
 
 
 def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: Path) -> Path:
@@ -149,7 +181,12 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
     techs = sorted(cell_tables)
     all_rows = np.concatenate([cell_tables[t]["row"].to_numpy() for t in techs])
     all_cols = np.concatenate([cell_tables[t]["col"].to_numpy() for t in techs])
-    r0, r1, c0, c1 = int(all_rows.min()), int(all_rows.max()), int(all_cols.min()), int(all_cols.max())
+    r0, r1, c0, c1 = (
+        int(all_rows.min()),
+        int(all_rows.max()),
+        int(all_cols.min()),
+        int(all_cols.max()),
+    )
     extent = (
         CELL_ORIGIN_LON + c0 * CELL_DEG,
         CELL_ORIGIN_LON + (c1 + 1) * CELL_DEG,
@@ -158,7 +195,9 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
     )
     colors = ["#f0f0f0", "#1b9e77", "#1f78b4", "#6baed6", "#a65628", "#e6ab02", "#d95f02"]
     cmap, norm = ListedColormap(colors), BoundaryNorm(np.arange(-0.5, 7.5), len(colors))
-    fig, axes = plt.subplots(2, len(techs), figsize=(7 * len(techs), 13), constrained_layout=True, squeeze=False)
+    fig, axes = plt.subplots(
+        2, len(techs), figsize=(7 * len(techs), 13), constrained_layout=True, squeeze=False
+    )
     loaded = style.load_relief(_aligned_path(iso, "elevation"))
     outline, rivers = style.country_outline(iso), style.major_rivers(iso)
     codes = {name: i + 1 for i, name in enumerate(("E1", "E2", "E3", "E4", "E5", "E6"))}
@@ -172,16 +211,32 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
         for k in (0, 1):
             if loaded:
                 style.draw_backdrop(axes[k, j], loaded[0], loaded[1])
-        im = axes[0, j].imshow(share, extent=extent, cmap="YlGn", vmin=0, vmax=1, interpolation="nearest", alpha=0.8, zorder=1)
+        im = axes[0, j].imshow(
+            share,
+            extent=extent,
+            cmap="YlGn",
+            vmin=0,
+            vmax=1,
+            interpolation="nearest",
+            alpha=0.8,
+            zorder=1,
+        )
         fig.colorbar(im, ax=axes[0, j], shrink=0.7, label="eligible share of the cell")
-        axes[0, j].set_title(f"{tech}: eligible share ({100 * cells['eligible_area_km2'].sum() / cells['cell_area_km2'].sum():.1f}% of the land)")
-        im2 = axes[1, j].imshow(dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest", alpha=0.85, zorder=1)
+        axes[0, j].set_title(
+            f"{tech}: eligible share ({100 * cells['eligible_area_km2'].sum() / cells['cell_area_km2'].sum():.1f}% of the land)"
+        )
+        im2 = axes[1, j].imshow(
+            dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest", alpha=0.85, zorder=1
+        )
         for k in (0, 1):
             style.draw_overlay(axes[k, j], outline, rivers, extent)
         cb = fig.colorbar(im2, ax=axes[1, j], shrink=0.7, ticks=range(7))
         cb.ax.set_yticklabels(EXCLUSION_LABELS)
         axes[1, j].set_title(f"{tech}: dominant exclusion per cell")
-    fig.suptitle(f"{iso}: F3 land eligibility, central parameters (open questions OQ-046 to OQ-049)", fontsize=13)
+    fig.suptitle(
+        f"{iso}: F3 land eligibility, central parameters (open questions OQ-046 to OQ-049)",
+        fontsize=13,
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=100)
     plt.close(fig)
@@ -215,7 +270,13 @@ def plot_hazard_context(iso: str, hazard: pd.DataFrame, out_path: Path) -> Path:
         img = np.full((r1 - r0 + 1, c1 - c0 + 1), np.nan, dtype=np.float32)
         img[rows - r0, cols - c0] = means[col].to_numpy()
         vals = img[np.isfinite(img)]
-        kwargs: dict = {"cmap": cmap, "extent": extent, "interpolation": "nearest", "alpha": 0.85, "zorder": 1}
+        kwargs: dict = {
+            "cmap": cmap,
+            "extent": extent,
+            "interpolation": "nearest",
+            "alpha": 0.85,
+            "zorder": 1,
+        }
         if "change" in col and vals.size:
             half = float(np.nanmax(np.abs(np.nanpercentile(vals, [1, 99])))) or 1.0
             kwargs.update(vmin=-half, vmax=half)
@@ -224,7 +285,9 @@ def plot_hazard_context(iso: str, hazard: pd.DataFrame, out_path: Path) -> Path:
         ax.set_title(title, fontsize=10)
         fig.colorbar(im, ax=ax, shrink=0.8)
     n = hazard["member"].nunique()
-    fig.suptitle(f"{iso}: hazard context, mean over {n} members (context only, OQ-007)", fontsize=13)
+    fig.suptitle(
+        f"{iso}: hazard context, mean over {n} members (context only, OQ-007)", fontsize=13
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=100)
     plt.close(fig)
@@ -242,17 +305,29 @@ def _fmt(v) -> str:
     return "-" if v is None else f"{v:,.3g}"
 
 
-def build_tables(iso: str, forcing: pd.DataFrame, masked: pd.DataFrame, hazard: pd.DataFrame) -> str:
+def build_tables(
+    iso: str, forcing: pd.DataFrame, masked: pd.DataFrame, hazard: pd.DataFrame
+) -> str:
     layer_rows = []
     for stem, panel_title, _cmap, _kind in ALIGNED_PANELS:
-        title = panel_title.replace("(log10 per pixel)", "(people per pixel)")  # the table shows raw values, not log10
+        title = panel_title.replace(
+            "(log10 per pixel)", "(people per pixel)"
+        )  # the table shows raw values, not log10
         path = _aligned_path(iso, stem)
         if not path.exists():
-            layer_rows.append({"layer": title, "valid pixels": "missing", "min": "-", "median": "-", "max": "-"})
+            layer_rows.append(
+                {"layer": title, "valid pixels": "missing", "min": "-", "median": "-", "max": "-"}
+            )
             continue
         s = layer_stats(path)
         layer_rows.append(
-            {"layer": title, "valid pixels": f"{s['n_valid']:,}", "min": _fmt(s["min"]), "median": _fmt(s["median"]), "max": _fmt(s["max"])}
+            {
+                "layer": title,
+                "valid pixels": f"{s['n_valid']:,}",
+                "min": _fmt(s["min"]),
+                "median": _fmt(s["median"]),
+                "max": _fmt(s["max"]),
+            }
         )
 
     f = forcing.copy()
@@ -266,9 +341,15 @@ def build_tables(iso: str, forcing: pd.DataFrame, masked: pd.DataFrame, hazard: 
                 "member": member,
                 "cells": len(g),
                 "masked": int(m_counts.get(member, 0)),
-                "delta_rsds (min / median / max)": " / ".join(_fmt(x) for x in (g.delta_rsds.min(), g.delta_rsds.median(), g.delta_rsds.max())),
-                "delta_wind (min / median / max)": " / ".join(_fmt(x) for x in (g.delta_wind.min(), g.delta_wind.median(), g.delta_wind.max())),
-                "dT K (min / median / max)": " / ".join(_fmt(x) for x in (g.dT.min(), g.dT.median(), g.dT.max())),
+                "delta_rsds (min / median / max)": " / ".join(
+                    _fmt(x) for x in (g.delta_rsds.min(), g.delta_rsds.median(), g.delta_rsds.max())
+                ),
+                "delta_wind (min / median / max)": " / ".join(
+                    _fmt(x) for x in (g.delta_wind.min(), g.delta_wind.median(), g.delta_wind.max())
+                ),
+                "dT K (min / median / max)": " / ".join(
+                    _fmt(x) for x in (g.dT.min(), g.dT.median(), g.dT.max())
+                ),
             }
         )
 
@@ -317,7 +398,9 @@ def build_overview(iso: str) -> OverviewSummary:
         for p in sorted(eligibility_dir.glob("cells_*__central.parquet"))
     }
     if cell_tables:
-        figures.append(plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png"))
+        figures.append(
+            plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png")
+        )
     table = out / "tables" / f"{iso}_overview.md"
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(build_tables(iso, forcing, masked, hazard), encoding="utf-8")

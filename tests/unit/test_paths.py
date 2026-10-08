@@ -63,7 +63,9 @@ class TestStoredPath:
         """The missing-variable error names the variable and points at .env.example."""
         with mock.patch.dict(os.environ, {}, clear=True):
             sp = StoredPath(root="data", rel="test.txt")
-            with pytest.raises(MissingPathEnvironmentError, match=r"GEOFREA_DATA_DIR.*\.env\.example"):
+            with pytest.raises(
+                MissingPathEnvironmentError, match=r"GEOFREA_DATA_DIR.*\.env\.example"
+            ):
                 sp.resolve()
 
     def test_str_representation(self):

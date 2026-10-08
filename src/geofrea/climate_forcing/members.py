@@ -54,7 +54,9 @@ class Ensemble:
     windows: tuple[tuple[int, int], ...]
     wind_ratio_neighbourhood_cells: int | None = None  # OQ-042, option A
     wind_factor_valid_range: tuple[float, float] | None = None  # OQ-042, option C
-    hazard_windows_available: tuple[tuple[int, int], ...] = ()  # windows with ISIMIP3b daily data on disk
+    hazard_windows_available: tuple[
+        tuple[int, int], ...
+    ] = ()  # windows with ISIMIP3b daily data on disk
 
 
 def _parse_window(text: str) -> tuple[int, int]:
@@ -66,7 +68,9 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
     """Read `gcm_ensemble` from experiments.yaml; fail loud if it is absent or names an unknown SSP."""
     cfg = yaml.safe_load(Path(experiments_yaml).read_text(encoding="utf-8")).get("gcm_ensemble")
     if not cfg:
-        raise MemberResolutionError(f"{experiments_yaml}: no `gcm_ensemble` block (OQ-009 verdict missing)")
+        raise MemberResolutionError(
+            f"{experiments_yaml}: no `gcm_ensemble` block (OQ-009 verdict missing)"
+        )
     unknown = [s for s in cfg["ssps"] if s not in SSP_EXPERIMENT]
     if unknown:
         raise MemberResolutionError(f"unknown SSP(s) {unknown}; known: {sorted(SSP_EXPERIMENT)}")
@@ -86,8 +90,12 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
         ssps=tuple(cfg["ssps"]),
         windows=tuple(_parse_window(w) for w in cfg["windows"]),
         wind_ratio_neighbourhood_cells=cfg.get("wind_ratio_neighbourhood_cells"),
-        wind_factor_valid_range=tuple(cfg["wind_factor_valid_range"]) if cfg.get("wind_factor_valid_range") else None,
-        hazard_windows_available=tuple(_parse_window(w) for w in cfg.get("hazard_windows_available", [])),
+        wind_factor_valid_range=tuple(cfg["wind_factor_valid_range"])
+        if cfg.get("wind_factor_valid_range")
+        else None,
+        hazard_windows_available=tuple(
+            _parse_window(w) for w in cfg.get("hazard_windows_available", [])
+        ),
     )
 
 
@@ -111,7 +119,9 @@ def resolve_members(ensemble: Ensemble) -> list[Member]:
 def _entry(registry: Cmip6Registry, gcm: Gcm, experiment: str, variable: str):
     entry = registry.entries.get(f"cmip6/{gcm.cds_name}/{experiment}/{variable}")
     if entry is None or entry.status != "registered":
-        raise MemberResolutionError(f"{gcm.name}: {experiment}/{variable} is not registered in the CMIP6 registry")
+        raise MemberResolutionError(
+            f"{gcm.name}: {experiment}/{variable} is not registered in the CMIP6 registry"
+        )
     return entry
 
 
@@ -146,9 +156,14 @@ def members_manifest(
             for experiment in ("historical", m.experiment):
                 e = _entry(registry, m.gcm, experiment, variable)
                 realizations.add(e.realization)
-                sources[f"{experiment}/{variable}"] = {"path": e.global_path, "sha256": e.source_sha256}
+                sources[f"{experiment}/{variable}"] = {
+                    "path": e.global_path,
+                    "sha256": e.source_sha256,
+                }
         if len(realizations) != 1:
-            raise MemberResolutionError(f"{m.gcm.name}/{m.ssp}: realizations differ across files: {sorted(realizations)}")
+            raise MemberResolutionError(
+                f"{m.gcm.name}/{m.ssp}: realizations differ across files: {sorted(realizations)}"
+            )
         grid = _entry(registry, m.gcm, "historical", "tas").native_grid
         entry: dict = {
             "member": m.member_id,

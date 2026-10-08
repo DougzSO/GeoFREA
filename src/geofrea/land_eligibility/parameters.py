@@ -119,7 +119,9 @@ def load_land_availability(experiments_yaml: Path) -> LandAvailability:
     try:
         return LandAvailability.model_validate(block)
     except ValueError as exc:
-        raise LandAvailabilityError(f"{experiments_yaml}: invalid `land_availability`: {exc}") from exc
+        raise LandAvailabilityError(
+            f"{experiments_yaml}: invalid `land_availability`: {exc}"
+        ) from exc
 
 
 def nominal_set(params: TechParameters) -> ParameterSet:
@@ -130,8 +132,12 @@ def nominal_set(params: TechParameters) -> ParameterSet:
         riparian_setback_km=params.riparian_setback_km.nominal,
         riparian_min_discharge_m3s=params.riparian_min_discharge_m3s.nominal,
         min_eligible_area_km2=params.min_eligible_area_km2.nominal,
-        excluded_classes=tuple(int(c) for c in params.excluded_classes.levels[params.excluded_classes.nominal]),
-        iucn_categories=tuple(str(c).lower() for c in params.iucn_categories.levels[params.iucn_categories.nominal]),
+        excluded_classes=tuple(
+            int(c) for c in params.excluded_classes.levels[params.excluded_classes.nominal]
+        ),
+        iucn_categories=tuple(
+            str(c).lower() for c in params.iucn_categories.levels[params.iucn_categories.nominal]
+        ),
         label="nominal",
     )
 

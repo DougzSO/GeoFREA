@@ -28,6 +28,7 @@ from geofrea.land_eligibility.parameters import load_land_availability, nominal_
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
+
 def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
     """Generate the ZZZ fixture and run data_acquisition + grid_alignment under `data_dir`.
 
@@ -70,10 +71,18 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
     def clipped(*parts: str):
         return read_clipped_to_country(next(raw.joinpath(*parts).glob("*.gpkg")), mainland)[0]
 
-    arrays["e1_protected_share"] = polygon_coverage_fraction(clipped("protected_areas"), transform, shape).astype(np.float64)
-    arrays["e2_water_share"] = polygon_coverage_fraction(clipped("hydrology", "lakes"), transform, shape).astype(np.float64)
+    arrays["e1_protected_share"] = polygon_coverage_fraction(
+        clipped("protected_areas"), transform, shape
+    ).astype(np.float64)
+    arrays["e2_water_share"] = polygon_coverage_fraction(
+        clipped("hydrology", "lakes"), transform, shape
+    ).astype(np.float64)
     rivers = river_fractions(
-        clipped("hydrology", "rivers"), transform, shape, [central.riparian_setback_km], [central.riparian_min_discharge_m3s]
+        clipped("hydrology", "rivers"),
+        transform,
+        shape,
+        [central.riparian_setback_km],
+        [central.riparian_min_discharge_m3s],
     )
     key = (float(central.riparian_min_discharge_m3s), float(central.riparian_setback_km))
     arrays["e3_riparian_share"] = rivers[key].astype(np.float64)

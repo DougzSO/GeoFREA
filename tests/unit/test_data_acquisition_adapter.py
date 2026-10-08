@@ -183,9 +183,7 @@ def test_adapter_maps_all_five_new_path_fields_from_one_complete_result(tmp_path
     # paths (never opened in this module, see module docstring).
     mainland = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
     boundary_path = tmp_path / "borders.geojson"
-    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(
-        boundary_path, driver="GeoJSON"
-    )
+    gpd.GeoDataFrame(geometry=[mainland], crs="EPSG:4326").to_file(boundary_path, driver="GeoJSON")
 
     fake_paths = {
         "protected": Path("/fake/wdpa.shp"),
@@ -405,9 +403,14 @@ def test_adapter_resolves_cmip6_paths_from_the_registry_for_the_result_country(t
     bra_crop_path.write_bytes(b"fake-crop-bytes")
 
     grid = Cmip6NativeGrid(
-        lat_resolution_deg=1.0, lon_resolution_deg=1.25,
-        lat_min=-89.5, lat_max=89.5, lon_min=0.625, lon_max=359.375,
-        n_lat=180, n_lon=288,
+        lat_resolution_deg=1.0,
+        lon_resolution_deg=1.25,
+        lat_min=-89.5,
+        lat_max=89.5,
+        lon_min=0.625,
+        lon_max=359.375,
+        n_lat=180,
+        n_lon=288,
     )
     registry = Cmip6Registry()
     registry.entries["cmip6/gfdl_esm4/historical/tas"] = Cmip6RegistryEntry(

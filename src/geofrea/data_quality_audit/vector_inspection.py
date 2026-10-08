@@ -273,13 +273,9 @@ def inspect_vector_layer(
             is_lineal = geom_types <= {"LineString", "MultiLineString"}
 
             if is_polygonal:
-                result["total_area_km2"] = round(
-                    float(gdf_proj.geometry.area.sum()) / 1e6, 1
-                )
+                result["total_area_km2"] = round(float(gdf_proj.geometry.area.sum()) / 1e6, 1)
             elif is_lineal:
-                result["total_length_km"] = round(
-                    float(gdf_proj.geometry.length.sum()) / 1e3, 1
-                )
+                result["total_length_km"] = round(float(gdf_proj.geometry.length.sum()) / 1e3, 1)
 
             if iucn_breakdown:
                 result["attribute_breakdown"] = _iucn_category_breakdown(gdf, gdf_proj)

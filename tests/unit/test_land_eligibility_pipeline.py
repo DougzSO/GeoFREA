@@ -55,7 +55,16 @@ def _slope_counts(slope_map: np.ndarray) -> np.ndarray:
 
 def _write_slope_counts(path: Path, counts: np.ndarray) -> Path:
     with rasterio.open(
-        path, "w", driver="GTiff", height=H, width=W, count=41, dtype="uint16", crs="EPSG:4326", transform=TRANSFORM, nodata=65535
+        path,
+        "w",
+        driver="GTiff",
+        height=H,
+        width=W,
+        count=41,
+        dtype="uint16",
+        crs="EPSG:4326",
+        transform=TRANSFORM,
+        nodata=65535,
     ) as dst:
         dst.write(counts)
     return path
@@ -63,7 +72,15 @@ def _write_slope_counts(path: Path, counts: np.ndarray) -> Path:
 
 def _write_counts(path: Path, counts: np.ndarray) -> Path:
     with rasterio.open(
-        path, "w", driver="GTiff", height=H, width=W, count=len(CLASSES), dtype="uint16", crs="EPSG:4326", transform=TRANSFORM,
+        path,
+        "w",
+        driver="GTiff",
+        height=H,
+        width=W,
+        count=len(CLASSES),
+        dtype="uint16",
+        crs="EPSG:4326",
+        transform=TRANSFORM,
         nodata=65535,
     ) as dst:
         dst.write(counts)
@@ -73,7 +90,16 @@ def _write_counts(path: Path, counts: np.ndarray) -> Path:
 
 def _write(path: Path, data: np.ndarray, dtype="float32", nodata=-9999.0) -> Path:
     with rasterio.open(
-        path, "w", driver="GTiff", height=H, width=W, count=1, dtype=dtype, crs="EPSG:4326", transform=TRANSFORM, nodata=nodata
+        path,
+        "w",
+        driver="GTiff",
+        height=H,
+        width=W,
+        count=1,
+        dtype=dtype,
+        crs="EPSG:4326",
+        transform=TRANSFORM,
+        nodata=nodata,
     ) as dst:
         dst.write(data.astype(dtype), 1)
     return path
@@ -104,19 +130,34 @@ def world(tmp_path, monkeypatch):
     for h in (100, 150, 200):
         layers.update({f"weibull_a_{h}m": 7.0, f"weibull_k_{h}m": 2.0, f"air_density_{h}m": 1.2})
     siting = SitingLayersResult(
-        country_code="ZZZ", layers={name: _write(base / f"{name}.tif", np.full((H, W), v)) for name, v in layers.items()}
+        country_code="ZZZ",
+        layers={
+            name: _write(base / f"{name}.tif", np.full((H, W), v)) for name, v in layers.items()
+        },
     )
     country = gpd.GeoDataFrame(geometry=[box(LON0, LAT0 - 0.2, LON0 + 0.3, LAT0)], crs="EPSG:4326")
-    protected = gpd.GeoDataFrame({"IUCN_CAT": ["II"]}, geometry=[box(LON0 + 0.10, LAT0 - 0.2, LON0 + 0.15, LAT0)], crs="EPSG:4326")
+    protected = gpd.GeoDataFrame(
+        {"IUCN_CAT": ["II"]},
+        geometry=[box(LON0 + 0.10, LAT0 - 0.2, LON0 + 0.15, LAT0)],
+        crs="EPSG:4326",
+    )
     protected.to_file(tmp_path / "wdpa.gpkg", driver="GPKG")
     rivers = gpd.GeoDataFrame(
-        {"DIS_AV_CMS": [50.0]}, geometry=[LineString([(LON0 + 0.205, LAT0), (LON0 + 0.205, LAT0 - 0.2)])], crs="EPSG:4326"
+        {"DIS_AV_CMS": [50.0]},
+        geometry=[LineString([(LON0 + 0.205, LAT0), (LON0 + 0.205, LAT0 - 0.2)])],
+        crs="EPSG:4326",
     )
     rivers.to_file(tmp_path / "rivers.gpkg", driver="GPKG")
-    lakes = gpd.GeoDataFrame(geometry=[box(LON0 + 5, LAT0 + 5, LON0 + 5.1, LAT0 + 5.1)], crs="EPSG:4326")  # none inside the country
+    lakes = gpd.GeoDataFrame(
+        geometry=[box(LON0 + 5, LAT0 + 5, LON0 + 5.1, LAT0 + 5.1)], crs="EPSG:4326"
+    )  # none inside the country
     lakes.to_file(tmp_path / "lakes.gpkg", driver="GPKG")
     return SimpleNamespace(
-        grid_result=grid_result, siting=siting, country=country, protected=tmp_path / "wdpa.gpkg", rivers=tmp_path / "rivers.gpkg",
+        grid_result=grid_result,
+        siting=siting,
+        country=country,
+        protected=tmp_path / "wdpa.gpkg",
+        rivers=tmp_path / "rivers.gpkg",
         lakes=tmp_path / "lakes.gpkg",
     )
 
@@ -124,7 +165,14 @@ def world(tmp_path, monkeypatch):
 def _run(world, techs=("solar",), **override):
     paths = {"protected": world.protected, "lakes": world.lakes, "rivers": world.rivers, **override}
     return build_eligibility(
-        "ZZZ", EXPERIMENTS, world.grid_result, world.siting, world.country, paths["protected"], paths["lakes"], paths["rivers"],
+        "ZZZ",
+        EXPERIMENTS,
+        world.grid_result,
+        world.siting,
+        world.country,
+        paths["protected"],
+        paths["lakes"],
+        paths["rivers"],
         list(techs),
     )
 
@@ -137,8 +185,13 @@ def test_named_land_scenarios_are_ordered(world):
         area = {}
         for scenario, s in tech_summary.scenarios.items():
             assert s.cells.name == f"cells_{tech}__{scenario}.parquet" and s.cells.exists()
-            assert s.candidates.name == f"candidates_{tech}__{scenario}.parquet" and s.candidates.exists()
-            area[scenario] = pd.read_parquet(s.cells).set_index("cell_id")["eligible_area_km2"].sort_index()
+            assert (
+                s.candidates.name == f"candidates_{tech}__{scenario}.parquet"
+                and s.candidates.exists()
+            )
+            area[scenario] = (
+                pd.read_parquet(s.cells).set_index("cell_id")["eligible_area_km2"].sort_index()
+            )
         assert (area["restrictive"] <= area["central"] + 1e-9).all()
         assert (area["central"] <= area["permissive"] + 1e-9).all()
         assert tech_summary.scenarios["central"].cells == tech_summary.cells
@@ -147,7 +200,11 @@ def test_named_land_scenarios_are_ordered(world):
         assert "riparian_setback_km" in varied and "pop_density_max_per_km2" not in varied
         assert "pop_density_max_per_km2" in tech_summary.scenarios["restrictive"].held_central
     solar = summary.technologies["solar"].scenarios
-    assert solar["restrictive"].eligible_area_km2 < solar["central"].eligible_area_km2 < solar["permissive"].eligible_area_km2
+    assert (
+        solar["restrictive"].eligible_area_km2
+        < solar["central"].eligible_area_km2
+        < solar["permissive"].eligible_area_km2
+    )
 
 
 def test_candidate_stability_table_counts_the_scenarios_in_which_a_cell_is_a_candidate(world):
@@ -186,12 +243,18 @@ def test_end_to_end_areas_candidates_and_invariants(world):
     assert solar.excluded_share_by_constraint["E5"] > 0.15
     col2 = cells[cells["col"] == col0 + 2]  # the protected polygon covers it entirely
     assert (col2["eligible_area_km2"] < 1e-6).all() and (col2["dominant_exclusion"] == "E1").all()
-    riverside = cells[cells["col"] == col0 + 4]  # a river inside it: only part of the pixels is excluded, not whole pixels
-    assert (riverside["eligible_area_km2"] > 0).all() and (riverside["excluded_area_km2_E3"] > 0).all()
+    riverside = cells[
+        cells["col"] == col0 + 4
+    ]  # a river inside it: only part of the pixels is excluded, not whole pixels
+    assert (riverside["eligible_area_km2"] > 0).all() and (
+        riverside["excluded_area_km2_E3"] > 0
+    ).all()
     assert (riverside["eligible_area_km2"] < riverside["cell_area_km2"]).all()
     cands = pd.read_parquet(solar.candidates)
     assert solar.n_candidates == len(cands) == int((cells["eligible_area_km2"] >= 0.1).sum())
-    assert {"dist_grid_km", "dist_road_km", "pvout_kwh_kwp_day", "dist_grid_capped_share"} <= set(cands.columns)
+    assert {"dist_grid_km", "dist_road_km", "pvout_kwh_kwp_day", "dist_grid_capped_share"} <= set(
+        cands.columns
+    )
     coarse = pd.read_parquet(solar.cells_0p1deg)
     assert coarse["eligible_area_km2"].sum() == pytest.approx(cells["eligible_area_km2"].sum())
     assert coarse["cell_area_km2"].sum() == pytest.approx(cells["cell_area_km2"].sum())
@@ -235,14 +298,18 @@ def test_pixel_without_a_population_value_is_not_eligible():
 
 
 def test_population_density_uses_count_over_geodesic_area():
-    layers = _layers((1, 2), pixel_area_km2=np.array([[1.0, 2.0]]), population_count=np.array([[150.0, 150.0]]))
+    layers = _layers(
+        (1, 2), pixel_area_km2=np.array([[1.0, 2.0]]), population_count=np.array([[150.0, 150.0]])
+    )
     _, excl = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
     assert excl["E6"].tolist() == [[1.0, 0.0]]  # 150/km2 excluded, 75/km2 kept
 
 
 def test_riparian_share_is_interpolated_between_prepared_setbacks_and_never_extrapolated():
     shape = (1, 1)
-    layers = _layers(shape, riparian_fraction={(0.0, 0.25): np.full(shape, 0.2), (0.0, 1.0): np.full(shape, 0.8)})
+    layers = _layers(
+        shape, riparian_fraction={(0.0, 0.25): np.full(shape, 0.2), (0.0, 1.0): np.full(shape, 0.8)}
+    )
     _, mid = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.625, 0.1, (10,), ("ia",)))
     assert mid["E3"][0, 0] == pytest.approx(0.5)
     with pytest.raises(MissingExclusionLayerError):
@@ -276,13 +343,17 @@ def test_an_excluded_class_missing_from_the_bands_is_an_error():
 def test_riparian_share_is_bilinear_in_setback_and_discharge_and_falls_with_discharge():
     shape = (1, 1)
     shares = {
-        (0.0, 0.25): np.full(shape, 0.2), (0.0, 1.0): np.full(shape, 0.8),
-        (10.0, 0.25): np.full(shape, 0.0), (10.0, 1.0): np.full(shape, 0.4),
+        (0.0, 0.25): np.full(shape, 0.2),
+        (0.0, 1.0): np.full(shape, 0.8),
+        (10.0, 0.25): np.full(shape, 0.0),
+        (10.0, 1.0): np.full(shape, 0.4),
     }
     layers = _layers(shape, riparian_fraction=shares)
 
     def e3(setback, q):
-        params = ParameterSet(10.0, 100.0, setback, 0.1, (10,), ("ia",), riparian_min_discharge_m3s=q)
+        params = ParameterSet(
+            10.0, 100.0, setback, 0.1, (10,), ("ia",), riparian_min_discharge_m3s=q
+        )
         return eligible_fraction(layers, params)[1]["E3"][0, 0]
 
     assert e3(1.0, 0.0) == pytest.approx(0.8) and e3(1.0, 10.0) == pytest.approx(0.4)
@@ -294,11 +365,18 @@ def test_riparian_share_is_bilinear_in_setback_and_discharge_and_falls_with_disc
 
 def test_steep_share_reads_whole_bins_and_a_proportion_of_the_bin_holding_the_threshold():
     counts = np.zeros((41, 1, 1), dtype=np.uint16)
-    counts[5, 0, 0], counts[10, 0, 0], counts[12, 0, 0], counts[40, 0, 0] = 100, 100, 100, 100  # 400 samples
+    counts[5, 0, 0], counts[10, 0, 0], counts[12, 0, 0], counts[40, 0, 0] = (
+        100,
+        100,
+        100,
+        100,
+    )  # 400 samples
     layers = _layers((1, 1), slope_counts=counts)
 
     def e4(limit):
-        return eligible_fraction(layers, ParameterSet(limit, 100.0, 0.5, 0.1, (10,), ("ia",)))[1]["E4"][0, 0]
+        return eligible_fraction(layers, ParameterSet(limit, 100.0, 0.5, 0.1, (10,), ("ia",)))[1][
+            "E4"
+        ][0, 0]
 
     assert e4(10.0) == pytest.approx(0.75)  # bins 10-11, 12-13 and 40+ are above 10 degrees
     assert e4(10.5) == pytest.approx(0.625)  # half of the 10-11 bin counts

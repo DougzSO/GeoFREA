@@ -67,9 +67,7 @@ def annual_mean_of_climatology(da: xr.DataArray, years: tuple[int, int]) -> xr.D
     return monthly_climatology(da, years).mean("month")
 
 
-def change_factor(
-    reference: xr.DataArray, window: xr.DataArray, kind: Kind
-) -> xr.DataArray:
+def change_factor(reference: xr.DataArray, window: xr.DataArray, kind: Kind) -> xr.DataArray:
     """`window / reference` (ratio) or `window - reference` (difference), same grid.
 
     NaN cells (outside a crop, ocean mask) stay NaN. A ratio over a non-positive reference mean
@@ -125,9 +123,7 @@ def _with_periodic_longitude(field: xr.DataArray) -> xr.DataArray:
     return xr.concat([west, field, east], dim="lon")
 
 
-def bilinear_to_points(
-    field: xr.DataArray, lat: np.ndarray, lon: np.ndarray
-) -> np.ndarray:
+def bilinear_to_points(field: xr.DataArray, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
     """Bilinear interpolation of a native-grid (lat, lon) field to the points (lat[i], lon[i]).
 
     `lon` may be given in -180..180; it is wrapped to the field's convention (0..360 or

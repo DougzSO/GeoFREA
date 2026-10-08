@@ -72,13 +72,19 @@ def _cmip6_problems(
 
 def _isimip_problems(registry: Isimip3bRegistry, iso: str, members) -> tuple[list[str], int]:
     problems: list[str] = []
-    needed = {(m.gcm.cds_name.replace("_", "-"), scenario) for m in members for scenario in ("historical", m.experiment)}
+    needed = {
+        (m.gcm.cds_name.replace("_", "-"), scenario)
+        for m in members
+        for scenario in ("historical", m.experiment)
+    }
     n = 0
     for gcm, scenario in sorted(needed):
         for variable in HAZARD_VARIABLES:
             key = f"isimip3b/{gcm}/{scenario}/{variable}/{iso}"
             if not registry.is_complete(key):
-                problems.append(f"ISIMIP3b {key}: not registered, missing or its size differs from the registry")
+                problems.append(
+                    f"ISIMIP3b {key}: not registered, missing or its size differs from the registry"
+                )
             else:
                 n += 1
     return problems, n
@@ -96,11 +102,15 @@ def _era5_problems(registry: Era5Registry, iso: str) -> tuple[list[str], int]:
     return [], 1
 
 
-def check_external_inputs(iso: str, experiments_yaml: Path, full_hash: bool = False) -> ExternalInputsReport:
+def check_external_inputs(
+    iso: str, experiments_yaml: Path, full_hash: bool = False
+) -> ExternalInputsReport:
     """Raise `ExternalInputError` listing every problem; return the counts checked when there is none."""
     ensemble = load_ensemble(experiments_yaml)
     members = [m for m in resolve_members(ensemble) if m.gcm is not None]
-    hazard_members = [m for m in members if has_hazard_channel(m, ensemble.hazard_windows_available)]
+    hazard_members = [
+        m for m in members if has_hazard_channel(m, ensemble.hazard_windows_available)
+    ]
     raw = core_paths.fetched_raw
 
     problems: list[str] = []
@@ -121,7 +131,9 @@ def check_external_inputs(iso: str, experiments_yaml: Path, full_hash: bool = Fa
         sorted({m.experiment for m in members}),
         full_hash,
     )
-    isimip, n_isimip = _isimip_problems(Isimip3bRegistry.load(registries["ISIMIP3b"]), iso, hazard_members)
+    isimip, n_isimip = _isimip_problems(
+        Isimip3bRegistry.load(registries["ISIMIP3b"]), iso, hazard_members
+    )
     era5, n_era5 = _era5_problems(Era5Registry.load(registries["ERA5"]), iso)
     problems = cmip6 + isimip + era5
     if problems:
@@ -130,5 +142,9 @@ def check_external_inputs(iso: str, experiments_yaml: Path, full_hash: bool = Fa
             + "\n".join(problems)
         )
     return ExternalInputsReport(
-        country_code=iso, cmip6_files=n_cmip6, isimip3b_files=n_isimip, era5_files=n_era5, full_hash=full_hash
+        country_code=iso,
+        cmip6_files=n_cmip6,
+        isimip3b_files=n_isimip,
+        era5_files=n_era5,
+        full_hash=full_hash,
     )

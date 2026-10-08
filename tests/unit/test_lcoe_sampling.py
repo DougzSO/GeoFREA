@@ -35,7 +35,11 @@ def test_sample_zero_is_the_nominal_vector_and_draws_stay_in_range():
     assert design.index.name == "sample" and len(design) == 201
     assert design.loc[0].tolist() == [5.0, 0.5, 100.0]
     draws = design.iloc[1:]
-    assert draws["a"].between(1.0, 10.0).all() and draws["b"].between(0.0, 1.0).all() and (draws["c"] == 100.0).all()
+    assert (
+        draws["a"].between(1.0, 10.0).all()
+        and draws["b"].between(0.0, 1.0).all()
+        and (draws["c"] == 100.0).all()
+    )
 
 
 @pytest.mark.unit

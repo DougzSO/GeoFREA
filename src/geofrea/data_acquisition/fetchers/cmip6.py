@@ -127,9 +127,7 @@ class RealizationMismatchError(RuntimeError):
     6). Nothing from the offending model is registered (action 5).
     """
 
-    def __init__(
-        self, model: str, key_a: str, label_a: str, key_b: str, label_b: str
-    ) -> None:
+    def __init__(self, model: str, key_a: str, label_a: str, key_b: str, label_b: str) -> None:
         super().__init__(
             f"model {model!r}: realization mismatch between "
             f"{key_a!r} ({label_a!r}) and {key_b!r} ({label_b!r})"
@@ -207,7 +205,9 @@ def read_native_grid(path: Path) -> NativeGrid:
         )
 
 
-def is_complete_download(final_path: Path, tmp_path: Path) -> Literal["complete", "partial", "absent"]:
+def is_complete_download(
+    final_path: Path, tmp_path: Path
+) -> Literal["complete", "partial", "absent"]:
     """Distinguish a finished download from a crashed/partial one.
 
     A live download always writes to `tmp_path` (suffix `.part.nc`) and is
@@ -267,7 +267,9 @@ def _merge_zip_members(zf: zipfile.ZipFile, members: list[str], out_path: Path) 
         for path in paths:
             with xr.open_dataset(path) as chunk:
                 parts.append(chunk.load())
-        merged = xr.concat(parts, dim="time", data_vars="minimal", coords="minimal", compat="override").sortby("time")
+        merged = xr.concat(
+            parts, dim="time", data_vars="minimal", coords="minimal", compat="override"
+        ).sortby("time")
         merged.to_netcdf(out_path)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

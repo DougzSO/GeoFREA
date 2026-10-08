@@ -100,9 +100,15 @@ def test_rasterize_linear_distance_returns_none_for_empty_or_none_gdf(tmp_path):
     grid = _grid()
     country_gdf = _country_gdf()
 
-    assert rasterize_linear_distance(None, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0) is None
+    assert (
+        rasterize_linear_distance(None, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0)
+        is None
+    )
     empty = gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
-    assert rasterize_linear_distance(empty, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0) is None
+    assert (
+        rasterize_linear_distance(empty, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0)
+        is None
+    )
 
 
 @pytest.mark.unit
@@ -127,7 +133,9 @@ def test_rasterize_linear_distance_stores_the_raw_distance_and_flags_beyond_the_
     assert in_country.min() == pytest.approx(0.0, abs=0.5)  # pixels on the line itself
     inside_flag = flag[grid.country_mask]
     assert set(np.unique(inside_flag)) <= {0, 1}
-    assert np.array_equal(inside_flag == 1, in_country > 5.0)  # flag marks exactly the raw distances above the cap
+    assert np.array_equal(
+        inside_flag == 1, in_country > 5.0
+    )  # flag marks exactly the raw distances above the cap
     assert (flag[~grid.country_mask] == NODATA_UINT8).all()
 
 
@@ -156,9 +164,7 @@ def _line_in_bbox_corner_outside_diamond() -> gpd.GeoDataFrame:
     # |x|+|y| in [0.24, 0.36], safely outside the diamond, but well
     # within the grid's raster bounds (bbox snaps to roughly
     # [-0.2, 0.2] at this resolution).
-    return gpd.GeoDataFrame(
-        geometry=[LineString([(0.12, 0.12), (0.18, 0.18)])], crs="EPSG:4326"
-    )
+    return gpd.GeoDataFrame(geometry=[LineString([(0.12, 0.12), (0.18, 0.18)])], crs="EPSG:4326")
 
 
 @pytest.mark.unit
@@ -179,7 +185,9 @@ def test_rasterize_linear_distance_returns_none_when_feature_does_not_intersect_
 
 
 @pytest.mark.unit
-def test_align_rivers_includes_features_outside_country_mask_unlike_rasterize_linear_distance(tmp_path):
+def test_align_rivers_includes_features_outside_country_mask_unlike_rasterize_linear_distance(
+    tmp_path,
+):
     # Locks in the documented asymmetry (vector_alignment.py module
     # docstring): align_rivers() has no STRtree intersects-prefilter and
     # does not AND the rasterized mask with grid.country_mask before the
@@ -275,6 +283,8 @@ def test_rasterize_linear_distance_catches_rasterize_failure_and_returns_none(tm
         raise RuntimeError("simulated rasterize failure")
 
     with patch.object(vector_alignment_module, "rasterize", side_effect=boom):
-        result = rasterize_linear_distance(line, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0)
+        result = rasterize_linear_distance(
+            line, tmp_path / "out.tif", country_gdf, grid, "roads", 100.0
+        )
 
     assert result is None

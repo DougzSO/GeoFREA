@@ -60,11 +60,23 @@ def major_rivers(iso: str) -> gpd.GeoDataFrame | None:
 def draw_backdrop(ax, relief: np.ndarray | None, extent: Extent) -> None:
     """Grey relief under everything else (no-op without elevation)."""
     if relief is not None:
-        ax.imshow(relief, extent=extent, cmap="Greys_r", vmin=0.0, vmax=1.0, interpolation="bilinear", zorder=0)
+        ax.imshow(
+            relief,
+            extent=extent,
+            cmap="Greys_r",
+            vmin=0.0,
+            vmax=1.0,
+            interpolation="bilinear",
+            zorder=0,
+        )
 
 
 def draw_overlay(
-    ax, outline: gpd.GeoDataFrame | None, rivers: gpd.GeoDataFrame | None, extent: Extent, scale_bar: bool = True
+    ax,
+    outline: gpd.GeoDataFrame | None,
+    rivers: gpd.GeoDataFrame | None,
+    extent: Extent,
+    scale_bar: bool = True,
 ) -> None:
     """Country outline, major rivers, scale bar and north arrow; fixes the axes to `extent` with a geographic aspect."""
     if rivers is not None and len(rivers):
@@ -100,7 +112,9 @@ def _scale_bar(ax, extent: Extent) -> None:
     x0, y0 = extent[0] + 0.04 * (extent[1] - extent[0]), extent[2] + 0.04 * (extent[3] - extent[2])
     h = 0.012 * (extent[3] - extent[2])
     ax.add_patch(Rectangle((x0, y0), deg / 2, h, facecolor="black", edgecolor="black", zorder=6))
-    ax.add_patch(Rectangle((x0 + deg / 2, y0), deg / 2, h, facecolor="white", edgecolor="black", zorder=6))
+    ax.add_patch(
+        Rectangle((x0 + deg / 2, y0), deg / 2, h, facecolor="white", edgecolor="black", zorder=6)
+    )
     ax.text(
         x0 + deg / 2,
         y0 + 1.8 * h,

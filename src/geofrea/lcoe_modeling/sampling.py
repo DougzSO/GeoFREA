@@ -34,12 +34,16 @@ class UncertainSpec:
 
     def __post_init__(self) -> None:
         if not self.low <= self.nominal <= self.high:
-            raise SamplingError(f"{self.name}: nominal {self.nominal} lies outside [{self.low}, {self.high}]")
+            raise SamplingError(
+                f"{self.name}: nominal {self.nominal} lies outside [{self.low}, {self.high}]"
+            )
         if self.distribution not in ("uniform", "triangular"):
             raise SamplingError(f"{self.name}: unknown distribution {self.distribution!r}")
 
 
-def specs_from_parameters(parameters: ParametersFile, country: str, technology: str, keys: Sequence[str]) -> list[UncertainSpec]:
+def specs_from_parameters(
+    parameters: ParametersFile, country: str, technology: str, keys: Sequence[str]
+) -> list[UncertainSpec]:
     """Specifications of the uncertain parameters `keys` of one country and technology, read from `parameters.json`.
 
     Raises:
@@ -50,8 +54,12 @@ def specs_from_parameters(parameters: ParametersFile, country: str, technology: 
     for key in keys:
         vv = getattr(params, key, None)
         if vv is None or vv.value is None or vv.range is None:
-            raise SamplingError(f"{country} {technology} {key}: no value or no range in parameters.json (U-05)")
-        specs.append(UncertainSpec(key, float(vv.value), vv.range.min, vv.range.max, vv.range.distribution))
+            raise SamplingError(
+                f"{country} {technology} {key}: no value or no range in parameters.json (U-05)"
+            )
+        specs.append(
+            UncertainSpec(key, float(vv.value), vv.range.min, vv.range.max, vv.range.distribution)
+        )
     return specs
 
 

@@ -285,7 +285,9 @@ def run_audit_phase(
         logger.info("  [land_cover] SKIP enabled.")
     elif inputs.land_cover_tiles:
         land_cover_cache_dir = (
-            context.outputs_dir / context.country_code / "data_quality_audit"
+            context.outputs_dir
+            / context.country_code
+            / "data_quality_audit"
             / "land_cover_tile_cache"
         )
         with timer("land_cover", timings):
@@ -312,7 +314,9 @@ def run_audit_phase(
     for product_key, raster_key in _GWA_PRODUCT_RASTER_KEYS.items():
         product_cfg = wind_cfg.get(product_key) if isinstance(wind_cfg, dict) else None
         expected_resolutions[raster_key] = (
-            product_cfg.expected_resolution_deg if isinstance(product_cfg, AuditLayerConfig) else None
+            product_cfg.expected_resolution_deg
+            if isinstance(product_cfg, AuditLayerConfig)
+            else None
         )
 
     cmip6_cfg = audit_config.layers.get("cmip6", {})
@@ -330,7 +334,9 @@ def run_audit_phase(
     # F1b audits ZZZ properly instead of reporting it not_audited or
     # flagging a spurious mismatch against a real product's resolution.
     # Empty for every real country — a no-op there.
-    for raster_key, override_cfg in audit_config.country_overrides.get(context.country_code, {}).items():
+    for raster_key, override_cfg in audit_config.country_overrides.get(
+        context.country_code, {}
+    ).items():
         expected_resolutions[raster_key] = override_cfg.expected_resolution_deg
 
     res_alerts, not_audited = diagnose_consistency(
@@ -381,9 +387,7 @@ def run_audit_phase(
 
     # ── Assemble + validate ─────────────────────────────────────────
     n_wind = len(inputs.wind_paths)
-    summary = _build_summary(
-        rasters, vectors, land_cover, alerts, n_wind, not_audited
-    )
+    summary = _build_summary(rasters, vectors, land_cover, alerts, n_wind, not_audited)
     elapsed_total = round((datetime.now(UTC) - started_at).total_seconds(), 1)
 
     result = AuditResult(

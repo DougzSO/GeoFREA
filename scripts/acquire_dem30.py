@@ -20,7 +20,9 @@ def main(argv: list[str]) -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     for iso in argv or ["PRT", "IND", "BRA"]:
-        boundary = gpd.read_file(core_paths.fetched_raw("gadm", iso) / f"gadm41_{iso}_0_mainland.shp")
+        boundary = gpd.read_file(
+            core_paths.fetched_raw("gadm", iso) / f"gadm41_{iso}_0_mainland.shp"
+        )
         out = copernicus_dem30.fetch_country(iso, boundary)
         print(iso, out)
     return 0

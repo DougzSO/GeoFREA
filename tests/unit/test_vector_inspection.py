@@ -215,8 +215,13 @@ def test_inspect_vector_layer_uses_cache_without_touching_source_on_second_call(
     def fail_if_called(*a, **k):
         raise AssertionError("the source was read although the cache is current")
 
-    with patch("geofrea.data_quality_audit.vector_inspection.read_clipped_to_country", side_effect=fail_if_called):
-        second = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    with patch(
+        "geofrea.data_quality_audit.vector_inspection.read_clipped_to_country",
+        side_effect=fail_if_called,
+    ):
+        second = inspect_vector_layer(
+            path, country_gdf=country_gdf, clip=True, cache_path=cache_path
+        )
 
     assert second["error"] is None
     assert second["n_features"] == first["n_features"] == 1
@@ -228,12 +233,26 @@ def test_inspect_vector_layer_rebuilds_the_cache_when_the_source_changes(tmp_pat
     country_gdf = gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
     cache_path = tmp_path / "cache" / "roads_clipped.gpkg"
     old = tmp_path / "old.geojson"
-    gpd.GeoDataFrame(geometry=[box(10, 10, 11, 11)], crs="EPSG:4326").to_file(old, driver="GeoJSON")  # outside
-    assert inspect_vector_layer(old, country_gdf=country_gdf, clip=True, cache_path=cache_path)["n_features"] == 0
+    gpd.GeoDataFrame(geometry=[box(10, 10, 11, 11)], crs="EPSG:4326").to_file(
+        old, driver="GeoJSON"
+    )  # outside
+    assert (
+        inspect_vector_layer(old, country_gdf=country_gdf, clip=True, cache_path=cache_path)[
+            "n_features"
+        ]
+        == 0
+    )
 
     new = tmp_path / "new.geojson"
-    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(new, driver="GeoJSON")
-    assert inspect_vector_layer(new, country_gdf=country_gdf, clip=True, cache_path=cache_path)["n_features"] == 1
+    gpd.GeoDataFrame(geometry=[box(0.2, 0.2, 0.5, 0.5)], crs="EPSG:4326").to_file(
+        new, driver="GeoJSON"
+    )
+    assert (
+        inspect_vector_layer(new, country_gdf=country_gdf, clip=True, cache_path=cache_path)[
+            "n_features"
+        ]
+        == 1
+    )
 
 
 @pytest.mark.unit

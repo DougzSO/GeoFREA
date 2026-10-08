@@ -113,8 +113,15 @@ def test_dag_has_no_suitability_criteria():
 @pytest.mark.unit
 def test_f4_requires_only_the_reference_grid_not_the_aligned_layers():
     """E of 7.0.1: F4 reads only the grid, so a rerun of the aligned layers cannot invalidate it."""
-    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())}
-    assert specs["climate_forcing"].requires == frozenset({"reference_grid", "audit_report", "external_inputs"})
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config()
+        )
+    }
+    assert specs["climate_forcing"].requires == frozenset(
+        {"reference_grid", "audit_report", "external_inputs"}
+    )
     assert specs["hazard_context"].requires == frozenset({"members", "reference_grid"})
     assert "reference_grid" in specs["grid_alignment"].produces
     for name in ("climate_forcing", "hazard_context", "land_eligibility", "siting_layers"):
@@ -127,13 +134,20 @@ def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
     produced = {key for spec in specs for key in spec.produces}
     for spec in specs:
         assert spec.requires <= produced, (spec.name, spec.requires - produced)
-    assert len(produced) == sum(len(spec.produces) for spec in specs)  # no artifact key has two producers
+    assert len(produced) == sum(
+        len(spec.produces) for spec in specs
+    )  # no artifact key has two producers
 
 
 @pytest.mark.unit
 def test_every_phase_after_alignment_depends_on_the_audit_gate():
     """F1b gates the F2b and F4 phases: a failed audit must stop them (A-09), directly or through an upstream phase."""
-    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())}
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config()
+        )
+    }
     producer = {key: spec.name for spec in specs.values() for key in spec.produces}
 
     def upstream(name: str) -> set[str]:
@@ -146,13 +160,21 @@ def test_every_phase_after_alignment_depends_on_the_audit_gate():
                 todo += [producer[k] for k in specs[p].requires]
         return seen
 
-    for name in ("siting_layers", "land_eligibility", "climate_forcing", "hazard_context", "climate_maps"):
+    for name in (
+        "siting_layers",
+        "land_eligibility",
+        "climate_forcing",
+        "hazard_context",
+        "climate_maps",
+    ):
         assert "data_quality_audit" in upstream(name), name
 
 
 @pytest.mark.unit
 def test_cli_parses_countries_phases_and_rerun_and_defaults_to_nothing():
-    args = main._parse_args(["prt", "BRA", "--phases", "grid_alignment,climate_forcing", "--rerun", "grid_alignment"])
+    args = main._parse_args(
+        ["prt", "BRA", "--phases", "grid_alignment,climate_forcing", "--rerun", "grid_alignment"]
+    )
     assert args.countries == ["prt", "BRA"]
     assert args.phases == "grid_alignment,climate_forcing" and args.rerun == "grid_alignment"
     empty = main._parse_args([])
@@ -175,7 +197,9 @@ def test_build_audit_inputs_falls_back_to_empty_when_acquisition_output_is_none(
         started_at="2026-08-25T00:00:00+00:00",
         finished_at="2026-08-25T00:00:01+00:00",
     )
-    inputs = main._build_audit_inputs(_context(tmp_path, prior_results={"data_acquisition": failed}))
+    inputs = main._build_audit_inputs(
+        _context(tmp_path, prior_results={"data_acquisition": failed})
+    )
     assert inputs == AuditInputs()
 
 
@@ -276,7 +300,11 @@ def test_build_grid_alignment_inputs_raises_when_borders_missing_from_real_outpu
         )
     }
     with pytest.raises(GridAlignmentRequiresBordersError):
-        main._build_grid_alignment_inputs(_context(tmp_path, prior_results=prior_results), ResolutionsConfig(suitability=0.01), 100.0)
+        main._build_grid_alignment_inputs(
+            _context(tmp_path, prior_results=prior_results),
+            ResolutionsConfig(suitability=0.01),
+            100.0,
+        )
 
 
 @pytest.mark.unit
@@ -289,7 +317,10 @@ def test_build_grid_alignment_inputs_adapts_real_acquisition_output(tmp_path):
         "data_acquisition": _acquisition_phase_result(
             [
                 AcquiredLayer(
-                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                    layer_name="borders",
+                    provenance="fetched",
+                    auth_required=False,
+                    path=boundary_path,
                 )
             ]
         )
@@ -312,7 +343,10 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
         "data_acquisition": _acquisition_phase_result(
             [
                 AcquiredLayer(
-                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                    layer_name="borders",
+                    provenance="fetched",
+                    auth_required=False,
+                    path=boundary_path,
                 )
             ]
         )
@@ -347,7 +381,10 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
         result = _acquisition_phase_result(
             [
                 AcquiredLayer(
-                    layer_name="borders", provenance="fetched", auth_required=False, path=boundary_path
+                    layer_name="borders",
+                    provenance="fetched",
+                    auth_required=False,
+                    path=boundary_path,
                 )
             ]
         ).output
@@ -367,7 +404,11 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
     )
 
     real_grid_alignment_run = next(
-        s.run for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config()) if s.name == "grid_alignment"
+        s.run
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config()
+        )
+        if s.name == "grid_alignment"
     )
     specs = [
         PhaseSpec(
@@ -428,13 +469,24 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
 
     monkeypatch.setattr(main, "_build_phase_specs", _failing_specs)
 
-    ok, _, _ = main.run_geofrea("PRT", ["data_acquisition"], [], ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), "run-id", False)
+    ok, _, _ = main.run_geofrea(
+        "PRT",
+        ["data_acquisition"],
+        [],
+        ResolutionsConfig(suitability=0.01),
+        100.0,
+        _audit_config(),
+        "run-id",
+        False,
+    )
 
     assert ok is False
 
 
 @pytest.mark.unit
-def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(tmp_path, monkeypatch):
+def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(
+    tmp_path, monkeypatch
+):
     def _specs(resolutions, distance_cap_km, audit_config):
         def failing_run(context):
             raise ValueError("boom")
@@ -461,7 +513,16 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok, _, _ = main.run_geofrea("PRT", ["b"], [], ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), "run-id", False)
+    ok, _, _ = main.run_geofrea(
+        "PRT",
+        ["b"],
+        [],
+        ResolutionsConfig(suitability=0.01),
+        100.0,
+        _audit_config(),
+        "run-id",
+        False,
+    )
 
     assert ok is False
 
@@ -484,7 +545,16 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 
     monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-    ok, _, _ = main.run_geofrea("PRT", ["data_acquisition"], [], ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), "run-id", False)
+    ok, _, _ = main.run_geofrea(
+        "PRT",
+        ["data_acquisition"],
+        [],
+        ResolutionsConfig(suitability=0.01),
+        100.0,
+        _audit_config(),
+        "run-id",
+        False,
+    )
 
     assert ok is True
 
@@ -529,7 +599,16 @@ def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, 
     # config/parameters.json — IND no longer qualifies as of task F1-3
     # item B (now has a full countries.IND entry, see docs/phases/
     # F1b_data_quality_audit.md D-F1b-007).
-    ok, _, _ = main.run_geofrea("QQQ", ["data_acquisition"], [], ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), "run-id", False)
+    ok, _, _ = main.run_geofrea(
+        "QQQ",
+        ["data_acquisition"],
+        [],
+        ResolutionsConfig(suitability=0.01),
+        100.0,
+        _audit_config(),
+        "run-id",
+        False,
+    )
 
     assert ok is True
 
@@ -601,6 +680,15 @@ def test_run_geofrea_still_succeeds_for_bra_and_prt(monkeypatch, tmp_path):
 
         monkeypatch.setattr(main, "_build_phase_specs", _specs)
 
-        ok, _, _ = main.run_geofrea(country, ["data_acquisition"], [], ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), "run-id", False)
+        ok, _, _ = main.run_geofrea(
+            country,
+            ["data_acquisition"],
+            [],
+            ResolutionsConfig(suitability=0.01),
+            100.0,
+            _audit_config(),
+            "run-id",
+            False,
+        )
 
         assert ok is True

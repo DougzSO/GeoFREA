@@ -30,19 +30,33 @@ def _block_mean(a: np.ndarray, k: int) -> np.ndarray:
     return a.reshape(h // k, k, w // k, k).mean(axis=(1, 3), dtype=np.float32)
 
 
-def _strip_geoms(gdf: gpd.GeoDataFrame, transform: rasterio.Affine, row0: int, row1: int, width: int, pad_deg: float):
+def _strip_geoms(
+    gdf: gpd.GeoDataFrame,
+    transform: rasterio.Affine,
+    row0: int,
+    row1: int,
+    width: int,
+    pad_deg: float,
+):
     """Geometries that can touch the strip [row0, row1) (plus a pad), through the spatial index."""
     top = transform.f + row0 * transform.e
     bottom = transform.f + row1 * transform.e
     left = transform.c
     right = transform.c + width * transform.a
-    window = box(left - pad_deg, min(top, bottom) - pad_deg, right + pad_deg, max(top, bottom) + pad_deg)
+    window = box(
+        left - pad_deg, min(top, bottom) - pad_deg, right + pad_deg, max(top, bottom) + pad_deg
+    )
     return gdf.geometry.iloc[list(gdf.sindex.query(window, predicate="intersects"))]
 
 
 def _fine_transform(transform: rasterio.Affine, factor: int, row_off: int) -> rasterio.Affine:
     return rasterio.Affine(
-        transform.a / factor, 0.0, transform.c, 0.0, transform.e / factor, transform.f + row_off * transform.e
+        transform.a / factor,
+        0.0,
+        transform.c,
+        0.0,
+        transform.e / factor,
+        transform.f + row_off * transform.e,
     )
 
 
@@ -97,7 +111,9 @@ def river_setback_fractions(
         lat_mid = transform.f + 0.5 * (r0 + r1) * transform.e
         lat_km, lon_km = wgs84_km_per_degree(np.array([lat_mid]))
         dy_km, dx_km = sub_deg * float(lat_km[0]), sub_deg * float(lon_km[0])
-        pad_rows = int(np.ceil(max_km / dy_km)) + 2  # sub-pixel rows of context above and below the strip
+        pad_rows = (
+            int(np.ceil(max_km / dy_km)) + 2
+        )  # sub-pixel rows of context above and below the strip
         pad_coarse = int(np.ceil(pad_rows / factor))
         p0, p1 = max(0, r0 - pad_coarse), min(height, r1 + pad_coarse)
         geoms = _strip_geoms(lines, transform, p0, p1, width, pad_deg=0.0)
@@ -141,8 +157,12 @@ def river_fractions(
         subset = lines
         if q > 0 and lines is not None and len(lines):
             if DISCHARGE_COLUMN not in lines.columns:
-                raise ValueError(f"rivers have no {DISCHARGE_COLUMN} column, so a discharge threshold of {q} m3/s cannot be applied")
+                raise ValueError(
+                    f"rivers have no {DISCHARGE_COLUMN} column, so a discharge threshold of {q} m3/s cannot be applied"
+                )
             subset = lines[lines[DISCHARGE_COLUMN] >= q]
-        for t, arr in river_setback_fractions(subset, transform, shape, setbacks_km, **kwargs).items():
+        for t, arr in river_setback_fractions(
+            subset, transform, shape, setbacks_km, **kwargs
+        ).items():
             out[(float(q), float(t))] = arr
     return out

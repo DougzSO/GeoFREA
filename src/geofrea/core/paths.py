@@ -37,9 +37,7 @@ class ReadOnlyLocationError(RuntimeError):
     """Attempted to write to a read-only data location."""
 
     def __init__(self, path: str, location: str) -> None:
-        super().__init__(
-            f"Cannot write to {path}: it is under read-only location '{location}'"
-        )
+        super().__init__(f"Cannot write to {path}: it is under read-only location '{location}'")
 
 
 class StoredPath(BaseModel):

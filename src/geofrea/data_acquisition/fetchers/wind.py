@@ -99,7 +99,9 @@ class GwaProductNotFoundError(RuntimeError):
         self.height_m = height_m
 
 
-def fetch_wind(outputs_dir: Path, country_code: str, height_m: int = _DEFAULT_HEIGHT_M) -> Path | None:
+def fetch_wind(
+    outputs_dir: Path, country_code: str, height_m: int = _DEFAULT_HEIGHT_M
+) -> Path | None:
     """Download the Global Wind Atlas wind-speed raster for one country.
 
     Args:

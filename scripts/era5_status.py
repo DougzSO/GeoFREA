@@ -64,7 +64,9 @@ def _last_step_per_country(log_path: Path) -> dict[str, str]:
     return last
 
 
-def _target_file_for_step(country_dir: Path, global_dir: Path, country: str, step: str) -> Path | None:
+def _target_file_for_step(
+    country_dir: Path, global_dir: Path, country: str, step: str
+) -> Path | None:
     return {
         "merge-start": global_dir / f"{country}_fg10_hourly_bbox.nc",
         "crop-start": country_dir / f"{country}_fg10_hourly.nc",
@@ -100,7 +102,9 @@ def main() -> None:
         raw_step = last_step.get(country)
         if years_done < REFERENCE_YEARS and raw_step is None:
             pct = round(100 * years_done / REFERENCE_YEARS)
-            print(f"{key}: ~{pct}% -- downloading years ({years_done}/{REFERENCE_YEARS}, {n_failed} permanently failed)")
+            print(
+                f"{key}: ~{pct}% -- downloading years ({years_done}/{REFERENCE_YEARS}, {n_failed} permanently failed)"
+            )
             continue
 
         # Bare (non "-start") tag on an old-code log means that step

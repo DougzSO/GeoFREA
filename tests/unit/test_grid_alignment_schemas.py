@@ -29,7 +29,9 @@ def test_grid_alignment_inputs_requires_country_gdf():
 
 @pytest.mark.unit
 def test_grid_alignment_inputs_accepts_country_gdf_only():
-    inputs = GridAlignmentInputs(country_gdf=_COUNTRY_GDF, distance_cap_km=100.0, resolution_deg=0.01)
+    inputs = GridAlignmentInputs(
+        country_gdf=_COUNTRY_GDF, distance_cap_km=100.0, resolution_deg=0.01
+    )
     assert inputs.elevation_path is None
     assert inputs.roads_source is None
     assert inputs.grid_source is None
@@ -40,7 +42,12 @@ def test_grid_alignment_inputs_accepts_country_gdf_only():
 @pytest.mark.unit
 def test_grid_alignment_inputs_forbids_extra_fields():
     with pytest.raises(ValidationError):
-        GridAlignmentInputs(country_gdf=_COUNTRY_GDF, distance_cap_km=100.0, resolution_deg=0.01, roads_path="should_not_exist.shp")
+        GridAlignmentInputs(
+            country_gdf=_COUNTRY_GDF,
+            distance_cap_km=100.0,
+            resolution_deg=0.01,
+            roads_path="should_not_exist.shp",
+        )
 
 
 @pytest.mark.unit

@@ -87,7 +87,9 @@ def grid_cell_origin(transform: rasterio.Affine, height: int, width: int) -> tup
     """(row0, col0) of the grid's north-west cell on the global lattice; validates the snapping."""
     k = CELL_NESTING_PIXELS
     if height % k or width % k:
-        raise GridNotOnLatticeError(f"grid {height}x{width} px is not a whole number of {k}x{k} cells")
+        raise GridNotOnLatticeError(
+            f"grid {height}x{width} px is not a whole number of {k}x{k} cells"
+        )
     row0 = (CELL_ORIGIN_LAT - transform.f) / CELL_DEG
     col0 = (transform.c - CELL_ORIGIN_LON) / CELL_DEG
     if abs(row0 - round(row0)) > 1e-6 or abs(col0 - round(col0)) > 1e-6:
@@ -109,7 +111,9 @@ def pixel_eligibility(
     eligible = np.ones(shape, dtype=bool) if shape is not None else None
     for name, excluded in exclusions.items():
         if excluded.shape != eligible.shape:
-            raise ValueError(f"exclusion {name} has shape {excluded.shape}, expected {eligible.shape}")
+            raise ValueError(
+                f"exclusion {name} has shape {excluded.shape}, expected {eligible.shape}"
+            )
         eligible &= ~excluded.astype(bool)
     for valid in required_valid or []:
         eligible &= valid.astype(bool)
@@ -163,7 +167,9 @@ def aggregate_to_cells(
 
     excluded = {}
     for name, mask in exclusions.items():
-        excluded[name] = _block_sum(area * np.asarray(mask, dtype=float), k)  # bool or a share in [0, 1]
+        excluded[name] = _block_sum(
+            area * np.asarray(mask, dtype=float), k
+        )  # bool or a share in [0, 1]
         frame[f"excluded_area_km2_{name}"] = excluded[name].ravel()
     if excluded:
         names = list(excluded)

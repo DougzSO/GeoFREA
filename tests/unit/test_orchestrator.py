@@ -68,7 +68,9 @@ def _make_spec(
                 context.register_artifact(key, path, "1.0")
         return DummyOutput(value=value)
 
-    return PhaseSpec(name=name, output_model=DummyOutput, run=run, requires=requires, produces=produces)
+    return PhaseSpec(
+        name=name, output_model=DummyOutput, run=run, requires=requires, produces=produces
+    )
 
 
 def _orchestrator(
@@ -285,9 +287,7 @@ def test_hash_reused_when_size_and_mtime_unchanged(tmp_path, monkeypatch):
 def test_legacy_manifest_without_schema_version_raises(tmp_path):
     manifest_path = tmp_path / "PRT" / "manifest.json"
     manifest_path.parent.mkdir(parents=True)
-    manifest_path.write_text(
-        '{"country_code": "PRT", "phases": {}}', encoding="utf-8"
-    )
+    manifest_path.write_text('{"country_code": "PRT", "phases": {}}', encoding="utf-8")
 
     with pytest.raises(LegacyManifestError):
         _orchestrator(tmp_path, ["a"])
@@ -303,7 +303,9 @@ def test_failure_in_one_branch_does_not_block_an_independent_branch(tmp_path):
     f1b = _make_spec(
         "F1b", call_log, fail=True, requires=frozenset({"f1_out"}), produces=frozenset({"f1b_out"})
     )
-    f2a = _make_spec("F2a", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f2a_out"}))
+    f2a = _make_spec(
+        "F2a", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f2a_out"})
+    )
 
     orchestrator = _orchestrator(tmp_path, ["F1b", "F2a"])
     results = orchestrator.run([f1, f1b, f2a])
@@ -318,9 +320,15 @@ def test_failure_in_one_branch_does_not_block_an_independent_branch(tmp_path):
 def test_failure_upstream_marks_all_dependents_skipped(tmp_path):
     call_log: list[str] = []
     f1 = _make_spec("F1", call_log, fail=True, produces=frozenset({"f1_out"}))
-    f1b = _make_spec("F1b", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f1b_out"}))
-    f2a = _make_spec("F2a", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f2a_out"}))
-    f2b = _make_spec("F2b", call_log, requires=frozenset({"f2a_out"}), produces=frozenset({"f2b_out"}))
+    f1b = _make_spec(
+        "F1b", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f1b_out"})
+    )
+    f2a = _make_spec(
+        "F2a", call_log, requires=frozenset({"f1_out"}), produces=frozenset({"f2a_out"})
+    )
+    f2b = _make_spec(
+        "F2b", call_log, requires=frozenset({"f2a_out"}), produces=frozenset({"f2b_out"})
+    )
 
     orchestrator = _orchestrator(tmp_path, ["F1b", "F2b"])
     results = orchestrator.run([f1, f1b, f2a, f2b])
@@ -415,7 +423,9 @@ def test_rerun_phases_marks_downstream_consumers_stale_upstream(tmp_path):
     # marked stale_upstream and left there, not recomputed in the same
     # pass (recomputing them anyway once needed is
     # test_stale_upstream_phase_is_recomputed_not_resumed's job).
-    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
+    a_changed = _make_spec(
+        "a", call_log, value=2, produces=frozenset({"a_out"})
+    )  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a_changed, b, c])
 
@@ -438,7 +448,9 @@ def test_stale_upstream_phase_is_recomputed_not_resumed(tmp_path):
 
     # Rerunning "a" alone (not targeting "b") leaves "b" marked
     # stale_upstream without recomputing it in this same run.
-    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
+    a_changed = _make_spec(
+        "a", call_log, value=2, produces=frozenset({"a_out"})
+    )  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a_changed, b])
     assert second.manifest.phases["b"].status == "stale_upstream"
@@ -513,7 +525,9 @@ def test_rerun_alone_marks_consumer_stale_even_with_a_narrower_phase_specs_list(
     # The rerun invocation only knows about "a" — as a targeted
     # single-phase rerun script would, without reconstructing "b"'s
     # PhaseSpec at all.
-    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
+    a_changed = _make_spec(
+        "a", call_log, value=2, produces=frozenset({"a_out"})
+    )  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a_changed])
 
@@ -531,7 +545,9 @@ def test_consumer_marked_stale_by_a_narrow_rerun_is_recomputed_when_next_needed(
     first = _orchestrator(tmp_path, ["b"])
     first.run([a, b])
 
-    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
+    a_changed = _make_spec(
+        "a", call_log, value=2, produces=frozenset({"a_out"})
+    )  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a_changed])
     assert second.manifest.phases["b"].status == "stale_upstream"
@@ -582,7 +598,9 @@ def test_stale_marking_survives_a_crash_between_phases(tmp_path):
     first = _orchestrator(tmp_path, ["b"])
     first.run([a, b])
 
-    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
+    a_changed = _make_spec(
+        "a", call_log, value=2, produces=frozenset({"a_out"})
+    )  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
     second.run([a_changed])
 
@@ -657,11 +675,18 @@ def test_seed_is_recorded_in_the_manifest_and_survives_a_reload(tmp_path):
 
 
 @pytest.mark.unit
-def test_manifest_entries_of_unregistered_phases_are_dropped_only_when_the_full_registry_is_given(tmp_path):
+def test_manifest_entries_of_unregistered_phases_are_dropped_only_when_the_full_registry_is_given(
+    tmp_path,
+):
     """V16: a retired phase leaves the manifest at the next run, never by hand; a subset run leaves other entries alone."""
     call_log: list[str] = []
     first = _orchestrator(tmp_path, ["old_phase", "phase_a"])
-    first.run([_make_spec("old_phase", call_log, produces=frozenset({"old_key"})), _make_spec("phase_a", call_log)])
+    first.run(
+        [
+            _make_spec("old_phase", call_log, produces=frozenset({"old_key"})),
+            _make_spec("phase_a", call_log),
+        ]
+    )
     assert "old_phase" in first.manifest.phases and "old_key" in first.manifest.artifacts
 
     subset = _orchestrator(tmp_path, ["phase_a"])
@@ -691,7 +716,9 @@ def test_manifest_run_id_and_dirty_describe_the_last_run_while_entries_keep_thei
 
 
 @pytest.mark.unit
-def test_rerun_with_identical_artifact_content_does_not_invalidate_consumers_and_keeps_their_lineage(tmp_path):
+def test_rerun_with_identical_artifact_content_does_not_invalidate_consumers_and_keeps_their_lineage(
+    tmp_path,
+):
     """E of 7.0.1: staleness follows content; an unchanged artifact keeps the run_id that first produced it."""
     call_log: list[str] = []
     a = _make_spec("a", call_log, produces=frozenset({"a_out"}))

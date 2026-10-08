@@ -74,13 +74,9 @@ class _TimingCapture:
 
     def report(self) -> tuple[float | None, float | None]:
         queue_s = (
-            self.running_at - self.accepted_at
-            if self.accepted_at and self.running_at
-            else None
+            self.running_at - self.accepted_at if self.accepted_at and self.running_at else None
         )
-        processing_s = (
-            self.done_at - self.running_at if self.running_at and self.done_at else None
-        )
+        processing_s = self.done_at - self.running_at if self.running_at and self.done_at else None
         return queue_s, processing_s
 
 
@@ -110,7 +106,9 @@ def _acquire_job(
     with lock:
         complete = registry.is_complete(job.key)
         if complete:
-            labels_by_model.setdefault(job.model, {})[job.key] = registry.entries[job.key].realization
+            labels_by_model.setdefault(job.model, {})[job.key] = registry.entries[
+                job.key
+            ].realization
     if complete:
         print(f"[skip] {job.key}: already registered and intact", flush=True)
         return 0
@@ -226,7 +224,13 @@ def main() -> None:
         if not hasattr(local, "client"):
             local.client = cdsapi.Client()
         return _acquire_job(
-            job, local.client, registry, registry_path, global_dir, lock, labels_by_model,
+            job,
+            local.client,
+            registry,
+            registry_path,
+            global_dir,
+            lock,
+            labels_by_model,
             time_requests=args.workers == 1,
         )
 
@@ -265,7 +269,9 @@ def main() -> None:
                 print(f"[skip crop] {key} {country}: no GADM polygon available", flush=True)
                 continue
             country_dir = core_paths.fetched_raw("cmip6", country)
-            out_path = country_dir / f"{entry.model}_{entry.experiment}_{entry.variable}_{country}.nc"
+            out_path = (
+                country_dir / f"{entry.model}_{entry.experiment}_{entry.variable}_{country}.nc"
+            )
             cells_before, cells_after = cmip6.crop_to_country_polygon(
                 global_path=entry.global_path, country_polygon_path=border_path, out_path=out_path
             )

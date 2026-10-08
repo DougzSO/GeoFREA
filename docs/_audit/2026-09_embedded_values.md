@@ -69,27 +69,29 @@ blocks read directly):
 ```python
 class TechnologyEntry(BaseModel):
     """One technology's registry entry (METHODOLOGY A-04)."""
+
     model_config = ConfigDict(extra="forbid")
 
-    resource_layers: list[str]          # M-F2b-03 layer names, e.g. ["pvout"] or
-                                         # ["weibull_a_100", "weibull_k_100", "air_density_100", ...]
-    cf_model: str                       # M-F5-02/M-F5-03 model selector, e.g.
-                                         # "pvout_with_temperature" | "weibull_with_air_density"
-    exclusions: list[Literal[
-        "protected", "water", "riparian", "slope", "land_cover", "population"
-    ]]                                   # M-F2b-01 E1-E6 subset this technology applies
+    resource_layers: list[str]  # M-F2b-03 layer names, e.g. ["pvout"] or
+    # ["weibull_a_100", "weibull_k_100", "air_density_100", ...]
+    cf_model: str  # M-F5-02/M-F5-03 model selector, e.g.
+    # "pvout_with_temperature" | "weibull_with_air_density"
+    exclusions: list[
+        Literal["protected", "water", "riparian", "slope", "land_cover", "population"]
+    ]  # M-F2b-01 E1-E6 subset this technology applies
     cost_drivers: list[Literal["grid_connection", "site_access"]]  # M-F6-01
-    uncertain_parameters: list[str]      # U-03 keys; each MUST exist in
-                                         # config/parameters.json's per-country technology
-                                         # block AND have a non-null range in
-                                         # experiments.yaml.uncertain_parameters
-    iec_class_rule: str | None = None    # OQ-005, wind-only in principle — present under
-                                         # `solar:` in the file today, which looks like a
-                                         # misplaced field (IEC turbine classes are a wind
-                                         # concept, M-F5-03); flagged here, not corrected —
-                                         # out of this sweep's "no src/config edits beyond
-                                         # approved moves" scope.
+    uncertain_parameters: list[str]  # U-03 keys; each MUST exist in
+    # config/parameters.json's per-country technology
+    # block AND have a non-null range in
+    # experiments.yaml.uncertain_parameters
+    iec_class_rule: str | None = None  # OQ-005, wind-only in principle — present under
+    # `solar:` in the file today, which looks like a
+    # misplaced field (IEC turbine classes are a wind
+    # concept, M-F5-03); flagged here, not corrected —
+    # out of this sweep's "no src/config edits beyond
+    # approved moves" scope.
     hub_heights: dict[str, float | None] = {}  # OQ-019, wind-only; ISO3 -> height_m
+
 
 class TechnologiesFile(RootModel[dict[str, TechnologyEntry]]):
     """config/technologies.yaml as a whole: technology name -> TechnologyEntry."""

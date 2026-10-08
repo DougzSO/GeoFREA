@@ -18,8 +18,7 @@ def test_no_environment_run_resolves_paths_from_env_file(tmp_path):
     """With nothing in the process environment, every value comes from .env."""
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "GEOFREA_SHARED_RAW_DIR=/fake/shared_raw\n"
-        "GEOFREA_DATA_DIR=/fake/data\n",
+        "GEOFREA_SHARED_RAW_DIR=/fake/shared_raw\nGEOFREA_DATA_DIR=/fake/data\n",
         encoding="utf-8",
     )
 

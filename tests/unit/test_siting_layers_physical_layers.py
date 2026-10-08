@@ -16,8 +16,16 @@ TRANSFORM = from_origin(-9.0, 42.0, 0.01, 0.01)
 
 def _raster(path, values, nodata=None):
     with rasterio.open(
-        path, "w", driver="GTiff", dtype="float32", width=values.shape[1], height=values.shape[0],
-        count=1, crs="EPSG:4326", transform=TRANSFORM, nodata=nodata,
+        path,
+        "w",
+        driver="GTiff",
+        dtype="float32",
+        width=values.shape[1],
+        height=values.shape[0],
+        count=1,
+        crs="EPSG:4326",
+        transform=TRANSFORM,
+        nodata=nodata,
     ) as dst:
         dst.write(values.astype("float32"), 1)
     return path
@@ -34,8 +42,12 @@ def _result(tmp_path, drop=None):
         country_code="PRT",
         timestamp="2026-10-06T00:00:00+00:00",
         grid_metadata=GridMetadata(
-            crs="EPSG:4326", resolution_deg=0.01, width=2, height=2,
-            transform=(0.01, 0.0, -9.0, 0.0, -0.01, 42.0), n_valid_pixels=4,
+            crs="EPSG:4326",
+            resolution_deg=0.01,
+            width=2,
+            height=2,
+            transform=(0.01, 0.0, -9.0, 0.0, -0.01, 42.0),
+            n_valid_pixels=4,
         ),
         grid=_raster(tmp_path / "grid.tif", base, nodata=-9999.0),
         roads=_raster(tmp_path / "roads.tif", base * 2),
@@ -51,7 +63,9 @@ def test_every_layer_is_written_with_unchanged_values_and_units(tmp_path):
     assert set(out) == {s.name for s in pl.LAYER_SPECS}
     assert len(out) == 3 + 9
     with rasterio.open(out["dist_grid_km"]) as r:
-        np.testing.assert_array_equal(r.read(1), [[1.0, 250.0], [3.5, 400.0]])  # raw, uncapped, unscaled
+        np.testing.assert_array_equal(
+            r.read(1), [[1.0, 250.0], [3.5, 400.0]]
+        )  # raw, uncapped, unscaled
         assert r.tags()["units"] == "km" and r.tags()["normalized"] == "false"
     with rasterio.open(out["weibull_k_150m"]) as r:
         assert r.tags()["units"] == "1"

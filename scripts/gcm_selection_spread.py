@@ -80,9 +80,7 @@ def farthest_point_selection(
     if not chosen:  # no seed present: start from the point farthest from the centroid
         chosen = [int(np.argmax(np.linalg.norm(z, axis=1)))]
     while len(chosen) < min(k, len(names)):
-        dist = np.min(
-            np.linalg.norm(z[:, None, :] - z[chosen][None, :, :], axis=2), axis=1
-        )
+        dist = np.min(np.linalg.norm(z[:, None, :] - z[chosen][None, :, :], axis=2), axis=1)
         dist[chosen] = -1.0
         chosen.append(int(np.argmax(dist)))
     return [names[i] for i in chosen]
@@ -99,7 +97,9 @@ def main() -> None:
     excluded = {m.strip() for m in args.exclude.split(",") if m.strip()}
 
     load_dotenv(REPO_ROOT / ".env", override=False)
-    registry = Cmip6Registry.load(core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json")
+    registry = Cmip6Registry.load(
+        core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json"
+    )
     models = sorted(
         {e.model for e in registry.entries.values() if e.status == "registered"} - excluded
     )
@@ -131,7 +131,12 @@ def main() -> None:
         "",
     ]
     for country in COUNTRIES:
-        lines += [f"## {country}", "", "| model | delta_rsds | delta_wind | dT (K) |", "|---|---:|---:|---:|"]
+        lines += [
+            f"## {country}",
+            "",
+            "| model | delta_rsds | delta_wind | dT (K) |",
+            "|---|---:|---:|---:|",
+        ]
         for m in names:
             f = factors[m][country]
             lines.append(f"| {m} | {f['delta_rsds']:.4f} | {f['delta_wind']:.4f} | {f['dT']:.3f} |")

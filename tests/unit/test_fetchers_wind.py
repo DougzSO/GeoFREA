@@ -109,9 +109,7 @@ def test_fetch_gwa_product_existence_confirmed_on_final_response_after_redirect(
 
 
 @pytest.mark.unit
-def test_fetch_gwa_product_missing_product_raises_instead_of_returning_none(
-    tmp_path, monkeypatch
-):
+def test_fetch_gwa_product_missing_product_raises_instead_of_returning_none(tmp_path, monkeypatch):
     # M-F1-03 / A-09: a product that does not exist fails loud, never
     # registered as silently absent. Mirrors the real failure observed
     # live (F1-2 probe): the API redirects to a CDN URL that then

@@ -60,7 +60,9 @@ def _fetch(name: str, dest: Path) -> dict | None:
         raise WorldCoverDownloadError(f"{name}: {exc}") from exc
     if part.stat().st_size != expected:
         part.unlink()
-        raise WorldCoverDownloadError(f"{name}: got {part.stat().st_size} bytes, expected {expected}")
+        raise WorldCoverDownloadError(
+            f"{name}: got {part.stat().st_size} bytes, expected {expected}"
+        )
     part.replace(target)
     return {"name": name, "bytes": expected, "sha256": _sha256(target)}
 
@@ -83,7 +85,13 @@ def fetch_country(iso: str, tile_names: list[str], workers: int = 4) -> Path:
         "absent_tiles": absent,
     }
     (dest / MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    logger.info("%s: %d tiles present (%.1f GB), %d absent", iso, len(present), sum(t["bytes"] for t in present) / 1e9, len(absent))
+    logger.info(
+        "%s: %d tiles present (%.1f GB), %d absent",
+        iso,
+        len(present),
+        sum(t["bytes"] for t in present) / 1e9,
+        len(absent),
+    )
     return dest
 
 

@@ -350,9 +350,7 @@ class VectorLayerSummary(BaseModel):
     n_features: int | None = None
 
 
-LayerSummary = Annotated[
-    RasterLayerSummary | VectorLayerSummary, Field(discriminator="kind")
-]
+LayerSummary = Annotated[RasterLayerSummary | VectorLayerSummary, Field(discriminator="kind")]
 
 
 class AuditSummary(BaseModel):

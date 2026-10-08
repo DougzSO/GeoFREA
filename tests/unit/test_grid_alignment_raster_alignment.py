@@ -38,23 +38,41 @@ def _square(cx: float, cy: float, half_side: float) -> Polygon:
 
 def _triangle(cx: float, cy: float, half_side: float) -> Polygon:
     """Right triangle: half of its bounding grid lies outside the country mask, whatever the snapping."""
-    return Polygon([(cx - half_side, cy - half_side), (cx + half_side, cy - half_side), (cx - half_side, cy + half_side)])
+    return Polygon(
+        [
+            (cx - half_side, cy - half_side),
+            (cx + half_side, cy - half_side),
+            (cx - half_side, cy + half_side),
+        ]
+    )
 
 
 def _country_gdf() -> gpd.GeoDataFrame:
-    return gpd.GeoDataFrame(geometry=[_triangle(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.15)], crs="EPSG:4326")
+    return gpd.GeoDataFrame(
+        geometry=[_triangle(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.15)], crs="EPSG:4326"
+    )
 
 
 def _grid():
     return build_reference_grid(_country_gdf(), resolution_deg=_RES)
 
 
-def _write_raster(path: Path, value: float, size: int = 60, dtype: str = "float32", nodata: float = -9999.0) -> None:
+def _write_raster(
+    path: Path, value: float, size: int = 60, dtype: str = "float32", nodata: float = -9999.0
+) -> None:
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     data = np.full((size, size), value, dtype=dtype)
     with rasterio.open(
-        path, "w", driver="GTiff", height=size, width=size, count=1,
-        dtype=dtype, crs="EPSG:4326", transform=transform, nodata=nodata,
+        path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype=dtype,
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=nodata,
     ) as dst:
         dst.write(data, 1)
 
@@ -85,8 +103,16 @@ def test_sum_resampling_keeps_the_total_of_a_count_raster_when_coarsening(tmp_pa
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, fine, fine)
     path = tmp_path / "pop.tif"
     with rasterio.open(
-        path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326",
-        transform=transform, nodata=-9999.0,
+        path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.ones((size, size), dtype="float32"), 1)
 
@@ -134,8 +160,16 @@ def test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata(
     data = np.full((size, size), 100.0, dtype="float32")
     data[size // 2, size // 2] = np.nan  # NOT -9999 -- a bare NaN residual
     with rasterio.open(
-        src_path, "w", driver="GTiff", height=size, width=size, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        src_path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(data, 1)
 
@@ -150,9 +184,10 @@ def test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata(
     )
     # The rest of the (uniform 100.0) raster must still align correctly --
     # sanitizing one stray cell must not corrupt everything else.
-    assert np.allclose(out_data[grid.country_mask], 100.0, atol=1.0) or (
-        out_data[grid.country_mask] == NODATA_FLOAT
-    ).any()
+    assert (
+        np.allclose(out_data[grid.country_mask], 100.0, atol=1.0)
+        or (out_data[grid.country_mask] == NODATA_FLOAT).any()
+    )
 
 
 @pytest.mark.unit
@@ -168,8 +203,16 @@ def test_reproject_to_grid_leaves_nan_declared_nodata_sources_untouched(tmp_path
     data = np.full((size, size), 50.0, dtype="float32")
     data[0, 0] = np.nan
     with rasterio.open(
-        src_path, "w", driver="GTiff", height=size, width=size, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=np.nan,
+        src_path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=np.nan,
     ) as dst:
         dst.write(data, 1)
 
@@ -191,8 +234,16 @@ def test_mosaic_land_cover_skips_tile_with_no_bbox_overlap(tmp_path):
     far_tile = tmp_path / "far.tif"
     far_transform = from_origin(100.0, 100.0, _RES, _RES)
     with rasterio.open(
-        far_tile, "w", driver="GTiff", height=10, width=10, count=1,
-        dtype="uint8", crs="EPSG:4326", transform=far_transform, nodata=0,
+        far_tile,
+        "w",
+        driver="GTiff",
+        height=10,
+        width=10,
+        count=1,
+        dtype="uint8",
+        crs="EPSG:4326",
+        transform=far_transform,
+        nodata=0,
     ) as dst:
         dst.write(np.full((10, 10), 88, dtype="uint8"), 1)
 
@@ -216,7 +267,9 @@ def test_mosaic_land_cover_skips_corrupted_tile_without_crashing(tmp_path):
     corrupted_tile = tmp_path / "corrupted.tif"
     corrupted_tile.write_bytes(b"not a real geotiff")
 
-    out_path = mosaic_land_cover([corrupted_tile, good_tile], tmp_path / "lc.tif", grid, country_gdf)
+    out_path = mosaic_land_cover(
+        [corrupted_tile, good_tile], tmp_path / "lc.tif", grid, country_gdf
+    )
 
     assert out_path is not None
     with rasterio.open(out_path) as src:
@@ -312,8 +365,16 @@ def _write_ramp_with_nan_mismatch(path: Path) -> None:
     data = (np.arange(size)[:, None] * 1000.0 + np.arange(size)[None, :]).astype("float32")
     data[30:40, 50:70] = np.nan
     with rasterio.open(
-        path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326",
-        transform=rasterio.transform.from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.005, 0.005), nodata=-9999.0,
+        path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=rasterio.transform.from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.005, 0.005),
+        nodata=-9999.0,
     ) as dst:
         dst.write(data, 1)
 
@@ -325,7 +386,9 @@ def test_windowed_strips_give_the_same_raster_as_a_single_pass(tmp_path):
     _write_ramp_with_nan_mismatch(src_path)
 
     one = reproject_to_grid(src_path, tmp_path / "one.tif", grid)  # fits in one window
-    many = reproject_to_grid(src_path, tmp_path / "many.tif", grid, max_window_bytes=20_000)  # forced strips
+    many = reproject_to_grid(
+        src_path, tmp_path / "many.tif", grid, max_window_bytes=20_000
+    )  # forced strips
 
     with rasterio.open(one) as a, rasterio.open(many) as b:
         da, db = a.read(1), b.read(1)
@@ -333,7 +396,9 @@ def test_windowed_strips_give_the_same_raster_as_a_single_pass(tmp_path):
 
 
 @pytest.mark.unit
-def test_reproject_never_reads_the_whole_source_when_it_exceeds_the_window_budget(tmp_path, monkeypatch):
+def test_reproject_never_reads_the_whole_source_when_it_exceeds_the_window_budget(
+    tmp_path, monkeypatch
+):
     from geofrea.grid_alignment import raster_alignment
 
     grid = _grid()
@@ -360,8 +425,16 @@ def test_source_that_does_not_overlap_the_grid_yields_all_nodata(tmp_path):
     grid = _grid()
     src_path = tmp_path / "far.tif"
     with rasterio.open(
-        src_path, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32", crs="EPSG:4326",
-        transform=rasterio.transform.from_origin(100.0, 10.0, 0.01, 0.01), nodata=-9999.0,
+        src_path,
+        "w",
+        driver="GTiff",
+        height=10,
+        width=10,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=rasterio.transform.from_origin(100.0, 10.0, 0.01, 0.01),
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.ones((10, 10), dtype="float32"), 1)
 
@@ -422,8 +495,16 @@ def _fine_tile(path: Path, grid, k: int, pattern) -> None:
     res = abs(grid.transform.a) / k
     rows, cols = np.indices((grid.height * k, grid.width * k))
     with rasterio.open(
-        path, "w", driver="GTiff", height=grid.height * k, width=grid.width * k, count=1, dtype="uint8", crs="EPSG:4326",
-        transform=from_origin(grid.transform.c, grid.transform.f, res, res), nodata=0,
+        path,
+        "w",
+        driver="GTiff",
+        height=grid.height * k,
+        width=grid.width * k,
+        count=1,
+        dtype="uint8",
+        crs="EPSG:4326",
+        transform=from_origin(grid.transform.c, grid.transform.f, res, res),
+        nodata=0,
     ) as dst:
         dst.write(pattern(rows, cols).astype("uint8"), 1)
 
@@ -445,7 +526,9 @@ def test_land_cover_class_counts_are_exact_per_pixel_block(tmp_path):
     inside[0, :] = False
     assert (counts[classes.index(30)][inside] == k * k // 2).all()
     assert (counts[classes.index(10)][inside] == k * k // 2).all()
-    assert (counts[:, 0, :][:, grid.country_mask[0]].sum(axis=0) == 0).all()  # sea row: counted in no class
+    assert (
+        counts[:, 0, :][:, grid.country_mask[0]].sum(axis=0) == 0
+    ).all()  # sea row: counted in no class
     assert (counts[:, ~grid.country_mask] == nodata).all()
 
 
@@ -453,12 +536,22 @@ def test_land_cover_class_counts_are_exact_per_pixel_block(tmp_path):
 def test_land_cover_counts_exact_or_raise(tmp_path):
     """M-F2a-06 (V19): a tile whose pixel is not a whole fraction of the grid pixel raises; there is no approximate mode."""
     grid, country_gdf = _grid(), _country_gdf()
-    res = abs(grid.transform.a) / 9.7  # about 100 m samples, as the retired IND tiles: not a whole fraction of 0.01 degree
+    res = (
+        abs(grid.transform.a) / 9.7
+    )  # about 100 m samples, as the retired IND tiles: not a whole fraction of 0.01 degree
     n_rows, n_cols = int(np.ceil(grid.height * 9.7)) + 5, int(np.ceil(grid.width * 9.7)) + 5
     tile = tmp_path / "ESA_WorldCover_10m_2020_v100_N36W012_Map.tif"
     with rasterio.open(
-        tile, "w", driver="GTiff", height=n_rows, width=n_cols, count=1, dtype="uint8", crs="EPSG:4326",
-        transform=from_origin(grid.transform.c, grid.transform.f, res, res), nodata=0,
+        tile,
+        "w",
+        driver="GTiff",
+        height=n_rows,
+        width=n_cols,
+        count=1,
+        dtype="uint8",
+        crs="EPSG:4326",
+        transform=from_origin(grid.transform.c, grid.transform.f, res, res),
+        nodata=0,
     ) as dst:
         dst.write(np.full((n_rows, n_cols), 30, dtype="uint8"), 1)
     with pytest.raises(LandCoverCountNotExactError, match="no approximate mode"):
@@ -469,7 +562,14 @@ def test_land_cover_counts_exact_or_raise(tmp_path):
 def _glo30_tile(path: Path, sp: int, z: np.ndarray) -> None:
     """A synthetic GLO-30-style tile for the 1 degree cell with corner (38 N, 9 W): first sample on the integer corner."""
     with rasterio.open(
-        path, "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs="EPSG:4326",
+        path,
+        "w",
+        driver="GTiff",
+        height=sp,
+        width=sp,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
         transform=from_origin(-9.0 - 0.5 / sp, 39.0 + 0.5 / sp, 1 / sp, 1 / sp),
     ) as dst:
         dst.write(z.astype("float32"), 1)
@@ -481,7 +581,9 @@ def test_slope_class_counts_put_every_sample_in_the_bin_of_its_true_slope(tmp_pa
     lat = 39.0 - np.arange(sp) / sp
     _, lon_km = wgs84_km_per_degree(lat.reshape(-1, 1))
     dx_m = lon_km * 1000.0 / sp
-    z = np.arange(sp)[None, :] * np.tan(np.radians(20.5)) * dx_m  # a ramp rising eastward at 20.5 degrees
+    z = (
+        np.arange(sp)[None, :] * np.tan(np.radians(20.5)) * dx_m
+    )  # a ramp rising eastward at 20.5 degrees
     tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
     _glo30_tile(tile, sp, z)
     out = slope_class_counts([tile], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp)
@@ -499,8 +601,18 @@ def test_slope_class_counts_leave_pixels_without_a_tile_empty(tmp_path):
     grid, sp = _grid(), 400
     other = tmp_path / "Copernicus_DSM_COG_10_N10_00_E010_00_DEM.tif"  # far from the country
     with rasterio.open(
-        other, "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs="EPSG:4326",
+        other,
+        "w",
+        driver="GTiff",
+        height=sp,
+        width=sp,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
         transform=from_origin(10 - 0.5 / sp, 11 + 0.5 / sp, 1 / sp, 1 / sp),
     ) as dst:
         dst.write(np.zeros((sp, sp), dtype="float32"), 1)
-    assert slope_class_counts([other], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp) is None
+    assert (
+        slope_class_counts([other], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp)
+        is None
+    )

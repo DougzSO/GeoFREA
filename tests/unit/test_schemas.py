@@ -246,7 +246,9 @@ def test_geospatial_values_have_no_schema_defaults_and_adaptive_mode_is_gone():
     with pytest.raises(ValidationError):
         ResolutionsConfig(suitability="adaptive")
     with pytest.raises(ValidationError):
-        ResolutionsConfig(suitability=0.01, adaptive={"target_pixels": 1})  # the adaptive block no longer exists
+        ResolutionsConfig(
+            suitability=0.01, adaptive={"target_pixels": 1}
+        )  # the adaptive block no longer exists
 
 
 # ─── Required-field tests: one parametrized case per field ──────────────

@@ -61,15 +61,17 @@ def test_fetch_protected_areas_raises_clear_error_when_token_missing(tmp_path, m
     assert protected_planet.TOKEN_ENV_VAR in message
     assert protected_planet.REGISTRATION_URL in message
     assert "50" in message  # pagination reminder (max 50/page)
-    assert "country" in message.lower() or "per country" in message.lower() or "bulk" in message.lower()
+    assert (
+        "country" in message.lower()
+        or "per country" in message.lower()
+        or "bulk" in message.lower()
+    )
 
 
 @pytest.mark.unit
 def test_fetch_protected_areas_accepts_explicit_token_without_env_var(tmp_path, monkeypatch):
     monkeypatch.delenv(protected_planet.TOKEN_ENV_VAR, raising=False)
-    monkeypatch.setattr(
-        protected_planet, "get_with_retry", Mock(return_value=_page_response([]))
-    )
+    monkeypatch.setattr(protected_planet, "get_with_retry", Mock(return_value=_page_response([])))
 
     result = protected_planet.fetch_protected_areas(tmp_path, "PRT", api_token="explicit-token")
 
@@ -93,11 +95,16 @@ def test_fetch_protected_areas_happy_path_single_page(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
-def test_fetch_protected_areas_reuses_a_cached_non_empty_collection_without_the_network(tmp_path, monkeypatch):
+def test_fetch_protected_areas_reuses_a_cached_non_empty_collection_without_the_network(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
     cached = paths.fetched_raw("wdpa", "PRT") / "PRT_protected_areas_wdpa.geojson"
     cached.parent.mkdir(parents=True, exist_ok=True)
-    cached.write_text(json.dumps({"type": "FeatureCollection", "features": [{"type": "Feature"}]}), encoding="utf-8")
+    cached.write_text(
+        json.dumps({"type": "FeatureCollection", "features": [{"type": "Feature"}]}),
+        encoding="utf-8",
+    )
     get = Mock(side_effect=AssertionError("network must not be touched"))
     monkeypatch.setattr(protected_planet, "get_with_retry", get)
 
@@ -135,13 +142,17 @@ def test_fetch_protected_areas_paginates_until_short_page(tmp_path, monkeypatch)
 
 
 @pytest.mark.unit
-def test_fetch_protected_areas_error_body_mid_download_is_not_the_end_of_the_data(tmp_path, monkeypatch):
+def test_fetch_protected_areas_error_body_mid_download_is_not_the_end_of_the_data(
+    tmp_path, monkeypatch
+):
     """A page without `protected_areas` (rate limit or error body) must fail the fetch, never save a partial country."""
     monkeypatch.setenv(protected_planet.TOKEN_ENV_VAR, "tok")
     full_page = _page_response([_pa(f"PA{i}", "II", i) for i in range(protected_planet._PER_PAGE)])
     error_page = Mock()
     error_page.json = Mock(return_value={"error": "rate limit exceeded"})
-    monkeypatch.setattr(protected_planet, "get_with_retry", Mock(side_effect=[full_page, error_page]))
+    monkeypatch.setattr(
+        protected_planet, "get_with_retry", Mock(side_effect=[full_page, error_page])
+    )
 
     result = protected_planet.fetch_protected_areas(tmp_path, "IND")
 

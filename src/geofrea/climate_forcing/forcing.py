@@ -60,7 +60,9 @@ def country_cells(mask_path: Path) -> pd.DataFrame:
     """
     with rasterio.open(mask_path) as src:
         band = src.read(1)
-        valid = np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        valid = (
+            np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        )
         transform, height, width = src.transform, src.height, src.width
     k = CELL_NESTING_PIXELS
     row0, col0 = grid_cell_origin(transform, height, width)
@@ -72,14 +74,20 @@ def country_cells(mask_path: Path) -> pd.DataFrame:
     return out.sort_values("cell_id").reset_index(drop=True)
 
 
-def _subset(da: xr.DataArray, lat_range: tuple[float, float], lon_range: tuple[float, float]) -> xr.DataArray:
+def _subset(
+    da: xr.DataArray, lat_range: tuple[float, float], lon_range: tuple[float, float]
+) -> xr.DataArray:
     """Native-grid subset covering the ranges plus a margin; lon_range in the file's own convention."""
     lat = da["lat"].values
     lon = da["lon"].values
     dlat = float(np.abs(np.diff(np.sort(lat))).mean())
     dlon = float(np.abs(np.diff(np.sort(lon))).mean())
-    lat_sel = (lat >= lat_range[0] - _MARGIN_NATIVE_CELLS * dlat) & (lat <= lat_range[1] + _MARGIN_NATIVE_CELLS * dlat)
-    lon_sel = (lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon) & (lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon)
+    lat_sel = (lat >= lat_range[0] - _MARGIN_NATIVE_CELLS * dlat) & (
+        lat <= lat_range[1] + _MARGIN_NATIVE_CELLS * dlat
+    )
+    lon_sel = (lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon) & (
+        lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon
+    )
     return da.isel(lat=np.flatnonzero(lat_sel), lon=np.flatnonzero(lon_sel))
 
 
@@ -182,13 +190,17 @@ def forcing_frames(
         )
         bad = frame[["delta_rsds", "dT", "delta_wind"]].isna().any(axis=1)
         if bad.any():
-            raise ForcingGapError(f"{m.member_id}: {int(bad.sum())} of {len(frame)} cells have no valid change factor")
+            raise ForcingGapError(
+                f"{m.member_id}: {int(bad.sum())} of {len(frame)} cells have no valid change factor"
+            )
         if wind_valid_range is not None:
             lo, hi = wind_valid_range
             invalid = (frame["delta_wind"] < lo) | (frame["delta_wind"] > hi)
             if invalid.any():
                 if masked_sink is not None:
-                    masked_sink.append(frame.loc[invalid, ["cell_id", "member", "delta_wind"]].copy())
+                    masked_sink.append(
+                        frame.loc[invalid, ["cell_id", "member", "delta_wind"]].copy()
+                    )
                 frame = frame.loc[~invalid].reset_index(drop=True)
         yield frame
 
@@ -205,7 +217,9 @@ def write_forcing(frames: Iterator[pd.DataFrame], out_path: Path) -> int:
             table = pa.Table.from_pandas(frame, preserve_index=False)
             if writer is None:
                 writer = pq.ParquetWriter(
-                    out_path, table_metadata(table.schema, CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow), compression="zstd"
+                    out_path,
+                    table_metadata(table.schema, CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow),
+                    compression="zstd",
                 )
             writer.write_table(table.cast(writer.schema))
             n += len(frame)
@@ -243,7 +257,9 @@ def assert_forcing_usable(
         )
     expected = len(cand) * len(members)
     present = f[f["member"].astype(str).isin(members)][["cell_id", "member"]]
-    declared = masked[masked["cell_id"].isin(cand) & masked["member"].astype(str).isin(members)][["cell_id", "member"]]
+    declared = masked[masked["cell_id"].isin(cand) & masked["member"].astype(str).isin(members)][
+        ["cell_id", "member"]
+    ]
     if len(present.drop_duplicates()) + len(declared.drop_duplicates()) != expected:
         raise ForcingContractError(
             f"{expected - len(present.drop_duplicates()) - len(declared.drop_duplicates())} candidate cell-members are "

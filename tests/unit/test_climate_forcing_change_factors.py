@@ -16,7 +16,9 @@ def _monthly(values_by_year_month, lat=(0.0, 1.0), lon=(0.0, 1.25)):
     data = np.array([values_by_year_month(t.year, t.month) for t in times], dtype=float)
     data = data[:, None, None] * np.ones((1, len(lat), len(lon)))
     return xr.DataArray(
-        data, dims=("time", "lat", "lon"), coords={"time": times, "lat": list(lat), "lon": list(lon)}
+        data,
+        dims=("time", "lat", "lon"),
+        coords={"time": times, "lat": list(lat), "lon": list(lon)},
     )
 
 
@@ -41,7 +43,9 @@ def test_ratio_factor_is_window_over_reference_and_difference_is_window_minus_re
 
     assert float(ratio.isel(lat=0, lon=0)) == pytest.approx(1.10)
     assert float(wind.isel(lat=0, lon=0)) == pytest.approx(1.10)
-    assert float(dt.isel(lat=0, lon=0)) == pytest.approx(10.0)  # additive, in the variable's unit (K)
+    assert float(dt.isel(lat=0, lon=0)) == pytest.approx(
+        10.0
+    )  # additive, in the variable's unit (K)
 
 
 @pytest.mark.unit
@@ -137,7 +141,9 @@ def _spike_fields():
     win = np.full(shape, 4.4)
     ref[:, 2, 2], win[:, 2, 2] = 0.002, 0.5  # one native cell whose reference wind is near zero
     mk = lambda a: xr.DataArray(
-        a, dims=("time", "lat", "lon"), coords={"time": times, "lat": np.arange(5.0), "lon": np.arange(5.0)}
+        a,
+        dims=("time", "lat", "lon"),
+        coords={"time": times, "lat": np.arange(5.0), "lon": np.arange(5.0)},
     )
     return mk(ref), mk(win)
 
@@ -147,7 +153,9 @@ def test_wind_neighbourhood_ratio_keeps_a_near_zero_reference_cell_from_explodin
     ref, win = _spike_fields()
 
     per_cell = cf.compute_change_factor("sfcWind", ref, win, (1995, 2014), (2041, 2070))
-    smoothed = cf.compute_change_factor("sfcWind", ref, win, (1995, 2014), (2041, 2070), neighbourhood=3)
+    smoothed = cf.compute_change_factor(
+        "sfcWind", ref, win, (1995, 2014), (2041, 2070), neighbourhood=3
+    )
 
     assert float(per_cell.max()) == pytest.approx(250.0)
     assert float(smoothed.max()) < 1.2 and float(smoothed.min()) == pytest.approx(1.1)

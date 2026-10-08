@@ -61,7 +61,9 @@ def snapshot_date_from_name(name: str) -> str:
     """`..._{20260809}.xlsx` -> `2026-08-09`; a name without a date cannot be pinned, so it is an error."""
     m = re.search(r"(\d{4})(\d{2})(\d{2})", name)
     if not m:
-        raise GemSnapshotError(f"{name}: no YYYYMMDD snapshot date in the file name; cannot pin the version")
+        raise GemSnapshotError(
+            f"{name}: no YYYYMMDD snapshot date in the file name; cannot pin the version"
+        )
     return date(int(m[1]), int(m[2]), int(m[3])).isoformat()
 
 
@@ -112,17 +114,28 @@ def read_solar_wind(xlsx: Path) -> pd.DataFrame:
     for col in ("start_year", "retired_year"):
         out[col] = pd.to_numeric(out[col], errors="coerce")
     # GEM text columns mix strings and numbers, which parquet cannot store
-    for col in ("gem_unit_id", "gem_location_id", "plant_name", "unit_name", "technology", "location_accuracy"):
+    for col in (
+        "gem_unit_id",
+        "gem_location_id",
+        "plant_name",
+        "unit_name",
+        "technology",
+        "location_accuracy",
+    ):
         out[col] = out[col].map(lambda v: None if pd.isna(v) else str(v))
     return out.reset_index(drop=True)
 
 
-def clip_country(plants: pd.DataFrame, iso: str, gem_name: str, boundary: gpd.GeoDataFrame) -> pd.DataFrame:
+def clip_country(
+    plants: pd.DataFrame, iso: str, gem_name: str, boundary: gpd.GeoDataFrame
+) -> pd.DataFrame:
     """Plants of the country's GEM name (config/countries.yaml `gem_country_name`) whose point lies inside `boundary` (the mainland polygon, OQ-039 for PRT)."""
     named = plants[plants["Country/area"] == gem_name].copy()
     if named[["lat", "lon"]].isna().any().any():
         raise GemSnapshotError(f"{iso}: GEM rows without coordinates")
-    pts = gpd.GeoDataFrame(named, geometry=gpd.points_from_xy(named["lon"], named["lat"]), crs="EPSG:4326")
+    pts = gpd.GeoDataFrame(
+        named, geometry=gpd.points_from_xy(named["lon"], named["lat"]), crs="EPSG:4326"
+    )
     boundary = boundary.to_crs("EPSG:4326")
     inside = pts.within(boundary.union_all())
     kept = pd.DataFrame(pts[inside].drop(columns="geometry")).drop(columns="Country/area")
@@ -132,7 +145,9 @@ def clip_country(plants: pd.DataFrame, iso: str, gem_name: str, boundary: gpd.Ge
 
 def counts(clipped: pd.DataFrame) -> dict:
     """Feature count and capacity (MW) per technology and status; the figure the registry carries."""
-    g = clipped.groupby(["tech", "status"]).agg(n=("capacity_mw", "size"), mw=("capacity_mw", "sum"))
+    g = clipped.groupby(["tech", "status"]).agg(
+        n=("capacity_mw", "size"), mw=("capacity_mw", "sum")
+    )
     return {f"{t}/{s}": {"n": int(r.n), "mw": round(float(r.mw), 1)} for (t, s), r in g.iterrows()}
 
 
@@ -152,5 +167,7 @@ def build_country(iso: str, gem_name: str, boundary_path: Path) -> Path:
         "n_features": len(clipped),
         "counts": counts(clipped),
     }
-    (paths.fetched_raw("gem", "_global") / REGISTRY_NAME).write_text(json.dumps(pin, indent=2), encoding="utf-8")
+    (paths.fetched_raw("gem", "_global") / REGISTRY_NAME).write_text(
+        json.dumps(pin, indent=2), encoding="utf-8"
+    )
     return out

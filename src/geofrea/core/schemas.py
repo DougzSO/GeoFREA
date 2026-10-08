@@ -158,7 +158,11 @@ class VerifiedValue(BaseModel, Generic[T]):
     @model_validator(mode="after")
     def _value_within_range_when_set(self) -> VerifiedValue:
         """Validate that value is within range bounds if range is set."""
-        if self.range is not None and self.value is not None and (self.value < self.range.min or self.value > self.range.max):
+        if (
+            self.range is not None
+            and self.value is not None
+            and (self.value < self.range.min or self.value > self.range.max)
+        ):
             raise ValueError(
                 f"value ({self.value}) must be within range [{self.range.min}, {self.range.max}]."
             )

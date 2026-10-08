@@ -67,7 +67,9 @@ def write_reference_grid_artifact(mask_raster: Path, out_path: Path) -> Path:
     """
     with rasterio.open(mask_raster) as src:
         band = src.read(1)
-        valid = np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        valid = (
+            np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        )
         definition = {
             "crs": src.crs.to_string(),
             "transform": [float(v) for v in src.transform[:6]],

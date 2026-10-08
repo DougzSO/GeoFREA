@@ -176,7 +176,9 @@ def bbox_from_polygon(country_polygon_path: Path, margin_deg: float = 0.5) -> li
     ]
 
 
-def is_complete_download(final_path: Path, tmp_path: Path) -> Literal["complete", "partial", "absent"]:
+def is_complete_download(
+    final_path: Path, tmp_path: Path
+) -> Literal["complete", "partial", "absent"]:
     """Distinguish a finished download from a crashed/partial one.
 
     Same pattern as `cmip6.py::is_complete_download()`: a live download
@@ -275,7 +277,9 @@ class _LoggingProgress(Callback):
     def __init__(self, label: str, interval_s: float = 30.0, mp_progress=None) -> None:
         self.label = label
         self.interval_s = interval_s
-        self.mp_progress = mp_progress  # a multiprocessing.Value('l'), shared with the parent process's watchdog
+        self.mp_progress = (
+            mp_progress  # a multiprocessing.Value('l'), shared with the parent process's watchdog
+        )
         self._lock = threading.Lock()
         self._start = 0.0
         self._total = 0
@@ -433,14 +437,19 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     """
     sorted_years = sorted(year_paths)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    batches = [sorted_years[i : i + _MERGE_BATCH_SIZE] for i in range(0, len(sorted_years), _MERGE_BATCH_SIZE)]
+    batches = [
+        sorted_years[i : i + _MERGE_BATCH_SIZE]
+        for i in range(0, len(sorted_years), _MERGE_BATCH_SIZE)
+    ]
 
     if len(batches) == 1:
         _merge_to(batches[0], out_path, "merge")
         return out_path
 
     n = len(batches)
-    batch_out_paths = [out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)]
+    batch_out_paths = [
+        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)
+    ]
     for i, (batch, batch_out) in enumerate(zip(batches, batch_out_paths), start=1):
         if batch_out.exists():
             print(f"[merge-skip] batch {i}/{n} already merged: {batch_out.name}", flush=True)
@@ -509,7 +518,9 @@ def read_native_grid(path: Path) -> NativeGrid:
         )
 
 
-_CROP_TIME_CHUNK_SIZE = 500  # hours per chunk after rechunking -- see _crop_worker()'s rechunk comment
+_CROP_TIME_CHUNK_SIZE = (
+    500  # hours per chunk after rechunking -- see _crop_worker()'s rechunk comment
+)
 
 
 def _crop_worker(
@@ -572,7 +583,9 @@ def _crop_worker(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress("crop", mp_progress=mp_progress):  # dask-backed write, see chunks= note above
+        with _LoggingProgress(
+            "crop", mp_progress=mp_progress
+        ):  # dask-backed write, see chunks= note above
             cropped.to_netcdf(out_path)
 
     result_queue.put((cells_before, cells_after))
@@ -601,7 +614,9 @@ def _crop_cell_counts(bbox_path: Path, country_polygon_path: Path) -> tuple[int,
     return cells_before, cells_after
 
 
-_CROP_BATCH_YEARS = 1  # years per intermediate crop batch (lowered from 5, COMMAND 2026-10-05: smaller
+_CROP_BATCH_YEARS = (
+    1  # years per intermediate crop batch (lowered from 5, COMMAND 2026-10-05: smaller
+)
 # batches bound how much work a watchdog kill loses per retry, on top of the time-axis rechunk fix
 # above) -- see crop_to_country_polygon() docstring
 
@@ -685,13 +700,17 @@ def crop_to_country_polygon(
         return _crop_to(bbox_path, country_polygon_path, out_path, "crop", year_batches[0])
 
     n = len(year_batches)
-    batch_out_paths = [out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)]
+    batch_out_paths = [
+        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)
+    ]
     cells: tuple[int, int] | None = None
     for i, (year_range, batch_out) in enumerate(zip(year_batches, batch_out_paths), start=1):
         if batch_out.exists():
             print(f"[crop-skip] batch {i}/{n} already cropped: {batch_out.name}", flush=True)
             continue
-        cells = _crop_to(bbox_path, country_polygon_path, batch_out, f"crop-batch{i}of{n}", year_range)
+        cells = _crop_to(
+            bbox_path, country_polygon_path, batch_out, f"crop-batch{i}of{n}", year_range
+        )
 
     _merge_to(batch_out_paths, out_path, "crop-final")
     for batch_out in batch_out_paths:
@@ -743,7 +762,9 @@ def compute_daily_maxima(hourly_path: Path, variable: str = "fg10") -> xr.Datase
         return daily.load().to_dataset(name=variable)
 
 
-def compute_annual_maxima(daily_max_path: Path | xr.Dataset, variable: str = "fg10") -> xr.DataArray:
+def compute_annual_maxima(
+    daily_max_path: Path | xr.Dataset, variable: str = "fg10"
+) -> xr.DataArray:
     """Reduce a daily-maximum field to one annual maximum per cell per year.
 
     Pure function over the downloaded/cropped/daily-reduced field, no
@@ -783,7 +804,9 @@ def _reduce_worker(hourly_path: Path, out_path: Path, variable: str, mp_progress
         ds_out.to_netcdf(out_path)
 
 
-def write_annual_maxima_from_hourly(hourly_path: Path, out_path: Path, variable: str = "fg10") -> None:
+def write_annual_maxima_from_hourly(
+    hourly_path: Path, out_path: Path, variable: str = "fg10"
+) -> None:
     """Compute daily-then-annual maxima from a raw hourly field and persist the result.
 
     The pipeline requested in COMMAND F4-2's dataset-switch verdict:

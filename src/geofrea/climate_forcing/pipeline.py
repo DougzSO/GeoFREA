@@ -90,25 +90,37 @@ def _ratio_qc(forcing_path: Path) -> dict:
     df["gcm"] = df["member"].str.extract(r"^m_(.+)_ssp")[0]
     return {
         gcm: {
-            col: {"min": float(g[col].min()), "max": float(g[col].max())} for col in ("delta_rsds", "delta_wind")
+            col: {"min": float(g[col].min()), "max": float(g[col].max())}
+            for col in ("delta_rsds", "delta_wind")
         }
         for gcm, g in df.groupby("gcm")
     }
 
 
-def build_forcing(iso: str, experiments_yaml: Path, registry_path: Path | None = None) -> ForcingSummary:
+def build_forcing(
+    iso: str, experiments_yaml: Path, registry_path: Path | None = None
+) -> ForcingSummary:
     """J-3: forcing.parquet, forcing_masked.parquet and members.yaml for `iso`."""
-    registry = Cmip6Registry.load(registry_path or core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json")
+    registry = Cmip6Registry.load(
+        registry_path or core_paths.fetched_raw("cmip6", "_global") / "cmip6_registry.json"
+    )
     ensemble = load_ensemble(experiments_yaml)
     members = resolve_members(ensemble)
-    manifest = members_manifest(members, registry, ensemble.hazard_windows_available)  # fails loud first
+    manifest = members_manifest(
+        members, registry, ensemble.hazard_windows_available
+    )  # fails loud first
 
     cells = country_cells(aligned_mask_path(iso))
     out_dir = artifacts_dir(iso)
     masked: list[pd.DataFrame] = []
     n_rows = write_forcing(
         forcing_frames(
-            cells, members, registry, ensemble.wind_ratio_neighbourhood_cells, ensemble.wind_factor_valid_range, masked
+            cells,
+            members,
+            registry,
+            ensemble.wind_ratio_neighbourhood_cells,
+            ensemble.wind_factor_valid_range,
+            masked,
         ),
         out_dir / "forcing.parquet",
     )
@@ -127,7 +139,10 @@ def build_forcing(iso: str, experiments_yaml: Path, registry_path: Path | None =
     masked_df["member"] = masked_df["member"].astype(str)
     masked_df["delta_wind"] = masked_df["delta_wind"].astype("float32")
     write_table(
-        masked_df, out_dir / "forcing_masked.parquet", schema_version=CLIMATE_TABLE_SCHEMA_VERSION, row_model=ForcingMaskedRow
+        masked_df,
+        out_dir / "forcing_masked.parquet",
+        schema_version=CLIMATE_TABLE_SCHEMA_VERSION,
+        row_model=ForcingMaskedRow,
     )
 
     manifest.update(
@@ -136,8 +151,12 @@ def build_forcing(iso: str, experiments_yaml: Path, registry_path: Path | None =
             "n_cells": len(cells),
             "n_rows": n_rows,
             "wind_ratio_neighbourhood_cells": ensemble.wind_ratio_neighbourhood_cells,
-            "wind_factor_valid_range": list(ensemble.wind_factor_valid_range) if ensemble.wind_factor_valid_range else None,
-            "masked_cell_members": {k: int(v) for k, v in masked_df.groupby("member").size().items()},
+            "wind_factor_valid_range": list(ensemble.wind_factor_valid_range)
+            if ensemble.wind_factor_valid_range
+            else None,
+            "masked_cell_members": {
+                k: int(v) for k, v in masked_df.groupby("member").size().items()
+            },
             "qc_factor_ranges_after_masking": _ratio_qc(out_dir / "forcing.parquet"),
         }
     )
@@ -158,7 +177,10 @@ def build_forcing(iso: str, experiments_yaml: Path, registry_path: Path | None =
 
 
 def _isimip(iso: str, gcm: str, experiment: str, variable: str) -> Path:
-    path = core_paths.fetched_raw("isimip3b", iso) / f"{gcm.replace('_', '-')}_{experiment}_{variable}_{iso}.nc"
+    path = (
+        core_paths.fetched_raw("isimip3b", iso)
+        / f"{gcm.replace('_', '-')}_{experiment}_{variable}_{iso}.nc"
+    )
     if not path.exists():
         raise HazardDataError(f"missing ISIMIP3b file {path}")
     return path
@@ -167,9 +189,15 @@ def _isimip(iso: str, gcm: str, experiment: str, variable: str) -> Path:
 def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     """J-4: hazard_context.parquet for the members that carry the hazard channel."""
     ensemble = load_ensemble(experiments_yaml)
-    members = [m for m in resolve_members(ensemble) if has_hazard_channel(m, ensemble.hazard_windows_available)]
+    members = [
+        m
+        for m in resolve_members(ensemble)
+        if has_hazard_channel(m, ensemble.hazard_windows_available)
+    ]
     if not members:
-        raise HazardDataError("no member carries the hazard channel (check hazard_windows_available)")
+        raise HazardDataError(
+            "no member carries the hazard channel (check hazard_windows_available)"
+        )
     cells = country_cells(aligned_mask_path(iso))
     gust = era5_gust_mean_annual_max(
         core_paths.fetched_raw("era5", iso) / f"{iso}_fg10_annual_max.nc",
@@ -189,9 +217,19 @@ def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     out = pd.concat(frames, ignore_index=True)
     out["member"] = out["member"].astype("category")
     path = artifacts_dir(iso) / "hazard_context.parquet"
-    write_table(out, path, schema_version=CLIMATE_TABLE_SCHEMA_VERSION, row_model=HazardContextRow, compression="zstd")
+    write_table(
+        out,
+        path,
+        schema_version=CLIMATE_TABLE_SCHEMA_VERSION,
+        row_model=HazardContextRow,
+        compression="zstd",
+    )
     return HazardSummary(
-        country_code=iso, n_cells=len(cells), n_hazard_members=len(members), n_rows=len(out), hazard_context=path
+        country_code=iso,
+        n_cells=len(cells),
+        n_hazard_members=len(members),
+        n_rows=len(out),
+        hazard_context=path,
     )
 
 
@@ -204,5 +242,7 @@ def build_maps(iso: str) -> MapsSummary:
         m: "OQ-042: grey cells have no valid wind factor for this member (masked, not zero change)"
         for m in masked["member"].astype(str).unique()
     }
-    figures = plot_all_members(forcing, masked, core_paths.phase_dir(iso, "climate_forcing", "figures"), iso, notes)
+    figures = plot_all_members(
+        forcing, masked, core_paths.phase_dir(iso, "climate_forcing", "figures"), iso, notes
+    )
     return MapsSummary(country_code=iso, n_figures=len(figures), figures=figures)

@@ -25,7 +25,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS = REPO_ROOT / "config" / "parameters.json"
 TECHNOLOGIES = REPO_ROOT / "config" / "technologies.yaml"
 EXPERIMENTS = REPO_ROOT / "config" / "experiments.yaml"
-_LEGACY_NAME = "opex_fixed_" + "pct_of_capex"  # built from parts so this file does not contain the retired name
+_LEGACY_NAME = (
+    "opex_fixed_" + "pct_of_capex"
+)  # built from parts so this file does not contain the retired name
 
 
 def _vv(value, **extra):
@@ -87,7 +89,9 @@ def test_proxy_blocks_production_run():
     prt = audit_parameters(parameters, technologies, ["PRT"], ["wind"])
     assert not any("proxy" in e for e in prt.errors)
     # a run that does not consume wind does not consume the proxy
-    assert not any("proxy" in e for e in audit_parameters(parameters, technologies, ["BRA"], ["solar"]).errors)
+    assert not any(
+        "proxy" in e for e in audit_parameters(parameters, technologies, ["BRA"], ["solar"]).errors
+    )
 
 
 @pytest.mark.unit
@@ -95,16 +99,26 @@ def test_uncertain_parameter_requires_range_in_production():
     """U-05: every uncertain parameter needs a value and a range, enforced only in a production run (MS-6 is not finished)."""
     parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
     audit = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
-    assert any("PRT solar capex_usd_per_kw: uncertain parameter has no range" in e for e in audit.errors)
+    assert any(
+        "PRT solar capex_usd_per_kw: uncertain parameter has no range" in e for e in audit.errors
+    )
     assert any("PRT solar gamma: uncertain parameter has no entry" in e for e in audit.errors)
     with pytest.raises(ProductionRunError, match="no range"):
         enforce_production(audit)
     # a parameter with a range passes: give capex a range and its finding disappears
     data = parameters.model_dump(mode="json")
     capex = data["countries"]["PRT"]["technologies"]["solar"]["capex_usd_per_kw"]
-    capex["range"] = {"min": capex["value"] * 0.5, "max": capex["value"] * 2, "distribution": "uniform", "source": "test"}
+    capex["range"] = {
+        "min": capex["value"] * 0.5,
+        "max": capex["value"] * 2,
+        "distribution": "uniform",
+        "source": "test",
+    }
     patched = type(parameters).model_validate(data)
-    assert not any("PRT solar capex_usd_per_kw" in e for e in audit_parameters(patched, technologies, ["PRT"], ["solar"]).errors)
+    assert not any(
+        "PRT solar capex_usd_per_kw" in e
+        for e in audit_parameters(patched, technologies, ["PRT"], ["solar"]).errors
+    )
 
 
 @pytest.mark.unit
@@ -118,7 +132,16 @@ def test_main_refuses_a_production_run_before_any_phase_starts(monkeypatch):
 @pytest.mark.unit
 def test_no_legacy_opex_names():
     """V7: the fixed O&M is `opex_fixed_frac` everywhere except the archive and dated audit records."""
-    skip_dirs = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "node_modules", "geofrea.egg-info", "_archive"}
+    skip_dirs = {
+        ".git",
+        "__pycache__",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "node_modules",
+        "geofrea.egg-info",
+        "_archive",
+    }
     hits = []
     for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
         dirnames[:] = [d for d in dirnames if d not in skip_dirs]

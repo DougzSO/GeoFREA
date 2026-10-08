@@ -26,7 +26,9 @@ def experiments(tmp_path):
         yaml.safe_dump(
             {
                 "gcm_ensemble": {
-                    "gcms": [{"name": "GFDL-ESM4", "cds_name": "gfdl_esm4", "hazard_channel": True}],
+                    "gcms": [
+                        {"name": "GFDL-ESM4", "cds_name": "gfdl_esm4", "hazard_channel": True}
+                    ],
                     "ssps": ["SSP3-7.0"],
                     "windows": ["2041-2070"],
                     "hazard_windows_available": ["2041-2070"],
@@ -51,10 +53,18 @@ def _build(data, *, skip_cmip6=None, corrupt_era5=False, skip_isimip=False):
         for variable in ("rsds", "sfcWind", "tas"):
             if skip_cmip6 == (experiment, variable):
                 continue
-            p = _file(raw / "cmip6" / "_global" / f"gfdl_{experiment}_{variable}.nc", f"{experiment}{variable}")
+            p = _file(
+                raw / "cmip6" / "_global" / f"gfdl_{experiment}_{variable}.nc",
+                f"{experiment}{variable}",
+            )
             cmip6.entries[f"cmip6/gfdl_esm4/{experiment}/{variable}"] = Cmip6RegistryEntry(
-                model="gfdl_esm4", experiment=experiment, variable=variable, status="registered",
-                global_path=str(p), source_sha256=sha256_file(p), realization="r1i1p1f1",
+                model="gfdl_esm4",
+                experiment=experiment,
+                variable=variable,
+                status="registered",
+                global_path=str(p),
+                source_sha256=sha256_file(p),
+                realization="r1i1p1f1",
             )
     cmip6.save(raw / "cmip6" / "_global" / "cmip6_registry.json")
 
@@ -62,10 +72,18 @@ def _build(data, *, skip_cmip6=None, corrupt_era5=False, skip_isimip=False):
     if not skip_isimip:
         for scenario in ("historical", "ssp370"):
             for variable in ("tasmax", "pr"):
-                p = _file(raw / "isimip3b" / ISO / f"gfdl-esm4_{scenario}_{variable}_{ISO}.nc", "isimip")
+                p = _file(
+                    raw / "isimip3b" / ISO / f"gfdl-esm4_{scenario}_{variable}_{ISO}.nc", "isimip"
+                )
                 entry = Isimip3bRegistryEntry(
-                    gcm="gfdl-esm4", scenario=scenario, variable=variable, country_code=ISO, path=str(p),
-                    source_sha256=sha256_file(p), size_bytes=p.stat().st_size, copied_from="test",
+                    gcm="gfdl-esm4",
+                    scenario=scenario,
+                    variable=variable,
+                    country_code=ISO,
+                    path=str(p),
+                    source_sha256=sha256_file(p),
+                    size_bytes=p.stat().st_size,
+                    copied_from="test",
                 )
                 isimip.entries[entry.key] = entry
     isimip.save(raw / "isimip3b" / "isimip3b_registry.json")
@@ -73,8 +91,12 @@ def _build(data, *, skip_cmip6=None, corrupt_era5=False, skip_isimip=False):
     era5 = Era5Registry()
     p = _file(raw / "era5" / ISO / f"{ISO}_fg10_annual_max.nc", "era5")
     era5.entries[f"era5/{ISO}/fg10"] = Era5RegistryEntry(
-        country_code=ISO, status="registered", source_path=str(p), source_sha256=sha256_file(p),
-        reduced_path=str(p), reduced_sha256=sha256_file(p),
+        country_code=ISO,
+        status="registered",
+        source_path=str(p),
+        source_sha256=sha256_file(p),
+        reduced_path=str(p),
+        reduced_sha256=sha256_file(p),
     )
     era5.save(raw / "era5" / "_global" / "era5_registry.json")
     if corrupt_era5:

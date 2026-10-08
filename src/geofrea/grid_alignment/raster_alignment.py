@@ -43,7 +43,9 @@ class MissingSourceCrsError(ValueError):
     """A source raster has no CRS and the caller supplied none (A-09: never guess a projection)."""
 
 
-def _source_window(src, grid: GridContext, row_start: int, row_end: int, pad_px: int, src_crs) -> Window | None:
+def _source_window(
+    src, grid: GridContext, row_start: int, row_end: int, pad_px: int, src_crs
+) -> Window | None:
     """Window of `src` covering destination rows [row_start, row_end) plus `pad_px` pixels, or None if disjoint."""
     left, top = grid.transform * (0, row_start)
     right, bottom = grid.transform * (grid.width, row_end)
@@ -100,7 +102,9 @@ def reproject_to_grid(
     with safe_raster_open(src_path) as src:
         crs_in = src.crs or src_crs
         if crs_in is None:
-            raise MissingSourceCrsError(f"{src_path}: the raster declares no CRS and none was supplied")
+            raise MissingSourceCrsError(
+                f"{src_path}: the raster declares no CRS and none was supplied"
+            )
         src_nodata = src.nodata
         itemsize = np.dtype(src.dtypes[0]).itemsize
         # Pad: the resampling footprint (destination pixel size in source pixels) plus a margin.
@@ -245,7 +249,8 @@ def derive_slope_from_dem(dem_path, out_path):
         if src.height < 2 or src.width < 2:
             logger.warning(
                 "    slope: DEM %sx%s too small for a gradient, skipping.",
-                src.height, src.width,
+                src.height,
+                src.width,
             )
             return None
 
@@ -271,9 +276,9 @@ def derive_slope_from_dem(dem_path, out_path):
                 win_y_end = min(src.height, y + h + 1)
                 win_h = win_y_end - win_y_start
 
-                elev_block = src.read(
-                    1, window=Window(0, win_y_start, src.width, win_h)
-                ).astype(np.float32)
+                elev_block = src.read(1, window=Window(0, win_y_start, src.width, win_h)).astype(
+                    np.float32
+                )
 
                 # Data-integrity correction: exclude nodata from the
                 # gradient entirely (NaN propagates one cell), instead of
@@ -366,7 +371,9 @@ def _glo30_tile_index(tiles: list) -> dict[tuple[int, int], Path]:
     return index
 
 
-def _read_dem_block(index: dict[tuple[int, int], Path], g0: int, g1: int, c0: int, c1: int, sp: int) -> np.ndarray:
+def _read_dem_block(
+    index: dict[tuple[int, int], Path], g0: int, g1: int, c0: int, c1: int, sp: int
+) -> np.ndarray:
     """DEM samples for global rows g0..g1-1 and columns c0..c1-1 (NaN where no tile covers them).
 
     Global indices count samples from 90 N and 180 W: row G has its centre at latitude 90 - G/sp, column C at longitude
@@ -378,15 +385,22 @@ def _read_dem_block(index: dict[tuple[int, int], Path], g0: int, g1: int, c0: in
             path = index.get((lat0, lon0))
             if path is None:
                 continue
-            tg0, tc0 = (90 - (lat0 + 1)) * sp, (lon0 + 180) * sp  # global index of the tile's first sample
+            tg0, tc0 = (
+                (90 - (lat0 + 1)) * sp,
+                (lon0 + 180) * sp,
+            )  # global index of the tile's first sample
             r0, r1 = max(g0, tg0), min(g1, tg0 + sp)
             q0, q1 = max(c0, tc0), min(c1, tc0 + sp)
             if r0 >= r1 or q0 >= q1:
                 continue
             with rasterio.open(path) as src:
                 if (src.height, src.width) != (sp, sp):
-                    raise ValueError(f"{Path(path).name}: expected {sp} x {sp} samples, got {src.height} x {src.width}")
-                block = src.read(1, window=Window(q0 - tc0, r0 - tg0, q1 - q0, r1 - r0)).astype(np.float32)
+                    raise ValueError(
+                        f"{Path(path).name}: expected {sp} x {sp} samples, got {src.height} x {src.width}"
+                    )
+                block = src.read(1, window=Window(q0 - tc0, r0 - tg0, q1 - q0, r1 - r0)).astype(
+                    np.float32
+                )
                 if src.nodata is not None:
                     block[block == src.nodata] = np.nan
             out[r0 - g0 : r1 - g0, q0 - c0 : q1 - c0] = block
@@ -394,7 +408,10 @@ def _read_dem_block(index: dict[tuple[int, int], Path], g0: int, g1: int, c0: in
 
 
 def slope_class_counts(
-    dem_tiles: list, out_path, grid: GridContext, samples_per_degree: int = _GLO30_SAMPLES_PER_DEGREE
+    dem_tiles: list,
+    out_path,
+    grid: GridContext,
+    samples_per_degree: int = _GLO30_SAMPLES_PER_DEGREE,
 ):
     """Per grid pixel, how many 30 m DEM samples have a slope in each 1 degree bin (D-F2a-016).
 
@@ -411,7 +428,9 @@ def slope_class_counts(
     res = abs(grid.transform.a)
     g_left, g_top = grid.transform.c, grid.transform.f
     counts = np.zeros((SLOPE_BINS, grid.height, grid.width), dtype=np.uint16)
-    progress = PeriodicProgress(logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "slope class counts")
+    progress = PeriodicProgress(
+        logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "slope class counts"
+    )
     for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
         progress.step()
         r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
@@ -420,7 +439,9 @@ def slope_class_counts(
         g_hi = int(np.ceil((90 - lat_lo) * sp)) + 1
         c_lo = int(np.floor((g_left + 180) * sp)) - 1
         c_hi = int(np.ceil((g_left + grid.width * res + 180) * sp)) + 1
-        z = _read_dem_block(index, g_lo - 1, g_hi + 1, c_lo - 1, c_hi + 1, sp)  # one extra sample all round for the stencil
+        z = _read_dem_block(
+            index, g_lo - 1, g_hi + 1, c_lo - 1, c_hi + 1, sp
+        )  # one extra sample all round for the stencil
         if not np.isfinite(z).any():
             continue
         lat_c = 90 - np.arange(g_lo - 1, g_hi + 1) / sp
@@ -442,7 +463,9 @@ def slope_class_counts(
         bins = np.clip(np.floor(np.where(valid, sub, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
         key = (grow[keep_r][:, None] * grid.width + gcol[keep_c][None, :]) * SLOPE_BINS + bins
         flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
-        counts[:, r0:r1, :] = flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+        counts[:, r0:r1, :] = (
+            flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+        )
     if not counts.any():
         return None
     counts[:, ~grid.country_mask] = SLOPE_COUNT_NODATA
@@ -481,7 +504,11 @@ def _exact_block_factor(src, grid: GridContext) -> int | None:
     grid_res = abs(grid.transform.a)
     t_res = abs(src.transform.a)
     k = round(grid_res / t_res)
-    if k < 1 or abs(k * t_res - grid_res) > 1e-9 * grid_res or abs(abs(src.transform.e) - t_res) > 1e-12:
+    if (
+        k < 1
+        or abs(k * t_res - grid_res) > 1e-9 * grid_res
+        or abs(abs(src.transform.e) - t_res) > 1e-12
+    ):
         return None
     off_c = (src.transform.c - grid.transform.c) / grid_res
     off_r = (grid.transform.f - src.transform.f) / grid_res
@@ -508,7 +535,9 @@ def _count_exact(src, counts: np.ndarray, grid: GridContext, k: int, lut: np.nda
         nr = min(_STRIP_GRID_ROWS, gr1 - r)
         win = Window((gc0 - c_t) * k, (r - r_t) * k, n_c * k, nr * k)
         key = lut[src.read(1, window=win)].astype(np.int32) + base[: nr * k]
-        per = np.bincount(key.ravel(), minlength=nr * n_c * (n_classes + 1)).reshape(nr, n_c, n_classes + 1)
+        per = np.bincount(key.ravel(), minlength=nr * n_c * (n_classes + 1)).reshape(
+            nr, n_c, n_classes + 1
+        )
         for i in range(n_classes):
             counts[i, r : r + nr, gc0:gc1] = per[:, :, i + 1]
     return True
@@ -553,7 +582,9 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
                     f"land_cover_class_counts: tile {tile_path.name!r} could not be read ({type(exc).__name__}: {exc}) and its "
                     f"footprint {footprint} overlaps the country, which would leave a coverage gap."
                 ) from exc
-            logger.warning("    Land cover tile %s skipped (%s: %s).", tile_path.name, type(exc).__name__, exc)
+            logger.warning(
+                "    Land cover tile %s skipped (%s: %s).", tile_path.name, type(exc).__name__, exc
+            )
     if not in_country:
         return None
     if None in exact_k or len(exact_k) != 1:
@@ -596,9 +627,11 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     }
     with safe_raster_write(out_path, **profile) as dst:
         dst.write(counts)
-        dst.update_tags(worldcover_classes=",".join(str(c) for c in WORLDCOVER_CLASSES), samples_per_pixel=str(spp))
+        dst.update_tags(
+            worldcover_classes=",".join(str(c) for c in WORLDCOVER_CLASSES),
+            samples_per_pixel=str(spp),
+        )
     return Path(out_path)
-
 
 
 def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):

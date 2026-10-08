@@ -117,9 +117,7 @@ def _get_hydrosheds_region(country_code: str) -> str:
     config = _load_countries_config()
 
     if country_code not in config:
-        raise CountryMappingError(
-            f"Country '{country_code}' not found in config/countries.yaml"
-        )
+        raise CountryMappingError(f"Country '{country_code}' not found in config/countries.yaml")
 
     region = config[country_code].get("hydrosheds_region")
     if region is None:

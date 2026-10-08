@@ -112,7 +112,9 @@ def _write_cog(tmp_path: Path, final_path: Path, kwargs: dict[str, Any]) -> None
 
 
 @contextmanager
-def safe_raster_write(file_path: str | Path, **kwargs: Any) -> Generator[rasterio.DatasetWriter, None, None]:
+def safe_raster_write(
+    file_path: str | Path, **kwargs: Any
+) -> Generator[rasterio.DatasetWriter, None, None]:
     """Open a raster file for writing, creating parent directories as needed; the file ends up as a COG (A-07).
 
     The raster is written as a tiled GeoTIFF next to the destination (LZW and tiling by default, overridable via kwargs, so

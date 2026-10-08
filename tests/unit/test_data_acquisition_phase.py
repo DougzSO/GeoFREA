@@ -71,6 +71,7 @@ _GWA_EXTRA_LAYER_NAMES = {
     "air_density_200m",
 }
 
+
 @pytest.fixture(autouse=True)
 def _no_network_fetchers(monkeypatch, tmp_path):
     for name in _FETCHER_NAMES:
@@ -166,9 +167,7 @@ def test_run_acquisition_phase_only_protected_requires_auth_2026_09_11(tmp_path)
     # one layer that requires auth.
     result = run_acquisition_phase(_context(tmp_path))
 
-    auth_required_names = {
-        layer.layer_name for layer in result.layers if layer.auth_required
-    }
+    auth_required_names = {layer.layer_name for layer in result.layers if layer.auth_required}
     assert auth_required_names == {"protected"}
 
 
@@ -222,18 +221,20 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
     result = run_acquisition_phase(_context(tmp_path))
 
     fetched = {layer.layer_name for layer in result.layers if layer.provenance == "fetched"}
-    local_only = {
-        layer.layer_name for layer in result.layers if layer.provenance == "local_only"
-    }
+    local_only = {layer.layer_name for layer in result.layers if layer.provenance == "local_only"}
 
-    assert fetched == {
-        "borders",
-        "admin1",
-        "wind",
-        "lakes",
-        "rivers",
-        "protected",
-    } | _GWA_EXTRA_LAYER_NAMES
+    assert (
+        fetched
+        == {
+            "borders",
+            "admin1",
+            "wind",
+            "lakes",
+            "rivers",
+            "protected",
+        }
+        | _GWA_EXTRA_LAYER_NAMES
+    )
     assert local_only == {
         "land_cover",
         "elevation",
@@ -268,14 +269,18 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
     for layer in result.layers:
         by_status[layer.fetch_status].add(layer.layer_name)
 
-    assert by_status["implemented"] == {
-        "wind",
-        "lakes",
-        "rivers",
-        "borders",
-        "admin1",
-        "protected",
-    } | _GWA_EXTRA_LAYER_NAMES
+    assert (
+        by_status["implemented"]
+        == {
+            "wind",
+            "lakes",
+            "rivers",
+            "borders",
+            "admin1",
+            "protected",
+        }
+        | _GWA_EXTRA_LAYER_NAMES
+    )
     assert by_status["implemented_not_activated"] == set()
     assert by_status["not_implemented"] == {
         "land_cover",

@@ -45,7 +45,9 @@ def _load_parameters() -> dict[str, Any]:
 
 
 def _synthetic_country_codes(countries_config: dict[str, dict[str, Any]]) -> set[str]:
-    return {code for code, mapping in countries_config.items() if mapping.get("synthetic_fixture_root")}
+    return {
+        code for code, mapping in countries_config.items() if mapping.get("synthetic_fixture_root")
+    }
 
 
 def _iter_verified_values(node: Any, path: str = ""):
@@ -78,7 +80,9 @@ def test_default_country_expansion_excludes_synthetic_countries():
 
     parameters = load_parameters(_PARAMETERS_JSON)
     default_countries = [
-        c for c in parameters.countries if not countries_config.get(c, {}).get("synthetic_fixture_root")
+        c
+        for c in parameters.countries
+        if not countries_config.get(c, {}).get("synthetic_fixture_root")
     ]
     assert synthetic.isdisjoint(default_countries), (
         f"synthetic countries {synthetic & set(default_countries)} would run in main()'s "
@@ -109,7 +113,11 @@ def test_no_real_country_value_is_marked_synthetic():
 def test_no_real_country_carries_the_synthetic_fixture_marker():
     """Check 3: only a country explicitly meant as a fixture may set synthetic_fixture_root."""
     countries_config = _load_countries_config()
-    real_countries = {"BRA", "PRT", "IND"}  # CLAUDE.md "Scope reminders" — the only real countries in scope
+    real_countries = {
+        "BRA",
+        "PRT",
+        "IND",
+    }  # CLAUDE.md "Scope reminders" — the only real countries in scope
 
     offending = [
         code

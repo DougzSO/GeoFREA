@@ -32,9 +32,16 @@ _DX_M = _RES * float(wgs84_km_per_degree(0.0)[1]) * 1000.0
 def _write_dem(path, data, nodata=NODATA_FLOAT):
     data = np.asarray(data, dtype=np.float32)
     with rasterio.open(
-        path, "w", driver="GTiff", height=data.shape[0], width=data.shape[1],
-        count=1, dtype="float32", crs="EPSG:4326",
-        transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES), nodata=nodata,
+        path,
+        "w",
+        driver="GTiff",
+        height=data.shape[0],
+        width=data.shape[1],
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES),
+        nodata=nodata,
     ) as dst:
         dst.write(data, 1)
     return path
@@ -173,8 +180,16 @@ def test_derive_slope_uses_geodesic_spacing_at_high_latitude(tmp_path):
     path = tmp_path / "hi_lat.tif"
     data = np.asarray(z, dtype=np.float32)
     with rasterio.open(
-        path, "w", driver="GTiff", height=7, width=8, count=1, dtype="float32", crs="EPSG:4326",
-        transform=from_origin(10.0, lat0, _RES, _RES), nodata=NODATA_FLOAT,
+        path,
+        "w",
+        driver="GTiff",
+        height=7,
+        width=8,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(10.0, lat0, _RES, _RES),
+        nodata=NODATA_FLOAT,
     ) as dst:
         dst.write(data, 1)
 
@@ -188,4 +203,6 @@ def test_derive_slope_uses_geodesic_spacing_at_high_latitude(tmp_path):
     assert slope[3, 4] == pytest.approx(expected, abs=1e-3)
     legacy_dx = _RES * 111.32 * 1000.0 * np.cos(np.radians(lat_mid))
     legacy = np.degrees(np.arctan(np.hypot(4.0 / legacy_dx, 4.0 / (_RES * 111.32 * 1000.0))))
-    assert abs(float(slope[3, 4]) - legacy) > 1e-4  # the geodesic result is not the old spherical one
+    assert (
+        abs(float(slope[3, 4]) - legacy) > 1e-4
+    )  # the geodesic result is not the old spherical one

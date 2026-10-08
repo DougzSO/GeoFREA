@@ -324,7 +324,9 @@ class RunManifest(BaseModel):
     country_code: str
     phases: dict[str, PhaseManifestEntry] = {}
     artifacts: dict[str, ArtifactEntry] = {}
-    seeds: dict[str, int] = {}  # random seeds of the run by name (A-12); recorded with `Orchestrator.record_seed`
+    seeds: dict[
+        str, int
+    ] = {}  # random seeds of the run by name (A-12); recorded with `Orchestrator.record_seed`
 
 
 @dataclass(frozen=True)
@@ -499,9 +501,7 @@ def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
     return [by_name[name] for name in order]
 
 
-def _transitive_closure(
-    start: set[str], edges: Mapping[str, set[str]]
-) -> set[str]:
+def _transitive_closure(start: set[str], edges: Mapping[str, set[str]]) -> set[str]:
     """Follow `edges` (name -> set of related names) from `start`, including it."""
     seen = set(start)
     stack = list(start)
@@ -581,9 +581,7 @@ class Orchestrator:
 
     def _load_manifest(self) -> RunManifest:
         if not self.manifest_path.exists():
-            return RunManifest(
-                run_id=self.run_id, dirty=self.dirty, country_code=self.country_code
-            )
+            return RunManifest(run_id=self.run_id, dirty=self.dirty, country_code=self.country_code)
         raw = self.manifest_path.read_text(encoding="utf-8")
         import json
 
@@ -617,7 +615,9 @@ class Orchestrator:
         """
         entry = self.manifest.phases.get(spec.name)
         if entry is None or entry.status != "stale_upstream":
-            raise ValueError(f"cannot revalidate {spec.name!r}: its manifest entry is {entry.status if entry else 'absent'}, not stale_upstream")
+            raise ValueError(
+                f"cannot revalidate {spec.name!r}: its manifest entry is {entry.status if entry else 'absent'}, not stale_upstream"
+            )
         for key in spec.requires:
             if key not in self.manifest.artifacts:
                 raise UndeclaredArtifactMissingError(
@@ -626,11 +626,20 @@ class Orchestrator:
             self._verify_artifact_integrity(key)
         consumed = {key: self.manifest.artifacts[key].run_id for key in spec.requires}
         self.manifest.phases[spec.name] = entry.model_copy(
-            update={"status": "success", "invalidated_by": None, "invalidated_in_run": None, "consumed_run_ids": consumed}
+            update={
+                "status": "success",
+                "invalidated_by": None,
+                "invalidated_in_run": None,
+                "consumed_run_ids": consumed,
+            }
         )
         logger.info(
             "Phase '%s' [%s]: revalidated (was stale_upstream, invalidated by %s in run %s); inputs now %s",
-            spec.name, self.country_code, entry.invalidated_by, entry.invalidated_in_run, sorted(consumed),
+            spec.name,
+            self.country_code,
+            entry.invalidated_by,
+            entry.invalidated_in_run,
+            sorted(consumed),
         )
         self._write_manifest()
 
@@ -644,7 +653,11 @@ class Orchestrator:
             del self.manifest.phases[name]
         for key in orphans:
             del self.manifest.artifacts[key]
-        logger.info("manifest: dropped entries of unregistered phases %s and %d artifact(s)", retired, len(orphans))
+        logger.info(
+            "manifest: dropped entries of unregistered phases %s and %d artifact(s)",
+            retired,
+            len(orphans),
+        )
         self._write_manifest()
 
     def record_seed(self, name: str, seed: int) -> None:
@@ -655,15 +668,15 @@ class Orchestrator:
         """
         recorded = self.manifest.seeds.get(name)
         if recorded is not None and recorded != seed:
-            raise ValueError(f"seed {name!r} is recorded as {recorded}; refusing to overwrite it with {seed}")
+            raise ValueError(
+                f"seed {name!r} is recorded as {recorded}; refusing to overwrite it with {seed}"
+            )
         self.manifest.seeds[name] = seed
         self._write_manifest()
 
     def _write_manifest(self) -> None:
         self.manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        self.manifest_path.write_text(
-            self.manifest.model_dump_json(indent=2), encoding="utf-8"
-        )
+        self.manifest_path.write_text(self.manifest.model_dump_json(indent=2), encoding="utf-8")
 
     def _hash_with_reuse(self, key: str, path: Path) -> tuple[str, int, int]:
         """Hash `path`, reusing a prior sha256 for this key if size/mtime match."""
@@ -717,10 +730,16 @@ class Orchestrator:
                     "Phase '%s' resumed, but upstream artifact '%s' was produced by "
                     "run_id %s when '%s' last ran and is now run_id %s. Resuming anyway "
                     "— lineage drift does not block.",
-                    spec.name, key, recorded_run_id, spec.name, current_entry.run_id,
+                    spec.name,
+                    key,
+                    recorded_run_id,
+                    spec.name,
+                    current_entry.run_id,
                 )
 
-    def _mark_manifest_consumers_stale(self, produced_keys: set[str], invalidating_phase: str) -> None:
+    def _mark_manifest_consumers_stale(
+        self, produced_keys: set[str], invalidating_phase: str
+    ) -> None:
         """Mark every manifest phase transitively downstream of `produced_keys` stale_upstream.
 
         Derives "who consumes what" entirely from data already persisted
@@ -829,7 +848,9 @@ class Orchestrator:
             self._prune_unregistered(set(by_name))
         for name in self.revalidate_phases:
             if name not in by_name:
-                raise MissingProducerError(f"revalidate_phases names a phase that is not registered: {name!r}")
+                raise MissingProducerError(
+                    f"revalidate_phases names a phase that is not registered: {name!r}"
+                )
             self._revalidate(by_name[name])
         unknown_targets = [name for name in self.target_phases if name not in by_name]
         if unknown_targets:
@@ -872,11 +893,11 @@ class Orchestrator:
                     finished_at=now,
                 )
                 results[spec.name] = result
-                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump(), methodology_version=self.methodology_version)
-                self._write_manifest()
-                logger.warning(
-                    "Phase '%s' skipped — upstream failed: %s", spec.name, failed_deps
+                self.manifest.phases[spec.name] = PhaseManifestEntry(
+                    **result.model_dump(), methodology_version=self.methodology_version
                 )
+                self._write_manifest()
+                logger.warning("Phase '%s' skipped — upstream failed: %s", spec.name, failed_deps)
                 continue
 
             must_force = spec.name in rerun_set
@@ -893,7 +914,9 @@ class Orchestrator:
                         else None
                     )
                 except ValidationError as exc:
-                    raise StaleManifestOutputSchemaError(spec.name, self.manifest_path, exc) from exc
+                    raise StaleManifestOutputSchemaError(
+                        spec.name, self.manifest_path, exc
+                    ) from exc
                 results[spec.name] = PhaseResult(
                     phase=spec.name,
                     status="success",
@@ -1020,7 +1043,9 @@ class Orchestrator:
                     finished_at=finished_at,
                 )
                 results[spec.name] = result
-                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump(), methodology_version=self.methodology_version)
+                self.manifest.phases[spec.name] = PhaseManifestEntry(
+                    **result.model_dump(), methodology_version=self.methodology_version
+                )
                 self.manifest.artifacts.update(new_artifacts)
                 self._write_manifest()
 
@@ -1036,9 +1061,7 @@ class Orchestrator:
                     (_transitive_closure({spec.name}, consumers) - {spec.name}) & to_attempt
                 )
                 logger.exception(
-                    "Phase '%s' [%s] FAILED\n"
-                    "  at: %s\n"
-                    "  dependents not run: %s",
+                    "Phase '%s' [%s] FAILED\n  at: %s\n  dependents not run: %s",
                     spec.name,
                     self.country_code,
                     location,
@@ -1075,7 +1098,9 @@ class Orchestrator:
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
             # registry forever and make every later resume raise StaleManifestEntryError.
             removed_keys = {
-                k for k, e in self.manifest.artifacts.items() if e.phase == spec.name and k not in new_artifacts
+                k
+                for k, e in self.manifest.artifacts.items()
+                if e.phase == spec.name and k not in new_artifacts
             }
             for stale_key in removed_keys:
                 del self.manifest.artifacts[stale_key]
@@ -1111,8 +1136,7 @@ class Orchestrator:
             if spec.summarize is not None:
                 summary_line = f"\n  summary: {spec.summarize(output)}"
             logger.info(
-                "Phase '%s' [%s] completed in %.1fs\n"
-                "  artifacts:\n%s%s",
+                "Phase '%s' [%s] completed in %.1fs\n  artifacts:\n%s%s",
                 spec.name,
                 self.country_code,
                 elapsed_s,

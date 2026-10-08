@@ -36,14 +36,26 @@ def plot_country(iso: str) -> Path:
     fig, ax = plt.subplots(figsize=(10, 10), constrained_layout=True)
     vmax = float(np.nanpercentile(arr, 99))
     im = ax.imshow(arr, extent=extent, cmap="Greys", vmin=0, vmax=vmax, interpolation="nearest")
-    fig.colorbar(im, ax=ax, shrink=0.7, label="distance to the OSM grid (km, colour limit at the 99th percentile)")
+    fig.colorbar(
+        im,
+        ax=ax,
+        shrink=0.7,
+        label="distance to the OSM grid (km, colour limit at the 99th percentile)",
+    )
     for tech, g in plants.groupby("tech"):
         ax.scatter(
-            g["lon"], g["lat"], s=2 + g["capacity_mw"].clip(upper=500) / 10, c=COLORS[tech], alpha=0.55,
-            linewidths=0, label=f"{tech} ({len(g):,} operating, {g['capacity_mw'].sum() / 1000:,.1f} GW)",
+            g["lon"],
+            g["lat"],
+            s=2 + g["capacity_mw"].clip(upper=500) / 10,
+            c=COLORS[tech],
+            alpha=0.55,
+            linewidths=0,
+            label=f"{tech} ({len(g):,} operating, {g['capacity_mw'].sum() / 1000:,.1f} GW)",
         )
     ax.legend(loc="lower left")
-    ax.set_title(f"{iso}: GEM operating solar and wind plants over the distance to the grid (validation context only)")
+    ax.set_title(
+        f"{iso}: GEM operating solar and wind plants over the distance to the grid (validation context only)"
+    )
     out = core_paths.phase_dir(iso, "overview", "figures") / f"{iso}_gem_plants_over_grid.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=100)

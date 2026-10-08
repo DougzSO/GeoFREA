@@ -189,7 +189,10 @@ def _read_clipped_with_cache(
         logger.warning(
             "%s: %d/%d features were topologically invalid and repaired "
             "before clipping (reasons: %s).",
-            path, repair_report.n_invalid, repair_report.n_total, repair_report.invalid_reasons,
+            path,
+            repair_report.n_invalid,
+            repair_report.n_total,
+            repair_report.invalid_reasons,
         )
     try:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -276,14 +279,20 @@ def _gwa_crs_for(key: str, path: Path, wind_layers: dict[str, Path]):
         height = key.rsplit("_", 1)[-1]
         sibling = wind_layers.get(f"wind_speed_{height}")
         if sibling is None:
-            raise MissingSourceCrsError(f"{path}: no CRS and no wind-speed sibling at {height} to take it from")
+            raise MissingSourceCrsError(
+                f"{path}: no CRS and no wind-speed sibling at {height} to take it from"
+            )
         with rasterio.open(sibling) as sib:
             if sib.crs is None or sib.transform != own.transform or sib.shape != own.shape:
-                raise MissingSourceCrsError(f"{path}: no CRS and the {height} wind-speed sibling is not on the same grid")
+                raise MissingSourceCrsError(
+                    f"{path}: no CRS and the {height} wind-speed sibling is not on the same grid"
+                )
             return sib.crs
 
 
-def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs) -> GridAlignmentResult:
+def run_grid_alignment_phase(
+    context: PhaseContext, inputs: GridAlignmentInputs
+) -> GridAlignmentResult:
     """Reproject every input layer onto one reference grid for `context.country_code`.
 
     Parameter order matches data_quality_audit's run_audit_phase(context,
@@ -340,7 +349,9 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
     # Fixed resolution (M-F2a-01), from settings.yaml's geospatial.resolutions.suitability.
     resolution_deg = float(inputs.resolution_deg)
 
-    grid = build_reference_grid(inputs.country_gdf, resolution_deg, nesting_pixels=CELL_NESTING_PIXELS)
+    grid = build_reference_grid(
+        inputs.country_gdf, resolution_deg, nesting_pixels=CELL_NESTING_PIXELS
+    )
     aligned: dict[str, Path | None] = {}
 
     with timer("elevation", timings), gdal_quiet():
@@ -386,7 +397,10 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
             out = _execute_or_load(
                 f"wind_{key}",
                 lambda wind_src=wind_src, key=key: reproject_to_grid(
-                    wind_src, _path(f"wind_{key}"), grid, src_crs=_gwa_crs_for(key, wind_src, inputs.wind_layers)
+                    wind_src,
+                    _path(f"wind_{key}"),
+                    grid,
+                    src_crs=_gwa_crs_for(key, wind_src, inputs.wind_layers),
                 ),
                 _exists(wind_src),
             )
@@ -409,7 +423,10 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         aligned["land_cover_counts"] = _execute_or_load(
             "land_cover_counts",
             lambda: land_cover_class_counts(
-                inputs.land_cover_count_tiles or inputs.land_cover_tiles, _path("land_cover_counts"), grid, inputs.country_gdf
+                inputs.land_cover_count_tiles or inputs.land_cover_tiles,
+                _path("land_cover_counts"),
+                grid,
+                inputs.country_gdf,
             ),
             bool(inputs.land_cover_tiles),
         )
@@ -471,14 +488,19 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         aligned["rivers"] = _execute_or_load(
             "rivers",
             lambda: align_rivers(
-                _clipped_gdf(inputs.rivers_path, "rivers"), _path("rivers"), grid, inputs.distance_cap_km
+                _clipped_gdf(inputs.rivers_path, "rivers"),
+                _path("rivers"),
+                grid,
+                inputs.distance_cap_km,
             ),
             _exists(inputs.rivers_path),
         )
 
     for layer in ("roads", "grid", "rivers"):
         flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
-        aligned[f"{layer}_distance_capped"] = flag_path if flag_path and flag_path.exists() else None
+        aligned[f"{layer}_distance_capped"] = (
+            flag_path if flag_path and flag_path.exists() else None
+        )
 
     grid_metadata = _save_grid_metadata(context.country_code, out_dir, grid, resolution_deg)
 

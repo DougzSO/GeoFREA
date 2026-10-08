@@ -82,7 +82,9 @@ def test_grid_off_the_lattice_or_not_whole_cells_fails_loud():
     with pytest.raises(cells.GridNotOnLatticeError):
         cells.grid_cell_origin(_transform(), 10, 14)  # 14 px is not 5 x 5 cells
     with pytest.raises(cells.GridNotOnLatticeError):
-        cells.grid_cell_origin(from_origin(-9.013, 39.0, 0.01, 0.01), 10, 15)  # corner off the 0.05 lattice
+        cells.grid_cell_origin(
+            from_origin(-9.013, 39.0, 0.01, 0.01), 10, 15
+        )  # corner off the 0.05 lattice
     assert cells.grid_cell_origin(_transform(), 10, 15) == (1020, 3600 - 180)
 
 
@@ -124,7 +126,9 @@ def test_aggregation_areas_dominant_exclusion_and_candidate_filter():
     assert c00.excluded_area_km2_E1 == pytest.approx(5 * areas[:5].sum())
     c10 = df[(df.row == 1021) & (df.col == 3420)].iloc[0]
     assert c10.dominant_exclusion == "E2"
-    assert c10.eligible_area_km2 == pytest.approx(5 * areas[7:10].sum())  # 3 of 5 pixel rows eligible
+    assert c10.eligible_area_km2 == pytest.approx(
+        5 * areas[7:10].sum()
+    )  # 3 of 5 pixel rows eligible
     assert c10.cell_area_km2 == pytest.approx(5 * areas[5:10].sum())
     c01 = df[(df.row == 1020) & (df.col == 3421)].iloc[0]
     assert 0 < c01.cell_area_km2 < 5 * areas[:5].sum()  # partly inside the country: land area only
@@ -149,11 +153,20 @@ def test_resources_are_eligible_area_weighted_means_and_flags_are_eligible_share
     capped[:5, 2] = True
 
     df = cells.aggregate_to_cells(
-        t, country, elig, {"E1": ~elig}, resources={"dist_grid_km": res}, flags={"distance_capped": capped}
+        t,
+        country,
+        elig,
+        {"E1": ~elig},
+        resources={"dist_grid_km": res},
+        flags={"distance_capped": capped},
     )
     c = df[(df.row == 1020) & (df.col == 3420)].iloc[0]
 
-    assert c.dist_grid_km == pytest.approx((10 + 20 + 20) / 3, rel=1e-3)  # equal pixel areas per row
+    assert c.dist_grid_km == pytest.approx(
+        (10 + 20 + 20) / 3, rel=1e-3
+    )  # equal pixel areas per row
     assert c.distance_capped == pytest.approx(1 / 3, rel=1e-3)
     empty = df[(df.row == 1021) & (df.col == 3420)].iloc[0]
-    assert np.isnan(empty.dist_grid_km) and np.isnan(empty.distance_capped)  # no eligible area: undefined, not 0
+    assert np.isnan(empty.dist_grid_km) and np.isnan(
+        empty.distance_capped
+    )  # no eligible area: undefined, not 0

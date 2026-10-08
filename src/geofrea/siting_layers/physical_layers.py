@@ -110,6 +110,8 @@ def build_physical_layers(grid_result: GridAlignmentResult, out_dir: Path) -> di
     if missing:
         raise MissingPhysicalLayerError(f"required aligned layers missing: {', '.join(missing)}")
     return {
-        spec.name: write_physical_layer(Path(sources[spec.name]), out_dir / f"{spec.name}.tif", spec)
+        spec.name: write_physical_layer(
+            Path(sources[spec.name]), out_dir / f"{spec.name}.tif", spec
+        )
         for spec in LAYER_SPECS
     }

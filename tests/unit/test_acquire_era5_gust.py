@@ -105,7 +105,9 @@ def test_queue_and_download_timeouts_are_independent(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
-def test_download_year_once_completes_when_queue_is_slow_but_download_is_fast(tmp_path, monkeypatch):
+def test_download_year_once_completes_when_queue_is_slow_but_download_is_fast(
+    tmp_path, monkeypatch
+):
     """Full `_download_year_once()` path: a queue phase that alone would have
     exhausted a combined old-style timeout must not prevent a fast,
     complete download afterward."""
@@ -163,7 +165,11 @@ def test_download_year_with_retries_succeeds_on_second_attempt(monkeypatch):
     monkeypatch.setattr(acquire_era5_gust, "_download_year_once", flaky_then_ok)
 
     result = acquire_era5_gust._download_year_with_retries(
-        client=object(), job=acquire_era5_gust.era5.Era5Job(country="XXX"), year=2010, bbox=[0, 0, 0, 0], out_dir=Path(".")
+        client=object(),
+        job=acquire_era5_gust.era5.Era5Job(country="XXX"),
+        year=2010,
+        bbox=[0, 0, 0, 0],
+        out_dir=Path("."),
     )
     assert result == Path("fake_success.nc")
     assert calls["n"] == acquire_era5_gust.MAX_ATTEMPTS_PER_YEAR
@@ -182,7 +188,11 @@ def test_download_year_with_retries_gives_up_after_max_attempts_without_hanging(
 
     with pytest.raises(TimeoutError):
         acquire_era5_gust._download_year_with_retries(
-            client=object(), job=acquire_era5_gust.era5.Era5Job(country="XXX"), year=1996, bbox=[0, 0, 0, 0], out_dir=Path(".")
+            client=object(),
+            job=acquire_era5_gust.era5.Era5Job(country="XXX"),
+            year=1996,
+            bbox=[0, 0, 0, 0],
+            out_dir=Path("."),
         )
     # Exactly MAX_ATTEMPTS_PER_YEAR attempts -- proves it gives up rather
     # than retrying indefinitely and hanging the sequential run.
@@ -209,7 +219,11 @@ def test_one_failed_year_does_not_abort_the_rest_of_the_country(monkeypatch):
     for year in (1995, 1996, 1997):
         try:
             results[year] = acquire_era5_gust._download_year_with_retries(
-                client=object(), job=acquire_era5_gust.era5.Era5Job(country="XXX"), year=year, bbox=[0, 0, 0, 0], out_dir=Path(".")
+                client=object(),
+                job=acquire_era5_gust.era5.Era5Job(country="XXX"),
+                year=year,
+                bbox=[0, 0, 0, 0],
+                out_dir=Path("."),
             )
         except TimeoutError:
             results[year] = None
@@ -288,7 +302,9 @@ def test_queue_phase_stuck_in_accepted_forever_is_interrupted_by_watchdog(monkey
 
 
 @pytest.mark.unit
-def test_download_year_with_retries_recovers_from_a_request_stuck_forever_in_accepted(monkeypatch, tmp_path):
+def test_download_year_with_retries_recovers_from_a_request_stuck_forever_in_accepted(
+    monkeypatch, tmp_path
+):
     """Same stuck-forever scenario, through the full retry path: attempt
     1 stalls in "accepted" past QUEUE_TIMEOUT_S, attempt 2 succeeds --
     the retry policy must engage exactly as it does for an ordinary
@@ -360,7 +376,9 @@ def test_registry_round_trips_permanently_failed_years_through_json(tmp_path):
     path = tmp_path / "era5_registry.json"
     registry.save(path)
     reloaded = Era5Registry.load(path)
-    assert reloaded.entries["era5/BRA/fg10"].permanently_failed_years == {"1996": "TimeoutError: stalled"}
+    assert reloaded.entries["era5/BRA/fg10"].permanently_failed_years == {
+        "1996": "TimeoutError: stalled"
+    }
 
 
 @pytest.mark.unit

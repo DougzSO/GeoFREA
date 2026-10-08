@@ -293,9 +293,7 @@ def get_mainland_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         Single-row GeoDataFrame with the largest polygon, in EPSG:4326.
     """
     union = (
-        gdf.geometry.union_all()
-        if hasattr(gdf.geometry, "union_all")
-        else gdf.geometry.unary_union
+        gdf.geometry.union_all() if hasattr(gdf.geometry, "union_all") else gdf.geometry.unary_union
     )
 
     utm_crs = get_local_utm_crs(union)
@@ -524,9 +522,7 @@ def clip_vector_to_country(
     """
     gdf, feature_repair_report = repair_invalid_geometries(gdf)
 
-    country_in_gdf_crs = (
-        country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
-    )
+    country_in_gdf_crs = country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
     country_geom = (
         country_in_gdf_crs.geometry.union_all()
         if hasattr(country_in_gdf_crs.geometry, "union_all")
@@ -536,9 +532,7 @@ def clip_vector_to_country(
     minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
     prefiltered = gdf.cx[minx:maxx, miny:maxy]
 
-    simplified_country_geom, country_repaired = _simplify_for_intersection(
-        country_geom, gdf.crs
-    )
+    simplified_country_geom, country_repaired = _simplify_for_intersection(country_geom, gdf.crs)
 
     tree = shapely.STRtree(prefiltered.geometry.values)
     matched_positions = tree.query(simplified_country_geom, predicate="intersects")

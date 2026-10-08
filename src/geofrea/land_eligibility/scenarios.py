@@ -45,13 +45,21 @@ def scenario_composition(params: TechParameters) -> ScenarioComposition:
     for name, permissive_high in _PERMISSIVE_IS_HIGH.items():
         ranged: Ranged = getattr(params, name)
         if ranged.has_range and ranged.status == SOURCED:
-            restrictive, permissive = (ranged.low, ranged.high) if permissive_high else (ranged.high, ranged.low)
-            varied[name] = {"central": ranged.nominal, "restrictive": restrictive, "permissive": permissive}
+            restrictive, permissive = (
+                (ranged.low, ranged.high) if permissive_high else (ranged.high, ranged.low)
+            )
+            varied[name] = {
+                "central": ranged.nominal,
+                "restrictive": restrictive,
+                "permissive": permissive,
+            }
         elif ranged.has_range:
             held[name] = f"range not sourced (status {ranged.status})"
         else:
             held[name] = "no range"
-    held["min_eligible_area_km2"] = "no range" if not params.min_eligible_area_km2.has_range else "range not used"
+    held["min_eligible_area_km2"] = (
+        "no range" if not params.min_eligible_area_km2.has_range else "range not used"
+    )
     held["excluded_classes"] = "categorical: one central level"
     held["iucn_categories"] = "categorical: one central level"
     return ScenarioComposition(varied, held)
@@ -68,24 +76,35 @@ def scenario_sets(params: TechParameters) -> dict[str, ParameterSet]:
     return sets
 
 
-def check_scenario_order(technology: str, cells_by_scenario: dict[str, pd.DataFrame], tolerance_km2: float = 1e-6) -> None:
+def check_scenario_order(
+    technology: str, cells_by_scenario: dict[str, pd.DataFrame], tolerance_km2: float = 1e-6
+) -> None:
     """Eligible area per cell: restrictive <= central <= permissive (V-03 for the scenarios).
 
     Raises:
         LandScenarioError: a cell violates the order, or the scenarios do not hold the same cells.
     """
-    area = {s: df.set_index("cell_id")["eligible_area_km2"].sort_index() for s, df in cells_by_scenario.items()}
+    area = {
+        s: df.set_index("cell_id")["eligible_area_km2"].sort_index()
+        for s, df in cells_by_scenario.items()
+    }
     ref = area["central"].index
     for scenario, series in area.items():
         if not series.index.equals(ref):
-            raise LandScenarioError(f"{technology}: scenario {scenario!r} does not hold the same cells as central")
+            raise LandScenarioError(
+                f"{technology}: scenario {scenario!r} does not hold the same cells as central"
+            )
     low, mid, high = area["restrictive"], area["central"], area["permissive"]
     bad = ((low > mid + tolerance_km2) | (mid > high + tolerance_km2)).sum()
     if bad:
-        raise LandScenarioError(f"{technology}: {int(bad)} cells violate restrictive <= central <= permissive eligible area")
+        raise LandScenarioError(
+            f"{technology}: {int(bad)} cells violate restrictive <= central <= permissive eligible area"
+        )
 
 
-def candidate_stability(cells_by_scenario: dict[str, pd.DataFrame], min_eligible_area_km2: float) -> pd.DataFrame:
+def candidate_stability(
+    cells_by_scenario: dict[str, pd.DataFrame], min_eligible_area_km2: float
+) -> pd.DataFrame:
     """Per cell that is a candidate in at least one scenario: eligible area per scenario and how often it is a candidate.
 
     Columns: `cell_id`, `area_km2_<scenario>`, `candidate_<scenario>` (bool), `n_scenarios` (scenarios in which the cell is a
@@ -94,11 +113,15 @@ def candidate_stability(cells_by_scenario: dict[str, pd.DataFrame], min_eligible
     scenarios = list(cells_by_scenario)
     table = None
     for scenario, df in cells_by_scenario.items():
-        part = df[["cell_id", "eligible_area_km2"]].rename(columns={"eligible_area_km2": f"area_km2_{scenario}"})
+        part = df[["cell_id", "eligible_area_km2"]].rename(
+            columns={"eligible_area_km2": f"area_km2_{scenario}"}
+        )
         table = part if table is None else table.merge(part, on="cell_id", how="outer")
     assert table is not None
     for scenario in scenarios:
-        table[f"candidate_{scenario}"] = table[f"area_km2_{scenario}"].fillna(0.0) >= min_eligible_area_km2
+        table[f"candidate_{scenario}"] = (
+            table[f"area_km2_{scenario}"].fillna(0.0) >= min_eligible_area_km2
+        )
     flags = [f"candidate_{s}" for s in scenarios]
     table["n_scenarios"] = table[flags].sum(axis=1).astype("int64")
     table["share_of_scenarios"] = table["n_scenarios"] / len(scenarios)

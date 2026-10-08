@@ -150,21 +150,15 @@ def test_fetch_borders_network_error_falls_back_to_none_when_naturalearth_unavai
     # docstring) — this confirms the real behavior in this environment:
     # GADM failure with no optional fallback package installed yields
     # None, not a crash.
-    monkeypatch.setattr(
-        gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down"))
-    )
+    monkeypatch.setattr(gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down")))
     monkeypatch.delitem(sys.modules, "geodatasets", raising=False)
 
     assert gadm.fetch_borders(tmp_path, "PRT") is None
 
 
 @pytest.mark.unit
-def test_fetch_borders_falls_back_to_naturalearth_when_geodatasets_available(
-    tmp_path, monkeypatch
-):
-    monkeypatch.setattr(
-        gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down"))
-    )
+def test_fetch_borders_falls_back_to_naturalearth_when_geodatasets_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down")))
 
     # Fake a minimal 'geodatasets' module exposing get_path(), pointing
     # at a tiny local GeoJSON shaped like NaturalEarth's real output
@@ -192,14 +186,12 @@ def test_fetch_borders_falls_back_to_naturalearth_when_geodatasets_available(
 def test_fetch_borders_naturalearth_fallback_returns_none_for_unmatched_country(
     tmp_path, monkeypatch
 ):
-    monkeypatch.setattr(
-        gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down"))
-    )
+    monkeypatch.setattr(gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down")))
 
     world_path = tmp_path / "fake_naturalearth.geojson"
-    gpd.GeoDataFrame(
-        {"iso_a3": ["ESP"]}, geometry=[box(-3, 40, -2, 41)], crs="EPSG:4326"
-    ).to_file(world_path, driver="GeoJSON")
+    gpd.GeoDataFrame({"iso_a3": ["ESP"]}, geometry=[box(-3, 40, -2, 41)], crs="EPSG:4326").to_file(
+        world_path, driver="GeoJSON"
+    )
     fake_geodatasets = types.ModuleType("geodatasets")
     fake_geodatasets.get_path = lambda name: str(world_path)
     monkeypatch.setitem(sys.modules, "geodatasets", fake_geodatasets)
@@ -261,18 +253,14 @@ def test_fetch_borders_falls_back_to_any_shp_when_no_level0_present(tmp_path, mo
 def test_fetch_admin1_returns_none_when_gadm_itself_fails(tmp_path, monkeypatch):
     # admin1 has no NaturalEarth-equivalent fallback (see module
     # docstring) — GADM failing entirely must yield None directly.
-    monkeypatch.setattr(
-        gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down"))
-    )
+    monkeypatch.setattr(gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down")))
 
     assert gadm.fetch_admin1(tmp_path, "PRT") is None
 
 
 @pytest.mark.unit
 def test_fetch_borders_naturalearth_fallback_reports_load_failure_as_none(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down"))
-    )
+    monkeypatch.setattr(gadm, "get_with_retry", Mock(side_effect=requests.ConnectionError("down")))
     fake_geodatasets = types.ModuleType("geodatasets")
     fake_geodatasets.get_path = lambda name: str(tmp_path / "does_not_exist.geojson")
     monkeypatch.setitem(sys.modules, "geodatasets", fake_geodatasets)
@@ -356,7 +344,9 @@ def _write_country_with_island(tmp_path):
     mainland, island = box(0, 0, 4, 4), box(10, 10, 10.5, 10.5)
     level0 = tmp_path / "raw" / "gadm41_PRT_0.shp"
     level0.parent.mkdir(parents=True)
-    gpd.GeoDataFrame({"GID_0": ["PRT"]}, geometry=[mainland.union(island)], crs="EPSG:4326").to_file(level0)
+    gpd.GeoDataFrame(
+        {"GID_0": ["PRT"]}, geometry=[mainland.union(island)], crs="EPSG:4326"
+    ).to_file(level0)
     level1 = tmp_path / "raw" / "gadm41_PRT_1.shp"
     gpd.GeoDataFrame(
         {"NAME_1": ["Continente", "Ilha"]}, geometry=[box(0, 0, 2, 2), island], crs="EPSG:4326"

@@ -25,7 +25,10 @@ def _dense_circle(cx: float, cy: float, radius: float, n_points: int) -> Polygon
     """A polygon with `n_points` vertices — stands in for a real, vertex-dense boundary."""
     return Polygon(
         [
-            (cx + radius * math.cos(2 * math.pi * i / n_points), cy + radius * math.sin(2 * math.pi * i / n_points))
+            (
+                cx + radius * math.cos(2 * math.pi * i / n_points),
+                cy + radius * math.sin(2 * math.pi * i / n_points),
+            )
             for i in range(n_points)
         ]
     )
@@ -146,9 +149,7 @@ def test_clip_vector_to_country_matches_by_position_not_by_pandas_label():
 @pytest.mark.unit
 def test_clip_vector_to_country_reprojects_when_crs_differs():
     country_gdf = gpd.GeoDataFrame(geometry=[_square(-8.0, 39.0, 1.0)], crs="EPSG:4326")
-    gdf = gpd.GeoDataFrame(geometry=[_square(-8.0, 39.0, 0.2)], crs="EPSG:4326").to_crs(
-        "EPSG:3857"
-    )
+    gdf = gpd.GeoDataFrame(geometry=[_square(-8.0, 39.0, 0.2)], crs="EPSG:4326").to_crs("EPSG:3857")
 
     clipped, _repair = clip_vector_to_country(gdf, country_gdf)
 
@@ -164,7 +165,9 @@ def test_simplify_for_intersection_reduces_vertices_for_geographic_crs():
     dense = _dense_circle(0.0, 0.0, radius=1.0, n_points=5000)
     assert shapely.get_num_coordinates(dense) > 4900
 
-    simplified, _repaired = _simplify_for_intersection(dense, gpd.GeoSeries([dense], crs="EPSG:4326").crs)
+    simplified, _repaired = _simplify_for_intersection(
+        dense, gpd.GeoSeries([dense], crs="EPSG:4326").crs
+    )
 
     n = shapely.get_num_coordinates(simplified)
     assert 0 < n < 500  # drastic reduction at 0.001deg tolerance on a 1deg-radius circle
@@ -194,7 +197,9 @@ def test_simplify_for_intersection_repairs_invalid_geometry_before_simplifying()
     bowtie = Polygon([(0, 0), (1, 1), (1, 0), (0, 1), (0, 0)])
     assert not shapely.is_valid(bowtie)
 
-    result, repaired = _simplify_for_intersection(bowtie, gpd.GeoSeries([bowtie], crs="EPSG:4326").crs)
+    result, repaired = _simplify_for_intersection(
+        bowtie, gpd.GeoSeries([bowtie], crs="EPSG:4326").crs
+    )
 
     assert shapely.is_valid(result)
     assert repaired is True
@@ -207,7 +212,9 @@ def test_clip_vector_to_country_with_vertex_dense_boundary_still_matches_correct
     # stand-in to keep the test fast) must still correctly include
     # inside features, exclude far-away ones, and cut crossing ones,
     # despite the boundary being simplified internally.
-    country_gdf = gpd.GeoDataFrame(geometry=[_dense_circle(0.0, 0.0, radius=1.0, n_points=3000)], crs="EPSG:4326")
+    country_gdf = gpd.GeoDataFrame(
+        geometry=[_dense_circle(0.0, 0.0, radius=1.0, n_points=3000)], crs="EPSG:4326"
+    )
 
     inside = _square(0.0, 0.0, 0.2)
     crossing = _square(0.95, 0.0, 0.3)
@@ -436,5 +443,10 @@ def test_utm_zone_of_a_very_large_layer_comes_from_its_bounding_box_not_from_a_u
     import geofrea.core.geo_utils as gu
 
     monkeypatch.setattr(gu, "_UTM_UNION_MAX_FEATURES", 2)
-    gdf = gpd.GeoDataFrame(geometry=[box(-9, 38, -8.9, 38.1), box(-8.5, 38.5, -8.4, 38.6), box(-8, 39, -7.9, 39.1)], crs="EPSG:4326")
-    assert gu.get_local_utm_crs(gdf) == "EPSG:32629"  # bbox centre (-8.45, 38.55) lies in zone 29 north
+    gdf = gpd.GeoDataFrame(
+        geometry=[box(-9, 38, -8.9, 38.1), box(-8.5, 38.5, -8.4, 38.6), box(-8, 39, -7.9, 39.1)],
+        crs="EPSG:4326",
+    )
+    assert (
+        gu.get_local_utm_crs(gdf) == "EPSG:32629"
+    )  # bbox centre (-8.45, 38.55) lies in zone 29 north

@@ -29,7 +29,9 @@ class _OpenRow(_Row):
 
 
 def _df() -> pd.DataFrame:
-    return pd.DataFrame({"cell_id": [1, 2], "value": [0.5, 1.5], "label": pd.array(["a", None], dtype="string")})
+    return pd.DataFrame(
+        {"cell_id": [1, 2], "value": [0.5, 1.5], "label": pd.array(["a", None], dtype="string")}
+    )
 
 
 @pytest.mark.unit

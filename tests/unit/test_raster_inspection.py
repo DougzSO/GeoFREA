@@ -363,9 +363,7 @@ def test_inspect_land_cover_tiles_reuses_cached_tile_without_reopening_it(tmp_pa
         opened.append(str(path))
         return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(
-        "geofrea.data_quality_audit.raster_inspection.rasterio.open", _spy_open
-    )
+    monkeypatch.setattr("geofrea.data_quality_audit.raster_inspection.rasterio.open", _spy_open)
 
     second = inspect_land_cover_tiles([tile], country_gdf=country_gdf, cache_dir=cache_dir)
 
@@ -523,9 +521,7 @@ def test_inspect_land_cover_tiles_warns_when_no_tile_overlaps(tmp_path, caplog):
         res=0.01,
     )
 
-    with caplog.at_level(
-        logging.WARNING, logger="geofrea.data_quality_audit.raster_inspection"
-    ):
+    with caplog.at_level(logging.WARNING, logger="geofrea.data_quality_audit.raster_inspection"):
         result = inspect_land_cover_tiles([far_path], country_gdf=_covering_gdf())
 
     assert result["tiles_used"] == 0
@@ -550,9 +546,7 @@ def test_stats_chunked_matches_expected_stats_across_multiple_chunks(tmp_path, m
     monkeypatch.setattr(raster_inspection, "_CHUNK_ROWS", 3)  # forces 4 chunks over 10 rows
 
     country_gdf = gpd.GeoDataFrame(
-        geometry=[
-            box(_ORIGIN_LON, _ORIGIN_LAT - 10 * _RES, _ORIGIN_LON + 4 * _RES, _ORIGIN_LAT)
-        ],
+        geometry=[box(_ORIGIN_LON, _ORIGIN_LAT - 10 * _RES, _ORIGIN_LON + 4 * _RES, _ORIGIN_LAT)],
         crs="EPSG:4326",
     )
 
@@ -672,9 +666,7 @@ def test_country_window_matches_country_bbox(tmp_path):
 
     # Top-left half of the raster only.
     half_gdf = gpd.GeoDataFrame(
-        geometry=[
-            box(_ORIGIN_LON, _ORIGIN_LAT - 5 * _RES, _ORIGIN_LON + 10 * _RES, _ORIGIN_LAT)
-        ],
+        geometry=[box(_ORIGIN_LON, _ORIGIN_LAT - 5 * _RES, _ORIGIN_LON + 10 * _RES, _ORIGIN_LAT)],
         crs="EPSG:4326",
     )
 
@@ -725,7 +717,10 @@ def test_mask_raster_by_polygon_raises_memory_error_when_window_exceeds_budget(
     # real, not simulated.
     monkeypatch.setattr(raster_inspection, "_WINDOWED_READ_MAX_BYTES", 399)
 
-    with rasterio.open(path) as src, pytest.raises(MemoryError, match="Windowed read would allocate"):
+    with (
+        rasterio.open(path) as src,
+        pytest.raises(MemoryError, match="Windowed read would allocate"),
+    ):
         _mask_raster_by_polygon(src, _covering_gdf())
 
 

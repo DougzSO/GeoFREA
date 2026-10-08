@@ -16,7 +16,9 @@ from geofrea.core.config_loader import load_countries
 from geofrea.data_acquisition.fetchers import gem_trackers
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = Path("D:/Douglas/OUTROS/CRAEI_raw_data/raw/gem/gem_global_integrated_power_tracker_{20260809}.xlsx")
+DEFAULT_SOURCE = Path(
+    "D:/Douglas/OUTROS/CRAEI_raw_data/raw/gem/gem_global_integrated_power_tracker_{20260809}.xlsx"
+)
 
 
 def main(argv: list[str]) -> int:
@@ -33,7 +35,11 @@ def main(argv: list[str]) -> int:
         print(iso, out)
     pin = gem_trackers.load_pin()
     for iso, info in pin["countries"].items():
-        print(iso, info["n_features"], {k: v["n"] for k, v in info["counts"].items() if k.endswith("operating")})
+        print(
+            iso,
+            info["n_features"],
+            {k: v["n"] for k, v in info["counts"].items() if k.endswith("operating")},
+        )
     return 0
 
 

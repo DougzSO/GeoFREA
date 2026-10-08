@@ -50,9 +50,7 @@ def _make_zip_bytes(inner_dir: str, shp_basename: str) -> bytes:
 @pytest.mark.unit
 def test_fetch_lakes_happy_path_extracts_and_returns_shp_path(tmp_path, monkeypatch):
     zip_bytes = _make_zip_bytes("HydroLAKES_polys_v10_shp", "HydroLAKES_polys_v10")
-    monkeypatch.setattr(
-        hydrosheds, "get_with_retry", Mock(return_value=Mock(content=zip_bytes))
-    )
+    monkeypatch.setattr(hydrosheds, "get_with_retry", Mock(return_value=Mock(content=zip_bytes)))
 
     result = hydrosheds.fetch_lakes(tmp_path)
 
@@ -166,9 +164,7 @@ def test_fetch_rivers_happy_path_uses_correct_region_tile(
 @pytest.mark.unit
 def test_fetch_rivers_idempotent_skips_everything_if_already_extracted(tmp_path, monkeypatch):
     extract_dir = (
-        paths.fetched_raw("hydrosheds", "PRT")
-        / "HydroRIVERS_v10_eu_shp"
-        / "HydroRIVERS_v10_eu_shp"
+        paths.fetched_raw("hydrosheds", "PRT") / "HydroRIVERS_v10_eu_shp" / "HydroRIVERS_v10_eu_shp"
     )
     extract_dir.mkdir(parents=True)
     shp_path = extract_dir / "HydroRIVERS_v10_eu.shp"

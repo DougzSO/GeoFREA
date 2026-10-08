@@ -302,7 +302,11 @@ class AcquiredLayer(BaseModel):
                     f"AcquiredLayer(layer_name={self.layer_name!r}): "
                     "resolution_status='failed' requires error_type to be set."
                 )
-        elif self.error_type is not None or self.error_location is not None or self.error_message is not None:
+        elif (
+            self.error_type is not None
+            or self.error_location is not None
+            or self.error_message is not None
+        ):
             raise ValueError(
                 f"AcquiredLayer(layer_name={self.layer_name!r}): error_type/"
                 "error_location/error_message must be None unless "

@@ -128,8 +128,18 @@ def test_rasters_are_written_as_cog_with_values_tags_and_nodata_unchanged(tmp_pa
     data = np.arange(60 * 70, dtype="float32").reshape(60, 70)
     data[0, 0] = -9999.0
     with safe_raster_write(
-        out_path, driver="GTiff", height=60, width=70, count=1, dtype="float32", crs="EPSG:4326", transform=transform,
-        nodata=-9999.0, blockxsize=256, blockysize=256, predictor=3,
+        out_path,
+        driver="GTiff",
+        height=60,
+        width=70,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
+        blockxsize=256,
+        blockysize=256,
+        predictor=3,
     ) as dst:
         dst.write(data, 1)
         dst.update_tags(layer="x", units="km")
@@ -148,7 +158,9 @@ def test_failed_raster_write_leaves_no_partial_file(tmp_path):
     out_path = tmp_path / "bad.tif"
     with (
         pytest.raises(RuntimeError, match="boom"),
-        safe_raster_write(out_path, driver="GTiff", height=2, width=2, count=1, dtype="float32") as dst,
+        safe_raster_write(
+            out_path, driver="GTiff", height=2, width=2, count=1, dtype="float32"
+        ) as dst,
     ):
         dst.write(np.ones((2, 2), dtype="float32"), 1)
         raise RuntimeError("boom")
@@ -164,7 +176,9 @@ def test_gdal_quiet_is_a_safe_noop_context_manager():
 
 
 @pytest.mark.unit
-def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(tmp_path, monkeypatch):
+def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(
+    tmp_path, monkeypatch
+):
     from geofrea.core import raster_io
 
     real_open, calls = rasterio.open, []
@@ -187,7 +201,9 @@ def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(t
 
 
 @pytest.mark.unit
-def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_waits(tmp_path, monkeypatch):
+def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_waits(
+    tmp_path, monkeypatch
+):
     from geofrea.core import raster_io
 
     attempts = []
@@ -198,7 +214,10 @@ def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_wa
 
     monkeypatch.setattr(raster_io.rasterio, "open", always)
     monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0))
-    with pytest.raises(rasterio.errors.RasterioIOError), safe_raster_write(tmp_path / "o.tif", driver="GTiff"):
+    with (
+        pytest.raises(rasterio.errors.RasterioIOError),
+        safe_raster_write(tmp_path / "o.tif", driver="GTiff"),
+    ):
         pass
     assert len(attempts) == 3  # first try + two retries
 
@@ -209,6 +228,9 @@ def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_wa
         raise rasterio.errors.RasterioIOError("no such file")
 
     monkeypatch.setattr(raster_io.rasterio, "open", other)
-    with pytest.raises(rasterio.errors.RasterioIOError), safe_raster_write(tmp_path / "o2.tif", driver="GTiff"):
+    with (
+        pytest.raises(rasterio.errors.RasterioIOError),
+        safe_raster_write(tmp_path / "o2.tif", driver="GTiff"),
+    ):
         pass
     assert len(attempts) == 1

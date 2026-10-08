@@ -47,8 +47,6 @@ def wgs84_km_per_degree(lat_deg):
         - 0.0023 * np.cos(6 * lat_rad)
     ) / 1000.0
     lon_km_per_deg = (
-        111412.84 * np.cos(lat_rad)
-        - 93.50 * np.cos(3 * lat_rad)
-        + 0.118 * np.cos(5 * lat_rad)
+        111412.84 * np.cos(lat_rad) - 93.50 * np.cos(3 * lat_rad) + 0.118 * np.cos(5 * lat_rad)
     ) / 1000.0
     return lat_km_per_deg, lon_km_per_deg

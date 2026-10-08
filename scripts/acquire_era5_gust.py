@@ -165,13 +165,9 @@ class _TimingCapture:
 
     def report(self) -> tuple[float | None, float | None]:
         queue_s = (
-            self.running_at - self.accepted_at
-            if self.accepted_at and self.running_at
-            else None
+            self.running_at - self.accepted_at if self.accepted_at and self.running_at else None
         )
-        processing_s = (
-            self.done_at - self.running_at if self.running_at and self.done_at else None
-        )
+        processing_s = self.done_at - self.running_at if self.running_at and self.done_at else None
         return queue_s, processing_s
 
 
@@ -392,7 +388,11 @@ def main() -> None:
 
             expected_path = global_dir / f"{country}_fg10_hourly_bbox_{year}.nc"
             recorded_hash = year_sha256.get(str(year))
-            if recorded_hash and expected_path.exists() and sha256_file(expected_path) == recorded_hash:
+            if (
+                recorded_hash
+                and expected_path.exists()
+                and sha256_file(expected_path) == recorded_hash
+            ):
                 print(f"[skip] {job.key}/{year}: already downloaded and intact", flush=True)
                 year_paths.append(expected_path)
                 continue
@@ -490,7 +490,10 @@ def main() -> None:
             # tiny checkpoint survives a kill; log shows i/N + ETA.
             country_dir = core_paths.fetched_raw("era5", country)
             reduced_path = country_dir / f"{country}_fg10_annual_max.nc"
-            print(f"[annual-start] {job.key}: per-year reduction of {len(year_paths)} files", flush=True)
+            print(
+                f"[annual-start] {job.key}: per-year reduction of {len(year_paths)} files",
+                flush=True,
+            )
             cells_before, cells_after = era5.write_annual_maxima_incremental(
                 year_paths=year_paths,
                 country_polygon_path=border_path,
@@ -499,7 +502,10 @@ def main() -> None:
                 label=country,
             )
             with xr.open_dataset(reduced_path) as _check:  # re-validate the final product
-                if "fg10" not in _check.data_vars or _check.sizes.get("year", 0) != expected_year_count:
+                if (
+                    "fg10" not in _check.data_vars
+                    or _check.sizes.get("year", 0) != expected_year_count
+                ):
                     raise OSError(
                         f"{reduced_path}: reduced product missing data or wrong 'year' dim "
                         f"(expected {expected_year_count})"
@@ -512,7 +518,9 @@ def main() -> None:
             grid = era5.read_native_grid(reduced_path)
             print(f"[crop] {job.key}: {cells_before} -> {cells_after} cells", flush=True)
         except Exception as exc:  # noqa: BLE001 -- recorded as "missing" below
-            print(f"[FAILED] {job.key}: post-download step: {type(exc).__name__}: {exc}", flush=True)
+            print(
+                f"[FAILED] {job.key}: post-download step: {type(exc).__name__}: {exc}", flush=True
+            )
             registry.entries[job.key] = Era5RegistryEntry(
                 country_code=country,
                 status="missing",
@@ -573,7 +581,10 @@ def main() -> None:
     for key, entry in sorted(registry.entries.items()):
         if entry.permanently_failed_years:
             if not any_permanent_failures:
-                print("\nPermanently failed (country, year) pairs -- manual resume needed:", flush=True)
+                print(
+                    "\nPermanently failed (country, year) pairs -- manual resume needed:",
+                    flush=True,
+                )
                 any_permanent_failures = True
             for year, reason in sorted(entry.permanently_failed_years.items()):
                 print(f"  {entry.country_code}/{year}: {reason}", flush=True)

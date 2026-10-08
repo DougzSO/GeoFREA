@@ -33,7 +33,9 @@ def test_every_layer_matches_the_frozen_fixture(fresh):
         name = key.replace("__", "/")
         want, got = frozen[key], fresh[name]
         assert got.shape == want.shape, name
-        if np.array_equal(want, want.astype(np.uint8)):  # binary / integer-valued (classes, flags, masks)
+        if np.array_equal(
+            want, want.astype(np.uint8)
+        ):  # binary / integer-valued (classes, flags, masks)
             np.testing.assert_array_equal(got, want, err_msg=name)
         else:
             np.testing.assert_allclose(got, want, rtol=1e-6, atol=0.0, err_msg=name)

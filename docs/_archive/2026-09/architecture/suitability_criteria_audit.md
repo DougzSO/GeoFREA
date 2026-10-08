@@ -74,8 +74,15 @@ Convenção: `snake_case`, sem código de país no filename (país está no path
 ### 2c. Retorno em memória (L1079-1087)
 
 ```python
-{"country_code": str, "criteria": Dict[str, np.ndarray], "tif_dir": Path,
- "fig_dir": Path, "report_dir": Path, "n_criteria": int, "timestamp": str}
+{
+    "country_code": str,
+    "criteria": Dict[str, np.ndarray],
+    "tif_dir": Path,
+    "fig_dir": Path,
+    "report_dir": Path,
+    "n_criteria": int,
+    "timestamp": str,
+}
 ```
 
 Validado por `CriteriaResult` (`schemas.py` L516). Invariante `n_criteria == len(criteria)` (L547). **`criteria` carrega arrays numpy inteiros, persistido via pickle** — artefato pesado, redundante com os `.tif`. Ver §7 (D6).
@@ -313,9 +320,9 @@ Demais parâmetros da fase — **no mesmo bloco `criteria`**, herdados do legado
 ```python
 class CriterionLayer(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: str                       # ∈ os 14 nomes canônicos
-    tif_path: Path                  # outputs/{ISO3}/suitability_criteria/tif/{name}.tif
-    figure_path: Path | None        # None se skip_maps
+    name: str  # ∈ os 14 nomes canônicos
+    tif_path: Path  # outputs/{ISO3}/suitability_criteria/tif/{name}.tif
+    figure_path: Path | None  # None se skip_maps
     # (campo `kind` REMOVIDO — DECISIONS.md 2026-09-10 ponto 6)
     valid_pixels: int
     mean: float
@@ -323,14 +330,16 @@ class CriterionLayer(BaseModel):
     p10: float
     p50: float
     p90: float
-    frac_ge_0_6: float              # fração com score >= 0.6 (métrica do log legado)
+    frac_ge_0_6: float  # fração com score >= 0.6 (métrica do log legado)
+
 
 class SuitabilityCriteriaSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
     n_criteria: int
-    missing_expected: list[str]     # dos 14 esperados, os não gerados
-    protected_source: Literal["wdpa", "assumed_free"]   # replica L458-459
-    grid_metadata: GridMetadata     # ecoado de grid_alignment, prova de mesma grade
+    missing_expected: list[str]  # dos 14 esperados, os não gerados
+    protected_source: Literal["wdpa", "assumed_free"]  # replica L458-459
+    grid_metadata: GridMetadata  # ecoado de grid_alignment, prova de mesma grade
+
 
 class SuitabilityCriteriaResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -339,8 +348,8 @@ class SuitabilityCriteriaResult(BaseModel):
     tif_dir: Path
     figure_dir: Path
     report_path: Path
-    criteria: dict[str, CriterionLayer]   # keyed por name; SEM arrays numpy (D6)
-    slope_degrees_tif: Path | None        # artefato cartográfico à parte, fora de `criteria`
+    criteria: dict[str, CriterionLayer]  # keyed por name; SEM arrays numpy (D6)
+    slope_degrees_tif: Path | None  # artefato cartográfico à parte, fora de `criteria`
     summary: SuitabilityCriteriaSummary
 
     @model_validator(mode="after")

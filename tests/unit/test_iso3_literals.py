@@ -89,7 +89,7 @@ def test_no_iso3_literals_in_src() -> None:
                 is_triple_quoted = token.string.startswith(('"""', "'''"))
 
                 # Look back to see if this follows a function/class definition
-                prev_tokens = tokens[max(0, i-5):i]
+                prev_tokens = tokens[max(0, i - 5) : i]
                 follows_def = any(
                     t.string in ("def", "class")
                     for t in prev_tokens
@@ -123,15 +123,15 @@ def test_no_iso3_literals_in_src() -> None:
                     continue
 
                 # Remove quotes (handle both single and double quotes, and raw/f-strings)
-                if string_value.startswith(('r"', 'r\'', 'f"', 'f\'', 'rf"', 'rf\'')):
+                if string_value.startswith(('r"', "r'", 'f"', "f'", 'rf"', "rf'")):
                     # Remove prefix like r, f, rf
-                    string_value = string_value.lstrip('rfRF')
-                if string_value.startswith(('"', '\'')):
+                    string_value = string_value.lstrip("rfRF")
+                if string_value.startswith(('"', "'")):
                     string_value = string_value[1:-1]  # Remove surrounding quotes
 
                 # Now check if any ISO3 code appears in this string value
                 for code in iso3_codes:
-                    if re.search(r'\b' + re.escape(code) + r'\b', string_value):
+                    if re.search(r"\b" + re.escape(code) + r"\b", string_value):
                         violations.append(
                             f"{py_file.relative_to(src_dir)}:{token.start[0]}: "
                             f"ISO3 literal '{code}' found in string (move to config/countries.yaml per A-05)\n"

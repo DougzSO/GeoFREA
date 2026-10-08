@@ -196,9 +196,7 @@ class CrsAssumptionMismatchError(RuntimeError):
     """
 
 
-def _effective_crs(
-    src: rasterio.DatasetReader, assume_crs_from: Path | None
-) -> rasterio.crs.CRS:
+def _effective_crs(src: rasterio.DatasetReader, assume_crs_from: Path | None) -> rasterio.crs.CRS:
     """Resolve the CRS to use for `src`, assigning one only from an exact-match reference.
 
     Never mutates or rewrites `src`'s own file — the returned CRS is
@@ -343,7 +341,9 @@ def _stats_chunked(
     behavior through the shared helper, not changing it, is the point.
     """
     try:
-        geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
+        geom_in_src_crs = country_gdf.to_crs(
+            effective_crs if effective_crs is not None else src.crs
+        )
         shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
         transform = src.transform
         nodata = src.nodata
@@ -450,7 +450,9 @@ def _stats_all_bands(
     caller falls back to the (band-1, chunked) path and says so.
     """
     if country_gdf is not None:
-        geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
+        geom_in_src_crs = country_gdf.to_crs(
+            effective_crs if effective_crs is not None else src.crs
+        )
         window = _country_window(geom_in_src_crs.total_bounds, src.transform, src.width, src.height)
         shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
     else:
@@ -462,7 +464,9 @@ def _stats_all_bands(
         return None
     win_transform = src.window_transform(window)
     if shapes is not None:
-        poly_mask = geometry_mask(shapes, out_shape=(height, width), transform=win_transform, invert=True)
+        poly_mask = geometry_mask(
+            shapes, out_shape=(height, width), transform=win_transform, invert=True
+        )
     else:
         poly_mask = np.ones((height, width), dtype=bool)
 
@@ -557,7 +561,9 @@ def inspect_raster(
             # masking (below) — with no country_gdf, the full file is
             # read as-is and a missing CRS is harmless, so resolution
             # (and its fail-loud check) is skipped entirely in that case.
-            effective_crs = _effective_crs(src, assume_crs_from) if country_gdf is not None else src.crs
+            effective_crs = (
+                _effective_crs(src, assume_crs_from) if country_gdf is not None else src.crs
+            )
             result["crs"] = str(effective_crs)
             result["resolution"] = round(abs(src.res[0]), 8)
             result["global_shape"] = (src.height, src.width)
@@ -596,8 +602,7 @@ def inspect_raster(
                     stats, transform = _stats_chunked(src, country_gdf, effective_crs)
                     if stats is None:
                         result["error"] = (
-                            "Failed to process raster "
-                            "(both windowed and chunked strategies failed)"
+                            "Failed to process raster (both windowed and chunked strategies failed)"
                         )
                         return result
 
@@ -718,9 +723,7 @@ def _save_land_cover_tile_cache(
             **payload,
             "cache_key": _land_cover_tile_cache_key(tile, geom_fingerprint),
         }
-        (cache_dir / f"{tile.stem}.json").write_text(
-            json.dumps(payload_with_key), encoding="utf-8"
-        )
+        (cache_dir / f"{tile.stem}.json").write_text(json.dumps(payload_with_key), encoding="utf-8")
     except OSError as exc:
         logger.warning("[land_cover] Failed to write tile cache for %s: %s", tile.name, exc)
 
@@ -874,9 +877,7 @@ def inspect_land_cover_tiles(
                             {
                                 "crs": tile_crs,
                                 "res": tile_res,
-                                "class_areas": {
-                                    str(k): v for k, v in tile_class_areas.items()
-                                },
+                                "class_areas": {str(k): v for k, v in tile_class_areas.items()},
                             },
                         )
 
@@ -931,9 +932,7 @@ def diagnose_consistency(
     alerts: list[str] = []
     not_audited: dict[str, str] = {}
 
-    crs_set = {
-        m["crs"] for m in raster_meta.values() if m.get("crs") and not m.get("error")
-    }
+    crs_set = {m["crs"] for m in raster_meta.values() if m.get("crs") and not m.get("error")}
     if len(crs_set) > 1:
         alerts.append("DIVERGENT CRS across layers — pipeline will reproject to EPSG:4326.")
 

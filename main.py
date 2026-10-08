@@ -270,7 +270,9 @@ def _build_grid_alignment_inputs(
             grid_alignment/adapter.py).
     """
     acquisition_output = context.prior_results["data_acquisition"].output
-    return acquisition_result_to_grid_alignment_inputs(acquisition_output, resolutions, distance_cap_km)
+    return acquisition_result_to_grid_alignment_inputs(
+        acquisition_output, resolutions, distance_cap_km
+    )
 
 
 _LAYER_REGISTRY_SCHEMA_VERSION = "1.1"  # bumped 2026-09-23: AcquiredLayer
@@ -346,9 +348,12 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
     for wind_key, path in result.wind_layers.items():
         context.register_artifact(f"aligned/wind_{wind_key}", path, "1.0")
     # the grid definition, as its own artifact: F4 reads only the grid, so it requires this and not the aligned layers
-    if result.grid is not None:  # absent only in a stub; the phase's `produces` makes a missing key fail loud
+    if (
+        result.grid is not None
+    ):  # absent only in a stub; the phase's `produces` makes a missing key fail loud
         grid_definition = write_reference_grid_artifact(
-            result.grid, context.outputs_dir / context.country_code / "artifacts" / "reference_grid.json"
+            result.grid,
+            context.outputs_dir / context.country_code / "artifacts" / "reference_grid.json",
         )
         context.register_artifact("reference_grid", grid_definition, "1.0")
 
@@ -508,7 +513,11 @@ def _build_phase_specs(
             run=siting_layers_run,
             requires=frozenset(
                 {"audit_report", "aligned/grid", "aligned/roads", "aligned/solar"}
-                | {f"aligned/wind_{product}_{h}m" for product in ("weibull_a", "weibull_k", "air_density") for h in (100, 150, 200)}
+                | {
+                    f"aligned/wind_{product}_{h}m"
+                    for product in ("weibull_a", "weibull_k", "air_density")
+                    for h in (100, 150, 200)
+                }
             ),
             produces=frozenset({"siting_layers"}),
             summarize=lambda out: f"{len(out.layers)} physical-unit layers",
@@ -519,9 +528,15 @@ def _build_phase_specs(
             run=land_eligibility_run,
             requires=frozenset(
                 {
-                    "siting_layers", "layer_registry", "audit_report",
-                    "aligned/land_cover_counts", "aligned/slope_counts", "aligned/population",
-                    "aligned/grid", "aligned/grid_distance_capped", "aligned/roads_distance_capped",
+                    "siting_layers",
+                    "layer_registry",
+                    "audit_report",
+                    "aligned/land_cover_counts",
+                    "aligned/slope_counts",
+                    "aligned/population",
+                    "aligned/grid",
+                    "aligned/grid_distance_capped",
+                    "aligned/roads_distance_capped",
                 }
             ),
             produces=frozenset({"land_eligibility"}),
@@ -562,7 +577,14 @@ def _build_phase_specs(
             output_model=OverviewSummary,
             run=overview_run,
             requires=frozenset(
-                {"aligned_rasters", "siting_layers", "land_eligibility", "forcing", "forcing_masked", "hazard_context"}
+                {
+                    "aligned_rasters",
+                    "siting_layers",
+                    "land_eligibility",
+                    "forcing",
+                    "forcing_masked",
+                    "hazard_context",
+                }
             ),
             produces=frozenset({"overview"}),
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
@@ -649,15 +671,17 @@ def run_geofrea(
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
-    results = orchestrator.run(
-        _build_phase_specs(resolutions, distance_cap_km, audit_config)
-    )
+    results = orchestrator.run(_build_phase_specs(resolutions, distance_cap_km, audit_config))
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
         logger.error(
             "Run incomplete for %s: %s",
             country_code,
-            {name: results[name].status for name in target_phases if results[name].status != "success"},
+            {
+                name: results[name].status
+                for name in target_phases
+                if results[name].status != "success"
+            },
         )
     else:
         logger.info("Run completed for %s.", country_code)
@@ -732,7 +756,9 @@ def main(argv: list[str] | None = None) -> int:
     # is the separation OQ-032's verdict requires enforced at the point
     # where "every country" would otherwise silently include it.
     default_countries = [
-        c for c in parameters.countries if not countries_config.get(c, {}).get("synthetic_fixture_root")
+        c
+        for c in parameters.countries
+        if not countries_config.get(c, {}).get("synthetic_fixture_root")
     ]
     countries = [c.upper() for c in args.countries] or settings.run.countries or default_countries
     unknown = [c for c in countries if c not in countries_config]
@@ -740,14 +766,28 @@ def main(argv: list[str] | None = None) -> int:
         logger.error(
             "Requested countries %s are not present in countries.yaml (known: %s).",
             unknown,
-            sorted(c for c in countries_config if not countries_config[c].get("synthetic_fixture_root")),
+            sorted(
+                c for c in countries_config if not countries_config[c].get("synthetic_fixture_root")
+            ),
         )
         return 1
-    target_phases = [p.strip() for p in args.phases.split(",") if p.strip()] if args.phases else settings.run.target_phases
-    rerun_phases = [p.strip() for p in args.rerun.split(",") if p.strip()] if args.rerun else settings.run.rerun_phases
-    revalidate_phases = [p.strip() for p in args.revalidate.split(",") if p.strip()] if args.revalidate else []
+    target_phases = (
+        [p.strip() for p in args.phases.split(",") if p.strip()]
+        if args.phases
+        else settings.run.target_phases
+    )
+    rerun_phases = (
+        [p.strip() for p in args.rerun.split(",") if p.strip()]
+        if args.rerun
+        else settings.run.rerun_phases
+    )
+    revalidate_phases = (
+        [p.strip() for p in args.revalidate.split(",") if p.strip()] if args.revalidate else []
+    )
 
-    parameter_audit = audit_parameters(parameters, technologies, countries, settings.run.technologies)
+    parameter_audit = audit_parameters(
+        parameters, technologies, countries, settings.run.technologies
+    )
     for finding in parameter_audit.warnings:
         logger.warning("parameter contract: %s", finding)
     if args.production:

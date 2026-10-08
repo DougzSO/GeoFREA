@@ -123,7 +123,9 @@ def fetch_protected_areas(
     """
     token = _require_token(api_token)
 
-    cached = paths.fetched_raw("wdpa", country_code) / f"{country_code}_protected_areas_wdpa.geojson"
+    cached = (
+        paths.fetched_raw("wdpa", country_code) / f"{country_code}_protected_areas_wdpa.geojson"
+    )
     if _cached_collection_is_usable(cached):
         # Re-paging the whole country from the API takes hours for BRA/IND (observed 2026-10-06: IND silent for
         # over an hour) and a re-run must not change the data under a frozen run, same as fetch_gwa_product().

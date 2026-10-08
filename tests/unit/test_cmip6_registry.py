@@ -45,9 +45,7 @@ def _registered_entry(path) -> Cmip6RegistryEntry:
 @pytest.mark.unit
 def test_missing_entry_requires_a_reason_and_carries_no_file_fields():
     with pytest.raises(ValueError, match="missing_reason"):
-        Cmip6RegistryEntry(
-            model="miroc6", experiment="ssp126", variable="pr", status="missing"
-        )
+        Cmip6RegistryEntry(model="miroc6", experiment="ssp126", variable="pr", status="missing")
 
 
 @pytest.mark.unit

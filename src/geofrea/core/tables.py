@@ -57,7 +57,12 @@ def table_metadata(schema: pa.Schema, schema_version: str, row_model: type[BaseM
 
 
 def write_table(
-    df: pd.DataFrame, path: Path, *, schema_version: str, row_model: type[BaseModel], compression: str = "snappy"
+    df: pd.DataFrame,
+    path: Path,
+    *,
+    schema_version: str,
+    row_model: type[BaseModel],
+    compression: str = "snappy",
 ) -> Path:
     """Validate `df` against `row_model` and write it as Parquet with the schema version in the file metadata.
 

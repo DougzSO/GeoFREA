@@ -137,6 +137,7 @@ class DataAcquisitionLayerFailedError(RuntimeError):
         self.country_code = country_code
         self.failed_layer_names = failed_layer_names
 
+
 # layer_name -> fetch function, for the 7 layers with a real fetcher
 # wired in as of 2026-09-11 (see module docstring). Each fetcher
 # already catches its own network/parsing failures internally and
@@ -183,8 +184,8 @@ _GWA_EXTRA_LAYER_SPECS: tuple[tuple[str, str, int], ...] = tuple(
 )
 
 for _layer_name, _product, _height in _GWA_EXTRA_LAYER_SPECS:
-    _FETCHED_LAYER_HANDLERS[_layer_name] = (
-        lambda ctx, p=_product, h=_height: fetch_gwa_product(ctx.outputs_dir, ctx.country_code, p, h)
+    _FETCHED_LAYER_HANDLERS[_layer_name] = lambda ctx, p=_product, h=_height: fetch_gwa_product(
+        ctx.outputs_dir, ctx.country_code, p, h
     )
 del _layer_name, _product, _height
 
@@ -448,9 +449,23 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
         "activated 2026-09-11, see DECISIONS.md same date",
         False,
     ),
-    _LayerSpec("solar", "local_only", False, "local bundled file (global PVOUT, no confirmed automatable source)", False),
-    _LayerSpec("lakes", "fetched", False, "HydroSHEDS (HydroLAKES global file, data.hydrosheds.org)", False),
-    _LayerSpec("rivers", "fetched", False, "HydroSHEDS (HydroRIVERS regional tile, data.hydrosheds.org)", False),
+    _LayerSpec(
+        "solar",
+        "local_only",
+        False,
+        "local bundled file (global PVOUT, no confirmed automatable source)",
+        False,
+    ),
+    _LayerSpec(
+        "lakes", "fetched", False, "HydroSHEDS (HydroLAKES global file, data.hydrosheds.org)", False
+    ),
+    _LayerSpec(
+        "rivers",
+        "fetched",
+        False,
+        "HydroSHEDS (HydroRIVERS regional tile, data.hydrosheds.org)",
+        False,
+    ),
 )
 
 
@@ -520,7 +535,9 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
             # (asserted above at import time), so at most one of
             # fetch_handler/local_handler ever applies to a given
             # layer_name once the synthetic override doesn't.
-            synthetic_override = resolve_synthetic_fetched_layer(context.country_code, spec.layer_name)
+            synthetic_override = resolve_synthetic_fetched_layer(
+                context.country_code, spec.layer_name
+            )
             if synthetic_override is not None:
                 path = synthetic_override
             elif fetch_handler:
@@ -583,14 +600,14 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
             )
         )
 
-    failed_layer_names = [layer.layer_name for layer in layers if layer.resolution_status == "failed"]
+    failed_layer_names = [
+        layer.layer_name for layer in layers if layer.resolution_status == "failed"
+    ]
 
     summary = AcquisitionSummary(
         layers_total=len(layers),
         layers_fetched_provenance=sum(1 for layer in layers if layer.provenance == "fetched"),
-        layers_local_only_provenance=sum(
-            1 for layer in layers if layer.provenance == "local_only"
-        ),
+        layers_local_only_provenance=sum(1 for layer in layers if layer.provenance == "local_only"),
         layers_requiring_auth=sum(1 for layer in layers if layer.auth_required),
         layers_resolved=sum(1 for layer in layers if layer.path is not None or layer.paths),
         layers_failed=len(failed_layer_names),

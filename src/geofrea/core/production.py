@@ -82,11 +82,15 @@ def audit_parameters(
             if params is None:
                 audit.errors.append(f"{iso} {tech}: no technology entry in parameters.json")
                 continue
-            fields: dict[str, VerifiedValue] = {k: v for k, v in params.__dict__.items() if isinstance(v, VerifiedValue)}
+            fields: dict[str, VerifiedValue] = {
+                k: v for k, v in params.__dict__.items() if isinstance(v, VerifiedValue)
+            }
             for key, vv in fields.items():
                 where = f"{iso} {tech} {key}"
                 if vv.proxy:
-                    audit.errors.append(f"{where}: proxy value consumed (a different quantity or technology, V6)")
+                    audit.errors.append(
+                        f"{where}: proxy value consumed (a different quantity or technology, V6)"
+                    )
                 if vv.tier == 3 and not vv.synthetic:
                     audit.warnings.append(f"{where}: Tier 3 value (U-07)")
                 if vv.range is not None and vv.range.tier == 3:
@@ -95,7 +99,9 @@ def audit_parameters(
                 where = f"{iso} {tech} {key}"
                 vv = fields.get(key)
                 if vv is None:
-                    audit.errors.append(f"{where}: uncertain parameter has no entry in parameters.json")
+                    audit.errors.append(
+                        f"{where}: uncertain parameter has no entry in parameters.json"
+                    )
                 elif vv.value is None:
                     audit.errors.append(f"{where}: uncertain parameter has no value")
                 elif vv.range is None:
@@ -111,4 +117,6 @@ def enforce_production(audit: ParameterAudit) -> None:
     """
     if audit.errors:
         listing = "\n  - ".join(audit.errors)
-        raise ProductionRunError(f"production run refused: {len(audit.errors)} violation(s) of the parameter contract:\n  - {listing}")
+        raise ProductionRunError(
+            f"production run refused: {len(audit.errors)} violation(s) of the parameter contract:\n  - {listing}"
+        )

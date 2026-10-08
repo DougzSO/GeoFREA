@@ -143,7 +143,9 @@ def acquisition_result_to_grid_alignment_inputs(
     for product in GWA_PRODUCTS:
         for height in GWA_HEIGHTS_M:
             # wind_speed at 100 m is registered under the bare name "wind" (F1, unchanged)
-            layer_name = "wind" if (product, height) == ("wind_speed", 100) else f"{product}_{height}m"
+            layer_name = (
+                "wind" if (product, height) == ("wind_speed", 100) else f"{product}_{height}m"
+            )
             path = resolved_path(layers.get(layer_name))
             if path:
                 wind_layers[f"{product}_{height}m"] = path

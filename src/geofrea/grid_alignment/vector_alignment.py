@@ -119,7 +119,9 @@ def load_vector_bbox(
         return None
 
 
-def calculate_wgs84_isotropic_distance(feature_mask_inv: np.ndarray, grid: GridContext) -> np.ndarray:
+def calculate_wgs84_isotropic_distance(
+    feature_mask_inv: np.ndarray, grid: GridContext
+) -> np.ndarray:
     """Compute Euclidean distance with a WGS84 ellipsoid correction.
 
     Converts a pixel-space distance transform to kilometres using
@@ -152,7 +154,9 @@ def distance_capped_path(distance_path) -> Path:
     return distance_path.with_name(f"{distance_path.stem}_capped{distance_path.suffix}")
 
 
-def _write_distance_and_flag(dist_km: np.ndarray, out_path, grid: GridContext, distance_cap_km: float) -> None:
+def _write_distance_and_flag(
+    dist_km: np.ndarray, out_path, grid: GridContext, distance_cap_km: float
+) -> None:
     """Write the raw geodesic distance raster and its `distance_capped` flag raster.
 
     OQ-040 (METHODOLOGY 1.4.0, M-F2a-03): the distance is stored as computed, never truncated, because the
@@ -174,7 +178,9 @@ def _write_distance_and_flag(dist_km: np.ndarray, out_path, grid: GridContext, d
         "blockxsize": 256,
         "blockysize": 256,
     }
-    with safe_raster_write(out_path, driver="GTiff", dtype="float32", nodata=NODATA_FLOAT, **common) as dst:
+    with safe_raster_write(
+        out_path, driver="GTiff", dtype="float32", nodata=NODATA_FLOAT, **common
+    ) as dst:
         dst.write(dist_km, 1)
     with safe_raster_write(
         distance_capped_path(out_path), driver="GTiff", dtype="uint8", nodata=NODATA_UINT8, **common
@@ -248,9 +254,7 @@ def rasterize_linear_distance(
         return None
 
 
-def align_lakes(
-    lakes_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext
-) -> object | None:
+def align_lakes(lakes_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext) -> object | None:
     """Rasterize inland water bodies as a binary hard-exclusion mask.
 
     Args:
@@ -342,4 +346,3 @@ def align_rivers(
     dist_km = calculate_wgs84_isotropic_distance((river_mask == 0).astype(np.uint8), grid)
     _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
     return out_path
-

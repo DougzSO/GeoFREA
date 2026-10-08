@@ -54,7 +54,9 @@ def _square(cx: float, cy: float, half_side: float) -> Polygon:
     )
 
 
-def _country_gdf(cx: float = _ORIGIN_LON + 0.2, cy: float = _ORIGIN_LAT - 0.2, half_side: float = 0.15) -> gpd.GeoDataFrame:
+def _country_gdf(
+    cx: float = _ORIGIN_LON + 0.2, cy: float = _ORIGIN_LAT - 0.2, half_side: float = 0.15
+) -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(geometry=[_square(cx, cy, half_side)], crs="EPSG:4326")
 
 
@@ -72,8 +74,16 @@ def _write_raster(path: Path, value: float, size: int = 60) -> None:
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     data = np.full((size, size), value, dtype="float32")
     with rasterio.open(
-        path, "w", driver="GTiff", height=size, width=size, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        path,
+        "w",
+        driver="GTiff",
+        height=size,
+        width=size,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(data, 1)
 
@@ -89,8 +99,16 @@ def test_verify_alignment_raises_runtime_error_on_dimension_mismatch(tmp_path):
     bad_path = tmp_path / "bad.tif"
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with rasterio.open(
-        bad_path, "w", driver="GTiff", height=3, width=3, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        bad_path,
+        "w",
+        driver="GTiff",
+        height=3,
+        width=3,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.ones((3, 3), dtype="float32"), 1)
 
@@ -108,8 +126,16 @@ def test_verify_alignment_passes_for_matching_dimensions_and_none_entries(tmp_pa
     # Height/width may differ if grid isn't square — force exact match.
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with rasterio.open(
-        good_path, "w", driver="GTiff", height=grid.height, width=grid.width, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        good_path,
+        "w",
+        driver="GTiff",
+        height=grid.height,
+        width=grid.width,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.ones((grid.height, grid.width), dtype="float32"), 1)
 
@@ -130,8 +156,16 @@ def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path
     def bad_reproject(src_path, out_path, grid, *args, **kwargs):
         transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
         with rasterio.open(
-            out_path, "w", driver="GTiff", height=3, width=3, count=1,
-            dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+            out_path,
+            "w",
+            driver="GTiff",
+            height=3,
+            width=3,
+            count=1,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=transform,
+            nodata=-9999.0,
         ) as dst:
             dst.write(np.ones((3, 3), dtype="float32"), 1)
         return out_path
@@ -194,7 +228,9 @@ def test_run_grid_alignment_phase_reuses_already_aligned_raster_on_second_call(t
     assert first.elevation is not None
 
     def fail_if_called(*a, **k):
-        raise AssertionError("reproject_to_grid() was called again — alignment cache was NOT reused!")
+        raise AssertionError(
+            "reproject_to_grid() was called again — alignment cache was NOT reused!"
+        )
 
     with patch.object(alignment_module, "reproject_to_grid", side_effect=fail_if_called):
         second = run_grid_alignment_phase(context, inputs)
@@ -234,12 +270,22 @@ def test_run_grid_alignment_phase_recomputes_when_cached_raster_dims_mismatch(tm
     inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
     context = _context(tmp_path)
 
-    stale_path = context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_elevation_aligned.tif"
+    stale_path = (
+        context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_elevation_aligned.tif"
+    )
     stale_path.parent.mkdir(parents=True)
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with rasterio.open(
-        stale_path, "w", driver="GTiff", height=2, width=2, count=1,
-        dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0,
+        stale_path,
+        "w",
+        driver="GTiff",
+        height=2,
+        width=2,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.ones((2, 2), dtype="float32"), 1)
 
@@ -278,8 +324,17 @@ def test_run_grid_alignment_phase_missing_layers_leave_none_without_error(tmp_pa
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
-    for field in ("elevation", "slope", "solar", "land_cover", "population",
-                  "roads", "grid", "lakes", "rivers"):
+    for field in (
+        "elevation",
+        "slope",
+        "solar",
+        "land_cover",
+        "population",
+        "roads",
+        "grid",
+        "lakes",
+        "rivers",
+    ):
         assert getattr(result, field) is None
     assert result.wind_layers == {}
 
@@ -292,7 +347,9 @@ def test_run_grid_alignment_phase_saves_grid_metadata_json(tmp_path):
 
     result = run_grid_alignment_phase(context, inputs)
 
-    meta_path = context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_grid_metadata.json"
+    meta_path = (
+        context.outputs_dir / "PRT" / "grid_alignment" / "artifacts" / "PRT_grid_metadata.json"
+    )
     assert meta_path.exists()
     import json
 
@@ -313,8 +370,16 @@ def test_run_grid_alignment_phase_reprojects_source_with_different_crs(tmp_path)
     x1, y1 = transformer.transform(_ORIGIN_LON + 0.6, _ORIGIN_LAT - 0.6)
     transform = rasterio.transform.from_bounds(x0, y1, x1, y0, 60, 60)
     with rasterio.open(
-        elev_path, "w", driver="GTiff", height=60, width=60, count=1,
-        dtype="float32", crs="EPSG:3857", transform=transform, nodata=-9999.0,
+        elev_path,
+        "w",
+        driver="GTiff",
+        height=60,
+        width=60,
+        count=1,
+        dtype="float32",
+        crs="EPSG:3857",
+        transform=transform,
+        nodata=-9999.0,
     ) as dst:
         dst.write(np.full((60, 60), 77.0, dtype="float32"), 1)
 
@@ -353,16 +418,19 @@ def test_run_grid_alignment_phase_multi_polygon_country_gdf_does_not_crash(tmp_p
 
 def _seed_key(cache_path, source, country_gdf):
     """Mark a pre-seeded clip cache as produced from `source` and `country_gdf` (the cache identity)."""
-    cache_path.with_suffix(".key").write_text(alignment_module._clip_cache_key(source, country_gdf), encoding="utf-8")
+    cache_path.with_suffix(".key").write_text(
+        alignment_module._clip_cache_key(source, country_gdf), encoding="utf-8"
+    )
 
 
 @pytest.mark.unit
 def test_read_clipped_with_cache_computes_and_writes_when_absent(tmp_path):
     country_gdf = _country_gdf()
     src_path = tmp_path / "src.geojson"
-    gpd.GeoDataFrame(geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])], crs="EPSG:4326").to_file(
-        src_path, driver="GeoJSON"
-    )
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])],
+        crs="EPSG:4326",
+    ).to_file(src_path, driver="GeoJSON")
     cache_path = tmp_path / "cache" / "roads_clipped.gpkg"
     assert not cache_path.exists()
 
@@ -404,7 +472,9 @@ def test_read_clipped_with_cache_reads_from_cache_without_calling_read_clipped_t
     pre_seeded = gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326")
     pre_seeded.to_file(cache_path, driver="GPKG")
     source = tmp_path / "src_never_read.geojson"
-    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(source, driver="GeoJSON")
+    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(
+        source, driver="GeoJSON"
+    )
     _seed_key(cache_path, source, country_gdf)
 
     def fail_if_called(*a, **k):
@@ -426,7 +496,8 @@ def test_read_clipped_with_cache_rebuilds_a_cache_made_from_another_source(tmp_p
     gpd.GeoDataFrame(geometry=[], crs="EPSG:4326").to_file(cache_path, driver="GPKG")
     source = tmp_path / "new_source.geojson"
     gpd.GeoDataFrame(
-        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])], crs="EPSG:4326"
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])],
+        crs="EPSG:4326",
     ).to_file(source, driver="GeoJSON")
 
     keyless = _read_clipped_with_cache(source, country_gdf, cache_path)
@@ -438,7 +509,9 @@ def test_read_clipped_with_cache_rebuilds_a_cache_made_from_another_source(tmp_p
 
 
 @pytest.mark.unit
-def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_quality_audit(tmp_path):
+def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_quality_audit(
+    tmp_path,
+):
     # The core Passo 1 guarantee: if the SAME cache_path convention
     # already has a file (e.g. because data_quality_audit ran earlier in
     # a separate process), grid_alignment picks it up without ever
@@ -450,7 +523,11 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
     cache_path = paths.interim("PRT", "grid_alignment") / "roads_clipped.gpkg"
     cache_path.parent.mkdir(parents=True)
     pre_clipped = gpd.GeoDataFrame(
-        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        geometry=[
+            LineString(
+                [(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)]
+            )
+        ],
         crs="EPSG:4326",
     )
     pre_clipped.to_file(cache_path, driver="GPKG")
@@ -483,18 +560,28 @@ def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp
     processed_dir = paths.interim("PRT", "grid_alignment")
     processed_dir.mkdir(parents=True)
 
-    lake = gpd.GeoDataFrame(geometry=[_square(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.03)], crs="EPSG:4326")
+    lake = gpd.GeoDataFrame(
+        geometry=[_square(_ORIGIN_LON + 0.2, _ORIGIN_LAT - 0.2, 0.03)], crs="EPSG:4326"
+    )
     lake.to_file(processed_dir / "lakes_clipped.gpkg", driver="GPKG")
     river = gpd.GeoDataFrame(
-        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        geometry=[
+            LineString(
+                [(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)]
+            )
+        ],
         crs="EPSG:4326",
     )
     river.to_file(processed_dir / "rivers_clipped.gpkg", driver="GPKG")
 
     lakes_source = tmp_path / "lakes_source_never_read.shp"
     rivers_source = tmp_path / "rivers_source_never_read.shp"
-    gpd.GeoDataFrame(geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:4326").to_file(lakes_source)
-    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(rivers_source)
+    gpd.GeoDataFrame(geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:4326").to_file(
+        lakes_source
+    )
+    gpd.GeoDataFrame(geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:4326").to_file(
+        rivers_source
+    )
     _seed_key(processed_dir / "lakes_clipped.gpkg", lakes_source, country_gdf)
     _seed_key(processed_dir / "rivers_clipped.gpkg", rivers_source, country_gdf)
     inputs = _inputs(lakes_path=lakes_source, rivers_path=rivers_source, country_gdf=country_gdf)
@@ -531,8 +618,16 @@ def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(
     tile = tmp_path / "tile.tif"
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with rasterio.open(
-        tile, "w", driver="GTiff", height=60, width=60, count=1,
-        dtype="uint8", crs="EPSG:4326", transform=transform, nodata=0,
+        tile,
+        "w",
+        driver="GTiff",
+        height=60,
+        width=60,
+        count=1,
+        dtype="uint8",
+        crs="EPSG:4326",
+        transform=transform,
+        nodata=0,
     ) as dst:
         dst.write(np.full((60, 60), 10, dtype="uint8"), 1)
 
@@ -593,16 +688,27 @@ def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_riv
     country_gdf = _country_gdf()
     roads_source = tmp_path / "roads_source.shp"
     gpd.GeoDataFrame(
-        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        geometry=[
+            LineString(
+                [(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)]
+            )
+        ],
         crs="EPSG:4326",
     ).to_file(roads_source)
     rivers_source = tmp_path / "rivers_source.shp"
     gpd.GeoDataFrame(
-        geometry=[LineString([(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)])],
+        geometry=[
+            LineString(
+                [(_ORIGIN_LON + 0.1, _ORIGIN_LAT - 0.3), (_ORIGIN_LON + 0.3, _ORIGIN_LAT - 0.1)]
+            )
+        ],
         crs="EPSG:4326",
     ).to_file(rivers_source)
     inputs = _inputs(
-        roads_source=roads_source, rivers_path=rivers_source, country_gdf=country_gdf, distance_cap_km=77.0
+        roads_source=roads_source,
+        rivers_path=rivers_source,
+        country_gdf=country_gdf,
+        distance_cap_km=77.0,
     )
 
     real_rasterize = alignment_module.rasterize_linear_distance
@@ -638,8 +744,16 @@ def test_run_grid_alignment_phase_aligns_each_wind_height_on_its_own_without_com
     for key, value in (("wind_speed_100m", 5.0), ("wind_speed_200m", 7.0), ("weibull_k_150m", 2.0)):
         path = tmp_path / f"{key}.tif"
         with rasterio.open(
-            path, "w", driver="GTiff", height=60, width=60, count=1, dtype="float32", crs="EPSG:4326",
-            transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.01, 0.01), nodata=-9999.0,
+            path,
+            "w",
+            driver="GTiff",
+            height=60,
+            width=60,
+            count=1,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, 0.01, 0.01),
+            nodata=-9999.0,
         ) as dst:
             dst.write(np.full((60, 60), value, dtype="float32"), 1)
         sources[key] = path
@@ -654,6 +768,8 @@ def test_run_grid_alignment_phase_aligns_each_wind_height_on_its_own_without_com
             data = src.read(1)
         valid = data[data != src.nodata]
         means[key] = float(valid.mean())
-    assert means["wind_speed_100m"] == pytest.approx(5.0, abs=1e-3)  # not blended with the 200 m layer
+    assert means["wind_speed_100m"] == pytest.approx(
+        5.0, abs=1e-3
+    )  # not blended with the 200 m layer
     assert means["wind_speed_200m"] == pytest.approx(7.0, abs=1e-3)
     assert means["weibull_k_150m"] == pytest.approx(2.0, abs=1e-3)

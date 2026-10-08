@@ -28,7 +28,12 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out / "zzz.npz", **{k.replace("/", "__"): v for k, v in arrays.items()})
     summary = {
-        k: {"shape": list(v.shape), "min": float(v.min()), "max": float(v.max()), "sum": float(v.sum())}
+        k: {
+            "shape": list(v.shape),
+            "min": float(v.min()),
+            "max": float(v.max()),
+            "sum": float(v.sum()),
+        }
         for k, v in arrays.items()
     }
     (out / "zzz_summary.json").write_text(json.dumps(summary, indent=2) + "\n")

@@ -27,7 +27,9 @@ PANELS = (
 )
 
 
-def _grid(cell_ids: np.ndarray, values: np.ndarray, rows: np.ndarray, cols: np.ndarray, shape, origin) -> np.ndarray:
+def _grid(
+    cell_ids: np.ndarray, values: np.ndarray, rows: np.ndarray, cols: np.ndarray, shape, origin
+) -> np.ndarray:
     out = np.full(shape, np.nan, dtype=np.float32)
     out[rows - origin[0], cols - origin[1]] = values
     return out
@@ -80,16 +82,41 @@ def plot_member(
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.2), constrained_layout=True)
     for ax, (column, title, cmap, _kind) in zip(axes, PANELS, strict=True):
-        img = _grid(member_rows["cell_id"].to_numpy(), member_rows[column].to_numpy(), rows, cols, shape, (r0, c0))
+        img = _grid(
+            member_rows["cell_id"].to_numpy(),
+            member_rows[column].to_numpy(),
+            rows,
+            cols,
+            shape,
+            (r0, c0),
+        )
         vmin, vmax = limits[column]
-        im = ax.imshow(img, extent=extent, origin="upper", cmap=cmap, vmin=vmin, vmax=vmax, interpolation="nearest")
+        im = ax.imshow(
+            img,
+            extent=extent,
+            origin="upper",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+        )
         if len(masked_rows):
-            ax.imshow(mask_img, extent=extent, origin="upper", cmap="Greys", vmin=0, vmax=1, interpolation="nearest")
+            ax.imshow(
+                mask_img,
+                extent=extent,
+                origin="upper",
+                cmap="Greys",
+                vmin=0,
+                vmax=1,
+                interpolation="nearest",
+            )
         ax.set_title(title, fontsize=10)
         ax.set_xlabel("longitude")
         ax.set_ylabel("latitude")
         fig.colorbar(im, ax=ax, shrink=0.8)
-    subtitle = f"{len(member_rows)} cells" + (f"; {len(masked_rows)} masked (grey, OQ-042)" if len(masked_rows) else "")
+    subtitle = f"{len(member_rows)} cells" + (
+        f"; {len(masked_rows)} masked (grey, OQ-042)" if len(masked_rows) else ""
+    )
     title = f"{country} - {member_id}  ({subtitle})"
     fig.suptitle(title + (f"\n{note}" if note else ""), fontsize=11)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,21 +126,35 @@ def plot_member(
 
 
 def plot_all_members(
-    forcing: pd.DataFrame, masked: pd.DataFrame, out_dir: Path, country: str, notes: dict[str, str] | None = None
+    forcing: pd.DataFrame,
+    masked: pd.DataFrame,
+    out_dir: Path,
+    country: str,
+    notes: dict[str, str] | None = None,
 ) -> list[Path]:
     """One PNG per member (m0 excluded: it is identity by definition), named `<country>_<member>.png`."""
     limits = color_limits(forcing)
     all_ids = np.concatenate([forcing["cell_id"].to_numpy(), masked["cell_id"].to_numpy()])
     bounds = lattice_bounds(all_ids)
-    by_member = {str(m): g for m, g in forcing.groupby(forcing["member"].astype(str), observed=True)}
-    masked_by_member = {str(m): g for m, g in masked.groupby(masked["member"].astype(str), observed=True)}
+    by_member = {
+        str(m): g for m, g in forcing.groupby(forcing["member"].astype(str), observed=True)
+    }
+    masked_by_member = {
+        str(m): g for m, g in masked.groupby(masked["member"].astype(str), observed=True)
+    }
     empty = masked.iloc[0:0]
     paths = []
     for m in sorted(k for k in by_member if k != "m0"):
         paths.append(
             plot_member(
-                m, by_member[m], masked_by_member.get(m, empty), bounds, limits,
-                out_dir / f"{country}_{m}.png", country, (notes or {}).get(m),
+                m,
+                by_member[m],
+                masked_by_member.get(m, empty),
+                bounds,
+                limits,
+                out_dir / f"{country}_{m}.png",
+                country,
+                (notes or {}).get(m),
             )
         )
     return paths

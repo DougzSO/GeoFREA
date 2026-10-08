@@ -21,7 +21,10 @@ def _write_netcdf(path, lat, lon, variant_label="r1i1p1f1", n_time=12, years=Non
     # `years` gives a real monthly time axis (one step per month of each year); default is an integer axis.
     if years is not None:
         time = np.concatenate(
-            [np.arange(f"{y}-01", f"{y + 1}-01", dtype="datetime64[M]").astype("datetime64[ns]") for y in years]
+            [
+                np.arange(f"{y}-01", f"{y + 1}-01", dtype="datetime64[M]").astype("datetime64[ns]")
+                for y in years
+            ]
         )
         n_time = len(time)
     else:

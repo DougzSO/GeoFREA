@@ -177,8 +177,7 @@ def _safe_extract(zip_path: Path, target_dir: Path) -> None:
                 dest.relative_to(target_resolved)
             except ValueError:
                 raise ValueError(
-                    f"Zip Slip detected: {member!r} escapes {target_dir} — "
-                    "archive rejected."
+                    f"Zip Slip detected: {member!r} escapes {target_dir} — archive rejected."
                 ) from None
         zf.extractall(target_dir)
 

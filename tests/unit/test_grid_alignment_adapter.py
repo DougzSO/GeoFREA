@@ -56,7 +56,9 @@ def test_adapter_raises_when_borders_layer_is_absent(tmp_path):
     result = _result([_layer("elevation", tmp_path / "elev.tif")])
 
     with pytest.raises(GridAlignmentRequiresBordersError, match="PRT"):
-        acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+        acquisition_result_to_grid_alignment_inputs(
+            result, ResolutionsConfig(suitability=0.01), 100.0
+        )
 
 
 @pytest.mark.unit
@@ -64,7 +66,9 @@ def test_adapter_raises_when_borders_layer_path_is_none(tmp_path):
     result = _result([_layer("borders", path=None)])
 
     with pytest.raises(GridAlignmentRequiresBordersError):
-        acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+        acquisition_result_to_grid_alignment_inputs(
+            result, ResolutionsConfig(suitability=0.01), 100.0
+        )
 
 
 @pytest.mark.unit
@@ -72,7 +76,9 @@ def test_adapter_with_only_borders_produces_mainland_filtered_country_gdf(tmp_pa
     boundary_path = _boundary_path(tmp_path)
     result = _result([_layer("borders", boundary_path)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.01), 100.0
+    )
 
     assert isinstance(inputs, GridAlignmentInputs)
     assert len(inputs.country_gdf) == 1  # mainland only, islet dropped
@@ -97,7 +103,9 @@ def test_adapter_maps_source_path_fields(tmp_path):
         ]
     )
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.01), 100.0
+    )
 
     assert inputs.elevation_path == elevation_path
     # Deliberately renamed fields (see schemas.py/adapter.py module
@@ -117,7 +125,9 @@ def test_adapter_does_not_map_protected_admin1_or_borders_passthrough(tmp_path):
         ]
     )
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.01), 100.0
+    )
 
     # GridAlignmentInputs has no protected_path/admin1_path/borders_path
     # fields at all — confirmed by extra="forbid" already covered in
@@ -141,7 +151,9 @@ def test_adapter_maps_every_gwa_product_and_height_to_its_own_wind_layer(tmp_pat
         ]
     )
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.01), 100.0
+    )
 
     assert inputs.wind_layers == {"wind_speed_100m": wind_100, "weibull_a_150m": weibull_a_150}
 
@@ -152,7 +164,9 @@ def test_adapter_maps_land_cover_tiles_list(tmp_path):
     tiles = [Path("/fake/tile1.tif"), Path("/fake/tile2.tif")]
     result = _result([_layer("borders", boundary_path), _layer("land_cover", paths=tiles)])
 
-    inputs = acquisition_result_to_grid_alignment_inputs(result, ResolutionsConfig(suitability=0.01), 100.0)
+    inputs = acquisition_result_to_grid_alignment_inputs(
+        result, ResolutionsConfig(suitability=0.01), 100.0
+    )
 
     assert inputs.land_cover_tiles == tiles
 

@@ -40,6 +40,7 @@ def _audit_config() -> AuditConfig:
     F1b_data_quality_audit.md action F7-2)."""
     return load_audit_config(AUDIT_YAML)
 
+
 _ORIGIN_LON, _ORIGIN_LAT = -9.0, 39.0
 _RES = 0.01
 _SIZE = 10
@@ -234,8 +235,12 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
     result = run_audit_phase(_context(tmp_path), AuditInputs(), audit_config=_audit_config())
 
     assert set(result.slope_threshold_check.keys()) == {"solar", "wind"}
-    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(10.0)  # solar range 10-15
-    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(10.2)  # wind range 10.2-30
+    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(
+        10.0
+    )  # solar range 10-15
+    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(
+        10.2
+    )  # wind range 10.2-30
     for check in result.slope_threshold_check.values():
         assert check.max_observed_deg is None
         assert check.inactive is False
@@ -262,7 +267,9 @@ def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_is_the_same_for_every_country(tmp_path):
     # The slope maxima come from the land_availability ranges, shared by all countries (2026-10-08), not from a per-country value.
-    result = run_audit_phase(_context(tmp_path, country_code="BRA"), AuditInputs(), audit_config=_audit_config())
+    result = run_audit_phase(
+        _context(tmp_path, country_code="BRA"), AuditInputs(), audit_config=_audit_config()
+    )
 
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(10.0)
     assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(10.2)
@@ -428,8 +435,15 @@ def test_vector_coverage_check_leaves_missing_unreadable_and_populated_layers_al
     check_vector_coverage(
         {
             "roads": {"found": False},
-            "grid": {"found": True, "n_features": None, "error": "boom", "error_type": "read_error"},
+            "grid": {
+                "found": True,
+                "n_features": None,
+                "error": "boom",
+                "error_type": "read_error",
+            },
         },
         "PRT",
     )
-    check_vector_coverage({"roads": {"found": True, "n_features": 5}, "grid": {"found": True, "n_features": 9}}, "PRT")
+    check_vector_coverage(
+        {"roads": {"found": True, "n_features": 5}, "grid": {"found": True, "n_features": 9}}, "PRT"
+    )

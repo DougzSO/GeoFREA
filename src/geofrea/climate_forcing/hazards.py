@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 KELVIN_OFFSET_C = 273.15  # CRAEI hazards/pet.py KELVIN_OFFSET_C
 PR_FLUX_TO_MM_PER_DAY = 86400.0  # kg m-2 s-1 -> mm d-1 (CRAEI hazards/loading.py)
 WET_DAY_THRESHOLD_MM = 1.0  # CRAEI hazards/precip.py WET_DAY_THRESHOLD_MM
-HEAT_THRESHOLDS_C = (35.0, 40.0)  # CRAEI config/params.yaml heat_tx35/tx40_threshold_c (tier 1, IPCC AR6 Atlas)
+HEAT_THRESHOLDS_C = (
+    35.0,
+    40.0,
+)  # CRAEI config/params.yaml heat_tx35/tx40_threshold_c (tier 1, IPCC AR6 Atlas)
 WET_DAY_PERCENTILE = 95.0
 REFERENCE_YEARS = (1995, 2014)  # S-05
 
@@ -87,10 +90,16 @@ def mean_annual_rx5day(pr_mm: xr.DataArray) -> xr.DataArray:
 # Adapted from CRAEI commit 76c9f8212e3bba0fd138409a809156f6fc0b77b1, src/craei/hazards/precip.py::wet_day_p95.
 # Adaptation: per-cell percentile of wet days on the grid; computed on the reference period only (CRAEI rule 4:
 # the threshold cannot see future rows).
-def wet_day_percentile(pr_ref_mm: xr.DataArray, percentile: float = WET_DAY_PERCENTILE) -> xr.DataArray:
+def wet_day_percentile(
+    pr_ref_mm: xr.DataArray, percentile: float = WET_DAY_PERCENTILE
+) -> xr.DataArray:
     """Per-cell `percentile` of the wet-day (>= 1 mm) precipitation of the reference period."""
     wet = pr_ref_mm.where(pr_ref_mm >= WET_DAY_THRESHOLD_MM)
-    return wet.quantile(percentile / 100.0, dim="time", skipna=True).drop_vars("quantile").astype("float32")
+    return (
+        wet.quantile(percentile / 100.0, dim="time", skipna=True)
+        .drop_vars("quantile")
+        .astype("float32")
+    )
 
 
 # Adapted from CRAEI commit 76c9f8212e3bba0fd138409a809156f6fc0b77b1, src/craei/hazards/precip.py::exceedance_frequency.
@@ -142,7 +151,9 @@ def sample_nearest(
     return values[keep][idx]
 
 
-def era5_gust_mean_annual_max(era5_annual_max: Path, lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+def era5_gust_mean_annual_max(
+    era5_annual_max: Path, lat: np.ndarray, lon: np.ndarray
+) -> np.ndarray:
     """Mean over the 20 annual maxima of the ERA5 gust at the nearest valid ERA5 cell (D-F4-009).
 
     Implements: M-F1-05, M-F4-05 (C2 extreme wind context, scenario-invariant).
@@ -155,7 +166,11 @@ def era5_gust_mean_annual_max(era5_annual_max: Path, lat: np.ndarray, lon: np.nd
     values, dist = sample_nearest(field, lat, lon, max_distance_deg=0.5, return_distance=True)
     n_far = int((dist > 0.25).sum())
     if n_far:
-        logger.warning("ERA5 gust: %d of %d cells use a native cell more than 0.25 degree away", n_far, len(lat))
+        logger.warning(
+            "ERA5 gust: %d of %d cells use a native cell more than 0.25 degree away",
+            n_far,
+            len(lat),
+        )
     return values
 
 
@@ -166,7 +181,11 @@ def load_daily(path: Path, variable: str, start: int, end: int) -> xr.DataArray:
 
 
 def hazard_fields(
-    historical_tasmax: Path, scenario_tasmax: Path, historical_pr: Path, scenario_pr: Path, window: tuple[int, int]
+    historical_tasmax: Path,
+    scenario_tasmax: Path,
+    historical_pr: Path,
+    scenario_pr: Path,
+    window: tuple[int, int],
 ) -> dict[str, xr.DataArray]:
     """Native-grid indicator fields (window and reference) for one GCM and scenario."""
     ref0, ref1 = REFERENCE_YEARS
@@ -184,20 +203,30 @@ def hazard_fields(
         "rx5day_mm": mean_annual_rx5day(pr_win),
         "rx5day_mm_ref": mean_annual_rx5day(pr_ref),
         "wet_p95_exceed_freq": wet_day_exceedance_frequency(pr_win, p95),
-        "wet_days_per_year_ref": ((pr_ref >= WET_DAY_THRESHOLD_MM).sum("time") / n_years_ref).astype("float32"),
+        "wet_days_per_year_ref": (
+            (pr_ref >= WET_DAY_THRESHOLD_MM).sum("time") / n_years_ref
+        ).astype("float32"),
     }
 
 
 def hazard_frame(
-    cells: pd.DataFrame, member_id: str, fields: dict[str, xr.DataArray], gust: np.ndarray, max_distance_deg: float
+    cells: pd.DataFrame,
+    member_id: str,
+    fields: dict[str, xr.DataArray],
+    gust: np.ndarray,
+    max_distance_deg: float,
 ) -> pd.DataFrame:
     """One member's hazard context rows for `cells` (nearest valid native cell per indicator)."""
     lat, lon = cells["lat_c"].to_numpy(), cells["lon_c"].to_numpy()
     data = {"cell_id": cells["cell_id"].to_numpy(), "member": member_id}
     for name, field in fields.items():
-        sampled = sample_nearest(field, lat, lon, max_distance_deg, skip_nan=False).astype(np.float32)
+        sampled = sample_nearest(field, lat, lon, max_distance_deg, skip_nan=False).astype(
+            np.float32
+        )
         if name != "wet_p95_exceed_freq" and not np.isfinite(sampled).all():
-            raise HazardDataError(f"{member_id}: indicator {name} is NaN in {int((~np.isfinite(sampled)).sum())} cells")
+            raise HazardDataError(
+                f"{member_id}: indicator {name} is NaN in {int((~np.isfinite(sampled)).sum())} cells"
+            )
         data[name] = sampled
     data["gust_mean_annual_max_ms"] = gust.astype(np.float32)
     frame = pd.DataFrame(data)

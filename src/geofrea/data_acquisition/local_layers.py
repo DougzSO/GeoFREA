@@ -199,6 +199,7 @@ def _tile_bbox_from_filename(name: str):
     lon = -int(lon_str) if ew == "W" else int(lon_str)
     return box(lon, lat, lon + 3, lat + 3)
 
+
 # Lazy-loaded cache for countries.yaml
 _COUNTRIES_CONFIG: dict[str, dict[str, str | None]] | None = None
 
@@ -240,9 +241,7 @@ def _get_country_mapping(country_code: str, key: str) -> str:
     config = _load_countries_config()
 
     if country_code not in config:
-        raise CountryMappingError(
-            f"Country '{country_code}' not found in config/countries.yaml"
-        )
+        raise CountryMappingError(f"Country '{country_code}' not found in config/countries.yaml")
 
     value = config[country_code].get(key)
     if value is None:
@@ -414,9 +413,11 @@ def resolve_population_path(country_code: str) -> Path | None:
 # GEOFREA_SHARED_RAW_DIR/solar_potential/. The sibling `World_TEMP_...`
 # bundle (air temperature) is deliberately not matched — it is not a
 # siting_layers input.
-_SOLAR_PVOUT_RELPATH = Path(
-    "solar_potential"
-) / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF" / "PVOUT.tif"
+_SOLAR_PVOUT_RELPATH = (
+    Path("solar_potential")
+    / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF"
+    / "PVOUT.tif"
+)
 
 
 def resolve_solar_path(country_code: str) -> Path | None:
@@ -536,7 +537,9 @@ def resolve_land_cover_tiles(
 
     if country_gdf is not None and len(candidates) > 0:
         country_geom = (
-            country_gdf.union_all() if hasattr(country_gdf, "union_all") else country_gdf.unary_union
+            country_gdf.union_all()
+            if hasattr(country_gdf, "union_all")
+            else country_gdf.unary_union
         )
         tiles = []
         for t in candidates:

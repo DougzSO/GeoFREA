@@ -91,7 +91,9 @@ def _fetch(name: str, dest: Path) -> dict | None:
     return {"name": name, "bytes": expected, "sha256": _sha256(target)}
 
 
-def fetch_country(iso: str, boundary: gpd.GeoDataFrame, workers: int = 6, names: Iterable[str] | None = None) -> Path:
+def fetch_country(
+    iso: str, boundary: gpd.GeoDataFrame, workers: int = 6, names: Iterable[str] | None = None
+) -> Path:
     """Download every GLO-30 tile that intersects the country and write the manifest; returns the tile directory."""
     dest = dem_dir(iso)
     dest.mkdir(parents=True, exist_ok=True)
@@ -110,7 +112,13 @@ def fetch_country(iso: str, boundary: gpd.GeoDataFrame, workers: int = 6, names:
         "absent_tiles": absent,
     }
     (dest / MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
-    logger.info("%s: %d tiles present (%.1f GB), %d absent", iso, len(present), sum(t["bytes"] for t in present) / 1e9, len(absent))
+    logger.info(
+        "%s: %d tiles present (%.1f GB), %d absent",
+        iso,
+        len(present),
+        sum(t["bytes"] for t in present) / 1e9,
+        len(absent),
+    )
     return dest
 
 
@@ -119,7 +127,9 @@ def load_tiles(iso: str) -> list[Path]:
     dest = dem_dir(iso)
     manifest = dest / MANIFEST
     if not manifest.exists():
-        raise FileNotFoundError(f"no Copernicus GLO-30 tiles for {iso}: run `python scripts/acquire_dem30.py` ({manifest} is missing)")
+        raise FileNotFoundError(
+            f"no Copernicus GLO-30 tiles for {iso}: run `python scripts/acquire_dem30.py` ({manifest} is missing)"
+        )
     info = json.loads(manifest.read_text(encoding="utf-8"))
     files = [dest / f"{t['name']}.tif" for t in info["tiles"]]
     missing = [f.name for f in files if not f.exists()]

@@ -97,7 +97,9 @@ def gen_elevation() -> None:
     """
     row = np.arange(N_COLS, dtype="float32") * 10.0
     arr = np.tile(row, (N_ROWS, 1))
-    _write_raster(RAW / "elevation" / "Synthetica" / "ZZZ_elevation.tif", arr, "float32", nodata=-9999.0)
+    _write_raster(
+        RAW / "elevation" / "Synthetica" / "ZZZ_elevation.tif", arr, "float32", nodata=-9999.0
+    )
 
 
 def gen_dem30() -> None:
@@ -112,11 +114,21 @@ def gen_dem30() -> None:
     name = "Copernicus_DSM_COG_10_S05_00_E020_00_DEM"
     z = np.tile(np.arange(sp, dtype="float32") * (10.0 / 36.0), (sp, 1))
     with rasterio.open(
-        dest / f"{name}.tif", "w", driver="GTiff", height=sp, width=sp, count=1, dtype="float32", crs=CRS,
-        transform=from_origin(20.0 - 0.5 / sp, -4.0 + 0.5 / sp, 1 / sp, 1 / sp), compress="deflate",
+        dest / f"{name}.tif",
+        "w",
+        driver="GTiff",
+        height=sp,
+        width=sp,
+        count=1,
+        dtype="float32",
+        crs=CRS,
+        transform=from_origin(20.0 - 0.5 / sp, -4.0 + 0.5 / sp, 1 / sp, 1 / sp),
+        compress="deflate",
     ) as dst:
         dst.write(z, 1)
-    (dest / "manifest.json").write_text(json.dumps({"source": "synthetic ZZZ", "tiles": [{"name": name}], "absent_tiles": []}))
+    (dest / "manifest.json").write_text(
+        json.dumps({"source": "synthetic ZZZ", "tiles": [{"name": name}], "absent_tiles": []})
+    )
 
 
 def gen_population() -> None:
@@ -222,7 +234,12 @@ def gen_grid() -> None:
 def gen_solar() -> None:
     """Global-PVOUT-style raster, uniform value 4.5 kWh/kWp/day (known constant, easy mean check)."""
     arr = np.full((N_ROWS, N_COLS), 4.5, dtype="float32")
-    out = RAW / "solar_potential" / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF" / "PVOUT.tif"
+    out = (
+        RAW
+        / "solar_potential"
+        / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF"
+        / "PVOUT.tif"
+    )
     _write_raster(out, arr, "float32", nodata=-9999.0)
 
 
@@ -258,8 +275,16 @@ def gen_wind() -> None:
         out = RAW / "wind" / "gwa" / f"ZZZ_{slug}_{height}m.tif"
         out.parent.mkdir(parents=True, exist_ok=True)
         with rasterio.open(
-            out, "w", driver="GTiff", height=gwa_rows, width=gwa_cols, count=1,
-            dtype="float32", crs=CRS, transform=transform, nodata=-9999.0,
+            out,
+            "w",
+            driver="GTiff",
+            height=gwa_rows,
+            width=gwa_cols,
+            count=1,
+            dtype="float32",
+            crs=CRS,
+            transform=transform,
+            nodata=-9999.0,
         ) as dst:
             dst.write(arr, 1)
 
