@@ -1,6 +1,6 @@
 # F5 technical_potential
 
-Status: `not_started`
+Status: `in_progress`
 Methodology items: M-F5-01 to M-F5-06, M-F4-07, V-02, V-03
 
 ## Contract
@@ -11,6 +11,14 @@ Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restri
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
+| M-F5-01 | `P_MW = eligible_area_km2 * LUF * PD` | `technical_potential/capacity.py:capacity_mw` | `test_technical_potential_functions.py::test_capacity_and_energy_closed_form`, `test_capacity_rejects_out_of_domain_inputs` | pass |
+| M-F5-02 | Solar `CF0 = pvout / 24`; member `CF0 * delta_rsds * (1 + gamma * dT)` | `solar.py:solar_cf_reference`, `solar_cf_member` | `test_pvout_to_cf_units_only`, `test_solar_member_reference_factors_return_cf0_and_gamma_sign` | pass |
+| M-F5-03 | Power-law `A_H`, linear `k_H` and `rho_H`; no extrapolation | `wind_profile.py:bracket_heights`, `weibull_scale_at_height`, `linear_at_height`, `resource_at_hub_height` | `test_power_law_*`, `test_linear_interpolation_midpoint_and_ends`, `test_hub_height_outside_the_data_heights_raises` | pass |
+| M-F5-03 | Density folded into the scale; exact piecewise-linear Weibull integral; member and ratio form (D-F5-001, D-F5-002) | `weibull_cf.py:equivalent_scale`, `weibull_capacity_factor`, `wind_cf_reference`, `wind_cf_member`, `member_cf_ratio` | `test_weibull_cf_matches_numerical_integration_over_a_grid` (rtol 1e-6 against `quad`), `test_density_folds_into_the_scale`, `test_ratio_form_equals_direct_form` | pass |
+| M-F5-03 | Power curve file, validation, hash, synthetic refused in production (D-F5-003) | `power_curve.py:PowerCurve`, `load_power_curve`, `curve_file_sha256`, `assert_curve_usable` | `test_power_curve_validation`, `test_loader_checks_the_stem_and_the_file`, `test_synthetic_curve_is_refused_in_production_only` | pass |
+| M-F5-05 | `E = P_MW * CF * 8760` | `capacity.py:annual_energy_mwh`; constant `core/constants.py:HOURS_PER_YEAR` | `test_capacity_and_energy_closed_form` | pass (the value 8760 awaits the author's check in the diff, D-F5-009) |
+| D-F5-008 | Rescale of the stored CF to another `gamma` or `eta_loss` | `rescale.py:rescale_cf_wind`, `rescale_cf_solar` | `test_rescale_*` | pass |
+| V-02 | Weibull CF against integration; PVOUT units; power-law interpolation | see the rows above | `test_technical_potential_functions.py` | pass |
 
 ## Active implementation decisions
 
@@ -19,7 +27,7 @@ Recorded before any code (Douglas's verdicts of 2026-10-08 on `docs/_audit/2026-
 - **D-F5-001 — Integration of the Weibull (D1; M-F5-03, V-02).** The tabulated curve is read as piecewise linear and each segment is integrated in closed form with `scipy.special.gammainc`; no speed step exists. `scipy.integrate.quad` is only the reference of the test.
 - **D-F5-002 — Test tolerance (D2; V-02).** Relative tolerance 1e-6 between the exact integral and `quad` (`quad` with `epsrel = 1e-10` and breakpoints at the curve nodes), written in the test and here.
 - **D-F5-003 — IEC curve while OQ-005 is open (D3; M-F5-03, A-09).** The `PowerCurve` schema and its loader exist; no real curve file exists. One synthetic curve lives in `tests/fixtures/` with `synthetic: true` and is refused in a production run. Wind F5 for BRA, PRT and IND fails loudly until OQ-005 closes.
-- **D-F5-004 — Curve provenance and class rule (D4; M-F5-03, OQ-005).** The curve file (`config/power_curves/<curve_id>.yaml`) carries the table and the U-05 provenance; `technologies.yaml` carries `power_curves` (class to curve id) and `iec_class_rule`, both `null` today. Rule: class per cell from the mean wind speed at hub height in the reference climate, fixed across members. The class thresholds are OQ-005.
+- **D-F5-004 — Curve provenance and class rule (D4; M-F5-03, OQ-005).** The curve file (`config/power_curves/<curve_id>.yaml`) carries the table and the U-05 provenance; `technologies.yaml` carries `power_curves` (class to curve id) and `iec_class_rule` (the class thresholds, D-F5-017), both `null` today. Rule: class per cell from the mean wind speed at hub height in the reference climate, fixed across members. The thresholds are OQ-005.
 - **D-F5-005 — Three land scenarios at cell level (D5; M-F5-06, U-08).** One potential file per technology and scenario; F6 and F7 read only `__central`. The climate effect is computed inside each scenario, never across scenarios.
 - **D-F5-006 — Masked cell-members (D6; M-F4-07, M-F5-06, M-F7-01).** The aggregates carry both series and the climate effect uses like-for-like. The F7 set is the central candidates present in every member of the core window; cells with a masked member form the class *climate-data-invalid*, reported with count and map, outside the ranking.
 - **D-F5-007 — Wind mask removes the solar row too (D7).** The literal M-F4-07 rule is kept: a cell-member masked for `delta_wind` is absent for both technologies, counted per technology.

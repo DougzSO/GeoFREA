@@ -1,4 +1,4 @@
-"""Raster-format constants shared across phases.
+"""Raster-format and physical constants shared across phases.
 
 Ported from geoworld_framework's src/core/constants.py — only the subset
 actually used so far (data_quality_audit's raster inspection, and, as
@@ -49,3 +49,13 @@ ESA_CLASS_NAMES: dict[int, str] = {
     95: "Mangroves",
     100: "Moss and lichen",
 }
+
+# Physical and calendar constants of F5 (D-F5-009). They are constants of a standard or of the calendar, not
+# scientific parameters with a range (U-05), so they live here and not in `config/parameters.json`.
+# Reference air density, kg/m3 (M-F5-03): the International Standard Atmosphere at sea level and 15 degC (ISO 2533), which is the
+# reference density of the power-curve convention of IEC 61400-12-1.
+RHO0_KG_M3: float = 1.225
+# Hours in a year as M-F5-05 defines it; leap years are ignored by that definition.
+HOURS_PER_YEAR: float = 8760.0
+# Hours in a day, the unit conversion of PVOUT (kWh/kWp/day) to a capacity factor (M-F5-02).
+HOURS_PER_DAY: float = 24.0
