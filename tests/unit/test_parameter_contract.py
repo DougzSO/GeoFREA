@@ -102,7 +102,7 @@ def test_uncertain_parameter_requires_range_in_production():
     assert any(
         "PRT solar capex_usd_per_kw: uncertain parameter has no range" in e for e in audit.errors
     )
-    assert any("PRT solar gamma: uncertain parameter has no entry" in e for e in audit.errors)
+    assert any("PRT solar gamma: uncertain parameter has no value" in e for e in audit.errors)
     with pytest.raises(ProductionRunError, match="no range"):
         enforce_production(audit)
     # a parameter with a range passes: give capex a range and its finding disappears
@@ -119,6 +119,24 @@ def test_uncertain_parameter_requires_range_in_production():
         "PRT solar capex_usd_per_kw" in e
         for e in audit_parameters(patched, technologies, ["PRT"], ["solar"]).errors
     )
+
+
+@pytest.mark.unit
+def test_required_f5_parameters_block_production_while_null():
+    """D-F5-011: `luf`, `power_density_mw_per_km2` and `hub_height_m` are not uncertain, yet a production run refuses them null."""
+    parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
+    for iso in ("BRA", "PRT", "IND"):
+        wind = audit_parameters(parameters, technologies, [iso], ["wind"])
+        for key in technologies.technologies["wind"].required_parameters:
+            assert f"{iso} wind {key}: required parameter has no value" in wind.errors
+        solar = audit_parameters(parameters, technologies, [iso], ["solar"])
+        assert f"{iso} solar luf: required parameter has no value" in solar.errors
+    assert "hub_height_m" in technologies.technologies["wind"].required_parameters
+    # the synthetic country carries test values for every required parameter
+    zzz = audit_parameters(parameters, technologies, ["ZZZ"], ["solar", "wind"])
+    assert not any("required parameter" in e for e in zzz.errors)
+    with pytest.raises(ProductionRunError, match="required parameter has no value"):
+        enforce_production(audit_parameters(parameters, technologies, ["PRT"], ["wind"]))
 
 
 @pytest.mark.unit

@@ -280,6 +280,9 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     """
 
     opex_variable_usd_per_kwh: VerifiedValue[float | None]
+    luf: VerifiedValue[UnitInterval | None]  # M-F5-01 (OQ-004)
+    power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
+    gamma: VerifiedValue[float | None]  # M-F5-02 (OQ-023), 1/K, negative
 
 
 class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
@@ -290,9 +293,16 @@ class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     parameters.json, for provenance of every field's value. Same
     opex_variable_usd_per_kwh and discount_rate_increment caveats as
     SolarParams apply here.
+
+    The F5 parameters (M-F5-01, M-F5-03) are null with `status = "pending_research"` until OQ-004 and OQ-005 give a sourced
+    value; `hub_height_m` replaces the former `hub_heights` of `technologies.yaml` (D-F5-012).
     """
 
     opex_variable_usd_per_kwh: VerifiedValue[float | None]
+    luf: VerifiedValue[UnitInterval | None]  # M-F5-01 (OQ-004)
+    power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
+    eta_loss: VerifiedValue[UnitInterval | None]  # M-F5-03 (OQ-005)
+    hub_height_m: VerifiedValue[PositiveFloat | None]  # M-F5-03 (OQ-005), within 100 to 200 m
 
 
 class TechnologyParams(BaseModel):

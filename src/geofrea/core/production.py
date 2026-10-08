@@ -6,6 +6,8 @@ any phase starts (A-09):
 
 - an uncertain parameter (U-03, listed per technology in `technologies.yaml`) has no entry, no value or no range in `parameters.json`
   for a country and technology being run (U-05);
+- a required parameter (`required_parameters` per technology in `technologies.yaml`: the F5 inputs that are not uncertain, such as
+  `luf`, `power_density_mw_per_km2` and `hub_height_m`; D-F5-011) has no entry or no value;
 - a consumed parameter has `proxy = true` (V6: a value of a different quantity or technology).
 
 Tier 3 values and ranges (U-07) and `synthetic` values only ever produce warnings. No value or range is created here.
@@ -69,7 +71,7 @@ def audit_parameters(
 ) -> ParameterAudit:
     """Findings for the parameters consumed by a run of `countries` x `run_technologies`.
 
-    Implements: U-05, V6.
+    Implements: U-05, V6, M-F5-01 (required parameters).
     """
     audit = ParameterAudit()
     for iso in countries:
@@ -106,6 +108,15 @@ def audit_parameters(
                     audit.errors.append(f"{where}: uncertain parameter has no value")
                 elif vv.range is None:
                     audit.errors.append(f"{where}: uncertain parameter has no range (U-05)")
+            for key in technologies.technologies[tech].required_parameters:
+                where = f"{iso} {tech} {key}"
+                vv = fields.get(key)
+                if vv is None:
+                    audit.errors.append(
+                        f"{where}: required parameter has no entry in parameters.json"
+                    )
+                elif vv.value is None:
+                    audit.errors.append(f"{where}: required parameter has no value")
     return audit
 
 

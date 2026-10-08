@@ -25,8 +25,13 @@ class TechnologyConfig(BaseModel):
     exclusions: list[str]
     cost_drivers: list[str]
     uncertain_parameters: list[str]
-    hub_heights: dict[str, float | None] | None = None  # wind only (OQ-005)
-    iec_class_rule: str | None = None  # wind only (OQ-005)
+    required_parameters: list[str] = Field(
+        default_factory=list
+    )  # F5 inputs a production run must find (D-F5-011)
+    power_curves: dict[str, str] | None = (
+        None  # wind only: IEC class -> curve id in config/power_curves/ (OQ-005, D-F5-004)
+    )
+    iec_class_rule: str | None = None  # wind only (OQ-005, D-F5-004)
 
 
 class TechnologiesFile(BaseModel):

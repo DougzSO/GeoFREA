@@ -10,7 +10,7 @@
 solar:
   # Resource layers for this technology (M-F2b-03)
   resource_layers:
-    - pvout  # Solar irradiance (kWh/kWp/day), Global Solar Atlas
+    - pvout_kwh_kwp_day  # PVOUT (kWh/kWp/day), Global Solar Atlas; same name as the F3 candidate column
 
   # Capacity-factor model selection (M-F5-02 for solar)
   # "pvout_with_temperature": Uses temperature-corrected PVOUT
@@ -33,6 +33,13 @@ solar:
     - grid_connection   # Distance to transmission grid (km)
     - site_access       # Distance to roads (km)
 
+  # Parameters F5 needs (M-F5-01, M-F5-02; D-F5-011). Keys of config/parameters.json
+  # countries.<ISO3>.technologies.solar; a production run refuses a null value.
+  required_parameters:
+    - luf                       # M-F5-01 (OQ-004)
+    - power_density_mw_per_km2  # M-F5-01 (OQ-004)
+    - gamma                     # M-F5-02 (OQ-023)
+
   # Uncertain parameters (U-03, U-04)
   # Keys must exist in config/parameters.json countries.<ISO3>.technologies.solar
   # Every key here must have a non-null range in experiments.yaml.uncertain_parameters
@@ -50,16 +57,17 @@ solar:
 wind:
   # Resource layers for this technology
   # Weibull parameters at three hub heights (M-F2b-03, M-F5-03)
+  # Names are the F3 candidate columns (<name>_<height>m); A is the Weibull scale (m/s), k the shape
   resource_layers:
-    - weibull_a_100    # Weibull shape at 100m
-    - weibull_k_100    # Weibull scale at 100m
-    - air_density_100  # Air density at 100m (kg/m³)
-    - weibull_a_150
-    - weibull_k_150
-    - air_density_150
-    - weibull_a_200
-    - weibull_k_200
-    - air_density_200
+    - weibull_a_100m    # Weibull scale A at 100 m (m/s)
+    - weibull_k_100m    # Weibull shape k at 100 m
+    - air_density_100m  # Air density at 100 m (kg/m3)
+    - weibull_a_150m
+    - weibull_k_150m
+    - air_density_150m
+    - weibull_a_200m
+    - weibull_k_200m
+    - air_density_200m
 
   # Capacity-factor model (M-F5-03)
   # "weibull_with_air_density": Weibull integration with air-density-corrected wind speed
@@ -91,18 +99,20 @@ wind:
     - road_cost_usd_per_km
     - eta_loss  # Availability + wake losses
 
-  # Hub height per country (M-F5-03)
-  # OQ-005: Country-specific hub height selection rule
-  hub_heights:
-    PRT: null  # Pending OQ-005
-    BRA: null
-    IND: null
+  # Parameters F5 needs (M-F5-01, M-F5-03; D-F5-011, D-F5-012). Keys of config/parameters.json
+  # countries.<ISO3>.technologies.wind; a production run refuses a null value.
+  # The hub height lives there (hub_height_m), no longer in this registry.
+  required_parameters:
+    - luf                       # M-F5-01 (OQ-004)
+    - power_density_mw_per_km2  # M-F5-01 (OQ-004)
+    - eta_loss                  # M-F5-03 (OQ-005)
+    - hub_height_m              # M-F5-03 (OQ-005)
 
-  # Technology-specific thresholds and parameters
-  # IEC turbine class selection is a wind concept (M-F5-03: "Reference
-  # turbine power curve per IEC class, class chosen per cell by the
-  # rule in technologies.yaml"). Moved here from solar 2026-09-24
-  # (ADJ-7) — it was a placeholder under the wrong technology, never a
-  # real rule for either. Still a placeholder: no rule decided yet.
-  # OQ-005: IEC class selection rule per cell (location-dependent or fixed)
+  # Reference power curves (M-F5-03, D-F5-003, D-F5-004): IEC class -> curve id. The table and its
+  # provenance live in config/power_curves/<curve_id>.yaml. No real curve exists until OQ-005 closes.
+  power_curves: null  # Pending OQ-005
+
+  # IEC class per cell (M-F5-03, D-F5-004): from the mean wind speed at hub height in the reference
+  # climate, fixed across members. The thresholds of the classes are pending OQ-005.
+  # (Moved here from solar 2026-09-24, ADJ-7.)
   iec_class_rule: null  # Pending OQ-005

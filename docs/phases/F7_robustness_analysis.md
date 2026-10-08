@@ -5,7 +5,7 @@ Methodology items: M-F7-01 to M-F7-11, V-03
 
 ## Contract
 
-Requires: F6 artifacts and kernel, `potential_<tech>.parquet`, `forcing.parquet`, `hazard_context.parquet`, admin1 boundaries. Produces: `robustness_<tech>.parquet`, hypothesis test tables, PRIM boxes.
+Requires: F6 artifacts and kernel, `potential_<tech>__central.parquet`, `forcing.parquet`, `forcing_masked.parquet`, `hazard_context.parquet`, admin1 boundaries. Produces: `robustness_<tech>.parquet`, hypothesis test tables, PRIM boxes.
 
 ## Conformance
 
@@ -20,6 +20,7 @@ Recorded before any code (Douglas's verdicts, 2026-10-08, METHODOLOGY 7.0.0):
 - **D-F7-002 — H4 comparison (V4; M-F7-06).** The Jaccard comparison of climate-only versus techno-only futures is primary; the variance decomposition, on relative LCOE, is secondary.
 - **D-F7-003 — Feasibility and climate-fragile cells (V9; verdict B of 2026-10-08; M-F7-01, M-F7-02).** A cell with CF below `CF_min` in the nominal future `(m0, s0)` leaves the F7 set. Climate-fragile = feasible in `(m0, s0)` and `CF(m, s0) < CF_min` in at least one member `m`: feasibility that defines the class is evaluated at the nominal parameters `s0` of each member. It is reported separately and not ranked with an infinite MR. Infeasibility that comes only from the parameter samples does not create the class and gives no infinite regret: within the P90 over samples, an infeasible sample receives the regret of the feasible cell with the highest LCOE in that future (finite worst case). `CF_min` is OQ-008.
 - **D-F7-004 — One threshold for satisficing and economic potential (verdict A of 2026-10-08, METHODOLOGY 7.0.1).** OQ-052 (cost threshold of economic potential, T-R12, H5) is merged into OQ-008: the LCOE threshold below which potential counts as economic is the satisficing threshold `tau` of M-F7-04, per country and technology.
+- **D-F7-005 — Climate-data-invalid cells (D-F5-006; METHODOLOGY 7.1.0, M-F7-01).** The F7 set is the central-scenario candidates present in every member of the core window. A cell with at least one member masked by M-F4-07 forms the class *climate-data-invalid*: it is reported with its count and a map, and it is not ranked and gets no regret. F7 reads `potential_<tech>__central.parquet` only.
 
 ## Known issues
 

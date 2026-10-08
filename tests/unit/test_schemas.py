@@ -68,6 +68,9 @@ VALID_SOLAR = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+    "luf": dict(VALID_PENDING_VALUE),
+    "power_density_mw_per_km2": dict(VALID_PENDING_VALUE),
+    "gamma": dict(VALID_PENDING_VALUE),
 }
 
 VALID_WIND = {
@@ -77,6 +80,10 @@ VALID_WIND = {
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
+    "luf": dict(VALID_PENDING_VALUE),
+    "power_density_mw_per_km2": dict(VALID_PENDING_VALUE),
+    "eta_loss": dict(VALID_PENDING_VALUE),
+    "hub_height_m": dict(VALID_PENDING_VALUE),
 }
 
 VALID_TECHNOLOGIES = {"solar": VALID_SOLAR, "wind": VALID_WIND}
