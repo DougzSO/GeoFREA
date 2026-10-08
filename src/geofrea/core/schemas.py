@@ -451,12 +451,16 @@ class SettingsFile(BaseModel):
         run: Country/phase selection for a pipeline execution.
         geospatial: Spatial processing configuration (currently just
             grid_alignment's target resolution).
+        figures: Which diagnostic figures a phase draws (A-08): `all`, `summary` (the figure the thesis output
+            needs, not the member-level ones) or `none`. Rasters and tables are artifacts and are always written.
+            Honoured by the F5 maps; the other map phases draw their figures regardless of it so far.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     run: RunConfig
     geospatial: GeospatialConfig
+    figures: Literal["all", "summary", "none"]
 
 
 class GeometryRepairSummary(BaseModel):

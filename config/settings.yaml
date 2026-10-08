@@ -31,7 +31,10 @@ run:
   # Phases wired in main.py, in pipeline order (the orchestrator derives the real order from the
   # requires/produces graph): F1 data_acquisition, F1b data_quality_audit, F2a grid_alignment,
   # F2b siting_layers (physical-unit layers), F4 climate_forcing (change factors, members.yaml),
-  # F4 hazard_context, F4 climate_maps (diagnostic maps), F3 land_eligibility, overview. F5-F8 are not built yet.
+  # F4 hazard_context, F4 climate_maps (diagnostic maps), F3 land_eligibility, overview, F5 technical_potential and
+  # potential_maps. F5 is registered but not listed below: it fails loudly (MissingParameterError) while the real
+  # countries lack LUF, power density, gamma, eta_loss, hub height and power curves (OQ-004, OQ-005, OQ-023); name it with
+  # `python main.py <ISO3> --phases technical_potential,potential_maps` once those values are entered. F6-F8 are not built yet.
   # The legacy `suitability_criteria` phase was retired (V16).
   target_phases:
     - data_acquisition
@@ -75,3 +78,10 @@ geospatial:
     # frozen PRT/BRA baseline (docs/architecture/baseline-manifest.md). The grid is snapped so 0.05 degree
     # cells (S-06) nest exactly 5 x 5. The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
+
+# Which diagnostic figures a phase draws (METHODOLOGY A-08): all | summary | none.
+#   all     the summary figure and the member-level or per-variable ones
+#   summary only the figure a thesis output reads (F5: the potential density map at the reference climate)
+#   none    no PNG; rasters and tables are artifacts and are always written
+# Honoured by the F5 maps (potential_maps); climate_maps and overview draw their figures regardless so far.
+figures: all

@@ -95,6 +95,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "land_eligibility",
         "climate_forcing",
         "technical_potential",
+        "potential_maps",
         "hazard_context",
         "climate_maps",
         "overview",

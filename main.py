@@ -124,6 +124,7 @@ from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibil
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
+from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
 
@@ -368,6 +369,7 @@ def _build_phase_specs(
     audit_config: AuditConfig,
     technologies: tuple[str, ...] = (),
     production: bool = False,
+    figures: str = "all",
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -397,6 +399,7 @@ def _build_phase_specs(
         technologies: settings.yaml's `run.technologies`, closed over by technical_potential
             (F5), whose `produces` names one artifact per technology and land scenario.
         production: whether this is a production run; F5 refuses a synthetic power curve in one.
+        figures: settings.yaml's `figures` (A-08), closed over by potential_maps.
 
     Returns:
         The registered PhaseSpecs.
@@ -491,6 +494,14 @@ def _build_phase_specs(
                 f"potential_aggregates_{tech}", potential.aggregates, POTENTIAL_TABLE_SCHEMA_VERSION
             )
         _register_json_artifact(context, "technical_potential", result)
+        return result
+
+    def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
+        """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
+        result = build_potential_maps(context.country_code, technologies, figures)
+        for key, path in result.rasters.items():
+            context.register_artifact(key, path, "1.0")
+        _register_json_artifact(context, "potential_maps", result)
         return result
 
     def overview_run(context: PhaseContext) -> OverviewSummary:
@@ -606,6 +617,16 @@ def _build_phase_specs(
             ),
         ),
         PhaseSpec(
+            name="potential_maps",
+            output_model=PotentialMapsSummary,
+            run=potential_maps_run,
+            requires=frozenset({f"potential_{tech}__central" for tech in technologies}),
+            produces=frozenset({"potential_maps"})
+            | {f"potential_density_{tech}" for tech in technologies}
+            | {f"capacity_factor_{tech}" for tech in technologies},
+            summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
+        ),
+        PhaseSpec(
             name="hazard_context",
             output_model=HazardSummary,
             run=hazard_context_run,
@@ -663,6 +684,7 @@ def run_geofrea(
     revalidate_phases: list[str] | None = None,
     technologies: tuple[str, ...] = (),
     production: bool = False,
+    figures: str = "all",
 ) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
@@ -683,6 +705,7 @@ def run_geofrea(
             geofrea.core.orchestrator.compute_dirty).
         technologies: settings.yaml's `run.technologies`, threaded to technical_potential.
         production: Whether this is a production run, threaded to technical_potential.
+        figures: settings.yaml's `figures`, threaded to potential_maps.
 
     Returns:
         A tuple: (True if every one of target_phases ended "success",
@@ -725,7 +748,9 @@ def run_geofrea(
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
     results = orchestrator.run(
-        _build_phase_specs(resolutions, distance_cap_km, audit_config, technologies, production)
+        _build_phase_specs(
+            resolutions, distance_cap_km, audit_config, technologies, production, figures
+        )
     )
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
@@ -877,6 +902,7 @@ def main(argv: list[str] | None = None) -> int:
             revalidate_phases,
             tuple(settings.run.technologies),
             args.production,
+            settings.figures,
         )
         all_ok = all_ok and ok
         for phase_name, result in results.items():

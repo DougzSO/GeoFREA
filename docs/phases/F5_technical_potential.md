@@ -5,7 +5,7 @@ Methodology items: M-F5-01 to M-F5-06, M-F4-07, V-02, V-03
 
 ## Contract
 
-Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restrictive, permissive), `forcing.parquet`, `forcing_masked.parquet` and `members.yaml` (F4), technology registry, parameters, and for wind a power curve of `config/power_curves/`. Produces: `potential_<tech>__<scenario>.parquet` (`cell_id`, `member`, `P_MW`, `CF`, `E_MWh`) and `potential_aggregates_<tech>.parquet` (one row per land scenario and member; series *all present cells* and *like-for-like*). F6 and F7 read only the central scenario. The reference grid is not required.
+Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restrictive, permissive), `forcing.parquet`, `forcing_masked.parquet` and `members.yaml` (F4), technology registry, parameters, and for wind a power curve of `config/power_curves/`. Produces: `potential_<tech>__<scenario>.parquet` (`cell_id`, `member`, `P_MW`, `CF`, `E_MWh`) and `potential_aggregates_<tech>.parquet` (one row per land scenario and member; series *all present cells* and *like-for-like*). F6 and F7 read only the central scenario. The reference grid is not required. Support phase `potential_maps` (requires `potential_<tech>__central`): `potential_density_<tech>.tif`, `capacity_factor_<tech>.tif` (COG) and the PNG maps, as `settings.yaml` `figures` allows.
 
 ## Conformance
 
@@ -28,6 +28,7 @@ Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restri
 | A-02, D-F5-009, D-F5-010 | Parameters, curve hash, `rho0`, hours, integration method and `c2_applied: false` in the table metadata | `pipeline.py:_provenance`, `core/tables.py:write_table(extra_metadata=)` | `test_table_metadata_records_the_parameters_curve_hash_and_that_c2_is_not_applied` | pass |
 | A-01, A-03 | `PhaseSpec` `technical_potential` (requires `land_eligibility`, `forcing`, `forcing_masked`, `members`; produces per-technology, per-scenario keys) | `main.py:_build_phase_specs` | `test_main.py::test_build_phase_specs_returns_all_phases_in_order` | pass |
 | A-06, V-08 | Synthetic country runs F5 end to end (D-F5-013: candidate tables and forcing built in the test, ZZZ test values of `parameters.json`) | `tests/unit/test_technical_potential_pipeline.py` | `test_zzz_*`, `test_solar_values_follow_the_method`, `test_wind_values_follow_the_method` | pass (F3 and F4 do not run on ZZZ yet, see Known issues) |
+| T-R1, D-F5-015 | COG of `P_MW / cell_area_km2` and of `CF` at `m0` (central scenario) and the potential-density figure, under `settings.yaml` `figures` | `maps.py:build_potential_maps`; `main.py` phase `potential_maps` | `test_technical_potential_maps.py` | pass |
 
 
 ## Active implementation decisions
@@ -64,3 +65,4 @@ Recorded before any code (Douglas's verdicts of 2026-10-08 on `docs/_audit/2026-
 
 - 2026-10-08: design report and verdicts D1 to D16; METHODOLOGY 7.1.0; `parameters.json` and `technologies.yaml` extended; no phase code.
 - 2026-10-08: pipeline, CF models, aggregates, table schemas and `PhaseSpec` `technical_potential`; run on the synthetic country; BRA, PRT and IND fail with `MissingParameterError` (9 missing items each).
+- 2026-10-08: `potential_maps` (COG and figure) and `settings.yaml` `figures`.

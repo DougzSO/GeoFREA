@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.1.0 |
+| Version | 7.1.1 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-08 |
 | Owner | Douglas |
@@ -122,13 +122,14 @@ F2a (reference_grid) + F1b + external_inputs ──> F4 climate_forcing ──> 
 F2a (reference_grid) + F4 members ──> hazard_context
 F2a + F2b + F3 + F4 + hazard_context ──> overview
 F3 + F4 ──> F5 technical_potential ──> F6 lcoe_modeling ──> F7 robustness_analysis
+F5 (central scenario) ──> potential_maps
 F3 + F6 (nominal) + F1 (existing plants) ──> F7b external_validation
 F5 + F6 + F7 + F7b ──> F8 results_synthesis ──> E1 explorer
 ```
 
 Each phase requires the named artifacts it reads, not the producing phase as a whole: F4 requires the `reference_grid` artifact (CRS, transform, shape and a hash of the in-country mask of the analysis grid) and no aligned layer, F2b and F3 require the aligned layers they read. A rerun of a phase invalidates a consumer only when the content hash of an artifact the consumer requires changed (A-02).
 
-The phases external_inputs, hazard_context, climate_maps and overview are support phases with no F-identifier; they are named by phase name and registered in `main.py` with the same `requires` and `produces` contract as the F-phases (A-01). The legacy phase `suitability_criteria` is outside this specification.
+The phases external_inputs, hazard_context, climate_maps, potential_maps and overview are support phases with no F-identifier; they are named by phase name and registered in `main.py` with the same `requires` and `produces` contract as the F-phases (A-01). The legacy phase `suitability_criteria` is outside this specification.
 
 Critical transitions:
 
@@ -150,6 +151,7 @@ Critical transitions:
 | F4 | `climate_forcing` | Compute per-cell climate change factors per member | Forcing table, masked-cell table, member list | RO3, RQ3 |
 | hazard_context | `climate_forcing` | Compute hazard context indicators per cell and member | Hazard table | RO3, RQ3 |
 | climate_maps | `climate_forcing` | Diagnostic maps of the change factors | Climate maps | Section 11 |
+| potential_maps | `technical_potential` | COG and diagnostic maps of potential density and capacity factor at the reference climate, central land scenario | Potential rasters, potential maps | T-R1 (F8 draws the thesis figure), Section 11 |
 | overview | `overview` | Country overview maps and table over F2a to F4 outputs | Overview figures | Section 11 |
 | F5 | `technical_potential` | Capacity, CF, and energy per cell and member | Potential table | RO1, RO3, RQ1, RQ3 |
 | F6 | `lcoe_modeling` | LCOE kernel, parameter sampling, per-member LCOE summaries | LCOE summaries, design matrix | RO2, RQ2 |
@@ -490,6 +492,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.1.1 | 2026-10-08 | PATCH (a registered support phase had no mention): Sections 4.1 and 4.2 list `potential_maps` as a support phase of F5 (requires the central potential table, produces the potential-density and capacity-factor rasters and the maps, drawn as `settings.yaml` `figures` allows, A-08). IDs cited and not altered: A-01, A-07, A-08, T-R1. |
 | 7.1.0 | 2026-10-08 | MINOR (registers verdicts D1 to D16 of `docs/_audit/2026-10_F5_design.md`, recorded as D-F5-001 to D-F5-016 in `docs/phases/F5_technical_potential.md`; no existing result is redefined): M-F5-03 gains the hub height in `parameters.json` (D-F5-012), the folded form `A_eq` (Section 2.3 of the design report), the exact piecewise-linear integral (D-F5-001, D-F5-002), the curve storage and the IEC class rule fixed across members (D-F5-003, D-F5-004), and `rho0` in `core/constants` (D-F5-009); M-F5-06 names the output per land scenario, the F6 and F7 reading of the central file and the two aggregate series (D-F5-005, D-F5-006); M-F7-01 defines the climate-data-invalid class and the F7 set (D-F5-006); M-F5-01 and M-F5-02 name the parameters as required parameters (D-F5-011); M-F5-05 cites the hours-per-year constant (D-F5-009); A-04 and Section 9 add the required-parameter keys, the IEC class rule, the class-to-curve map and `config/power_curves/`. IDs cited by the rewritten lines and not altered: M-F4-07, U-05, U-06, U-08, V1, V-02, V-03, OQ-005, OQ-004, OQ-023. |
 | 7.0.1 | 2026-10-08 | PATCH (verdicts A to G of 2026-10-08): OQ-052 is merged into OQ-008, so the cost threshold of economic potential (T-R12, H5) is the satisficing threshold `tau` (H5, M-F7-07, T-R12, MS-6 in Section 12). Climate-fragile is defined at the nominal parameters `s0` of each member and parametric-only infeasibility gets the finite worst-case regret (M-F7-01, M-F7-02; V9, V3). Section 4.1: F4 requires the `reference_grid` artifact and no aligned layer, F2b and F3 require named layers, and staleness follows artifact content (4.1, 4.2, A-02, A-01). The V-01 fixtures are refrozen with E1 to E3 as the shares F3 computes (V-01, M-F3-01). IDs cited by the rewritten lines and not altered: M-F7-03, M-F7-07, H5, T-R12, OQ-010, OQ-020, OQ-050, OQ-051, OQ-052, V-03, M-F4-07, M-F2b-01, M-F2b-05, A-06, A-09, F4, H1, H4, RQ3, U-08, and the OQ list of the MS-6 row: OQ-001, OQ-002, OQ-003, OQ-004, OQ-005, OQ-015, OQ-016, OQ-019, OQ-021, OQ-022, OQ-023, OQ-044, OQ-045. |
 | 7.0.0 | 2026-10-08 | MAJOR (changes a result definition and phase contracts): applies verdicts V1 to V6, V8 to V10, V12 to V15 and V17 to V19 of `docs/_audit/2026-10_systematic_review.md` (V7, V11, V16 and V20 act outside this document). Land stays in every potential output and leaves only the set of futures of F7 (V1): U-01, U-06 (three named scenarios central, restrictive, permissive replacing the strict and lenient variants; full factorial only to report ranges, V2), M-F2b-06, M-F3-02, M-F3-04, M-F5-06, M-E1-01, T-R2, Section 9. Relative regret and primary metric MR as max over members of the P90 over samples (V3): M-F7-02, M-F7-03, M-F7-05, M-F7-11, V-03, RO4, Section 3; M-F7-01 (cells below CF_min leave the set, climate-fragile class, V9); M-F7-06 (Jaccard primary, variance on relative LCOE secondary, V4); M-F7-07 (H4 per V4, new H5 test, rules in OQ-050). Independent sampling without sourced correlation (V5): U-03, L-012; U-05 gains the `proxy` field with a narrow definition (V6), L-203 stays; new U-08 reporting rule (V14); A-02 records the METHODOLOGY version per phase entry (V15). S-05, M-F1-04 and M-F4-05: the 2071-2100 window has no hazard rows until OQ-007 admits a hazard to LCOE (V8). RQ0 'siting priorities' (V10, S-06, OQ-010 in M-F7-05). New H5 (RQ3, V13) and thesis outputs T-R10 (extended), T-O3 (now essential), new T-R11 and T-R12, T-R8 (H1-H5), with the rule for climate outputs at fixed central land (V12), OQ-050, OQ-051, OQ-052 (to be registered in `docs/OPEN_QUESTIONS.md`). M-F2b-05 raises on an absent protected-area, lake or river layer (V17) with A-06 providing them; A-06 and V-08 extended with every built phase. Sections 4.1 and 4.2 match `main.py` (F1b `audit_report` required by F2b, F3, F4; support phases external_inputs, hazard_context, climate_maps, overview) and M-F1b-02 is rewritten (V18); A-01 referenced. M-F2a-06 keeps its text (anything but an exact block count is an error) and is now met by IND with the 10 m tiles (V19, D-F2a-015). Corrections of the systematic review: M-F2b-01 rewritten for shares, 30 m slope samples and named-level `excluded_classes` (M-F2a-06, M-F2a-07, M-F3-01); M-F2a-06 and M-F2a-07 moved to the F2a block; M-F2b-05 ordered before M-F2b-06; S-04 names the six GCMs (D-F4-012); U-03 names `opex_fixed_frac` (V7 name). Section 12 rewritten with the real state: MS-5 (V2, V19), MS-6 (OQ-004, OQ-005, OQ-023, OQ-001, OQ-016, OQ-017, OQ-018, OQ-019, OQ-022, OQ-008, OQ-010, OQ-020, OQ-021, OQ-050, OQ-051, OQ-052; OQ-002, OQ-003, OQ-015, OQ-044, OQ-045 resolved), MS-8, MS-9 (U-02, U-04, A-10). IDs cited by rewritten lines without a change of their own content: A-03, A-05, A-11, D-F2a-016, OQ-013, RO3, RQ1, RQ2, RQ4, RQ5, U-07, V-01, V-02, V-04, M-F3-01, M-F4-02, M-F4-03, M-F7-04, M-F7-08, M-F7-10, M-F2b-04, OQ-004, OQ-007, OQ-016, OQ-045, OQ-049, A-09. |

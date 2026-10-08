@@ -133,6 +133,7 @@ VALID_RUN_CONFIG = {
 VALID_SETTINGS_FILE = {
     "run": VALID_RUN_CONFIG,
     "geospatial": {"resolutions": {"suitability": 0.01}, "distance_cap_km": 100.0},
+    "figures": "all",
 }
 
 # tech_name -> (model class, valid payload) - shared across the tech-model tests below.
