@@ -253,3 +253,13 @@ def test_steep_share_reads_whole_bins_and_a_proportion_of_the_bin_holding_the_th
     assert e4(40.0) == pytest.approx(0.25)  # only the open-ended bin
     with pytest.raises(MissingExclusionLayerError):
         e4(45.0)
+
+
+def test_counts_with_a_no_class_band_use_the_sum_of_every_band_as_the_pixel_total():
+    classes = (*CLASSES, 0)
+    counts = np.zeros((len(classes), 1, 2), dtype=np.uint16)
+    counts[classes.index(30), 0, :] = [60, 100]
+    counts[classes.index(0), 0, :] = [40, 0]  # pixel 0: 40% of its samples have no class
+    layers = _layers((1, 2), land_cover_counts=counts, land_cover_classes=classes)
+    _, excl = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
+    assert excl["E5"][0].tolist() == pytest.approx([0.4, 0.0])

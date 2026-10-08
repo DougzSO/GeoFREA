@@ -428,3 +428,13 @@ def test_clip_vector_to_country_repairs_invalid_simplified_country_polygon(monke
 
     assert report.country_polygon_repaired is True
     monkeypatch.setattr(geo_utils_module.shapely, "simplify", real_simplify)
+
+
+def test_utm_zone_of_a_very_large_layer_comes_from_its_bounding_box_not_from_a_union(monkeypatch):
+    from shapely.geometry import box
+
+    import geofrea.core.geo_utils as gu
+
+    monkeypatch.setattr(gu, "_UTM_UNION_MAX_FEATURES", 2)
+    gdf = gpd.GeoDataFrame(geometry=[box(-9, 38, -8.9, 38.1), box(-8.5, 38.5, -8.4, 38.6), box(-8, 39, -7.9, 39.1)], crs="EPSG:4326")
+    assert gu.get_local_utm_crs(gdf) == "EPSG:32629"  # bbox centre (-8.45, 38.55) lies in zone 29 north

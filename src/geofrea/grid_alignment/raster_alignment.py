@@ -472,88 +472,147 @@ LAND_COVER_COUNT_NODATA = 65535
 _STRIP_GRID_ROWS = 8  # grid rows read at once from a tile (8 x 120 source rows)
 
 
+def _exact_block_factor(src, grid: GridContext) -> int | None:
+    """k if the grid pixel is k x k source pixels and the tile edges sit on grid pixel edges (exact block counting), else None."""
+    grid_res = abs(grid.transform.a)
+    t_res = abs(src.transform.a)
+    k = round(grid_res / t_res)
+    if k < 1 or abs(k * t_res - grid_res) > 1e-9 * grid_res or abs(abs(src.transform.e) - t_res) > 1e-12:
+        return None
+    off_c = (src.transform.c - grid.transform.c) / grid_res
+    off_r = (grid.transform.f - src.transform.f) / grid_res
+    if abs(off_c - round(off_c)) > 1e-6 or abs(off_r - round(off_r)) > 1e-6:
+        return None
+    return k
+
+
+def _count_exact(src, counts: np.ndarray, grid: GridContext, k: int, lut: np.ndarray) -> bool:
+    """Block-count one tile into `counts` (class bands only); False if the tile does not touch the grid."""
+    n_classes = len(WORLDCOVER_CLASSES)
+    c_t = round((src.transform.c - grid.transform.c) / abs(grid.transform.a))
+    r_t = round((grid.transform.f - src.transform.f) / abs(grid.transform.a))
+    t_cols, t_rows = src.width // k, src.height // k
+    gr0, gr1 = max(r_t, 0), min(r_t + t_rows, grid.height)
+    gc0, gc1 = max(c_t, 0), min(c_t + t_cols, grid.width)
+    if gr0 >= gr1 or gc0 >= gc1:
+        return False
+    n_c = gc1 - gc0
+    rb = (np.arange(_STRIP_GRID_ROWS * k) // k)[:, None]
+    cb = (np.arange(n_c * k) // k)[None, :]
+    base = ((rb * n_c + cb) * (n_classes + 1)).astype(np.int32)
+    for r in range(gr0, gr1, _STRIP_GRID_ROWS):
+        nr = min(_STRIP_GRID_ROWS, gr1 - r)
+        win = Window((gc0 - c_t) * k, (r - r_t) * k, n_c * k, nr * k)
+        key = lut[src.read(1, window=win)].astype(np.int32) + base[: nr * k]
+        per = np.bincount(key.ravel(), minlength=nr * n_c * (n_classes + 1)).reshape(nr, n_c, n_classes + 1)
+        for i in range(n_classes):
+            counts[i, r : r + nr, gc0:gc1] = per[:, :, i + 1]
+    return True
+
+
+def _count_by_centre(src, counts: np.ndarray, grid: GridContext, lut: np.ndarray) -> bool:
+    """Count one tile into `counts` (class bands plus a last band for samples of no class) by the grid pixel holding each
+    sample's centre; used when the tile pixel is not a whole fraction of the grid pixel. Counts are then approximate at pixel
+    edges (a sample belongs wholly to one pixel) and the number of samples per pixel varies slightly."""
+    n_bands = counts.shape[0]
+    res = abs(grid.transform.a)
+    tr = src.transform
+    cols_c = tr.c + (np.arange(src.width) + 0.5) * tr.a
+    gcol = np.floor((cols_c - grid.transform.c) / res + 1e-9).astype(np.int64)
+    col_ok = np.flatnonzero((gcol >= 0) & (gcol < grid.width))
+    if col_ok.size == 0:
+        return False
+    c_lo, c_hi = int(col_ok[0]), int(col_ok[-1]) + 1
+    touched = False
+    for r0 in range(0, src.height, 256):
+        r1 = min(r0 + 256, src.height)
+        rows_c = tr.f + (np.arange(r0, r1) + 0.5) * tr.e
+        grow = np.floor((grid.transform.f - rows_c) / res + 1e-9).astype(np.int64)
+        row_ok = np.flatnonzero((grow >= 0) & (grow < grid.height))
+        if row_ok.size == 0:
+            continue
+        a0, a1 = int(row_ok[0]), int(row_ok[-1]) + 1
+        block = src.read(1, window=Window(c_lo, r0 + a0, c_hi - c_lo, a1 - a0))
+        g_rows = grow[a0:a1]
+        gr_min, gr_max = int(g_rows.min()), int(g_rows.max())
+        nr = gr_max - gr_min + 1
+        key = ((g_rows - gr_min)[:, None] * grid.width + gcol[c_lo:c_hi][None, :]) * n_bands + lut[block].astype(np.int64)
+        per = np.bincount(key.ravel(), minlength=nr * grid.width * n_bands).reshape(nr, grid.width, n_bands)
+        counts[:, gr_min : gr_max + 1, :] += per.transpose(2, 0, 1).astype(np.uint16)
+        touched = True
+    return touched
+
+
 def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country_gdf):
-    """Per grid pixel, how many 10 m ESA WorldCover samples fall in each class (D-F2a-015).
+    """Per grid pixel, how many ESA WorldCover samples fall in each class (D-F2a-015).
 
     The point-sample mosaic (`mosaic_land_cover`) labels a 1.1 km pixel with the class of the one source sample under
-    its centre, which makes every cell share noisy (about +-10 percentage points at a 50 % share). Here the tiles are
-    block-counted instead: output band i holds, per pixel, the number of source samples of class WORLDCOVER_CLASSES[i]
-    (uint16, 0 to k*k with k = grid pixel / tile pixel, 120 for a 0.01 degree grid). Samples of no class (nodata 0, for
-    instance open sea) are counted in no band, so the bands of a pixel sum to less than k*k there. The grid must be an
-    exact multiple of the tile pixel and aligned to it (true for the 0.05 degree lattice and 3 degree tiles); anything
-    else raises, since a misaligned block count would be silently wrong (A-09). A tile that cannot be read but overlaps
-    the country raises, as in `mosaic_land_cover`. Pixels outside the country are LAND_COVER_COUNT_NODATA in every band.
+    its centre, which makes every cell share noisy (about +-10 percentage points at a 50 % share). Here the samples under each
+    pixel are counted instead: band i holds the number of samples of class WORLDCOVER_CLASSES[i] (uint16).
 
-    Returns the output path, or None if no tile overlapped the country.
+    Two modes, chosen per country from the tile headers: when every in-country tile is an exact fraction of the grid pixel and on
+    its edges (the 10 m global tiles on the 0.05 degree lattice: 120 x 120 samples per 0.01 degree pixel), the count is an exact
+    block count and samples of no class (open sea) are in no band (the tag `samples_per_pixel` gives the full pixel). Otherwise
+    (for IND the tiles hold about 100 m samples, 0.000898 degree) each sample is counted into the pixel containing its centre,
+    and an extra last band counts samples of no class, so the bands of a pixel always sum to its sample count (tag
+    `samples_per_pixel` is then 0). Pixels outside the country are LAND_COVER_COUNT_NODATA in every band. A tile that cannot be
+    read but overlaps the country raises, as in `mosaic_land_cover`. Returns the output path, or None if no tile overlapped.
     """
     bounds_main = tuple(float(b) for b in country_gdf.total_bounds)
-    grid_res = abs(grid.transform.a)
-    g_left, g_top = grid.transform.c, grid.transform.f
     n_classes = len(WORLDCOVER_CLASSES)
-    counts = np.zeros((n_classes, grid.height, grid.width), dtype=np.uint16)
-    lut = np.zeros(256, dtype=np.uint8)
-    for i, cls in enumerate(WORLDCOVER_CLASSES):
-        lut[cls] = i + 1
-    used = skipped = 0
-    progress = PeriodicProgress(logger, len(lc_tiles), "land_cover class counts")
+    in_country = []
+    exact_k: set[int | None] = set()
     for tile in lc_tiles:
-        progress.step()
         tile_path = Path(tile)
         tile_bounds = None
         try:
             with rasterio.open(str(tile)) as src:
                 tile_bounds = tuple(float(b) for b in src.bounds)
-                if not _bbox_overlaps(tile_bounds, bounds_main):
-                    skipped += 1
-                    continue
-                t_res = abs(src.transform.a)
-                k = round(grid_res / t_res)
-                if k < 1 or abs(k * t_res - grid_res) > 1e-9 * grid_res or abs(abs(src.transform.e) - t_res) > 1e-12:
-                    raise ValueError(f"grid pixel {grid_res} is not a whole multiple of tile pixel {t_res}")
-                off_c = (src.transform.c - g_left) / grid_res
-                off_r = (g_top - src.transform.f) / grid_res
-                if abs(off_c - round(off_c)) > 1e-6 or abs(off_r - round(off_r)) > 1e-6:
-                    raise ValueError("tile edges are not on the grid pixel edges")
-                c_t, r_t = round(off_c), round(off_r)  # grid column/row of the tile's top-left corner (may be negative)
-                t_cols, t_rows = src.width // k, src.height // k
-                gr0, gr1 = max(r_t, 0), min(r_t + t_rows, grid.height)
-                gc0, gc1 = max(c_t, 0), min(c_t + t_cols, grid.width)
-                if gr0 >= gr1 or gc0 >= gc1:
-                    skipped += 1
-                    continue
-                n_c = gc1 - gc0
-                rb = (np.arange(_STRIP_GRID_ROWS * k) // k)[:, None]
-                cb = (np.arange(n_c * k) // k)[None, :]
-                base = ((rb * n_c + cb) * (n_classes + 1)).astype(np.int32)
-                for r in range(gr0, gr1, _STRIP_GRID_ROWS):
-                    nr = min(_STRIP_GRID_ROWS, gr1 - r)
-                    win = Window((gc0 - c_t) * k, (r - r_t) * k, n_c * k, nr * k)
-                    block = src.read(1, window=win)
-                    key = lut[block].astype(np.int32) + base[: nr * k]
-                    flat = np.bincount(key.ravel(), minlength=nr * n_c * (n_classes + 1))
-                    per = flat.reshape(nr, n_c, n_classes + 1)
-                    for i in range(n_classes):
-                        counts[i, r : r + nr, gc0:gc1] = per[:, :, i + 1]
-                used += 1
+                if _bbox_overlaps(tile_bounds, bounds_main):
+                    in_country.append(tile_path)
+                    exact_k.add(_exact_block_factor(src, grid))
         except Exception as exc:
             footprint = tile_bounds or _esa_worldcover_tile_bounds(tile_path.name)
             if footprint is not None and _bbox_overlaps(footprint, bounds_main):
                 raise RuntimeError(
-                    f"land_cover_class_counts: tile {tile_path.name!r} could not be used ({type(exc).__name__}: {exc}) "
-                    f"and its footprint {footprint} overlaps the country, which would leave a coverage gap."
+                    f"land_cover_class_counts: tile {tile_path.name!r} could not be read ({type(exc).__name__}: {exc}) and its "
+                    f"footprint {footprint} overlaps the country, which would leave a coverage gap."
                 ) from exc
-            skipped += 1
             logger.warning("    Land cover tile %s skipped (%s: %s).", tile_path.name, type(exc).__name__, exc)
-    logger.info("    Land cover class counts: %d tiles used, %d skipped.", used, skipped)
+    if not in_country:
+        return None
+    exact = None not in exact_k and len(exact_k) == 1
+    n_bands = n_classes if exact else n_classes + 1
+    counts = np.zeros((n_bands, grid.height, grid.width), dtype=np.uint16)
+    lut = np.zeros(256, dtype=np.uint8)  # exact mode: 0 = no class, i + 1 = class i; centre mode: class i, no class = last band
+    if exact:
+        for i, cls in enumerate(WORLDCOVER_CLASSES):
+            lut[cls] = i + 1
+    else:
+        lut[:] = n_classes
+        for i, cls in enumerate(WORLDCOVER_CLASSES):
+            lut[cls] = i
+    progress = PeriodicProgress(logger, len(in_country), "land_cover class counts")
+    used = 0
+    for tile_path in in_country:
+        progress.step()
+        with rasterio.open(str(tile_path)) as src:
+            if exact:
+                touched = _count_exact(src, counts, grid, next(iter(exact_k)), lut)
+            else:
+                touched = _count_by_centre(src, counts, grid, lut)
+        used += int(touched)
+    logger.info("    Land cover class counts (%s): %d tiles used.", "exact blocks" if exact else "by sample centre", used)
     if used == 0:
         return None
+    spp = next(iter(exact_k)) ** 2 if exact else 0
     counts[:, ~grid.country_mask] = LAND_COVER_COUNT_NODATA
     profile = {
         "driver": "GTiff",
         "dtype": "uint16",
         "width": grid.width,
         "height": grid.height,
-        "count": n_classes,
+        "count": n_bands,
         "crs": grid.crs,
         "transform": grid.transform,
         "nodata": LAND_COVER_COUNT_NODATA,
@@ -565,7 +624,9 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     }
     with safe_raster_write(out_path, **profile) as dst:
         dst.write(counts)
-        dst.update_tags(worldcover_classes=",".join(str(c) for c in WORLDCOVER_CLASSES), samples_per_pixel=str(k * k))
+        dst.update_tags(
+            worldcover_classes=",".join(str(c) for c in [*WORLDCOVER_CLASSES, *([] if exact else [0])]), samples_per_pixel=str(spp)
+        )
     return Path(out_path)
 
 

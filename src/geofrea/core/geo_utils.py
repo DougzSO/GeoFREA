@@ -133,6 +133,7 @@ import geopandas as gpd
 import numpy as np
 import pyogrio
 import shapely
+from shapely.geometry import Point
 
 
 class GeometryRepairReport(NamedTuple):
@@ -237,6 +238,9 @@ def repair_invalid_geometries(
     return gdf, report
 
 
+_UTM_UNION_MAX_FEATURES = 20_000
+
+
 def get_local_utm_crs(geometry: Any) -> str:
     """Compute the local UTM EPSG code from the centroid of a geometry.
 
@@ -246,6 +250,12 @@ def get_local_utm_crs(geometry: Any) -> str:
     Returns:
         EPSG code string for the local UTM zone (e.g. "EPSG:32629").
     """
+    if isinstance(geometry, gpd.GeoDataFrame) and len(geometry) > _UTM_UNION_MAX_FEATURES:
+        # The union of a very large layer (IND protected areas: 193,478 polygons) did not finish in an hour, and only the
+        # zone is needed: use the centre of the layer's bounding box instead (can differ from the union centroid only
+        # near a zone edge; the areas it feeds are audit statistics).
+        minx, miny, maxx, maxy = geometry.total_bounds
+        geometry = Point(0.5 * (minx + maxx), 0.5 * (miny + maxy))
     if isinstance(geometry, gpd.GeoDataFrame):
         geometry = (
             geometry.geometry.union_all()
