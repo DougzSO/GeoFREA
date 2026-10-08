@@ -152,10 +152,12 @@ land_availability:
     solar:
       slope_max_deg:
         nominal: 10.0
+        low: 10.0
+        high: 15.0
         unit: degrees
-        source: "MAPRE site-suitability set (Patankar et al., arXiv:2211.05062, Table B1; Owusu-Obeng et al., arXiv:2401.16626; both cite Leslie et al. and Wu et al.)"
-        status: range_pending
-        note: "Range leads not opened: 3.1 deg (85% of the 100 largest operating PV sites) and 14.04 deg (25%)."
+        source: "central 10 deg: MAPRE site-suitability set (Patankar et al., arXiv:2211.05062, Table B1; Owusu-Obeng et al., arXiv:2401.16626; both cite Leslie et al. and Wu et al.), also 'typical' in Ryberg et al. 2017 (arXiv:1712.07840, Table 2), >=10 deg for solar in arXiv:2504.12508 (10 m DEM, citing Leslie et al.) and >10 deg in arXiv:2511.07323. Range 10-15 deg proposed by Douglas 2026-10-07; the 15 deg end rests on a lead only (suitable slope 5-15 deg in GIS multi-criteria solar-farm studies, search snippets, not opened)"
+        status: range_set_by_douglas_literature_lead
+        note: "Literature spans 1-30 deg across renewables (Ryberg 2017 Table 2: low 30, typical 10, high 1); stricter values below 10 deg exist and are not in the range. Leads not opened: 3.1 deg (85% of the 100 largest operating PV sites) and 14.04 deg (25%)."
       pop_density_max_per_km2:
         nominal: 200.0
         low: 150.0

@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "5.0.0",
-  "last_updated": "2026-10-07",
+  "methodology_version": "6.0.0",
+  "last_updated": "2026-10-08",
   "current_milestone": "MS-5",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -44,7 +44,7 @@
       "module": "grid_alignment",
       "status": "built_pending_conformance",
       "record": "docs/phases/F2a_grid_alignment.md",
-      "summary": "Green for PRT (93,149 px), IND (2.61M px) and BRA (7.10M px) with mainland scope, uncapped distances plus flags, per-height wind, geodesic slope, windowed reprojection, keyed clip caches. V-01 refrozen on ZZZ (G-4). See D-F2a-004..011."
+      "summary": "Green for PRT (93,149 px), IND (2.61M px) and BRA (7.10M px) with mainland scope, uncapped distances plus flags, per-height wind, geodesic slope, windowed reprojection, keyed clip caches. V-01 refrozen on ZZZ (G-4, then twice more for new layers). Land cover as per-class sample counts and slope as 30 m bin counts from Copernicus GLO-30 (M-F2a-06/07, D-F2a-015/016). See D-F2a-004..016."
     },
     {
       "id": "F2b",
@@ -53,7 +53,7 @@
       "record": "docs/phases/F2b_siting_layers.md",
       "summary": "H-4 done and wired: phase siting_layers writes 12 physical-unit layers (no normalization). Exclusions E1-E6 (H-3) blocked on Stage R; legacy suitability_criteria still registered but not in the default run (D-F2b-005)."
     },
-    {"id": "F3", "module": "land_eligibility", "status": "built_pending_conformance", "record": "docs/phases/F3_land_eligibility.md", "summary": "Engine built and run for PRT, IND and BRA with the central land-availability parameters: E1-E3 as sub-pixel shares, cells, candidate tables, maps, V-07 table (D-F3-002 to D-F3-004). Results depend on open OQ-046 to OQ-049 (riparian streams, density in IND, protected-area set and IND file, unsourced ranges)."},
+    {"id": "F3", "module": "land_eligibility", "status": "built_pending_conformance", "record": "docs/phases/F3_land_eligibility.md", "summary": "Engine built and run for PRT, IND and BRA with the final central land-availability parameters (D-F3-006): E1-E3 as sub-pixel shares, E4 from 30 m slope bins, E5 from class counts, riparian discharge parameter built (D-F3-005); solar / wind eligible land PRT 23.9 / 31.7%, IND 4.9 / 17.2%, BRA 18.0 / 25.8%. Not built: sampling of the parameter ranges, the cell-by-draw matrix and METHODOLOGY 7.0.0 (OQ-049). Literature for the density, discharge and solar-slope upper ends is pending (Stage R)."},
     {"id": "F4", "module": "climate_forcing", "status": "in_progress", "record": "docs/phases/F4_climate_forcing.md", "summary": "J-1 to J-5 done: ensemble decided (option C, 36 members), forcing.parquet with masked cell-members (OQ-042 option C), members.yaml, hazard_context.parquet for the core window, one map per member; all wired in main.py. Open: ISIMIP3b 2071-2100 hazard data not acquired, loss functions (OQ-007)."},
     {"id": "F5", "module": "technical_potential", "status": "not_started", "record": "docs/phases/F5_technical_potential.md", "summary": ""},
     {"id": "F6", "module": "lcoe_modeling", "status": "not_started", "record": "docs/phases/F6_lcoe_modeling.md", "summary": ""},

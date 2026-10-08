@@ -105,3 +105,12 @@ Land cover (class share of country pixels): PRT tree cover 29.8%, grassland 49.4
 - Not opened (leads only): the PV slope studies behind 3.1 deg and 14.04 deg; NREL Lopez et al. (2012), "U.S. Renewable Energy
   Technical Potentials: A GIS-Based Analysis" (host not reachable); the Silicon PV model, Applied Energy (Poland), seen through a
   pv magazine summary (elevation above 2,000 m or slope above 30 deg excluded).
+
+## Addendum 2026-10-08: solar slope maximum, and the DEM resolution behind the thresholds
+
+Douglas expects solar slope between 10 and 15 degrees. Sources opened (text extracted from the PDFs):
+- Ryberg, Robinius, Stolten (2017), "Methodological Framework for Determining the Land Eligibility of Renewable Energy Sources", arXiv:1712.07840, Table 2: slope exclusion values found in the land-eligibility literature, across renewables: 30 degrees (least restrictive), **10 degrees typical**, 1 degree (most restrictive). Watson's southern-England PV/wind study excludes slopes above 10 degrees (and, for PV, aspects outside southwest-southeast).
+- arXiv:2504.12508 (Optimizing Utility-Scale Solar Siting): excludes slopes at or above **10 degrees for solar and 19 for wind**, from a **10 m DEM**, citing Leslie et al. (so the thresholds MAPRE also cites were applied on a 10 m DEM, which makes a 30 m slope the closer reading than the earlier 550 m one).
+- arXiv:2511.07323 (Beyond Prime Farmland): ">10 degrees for solar" as a physical exclusion.
+- Lead only (search snippets, not opened): GIS multi-criteria solar-farm studies call 5-15 degrees suitable; the 3.1 and 14.04 degree figures from large operating PV sites noted earlier.
+Outcome: central 10 degrees stays; range set to 10-15 degrees (Douglas's expectation; the 15 end rests on the lead), status `range_set_by_douglas_literature_lead`. Stricter values (5 degrees) appear in the literature and are outside this range by choice.
