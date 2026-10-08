@@ -71,7 +71,7 @@ windows:
 
 # Uncertain parameters (U-03: default set)
 # Each entry is a parameter key that exists in config/parameters.json and
-# has a non-null range in experiments.yaml.uncertain_parameters (validated at load).
+# has a non-null range (U-05). No loader enforces this yet; it is to be enforced at load once the loader exists.
 # Parameters marked as non-uncertain (range=null in parameters.json) must NOT appear here.
 uncertain_parameters:
   capex_usd_per_kw:
@@ -111,41 +111,11 @@ sampler:
   initial_size: 500
   # max_size_for_convergence: null  # Pending U-04 protocol completion
 
-# Land-availability variants (U-06)
-# Alternative exclusion parameter sets for sensitivity analysis
-# Only "central" feeds F4-F7 (core analysis); variants feed T-R2 and E1 only
-land_variants:
-  # Central (default) exclusion set from M-F2b-01
-  central:
-    description: "Standard exclusion set (M-F2b-01 E1-E6)"
-    # E4 slope threshold per technology (degrees)
-    # E3 riparian buffer (km)
-    # E2 water bodies (binary exclusion)
-    # E6 population density threshold (persons/km²)
-    # E5 land cover excluded classes (per land-cover table)
-    # E1 IUCN protected categories (see config/parameters.json criteria.iucn_strict_categories)
-
-  strict:
-    description: "Stricter exclusion criteria (tighter thresholds)"
-    # Applied only in T-R2 and E1 sensitivity tables
-    # Specific thresholds pending phase specification; typically:
-    # - Reduced riparian buffer (e.g., 1.0 km instead of 0.5 km) — OQ-025
-    # - Higher population density threshold
-    # - Expanded land-cover exclusions (e.g., grassland / cropland included)
-
-  lenient:
-    description: "Relaxed exclusion criteria (looser thresholds)"
-    # Applied only in T-R2 and E1 sensitivity tables
-    # Specific thresholds pending phase specification; typically:
-    # - Increased riparian buffer (e.g., 0.1 km instead of 0.5 km)
-    # - Lower population density threshold
-    # - Reduced land-cover exclusions
-
 # Land-availability parameters as ranges (E1-E6, minimum area; Douglas, 2026-10-07)
 # Each continuous parameter has a central value (`nominal`, feeds F4-F7) and, where a source gives one, a `low`-`high` range;
 # a parameter without a sourced range keeps low/high null and is held at nominal (declared, not filled in). Categorical
 # parameters are named `levels`. Sources and the evidence behind every value: docs/_audit/2026-10_f3_parameter_research.md.
-# This block is meant to replace the strict/lenient `land_variants` above once METHODOLOGY U-06 is changed (awaiting Douglas).
+# These ranges feed the named land-availability scenarios of METHODOLOGY U-06 (central, restrictive, permissive) and the range report; the scenario composition is recorded in docs/phases/F3_land_eligibility.md.
 land_availability:
   riparian_discharge_grid_m3s: [0.0, 1.0, 5.0, 10.0]  # thresholds at which the riparian shares are computed; draws between them are interpolated
   technologies:
@@ -275,15 +245,15 @@ thresholds:
   # Either:
   #   - fixed p_k (0 < p_k <= 1): top p_k share of candidate cells by count
   #   - capacity_target_gw: minimum national capacity to identify top-k
-  # OQ-021: Decision between fixed vs. capacity-driven top-k
-  top_k_percent: null  # Pending OQ-021 (fixed approach)
-  top_k_capacity_gw: null  # Pending OQ-021 (capacity approach)
+  # OQ-021: top-k percentage p_k; OQ-010: national capacity target of the top-k sensitivity
+  top_k_percent: null  # Pending OQ-021
+  top_k_capacity_gw: null  # Pending OQ-010
 
   # Feasibility threshold (M-F7-01)
   # Capacity factor minimum for a cell to be feasible
-  # OQ-009: Per-technology CF_min
+  # OQ-008: Per-technology CF_min
   capacity_factor_min:
-    # solar: null  # Pending OQ-009
+    # solar: null  # Pending OQ-008
     # wind: null
 
   # Regret quantile (M-F7-02)

@@ -92,9 +92,9 @@ wind:
     - eta_loss  # Availability + wake losses
 
   # Hub height per country (M-F5-03)
-  # OQ-019: Country-specific hub height selection rule
+  # OQ-005: Country-specific hub height selection rule
   hub_heights:
-    PRT: null  # Pending OQ-019
+    PRT: null  # Pending OQ-005
     BRA: null
     IND: null
 

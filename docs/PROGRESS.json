@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "6.0.0",
+  "methodology_version": "7.0.0",
   "last_updated": "2026-10-08",
   "current_milestone": "MS-5",
   "milestones": [
@@ -9,8 +9,8 @@
     {"id": "MS-2", "title": "F1 and F1b conformance, India wiring", "status": "done"},
     {"id": "MS-3", "title": "F2a conformance", "status": "done"},
     {"id": "MS-4", "title": "F2b rebuild as siting_layers", "status": "in_progress"},
-    {"id": "MS-5", "title": "F3 land_eligibility", "status": "not_started"},
-    {"id": "MS-6", "title": "Parameter research (OQ-001 to OQ-023)", "status": "not_started"},
+    {"id": "MS-5", "title": "F3 land_eligibility", "status": "in_progress"},
+    {"id": "MS-6", "title": "Parameter research (OQ-001 to OQ-023)", "status": "in_progress"},
     {"id": "MS-7", "title": "F4 climate_forcing", "status": "in_progress"},
     {"id": "MS-8", "title": "F5 technical_potential", "status": "not_started"},
     {"id": "MS-9", "title": "F6 lcoe_modeling", "status": "not_started"},
@@ -23,7 +23,7 @@
       "module": "core",
       "status": "in_progress",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-05/A-06/A-09/A-12/U-05/U-07 done; A-04 and Section-9 partial (technologies.yaml/experiments.yaml have no loader); A-07 partial (rasters are tiled GTiff, not true COG); A-08 and A-13 fail (see core.md D-core-006, A-13 row); A-10/A-11 not_started. ZZZ fixture runs F1-F2b end to end, no monkeypatch/network (~12s); OQ-032 closed (D-core-018). Grid-nesting bug found (get_mainland_gdf UTM round-trip + unguarded floor/ceil) -- playbook task G-3 to fix. CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned."
+      "summary": "A-01/A-02/A-03/A-05/A-08/A-09/A-11/U-05 (schema)/U-07 (field) implemented; A-12 partial (run id deterministic, no seeds recorded: no sampler exists); A-04 and Section-9 partial (technologies.yaml/experiments.yaml have no loader); A-07 partial (rasters are tiled GTiff, not true COG; parquet tables carry no schema_version); A-06 covers F1 and F2a (the ZZZ fixture; F3 has its own synthetic world); A-10 absent; A-13 partial. A-02 will record the METHODOLOGY version per phase entry (D-core-022, V15). OQ-032 closed (D-core-018). CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned."
     },
     {
       "id": "F1",
