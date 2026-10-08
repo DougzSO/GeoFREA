@@ -671,6 +671,20 @@ def test_manifest_entries_of_unregistered_phases_are_dropped_only_when_the_full_
     assert "phase_a" in on_disk["phases"]
 
 
+@pytest.mark.unit
+def test_manifest_run_id_and_dirty_describe_the_last_run_while_entries_keep_their_own(tmp_path):
+    """The top-level run_id and dirty are those of the latest run; an entry keeps the run_id that produced its artifacts."""
+    call_log: list[str] = []
+    spec = _make_spec("phase_a", call_log, produces=frozenset({"a_key"}))
+    first = _orchestrator(tmp_path, ["phase_a"], run_id="run-1", dirty=True)
+    first.run([spec])
+    second = _orchestrator(tmp_path, ["phase_a"], run_id="run-2", dirty=False)
+    second.run([spec])  # resumes
+    on_disk = json.loads(second.manifest_path.read_text(encoding="utf-8"))
+    assert on_disk["run_id"] == "run-2" and on_disk["dirty"] is False
+    assert on_disk["artifacts"]["a_key"]["run_id"] == "run-1"
+
+
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
 
 

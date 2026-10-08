@@ -567,6 +567,10 @@ class Orchestrator:
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
+        # the manifest's own run_id and dirty describe the LAST run that opened it, not the run that created the file
+        # (phase entries and artifacts keep the run_id of the run that produced them)
+        self.manifest.run_id = self.run_id
+        self.manifest.dirty = self.dirty
 
     @property
     def manifest_path(self) -> Path:
@@ -1065,4 +1069,5 @@ class Orchestrator:
                 summary_line,
             )
 
+        self._write_manifest()  # records this run's run_id and dirty even when every phase resumed
         return results
