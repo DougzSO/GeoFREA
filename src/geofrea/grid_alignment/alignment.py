@@ -409,7 +409,7 @@ def run_grid_alignment_phase(context: PhaseContext, inputs: GridAlignmentInputs)
         aligned["land_cover_counts"] = _execute_or_load(
             "land_cover_counts",
             lambda: land_cover_class_counts(
-                inputs.land_cover_tiles, _path("land_cover_counts"), grid, inputs.country_gdf
+                inputs.land_cover_count_tiles or inputs.land_cover_tiles, _path("land_cover_counts"), grid, inputs.country_gdf
             ),
             bool(inputs.land_cover_tiles),
         )

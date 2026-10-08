@@ -54,7 +54,7 @@ from pathlib import Path
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.core.schemas import ResolutionsConfig
-from geofrea.data_acquisition.fetchers import copernicus_dem30
+from geofrea.data_acquisition.fetchers import copernicus_dem30, esa_worldcover
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -100,6 +100,14 @@ def _slope_dem_tiles(country_code: str) -> list[Path]:
         return []
 
 
+def _land_cover_count_tiles(country_code: str) -> list[Path]:
+    """The acquired 10 m WorldCover tiles of the country (D-F2a-017), or none if the local tiles are used for the counts."""
+    try:
+        return esa_worldcover.load_tiles(country_code)
+    except MissingPathEnvironmentError:
+        return []
+
+
 def _layers_by_name(result: AcquisitionResult) -> dict[str, AcquiredLayer]:
     return {layer.layer_name: layer for layer in result.layers}
 
@@ -142,6 +150,7 @@ def acquisition_result_to_grid_alignment_inputs(
 
     land_cover_tiles = resolved_paths(layers.get("land_cover"))
     slope_dem_tiles = _slope_dem_tiles(result.country_code)
+    land_cover_count_tiles = _land_cover_count_tiles(result.country_code)
 
     borders_path = resolved_path(layers.get("borders"))
     if borders_path is None:
@@ -157,6 +166,7 @@ def acquisition_result_to_grid_alignment_inputs(
         wind_layers=wind_layers,
         land_cover_tiles=land_cover_tiles,
         slope_dem_tiles=slope_dem_tiles,
+        land_cover_count_tiles=land_cover_count_tiles,
         country_gdf=country_gdf,
         resolution_deg=resolutions.suitability,
         distance_cap_km=distance_cap_km,

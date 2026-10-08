@@ -70,6 +70,8 @@ class GridAlignmentInputs(BaseModel):
             each filename) — every path here is used, not just the
             first.
         population_path: Population raster path.
+        land_cover_count_tiles: 10 m WorldCover tiles acquired for the class counts when the local tiles are coarser (D-F2a-017);
+            empty means the counts use `land_cover_tiles`.
         slope_dem_tiles: Copernicus GLO-30 (30 m) tile paths for the slope bins (D-F2a-016); empty if not acquired.
         land_cover_tiles: ESA WorldCover tile paths (mosaicked, not
             reprojected individually).
@@ -116,6 +118,7 @@ class GridAlignmentInputs(BaseModel):
     population_path: Path | None = None
     land_cover_tiles: list[Path] = []
     slope_dem_tiles: list[Path] = []
+    land_cover_count_tiles: list[Path] = []
     roads_source: Path | None = None
     grid_source: Path | None = None
     lakes_path: Path | None = None
