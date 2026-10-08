@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.0.0 |
+| Version | 7.0.1 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-08 |
 | Owner | Douglas |
@@ -64,7 +64,7 @@ All architecture and output decisions are subordinate to this section.
 - **H2.** Within-country spatial heterogeneity in eligibility and viability is large enough that country-aggregated assessments misrepresent site-level robustness.
 - **H3.** Sites that are robust under combined uncertainty differ materially, in location and ranking, from sites that are optimal under current conditions.
 - **H4.** The relative robustness ranking is sensitive to which uncertainty axis (climate or techno-economic) dominates in each country; there is no country-independent robustness ordering.
-- **H5 (RQ3).** Climate change alters national economic potential (TWh below the cost threshold, OQ-052) and the share of potential exposed to hazards (OQ-051) by a margin that matters relative to the gap between potential and national target (OQ-010). Stated as a test; the decision rule (statistic and threshold) is fixed before the results in OQ-050, as for H1 to H4.
+- **H5 (RQ3).** Climate change alters national economic potential (TWh below the cost threshold `tau`, OQ-008) and the share of potential exposed to hazards (OQ-051) by a margin that matters relative to the gap between potential and national target (OQ-010). Stated as a test; the decision rule (statistic and threshold) is fixed before the results in OQ-050, as for H1 to H4.
 
 ### 1.4 Declared contributions
 
@@ -114,16 +114,19 @@ Literature anchors (verify full references during the literature review): McKenn
 
 ```
 F1  data_acquisition ──> F1b data_quality_audit            (audit_report; findings never block, M-F1b-02)
-F1 ──> F2a grid_alignment
-F2a + F1b ──> F2b siting_layers
-F1 + F2a + F2b + F1b ──> F3 land_eligibility
+F1 ──> F2a grid_alignment                                  (aligned layers, and reference_grid: the grid definition)
+F2a (named layers) + F1b ──> F2b siting_layers
+F2a (named layers) + F2b + F1b ──> F3 land_eligibility
 external_inputs (CMIP6, ISIMIP3b, ERA5 registered) ──> F4 climate_forcing
-F2a + F1b + external_inputs ──> F4 climate_forcing ──> hazard_context, climate_maps
+F2a (reference_grid) + F1b + external_inputs ──> F4 climate_forcing ──> climate_maps
+F2a (reference_grid) + F4 members ──> hazard_context
 F2a + F2b + F3 + F4 + hazard_context ──> overview
 F3 + F4 ──> F5 technical_potential ──> F6 lcoe_modeling ──> F7 robustness_analysis
 F3 + F6 (nominal) + F1 (existing plants) ──> F7b external_validation
 F5 + F6 + F7 + F7b ──> F8 results_synthesis ──> E1 explorer
 ```
+
+Each phase requires the named artifacts it reads, not the producing phase as a whole: F4 requires the `reference_grid` artifact (CRS, transform, shape and a hash of the in-country mask of the analysis grid) and no aligned layer, F2b and F3 require the aligned layers they read. A rerun of a phase invalidates a consumer only when the content hash of an artifact the consumer requires changed (A-02).
 
 The phases external_inputs, hazard_context, climate_maps and overview are support phases with no F-identifier; they are named by phase name and registered in `main.py` with the same `requires` and `produces` contract as the F-phases (A-01). The legacy phase `suitability_criteria` is outside this specification.
 
@@ -272,8 +275,8 @@ Critical transitions:
 
 Definitions for one country and technology. `C` = candidate cells of the central land scenario (V1); land is not a factor of the futures. Futures `f = (m, s)` over climate members of the core window and samples; `f0 = (m0, s0)` is the nominal present future.
 
-- **M-F7-01. Feasibility.** `feasible(i, f) = CF_i,m >= CF_min[tech]` (OQ-008). A cell with `CF` below `CF_min` in the nominal future `f0` leaves the F7 set. A cell feasible in `f0` and infeasible in some member forms the class *climate-fragile*: it is reported separately, with the members in which it fails, and is not ranked with an infinite MR.
-- **M-F7-02. Relative regret.** `L*_f` = the `q_ref` quantile of LCOE over feasible cells in `f` (default `q_ref = 0`, the minimum; OQ-020). `r_i,f = (LCOE_i,f - L*_f) / L*_f` for feasible cells.
+- **M-F7-01. Feasibility.** `feasible(i, f) = CF_i,m >= CF_min[tech]` (OQ-008). A cell with `CF` below `CF_min` in the nominal future `f0 = (m0, s0)` leaves the F7 set. A cell feasible in `f0` and with `CF(m, s0) < CF_min` in at least one member `m` forms the class *climate-fragile*: the class is defined at the nominal parameters `s0` of each member, it is reported separately with the members in which it fails, and it is not ranked with an infinite MR. Infeasibility that arises only from the parameter samples (`CF(m, s0) >= CF_min` but `CF(m, s) < CF_min`) does not create the class (M-F7-02 gives it a finite regret).
+- **M-F7-02. Relative regret.** `L*_f` = the `q_ref` quantile of LCOE over feasible cells in `f` (default `q_ref = 0`, the minimum; OQ-020). `r_i,f = (LCOE_i,f - L*_f) / L*_f` for feasible cells. A cell that is not climate-fragile and is infeasible in a future `f = (m, s)` receives the regret of the feasible cell with the highest LCOE in `f` (the finite worst case), so no ranked cell has an infinite regret.
 - **M-F7-03. Primary metric.** `MR_i = max over members m of ( P90 over parameter samples s of r_i,(m,s) )`. Order of operations: `r` per future `(m, s)`; P90 over samples for each member; maximum over members. Secondary: SR (M-F7-04).
 - **M-F7-04. Satisficing robustness.** `SR_i` = share of futures with `feasible(i, f)` and `LCOE_i,f <= tau[country, tech]` (OQ-008).
 - **M-F7-05. Rankings.** Nominal rank by `LCOE_i,f0`; robust rank by `MR_i` (ties broken by `SR_i`), over the cells that are not climate-fragile. Top-k is the best `p_k` percent of candidate cells by count (OQ-021). Sensitivity, the strategy-level reading: top-k as the minimum cell set reaching a national capacity target (OQ-010).
@@ -283,7 +286,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
   - H2: within-country dispersion of `MR` (IQR relative to median; range across admin1 units) against the capacity-weighted national aggregate; repeated at 0.1 degree (V-07).
   - H3: Jaccard(top-k nominal, top-k robust); share of robust top-k capacity outside nominal top-k; capacity-weighted distance between the two sets' centroids.
   - H4: country ordering of the climate-only versus techno-only Jaccard comparison of M-F7-06 (primary), with the variance shares as secondary.
-  - H5: per member, national potential (GW, TWh) below the cost threshold (OQ-052) and the share of potential in cells above the hazard exposure thresholds (OQ-051), each compared with the national target (OQ-010) at fixed central land; the land range is reported beside them (U-08). The decision rule is OQ-050.
+  - H5: per member, national potential (GW, TWh) below the cost threshold `tau` (OQ-008) and the share of potential in cells above the hazard exposure thresholds (OQ-051), each compared with the national target (OQ-010) at fixed central land; the land range is reported beside them (U-08). The decision rule is OQ-050.
 - **M-F7-08. Scenario discovery.** PRIM over future descriptors (parameter values, member change factors, SSP, GCM) with outcome "nominal top-k cell leaves top-k", per country and technology.
 - **M-F7-09. Method agreement.** Kendall correlation between `MR` and `SR` rankings, supporting the RQ4 discussion.
 - **M-F7-10. Streaming.** One future at a time, vectorized over cells, updating running maxima and counters; a full evaluation of all futures is never held in memory.
@@ -349,7 +352,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
 ## 7. Architecture requirements
 
 - **A-01. DAG orchestration.** Each `PhaseSpec` declares `requires` and `produces` artifact keys. The orchestrator validates the graph at startup (missing producers, cycles) and orders phases topologically. Phases exchange data only through declared artifacts.
-- **A-02. Artifact registry.** The per-country manifest records, for each artifact: path, content hash, schema version, producing phase, run ID; and, for each phase entry, the METHODOLOGY version. A phase whose upstream is not part of the current run loads upstream artifacts from the manifest. In-memory coupling between phases is not allowed.
+- **A-02. Artifact registry.** The per-country manifest records, for each artifact: path, content hash, schema version, producing phase, run ID; and, for each phase entry, the METHODOLOGY version. A re-registered artifact with an unchanged content hash keeps the run ID that first produced it, and a consumer is marked stale only by an artifact whose content hash changed. A phase whose upstream is not part of the current run loads upstream artifacts from the manifest. In-memory coupling between phases is not allowed.
 - **A-03. Run targeting.** `settings.yaml` declares `run.target_phases`, `run.countries`, `run.technologies`, and `run.rerun_phases`; dependencies are resolved from the DAG. `rerun_phases` re-executes exactly the phases it names; every phase downstream of a named phase that currently holds a successful manifest entry is marked stale and recomputed automatically the next time a run needs it, rather than being re-executed in the same pass (see `docs/phases/core.md` D-core-012). Per-phase boolean toggles are not used.
 - **A-04. Technology registry.** `config/technologies.yaml` declares per technology: resource layers, capacity-factor model, exclusion set, cost structure, uncertain-parameter keys. F5-F7 code contains no technology names.
 - **A-05. Country agnosticism.** All country-specific mappings (data-source regions, file names, GRIP4 regions, HydroSHEDS regions) live in `config/countries.yaml`. A test fails if an ISO3 code literal appears in `src/` outside comments and docstrings.
@@ -419,7 +422,7 @@ Only these outputs belong to the dissertation. Every other file is a pipeline ar
 | T-R9 | Table | F7b | External validation | RO5 | Essential |
 | T-R10 | Table | F4, F5, F7 | Hazard context exposure of nominal and robust top-k cells and of all eligible potential (GW and TWh in cells above the hazard exposure thresholds, OQ-051), by SSP and window; the wording is "exposed", and "lost" only for a hazard whose loss function passed OQ-007 | RQ3, H4, H5 | Essential |
 | T-R11 | Figure | F6 | LCOE map at reference | RQ2 | Essential |
-| T-R12 | Table | F5, F6 | Potential (GW, TWh) below the cost threshold (OQ-052) per member, compared with the national targets (OQ-010) | RQ3, H5 | Essential |
+| T-R12 | Table | F5, F6 | Potential (GW, TWh) below the cost threshold `tau` (OQ-008) per member, compared with the national targets (OQ-010) | RQ3, H5 | Essential |
 | T-O1 | Figure | F7 | PRIM scenario discovery boxes | RQ4 | Optional |
 | T-O2 | Figure | F7 | Agreement between MR and SR rankings | RQ4 | Optional |
 | T-O3 | Figure | F6 | Supply curves at nominal parameters, by SSP and window | RQ2 | Essential |
@@ -446,7 +449,7 @@ Sequenced by dependency; each milestone closes before the next opens, except whe
 | MS-3 | F2a conformance | done | V-01 fixtures refrozen and passing |
 | MS-4 | F2b rebuild as `siting_layers` | in progress | Exclusion parity E1-E3; sanity ranges pass for three countries |
 | MS-5 | F3 | built, pending conformance | Closes with the three named scenarios of U-06 (V2), the 10 m land cover for IND (M-F2a-06, V19) and a clean rerun in BRA, PRT and IND; candidate tables for three countries and two technologies |
-| MS-6 | Parameter research, in parallel with MS-4 and MS-5, by priority: F5 first (OQ-004, OQ-005, OQ-023), then F6 (OQ-001, OQ-016 to OQ-019, OQ-022), then F7 (OQ-008, OQ-010, OQ-020, OQ-021, OQ-050); also OQ-051 and OQ-052 | in progress (OQ-002, OQ-003, OQ-015, OQ-044, OQ-045 resolved) | Every uncertain parameter has range and tier |
+| MS-6 | Parameter research, in parallel with MS-4 and MS-5, by priority: F5 first (OQ-004, OQ-005, OQ-023), then F6 (OQ-001, OQ-016 to OQ-019, OQ-022), then F7 (OQ-008, OQ-010, OQ-020, OQ-021, OQ-050); also OQ-051 | in progress (OQ-002, OQ-003, OQ-015, OQ-044, OQ-045 resolved) | Every uncertain parameter has range and tier |
 | MS-7 | F4, including GCM selection | in progress | Forcing tables for the selected ensemble |
 | MS-8 | F5: code and tests on the synthetic country before real values; real execution only with parameter values recorded under MS-6 | not started | V-02, V-03 pass |
 | MS-9 | F6, including sampling (U-02), convergence (U-04) and batches (A-10) | not started | U-04 convergence recorded |
@@ -486,6 +489,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.0.1 | 2026-10-08 | PATCH (verdicts A to G of 2026-10-08): OQ-052 is merged into OQ-008, so the cost threshold of economic potential (T-R12, H5) is the satisficing threshold `tau` (H5, M-F7-07, T-R12, MS-6 in Section 12). Climate-fragile is defined at the nominal parameters `s0` of each member and parametric-only infeasibility gets the finite worst-case regret (M-F7-01, M-F7-02; V9, V3). Section 4.1: F4 requires the `reference_grid` artifact and no aligned layer, F2b and F3 require named layers, and staleness follows artifact content (4.1, 4.2, A-02, A-01). The V-01 fixtures are refrozen with E1 to E3 as the shares F3 computes (V-01, M-F3-01). IDs cited by the rewritten lines and not altered: M-F7-03, M-F7-07, H5, T-R12, OQ-010, OQ-020, OQ-050, OQ-051, OQ-052, V-03, M-F4-07, M-F2b-01, M-F2b-05, A-06, A-09, F4, H1, H4, RQ3, U-08, and the OQ list of the MS-6 row: OQ-001, OQ-002, OQ-003, OQ-004, OQ-005, OQ-015, OQ-016, OQ-019, OQ-021, OQ-022, OQ-023, OQ-044, OQ-045. |
 | 7.0.0 | 2026-10-08 | MAJOR (changes a result definition and phase contracts): applies verdicts V1 to V6, V8 to V10, V12 to V15 and V17 to V19 of `docs/_audit/2026-10_systematic_review.md` (V7, V11, V16 and V20 act outside this document). Land stays in every potential output and leaves only the set of futures of F7 (V1): U-01, U-06 (three named scenarios central, restrictive, permissive replacing the strict and lenient variants; full factorial only to report ranges, V2), M-F2b-06, M-F3-02, M-F3-04, M-F5-06, M-E1-01, T-R2, Section 9. Relative regret and primary metric MR as max over members of the P90 over samples (V3): M-F7-02, M-F7-03, M-F7-05, M-F7-11, V-03, RO4, Section 3; M-F7-01 (cells below CF_min leave the set, climate-fragile class, V9); M-F7-06 (Jaccard primary, variance on relative LCOE secondary, V4); M-F7-07 (H4 per V4, new H5 test, rules in OQ-050). Independent sampling without sourced correlation (V5): U-03, L-012; U-05 gains the `proxy` field with a narrow definition (V6), L-203 stays; new U-08 reporting rule (V14); A-02 records the METHODOLOGY version per phase entry (V15). S-05, M-F1-04 and M-F4-05: the 2071-2100 window has no hazard rows until OQ-007 admits a hazard to LCOE (V8). RQ0 'siting priorities' (V10, S-06, OQ-010 in M-F7-05). New H5 (RQ3, V13) and thesis outputs T-R10 (extended), T-O3 (now essential), new T-R11 and T-R12, T-R8 (H1-H5), with the rule for climate outputs at fixed central land (V12), OQ-050, OQ-051, OQ-052 (to be registered in `docs/OPEN_QUESTIONS.md`). M-F2b-05 raises on an absent protected-area, lake or river layer (V17) with A-06 providing them; A-06 and V-08 extended with every built phase. Sections 4.1 and 4.2 match `main.py` (F1b `audit_report` required by F2b, F3, F4; support phases external_inputs, hazard_context, climate_maps, overview) and M-F1b-02 is rewritten (V18); A-01 referenced. M-F2a-06 keeps its text (anything but an exact block count is an error) and is now met by IND with the 10 m tiles (V19, D-F2a-015). Corrections of the systematic review: M-F2b-01 rewritten for shares, 30 m slope samples and named-level `excluded_classes` (M-F2a-06, M-F2a-07, M-F3-01); M-F2a-06 and M-F2a-07 moved to the F2a block; M-F2b-05 ordered before M-F2b-06; S-04 names the six GCMs (D-F4-012); U-03 names `opex_fixed_frac` (V7 name). Section 12 rewritten with the real state: MS-5 (V2, V19), MS-6 (OQ-004, OQ-005, OQ-023, OQ-001, OQ-016, OQ-017, OQ-018, OQ-019, OQ-022, OQ-008, OQ-010, OQ-020, OQ-021, OQ-050, OQ-051, OQ-052; OQ-002, OQ-003, OQ-015, OQ-044, OQ-045 resolved), MS-8, MS-9 (U-02, U-04, A-10). IDs cited by rewritten lines without a change of their own content: A-03, A-05, A-11, D-F2a-016, OQ-013, RO3, RQ1, RQ2, RQ4, RQ5, U-07, V-01, V-02, V-04, M-F3-01, M-F4-02, M-F4-03, M-F7-04, M-F7-08, M-F7-10, M-F2b-04, OQ-004, OQ-007, OQ-016, OQ-045, OQ-049, A-09. |
 | 6.0.0 | 2026-10-07 | MAJOR (changes a result definition): E5 of M-F3-01 becomes a share of the pixel from per-class sample counts instead of the class of one sample, and E4 of M-F3-01 becomes the share of 30 m samples above the slope maximum (new M-F2a-07, D-F2a-016); new M-F2a-06 (D-F2a-015); new riparian discharge parameter (`riparian_min_discharge_m3s`, D-F3-005). The land-cover change leaves country totals nearly unchanged and moves cell values; the slope change lowers the eligible land (PRT solar 31.2% to 23.9%). The planned sampled land-availability ranges (OQ-049) will be the next MAJOR. |
 | 5.0.0 | 2026-10-07 | MAJOR (changes a result definition): M-F3-01 eligibility becomes an eligible share per pixel; E1-E3 are excluded shares measured on sub-pixels (M-F2b-01, OQ-045 option c); new M-F2a-05 (counts are summed, which corrects the aligned population layer, D-F2a-014); new M-F2b-06 (land-availability parameters as ranges in `land_availability`); parameter values proposed in `docs/_audit/2026-10_f3_parameter_research.md` and approved by Douglas on 2026-10-07 (cropland excluded for solar). |

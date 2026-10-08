@@ -233,22 +233,31 @@
     "max": 8.0,
     "sum": 4800.0
   },
-  "e2_water": {
+  "e1_protected_share": {
     "shape": [
       20,
       30
     ],
     "min": 0.0,
     "max": 1.0,
-    "sum": 596.0
+    "sum": 25.0
   },
-  "e1_protected": {
+  "e2_water_share": {
     "shape": [
       20,
       30
     ],
     "min": 0.0,
     "max": 1.0,
-    "sum": 575.0
+    "sum": 4.0
+  },
+  "e3_riparian_share": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 0.5,
+    "sum": 27.000000178813934
   }
 }

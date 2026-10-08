@@ -552,6 +552,8 @@ class Orchestrator:
             entries and artifacts of the manifest whose phase is not registered any more (a retired phase such
             as `suitability_criteria`, V16) are dropped at the start of the run. A caller that passes a subset
             of the registry leaves it False so entries of the other phases stay untouched.
+        revalidate_phases: Phases whose `stale_upstream` entry is declared valid again (see `_revalidate`), for the
+            case where their inputs did not change although the lineage says they were invalidated.
     """
 
     outputs_dir: Path
@@ -564,6 +566,7 @@ class Orchestrator:
     dirty: bool
     manifest: RunManifest = field(init=False)
     prune_unregistered: bool = False
+    revalidate_phases: Sequence[str] = ()
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
@@ -598,6 +601,38 @@ class Orchestrator:
         # RunManifest.schema_version is a Literal["2.3"].
         data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
+
+    def _revalidate(self, spec: PhaseSpec) -> None:
+        """Declare a `stale_upstream` entry valid again, recording the lineage of the artifacts it requires now.
+
+        Staleness is conservative: it follows the keys a phase consumed, and a phase can be invalidated by a rerun that did
+        not change anything it reads. When the phase's contract has since been narrowed to what it really reads (its `requires`
+        no longer names the invalidating artifacts), the caller asks for the entry to be revalidated. Every artifact the spec
+        requires must be in the manifest and intact; the entry becomes `success` with `consumed_run_ids` of the current
+        artifacts, and the action is logged.
+
+        Raises:
+            ValueError: the phase has no entry, or its entry is not `stale_upstream`.
+            UndeclaredArtifactMissingError: a required artifact is not in the manifest.
+        """
+        entry = self.manifest.phases.get(spec.name)
+        if entry is None or entry.status != "stale_upstream":
+            raise ValueError(f"cannot revalidate {spec.name!r}: its manifest entry is {entry.status if entry else 'absent'}, not stale_upstream")
+        for key in spec.requires:
+            if key not in self.manifest.artifacts:
+                raise UndeclaredArtifactMissingError(
+                    f"cannot revalidate {spec.name!r}: required artifact {key!r} is not in the manifest (rerun its producer)"
+                )
+            self._verify_artifact_integrity(key)
+        consumed = {key: self.manifest.artifacts[key].run_id for key in spec.requires}
+        self.manifest.phases[spec.name] = entry.model_copy(
+            update={"status": "success", "invalidated_by": None, "invalidated_in_run": None, "consumed_run_ids": consumed}
+        )
+        logger.info(
+            "Phase '%s' [%s]: revalidated (was stale_upstream, invalidated by %s in run %s); inputs now %s",
+            spec.name, self.country_code, entry.invalidated_by, entry.invalidated_in_run, sorted(consumed),
+        )
+        self._write_manifest()
 
     def _prune_unregistered(self, registered: set[str]) -> None:
         """Drop manifest phase entries and artifacts of phases that are not registered any more (V16)."""
@@ -792,6 +827,10 @@ class Orchestrator:
 
         if self.prune_unregistered:
             self._prune_unregistered(set(by_name))
+        for name in self.revalidate_phases:
+            if name not in by_name:
+                raise MissingProducerError(f"revalidate_phases names a phase that is not registered: {name!r}")
+            self._revalidate(by_name[name])
         unknown_targets = [name for name in self.target_phases if name not in by_name]
         if unknown_targets:
             raise MissingProducerError(
@@ -1035,10 +1074,22 @@ class Orchestrator:
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
             # registry forever and make every later resume raise StaleManifestEntryError.
-            for stale_key in [
+            removed_keys = {
                 k for k, e in self.manifest.artifacts.items() if e.phase == spec.name and k not in new_artifacts
-            ]:
+            }
+            for stale_key in removed_keys:
                 del self.manifest.artifacts[stale_key]
+            # Staleness follows CONTENT: a consumer is invalidated only by an artifact whose hash changed (or that
+            # appeared or disappeared). An artifact re-registered with identical content keeps the run_id that first
+            # produced it, so the lineage recorded by its consumers stays true.
+            changed_keys: set[str] = set()
+            for key, entry_new in list(new_artifacts.items()):
+                old = self.manifest.artifacts.get(key)
+                if old is not None and old.sha256 == entry_new.sha256:
+                    new_artifacts[key] = entry_new.model_copy(update={"run_id": old.run_id})
+                else:
+                    changed_keys.add(key)
+            changed_keys |= removed_keys
             self.manifest.artifacts.update(new_artifacts)
 
             # Same write as the success entry above (one _write_manifest()
@@ -1047,7 +1098,7 @@ class Orchestrator:
             # this phase's completion — its own entry and its dependents'
             # staleness — has been made. See docs/phases/core.md's
             # rerun_phases decision for the atomicity statement.
-            self._mark_manifest_consumers_stale(set(new_artifacts.keys()), spec.name)
+            self._mark_manifest_consumers_stale(changed_keys, spec.name)
 
             self._write_manifest()
 

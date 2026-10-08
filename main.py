@@ -118,6 +118,7 @@ from geofrea.grid_alignment.adapter import (
     acquisition_result_to_grid_alignment_inputs,
 )
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
+from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.overview.figures import OverviewSummary, build_overview
@@ -344,6 +345,12 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
             context.register_artifact(f"aligned/{layer_key}", path, "1.0")
     for wind_key, path in result.wind_layers.items():
         context.register_artifact(f"aligned/wind_{wind_key}", path, "1.0")
+    # the grid definition, as its own artifact: F4 reads only the grid, so it requires this and not the aligned layers
+    if result.grid is not None:  # absent only in a stub; the phase's `produces` makes a missing key fail loud
+        grid_definition = write_reference_grid_artifact(
+            result.grid, context.outputs_dir / context.country_code / "artifacts" / "reference_grid.json"
+        )
+        context.register_artifact("reference_grid", grid_definition, "1.0")
 
 
 def _build_phase_specs(
@@ -480,7 +487,7 @@ def _build_phase_specs(
             output_model=GridAlignmentResult,
             run=grid_alignment_run,
             requires=frozenset({"layer_registry"}),
-            produces=frozenset({"aligned_rasters"})
+            produces=frozenset({"aligned_rasters", "reference_grid"})
             | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS}
             | {f"aligned/wind_{key}" for key in _WIND_LAYER_KEYS},
             summarize=_summarize_grid_alignment,
@@ -499,7 +506,10 @@ def _build_phase_specs(
             name="siting_layers",
             output_model=SitingLayersResult,
             run=siting_layers_run,
-            requires=frozenset({"aligned_rasters", "audit_report"}),
+            requires=frozenset(
+                {"audit_report", "aligned/grid", "aligned/roads", "aligned/solar"}
+                | {f"aligned/wind_{product}_{h}m" for product in ("weibull_a", "weibull_k", "air_density") for h in (100, 150, 200)}
+            ),
             produces=frozenset({"siting_layers"}),
             summarize=lambda out: f"{len(out.layers)} physical-unit layers",
         ),
@@ -507,7 +517,13 @@ def _build_phase_specs(
             name="land_eligibility",
             output_model=EligibilitySummary,
             run=land_eligibility_run,
-            requires=frozenset({"aligned_rasters", "siting_layers", "layer_registry", "audit_report"}),
+            requires=frozenset(
+                {
+                    "siting_layers", "layer_registry", "audit_report",
+                    "aligned/land_cover_counts", "aligned/slope_counts", "aligned/population",
+                    "aligned/grid", "aligned/grid_distance_capped", "aligned/roads_distance_capped",
+                }
+            ),
             produces=frozenset({"land_eligibility"}),
             summarize=lambda out: "; ".join(
                 f"{t}: {s.n_candidates:,} candidate cells, {100 * s.eligible_share:.1f}% of the land eligible"
@@ -518,7 +534,7 @@ def _build_phase_specs(
             name="climate_forcing",
             output_model=ForcingSummary,
             run=climate_forcing_run,
-            requires=frozenset({"aligned_rasters", "audit_report", "external_inputs"}),
+            requires=frozenset({"reference_grid", "audit_report", "external_inputs"}),
             produces=frozenset({"forcing", "forcing_masked", "members"}),
             summarize=lambda out: (
                 f"{out.n_cells} cells x {out.n_members} members = {out.n_rows} rows; "
@@ -529,7 +545,7 @@ def _build_phase_specs(
             name="hazard_context",
             output_model=HazardSummary,
             run=hazard_context_run,
-            requires=frozenset({"members", "aligned_rasters"}),
+            requires=frozenset({"members", "reference_grid"}),
             produces=frozenset({"hazard_context"}),
             summarize=lambda out: f"{out.n_cells} cells x {out.n_hazard_members} hazard members",
         ),
@@ -573,6 +589,7 @@ def run_geofrea(
     audit_config: AuditConfig,
     run_id: str,
     dirty: bool,
+    revalidate_phases: list[str] | None = None,
 ) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
@@ -628,6 +645,7 @@ def run_geofrea(
         methodology_version=_read_methodology_version(METHODOLOGY_MD),
         dirty=dirty,
         prune_unregistered=True,
+        revalidate_phases=revalidate_phases or [],
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
@@ -670,6 +688,11 @@ def _parse_args(argv: list[str]):
         "--production",
         action="store_true",
         help="production run: refuse to start if a consumed parameter is a proxy or an uncertain parameter lacks a value or range",
+    )
+    parser.add_argument(
+        "--revalidate",
+        help="comma-separated phases whose stale_upstream entry is declared still valid because their current inputs are unchanged "
+        "(the orchestrator checks that their required artifacts exist and records the lineage); used once after a contract change",
     )
     parser.add_argument(
         "--rerun",
@@ -722,6 +745,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     target_phases = [p.strip() for p in args.phases.split(",") if p.strip()] if args.phases else settings.run.target_phases
     rerun_phases = [p.strip() for p in args.rerun.split(",") if p.strip()] if args.rerun else settings.run.rerun_phases
+    revalidate_phases = [p.strip() for p in args.revalidate.split(",") if p.strip()] if args.revalidate else []
 
     parameter_audit = audit_parameters(parameters, technologies, countries, settings.run.technologies)
     for finding in parameter_audit.warnings:
@@ -755,6 +779,7 @@ def main(argv: list[str] | None = None) -> int:
             audit_config,
             run_id,
             dirty,
+            revalidate_phases,
         )
         all_ok = all_ok and ok
         for phase_name, result in results.items():

@@ -4,9 +4,10 @@ Shared by `scripts/freeze_v01_fixtures.py` (writes the frozen fixtures) and `tes
 a fresh run against them), so both exercise exactly the same code path. ZZZ is deterministic and 600 pixels
 wide, so the whole run takes seconds and the fixtures are a few hundred kB (V-01, METHODOLOGY section 5).
 
-E1 protected and E2 water are the binary masks of `frozen_binary_masks` (1 = free, 0 = excluded in that
-function's convention); E3 riparian is frozen as the F2a river-distance raster it thresholds, because the
-setback itself is a research parameter (OQ-002/003, H-3).
+E1 protected, E2 water and E3 riparian are frozen as the excluded shares of each pixel that F3 computes
+(`land_eligibility/fractions.py`: sub-pixel coverage; E1 with every designation, E3 at the central setback and
+discharge threshold of `land_availability`). Refrozen with Douglas's authorization of 2026-10-08 (verdict G),
+replacing the binary masks of the retired legacy phase. The F2a river-distance raster stays frozen as well.
 """
 
 from __future__ import annotations
@@ -21,8 +22,9 @@ import rasterio
 
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_audit_config
-from geofrea.core.geo_utils import load_mainland_boundary
-from tests.regression.frozen_binary_masks import lakes_mask, protected_mask
+from geofrea.core.geo_utils import load_mainland_boundary, read_clipped_to_country
+from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
+from geofrea.land_eligibility.parameters import load_land_availability, nominal_set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -59,14 +61,20 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
     for tif in sorted(Path(out_dir).glob("*.tif")):
         with rasterio.open(tif) as src:
             arrays[f"f2a/{tif.stem}"] = src.read(1).astype(np.float64)
-    lakes = next(Path(out_dir).glob("*lakes_aligned.tif"))
-    arrays["e2_water"] = lakes_mask(str(lakes)).astype(np.float64)
-
-    with rasterio.open(lakes) as src:
-        transform, width, height, crs = src.transform, src.width, src.height, str(src.crs)
+    with rasterio.open(next(Path(out_dir).glob("*lakes_aligned.tif"))) as src:
+        transform, shape = src.transform, (src.height, src.width)
     raw = data_dir / "fixtures" / "synthetic_zzz" / "raw"
     mainland = load_mainland_boundary(next((raw / "countries_borders").rglob("gadm41_ZZZ_0.shp")))
-    wdpa = next((raw / "protected_areas").glob("*.gpkg"))
-    protected = protected_mask(wdpa, mainland, transform, width, height, crs)
-    arrays["e1_protected"] = protected.astype(np.float64)
+    central = nominal_set(load_land_availability(main.EXPERIMENTS_YAML).technologies["solar"])
+
+    def clipped(*parts: str):
+        return read_clipped_to_country(next(raw.joinpath(*parts).glob("*.gpkg")), mainland)[0]
+
+    arrays["e1_protected_share"] = polygon_coverage_fraction(clipped("protected_areas"), transform, shape).astype(np.float64)
+    arrays["e2_water_share"] = polygon_coverage_fraction(clipped("hydrology", "lakes"), transform, shape).astype(np.float64)
+    rivers = river_fractions(
+        clipped("hydrology", "rivers"), transform, shape, [central.riparian_setback_km], [central.riparian_min_discharge_m3s]
+    )
+    key = (float(central.riparian_min_discharge_m3s), float(central.riparian_setback_km))
+    arrays["e3_riparian_share"] = rivers[key].astype(np.float64)
     return arrays

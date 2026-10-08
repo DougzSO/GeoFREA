@@ -111,6 +111,17 @@ def test_dag_has_no_suitability_criteria():
 
 
 @pytest.mark.unit
+def test_f4_requires_only_the_reference_grid_not_the_aligned_layers():
+    """E of 7.0.1: F4 reads only the grid, so a rerun of the aligned layers cannot invalidate it."""
+    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())}
+    assert specs["climate_forcing"].requires == frozenset({"reference_grid", "audit_report", "external_inputs"})
+    assert specs["hazard_context"].requires == frozenset({"members", "reference_grid"})
+    assert "reference_grid" in specs["grid_alignment"].produces
+    for name in ("climate_forcing", "hazard_context", "land_eligibility", "siting_layers"):
+        assert "aligned_rasters" not in specs[name].requires  # each reads named layers only
+
+
+@pytest.mark.unit
 def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
     specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())
     produced = {key for spec in specs for key in spec.produces}

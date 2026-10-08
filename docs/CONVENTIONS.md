@@ -36,7 +36,7 @@ Used in `docs/PROGRESS.json` and phase records:
 - `conformant`: audited, all conformance rows pass
 - `rework_required`: code exists and conflicts with the methodology
 
-Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`.
+Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
 
 ## Docstrings
 

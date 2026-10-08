@@ -7,8 +7,11 @@ changes — see docs/DECISIONS.md 2026-09-08, grid_alignment Passo 3.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -45,6 +48,39 @@ def _snap(value: float, step: float, *, up: bool) -> float:
     q = value / step
     q = np.ceil(q - 1e-9) if up else np.floor(q + 1e-9)
     return float(q * step)
+
+
+def write_reference_grid_artifact(mask_raster: Path, out_path: Path) -> Path:
+    """Write the definition of the analysis grid as a small, deterministic JSON file (the `reference_grid` artifact, E of 7.0.1).
+
+    The file holds the CRS, the affine transform, the shape, the pixel size and the SHA-256 of the in-country pixel mask of
+    `mask_raster` (the aligned F2a raster whose valid pixels are the in-country pixels). Two runs that produce the same grid and
+    the same country mask write byte-identical files, so a consumer that reads only the grid (F4) is not invalidated by a rerun
+    that changes other aligned layers. No timestamp or path enters the file.
+
+    Args:
+        mask_raster: Aligned raster on the analysis grid whose valid pixels (finite and not nodata) are the in-country pixels.
+        out_path: Destination of the JSON file.
+
+    Returns:
+        `out_path`.
+    """
+    with rasterio.open(mask_raster) as src:
+        band = src.read(1)
+        valid = np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
+        definition = {
+            "crs": src.crs.to_string(),
+            "transform": [float(v) for v in src.transform[:6]],
+            "width": int(src.width),
+            "height": int(src.height),
+            "pixel_size_deg": float(abs(src.transform.a)),
+            "valid_pixels": int(valid.sum()),
+            "valid_mask_sha256": hashlib.sha256(np.packbits(valid).tobytes()).hexdigest(),
+        }
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(definition, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return out_path
 
 
 def build_reference_grid(

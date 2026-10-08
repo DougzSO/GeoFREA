@@ -63,7 +63,7 @@ def _make_spec(
             for key in produces:
                 path = (artifact_dir or context.outputs_dir) / f"{key}.txt"
                 path.parent.mkdir(parents=True, exist_ok=True)
-                if not path.exists():
+                if not path.exists() or path.read_text(encoding="utf-8") != f"{key}-{value}":
                     path.write_text(f"{key}-{value}", encoding="utf-8")
                 context.register_artifact(key, path, "1.0")
         return DummyOutput(value=value)
@@ -415,8 +415,9 @@ def test_rerun_phases_marks_downstream_consumers_stale_upstream(tmp_path):
     # marked stale_upstream and left there, not recomputed in the same
     # pass (recomputing them anyway once needed is
     # test_stale_upstream_phase_is_recomputed_not_resumed's job).
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
-    second.run([a, b, c])
+    second.run([a_changed, b, c])
 
     assert second.manifest.phases["b"].status == "stale_upstream"
     assert second.manifest.phases["b"].invalidated_by == "a"
@@ -437,8 +438,9 @@ def test_stale_upstream_phase_is_recomputed_not_resumed(tmp_path):
 
     # Rerunning "a" alone (not targeting "b") leaves "b" marked
     # stale_upstream without recomputing it in this same run.
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
-    second.run([a, b])
+    second.run([a_changed, b])
     assert second.manifest.phases["b"].status == "stale_upstream"
 
     call_log.clear()
@@ -511,8 +513,9 @@ def test_rerun_alone_marks_consumer_stale_even_with_a_narrower_phase_specs_list(
     # The rerun invocation only knows about "a" — as a targeted
     # single-phase rerun script would, without reconstructing "b"'s
     # PhaseSpec at all.
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
-    second.run([a])
+    second.run([a_changed])
 
     assert second.manifest.phases["b"].status == "stale_upstream"
     assert second.manifest.phases["b"].invalidated_by == "a"
@@ -528,8 +531,9 @@ def test_consumer_marked_stale_by_a_narrow_rerun_is_recomputed_when_next_needed(
     first = _orchestrator(tmp_path, ["b"])
     first.run([a, b])
 
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
-    second.run([a])
+    second.run([a_changed])
     assert second.manifest.phases["b"].status == "stale_upstream"
 
     call_log.clear()
@@ -578,8 +582,9 @@ def test_stale_marking_survives_a_crash_between_phases(tmp_path):
     first = _orchestrator(tmp_path, ["b"])
     first.run([a, b])
 
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))  # the rerun produces different content
     second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"])
-    second.run([a])
+    second.run([a_changed])
 
     # Fresh process, fresh Orchestrator, reading only what is on disk —
     # no in-memory state from `second` is reused.
@@ -683,6 +688,54 @@ def test_manifest_run_id_and_dirty_describe_the_last_run_while_entries_keep_thei
     on_disk = json.loads(second.manifest_path.read_text(encoding="utf-8"))
     assert on_disk["run_id"] == "run-2" and on_disk["dirty"] is False
     assert on_disk["artifacts"]["a_key"]["run_id"] == "run-1"
+
+
+@pytest.mark.unit
+def test_rerun_with_identical_artifact_content_does_not_invalidate_consumers_and_keeps_their_lineage(tmp_path):
+    """E of 7.0.1: staleness follows content; an unchanged artifact keeps the run_id that first produced it."""
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+    first = _orchestrator(tmp_path, ["b"], run_id="run-1")
+    first.run([a, b])
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"], run_id="run-2")
+    second.run([a, b])
+    assert call_log.count("a") == 2  # a did execute again
+    assert second.manifest.phases["b"].status == "success"
+    assert second.manifest.artifacts["a_out"].run_id == "run-1"
+    assert second.manifest.phases["b"].consumed_run_ids == {"a_out": "run-1"}
+
+
+@pytest.mark.unit
+def test_revalidate_returns_a_stale_entry_to_success_without_recomputing_it(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    a_changed = _make_spec("a", call_log, value=2, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+    _orchestrator(tmp_path, ["b"], run_id="run-1").run([a, b])
+    _orchestrator(tmp_path, ["a"], rerun_phases=["a"], run_id="run-2").run([a_changed, b])
+    stale = _orchestrator(tmp_path, ["b"], run_id="run-3")
+    assert stale.manifest.phases["b"].status == "stale_upstream"
+
+    call_log.clear()
+    stale.revalidate_phases = ["b"]
+    results = stale.run([a_changed, b])
+    assert call_log == []  # nothing recomputed
+    assert results["b"].status == "success"
+    entry = json.loads(stale.manifest_path.read_text(encoding="utf-8"))["phases"]["b"]
+    assert entry["status"] == "success" and entry["invalidated_by"] is None
+    assert entry["consumed_run_ids"] == {"a_out": "run-2"}
+
+
+@pytest.mark.unit
+def test_revalidate_refuses_a_phase_that_is_not_stale_or_whose_input_is_missing(tmp_path):
+    call_log: list[str] = []
+    a = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    orchestrator = _orchestrator(tmp_path, ["a"])
+    orchestrator.run([a])
+    orchestrator.revalidate_phases = ["a"]
+    with pytest.raises(ValueError, match="not stale_upstream"):
+        orchestrator.run([a])
 
 
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
