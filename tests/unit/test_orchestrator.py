@@ -651,6 +651,26 @@ def test_seed_is_recorded_in_the_manifest_and_survives_a_reload(tmp_path):
         reloaded.record_seed("sampler", 7)
 
 
+@pytest.mark.unit
+def test_manifest_entries_of_unregistered_phases_are_dropped_only_when_the_full_registry_is_given(tmp_path):
+    """V16: a retired phase leaves the manifest at the next run, never by hand; a subset run leaves other entries alone."""
+    call_log: list[str] = []
+    first = _orchestrator(tmp_path, ["old_phase", "phase_a"])
+    first.run([_make_spec("old_phase", call_log, produces=frozenset({"old_key"})), _make_spec("phase_a", call_log)])
+    assert "old_phase" in first.manifest.phases and "old_key" in first.manifest.artifacts
+
+    subset = _orchestrator(tmp_path, ["phase_a"])
+    subset.run([_make_spec("phase_a", call_log)])
+    assert "old_phase" in subset.manifest.phases  # a subset of the registry prunes nothing
+
+    full = _orchestrator(tmp_path, ["phase_a"])
+    full.prune_unregistered = True
+    full.run([_make_spec("phase_a", call_log)])
+    on_disk = json.loads(full.manifest_path.read_text(encoding="utf-8"))
+    assert "old_phase" not in on_disk["phases"] and "old_key" not in on_disk["artifacts"]
+    assert "phase_a" in on_disk["phases"]
+
+
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─
 
 

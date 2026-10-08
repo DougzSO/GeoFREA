@@ -548,6 +548,10 @@ class Orchestrator:
         methodology_version: The METHODOLOGY version of this run, recorded in every phase entry (A-02).
         dirty: Whether the working tree has uncommitted changes under
             src/ or config/ (see compute_dirty).
+        prune_unregistered: When True (the caller passes the complete registry, as main.py does), phase
+            entries and artifacts of the manifest whose phase is not registered any more (a retired phase such
+            as `suitability_criteria`, V16) are dropped at the start of the run. A caller that passes a subset
+            of the registry leaves it False so entries of the other phases stay untouched.
     """
 
     outputs_dir: Path
@@ -559,6 +563,7 @@ class Orchestrator:
     methodology_version: str
     dirty: bool
     manifest: RunManifest = field(init=False)
+    prune_unregistered: bool = False
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
@@ -589,6 +594,19 @@ class Orchestrator:
         # RunManifest.schema_version is a Literal["2.3"].
         data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
+
+    def _prune_unregistered(self, registered: set[str]) -> None:
+        """Drop manifest phase entries and artifacts of phases that are not registered any more (V16)."""
+        retired = sorted(n for n in self.manifest.phases if n not in registered)
+        orphans = sorted(k for k, e in self.manifest.artifacts.items() if e.phase not in registered)
+        if not retired and not orphans:
+            return
+        for name in retired:
+            del self.manifest.phases[name]
+        for key in orphans:
+            del self.manifest.artifacts[key]
+        logger.info("manifest: dropped entries of unregistered phases %s and %d artifact(s)", retired, len(orphans))
+        self._write_manifest()
 
     def record_seed(self, name: str, seed: int) -> None:
         """Record a random seed in the manifest and persist it (A-12).
@@ -768,6 +786,8 @@ class Orchestrator:
             for dep_name in dep_names:
                 consumers[dep_name].add(name)
 
+        if self.prune_unregistered:
+            self._prune_unregistered(set(by_name))
         unknown_targets = [name for name in self.target_phases if name not in by_name]
         if unknown_targets:
             raise MissingProducerError(

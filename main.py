@@ -627,6 +627,7 @@ def run_geofrea(
         run_id=run_id,
         methodology_version=_read_methodology_version(METHODOLOGY_MD),
         dirty=dirty,
+        prune_unregistered=True,
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
