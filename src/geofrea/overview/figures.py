@@ -312,7 +312,10 @@ def build_overview(iso: str) -> OverviewSummary:
         plot_hazard_context(iso, hazard, out / "figures" / f"{iso}_hazard_context.png"),
     ]
     eligibility_dir = core_paths.phase_dir(iso, "land_eligibility", "artifacts")
-    cell_tables = {p.stem.removeprefix("cells_"): pd.read_parquet(p) for p in sorted(eligibility_dir.glob("cells_*.parquet")) if "0p1deg" not in p.stem}
+    cell_tables = {
+        p.stem.removeprefix("cells_").removesuffix("__central"): pd.read_parquet(p)
+        for p in sorted(eligibility_dir.glob("cells_*__central.parquet"))
+    }
     if cell_tables:
         figures.append(plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png"))
     table = out / "tables" / f"{iso}_overview.md"

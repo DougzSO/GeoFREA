@@ -39,7 +39,7 @@ happens downstream in data_quality_audit (inspect_vector_layer(clip=
 True), same as lakes/rivers/protected), not in this phase; see
 local_layers.py's module docstring. `solar` was
 added 2026-09-11 the same way (single global Global Solar Atlas PVOUT
-file, resolve_solar_path) — hard-required by suitability_criteria, which
+file, resolve_solar_path) — hard-required by siting_layers, which
 could not run end-to-end without it. _LOCAL_PATH_HANDLERS /
 _LOCAL_MULTI_PATH_HANDLERS below are the only places this phase knows
 about local_layers.py. `protected` was activated 2026-09-11 (see

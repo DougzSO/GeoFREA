@@ -57,10 +57,10 @@ jobs:
               _resolved_config_json(settings, parameters), methodology_version, "ci"
           )
 
-          phases = ["data_acquisition", "data_quality_audit", "grid_alignment", "suitability_criteria"]
+          phases = ["data_acquisition", "data_quality_audit", "grid_alignment", "siting_layers"]
           started = time.perf_counter()
           ok = run_geofrea(
-              "ZZZ", phases, [], settings.geospatial.resolutions, audit_config, run_id, dirty
+              "ZZZ", phases, [], settings.geospatial.resolutions, settings.geospatial.distance_cap_km, audit_config, run_id, dirty
           )
           elapsed = time.perf_counter() - started
           print(f"ZZZ F1-F2b: ok={ok} elapsed={elapsed:.2f}s")

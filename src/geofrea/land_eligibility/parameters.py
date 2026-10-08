@@ -165,8 +165,3 @@ def strictest_slope_max_deg(la: LandAvailability, technology: str) -> float:
     """
     q = la.technologies[technology].slope_max_deg
     return q.low if q.has_range else q.nominal
-
-
-def legacy_terrain_slope_deg(la: LandAvailability) -> float:
-    """Denominator of the legacy terrain score: the highest nominal slope maximum over the technologies (legacy phase only)."""
-    return max(t.slope_max_deg.nominal for t in la.technologies.values())

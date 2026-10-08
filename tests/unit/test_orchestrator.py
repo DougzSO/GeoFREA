@@ -86,6 +86,7 @@ def _orchestrator(
         target_phases=target_phases,
         rerun_phases=rerun_phases if rerun_phases is not None else [],
         run_id=run_id,
+        methodology_version="test-1.0.0",
         dirty=dirty,
     )
 
@@ -615,7 +616,25 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.2"
+    assert orchestrator.manifest.schema_version == "2.3"
+
+
+@pytest.mark.unit
+def test_manifest_records_methodology_version(tmp_path):
+    """A-02 (V15): every phase entry on disk carries the METHODOLOGY version of the run, whatever its status."""
+    call_log: list[str] = []
+    ok = _make_spec("phase_ok", call_log, produces=frozenset({"ok_key"}))
+    bad = _make_spec("phase_bad", call_log, fail=True)
+    orchestrator = _orchestrator(tmp_path, ["phase_ok", "phase_bad"])
+
+    orchestrator.run([ok, bad])
+
+    on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
+    assert on_disk["schema_version"] == "2.3"
+    assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
+        "phase_ok": "test-1.0.0",
+        "phase_bad": "test-1.0.0",
+    }
 
 
 # ─── Part B: stale resume rejection (2026-09-21, see docs/phases/core.md) ─

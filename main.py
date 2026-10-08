@@ -96,7 +96,7 @@ from geofrea.core.orchestrator import (
 )
 from geofrea.core.paths import log_path, outputs_dir, phase_dir
 from geofrea.core.run_logging import configure_logging, render_run_table
-from geofrea.core.schemas import CriteriaParams, ResolutionsConfig, SettingsFile
+from geofrea.core.schemas import ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_acquisition_phase
@@ -111,13 +111,7 @@ from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.overview.figures import OverviewSummary, build_overview
-from geofrea.suitability_criteria.adapter import build_suitability_criteria_inputs
-from geofrea.suitability_criteria.phase import run_suitability_criteria_phase
-from geofrea.suitability_criteria.physical_layers import SitingLayersResult, build_physical_layers
-from geofrea.suitability_criteria.schemas import (
-    SuitabilityCriteriaInputs,
-    SuitabilityCriteriaResult,
-)
+from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 
 logger = logging.getLogger("geofrea.main")
 
@@ -267,38 +261,6 @@ def _build_grid_alignment_inputs(
     return acquisition_result_to_grid_alignment_inputs(acquisition_output, resolutions, distance_cap_km)
 
 
-def _build_suitability_criteria_inputs(
-    context: PhaseContext, criteria: CriteriaParams
-) -> SuitabilityCriteriaInputs:
-    """Build suitability_criteria's input from grid_alignment + data_acquisition.
-
-    No RuntimeError guards here (removed 2026-09-21, see docs/phases/
-    core.md D-core-001): suitability_criteria's PhaseSpec declares
-    requires={"aligned_rasters", "layer_registry"}, produced only by
-    grid_alignment and data_acquisition respectively — the
-    orchestrator's graph validation and dependency-skip logic already
-    guarantee both succeeded before this closure is ever called.
-
-    Args:
-        context: The suitability_criteria phase's PhaseContext.
-        criteria: The global CriteriaParams block from parameters.json,
-            closed over by the phase spec (same per-context-closure
-            pattern as `resolutions` for grid_alignment).
-
-    Returns:
-        Real SuitabilityCriteriaInputs.
-    """
-    grid_output = context.prior_results["grid_alignment"].output
-    acquisition_output = context.prior_results["data_acquisition"].output
-    country_params = context.require_country_params("criteria")
-    return build_suitability_criteria_inputs(
-        grid_output,
-        acquisition_output,
-        criteria,
-        country_params.criteria,
-    )
-
-
 _LAYER_REGISTRY_SCHEMA_VERSION = "1.1"  # bumped 2026-09-23: AcquiredLayer
 # gained source_sha256/source_sha256_skipped_reason (docs/phases/core.md
 # D-core-016, resolving OQ-024). Both are optional with a None default,
@@ -376,7 +338,6 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
 def _build_phase_specs(
     resolutions: ResolutionsConfig,
     distance_cap_km: float,
-    criteria: CriteriaParams,
     audit_config: AuditConfig,
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
@@ -397,11 +358,6 @@ def _build_phase_specs(
     own output-model summary ("layer_registry", "audit_report") — F1's
     AcquiredLayer entries have no per-layer content to hash beyond the
     resolved path itself (see OQ-024, docs/OPEN_QUESTIONS.md).
-
-    suitability_criteria (F2b) produces only its own output-model
-    artifact ("suitability_criteria_result"), not a per-layer
-    breakdown — a temporary exception, see docs/phases/core.md Known
-    issues, pending the Estágio H rebuild of F2b into siting_layers.
 
     Args:
         resolutions: settings.yaml's `geospatial.resolutions`, closed
@@ -487,13 +443,6 @@ def _build_phase_specs(
         """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
         result = build_overview(context.country_code)
         _register_json_artifact(context, "overview", result)
-        return result
-
-    def suitability_criteria_run(context: PhaseContext) -> SuitabilityCriteriaResult:
-        result = run_suitability_criteria_phase(
-            context, inputs=_build_suitability_criteria_inputs(context, criteria)
-        )
-        _register_json_artifact(context, "suitability_criteria_result", result)
         return result
 
     return [
@@ -591,13 +540,6 @@ def _build_phase_specs(
             produces=frozenset({"overview"}),
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),
-        PhaseSpec(
-            name="suitability_criteria",
-            output_model=SuitabilityCriteriaResult,
-            run=suitability_criteria_run,
-            requires=frozenset({"aligned_rasters", "layer_registry"}),
-            produces=frozenset({"suitability_criteria_result"}),
-        ),
     ]
 
 
@@ -672,11 +614,12 @@ def run_geofrea(
         target_phases=target_phases,
         rerun_phases=rerun_phases,
         run_id=run_id,
+        methodology_version=_read_methodology_version(METHODOLOGY_MD),
         dirty=dirty,
     )
 
     results = orchestrator.run(
-        _build_phase_specs(resolutions, distance_cap_km, parameters.criteria, audit_config)
+        _build_phase_specs(resolutions, distance_cap_km, audit_config)
     )
     ok = all(results[name].status == "success" for name in target_phases)
     if not ok:
@@ -722,7 +665,6 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings(SETTINGS_YAML)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
-
     # "Known" is defined by countries.yaml (A-05's single source of
     # country-specific mappings), not parameters.json: a country can be
     # wired for data_acquisition/grid_alignment before its economics are

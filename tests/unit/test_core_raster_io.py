@@ -97,7 +97,7 @@ def test_safe_raster_write_defaults_to_lzw_compression_and_tiling(tmp_path):
 
 
 @pytest.mark.unit
-def test_safe_raster_write_caller_can_override_defaults(tmp_path):
+def test_safe_raster_write_caller_can_override_compression_and_output_is_a_cog(tmp_path):
     out_path = tmp_path / "out.tif"
     transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
     with safe_raster_write(
@@ -111,13 +111,48 @@ def test_safe_raster_write_caller_can_override_defaults(tmp_path):
         transform=transform,
         nodata=-9999.0,
         compress="none",
-        tiled=False,
     ) as dst:
         dst.write(np.ones((3, 3), dtype="float32"), 1)
 
     with rasterio.open(out_path) as src:
         assert src.profile.get("compress") is None
-        assert src.profile.get("tiled") is False
+        assert src.profile.get("tiled") is True  # a COG is always tiled
+        assert src.tags(ns="IMAGE_STRUCTURE").get("LAYOUT") == "COG"
+
+
+@pytest.mark.unit
+def test_rasters_are_written_as_cog_with_values_tags_and_nodata_unchanged(tmp_path):
+    """A-07: the file is a Cloud Optimized GeoTIFF; values, nodata, tags and georeferencing are those that were written."""
+    out_path = tmp_path / "cog.tif"
+    transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
+    data = np.arange(60 * 70, dtype="float32").reshape(60, 70)
+    data[0, 0] = -9999.0
+    with safe_raster_write(
+        out_path, driver="GTiff", height=60, width=70, count=1, dtype="float32", crs="EPSG:4326", transform=transform,
+        nodata=-9999.0, blockxsize=256, blockysize=256, predictor=3,
+    ) as dst:
+        dst.write(data, 1)
+        dst.update_tags(layer="x", units="km")
+
+    with rasterio.open(out_path) as src:
+        assert src.tags(ns="IMAGE_STRUCTURE").get("LAYOUT") == "COG"
+        assert src.profile["compress"] == "lzw"
+        assert src.nodata == -9999.0 and src.crs.to_epsg() == 4326 and src.transform == transform
+        assert src.tags()["layer"] == "x" and src.tags()["units"] == "km"
+        assert np.array_equal(src.read(1), data)
+    assert not list(tmp_path.glob("*.writing.tif"))
+
+
+@pytest.mark.unit
+def test_failed_raster_write_leaves_no_partial_file(tmp_path):
+    out_path = tmp_path / "bad.tif"
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        safe_raster_write(out_path, driver="GTiff", height=2, width=2, count=1, dtype="float32") as dst,
+    ):
+        dst.write(np.ones((2, 2), dtype="float32"), 1)
+        raise RuntimeError("boom")
+    assert not out_path.exists() and not list(tmp_path.glob("*.writing.tif"))
 
 
 @pytest.mark.unit

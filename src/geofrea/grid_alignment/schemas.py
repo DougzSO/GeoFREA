@@ -4,7 +4,7 @@ Ported from geoworld_framework's src/processors/grid_aligner.py
 (`GridAligner.run()`, 1213 lines — see docs/architecture/grid_alignment.md).
 This phase reprojects every raw layer data_acquisition resolved onto a
 single reference grid (same CRS/transform/dimensions), a prerequisite
-for suitability_criteria (Fase 2b) — see module-mapping.md.
+for siting_layers (F2b) — see module-mapping.md.
 
 Design corrected from the legacy shape during the read-only audit that
 preceded this schema (2026-09-08, see docs/DECISIONS.md same date —

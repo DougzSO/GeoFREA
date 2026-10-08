@@ -584,6 +584,7 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
         target_phases=["data_acquisition"],
         rerun_phases=[],
         run_id="test-run-id",
+        methodology_version="test-1.0.0",
         dirty=False,
     )
     first_results = first_run.run(phase_specs)
@@ -599,6 +600,7 @@ def test_orchestrator_resumes_data_acquisition_phase_from_saved_manifest(tmp_pat
         target_phases=["data_acquisition"],
         rerun_phases=[],
         run_id="test-run-id",
+        methodology_version="test-1.0.0",
         dirty=False,
     )
     resumed_results = resumed_run.run(phase_specs)
@@ -633,6 +635,7 @@ def test_partial_layer_failure_still_registers_layer_registry_with_the_failed_la
         target_phases=["data_acquisition"],
         rerun_phases=[],
         run_id="test-run-id",
+        methodology_version="test-1.0.0",
         dirty=False,
     )
     specs = [

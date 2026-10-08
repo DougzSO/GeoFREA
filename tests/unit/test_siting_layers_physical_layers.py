@@ -9,7 +9,7 @@ from rasterio.transform import from_origin
 
 from geofrea.core.constants import NODATA_FLOAT
 from geofrea.grid_alignment.schemas import GridAlignmentResult, GridMetadata
-from geofrea.suitability_criteria import physical_layers as pl
+from geofrea.siting_layers import physical_layers as pl
 
 TRANSFORM = from_origin(-9.0, 42.0, 0.01, 0.01)
 

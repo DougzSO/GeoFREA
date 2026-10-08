@@ -34,6 +34,7 @@ from geofrea.core.geo_utils import (
     write_clip_cache_key,
 )
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
+from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
@@ -56,7 +57,19 @@ from geofrea.land_eligibility.parameters import (
     riparian_discharges_m3s,
     riparian_thresholds_km,
 )
-from geofrea.suitability_criteria.physical_layers import SitingLayersResult
+from geofrea.land_eligibility.scenarios import (
+    candidate_stability,
+    check_scenario_order,
+    scenario_composition,
+    scenario_sets,
+)
+from geofrea.land_eligibility.table_schemas import (
+    LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
+    CandidateStabilityRow,
+    CellRow,
+    CoarseCellRow,
+)
+from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 logger = logging.getLogger("geofrea.land_eligibility.pipeline")
 
@@ -69,11 +82,32 @@ class LandEligibilityError(RuntimeError):
     """An input of F3 is missing or an invariant of the result fails (A-09, V-03)."""
 
 
+class MissingRequiredLayerError(LandEligibilityError):
+    """A protected-area, lake or river layer of a configured country is absent; a zero share is never assumed (M-F2b-05)."""
+
+
+class ScenarioSummary(BaseModel):
+    """One named land-availability scenario of one technology (U-06): its parameter set and its two tables."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scenario: str
+    parameter_set: dict
+    varied: dict[str, dict[str, float]]
+    held_central: dict[str, str]
+    n_candidates: int
+    eligible_area_km2: float
+    cells: Path
+    candidates: Path
+
+
 class TechSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     technology: str
     parameter_set: dict
+    scenarios: dict[str, ScenarioSummary]
+    stability: Path
     n_cells: int
     n_candidates: int
     cell_area_km2: float
@@ -122,6 +156,11 @@ def _read_class_counts(path: Path | None) -> tuple[np.ndarray, tuple[int, ...], 
         tags = src.tags()
         nodata = src.nodata
     classes = tuple(int(c) for c in tags["worldcover_classes"].split(","))
+    if 0 in classes or int(tags["samples_per_pixel"]) <= 0:
+        raise LandEligibilityError(
+            "the aligned land-cover class counts come from the retired centre-count mode (a band for no class, or no samples per "
+            "pixel); delete the file and rerun grid_alignment (M-F2a-06, V19)"
+        )
     outside = (counts == nodata).all(axis=0)
     counts[:, outside] = 0
     return counts, classes, ~outside & (counts.sum(axis=0, dtype=np.uint32) > 0), int(tags["samples_per_pixel"])
@@ -141,10 +180,19 @@ def _read_slope_counts(path: Path | None) -> tuple[np.ndarray, np.ndarray]:
     return counts, ~outside & (counts.sum(axis=0, dtype=np.uint32) > 0)
 
 
-def _clipped(path: Path | None, name: str, country_gdf: gpd.GeoDataFrame, interim: Path) -> gpd.GeoDataFrame | None:
-    """The vector clipped to the country, through a cache keyed by the source identity and the polygon."""
+def _clipped(path: Path | None, name: str, country_gdf: gpd.GeoDataFrame, interim: Path) -> gpd.GeoDataFrame:
+    """The vector clipped to the country, through a cache keyed by the source identity and the polygon.
+
+    Implements: M-F2b-05.
+
+    Raises:
+        MissingRequiredLayerError: `path` is None or the file does not exist.
+    """
     if path is None or not Path(path).exists():
-        return None
+        raise MissingRequiredLayerError(
+            f"required layer {name!r} is absent ({path}); F3 never assumes a zero share for a missing "
+            f"protected-area, lake or river layer"
+        )
     cache = interim / f"{name}_clipped.gpkg"
     key = clip_cache_key(path, country_gdf)
     if clip_cache_is_current(cache, key):
@@ -286,7 +334,9 @@ def build_eligibility(
 
     summaries: dict[str, TechSummary] = {}
     for tech in techs:
-        params: ParameterSet = nominal_set(la.technologies[tech])
+        sets = scenario_sets(la.technologies[tech])
+        composition = scenario_composition(la.technologies[tech])
+        params: ParameterSet = sets["central"]
         resource_paths = _required_resources(tech, siting_result.layers)
         resources = {name: _read(path, name) for name, path in resource_paths.items()}
         layers = EligibilityLayers(
@@ -304,21 +354,46 @@ def build_eligibility(
             riparian_fraction=riparian_fraction,
             required_valid={name: np.isfinite(a) for name, a in resources.items()},
         )
-        eligible, excl = eligible_fraction(layers, params)
-        cells = aggregate_to_cells(
-            transform, country_mask, eligible, excl, resources=resources, flags=flags
+        cells_by_scenario: dict[str, pd.DataFrame] = {}
+        scenario_summaries: dict[str, ScenarioSummary] = {}
+        central: dict = {}
+        for scenario, sparams in sets.items():
+            eligible, excl = eligible_fraction(layers, sparams)
+            cells = aggregate_to_cells(transform, country_mask, eligible, excl, resources=resources, flags=flags)
+            _check_invariants(f"{tech}/{scenario}", cells, eligible, pixel_area, country_mask)
+            cells["candidate"] = cells["eligible_area_km2"] >= sparams.min_eligible_area_km2
+            candidates = candidate_cells(cells, sparams.min_eligible_area_km2).drop(columns="candidate")
+            cells_path = _table_path(out, "cells", tech, scenario)
+            cand_path = _table_path(out, "candidates", tech, scenario)
+            write_table(cells, cells_path, schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION, row_model=CellRow)
+            write_table(candidates, cand_path, schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION, row_model=CellRow)
+            cells_by_scenario[scenario] = cells
+            scenario_summaries[scenario] = ScenarioSummary(
+                scenario=scenario,
+                parameter_set={k: (list(v) if isinstance(v, tuple) else v) for k, v in sparams.__dict__.items()},
+                varied=composition.varied,
+                held_central=composition.held,
+                n_candidates=len(candidates),
+                eligible_area_km2=float(cells["eligible_area_km2"].sum()),
+                cells=cells_path,
+                candidates=cand_path,
+            )
+            if scenario == "central":
+                central = {"eligible": eligible, "excl": excl, "cells": cells, "candidates": candidates}
+            logger.info(
+                "%s %s [%s]: %d cells, %d candidates, %.1f%% of the land eligible", iso, tech, scenario, len(cells),
+                len(candidates), 100 * float(cells["eligible_area_km2"].sum() / cells["cell_area_km2"].sum()),
+            )
+        check_scenario_order(tech, cells_by_scenario)
+        stability_path = Path(str(out / f"candidate_stability_{tech}") + ".parquet")
+        write_table(
+            candidate_stability(cells_by_scenario, params.min_eligible_area_km2), stability_path,
+            schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION, row_model=CandidateStabilityRow,
         )
-        _check_invariants(tech, cells, eligible, pixel_area, country_mask)
-        cells["candidate"] = cells["eligible_area_km2"] >= params.min_eligible_area_km2
-        candidates = candidate_cells(cells, params.min_eligible_area_km2).drop(columns="candidate")
 
-        base = out / f"{{}}_{tech}"
-        cells_path = Path(str(base).format("cells") + ".parquet")
-        cand_path = Path(str(base).format("candidates") + ".parquet")
-        coarse_path = Path(str(base).format("cells_0p1deg") + ".parquet")
-        cells.to_parquet(cells_path, index=False)
-        candidates.to_parquet(cand_path, index=False)
-        _coarse(cells).to_parquet(coarse_path, index=False)
+        eligible, excl, cells, candidates = central["eligible"], central["excl"], central["cells"], central["candidates"]
+        coarse_path = Path(str(out / f"cells_0p1deg_{tech}") + ".parquet")
+        write_table(_coarse(cells), coarse_path, schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION, row_model=CoarseCellRow)
         rasters = _write_rasters(out, tech, eligible, cells, transform, grid_ref)
 
         valid = valid_pixels(layers)
@@ -326,6 +401,8 @@ def build_eligibility(
         summaries[tech] = TechSummary(
             technology=tech,
             parameter_set={k: (list(v) if isinstance(v, tuple) else v) for k, v in params.__dict__.items()},
+            scenarios=scenario_summaries,
+            stability=stability_path,
             n_cells=len(cells),
             n_candidates=len(candidates),
             cell_area_km2=total_area,
@@ -335,16 +412,17 @@ def build_eligibility(
                 name: float(cells[f"excluded_area_km2_{name}"].sum() / total_area) for name in EXCLUSION_NAMES
             },
             invalid_pixel_share=float(1.0 - np.count_nonzero(valid) / max(1, np.count_nonzero(country_mask))),
-            candidates=cand_path,
-            cells=cells_path,
+            candidates=scenario_summaries["central"].candidates,
+            cells=scenario_summaries["central"].cells,
             cells_0p1deg=coarse_path,
             rasters=rasters,
         )
-        logger.info(
-            "%s %s: %d cells, %d candidates, %.1f%% of the land eligible", iso, tech, len(cells), len(candidates),
-            100 * summaries[tech].eligible_share,
-        )
     return EligibilitySummary(country_code=iso, technologies=summaries)
+
+
+def _table_path(out: Path, kind: str, tech: str, scenario: str) -> Path:
+    """`<kind>_<tech>__<scenario>.parquet` under the F3 artifacts directory (the scenario is part of the file name, V2)."""
+    return out / f"{kind}_{tech}__{scenario}.parquet"
 
 
 def _check_invariants(tech: str, cells: pd.DataFrame, eligible: np.ndarray, pixel_area: np.ndarray, mask: np.ndarray) -> None:

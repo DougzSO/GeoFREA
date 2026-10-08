@@ -31,7 +31,9 @@ from geofrea.climate_forcing.members import (
     Member,
     MemberResolutionError,
 )
+from geofrea.climate_forcing.table_schemas import CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow
 from geofrea.core.constants import CELL_NESTING_PIXELS
+from geofrea.core.tables import table_metadata, validate_columns
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 from geofrea.land_eligibility.cells import cell_center, cell_id, grid_cell_origin
 
@@ -199,9 +201,12 @@ def write_forcing(frames: Iterator[pd.DataFrame], out_path: Path) -> int:
     try:
         for frame in frames:
             frame["member"] = frame["member"].astype("category")
+            validate_columns(frame, ForcingRow)
             table = pa.Table.from_pandas(frame, preserve_index=False)
             if writer is None:
-                writer = pq.ParquetWriter(out_path, table.schema, compression="zstd")
+                writer = pq.ParquetWriter(
+                    out_path, table_metadata(table.schema, CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow), compression="zstd"
+                )
             writer.write_table(table.cast(writer.schema))
             n += len(frame)
     finally:

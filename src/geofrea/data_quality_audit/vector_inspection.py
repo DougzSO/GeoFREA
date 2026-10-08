@@ -38,7 +38,7 @@ list and priority order geoworld_framework's
 criteria_builder.py::compute_protected_areas() uses (IUCN_CAT/
 iucn_cat/IUCN/DESIGNATION) — not reinvented. Only descriptive stats
 (count/area/pct per category) are computed here; the IUCN_SCORES
-suitability-score mapping itself belongs to a future suitability_criteria
+suitability-score mapping itself belongs to a later phase
 phase, not this audit (see DECISIONS.md 2026-08-24 "protected (WDPA):
 decisão de onde entra no GeoFREA fica pendente"). Category values are
 normalized with `.str.lower().str.strip()` before grouping, replicating
@@ -324,7 +324,7 @@ def _iucn_category_breakdown(
     through to the same default score used for any unrecognized string,
     silently and without a label. This function's "unknown" label exists
     only because it needs *some* dict key to group by — not a scoring
-    decision, and not necessarily the label suitability_criteria (the
+    decision, and not necessarily the label the retired legacy phase used (the
     future phase that will port IUCN_SCORES) should use. Left as-is,
     flagged for that future design, not decided here.
     """

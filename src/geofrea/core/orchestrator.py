@@ -47,14 +47,16 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.2"
-# 2.1 manifests are readable without migration: PhaseManifestEntry's new
-# fields (invalidated_by, invalidated_in_run) default to None, so old
+_MANIFEST_SCHEMA_VERSION = "2.3"
+# 2.3 (METHODOLOGY 7.0.0, A-02): every PhaseManifestEntry records the METHODOLOGY version it ran under
+# (`methodology_version`, None for entries written before 2.3).
+# 2.1 and 2.2 manifests are readable without migration: PhaseManifestEntry's new
+# fields (invalidated_by, invalidated_in_run, methodology_version) default to None, so old
 # JSON missing them still validates. _load_manifest() normalizes the
-# on-disk "2.1" tag to "2.2" in memory before validating (RunManifest's
-# schema_version is a Literal["2.2"]) rather than running a migration
+# on-disk tag to "2.3" in memory before validating (RunManifest's
+# schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
-_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", _MANIFEST_SCHEMA_VERSION})
+_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", "2.2", _MANIFEST_SCHEMA_VERSION})
 
 
 def _now_iso() -> str:
@@ -98,9 +100,8 @@ class CountryParamsRequiredError(RuntimeError):
     Raised at the point of use (PhaseContext.require_country_params), not
     at orchestrator/main.py setup: data_acquisition and grid_alignment
     read no CountryParams field and run fine for a country present only
-    in countries.yaml; data_quality_audit (technologies.<tech>.
-    slope_threshold_deg) and suitability_criteria (criteria) do need an
-    entry and fail loud here, naming the country and the field, instead
+    in countries.yaml; a phase that reads a CountryParams field
+    (for example technologies.<tech>) needs an entry and fails loud here, naming the country and the field, instead
     of every country needing full economic parameters before F1 can run.
     """
 
@@ -254,6 +255,9 @@ class PhaseManifestEntry(BaseModel):
         invalidated_in_run: For a "stale_upstream" entry, the run_id of
             the run that performed the invalidating rerun. None
             otherwise.
+        methodology_version: The METHODOLOGY version the phase ran (or
+            failed, or was skipped) under (A-02). None only for entries
+            written before manifest schema 2.3.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -267,6 +271,7 @@ class PhaseManifestEntry(BaseModel):
     consumed_run_ids: dict[str, str] = {}
     invalidated_by: str | None = None
     invalidated_in_run: str | None = None
+    methodology_version: str | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -313,7 +318,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.2"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.3"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -354,8 +359,7 @@ class PhaseContext:
 
         Args:
             field: Human-readable name of the CountryParams field the
-                caller is about to read (e.g. "technologies.solar",
-                "criteria") — included in the error so the failure names
+                caller is about to read (e.g. "technologies.solar") — included in the error so the failure names
                 exactly what's missing, not just that something is.
         """
         if self.country_params is None:
@@ -540,6 +544,7 @@ class Orchestrator:
             "stale_upstream" phase recomputes it automatically, whether
             or not it is named in that run's rerun_phases.
         run_id: This run's identifier (see compute_run_id).
+        methodology_version: The METHODOLOGY version of this run, recorded in every phase entry (A-02).
         dirty: Whether the working tree has uncommitted changes under
             src/ or config/ (see compute_dirty).
     """
@@ -550,6 +555,7 @@ class Orchestrator:
     target_phases: Sequence[str]
     rerun_phases: Sequence[str]
     run_id: str
+    methodology_version: str
     dirty: bool
     manifest: RunManifest = field(init=False)
 
@@ -577,9 +583,9 @@ class Orchestrator:
                 "There is no migration path — delete this manifest and rerun the "
                 "pipeline for this country from scratch."
             )
-        # A "2.1" manifest validates as-is against the "2.2" schema (its
+        # A "2.1" or "2.2" manifest validates as-is against the "2.3" schema (its
         # new fields are optional); normalize the tag itself since
-        # RunManifest.schema_version is a Literal["2.2"].
+        # RunManifest.schema_version is a Literal["2.3"].
         data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
 
@@ -790,7 +796,7 @@ class Orchestrator:
                     finished_at=now,
                 )
                 results[spec.name] = result
-                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump())
+                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump(), methodology_version=self.methodology_version)
                 self._write_manifest()
                 logger.warning(
                     "Phase '%s' skipped — upstream failed: %s", spec.name, failed_deps
@@ -938,7 +944,7 @@ class Orchestrator:
                     finished_at=finished_at,
                 )
                 results[spec.name] = result
-                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump())
+                self.manifest.phases[spec.name] = PhaseManifestEntry(**result.model_dump(), methodology_version=self.methodology_version)
                 self.manifest.artifacts.update(new_artifacts)
                 self._write_manifest()
 
@@ -987,6 +993,7 @@ class Orchestrator:
                 started_at=started_at,
                 finished_at=finished_at,
                 consumed_run_ids=consumed_run_ids,
+                methodology_version=self.methodology_version,
             )
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the

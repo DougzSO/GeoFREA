@@ -27,7 +27,13 @@ from geofrea.climate_forcing.members import (
     members_manifest,
     resolve_members,
 )
+from geofrea.climate_forcing.table_schemas import (
+    CLIMATE_TABLE_SCHEMA_VERSION,
+    ForcingMaskedRow,
+    HazardContextRow,
+)
 from geofrea.core import paths as core_paths
+from geofrea.core.tables import write_table
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 
 ISIMIP_MAX_DISTANCE_DEG = 0.4  # half the 0.5 degree diagonal (0.354) plus a margin
@@ -118,7 +124,11 @@ def build_forcing(iso: str, experiments_yaml: Path, registry_path: Path | None =
         )
     )
     masked_df["reason"] = "delta_wind outside wind_factor_valid_range (OQ-042 option C)"
-    masked_df.to_parquet(out_dir / "forcing_masked.parquet", index=False)
+    masked_df["member"] = masked_df["member"].astype(str)
+    masked_df["delta_wind"] = masked_df["delta_wind"].astype("float32")
+    write_table(
+        masked_df, out_dir / "forcing_masked.parquet", schema_version=CLIMATE_TABLE_SCHEMA_VERSION, row_model=ForcingMaskedRow
+    )
 
     manifest.update(
         {
@@ -179,7 +189,7 @@ def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     out = pd.concat(frames, ignore_index=True)
     out["member"] = out["member"].astype("category")
     path = artifacts_dir(iso) / "hazard_context.parquet"
-    out.to_parquet(path, index=False, compression="zstd")
+    write_table(out, path, schema_version=CLIMATE_TABLE_SCHEMA_VERSION, row_model=HazardContextRow, compression="zstd")
     return HazardSummary(
         country_code=iso, n_cells=len(cells), n_hazard_members=len(members), n_rows=len(out), hazard_context=path
     )

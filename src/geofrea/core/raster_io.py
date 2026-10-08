@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import rasterio
+import rasterio.shutil
 from rasterio._err import CPLE_BaseError
 
 logger = logging.getLogger(__name__)
@@ -78,11 +79,46 @@ def _open_for_write(file_path: Path, kwargs: dict[str, Any]):
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+def _cog_options(kwargs: dict[str, Any]) -> dict[str, str]:
+    """GDAL COG creation options equivalent to the writer's profile (same compression, same predictor, 256 pixel blocks)."""
+    options = {
+        "COMPRESS": str(kwargs.get("compress", "lzw")).upper(),
+        "BLOCKSIZE": str(kwargs.get("blockxsize", 256)),
+        "OVERVIEW_RESAMPLING": "NEAREST",  # overviews never invent values: classes and counts stay valid
+    }
+    if kwargs.get("predictor") is not None:
+        options["PREDICTOR"] = str(kwargs["predictor"])
+    return options
+
+
+def _write_cog(tmp_path: Path, final_path: Path, kwargs: dict[str, Any]) -> None:
+    """Convert the finished GeoTIFF at `tmp_path` into a Cloud Optimized GeoTIFF at `final_path` (lossless), then drop it.
+
+    Implements: A-07.
+    """
+    options = _cog_options(kwargs)
+    for wait in (*_WRITE_RETRY_WAITS_S, None):
+        try:
+            if final_path.exists():
+                final_path.unlink()
+            rasterio.shutil.copy(str(tmp_path), str(final_path), driver="COG", **options)
+            break
+        except (rasterio.errors.RasterioIOError, CPLE_BaseError, PermissionError) as exc:
+            if wait is None or "ermission" not in str(exc):
+                raise
+            logger.warning("%s is locked (%s); retrying in %.0fs", final_path.name, exc, wait)
+            time.sleep(wait)
+    tmp_path.unlink(missing_ok=True)
+
+
 @contextmanager
 def safe_raster_write(file_path: str | Path, **kwargs: Any) -> Generator[rasterio.DatasetWriter, None, None]:
-    """Open a raster file for writing, creating parent directories as needed.
+    """Open a raster file for writing, creating parent directories as needed; the file ends up as a COG (A-07).
 
-    Applies LZW compression and tiling by default (overridable via kwargs).
+    The raster is written as a tiled GeoTIFF next to the destination (LZW and tiling by default, overridable via kwargs, so
+    windowed writes and tags work as with any rasterio dataset) and converted on exit to a Cloud Optimized GeoTIFF at
+    `file_path` with the same compression, predictor and nodata; values and tags are unchanged. If the `with` body raises,
+    the partial file is removed and nothing is written to `file_path`.
 
     Args:
         file_path: Destination path for the raster file.
@@ -96,11 +132,16 @@ def safe_raster_write(file_path: str | Path, **kwargs: Any) -> Generator[rasteri
 
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    dst = _open_for_write(file_path, kwargs)
+    tmp_path = file_path.with_name(f"{file_path.stem}.writing.tif")
+    dst = _open_for_write(tmp_path, kwargs)
     try:
         yield dst
-    finally:
+    except BaseException:
         dst.close()
+        tmp_path.unlink(missing_ok=True)
+        raise
+    dst.close()
+    _write_cog(tmp_path, file_path, kwargs)
 
 
 @contextmanager

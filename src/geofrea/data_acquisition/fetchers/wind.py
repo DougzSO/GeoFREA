@@ -32,7 +32,7 @@ before implementing (all 12 product/height combinations return 200
 with a real GeoTIFF; see docs/phases/F1_data_acquisition.md). Kept
 deliberately separate from fetch_wind() above rather than rewriting it
 in terms of the new function: fetch_wind() feeds the single "wind"
-registry entry that grid_alignment/suitability_criteria already
+registry entry that grid_alignment/siting_layers already
 consume as GeoFREA's actual wind resource layer, and its existing
 soft-fail contract (returns None, never raises — see
 tests/unit/test_fetchers_wind.py) is relied on by every other fetcher

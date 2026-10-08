@@ -139,7 +139,7 @@ from shapely.geometry import Point
 class GeometryRepairReport(NamedTuple):
     """Traceability record for invalid-geometry repair on a clip path.
 
-    Moved here 2026-09-21 from suitability_criteria's WDPA-only
+    Moved here 2026-09-21 from the retired legacy F2b phase's WDPA-only
     `WdpaGeometryRepairReport` (see docs/phases/core.md, docs/phases/
     F2b_siting_layers.md) so every caller of `clip_vector_to_country()`/
     `read_clipped_to_country()` gets the same repair, not just
@@ -517,7 +517,7 @@ def clip_vector_to_country(
         caller's invalid input geometries (`gdf`) are repaired via
         `repair_invalid_geometries()` before the intersection — this is
         unconditional, not opt-in (2026-09-21, see docs/phases/core.md
-        — moved here from suitability_criteria's WDPA-only repair so
+        — moved here from the retired legacy F2b phase's WDPA-only repair so
         every phase using this shared clip path gets it). The report is
         always returned, never just logged, so a caller cannot
         silently miss that a repair happened.

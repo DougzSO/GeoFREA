@@ -11,7 +11,7 @@ a real fetcher, so phase.py's wiring for these layers is a thin
 "resolve instead of download" swap, not a new code path.
 
 `solar` was added 2026-09-11 (resolve_solar_path): a single global
-Global Solar Atlas v2 PVOUT raster, hard-required by suitability_criteria
+Global Solar Atlas v2 PVOUT raster, hard-required by siting_layers
 (REQUIRED_ALIGNED_LAYERS) — the phase could not run end-to-end without
 it. Unlike elevation/population/grid it is not country-split; the
 country_code argument is accepted only for a uniform handler signature.
@@ -413,7 +413,7 @@ def resolve_population_path(country_code: str) -> Path | None:
 # country's target grid. Confirmed 2026-09-11 by listing
 # GEOFREA_SHARED_RAW_DIR/solar_potential/. The sibling `World_TEMP_...`
 # bundle (air temperature) is deliberately not matched — it is not a
-# suitability_criteria input.
+# siting_layers input.
 _SOLAR_PVOUT_RELPATH = Path(
     "solar_potential"
 ) / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF" / "PVOUT.tif"

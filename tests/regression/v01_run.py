@@ -4,7 +4,7 @@ Shared by `scripts/freeze_v01_fixtures.py` (writes the frozen fixtures) and `tes
 a fresh run against them), so both exercise exactly the same code path. ZZZ is deterministic and 600 pixels
 wide, so the whole run takes seconds and the fixtures are a few hundred kB (V-01, METHODOLOGY section 5).
 
-E1 protected and E2 water are the binary masks of `criteria_functions` (1 = free, 0 = excluded in that
+E1 protected and E2 water are the binary masks of `frozen_binary_masks` (1 = free, 0 = excluded in that
 function's convention); E3 riparian is frozen as the F2a river-distance raster it thresholds, because the
 setback itself is a research parameter (OQ-002/003, H-3).
 """
@@ -20,12 +20,9 @@ import numpy as np
 import rasterio
 
 from geofrea.core import paths as core_paths
-from geofrea.core.config_loader import load_audit_config, load_parameters
+from geofrea.core.config_loader import load_audit_config
 from geofrea.core.geo_utils import load_mainland_boundary
-from geofrea.suitability_criteria.criteria_functions import (
-    compute_lakes_exclusion,
-    compute_protected_areas,
-)
+from tests.regression.frozen_binary_masks import lakes_mask, protected_mask
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -63,14 +60,13 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
         with rasterio.open(tif) as src:
             arrays[f"f2a/{tif.stem}"] = src.read(1).astype(np.float64)
     lakes = next(Path(out_dir).glob("*lakes_aligned.tif"))
-    arrays["e2_water"] = compute_lakes_exclusion(str(lakes))[0].astype(np.float64)
+    arrays["e2_water"] = lakes_mask(str(lakes)).astype(np.float64)
 
     with rasterio.open(lakes) as src:
         transform, width, height, crs = src.transform, src.width, src.height, str(src.crs)
     raw = data_dir / "fixtures" / "synthetic_zzz" / "raw"
     mainland = load_mainland_boundary(next((raw / "countries_borders").rglob("gadm41_ZZZ_0.shp")))
     wdpa = next((raw / "protected_areas").glob("*.gpkg"))
-    strict = load_parameters(main.PARAMETERS_JSON).criteria.iucn_strict_categories.value
-    protected = compute_protected_areas(wdpa, mainland, transform, width, height, crs, strict)[0]
+    protected = protected_mask(wdpa, mainland, transform, width, height, crs)
     arrays["e1_protected"] = protected.astype(np.float64)
     return arrays

@@ -179,7 +179,7 @@ def phase_dir(iso3: str, phase: str, kind: str) -> Path:
     Args:
         iso3: ISO-3166-alpha-3 country code.
         phase: Phase name (e.g. "data_quality_audit", "grid_alignment",
-            "suitability_criteria").
+            "siting_layers").
         kind: Output kind (e.g. "artifacts", "figures", "reports").
 
     Returns:

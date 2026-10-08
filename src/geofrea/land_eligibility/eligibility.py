@@ -94,12 +94,9 @@ def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np
         raise MissingExclusionLayerError(f"excluded land-cover classes {sorted(unknown)} are not in the prepared bands")
     allowed = np.zeros(layers.country_mask.shape, dtype=np.float32)
     for band, code in enumerate(layers.land_cover_classes):
-        if code != 0 and code not in excluded:  # code 0 is the count of samples of no class: never allowed
+        if code not in excluded:
             allowed += layers.land_cover_counts[band]
-    if 0 in layers.land_cover_classes:  # samples of no class are counted, so the pixel total is the sum of every band
-        total = layers.land_cover_counts.sum(axis=0, dtype=np.float32)
-    else:
-        total = np.float32(layers.samples_per_pixel)
+    total = np.float32(layers.samples_per_pixel)  # samples of no class (open sea) are in no band: never allowed
     with np.errstate(invalid="ignore", divide="ignore"):
         share = np.where(total > 0, 1.0 - allowed / total, 1.0)
     return np.clip(share, 0.0, 1.0).astype(np.float32)

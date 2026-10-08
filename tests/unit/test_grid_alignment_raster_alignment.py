@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.grid_alignment.raster_alignment import (
+    LandCoverCountNotExactError,
     MissingSourceCrsError,
     land_cover_class_counts,
     mosaic_land_cover,
@@ -449,29 +450,20 @@ def test_land_cover_class_counts_are_exact_per_pixel_block(tmp_path):
 
 
 @pytest.mark.unit
-def test_land_cover_class_counts_by_sample_centre_when_the_tile_pixel_is_not_a_fraction_of_the_grid_pixel(tmp_path):
+def test_land_cover_counts_exact_or_raise(tmp_path):
+    """M-F2a-06 (V19): a tile whose pixel is not a whole fraction of the grid pixel raises; there is no approximate mode."""
     grid, country_gdf = _grid(), _country_gdf()
-    res = abs(grid.transform.a) / 9.7  # about 100 m samples, as the IND tiles: not a whole fraction of 0.01 degree
+    res = abs(grid.transform.a) / 9.7  # about 100 m samples, as the retired IND tiles: not a whole fraction of 0.01 degree
     n_rows, n_cols = int(np.ceil(grid.height * 9.7)) + 5, int(np.ceil(grid.width * 9.7)) + 5
     tile = tmp_path / "ESA_WorldCover_10m_2020_v100_N36W012_Map.tif"
-    pattern = np.where(np.indices((n_rows, n_cols))[1] % 2 == 0, 30, 10)  # alternate grassland / forest columns
-    pattern[:3, :] = 0  # a band of no class along the top
     with rasterio.open(
         tile, "w", driver="GTiff", height=n_rows, width=n_cols, count=1, dtype="uint8", crs="EPSG:4326",
         transform=from_origin(grid.transform.c, grid.transform.f, res, res), nodata=0,
     ) as dst:
-        dst.write(pattern.astype("uint8"), 1)
-    out = land_cover_class_counts([tile], tmp_path / "counts.tif", grid, country_gdf)
-    with rasterio.open(out) as src:
-        counts = src.read().astype(float)
-        tags = src.tags()
-    classes = [int(c) for c in tags["worldcover_classes"].split(",")]
-    assert classes[-1] == 0 and tags["samples_per_pixel"] == "0"  # centre mode: an extra band for samples of no class
-    inside = grid.country_mask & (np.arange(grid.height)[:, None] > 0)
-    total = counts.sum(axis=0)
-    assert np.all((total[inside] >= 80) & (total[inside] <= 110))  # about 9.7 x 9.7 samples per pixel
-    share30 = counts[classes.index(30)][inside] / total[inside]
-    assert np.all(np.abs(share30 - 0.5) < 0.1)
+        dst.write(np.full((n_rows, n_cols), 30, dtype="uint8"), 1)
+    with pytest.raises(LandCoverCountNotExactError, match="no approximate mode"):
+        land_cover_class_counts([tile], tmp_path / "counts.tif", grid, country_gdf)
+    assert not (tmp_path / "counts.tif").exists()
 
 
 def _glo30_tile(path: Path, sp: int, z: np.ndarray) -> None:

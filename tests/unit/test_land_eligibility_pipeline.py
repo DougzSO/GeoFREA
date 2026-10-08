@@ -19,8 +19,12 @@ from geofrea.land_eligibility.eligibility import (
     eligible_fraction,
 )
 from geofrea.land_eligibility.parameters import ParameterSet
-from geofrea.land_eligibility.pipeline import LandEligibilityError, build_eligibility
-from geofrea.suitability_criteria.physical_layers import SitingLayersResult
+from geofrea.land_eligibility.pipeline import (
+    LandEligibilityError,
+    MissingRequiredLayerError,
+    build_eligibility,
+)
+from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 EXPERIMENTS = Path(__file__).resolve().parents[2] / "config" / "experiments.yaml"
 H, W = 20, 30  # pixels of 0.01 degree: 4 x 6 cells of 0.05 degree
@@ -109,15 +113,64 @@ def world(tmp_path, monkeypatch):
         {"DIS_AV_CMS": [50.0]}, geometry=[LineString([(LON0 + 0.205, LAT0), (LON0 + 0.205, LAT0 - 0.2)])], crs="EPSG:4326"
     )
     rivers.to_file(tmp_path / "rivers.gpkg", driver="GPKG")
+    lakes = gpd.GeoDataFrame(geometry=[box(LON0 + 5, LAT0 + 5, LON0 + 5.1, LAT0 + 5.1)], crs="EPSG:4326")  # none inside the country
+    lakes.to_file(tmp_path / "lakes.gpkg", driver="GPKG")
     return SimpleNamespace(
-        grid_result=grid_result, siting=siting, country=country, protected=tmp_path / "wdpa.gpkg", rivers=tmp_path / "rivers.gpkg"
+        grid_result=grid_result, siting=siting, country=country, protected=tmp_path / "wdpa.gpkg", rivers=tmp_path / "rivers.gpkg",
+        lakes=tmp_path / "lakes.gpkg",
     )
 
 
-def _run(world, techs=("solar",)):
+def _run(world, techs=("solar",), **override):
+    paths = {"protected": world.protected, "lakes": world.lakes, "rivers": world.rivers, **override}
     return build_eligibility(
-        "ZZZ", EXPERIMENTS, world.grid_result, world.siting, world.country, world.protected, None, world.rivers, list(techs)
+        "ZZZ", EXPERIMENTS, world.grid_result, world.siting, world.country, paths["protected"], paths["lakes"], paths["rivers"],
+        list(techs),
     )
+
+
+def test_named_land_scenarios_are_ordered(world):
+    """U-06 (V2): restrictive <= central <= permissive eligible area in every cell; one pair of tables per scenario, named by it."""
+    summary = _run(world, ("solar", "wind"))
+    for tech, tech_summary in summary.technologies.items():
+        assert list(tech_summary.scenarios) == ["central", "restrictive", "permissive"]
+        area = {}
+        for scenario, s in tech_summary.scenarios.items():
+            assert s.cells.name == f"cells_{tech}__{scenario}.parquet" and s.cells.exists()
+            assert s.candidates.name == f"candidates_{tech}__{scenario}.parquet" and s.candidates.exists()
+            area[scenario] = pd.read_parquet(s.cells).set_index("cell_id")["eligible_area_km2"].sort_index()
+        assert (area["restrictive"] <= area["central"] + 1e-9).all()
+        assert (area["central"] <= area["permissive"] + 1e-9).all()
+        assert tech_summary.scenarios["central"].cells == tech_summary.cells
+        # only ranges with status `sourced` move; the rest is declared as held at central
+        varied = tech_summary.scenarios["restrictive"].varied
+        assert "riparian_setback_km" in varied and "pop_density_max_per_km2" not in varied
+        assert "pop_density_max_per_km2" in tech_summary.scenarios["restrictive"].held_central
+    solar = summary.technologies["solar"].scenarios
+    assert solar["restrictive"].eligible_area_km2 < solar["central"].eligible_area_km2 < solar["permissive"].eligible_area_km2
+
+
+def test_candidate_stability_table_counts_the_scenarios_in_which_a_cell_is_a_candidate(world):
+    summary = _run(world, ("solar",))
+    solar = summary.technologies["solar"]
+    stab = pd.read_parquet(solar.stability)
+    assert solar.stability.name == "candidate_stability_solar.parquet"
+    assert set(stab["n_scenarios"]) <= {1, 2, 3}
+    assert (stab["share_of_scenarios"] == stab["n_scenarios"] / 3).all()
+    central = set(pd.read_parquet(solar.candidates)["cell_id"])
+    assert central == set(stab.loc[stab["candidate_central"], "cell_id"])
+    # a candidate of the restrictive scenario is a candidate of central, and a candidate of central of the permissive one
+    assert not (stab["candidate_restrictive"] & ~stab["candidate_central"]).any()
+    assert not (stab["candidate_central"] & ~stab["candidate_permissive"]).any()
+
+
+@pytest.mark.parametrize("layer", ["protected", "lakes", "rivers"])
+@pytest.mark.parametrize("absent", ["none", "no_file"])
+def test_missing_required_layer_raises(world, tmp_path, layer, absent):
+    """M-F2b-05 (V17): an absent protected-area, lake or river layer raises a named error, never a zero share."""
+    value = None if absent == "none" else tmp_path / "does_not_exist.gpkg"
+    with pytest.raises(MissingRequiredLayerError, match=layer):
+        _run(world, **{layer: value})
 
 
 def test_end_to_end_areas_candidates_and_invariants(world):
@@ -253,13 +306,3 @@ def test_steep_share_reads_whole_bins_and_a_proportion_of_the_bin_holding_the_th
     assert e4(40.0) == pytest.approx(0.25)  # only the open-ended bin
     with pytest.raises(MissingExclusionLayerError):
         e4(45.0)
-
-
-def test_counts_with_a_no_class_band_use_the_sum_of_every_band_as_the_pixel_total():
-    classes = (*CLASSES, 0)
-    counts = np.zeros((len(classes), 1, 2), dtype=np.uint16)
-    counts[classes.index(30), 0, :] = [60, 100]
-    counts[classes.index(0), 0, :] = [40, 0]  # pixel 0: 40% of its samples have no class
-    layers = _layers((1, 2), land_cover_counts=counts, land_cover_classes=classes)
-    _, excl = eligible_fraction(layers, ParameterSet(10.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
-    assert excl["E5"][0].tolist() == pytest.approx([0.4, 0.0])

@@ -102,7 +102,7 @@ def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
         pd.DataFrame(
             {"cell_id": ids, "row": rows, "col": cols, "cell_area_km2": 30.0,
              "eligible_area_km2": np.linspace(0, 30, len(ids)), "dominant_exclusion": ["E5"] * 10 + [None] * 5 + ["E3"] * 5}
-        ).to_parquet(art / f"cells_{tech}.parquet", index=False)
+        ).to_parquet(art / f"cells_{tech}__central.parquet", index=False)
     pd.DataFrame({"cell_0p1deg_id": [0]}).to_parquet(art / "cells_0p1deg_solar.parquet", index=False)  # must be ignored
     result = build_overview(ISO)
     assert f"{ISO}_eligibility.png" in [p.name for p in result.figures]

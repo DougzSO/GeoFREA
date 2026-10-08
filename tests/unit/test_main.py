@@ -23,7 +23,6 @@ from shapely.geometry import Polygon
 import main
 from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.orchestrator import (
-    CountryParamsRequiredError,
     Orchestrator,
     PhaseContext,
     PhaseResult,
@@ -42,10 +41,6 @@ AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 
 def _country_params(country_code: str = "PRT"):
     return load_parameters(PARAMETERS_JSON).countries[country_code]
-
-
-def _criteria():
-    return load_parameters(PARAMETERS_JSON).criteria
 
 
 def _audit_config() -> AuditConfig:
@@ -90,7 +85,7 @@ def _acquisition_phase_result(layers: list[AcquiredLayer]) -> PhaseResult[Acquis
 
 @pytest.mark.unit
 def test_build_phase_specs_returns_all_phases_in_order():
-    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())
+    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())
     assert [spec.name for spec in specs] == [
         "data_acquisition",
         "data_quality_audit",
@@ -102,13 +97,22 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "hazard_context",
         "climate_maps",
         "overview",
-        "suitability_criteria",
     ]
 
 
 @pytest.mark.unit
+def test_dag_has_no_suitability_criteria():
+    """V16: the legacy phase is retired: not registered, not produced, not required, and its package is gone."""
+    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())
+    assert "suitability_criteria" not in {s.name for s in specs}
+    keys = {k for s in specs for k in s.produces | s.requires}
+    assert not any("suitability" in k for k in keys)
+    assert not (REPO_ROOT / "src" / "geofrea" / "suitability_criteria").exists()
+
+
+@pytest.mark.unit
 def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
-    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())
+    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())
     produced = {key for spec in specs for key in spec.produces}
     for spec in specs:
         assert spec.requires <= produced, (spec.name, spec.requires - produced)
@@ -118,7 +122,7 @@ def test_phase_graph_is_consistent_and_every_requirement_has_a_producer():
 @pytest.mark.unit
 def test_every_phase_after_alignment_depends_on_the_audit_gate():
     """F1b gates the F2b and F4 phases: a failed audit must stop them (A-09), directly or through an upstream phase."""
-    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())}
+    specs = {s.name: s for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())}
     producer = {key: spec.name for spec in specs.values() for key in spec.produces}
 
     def upstream(name: str) -> set[str]:
@@ -303,7 +307,7 @@ def test_grid_alignment_run_produces_result_from_borders_only(tmp_path):
         )
     }
 
-    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config())
+    specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())
     grid_alignment_run = next(s.run for s in specs if s.name == "grid_alignment")
     result = grid_alignment_run(_context(tmp_path, prior_results=prior_results))
 
@@ -347,11 +351,12 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
         target_phases=["grid_alignment"],
         rerun_phases=[],
         run_id="test-run-id",
+        methodology_version="test-1.0.0",
         dirty=False,
     )
 
     real_grid_alignment_run = next(
-        s.run for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _criteria(), _audit_config()) if s.name == "grid_alignment"
+        s.run for s in main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config()) if s.name == "grid_alignment"
     )
     specs = [
         PhaseSpec(
@@ -396,7 +401,7 @@ def test_orchestrator_runs_grid_alignment_with_data_quality_audit_not_targeted(t
 
 @pytest.mark.unit
 def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypatch):
-    def _failing_specs(resolutions, distance_cap_km, criteria, audit_config):
+    def _failing_specs(resolutions, distance_cap_km, audit_config):
         def run(context):
             raise ValueError("boom")
 
@@ -419,7 +424,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_fails(tmp_path, monkeypat
 
 @pytest.mark.unit
 def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_failed(tmp_path, monkeypatch):
-    def _specs(resolutions, distance_cap_km, criteria, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config):
         def failing_run(context):
             raise ValueError("boom")
 
@@ -452,7 +457,7 @@ def test_run_geofrea_returns_false_when_a_target_phase_is_skipped_upstream_faile
 
 @pytest.mark.unit
 def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, monkeypatch):
-    def _specs(resolutions, distance_cap_km, criteria, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config):
         def run(context):
             return _acquisition_phase_result([]).output
 
@@ -479,14 +484,13 @@ def test_run_geofrea_returns_true_when_every_target_phase_succeeds(tmp_path, mon
 # (IND, at the time this was written — see config/countries.yaml and
 # OQ-012) must still be able to run phases that read no CountryParams
 # field. Only a phase that actually reads one (data_quality_audit's
-# suitability_criteria's criteria) fails loud,
-# naming the country and the field, via
-# PhaseContext.require_country_params().
+# technologies.<tech> entry) fails loud, naming the country and the
+# field, via PhaseContext.require_country_params().
 
 
 @pytest.mark.unit
 def test_run_geofrea_succeeds_for_country_absent_from_parameters_json(tmp_path, monkeypatch):
-    def _specs(resolutions, distance_cap_km, criteria, audit_config):
+    def _specs(resolutions, distance_cap_km, audit_config):
         def run(context):
             # Reads country_code only, never country_params — same shape
             # as the real data_acquisition PhaseSpec.
@@ -552,6 +556,7 @@ def test_audit_runs_for_a_country_without_country_params(tmp_path):
         target_phases=["data_quality_audit"],
         rerun_phases=[],
         run_id="test-run-id",
+        methodology_version="test-1.0.0",
         dirty=False,
     )
 
@@ -562,44 +567,13 @@ def test_audit_runs_for_a_country_without_country_params(tmp_path):
 
 
 @pytest.mark.unit
-def test_build_suitability_criteria_inputs_fails_loud_when_params_absent(tmp_path):
-    # require_country_params("criteria") is only reached after
-    # grid_alignment/data_acquisition's prior_results are read (see
-    # main.py::_build_suitability_criteria_inputs) — neither is
-    # inspected before the CountryParamsRequiredError, so dummy
-    # PhaseResults with placeholder output are enough here; the real
-    # adapter wiring is exercised end-to-end by the grid_alignment tests
-    # above.
-    dummy_result = PhaseResult(
-        phase="dummy",
-        status="success",
-        output=None,
-        error=None,
-        started_at="2026-09-23T00:00:00+00:00",
-        finished_at="2026-09-23T00:00:01+00:00",
-    )
-    context = PhaseContext(
-        country_code="IND",
-        country_params=None,
-        outputs_dir=tmp_path,
-        prior_results={"grid_alignment": dummy_result, "data_acquisition": dummy_result},
-    )
-
-    with pytest.raises(CountryParamsRequiredError) as exc_info:
-        main._build_suitability_criteria_inputs(context, _criteria())
-
-    assert exc_info.value.country_code == "IND"
-    assert exc_info.value.field == "criteria"
-
-
-@pytest.mark.unit
 def test_run_geofrea_still_succeeds_for_bra_and_prt(monkeypatch, tmp_path):
     # BRA/PRT both have real parameters.json entries — confirm the
     # gating change doesn't alter their behavior.
     monkeypatch.setattr(main, "outputs_dir", lambda: tmp_path)
     for country in ("BRA", "PRT"):
 
-        def _specs(resolutions, distance_cap_km, criteria, audit_config):
+        def _specs(resolutions, distance_cap_km, audit_config):
             def run(context):
                 assert context.country_params is not None
                 return _acquisition_phase_result([]).output
