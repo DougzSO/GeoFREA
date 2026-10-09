@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from pyproj import Geod
+from scipy.stats import kendalltau
 
 from geofrea.core.config_schemas import HypothesisRule
 from geofrea.robustness_analysis.cell_set import CellSet
@@ -345,6 +346,36 @@ def h5(
             )
         )
     return rows
+
+
+def _tied_pairs(*keys: np.ndarray) -> int:
+    """The number of pairs of cells that share the same value in every one of `keys`."""
+    _, counts = np.unique(np.column_stack(keys), axis=0, return_counts=True)
+    return int((counts * (counts - 1) // 2).sum())
+
+
+def agreement(cell_set: CellSet, evaluation: Evaluation) -> list[Statistic]:
+    """MR against SR (M-F7-09, D-F7-022): Kendall's tau-b between `MR` and `-SR` over the ranked set, with the number of tied pairs.
+
+    `MR` is better when low and `SR` when high, so the statistic is taken against `-SR`: a positive value means the two criteria order the
+    cells alike. Nothing is written without `tau` (no `SR`) or with fewer than two ranked cells.
+    """
+    if evaluation.sr is None:
+        return []
+    ranked = cell_set.ranked
+    mr, minus_sr = evaluation.mr[ranked], -evaluation.sr[ranked]
+    n = int(ranked.sum())
+    if n < 2:
+        return []
+    tau = float(kendalltau(mr, minus_sr, variant="b").statistic)
+    note = "Kendall tau-b between MR and -SR over the ranked set; positive: the two criteria order the cells alike"
+    return [
+        Statistic("RQ4", "mr_sr_kendall_tau_b", _clean(tau), n_cells=n, note=note),
+        Statistic("RQ4", "mr_sr_pairs", float(n * (n - 1) // 2), n_cells=n),
+        Statistic("RQ4", "mr_sr_tied_pairs_mr", float(_tied_pairs(mr)), n_cells=n),
+        Statistic("RQ4", "mr_sr_tied_pairs_sr", float(_tied_pairs(minus_sr)), n_cells=n),
+        Statistic("RQ4", "mr_sr_tied_pairs_both", float(_tied_pairs(mr, minus_sr)), n_cells=n),
+    ]
 
 
 def evaluate_rules(

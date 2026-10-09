@@ -480,7 +480,7 @@ def test_without_a_pre_registered_rule_every_statistic_has_no_verdict_and_a_warn
 ):
     entry, _, _ = _run(tmp_path)
     hypothesis = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
-    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5"}
+    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     assert hypothesis["verdict"].isna().all() and hypothesis["verdict_reason"].notna().all()
     assert sum("no pre-registered rule" in r.message for r in caplog.records) >= 5
 
@@ -535,3 +535,53 @@ def test_exposure_is_written_empty_and_flagged_when_no_member_carries_the_hazard
     assert len(pd.read_parquet(path)) == 0
     flag = json.loads(pq.read_schema(path).metadata[b"geofrea_robustness_skipped"])
     assert "hazard channel" in flag["reason"] and flag["open_question"] == "OQ-007"
+
+
+# -- PRIM and the agreement of MR and SR (F7-C) -------------------------------------------------------------
+
+
+def _with_prim(alpha=0.1, mass_min=0.1) -> ExperimentsFile:
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    raw["sampler"]["initial_size"] = 60
+    raw["prim"].update({"peel_alpha": alpha, "mass_min": mass_min, "source": "test value"})
+    return ExperimentsFile.model_validate(raw)
+
+
+@pytest.mark.unit
+def test_prim_boxes_are_written_from_the_futures_with_the_share_threshold(tmp_path):
+    entry, _, _ = _run(tmp_path, experiments=_with_prim())
+    boxes = pd.read_parquet(entry.windows["core"].tables["prim_boxes"])
+    futures = pd.read_parquet(entry.windows["core"].tables["futures"])
+    draws = futures[futures["sample"] >= 1]
+    theta = float(boxes["theta"].iloc[0])
+    assert boxes["step"].iloc[0] == 0 and boxes["n"].iloc[0] == len(draws)
+    assert boxes["k"].iloc[0] == int((draws["share_nominal_top_k_leaving"] >= theta).sum())
+    assert {"gcm__in", "ssp__in", "dT_mean__min", "dT_mean__max"} <= set(boxes.columns)
+    assert (boxes["mass"] >= 0.1).all()
+
+
+@pytest.mark.unit
+def test_prim_is_skipped_and_flagged_with_oq_056_while_its_settings_are_null(tmp_path):
+    entry, _, _ = _run(tmp_path)
+    path = entry.windows["core"].tables["prim_boxes"]
+    assert len(pd.read_parquet(path)) == 0
+    assert (
+        json.loads(pq.read_schema(path).metadata[b"geofrea_robustness_skipped"])["open_question"]
+        == "OQ-056"
+    )
+
+
+@pytest.mark.unit
+def test_the_kendall_statistic_equals_scipy_on_the_ranked_cells_and_counts_the_tied_pairs(tmp_path):
+    from scipy.stats import kendalltau
+
+    entry, _, _ = _run(tmp_path)
+    robustness = _table(entry)
+    ranked = robustness[robustness["cell_class"] == "ranked"]
+    expected = kendalltau(ranked["mr"], -ranked["sr"], variant="b").statistic
+    hypothesis = pd.read_parquet(entry.windows["core"].tables["hypothesis"]).set_index("statistic")
+    n = len(ranked)
+    assert hypothesis.loc["mr_sr_kendall_tau_b", "value"] == pytest.approx(expected)
+    assert hypothesis.loc["mr_sr_pairs", "value"] == n * (n - 1) / 2
+    by_hand = sum(c * (c - 1) // 2 for c in ranked["mr"].value_counts())
+    assert hypothesis.loc["mr_sr_tied_pairs_mr", "value"] == by_hand

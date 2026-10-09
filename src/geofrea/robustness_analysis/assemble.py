@@ -13,6 +13,7 @@ from geofrea.robustness_analysis.decision import TechDecision
 from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
 from geofrea.robustness_analysis.hypotheses import Statistic
+from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
     TopK,
     capacity_target_set,
@@ -348,4 +349,45 @@ def hypothesis_frame(
                 "verdict_reason": verdict["verdict_reason"],
             }
         )
+    return pd.DataFrame(rows)
+
+
+def prim_input(
+    futures: pd.DataFrame, parameter_names: Sequence[str], theta: float
+) -> tuple[pd.DataFrame, np.ndarray]:
+    """The descriptors and the binary outcome of PRIM: the draws `s >= 1`, outcome "the share of the nominal top-k that leaves is at least `theta`".
+
+    Implements: M-F7-08, D-F7-021.
+
+    Integer-valued parameters are cast to real (the own PRIM supports real and categorical descriptors).
+    """
+    draws = futures[futures["sample"] >= 1].reset_index(drop=True)
+    real = [*parameter_names, "delta_rsds_mean", "dT_mean", "delta_wind_mean"]
+    x = draws[real].astype("float64")
+    x["gcm"] = draws["gcm"].astype(str)
+    x["ssp"] = draws["ssp"].astype(str)
+    share = draws["share_nominal_top_k_leaving"].to_numpy(dtype="float64")
+    return x, (share >= theta).astype(int)
+
+
+def prim_frame(result: PrimResult, theta: float) -> pd.DataFrame:
+    """The trajectory of the first PRIM box, one row per box, with the limits of every descriptor."""
+    rows = []
+    for step in result.steps:
+        row: dict[str, object] = {
+            "step": step.step,
+            "coverage": step.coverage,
+            "density": step.density,
+            "mass": step.mass,
+            "n": step.n,
+            "k": step.k,
+            "n_restricted": step.n_restricted,
+            "theta": theta,
+        }
+        for name in result.real_descriptors:
+            row[f"{name}__min"] = step.lower[name]
+            row[f"{name}__max"] = step.upper[name]
+        for name in result.categorical_descriptors:
+            row[f"{name}__in"] = "|".join(step.categories[name])
+        rows.append(row)
     return pd.DataFrame(rows)

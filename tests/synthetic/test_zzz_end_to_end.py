@@ -73,6 +73,10 @@ def zzz(tmp_path_factory):
         ("initial_size: 500", f"initial_size: {INITIAL_SIZE}"),
         ("max_size_for_convergence: null", f"max_size_for_convergence: {CEILING}"),
         ("top_k_percent: null", f"top_k_percent: {TOP_K_PERCENT}"),
+        # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
+        ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
+        ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
+        ("H2: null", "H2: [{statistic: h2_mr_median, comparison: ge, threshold: -1.0}]"),
     ):
         assert experiments_text.count(old) == 1, old
         experiments_text = experiments_text.replace(old, new)
@@ -786,16 +790,22 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
 def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenarios(zzz, tech):
     base = _phase(zzz, "robustness_analysis")
     hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
-    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5"}
-    assert hypothesis["verdict"].isna().all()  # no pre-registered rule in the shipped configuration
+    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
+    verdicts = hypothesis.set_index("statistic")["verdict"]
+    assert verdicts["h2_mr_median"] == "met"  # the only pre-registered rule of this run
+    assert verdicts.drop("h2_mr_median").isna().all()
+    assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
+    prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
+    assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
     below = pd.read_parquet(base / f"potential_below_tau_{tech}__core.parquet")
     assert set(below["land_scenario"]) == {"central", "restrictive", "permissive"}
     futures = pd.read_parquet(base / f"futures_{tech}__core.parquet")
     assert set(futures["sample"]) >= {0, 1}
-    # the 2041-2070 hazard members exist on ZZZ, but the shipped exposure thresholds are null (OQ-051)
-    exposure = base / f"hazard_exposure_{tech}__core.parquet"
-    assert len(pd.read_parquet(exposure)) == 0
-    assert b"geofrea_robustness_skipped" in pq.read_schema(exposure).metadata
+    exposure = pd.read_parquet(base / f"hazard_exposure_{tech}__core.parquet")
+    assert set(exposure["hazard"]) == {
+        "tx35_days"
+    }  # the only indicator with a threshold in this run
+    assert (exposure["potential_gw"] >= 0).all() and set(exposure["group"]) >= {"f7_set"}
 
 
 @pytest.mark.synthetic

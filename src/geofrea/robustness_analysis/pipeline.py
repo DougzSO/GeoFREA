@@ -54,6 +54,8 @@ from geofrea.robustness_analysis.assemble import (
     futures_frame,
     hypothesis_frame,
     nominal_by_member_frame,
+    prim_frame,
+    prim_input,
     robustness_frame,
 )
 from geofrea.robustness_analysis.cell_set import CellSet, build_cell_set
@@ -70,7 +72,8 @@ from geofrea.robustness_analysis.decision import (
 )
 from geofrea.robustness_analysis.evaluator import evaluate
 from geofrea.robustness_analysis.futures import MemberLabel, futures_pass
-from geofrea.robustness_analysis.hypotheses import evaluate_rules, h1, h2, h3, h4, h5
+from geofrea.robustness_analysis.hypotheses import agreement, evaluate_rules, h1, h2, h3, h4, h5
+from geofrea.robustness_analysis.prim import run_prim
 from geofrea.robustness_analysis.table_schemas import (
     ROBUSTNESS_TABLE_SCHEMA_VERSION,
     DrawStatisticRow,
@@ -79,6 +82,7 @@ from geofrea.robustness_analysis.table_schemas import (
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
+    PrimBoxRow,
     RobustnessRow,
 )
 from geofrea.robustness_analysis.thesis_tables import (
@@ -101,6 +105,7 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "hypothesis": HypothesisRow,
     "potential_below_tau": PotentialBelowTauRow,
     "hazard_exposure": ExposureRow,
+    "prim_boxes": PrimBoxRow,
 }
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
@@ -508,6 +513,25 @@ def run_window(
             member_factor_means(paths.climate_dir / "forcing.parquet", cell_set.f7_ids, member_ids),
         )
         frames["draw_statistics"] = draw_statistics_frame(futures)
+        prim_settings = experiments.prim
+        if (
+            decision.prim_outcome_share is None
+            or prim_settings.peel_alpha is None
+            or prim_settings.mass_min is None
+        ):
+            skips["prim_boxes"] = SkippedOutput(
+                "PRIM boxes (M-F7-08)",
+                "prim_outcome_share, prim.peel_alpha or prim.mass_min is null",
+                "OQ-056",
+            )
+        else:
+            x, y = prim_input(
+                frames["futures"], [s.name for s in resolved.specs], decision.prim_outcome_share
+            )
+            outcome = run_prim(
+                x, y, alpha=prim_settings.peel_alpha, mass_min=prim_settings.mass_min
+            )
+            frames["prim_boxes"] = prim_frame(outcome, decision.prim_outcome_share)
     else:
         why = SkippedOutput(
             "futures and per-draw statistics (H1, H3, PRIM input)",
@@ -515,6 +539,9 @@ def run_window(
             "OQ-021",
         )
         skips["futures"] = skips["draw_statistics"] = why
+        skips["prim_boxes"] = SkippedOutput(
+            "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
+        )
 
     # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
     land_range: dict[str, tuple[float, float]] = {}
@@ -612,7 +639,11 @@ def run_window(
         )
 
     # H1 to H5 and the pre-registered rules
-    statistics = h2(cell_set, evaluation, admin1) + h4(cell_set, evaluation, ranking)
+    statistics = (
+        h2(cell_set, evaluation, admin1)
+        + h4(cell_set, evaluation, ranking)
+        + agreement(cell_set, evaluation)
+    )
     if futures is not None:
         statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
     if evaluation.potential_gw is not None:

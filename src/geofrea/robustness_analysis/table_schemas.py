@@ -149,3 +149,23 @@ class PotentialBelowTauRow(BaseModel):
     potential_gw: float
     potential_twh: float
     gap_to_target_gw: float | None
+
+
+class PrimBoxRow(BaseModel):
+    """One box of the peeling and pasting trajectory of the first PRIM box (M-F7-08, D-F7-021): its statistics and its limits.
+
+    Step 0 is the box with every future. The limits are extra columns: `<descriptor>__min` and `<descriptor>__max` for a real descriptor,
+    `<descriptor>__in` for a categorical one (the categories the box keeps, joined by `|`). `theta` is the share of the nominal top-k that
+    leaves, at which a future counts as of interest. Choosing a box on the trajectory is the author's.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    step: int
+    coverage: float
+    density: float
+    mass: float
+    n: int
+    k: int
+    n_restricted: int
+    theta: float
