@@ -175,6 +175,27 @@ def test_the_three_scenarios_are_ordered_by_eligible_area(zzz):
         assert total["restrictive"] <= total["central"] <= total["permissive"]
 
 
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+@pytest.mark.parametrize("scenario", SCENARIOS)
+def test_every_cell_carries_the_admin1_unit_of_its_half_of_the_country(zzz, tech, scenario):
+    """D-F3-012: the ZZZ border splits the country into a west and an east half of three cell columns each."""
+    cells = _eligibility(zzz, tech, scenario)
+    assert cells["admin1_id"].notna().all()
+    west = cells["admin1_id"] == "ZZZ.1_1"
+    assert west.sum() == N_CELLS // 2 and (cells["admin1_id"] == "ZZZ.2_1").sum() == N_CELLS // 2
+    assert cells.loc[west, "col"].max() < cells.loc[~west, "col"].min()
+    units = pd.read_parquet(_phase(zzz, "land_eligibility") / "admin1_units.parquet")
+    assert units.set_index("admin1_id")["n_cells"].to_dict() == {"ZZZ.1_1": 12, "ZZZ.2_1": 12}
+    candidates = pd.read_parquet(
+        _phase(zzz, "land_eligibility") / f"candidates_{tech}__{scenario}.parquet"
+    )
+    merged = candidates.merge(
+        cells[["cell_id", "admin1_id"]], on="cell_id", suffixes=("", "_cells")
+    )
+    assert (merged["admin1_id"] == merged["admin1_id_cells"]).all()
+
+
 # -- F4 on the miniature CMIP6 files ---------------------------------------------------------------
 
 

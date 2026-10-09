@@ -152,6 +152,15 @@ def world(tmp_path, monkeypatch):
         geometry=[box(LON0 + 5, LAT0 + 5, LON0 + 5.1, LAT0 + 5.1)], crs="EPSG:4326"
     )  # none inside the country
     lakes.to_file(tmp_path / "lakes.gpkg", driver="GPKG")
+    admin1 = gpd.GeoDataFrame(
+        {"GID_1": ["ZZZ.1_1", "ZZZ.2_1"], "NAME_1": ["West", "East"]},
+        geometry=[
+            box(LON0, LAT0 - 0.2, LON0 + 0.12, LAT0),
+            box(LON0 + 0.12, LAT0 - 0.2, LON0 + 0.3, LAT0),
+        ],
+        crs="EPSG:4326",
+    )  # the border at 0.12 degree splits the third cell column (0.10 to 0.15) 2 to 3
+    admin1.to_file(tmp_path / "admin1.gpkg", driver="GPKG")
     return SimpleNamespace(
         grid_result=grid_result,
         siting=siting,
@@ -159,11 +168,18 @@ def world(tmp_path, monkeypatch):
         protected=tmp_path / "wdpa.gpkg",
         rivers=tmp_path / "rivers.gpkg",
         lakes=tmp_path / "lakes.gpkg",
+        admin1=tmp_path / "admin1.gpkg",
     )
 
 
 def _run(world, techs=("solar",), **override):
-    paths = {"protected": world.protected, "lakes": world.lakes, "rivers": world.rivers, **override}
+    paths = {
+        "protected": world.protected,
+        "lakes": world.lakes,
+        "rivers": world.rivers,
+        "admin1": world.admin1,
+        **override,
+    }
     return build_eligibility(
         "ZZZ",
         EXPERIMENTS,
@@ -173,6 +189,7 @@ def _run(world, techs=("solar",), **override):
         paths["protected"],
         paths["lakes"],
         paths["rivers"],
+        paths["admin1"],
         list(techs),
     )
 

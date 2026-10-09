@@ -7,6 +7,7 @@ Reads the aligned F2a rasters, the F2b physical layers and the vector sources (p
     dominant exclusion, resource and distance means weighted by eligible area, `candidate` flag);
   - `candidates_<tech>.parquet`: the cells with `eligible_area_km2 >= min_eligible_area_km2` (M-F3-04/05);
   - `cells_0p1deg_<tech>.parquet`: the same cells grouped 2 x 2 for the scale check (V-07);
+  - `admin1_units.parquet`: the GADM level-1 units that hold cells, with their cell counts (each cell table carries `admin1_id`, D-F3-012);
   - `eligible_fraction_<tech>.tif` (pixels), `eligible_area_km2_<tech>.tif` and `dominant_exclusion_<tech>.tif` (cells).
 
 The parameter set is the nominal one of `land_availability` in `config/experiments.yaml` (it feeds F4-F7); the engine itself is a
@@ -36,6 +37,7 @@ from geofrea.core.geo_utils import (
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
+from geofrea.land_eligibility.admin1 import assign_admin1, read_units
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
     candidate_cells,
@@ -65,6 +67,7 @@ from geofrea.land_eligibility.scenarios import (
 )
 from geofrea.land_eligibility.table_schemas import (
     LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
+    Admin1UnitRow,
     CandidateStabilityRow,
     CellRow,
     CoarseCellRow,
@@ -121,6 +124,7 @@ class TechSummary(BaseModel):
     cells: Path
     cells_0p1deg: Path
     rasters: dict[str, Path]
+    admin1_units: Path
 
 
 class EligibilitySummary(BaseModel):
@@ -309,6 +313,7 @@ def build_eligibility(
     protected_path: Path | None,
     lakes_path: Path | None,
     rivers_path: Path | None,
+    admin1_path: Path | None,
     technologies: list[str] | None = None,
 ) -> EligibilitySummary:
     """Eligibility, cells and candidate tables for every configured technology (nominal parameter set)."""
@@ -317,6 +322,13 @@ def build_eligibility(
     out = artifacts_dir(iso)
     interim = core_paths.interim(iso, "land_eligibility")
     interim.mkdir(parents=True, exist_ok=True)
+    if admin1_path is None or not Path(admin1_path).exists():
+        raise MissingRequiredLayerError(
+            f"required layer 'admin1' is absent ({admin1_path}); every cell takes its admin1 unit from it (M-F3-03)"
+        )
+    units = read_units(gpd.read_file(str(admin1_path)))
+    admin1_by_cell: dict[int, str] = {}
+    units_path = Path(str(out / "admin1_units") + ".parquet")
 
     slope_counts, slope_valid = _read_slope_counts(grid_result.slope_counts)
     population = _read(grid_result.population, "population")
@@ -421,6 +433,20 @@ def build_eligibility(
             cells = aggregate_to_cells(
                 transform, country_mask, eligible, excl, resources=resources, flags=flags
             )
+            if not admin1_by_cell:
+                ids = assign_admin1(cells["row"].to_numpy(), cells["col"].to_numpy(), units)
+                admin1_by_cell = dict(zip(cells["cell_id"].tolist(), ids.tolist(), strict=True))
+                write_table(
+                    _admin1_units(cells.assign(admin1_id=ids), units),
+                    units_path,
+                    schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
+                    row_model=Admin1UnitRow,
+                )
+            cells["admin1_id"] = cells["cell_id"].map(admin1_by_cell)
+            if cells["admin1_id"].isna().any():
+                raise LandEligibilityError(
+                    f"{tech}/{scenario}: cells that the first table did not have (the cells of one country do not depend on the scenario)"
+                )
             _check_invariants(f"{tech}/{scenario}", cells, eligible, pixel_area, country_mask)
             cells["candidate"] = cells["eligible_area_km2"] >= sparams.min_eligible_area_km2
             candidates = candidate_cells(cells, sparams.min_eligible_area_km2).drop(
@@ -518,8 +544,19 @@ def build_eligibility(
             cells=scenario_summaries["central"].cells,
             cells_0p1deg=coarse_path,
             rasters=rasters,
+            admin1_units=units_path,
         )
     return EligibilitySummary(country_code=iso, technologies=summaries)
+
+
+def _admin1_units(cells: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:
+    """The units that hold at least one cell, with the number of cells and their land area (D-F3-012)."""
+    grouped = cells.groupby("admin1_id", as_index=False).agg(
+        n_cells=("cell_id", "size"), cell_area_km2=("cell_area_km2", "sum")
+    )
+    return grouped.merge(units[["admin1_id", "admin1_name"]], on="admin1_id", how="left")[
+        ["admin1_id", "admin1_name", "n_cells", "cell_area_km2"]
+    ]
 
 
 def _table_path(out: Path, kind: str, tech: str, scenario: str) -> Path:

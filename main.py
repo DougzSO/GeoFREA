@@ -450,6 +450,7 @@ def _build_phase_specs(
             resolved_path(layers.get("protected")),
             resolved_path(layers.get("lakes")),
             resolved_path(layers.get("rivers")),
+            resolved_path(layers.get("admin1")),
         )
         _register_json_artifact(context, "land_eligibility", result)
         return result

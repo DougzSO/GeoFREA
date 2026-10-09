@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION = "1.0"
+LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION = "1.1"
 
 
 class CellRow(BaseModel):
@@ -30,6 +30,18 @@ class CellRow(BaseModel):
     dist_road_km: float | None
     dist_grid_capped_share: float | None
     dist_road_capped_share: float | None
+    admin1_id: str  # GADM level-1 unit with the largest area of the cell (M-F3-03, D-F3-012)
+
+
+class Admin1UnitRow(BaseModel):
+    """One admin1 unit with cells in the country: identifier, name, number of cells and their land area (D-F3-012)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    admin1_id: str
+    admin1_name: str
+    n_cells: int
+    cell_area_km2: float
 
 
 class CoarseCellRow(BaseModel):
