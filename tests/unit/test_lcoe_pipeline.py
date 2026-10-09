@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 import tracemalloc
 from pathlib import Path
 
@@ -122,7 +123,7 @@ def _write_inputs(root: Path, resolved, n_cells=30, zero_energy_cell=None, drop=
     return potential_path, candidates_path, forcing_path
 
 
-def _stage(tmp_path, tech, **kw):
+def _stage(tmp_path, tech, restrictive_drop=(), **kw):
     """The directory layout `build_lcoe` reads, from small tables for the ZZZ values of `tech`."""
     registry = load_technologies(TECHNOLOGIES)
     zzz = getattr(load_parameters(PARAMETERS).countries["ZZZ"].technologies, tech)
@@ -133,6 +134,22 @@ def _stage(tmp_path, tech, **kw):
         d.mkdir()
     potential.replace(pdir / f"potential_{tech}__central.parquet")
     candidates.replace(cdir / f"candidates_{tech}__central.parquet")
+    # the other land scenarios: the same tables, the restrictive one without the cells in `restrictive_drop`
+    central = pd.read_parquet(pdir / f"potential_{tech}__central.parquet")
+    meta = pq.read_schema(pdir / f"potential_{tech}__central.parquet").metadata
+    for scenario in ("restrictive", "permissive"):
+        keep = ~central["cell_id"].isin(restrictive_drop if scenario == "restrictive" else ())
+        write_table(
+            central[keep].reset_index(drop=True),
+            pdir / f"potential_{tech}__{scenario}.parquet",
+            schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
+            row_model=PotentialRow,
+            extra_metadata={POTENTIAL_KEY: meta[POTENTIAL_KEY.encode()].decode()},
+        )
+        shutil.copy(
+            cdir / f"candidates_{tech}__central.parquet",
+            cdir / f"candidates_{tech}__{scenario}.parquet",
+        )
     forcing.replace(kdir / "forcing.parquet")
     (kdir / "members.yaml").write_text(
         yaml.safe_dump({"members": [{"member": m} for m in MEMBERS]}), encoding="utf-8"
@@ -170,6 +187,58 @@ def _hand_lcoe(p, dist_grid, dist_road, e_year1, s):
         cost += opex_t / (1 + s["discount_rate"]) ** t
         energy += e_t / (1 + s["discount_rate"]) ** t
     return cost / energy
+
+
+# -- the nominal LCOE of the other land scenarios (D-F6-018) -----------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("tech", TECHS)
+def test_the_other_land_scenarios_get_a_nominal_lcoe_table_with_no_draws(tmp_path, tech):
+    """The restrictive and permissive scenarios carry `lcoe_nominal` only; for a cell they share with the central scenario it is the central nominal."""
+    dropped = (101, 107)
+    dirs = _stage(tmp_path, tech, restrictive_drop=dropped)
+    registry = load_technologies(TECHNOLOGIES)
+    zzz = load_parameters(PARAMETERS).countries["ZZZ"]
+    out = tmp_path / "out"
+    result = build_lcoe(
+        "ZZZ", registry, zzz, [tech], sampler_seed=7, sampler_size=24, max_batch_gb=1.0,
+        out_dir=out, **dirs,
+    )  # fmt: skip
+    entry = result.technologies[tech]
+    assert set(entry.lcoe_nominal_scenarios) == {"restrictive", "permissive"}
+    central = (
+        pd.read_parquet(entry.lcoe_summary).astype({"member": str}).set_index(["cell_id", "member"])
+    )
+    for scenario, path in entry.lcoe_nominal_scenarios.items():
+        assert path.name == f"lcoe_nominal_{tech}__{scenario}.parquet"
+        table = pd.read_parquet(path).astype({"member": str})
+        assert list(table.columns) == ["cell_id", "member", "lcoe_nominal"]  # no statistic, no draw
+        expect = central.reset_index()
+        if scenario == "restrictive":
+            expect = expect[~expect["cell_id"].isin(dropped)]
+        assert len(table) == len(expect)
+        merged = table.merge(expect, on=["cell_id", "member"], suffixes=("", "_central"))
+        assert len(merged) == len(table)
+        np.testing.assert_allclose(
+            merged["lcoe_nominal"], merged["lcoe_nominal_central"], rtol=1e-13
+        )
+    assert not (
+        set(dropped) & set(pd.read_parquet(entry.lcoe_nominal_scenarios["restrictive"])["cell_id"])
+    )
+
+
+@pytest.mark.unit
+def test_a_missing_table_of_another_land_scenario_is_refused_before_the_run(tmp_path):
+    dirs = _stage(tmp_path, "wind")
+    (dirs["potential_dir"] / "potential_wind__permissive.parquet").unlink()
+    registry = load_technologies(TECHNOLOGIES)
+    zzz = load_parameters(PARAMETERS).countries["ZZZ"]
+    with pytest.raises(FileNotFoundError, match="permissive"):
+        build_lcoe(
+            "ZZZ", registry, zzz, ["wind"], sampler_seed=7, sampler_size=16, max_batch_gb=1.0,
+            out_dir=tmp_path / "out", **dirs,
+        )  # fmt: skip
 
 
 # -- the summaries ------------------------------------------------------------------------------------
@@ -428,6 +497,8 @@ def test_no_sample_level_array_is_persisted_and_the_metadata_records_the_run(tmp
     result, out = _run(tmp_path, "wind", n=64)
     assert sorted(p.name for p in out.iterdir()) == [
         "design_matrix_wind.parquet",
+        "lcoe_nominal_wind__permissive.parquet",
+        "lcoe_nominal_wind__restrictive.parquet",
         "lcoe_summary_wind.parquet",
         "supply_curve_wind.parquet",
     ]

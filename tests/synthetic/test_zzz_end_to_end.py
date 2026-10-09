@@ -409,6 +409,24 @@ def test_f6_produces_the_summary_design_matrix_and_supply_curve_from_the_f5_tabl
 
 @pytest.mark.synthetic
 @pytest.mark.parametrize("tech", ["solar", "wind"])
+@pytest.mark.parametrize("scenario", ["restrictive", "permissive"])
+def test_f6_writes_the_nominal_lcoe_of_the_other_land_scenarios_with_no_draws(zzz, tech, scenario):
+    """D-F6-018: one row per cell and member of the scenario's F5 table, only the nominal LCOE, finite and positive."""
+    table = pd.read_parquet(
+        _phase(zzz, "lcoe_modeling") / f"lcoe_nominal_{tech}__{scenario}.parquet"
+    )
+    potential = pd.read_parquet(
+        _phase(zzz, "technical_potential") / f"potential_{tech}__{scenario}.parquet"
+    )
+    assert list(table.columns) == ["cell_id", "member", "lcoe_nominal"]
+    assert len(table) == len(potential)
+    assert np.isfinite(table["lcoe_nominal"]).all() and (table["lcoe_nominal"] > 0).all()
+    keys = set(zip(table["cell_id"], table["member"].astype(str), strict=True))
+    assert keys == set(zip(potential["cell_id"], potential["member"].astype(str), strict=True))
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
 def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech):
     """A row of the F6 summary, recomputed from the F5 and F3 tables, the F4 forcing and the stored design matrix by plain arithmetic."""
     from geofrea.core.config_loader import load_parameters

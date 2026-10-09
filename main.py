@@ -529,6 +529,10 @@ def _build_phase_specs(
             context.register_artifact(
                 f"supply_curve_{tech}", entry.supply_curve, LCOE_TABLE_SCHEMA_VERSION
             )
+            for scenario, path in entry.lcoe_nominal_scenarios.items():
+                context.register_artifact(
+                    f"lcoe_nominal_{tech}__{scenario}", path, LCOE_TABLE_SCHEMA_VERSION
+                )
         _register_json_artifact(context, "lcoe_modeling", result)
         return result
 
@@ -682,12 +686,21 @@ def _build_phase_specs(
             output_model=LcoeSummary,
             run=lcoe_modeling_run,
             requires=frozenset({"land_eligibility", "forcing", "members"})
-            | {f"potential_{tech}__central" for tech in technologies},
+            | {
+                f"potential_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            },
             produces=frozenset({"lcoe_modeling"})
             | {
                 f"{kind}_{tech}"
                 for tech in technologies
                 for kind in ("lcoe_summary", "design_matrix", "supply_curve")
+            }
+            | {
+                f"lcoe_nominal_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS[1:]
             },
             summarize=lambda out: "; ".join(
                 f"{t}: {e.n_rows} cell-members, {e.n_samples} samples, "

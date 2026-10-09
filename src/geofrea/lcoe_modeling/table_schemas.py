@@ -29,6 +29,16 @@ class LcoeSummaryRow(BaseModel):
     n_nonfinite: int
 
 
+class LcoeNominalRow(BaseModel):
+    """The nominal LCOE (sample `s0`, no draws) of one cell in one member for a land scenario other than the central one (M-F6-06, D-F6-018)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: int
+    member: str
+    lcoe_nominal: float
+
+
 class DesignMatrixRow(BaseModel):
     """One parameter sample; the columns after `sample` are the uncertain parameters of the technology (M-F6-02).
 

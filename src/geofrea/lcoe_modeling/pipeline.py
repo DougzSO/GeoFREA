@@ -5,7 +5,9 @@ Reads, per technology, `potential_<tech>__central.parquet` (F5), `candidates_<te
 
   - `lcoe_summary_<tech>.parquet`: per (cell, member), the nominal LCOE and the mean, variance, p10, p50 and p90 over the draws (M-F6-04);
   - `design_matrix_<tech>.parquet`: the Latin hypercube design, sample 0 the nominal vector (M-F6-02, M-F6-06);
-  - `supply_curve_<tech>.parquet`: per member, the cells in increasing nominal LCOE with cumulative capacity and energy (M-F6-06).
+  - `supply_curve_<tech>.parquet`: per member, the cells in increasing nominal LCOE with cumulative capacity and energy (M-F6-06);
+  - `lcoe_nominal_<tech>__<scenario>.parquet`, for the restrictive and permissive land scenarios: the nominal LCOE per cell and member, no
+    draws (M-F6-06, D-F6-018).
 
 Nothing is read before every parameter, range and price year is checked: a missing one raises `LcoeMissingInputError` listing all of them
 (A-09). Members are the outer loop and cells are processed in blocks that hold every sample, so the quantiles are exact and the memory
@@ -34,6 +36,7 @@ from geofrea.core.constants import PRICE_BASE_YEAR_USD
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import TableWriter, require_schema_version, write_table
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
 from geofrea.lcoe_modeling.kernel import (
     KERNEL_PARAMETER_KEYS,
@@ -48,6 +51,7 @@ from geofrea.lcoe_modeling.supply_curve import supply_curve
 from geofrea.lcoe_modeling.table_schemas import (
     LCOE_TABLE_SCHEMA_VERSION,
     DesignMatrixRow,
+    LcoeNominalRow,
     LcoeSummaryRow,
     SupplyCurveRow,
 )
@@ -69,6 +73,8 @@ COST_PRICE_KEYS = (
 LIVE_BLOCKS = 4  # live cell-by-sample arrays at the peak (D-F6-005)
 BYTES_PER_VALUE = 8
 CF_MAX = 1.0 + 1e-9  # V-03: a sampled capacity factor may not exceed 1 (rounding slack only)
+CENTRAL_SCENARIO = LAND_SCENARIOS[0]
+OTHER_SCENARIOS = LAND_SCENARIOS[1:]  # nominal LCOE only (D-F6-018)
 
 
 class LcoeMissingInputError(RuntimeError):
@@ -105,6 +111,7 @@ class TechLcoe(BaseModel):
     lcoe_summary: Path
     design_matrix: Path
     supply_curve: Path
+    lcoe_nominal_scenarios: dict[str, Path]
 
 
 class LcoeSummary(BaseModel):
@@ -437,6 +444,59 @@ def read_member_inputs(
         yield MemberCells(member=member, cell_id=ids, cells=cells, cf=cf[rows])
 
 
+def build_scenario_nominal(
+    resolved: ResolvedLcoe,
+    nominal_samples: SampleInputs,
+    x_range: tuple[float, float],
+    *,
+    potential_path: Path,
+    candidates_path: Path,
+    forcing_path: Path,
+    members: Sequence[str],
+    out_path: Path,
+    provenance: dict[str, str],
+) -> Path:
+    """The nominal LCOE per cell and member of one land scenario, with no draws.
+
+    Implements: M-F6-06, D-F6-018.
+
+    Raises:
+        LcoeInputError: an input table breaks its contract (as for the central scenario).
+    """
+    with TableWriter(
+        out_path,
+        schema_version=LCOE_TABLE_SCHEMA_VERSION,
+        row_model=LcoeNominalRow,
+        compression="zstd",
+        extra_metadata=provenance,
+        empty_frame=pd.DataFrame(
+            {
+                "cell_id": pd.Series(dtype="int64"),
+                "member": pd.Series(dtype="object"),
+                "lcoe_nominal": pd.Series(dtype="float64"),
+            }
+        ),
+    ) as writer:
+        for item in read_member_inputs(
+            resolved,
+            potential_path=potential_path,
+            candidates_path=candidates_path,
+            forcing_path=forcing_path,
+            members=members,
+            x_range=x_range,
+        ):
+            writer.write(
+                pd.DataFrame(
+                    {
+                        "cell_id": item.cell_id,
+                        "member": np.full(len(item.cell_id), item.member, dtype=object),
+                        "lcoe_nominal": lcoe_block(item.cells, nominal_samples)[:, 0],
+                    }
+                )
+            )
+    return out_path
+
+
 def build_technology_lcoe(
     iso: str,
     resolved: ResolvedLcoe,
@@ -450,6 +510,7 @@ def build_technology_lcoe(
     seed: int,
     max_batch_gb: float,
     production: bool = False,
+    other_scenarios: Mapping[str, tuple[Path, Path]] | None = None,
 ) -> TechLcoe:
     """Summary, design matrix and supply curve of one technology.
 
@@ -549,6 +610,20 @@ def build_technology_lcoe(
         row_model=DesignMatrixRow,
         extra_metadata=provenance,
     )
+    scenario_tables = {
+        scenario: build_scenario_nominal(
+            resolved,
+            nominal_samples,
+            x_range,
+            potential_path=potential,
+            candidates_path=candidates,
+            forcing_path=forcing_path,
+            members=members,
+            out_path=out_dir / f"lcoe_nominal_{tech}__{scenario}.parquet",
+            provenance=provenance,
+        )
+        for scenario, (potential, candidates) in (other_scenarios or {}).items()
+    }
     finite_m0 = m0_nominal[np.isfinite(m0_nominal)] if m0_nominal is not None else np.array([])
     result = TechLcoe(
         technology=tech,
@@ -565,6 +640,7 @@ def build_technology_lcoe(
         lcoe_summary=summary_path,
         design_matrix=design_path,
         supply_curve=supply_path,
+        lcoe_nominal_scenarios=scenario_tables,
     )
     logger.info(
         "%s %s: %d cell-members, %d samples, %d cells per block, nominal LCOE at m0 min %s median %s USD/MWh, %d non-finite draws",
@@ -643,8 +719,9 @@ def build_lcoe(
     forcing_path = Path(climate_dir) / "forcing.parquet"
     needed = [members_file, forcing_path]
     for tech in resolved:
-        needed.append(Path(potential_dir) / f"potential_{tech}__central.parquet")
-        needed.append(Path(candidates_dir) / f"candidates_{tech}__central.parquet")
+        for scenario in (CENTRAL_SCENARIO, *OTHER_SCENARIOS):
+            needed.append(Path(potential_dir) / f"potential_{tech}__{scenario}.parquet")
+            needed.append(Path(candidates_dir) / f"candidates_{tech}__{scenario}.parquet")
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
         raise FileNotFoundError(f"F6 input missing (F3, F4 and F5 must have run): {absent}")
@@ -662,6 +739,13 @@ def build_lcoe(
             seed=sampler_seed,
             max_batch_gb=max_batch_gb,
             production=production,
+            other_scenarios={
+                scenario: (
+                    Path(potential_dir) / f"potential_{tech}__{scenario}.parquet",
+                    Path(candidates_dir) / f"candidates_{tech}__{scenario}.parquet",
+                )
+                for scenario in OTHER_SCENARIOS
+            },
         )
         for tech, res in resolved.items()
     }

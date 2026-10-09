@@ -105,8 +105,8 @@ def test_build_phase_specs_returns_all_phases_in_order():
 
 
 @pytest.mark.unit
-def test_lcoe_modeling_reads_the_central_potential_forcing_and_members_and_produces_three_tables_per_technology():
-    """D-F6-015: F6 requires the F5 central tables (not the other land scenarios), `forcing` and `members`; it produces its tables."""
+def test_lcoe_modeling_reads_the_potential_of_every_land_scenario_forcing_and_members_and_produces_its_tables():
+    """D-F6-015, D-F6-018: F6 requires the F5 tables of the three land scenarios, `forcing` and `members`; it produces the three tables of the central scenario and the nominal LCOE of the other two."""
     specs = {
         s.name: s
         for s in main._build_phase_specs(
@@ -122,8 +122,11 @@ def test_lcoe_modeling_reads_the_central_potential_forcing_and_members_and_produ
             "land_eligibility",
             "forcing",
             "members",
-            "potential_solar__central",
-            "potential_wind__central",
+            *(
+                f"potential_{tech}__{scenario}"
+                for tech in ("solar", "wind")
+                for scenario in ("central", "restrictive", "permissive")
+            ),
         }
     )
     assert f6.produces == frozenset(
@@ -132,6 +135,11 @@ def test_lcoe_modeling_reads_the_central_potential_forcing_and_members_and_produ
             f"{kind}_{tech}"
             for tech in ("solar", "wind")
             for kind in ("lcoe_summary", "design_matrix", "supply_curve")
+        }
+        | {
+            f"lcoe_nominal_{tech}__{scenario}"
+            for tech in ("solar", "wind")
+            for scenario in ("restrictive", "permissive")
         }
     )
     assert f6.requires <= specs["technical_potential"].produces | specs[
@@ -149,7 +157,16 @@ def test_sample_size_convergence_is_a_support_phase_with_its_own_artifacts_and_n
         )
     }
     phase = specs["sample_size_convergence"]
-    assert phase.requires == specs["lcoe_modeling"].requires
+    assert phase.requires == frozenset(
+        {
+            "land_eligibility",
+            "forcing",
+            "members",
+            "potential_solar__central",
+            "potential_wind__central",
+        }
+    )
+    assert phase.requires <= specs["lcoe_modeling"].requires
     assert phase.produces == frozenset(
         {"sample_size_convergence", "sample_size_convergence_solar", "sample_size_convergence_wind"}
     )
