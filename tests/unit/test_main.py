@@ -101,6 +101,8 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "sample_size_convergence",
         "robustness_analysis",
         "external_validation",
+        "lcoe_maps",
+        "robustness_maps",
         "potential_maps",
         "hazard_context",
         "climate_maps",

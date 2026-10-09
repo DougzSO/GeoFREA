@@ -41,6 +41,8 @@ PHASES = [
     "sample_size_convergence",
     "robustness_analysis",
     "external_validation",
+    "lcoe_maps",
+    "robustness_maps",
 ]
 INITIAL_SIZE, CEILING, TOP_K_PERCENT = 16, 64, 25
 SCENARIOS = ("central", "restrictive", "permissive")
@@ -175,6 +177,8 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "sample_size_convergence",
             "robustness_analysis",
             "external_validation",
+            "lcoe_maps",
+            "robustness_maps",
         )
     }
 
@@ -1030,3 +1034,57 @@ def test_v06_f5_to_f7_do_not_change_when_the_plant_inventory_is_absent(zzz_fine,
     assert before.keys() == after.keys()
     for key, frame in before.items():
         pd.testing.assert_frame_equal(frame, after[key], obj=key)
+
+
+# -- the LCOE and robustness maps ---------------------------------------------------------------------------
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_the_lcoe_map_of_the_reference_member_equals_the_f6_table_cell_by_cell(zzz, tech):
+    import rasterio
+
+    summary = pd.read_parquet(_phase(zzz, "lcoe_modeling") / f"lcoe_summary_{tech}.parquet")
+    reference = summary[summary["member"].astype(str) == "m0"].set_index("cell_id")["lcoe_nominal"]
+    with rasterio.open(_phase(zzz, "lcoe_modeling") / f"lcoe_nominal_{tech}.tif") as src:
+        raster, transform = src.read(1), src.transform
+    lat, lon = (
+        pd.read_parquet(_phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet")
+        .set_index("cell_id")
+        .loc[reference.index, ["lat_c", "lon_c"]]
+        .to_numpy()
+        .T
+    )
+    rows, cols = rasterio.transform.rowcol(transform, lon, lat)
+    np.testing.assert_allclose(raster[rows, cols], reference.to_numpy(), rtol=1e-6)
+    figures = {p.name for p in (_phase(zzz, "lcoe_modeling", "figures")).glob("*.png")}
+    assert f"lcoe_nominal_{tech}__ref__na__na.png" in figures
+    assert f"supply_curve_{tech}__ref__na__na.png" in figures
+    assert {f"lcoe_nominal_{tech}__2041-2070__ssp126__na.png"} <= figures
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_the_robustness_maps_are_written_for_both_windows_and_the_max_regret_matches_the_table(
+    zzz, tech
+):
+    import rasterio
+
+    for role in ("core", "sensitivity"):
+        table = _robustness(zzz, tech, role)
+        with rasterio.open(
+            _phase(zzz, "robustness_analysis") / f"max_regret_{tech}__{role}.tif"
+        ) as src:
+            raster, transform = src.read(1), src.transform
+            nodata = src.nodata
+        rows, cols = rasterio.transform.rowcol(
+            transform, table["lon_c"].to_numpy(), table["lat_c"].to_numpy()
+        )
+        got = raster[rows, cols].astype("float64")
+        want = table["mr"].to_numpy(dtype="float64")
+        finite = np.isfinite(want)
+        np.testing.assert_allclose(got[finite], want[finite], rtol=1e-5)
+        assert (got[~finite] == nodata).all()
+    window = "2041-2070"
+    figures = {p.name for p in _phase(zzz, "robustness_analysis", "figures").glob("*.png")}
+    assert f"cell_class_{tech}__{window}__na__na.png" in figures

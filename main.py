@@ -71,6 +71,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from geofrea.climate_forcing.external_inputs import ExternalInputsReport, check_external_inputs
+from geofrea.climate_forcing.members import load_ensemble
 from geofrea.climate_forcing.pipeline import (
     ForcingSummary,
     HazardSummary,
@@ -132,9 +133,15 @@ from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentRes
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.convergence import ConvergenceSummary, build_convergence
+from geofrea.lcoe_modeling.maps import LcoeMapsSummary, build_lcoe_maps
+from geofrea.lcoe_modeling.maps import slug as ssp_slug
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
+from geofrea.robustness_analysis.maps import (
+    MAPS as ROBUSTNESS_MAPS,
+)
+from geofrea.robustness_analysis.maps import RobustnessMapsSummary, build_robustness_maps
 from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
@@ -622,6 +629,35 @@ def _build_phase_specs(
         _register_json_artifact(context, "external_validation", result)
         return result
 
+    def lcoe_maps_run(context: PhaseContext) -> LcoeMapsSummary:
+        """F6 (D-F6-015): COG and maps of the LCOE at m0 (nominal, p10, p50, p90), the nominal LCOE by SSP and the supply curve."""
+        experiments = load_experiments(EXPERIMENTS_YAML)
+        core = experiments.windows["core"]
+        result = build_lcoe_maps(
+            context.country_code,
+            technologies,
+            figures,
+            f"{core['start_year']}-{core['end_year']}",
+        )
+        for key, path in result.rasters.items():
+            context.register_artifact(key, path, "1.0")
+        _register_json_artifact(context, "lcoe_maps", result)
+        return result
+
+    def robustness_maps_run(context: PhaseContext) -> RobustnessMapsSummary:
+        """F7 (D-F7-024): COG and maps of the max regret, satisficing, top-k flags, classes and sub-family regrets."""
+        experiments = load_experiments(EXPERIMENTS_YAML)
+        windows = {
+            role: f"{w['start_year']}-{w['end_year']}"
+            for role, w in experiments.windows.items()
+            if role in ("core", "sensitivity")
+        }
+        result = build_robustness_maps(context.country_code, technologies, figures, windows)
+        for key, path in result.rasters.items():
+            context.register_artifact(key, path, "1.0")
+        _register_json_artifact(context, "robustness_maps", result)
+        return result
+
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
         result = build_potential_maps(context.country_code, technologies, figures)
@@ -847,6 +883,45 @@ def _build_phase_specs(
                 f"{t}: {v.n_units} units, {v.capacity_mw:,.0f} MW, {v.n_outside_grid} outside the grid"
                 for t, v in out.technologies.items()
             ),
+        ),
+        PhaseSpec(
+            name="lcoe_maps",
+            output_model=LcoeMapsSummary,
+            run=lcoe_maps_run,
+            requires=frozenset({"members", "land_eligibility"})
+            | {f"lcoe_summary_{tech}" for tech in technologies}
+            | {f"supply_curve_{tech}" for tech in technologies},
+            produces=frozenset({"lcoe_maps"})
+            | {
+                f"lcoe_{stat}_{tech}"
+                for tech in technologies
+                for stat in ("nominal", "p10", "p50", "p90")
+            }
+            | {
+                f"lcoe_nominal_{tech}__{ssp_slug(ssp)}"
+                for tech in technologies
+                for ssp in load_ensemble(EXPERIMENTS_YAML).ssps
+            },
+            summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
+        ),
+        PhaseSpec(
+            name="robustness_maps",
+            output_model=RobustnessMapsSummary,
+            run=robustness_maps_run,
+            requires=frozenset({"robustness_analysis"})
+            | {
+                f"robustness_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+            },
+            produces=frozenset({"robustness_maps"})
+            | {
+                f"{name}_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+                for name in ROBUSTNESS_MAPS
+            },
+            summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
         ),
         PhaseSpec(
             name="potential_maps",

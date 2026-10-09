@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.2.0 |
+| Version | 7.2.1 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-09 |
 | Owner | Douglas |
@@ -123,13 +123,15 @@ F2a (reference_grid) + F4 members ──> hazard_context
 F2a + F2b + F3 + F4 + hazard_context ──> overview
 F3 + F4 ──> F5 technical_potential ──> F6 lcoe_modeling ──> F7 robustness_analysis
 F5 (central scenario) ──> potential_maps
+F6 ──> lcoe_maps
+F7 ──> robustness_maps
 F3 + F6 (nominal) + F1 (existing plants) ──> F7b external_validation
 F5 + F6 + F7 + F7b ──> F8 results_synthesis ──> E1 explorer
 ```
 
 Each phase requires the named artifacts it reads, not the producing phase as a whole: F4 requires the `reference_grid` artifact (CRS, transform, shape and a hash of the in-country mask of the analysis grid) and no aligned layer, F2b and F3 require the aligned layers they read. A rerun of a phase invalidates a consumer only when the content hash of an artifact the consumer requires changed (A-02).
 
-The phases external_inputs, hazard_context, climate_maps, potential_maps and overview are support phases with no F-identifier; they are named by phase name and registered in `main.py` with the same `requires` and `produces` contract as the F-phases (A-01). The legacy phase `suitability_criteria` is outside this specification.
+The phases external_inputs, hazard_context, climate_maps, potential_maps, lcoe_maps, robustness_maps and overview are support phases with no F-identifier; they are named by phase name and registered in `main.py` with the same `requires` and `produces` contract as the F-phases (A-01). The legacy phase `suitability_criteria` is outside this specification.
 
 Critical transitions:
 
@@ -152,6 +154,8 @@ Critical transitions:
 | hazard_context | `climate_forcing` | Compute hazard context indicators per cell and member | Hazard table | RO3, RQ3 |
 | climate_maps | `climate_forcing` | Diagnostic maps of the change factors | Climate maps | Section 11 |
 | potential_maps | `technical_potential` | COG and diagnostic maps of potential density and capacity factor at the reference climate, central land scenario | Potential rasters, potential maps | T-R1 (F8 draws the thesis figure), Section 11 |
+| lcoe_maps | `lcoe_modeling` | COG and diagnostic maps of the LCOE at the reference member (nominal, p10, p50, p90), the nominal LCOE of the core window by SSP, and the nominal supply curve | LCOE rasters, LCOE maps | T-R11 (F8 draws the thesis figure), Section 11 |
+| robustness_maps | `robustness_analysis` | COG and diagnostic maps of the max regret, satisficing, top-k flags, classes and the sub-family regrets, per window | Robustness rasters, robustness maps | T-R4 (F8 draws the thesis figure), Section 11 |
 | overview | `overview` | Country overview maps and table over F2a to F4 outputs | Overview figures | Section 11 |
 | F5 | `technical_potential` | Capacity, CF, and energy per cell and member | Potential table | RO1, RO3, RQ1, RQ3 |
 | F6 | `lcoe_modeling` | LCOE kernel, parameter sampling, per-member LCOE summaries | LCOE summaries, design matrix | RO2, RQ2 |
@@ -493,6 +497,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.2.1 | 2026-10-09 | PATCH (two registered support phases had no mention): Sections 4.1 and 4.2 list `lcoe_maps` (after F6; COG and maps of the LCOE at the reference member, by SSP, and the supply curve) and `robustness_maps` (after F7; COG and maps of the F7 results per window) as support phases, drawn as `settings.yaml` `figures` allows, rasters always written (A-08). IDs cited and not altered: A-01, A-07, A-08, T-R4, T-R11. |
 | 7.2.0 | 2026-10-09 | MINOR (verdicts of 2026-10-09 on `docs/_audit/2026-10_F7_design.md`, recorded as D-F7-006 to D-F7-033 in `docs/phases/F7_robustness_analysis.md` and D-F7b-002 to D-F7b-007; no existing result is redefined, F7 and F7b are not built yet): M-F7-01 evaluates feasibility on `CF(m, s0)` through an energy floor in the kernel; M-F7-02 fixes the set of `L*`; M-F7-05 fixes the base of `k`, the ties, the truncation and the capacity-target reading; M-F7-06 defines the two criteria of the primary comparison; M-F7-08 gives the PRIM outcome per future; M-F3-03 adds `admin1_id`; M-F3-05 and M-F7b-01 state that the excluded shares of the pixels are not persisted and F7b evaluates the eligibility engine at the plant pixels; M-F3-06, M-F4-04, V-07 and A-08 make the cell size a run parameter (`scale`) of F3 to F7; M-F6-06 adds the nominal LCOE of the restrictive and permissive scenarios. IDs cited and not altered: M-F3-01, M-F6-01, M-F7-03, M-F7-07, OQ-008, OQ-010, OQ-020, OQ-021, OQ-056, U-08, V1, A-12. |
 | 7.1.3 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on the F6 commits): M-F7-03 states that the P90 over parameter samples uses only the draws `s >= 1`, the nominal vector entering only the nominal ranking (D-F6-003); U-04 states the convergence criterion as `1 - Jaccard` of the top-k sets of consecutive sizes below 0.01, adopting the larger size of the first pair that agrees, with the definitive F7 `MR` as the metric (D-F6-004; OQ-055 closed). IDs cited and not altered: M-F7-05, M-F7-02, M-F6-04. |
 | 7.1.2 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on `docs/_audit/2026-10_F6_design.md`, recorded as D-F6-001 to D-F6-016 in `docs/phases/F6_lcoe_modeling.md`; no result is redefined): M-F6-01 names the variable O&M key and unit (`opex_var_usd_per_mwh`, USD/MWh); M-F6-04 batches along cells with all samples in memory, and the summaries are taken over the draws `s >= 1`, with the nominal vector reported on its own and the count of non-finite values persisted (D2, D3, D7); M-F6-06 names the design matrix per technology (D13); M-F7-06 states that the secondary statistic is accumulated by F7, not read from the F6 summaries. IDs cited and not altered: A-10, U-03, M-F6-02, M-F7-03. |

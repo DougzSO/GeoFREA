@@ -17,24 +17,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import rasterio
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
-from geofrea.core.raster_io import safe_raster_write
-from geofrea.core.scale import active_scale
-from geofrea.land_eligibility.cells import row_col_from_id
+from geofrea.land_eligibility.map_raster import FIGURE_MODES, cell_grid, plot_grid, write_cog
 
 CENTRAL = "central"
-FIGURE_MODES = ("all", "summary", "none")
 
 
 class PotentialMapsError(RuntimeError):
@@ -48,63 +39,6 @@ class PotentialMapsSummary(BaseModel):
     figures_mode: str
     rasters: dict[str, Path]
     figures: list[Path]
-
-
-def _grid(cell_ids: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, int, int]:
-    """`values` placed on the 0.05 degree lattice spanned by the cells; returns the array and its (row0, col0)."""
-    rows, cols = row_col_from_id(cell_ids)
-    row0, col0 = int(rows.min()), int(cols.min())
-    out = np.full((int(rows.max()) - row0 + 1, int(cols.max()) - col0 + 1), np.nan, dtype="float64")
-    out[rows - row0, cols - col0] = values
-    return out, row0, col0
-
-
-def _write_cog(path: Path, grid: np.ndarray, row0: int, col0: int) -> Path:
-    transform = rasterio.Affine(
-        active_scale().cell_deg,
-        0,
-        CELL_ORIGIN_LON + col0 * active_scale().cell_deg,
-        0,
-        -active_scale().cell_deg,
-        CELL_ORIGIN_LAT - row0 * active_scale().cell_deg,
-    )
-    data = np.where(np.isnan(grid), NODATA_FLOAT, grid).astype("float32")
-    with safe_raster_write(
-        path,
-        driver="GTiff",
-        height=data.shape[0],
-        width=data.shape[1],
-        count=1,
-        dtype="float32",
-        crs="EPSG:4326",
-        transform=transform,
-        nodata=NODATA_FLOAT,
-    ) as dst:
-        dst.write(data, 1)
-    return path
-
-
-def _plot(
-    grid: np.ndarray, row0: int, col0: int, title: str, label: str, cmap: str, path: Path
-) -> Path:
-    west = CELL_ORIGIN_LON + col0 * active_scale().cell_deg
-    north = CELL_ORIGIN_LAT - row0 * active_scale().cell_deg
-    extent = (
-        west,
-        west + grid.shape[1] * active_scale().cell_deg,
-        north - grid.shape[0] * active_scale().cell_deg,
-        north,
-    )
-    fig, ax = plt.subplots(figsize=(7, 6))
-    image = ax.imshow(np.ma.masked_invalid(grid), extent=extent, origin="upper", cmap=cmap)
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel("Longitude (deg)")
-    ax.set_ylabel("Latitude (deg)")
-    fig.colorbar(image, ax=ax, label=label, shrink=0.8)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return path
 
 
 def build_potential_maps(
@@ -153,18 +87,20 @@ def build_potential_maps(
                 f"{potential_path.name}: rows of cells absent from {cells_path.name}"
             )
         cell_ids = merged["cell_id"].to_numpy()
-        density, row0, col0 = _grid(cell_ids, (merged["P_MW"] / merged["cell_area_km2"]).to_numpy())
-        cf, _, _ = _grid(cell_ids, merged["CF"].to_numpy())
+        density, row0, col0 = cell_grid(
+            cell_ids, (merged["P_MW"] / merged["cell_area_km2"]).to_numpy()
+        )
+        cf, _, _ = cell_grid(cell_ids, merged["CF"].to_numpy())
         has_values = bool(np.isfinite(density).any())
-        rasters[f"potential_density_{tech}"] = _write_cog(
+        rasters[f"potential_density_{tech}"] = write_cog(
             Path(artifacts) / f"potential_density_{tech}.tif", density, row0, col0
         )
-        rasters[f"capacity_factor_{tech}"] = _write_cog(
+        rasters[f"capacity_factor_{tech}"] = write_cog(
             Path(artifacts) / f"capacity_factor_{tech}.tif", cf, row0, col0
         )
         if has_values and figures_mode in ("all", "summary"):
             figures.append(
-                _plot(
+                plot_grid(
                     density,
                     row0,
                     col0,
@@ -176,7 +112,7 @@ def build_potential_maps(
             )
         if has_values and figures_mode == "all":
             figures.append(
-                _plot(
+                plot_grid(
                     cf,
                     row0,
                     col0,
