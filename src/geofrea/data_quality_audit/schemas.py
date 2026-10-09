@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import geopandas as gpd
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from geofrea.core.schemas import GeometryRepairSummary
 
@@ -38,6 +38,30 @@ class AuditLayerConfig(BaseModel):
     source: str | None = None
     unit: str | None = None
     sanity_range: tuple[float, float] | None = None
+
+
+class DerivedRangeConfig(BaseModel):
+    """How the sanity range of an F2b layer is derived (V-04, siting_layers/sanity.py), or that it has no derivation yet.
+
+    `derivation` and `source` are both null together (the layer has no range: an OQ names what is missing), or both set (the
+    range follows from the named derivation of the named standard or geometry; no number is stored here).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    derivation: Literal["iso2533_envelope", "country_bbox_diagonal"] | None = None
+    source: str | None = None
+    open_question: str | None = None
+
+    @model_validator(mode="after")
+    def _derivation_with_source_or_an_open_question(self) -> DerivedRangeConfig:
+        if (self.derivation is None) != (self.source is None):
+            raise ValueError("derivation and source are both set or both null")
+        if self.derivation is None and self.open_question is None:
+            raise ValueError(
+                "a layer with no derivation names the open question that will give its range"
+            )
+        return self
 
 
 class AuditConfig(BaseModel):
@@ -78,6 +102,7 @@ class AuditConfig(BaseModel):
     resolution_tolerance: float
     layers: dict[str, AuditLayerConfig | dict[str, AuditLayerConfig]]
     country_overrides: dict[str, dict[str, AuditLayerConfig]] = {}
+    derived_ranges: dict[str, DerivedRangeConfig] = {}
 
 
 class AuditInputs(BaseModel):

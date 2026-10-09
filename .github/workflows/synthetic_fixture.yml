@@ -1,6 +1,6 @@
 name: Synthetic fixture (ZZZ)
 
-# A-06/V-08: runs F1 through F2b end-to-end for the ZZZ synthetic country
+# A-06/V-08: runs F1 through F5 end-to-end for the ZZZ synthetic country
 # fixture (config/countries.yaml, scripts/generate_zzz_fixture.py) --
 # see docs/phases/core.md D-core-018 (closing OQ-032). Separate from
 # regression.yml (which runs the frozen BRA/PRT legacy-parity suite):
@@ -35,38 +35,10 @@ jobs:
       - name: Install GeoFREA (editable, dev extras)
         run: pip install -e ".[dev]"
 
-      - name: Generate the ZZZ fixture
-        run: python scripts/generate_zzz_fixture.py
-
-      - name: Run F1 through F2b for ZZZ
-        run: |
-          python - <<'PYEOF'
-          import sys
-          import time
-
-          from geofrea.core.config_loader import load_audit_config, load_parameters, load_settings
-          from geofrea.core.orchestrator import compute_dirty, compute_run_id
-          from main import _read_methodology_version, _resolved_config_json, run_geofrea
-
-          settings = load_settings("config/settings.yaml")
-          parameters = load_parameters("config/parameters.json")
-          audit_config = load_audit_config("config/audit.yaml")
-          methodology_version = _read_methodology_version("docs/METHODOLOGY.md")
-          dirty = compute_dirty(".")
-          run_id = compute_run_id(
-              _resolved_config_json(settings, parameters), methodology_version, "ci"
-          )
-
-          phases = ["data_acquisition", "data_quality_audit", "grid_alignment", "siting_layers"]
-          started = time.perf_counter()
-          ok = run_geofrea(
-              "ZZZ", phases, [], settings.geospatial.resolutions, settings.geospatial.distance_cap_km, audit_config, run_id, dirty
-          )
-          elapsed = time.perf_counter() - started
-          print(f"ZZZ F1-F2b: ok={ok} elapsed={elapsed:.2f}s")
-          if not ok or elapsed > 60:
-              sys.exit(1)
-          PYEOF
+      - name: Run ZZZ end to end (F1 to F5, no network)
+        # tests/synthetic generates the fixture and its miniature CMIP6, ISIMIP3b and ERA5 inputs (D13b) into a scratch
+        # data directory, refuses every socket connection, and runs data_acquisition through potential_maps (A-06, V-08).
+        run: pytest tests/synthetic -m synthetic -v
 
       - name: Run the synthetic-value separation tests
         run: pytest tests/unit/test_synthetic_value_separation.py tests/unit/test_iso3_literals.py -v

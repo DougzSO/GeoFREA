@@ -233,8 +233,18 @@ def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     )
 
 
-def build_maps(iso: str) -> MapsSummary:
-    """J-5: one PNG per member under `figures/`, from forcing.parquet and forcing_masked.parquet."""
+def build_maps(iso: str, figures_mode: str) -> MapsSummary:
+    """J-5: one PNG per member under `figures/`, from forcing.parquet and forcing_masked.parquet.
+
+    Args:
+        iso: Country code.
+        figures_mode: `settings.yaml` `figures` (A-08). Member-level maps are drawn only with `all`; `summary` and `none`
+            draw none (F4 has no summary-level map).
+    """
+    if figures_mode not in ("all", "summary", "none"):
+        raise ValueError(f"figures must be all, summary or none, got {figures_mode!r}")
+    if figures_mode != "all":
+        return MapsSummary(country_code=iso, n_figures=0, figures=[])
     art = artifacts_dir(iso)
     forcing = pd.read_parquet(art / "forcing.parquet")
     masked = pd.read_parquet(art / "forcing_masked.parquet")

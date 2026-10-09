@@ -1,10 +1,11 @@
 """Potential-density and capacity-factor maps of the central land scenario at the reference climate (T-R1; D-F5-015, A-07, A-08).
 
-Reads `potential_<tech>__central.parquet` (member `m0`) and `candidates_<tech>__central.parquet` and writes, under
+Reads `potential_<tech>__central.parquet` (member `m0`) and `cells_<tech>__central.parquet` (every country cell, for the extent
+and the cell area) and writes, under
 `outputs/<ISO3>/technical_potential/`:
 
   - `artifacts/potential_density_<tech>.tif`: `P_MW / cell_area_km2`, MW per km2 of cell (T-R1), Cloud Optimized GeoTIFF on the
-    0.05 degree lattice, EPSG:4326, nodata where a cell is not a candidate;
+    0.05 degree lattice, EPSG:4326, nodata where a cell is not a candidate (a technology without candidates gets an all-nodata raster and no figure);
   - `artifacts/capacity_factor_<tech>.tif`: `CF` at `m0`, same grid;
   - `figures/potential_density_<tech>__ref__na__na.png` and `figures/capacity_factor_<tech>__ref__na__na.png`.
 
@@ -111,7 +112,7 @@ def build_potential_maps(
     figures_mode: str,
     *,
     potential_dir: Path | None = None,
-    candidates_dir: Path | None = None,
+    cells_dir: Path | None = None,
     figures_dir: Path | None = None,
 ) -> PotentialMapsSummary:
     """COG rasters and PNG maps of `P_MW / cell_area_km2` and `CF` at `m0`, central land scenario.
@@ -123,45 +124,44 @@ def build_potential_maps(
         technologies: Technology keys of the run.
         figures_mode: `all`, `summary` or `none` (`settings.yaml` `figures`).
         potential_dir: Directory of the potential tables (default: the F5 artifacts directory).
-        candidates_dir: Directory of the F3 candidate tables (default: the F3 artifacts directory).
+        cells_dir: Directory of the F3 cell tables (default: the F3 artifacts directory).
         figures_dir: Directory of the PNGs (default: the F5 figures directory).
 
     Raises:
-        PotentialMapsError: unknown `figures_mode`, a missing table, or a reference member without rows.
+        PotentialMapsError: unknown `figures_mode`, a missing table, or potential rows for cells the F3 table lacks.
     """
     if figures_mode not in FIGURE_MODES:
         raise PotentialMapsError(f"figures must be one of {FIGURE_MODES}, got {figures_mode!r}")
     artifacts = potential_dir or core_paths.phase_dir(iso, "technical_potential", "artifacts")
-    candidates_dir = candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
+    cells_dir = cells_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
     figures_dir = figures_dir or core_paths.phase_dir(iso, "technical_potential", "figures")
     rasters: dict[str, Path] = {}
     figures: list[Path] = []
     for tech in technologies:
         potential_path = Path(artifacts) / f"potential_{tech}__{CENTRAL}.parquet"
-        candidates_path = Path(candidates_dir) / f"candidates_{tech}__{CENTRAL}.parquet"
-        for needed in (potential_path, candidates_path):
+        cells_path = Path(cells_dir) / f"cells_{tech}__{CENTRAL}.parquet"
+        for needed in (potential_path, cells_path):
             if not needed.is_file():
                 raise PotentialMapsError(f"missing input {needed}")
         table = pd.read_parquet(potential_path)
         reference = table[table["member"].astype(str) == REFERENCE_MEMBER_ID]
-        if reference.empty:
+        cells = pd.read_parquet(cells_path, columns=["cell_id", "cell_area_km2"])
+        merged = cells.merge(reference, on="cell_id", how="left", validate="one_to_one")
+        if len(reference) != int(merged["P_MW"].notna().sum()):
             raise PotentialMapsError(
-                f"{potential_path.name} has no rows of member {REFERENCE_MEMBER_ID!r}"
+                f"{potential_path.name}: rows of cells absent from {cells_path.name}"
             )
-        area = pd.read_parquet(candidates_path, columns=["cell_id", "cell_area_km2"])
-        merged = reference.merge(area, on="cell_id", how="left", validate="one_to_one")
-        if merged["cell_area_km2"].isna().any():
-            raise PotentialMapsError(f"{potential_path.name}: cells without a candidate row")
         cell_ids = merged["cell_id"].to_numpy()
         density, row0, col0 = _grid(cell_ids, (merged["P_MW"] / merged["cell_area_km2"]).to_numpy())
         cf, _, _ = _grid(cell_ids, merged["CF"].to_numpy())
+        has_values = bool(np.isfinite(density).any())
         rasters[f"potential_density_{tech}"] = _write_cog(
             Path(artifacts) / f"potential_density_{tech}.tif", density, row0, col0
         )
         rasters[f"capacity_factor_{tech}"] = _write_cog(
             Path(artifacts) / f"capacity_factor_{tech}.tif", cf, row0, col0
         )
-        if figures_mode in ("all", "summary"):
+        if has_values and figures_mode in ("all", "summary"):
             figures.append(
                 _plot(
                     density,
@@ -173,7 +173,7 @@ def build_potential_maps(
                     Path(figures_dir) / f"potential_density_{tech}__ref__na__na.png",
                 )
             )
-        if figures_mode == "all":
+        if has_values and figures_mode == "all":
             figures.append(
                 _plot(
                     cf,

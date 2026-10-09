@@ -11,6 +11,10 @@ lat [-5.00, -4.80] -- 6 x 4 decision cells (0.05 deg) = 30 x 20 pixels
 computable by hand, not merely plausible; see the docstring of each
 generator function for what it tests.
 
+The climate inputs F4 reads (D13b) are written by `zzz_climate_fixture.py` under GEOFREA_DATA_DIR/raw/ (where
+`core.paths.fetched_raw` looks); set ZZZ_CLIMATE=0 to skip them, and use a scratch GEOFREA_DATA_DIR for them (a real
+registry is never overwritten).
+
 Run once, from the repository root, with GEOFREA_DATA_DIR set:
     python generate_zzz_fixture.py
 """
@@ -26,6 +30,7 @@ import numpy as np
 import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, box
+from zzz_climate_fixture import write_climate_fixture
 
 # --- Extent -----------------------------------------------------------
 WEST, EAST = 20.00, 20.30
@@ -145,15 +150,18 @@ def gen_population() -> None:
 
 
 def gen_land_cover() -> None:
-    """Single ESA-WorldCover-style tile, one class code, known area.
+    """Single ESA-WorldCover-style tile with three bands of whole decision cells (5 pixel rows each), known areas.
 
-    Class 10 (tree cover) south half, class 40 (cropland) north half --
-    each is exactly N_ROWS/2 * N_COLS = 300 pixels, at 0.01 deg (~1.23e-6
-    deg^2/pixel at this latitude is not relevant -- the test only needs
-    the per-class pixel COUNT, not a real-world area).
+    North, rows 0-9: class 40 (cropland), excluded for solar (`cropland_excluded`), allowed for wind.
+    Middle, rows 10-14: class 30 (grassland), allowed for both technologies: this is the only band where solar has candidates,
+    and the population gradient (`gen_population`) and the river's setback (`gen_rivers`) trim it, so the solar path of F3 to F5
+    is exercised with a known, non-trivial share.
+    South, rows 15-19: class 10 (tree cover), excluded for both.
+    Each band is a whole number of decision-cell rows, so no cell mixes classes.
     """
     arr = np.full((N_ROWS, N_COLS), 10, dtype="uint8")
-    arr[: N_ROWS // 2, :] = 40  # northern half (lower row index = north)
+    arr[:10, :] = 40  # northern half (lower row index = north)
+    arr[10:15, :] = 30
     tile_name = "ESA_WorldCover_10m_2020_v100_S05E020_Map.tif"
     _write_raster(RAW / "land_cover" / "Synthetica" / tile_name, arr, "uint8", nodata=0)
 
@@ -179,10 +187,13 @@ def gen_rivers() -> None:
 
     Length = EAST - WEST = 0.30 deg exactly (planar units, hand-checkable
     before any geodesic correction is applied downstream).
+
+    `DIS_AV_CMS` (HydroRIVERS long-term mean discharge, m3/s) is a test value of 50, above every discharge threshold of the
+    riparian grid, so the line counts as a river at every threshold F3 evaluates.
     """
     mid_lat = (SOUTH + NORTH) / 2
     gdf = gpd.GeoDataFrame(
-        {"HYRIV_ID": [1]},
+        {"HYRIV_ID": [1], "DIS_AV_CMS": [50.0]},
         geometry=[LineString([(WEST, mid_lat), (EAST, mid_lat)])],
         crs=CRS,
     )
@@ -304,6 +315,11 @@ def main() -> None:
     gen_grid()
     gen_solar()
     gen_wind()
+    if os.environ.get("ZZZ_CLIMATE") != "0":
+        write_climate_summary = write_climate_fixture(
+            Path(__file__).resolve().parents[1] / "config" / "experiments.yaml"
+        )
+        print(f"Climate fixture: {write_climate_summary}")
 
     manifest = {
         "extent": {"west": WEST, "east": EAST, "south": SOUTH, "north": NORTH},

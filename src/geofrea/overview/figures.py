@@ -30,6 +30,7 @@ from geofrea.core import paths as core_paths
 from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
 from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.overview import style
+from geofrea.overview.layer_maps import build_layer_maps
 
 MAX_PIXELS = 700  # longest side of a drawn raster
 
@@ -382,25 +383,33 @@ def build_tables(
     return "\n".join(parts)
 
 
-def build_overview(iso: str) -> OverviewSummary:
+def build_overview(iso: str, figures_mode: str) -> OverviewSummary:
+    """Overview figures and table. `figures_mode` is `settings.yaml` `figures` (A-08): `none` writes the table only."""
+    if figures_mode not in ("all", "summary", "none"):
+        raise ValueError(f"figures must be all, summary or none, got {figures_mode!r}")
     art = core_paths.phase_dir(iso, "climate_forcing", "artifacts")
     forcing = pd.read_parquet(art / "forcing.parquet")
     masked = pd.read_parquet(art / "forcing_masked.parquet")
     hazard = pd.read_parquet(art / "hazard_context.parquet")
     out = overview_dir(iso)
-    figures = [
-        plot_aligned_layers(iso, out / "figures" / f"{iso}_aligned_layers.png"),
-        plot_hazard_context(iso, hazard, out / "figures" / f"{iso}_hazard_context.png"),
-    ]
+    figures = []
+    if figures_mode != "none":
+        figures = [
+            plot_aligned_layers(iso, out / "figures" / f"{iso}_aligned_layers.png"),
+            plot_hazard_context(iso, hazard, out / "figures" / f"{iso}_hazard_context.png"),
+        ]
     eligibility_dir = core_paths.phase_dir(iso, "land_eligibility", "artifacts")
     cell_tables = {
         p.stem.removeprefix("cells_").removesuffix("__central"): pd.read_parquet(p)
         for p in sorted(eligibility_dir.glob("cells_*__central.parquet"))
     }
-    if cell_tables:
+    if cell_tables and figures_mode != "none":
         figures.append(
             plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png")
         )
+    figures += build_layer_maps(
+        iso, figures_mode
+    )  # one map per file for the exclusion and cost layers (H-5)
     table = out / "tables" / f"{iso}_overview.md"
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(build_tables(iso, forcing, masked, hazard), encoding="utf-8")

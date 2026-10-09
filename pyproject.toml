@@ -50,6 +50,7 @@ addopts = "--strict-markers"
 markers = [
     "unit: fast tests with no external data dependency",
     "regression: V-01 frozen regression on the synthetic ZZZ country (tests/fixtures/v01)",
+    "synthetic: F1 to F5 end to end on the synthetic ZZZ country with no network (A-06, V-08)",
 ]
 
 [tool.ruff]

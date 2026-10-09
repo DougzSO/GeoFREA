@@ -453,7 +453,7 @@ class SettingsFile(BaseModel):
             grid_alignment's target resolution).
         figures: Which diagnostic figures a phase draws (A-08): `all`, `summary` (the figure the thesis output
             needs, not the member-level ones) or `none`. Rasters and tables are artifacts and are always written.
-            Honoured by the F5 maps; the other map phases draw their figures regardless of it so far.
+            Honoured by climate_maps, overview (with its per-layer maps) and potential_maps.
     """
 
     model_config = ConfigDict(extra="forbid")

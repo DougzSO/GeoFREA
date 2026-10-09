@@ -470,7 +470,7 @@ def _build_phase_specs(
 
     def climate_maps_run(context: PhaseContext) -> MapsSummary:
         """F4 (J-5): one diagnostic map per member."""
-        result = build_maps(context.country_code)
+        result = build_maps(context.country_code, figures)
         _register_json_artifact(context, "climate_maps", result)
         return result
 
@@ -506,7 +506,7 @@ def _build_phase_specs(
 
     def overview_run(context: PhaseContext) -> OverviewSummary:
         """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
-        result = build_overview(context.country_code)
+        result = build_overview(context.country_code, figures)
         _register_json_artifact(context, "overview", result)
         return result
 

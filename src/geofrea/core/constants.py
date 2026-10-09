@@ -59,3 +59,11 @@ RHO0_KG_M3: float = 1.225
 HOURS_PER_YEAR: float = 8760.0
 # Hours in a day, the unit conversion of PVOUT (kWh/kWp/day) to a capacity factor (M-F5-02).
 HOURS_PER_DAY: float = 24.0
+
+# International Standard Atmosphere, ISO 2533, troposphere (V-04 sanity range of the air density; siting_layers/sanity.py).
+# Standard values of the atmosphere model, not parameters with a range (U-05).
+ISA_T0_K: float = 288.15  # temperature at mean sea level
+ISA_P0_PA: float = 101325.0  # pressure at mean sea level
+ISA_LAPSE_K_PER_M: float = 0.0065  # temperature lapse rate in the troposphere
+ISA_G_M_S2: float = 9.80665  # standard gravity
+ISA_R_J_KG_K: float = 287.05287  # specific gas constant of dry air

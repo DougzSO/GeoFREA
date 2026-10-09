@@ -79,9 +79,11 @@ geospatial:
     # cells (S-06) nest exactly 5 x 5. The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
 
-# Which diagnostic figures a phase draws (METHODOLOGY A-08): all | summary | none.
-#   all     the summary figure and the member-level or per-variable ones
-#   summary only the figure a thesis output reads (F5: the potential density map at the reference climate)
-#   none    no PNG; rasters and tables are artifacts and are always written
-# Honoured by the F5 maps (potential_maps); climate_maps and overview draw their figures regardless so far.
+# Which diagnostic figures a phase draws (METHODOLOGY A-08): all | summary | none. Rasters and tables are artifacts and are
+# always written; only PNG maps follow this setting. Honoured by climate_maps, overview (with its per-layer maps) and
+# potential_maps:
+#   all      every map: the member-level climate maps, the aligned-layer, hazard and eligibility overview figures, one map per
+#            exclusion and cost layer, the potential density and capacity-factor maps
+#   summary  no member-level climate maps; the overview figures and the eligible share per technology; the potential density map
+#   none     no PNG at all (the overview table is still written)
 figures: all

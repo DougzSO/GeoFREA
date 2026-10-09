@@ -101,7 +101,7 @@ def data_dir(tmp_path, monkeypatch):
 def test_overview_writes_two_figures_and_a_table(data_dir):
     _write_aligned(data_dir)
     _write_climate(data_dir)
-    result = build_overview(ISO)
+    result = build_overview(ISO, "all")
     assert [p.name for p in result.figures] == [
         f"{ISO}_aligned_layers.png",
         f"{ISO}_hazard_context.png",
@@ -118,7 +118,7 @@ def test_overview_writes_two_figures_and_a_table(data_dir):
 def test_a_missing_layer_is_shown_as_missing_not_hidden(data_dir):
     _write_aligned(data_dir, skip="slope")
     _write_climate(data_dir)
-    result = build_overview(ISO)
+    result = build_overview(ISO, "all")
     text = result.table.read_text(encoding="utf-8")
     assert "| Slope (degrees) | missing |" in text
 
@@ -138,11 +138,12 @@ def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
                 "col": cols,
                 "cell_area_km2": 30.0,
                 "eligible_area_km2": np.linspace(0, 30, len(ids)),
+                **{f"excluded_area_km2_E{i}": 0.5 * i for i in range(1, 7)},
                 "dominant_exclusion": ["E5"] * 10 + [None] * 5 + ["E3"] * 5,
             }
         ).to_parquet(art / f"cells_{tech}__central.parquet", index=False)
     pd.DataFrame({"cell_0p1deg_id": [0]}).to_parquet(
         art / "cells_0p1deg_solar.parquet", index=False
     )  # must be ignored
-    result = build_overview(ISO)
+    result = build_overview(ISO, "all")
     assert f"{ISO}_eligibility.png" in [p.name for p in result.figures]

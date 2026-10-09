@@ -323,7 +323,21 @@ def build_technology_potential(
                 )
             energy_by_member[member] = energy
             absent_by_member[member] = int(len(frame) - len(rows))
-        table = pd.concat(pieces, ignore_index=True)
+        if pieces:
+            table = pd.concat(pieces, ignore_index=True)
+        else:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
+            logger.warning(
+                "%s %s [%s]: no candidate cells, the potential is zero", iso, tech, scenario
+            )
+            table = pd.DataFrame(
+                {
+                    "cell_id": pd.Series(dtype="int64"),
+                    "member": pd.Categorical([], categories=list(members)),
+                    "P_MW": pd.Series(dtype="float64"),
+                    "CF": pd.Series(dtype="float64"),
+                    "E_MWh": pd.Series(dtype="float64"),
+                }
+            )
         path = Path(out_dir) / f"potential_{tech}__{scenario}.parquet"
         write_table(
             table,

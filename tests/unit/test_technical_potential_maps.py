@@ -37,7 +37,7 @@ def _maps(run_ok, tmp_path, mode):
         ["solar", "wind"],
         mode,
         potential_dir=out,
-        candidates_dir=land,
+        cells_dir=land,
         figures_dir=tmp_path / "figures",
     )
 
@@ -87,13 +87,31 @@ def test_cells_outside_the_candidate_set_are_nodata_in_the_raster(run_ok, tmp_pa
         ["solar"],
         "none",
         potential_dir=reduced,
-        candidates_dir=land,
+        cells_dir=land,
         figures_dir=tmp_path / "f",
     )
     with rasterio.open(mapped.rasters["potential_density_solar"]) as src:
         data = src.read(1)
-    assert data.shape == (1, 4) and (data == NODATA_FLOAT).sum() == 2
+    # the F3 cell table has 10 cells (8 candidates and 2 that are not): the raster spans all of them
+    assert data.shape == (1, 10) and (data == NODATA_FLOAT).sum() == 8
     assert result.rasters  # the full map exists as well
+
+
+@pytest.mark.unit
+def test_a_technology_without_candidates_gets_an_all_nodata_raster_and_no_figure(run_ok, tmp_path):
+    out = run_ok[1]
+    empty = out.parent / "empty"
+    empty.mkdir()
+    pd.read_parquet(out / "potential_solar__central.parquet").iloc[0:0].to_parquet(
+        empty / "potential_solar__central.parquet"
+    )
+    mapped = build_potential_maps(
+        "ZZZ", ["solar"], "all", potential_dir=empty, cells_dir=out.parent / "in" / "land",
+        figures_dir=tmp_path / "f",
+    )  # fmt: skip
+    with rasterio.open(mapped.rasters["capacity_factor_solar"]) as src:
+        assert (src.read(1) == NODATA_FLOAT).all()
+    assert mapped.figures == []
 
 
 @pytest.mark.unit
@@ -124,9 +142,7 @@ def test_unknown_figures_mode_and_missing_inputs_raise(run_ok, tmp_path):
     with pytest.raises(PotentialMapsError, match="figures must be one of"):
         build_potential_maps("ZZZ", ["solar"], "some", potential_dir=out)
     with pytest.raises(PotentialMapsError, match="missing input"):
-        build_potential_maps(
-            "ZZZ", ["solar"], "none", potential_dir=tmp_path, candidates_dir=tmp_path
-        )
+        build_potential_maps("ZZZ", ["solar"], "none", potential_dir=tmp_path, cells_dir=tmp_path)
 
 
 @pytest.mark.unit

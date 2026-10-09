@@ -41,7 +41,11 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
     subprocess.run(
         [sys.executable, str(REPO_ROOT / "scripts" / "generate_zzz_fixture.py")],
         check=True,
-        env={**os.environ, "GEOFREA_DATA_DIR": str(data_dir)},
+        env={
+            **os.environ,
+            "GEOFREA_DATA_DIR": str(data_dir),
+            "ZZZ_CLIMATE": "0",
+        },  # V-01 needs no climate inputs
         capture_output=True,
     )
     settings = main.load_settings(main.SETTINGS_YAML)

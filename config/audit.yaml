@@ -100,6 +100,28 @@ layers:
     expected_resolution_deg: null  # acquired 2026-10-07 (F5-1); tabular, not a resolution layer.
     source: null
 
+# Sanity ranges of the F2b layers that are derived, not looked up (V-04, H-6; siting_layers/sanity.py). No number is stored: each range
+# follows from a named derivation, per country, so it needs no research and no judgement.
+#   iso2533_envelope      air density: [rho_ISA(z_max + h), rho_ISA(z_min + h)] with z_min and z_max the lowest and highest in-country
+#                         DEM elevation and h the layer height above ground (ISO 2533 troposphere; constants in core/constants.py)
+#   country_bbox_diagonal distance to the grid or to the roads: [0, diagonal of the country's bounding box]
+# Weibull A and k have no derivation: a range needs a sourced reading of the Global Wind Atlas documentation (OQ-053).
+# PVOUT keeps the range under `layers.solar.sanity_range` above.
+derived_ranges:
+  air_density:
+    derivation: iso2533_envelope
+    source: "ISO 2533 International Standard Atmosphere, troposphere (T0 288.15 K, p0 101325 Pa, lapse 0.0065 K/m, g 9.80665 m/s2, R 287.05287 J/kg/K)"
+  dist_grid_km:
+    derivation: country_bbox_diagonal
+    source: "geometry of the F2a aligned grid of the country (no external source)"
+  dist_road_km:
+    derivation: country_bbox_diagonal
+    source: "geometry of the F2a aligned grid of the country (no external source)"
+  weibull_a:
+    open_question: "OQ-053"
+  weibull_k:
+    open_question: "OQ-053"
+
 # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
 # ZZZ's fixture rasters are generated at whatever resolution
 # scripts/generate_zzz_fixture.py chose, not the real cross-country

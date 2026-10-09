@@ -111,6 +111,15 @@ def _write_inputs(root: Path, drop_forcing_rows: list[tuple[int, str]] = (), win
     for scenario in SCENARIO_AREAS:
         _candidates(scenario, solar_cols).to_parquet(land / f"candidates_solar__{scenario}.parquet")
         _candidates(scenario, wind_cols).to_parquet(land / f"candidates_wind__{scenario}.parquet")
+    # the F3 cell table holds every country cell: the candidates and two cells that are not candidates
+    for tech, cols in (("solar", solar_cols), ("wind", wind_cols)):
+        central = _candidates("central", cols)
+        extra = central.iloc[:2].assign(
+            cell_id=CELL_IDS[-1] + np.array([1, 2]), eligible_area_km2=0.0
+        )
+        pd.concat([central, extra], ignore_index=True).to_parquet(
+            land / f"cells_{tech}__central.parquet"
+        )
     rows, masked = [], []
     for member in MEMBERS:
         rsds, d_t, wind = FACTORS[member]
@@ -595,3 +604,27 @@ def test_no_technology_name_appears_in_technical_potential():
                 if ident.lower() in names:
                     offenders.append((path.name, node.lineno, ident))
     assert not offenders, offenders
+
+
+@pytest.mark.unit
+def test_a_technology_without_candidate_cells_gives_empty_tables_and_zero_totals(
+    tmp_path, registry, synthetic_params
+):
+    """A scenario with no candidate cells is a valid zero potential, written as an empty table and zero aggregates."""
+    land, climate = _write_inputs(tmp_path / "in")
+    for scenario in SCENARIO_AREAS:
+        path = land / f"candidates_solar__{scenario}.parquet"
+        pd.read_parquet(path).iloc[0:0].to_parquet(path)
+    out = tmp_path / "out"
+    summary = build_potential(
+        "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
+        candidates_dir=land, climate_dir=climate, out_dir=out,
+    )  # fmt: skip
+    assert summary.technologies["solar"].scenarios["central"].n_rows == 0
+    assert len(pd.read_parquet(out / "potential_solar__central.parquet")) == 0
+    agg = pd.read_parquet(out / "potential_aggregates_solar.parquet")
+    assert (agg["P_GW"] == 0).all() and (agg["E_TWh"] == 0).all() and (agg["n_cells"] == 0).all()
+    assert (
+        agg["cf_energy_weighted"].isna().all()
+        and agg["delta_E_pct_vs_m0_like_for_like"].isna().all()
+    )

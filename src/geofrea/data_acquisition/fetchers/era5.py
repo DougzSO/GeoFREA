@@ -71,12 +71,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+import dask
 import geopandas as gpd
 import numpy as np
 import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 from dask.callbacks import Callback
 
+# 2026-10-09, root cause found (py-spy dump of a frozen merge worker, reproduced about once in a dozen runs of
+# `test_merge_yearly_files_concatenates_along_time`): a lock deadlock inside xarray's netCDF4 backend, not an OS or drive
+# stall. With the default threaded dask scheduler, one worker thread waits for the write lock in
+# `netCDF4_.py::__setitem__` while another waits for the read lock in `_getitem`; neither can proceed, every thread idles
+# at zero CPU, and the watchdog below ends the process after `WRITE_STALL_TIMEOUT_S`. The netCDF4/HDF5 library serializes
+# its calls anyway, so the threads buy no parallelism for these writes: `_single_threaded_dask()` runs them on dask's
+# synchronous scheduler, which cannot deadlock on those locks. The watchdog stays as protection against a real stall.
+#
 # 2026-09-30, real use: a `to_netcdf()` write on BRA's merge froze
 # twice -- zero CPU across *every* thread in the process, no PageIn
 # wait (unlike the separate RAM-thrash stall earlier the same day, and
@@ -368,11 +377,16 @@ def _run_worker_with_watchdog(
         raise RuntimeError(f"{label}: worker subprocess exited with code {proc.exitcode}")
 
 
+def _single_threaded_dask():
+    """Context manager: run dask computations on the synchronous scheduler (no threads, so no lock-order deadlock)."""
+    return dask.config.set(scheduler="synchronous")
+
+
 def _merge_worker(year_paths: list[Path], out_path: Path, label: str, mp_progress) -> None:
     """Subprocess entry point for `merge_yearly_files()` -- see `_run_worker_with_watchdog()`."""
     with xr.open_mfdataset(sorted(year_paths), combine="by_coords") as merged:
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress(label, mp_progress=mp_progress):
+        with _single_threaded_dask(), _LoggingProgress(label, mp_progress=mp_progress):
             merged.to_netcdf(out_path)
 
 
@@ -583,8 +597,9 @@ def _crop_worker(
         cropped = cropped.rio.write_crs("EPSG:4326")
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with _LoggingProgress(
-            "crop", mp_progress=mp_progress
+        with (
+            _single_threaded_dask(),
+            _LoggingProgress("crop", mp_progress=mp_progress),
         ):  # dask-backed write, see chunks= note above
             cropped.to_netcdf(out_path)
 
@@ -800,7 +815,7 @@ def _reduce_worker(hourly_path: Path, out_path: Path, variable: str, mp_progress
     ds_out = annual.to_dataset(name=variable)
     ds_out = ds_out.rio.write_crs("EPSG:4326")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with _LoggingProgress("reduce", mp_progress=mp_progress):
+    with _single_threaded_dask(), _LoggingProgress("reduce", mp_progress=mp_progress):
         ds_out.to_netcdf(out_path)
 
 
