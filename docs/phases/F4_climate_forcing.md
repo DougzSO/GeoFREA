@@ -12,7 +12,7 @@ Requires: CMIP6 and ERA5 layers from `acquisition_registry`, cell grid from F3. 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
 | M-F4-03 | Delta-change factors from monthly climatologies (ratio rsds/sfcWind, difference tas) | `climate_forcing/change_factors.py:compute_change_factor`, `monthly_climatology`, `change_factor`; per member in `climate_forcing/forcing.py:member_factor_fields` | `test_climate_forcing_change_factors.py` (9), `test_climate_forcing_forcing.py` | pass (PRT built; IND, BRA see D-F4-013) |
-| M-F4-04 | Bilinear interpolation of the factors to 0.05 degree cell centers | `change_factors.py:bilinear_to_points`, `forcing.py:forcing_frames` over `country_cells` | same files | pass (PRT built) |
+| M-F4-04, D-F4-020 | Bilinear interpolation of the factors to the cell centers of the run scale (0.05 degree by default, 0.1 degree) | `forcing.py:country_cells` (the cells of the active scale),  `change_factors.py:bilinear_to_points`, `forcing.py:forcing_frames` over `country_cells` | same files | pass (PRT built) |
 | M-F4-01 | Members `(gcm, ssp, window)` plus the reference member | `climate_forcing/members.py:load_ensemble`, `resolve_members` | `test_climate_forcing_forcing.py` | pass |
 | M-F4-05 | Hazard context indicators per cell and member | `climate_forcing/hazards.py` (adapted from CRAEI, A-11), `pipeline.py::build_hazard_context` | `test_climate_forcing_hazards.py` | partial (core window only; 2071-2100 data not acquired; loss functions OQ-007) |
 | M-F4-06 | `forcing.parquet`, `forcing_masked.parquet`, `hazard_context.parquet`, `members.yaml` | `forcing.py`, `members.py`, `hazards.py`, `pipeline.py` | same files | pass (core window) |
@@ -54,3 +54,4 @@ Requires: CMIP6 and ERA5 layers from `acquisition_registry`, cell grid from F3. 
 ## History
 
 - 2026-10-08: F4 runs on the synthetic country from miniature CMIP6 files (D-F4-019).
+- 2026-10-09: forcing and hazard cells follow the run scale (D-F4-020): `country_cells` takes the cells of the active scale; the synthetic country runs F4 at 0.05 and 0.1 degree.

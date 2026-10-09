@@ -106,6 +106,7 @@ from geofrea.core.production import (
     validate_run_technologies,
 )
 from geofrea.core.run_logging import configure_logging, render_run_table
+from geofrea.core.scale import DEFAULT_SCALE, SCALES, use_scale
 from geofrea.core.schemas import ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
@@ -773,17 +774,59 @@ def _build_phase_specs(
     ]
 
 
-def _resolved_config_json(settings: SettingsFile, parameters) -> str:
+def _resolved_config_json(
+    settings: SettingsFile, parameters, scale: str = DEFAULT_SCALE.scale_id
+) -> str:
     return json.dumps(
         {
             "settings": settings.model_dump(mode="json"),
             "parameters": parameters.model_dump(mode="json"),
+            "scale": scale,
         },
         sort_keys=True,
     )
 
 
 def run_geofrea(
+    country_code: str,
+    target_phases: list[str],
+    rerun_phases: list[str],
+    resolutions: ResolutionsConfig,
+    distance_cap_km: float,
+    audit_config: AuditConfig,
+    run_id: str,
+    dirty: bool,
+    revalidate_phases: list[str] | None = None,
+    technologies: tuple[str, ...] = (),
+    production: bool = False,
+    figures: str = "all",
+    max_batch_gb: float | None = None,
+    scale: str = DEFAULT_SCALE.scale_id,
+):
+    """`_run_geofrea` at the cell scale `scale` (`core.scale`: `0p05deg`, the default, or `0p1deg`; M-F3-06, V-07).
+
+    The scale is the only difference between a run and its scale check: the same phases run, the cell size they read is the active scale,
+    and the phases that depend on it write under `<phase>__<scale id>` with their own manifest (A-08).
+    """
+    with use_scale(scale):
+        return _run_geofrea(
+            country_code,
+            target_phases,
+            rerun_phases,
+            resolutions,
+            distance_cap_km,
+            audit_config,
+            run_id,
+            dirty,
+            revalidate_phases,
+            technologies,
+            production,
+            figures,
+            max_batch_gb,
+        )
+
+
+def _run_geofrea(
     country_code: str,
     target_phases: list[str],
     rerun_phases: list[str],
@@ -918,6 +961,12 @@ def _parse_args(argv: list[str]):
         "(the orchestrator checks that their required artifacts exist and records the lineage); used once after a contract change",
     )
     parser.add_argument(
+        "--scale",
+        choices=sorted(SCALES),
+        default=DEFAULT_SCALE.scale_id,
+        help="cell size of the run: 0p05deg (default, S-06) or 0p1deg, the scale check of V-07 (same code, files under <phase>__0p1deg)",
+    )
+    parser.add_argument(
         "--rerun",
         help="comma-separated phases to execute again even if the manifest records success (default: run.rerun_phases)",
     )
@@ -1003,7 +1052,7 @@ def main(argv: list[str] | None = None) -> int:
     git_commit = compute_git_commit(REPO_ROOT)
     dirty = compute_dirty(REPO_ROOT)
     run_id = compute_run_id(
-        _resolved_config_json(settings, parameters), methodology_version, git_commit
+        _resolved_config_json(settings, parameters, args.scale), methodology_version, git_commit
     )
 
     all_ok = True
@@ -1023,6 +1072,7 @@ def main(argv: list[str] | None = None) -> int:
             args.production,
             settings.figures,
             settings.memory.max_batch_gb,
+            args.scale,
         )
         all_ok = all_ok and ok
         for phase_name, result in results.items():

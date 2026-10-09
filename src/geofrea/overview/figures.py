@@ -27,7 +27,8 @@ import rasterio
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.overview import style
 from geofrea.overview.layer_maps import build_layer_maps
@@ -189,10 +190,10 @@ def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: P
         int(all_cols.max()),
     )
     extent = (
-        CELL_ORIGIN_LON + c0 * CELL_DEG,
-        CELL_ORIGIN_LON + (c1 + 1) * CELL_DEG,
-        CELL_ORIGIN_LAT - (r1 + 1) * CELL_DEG,
-        CELL_ORIGIN_LAT - r0 * CELL_DEG,
+        CELL_ORIGIN_LON + c0 * active_scale().cell_deg,
+        CELL_ORIGIN_LON + (c1 + 1) * active_scale().cell_deg,
+        CELL_ORIGIN_LAT - (r1 + 1) * active_scale().cell_deg,
+        CELL_ORIGIN_LAT - r0 * active_scale().cell_deg,
     )
     colors = ["#f0f0f0", "#1b9e77", "#1f78b4", "#6baed6", "#a65628", "#e6ab02", "#d95f02"]
     cmap, norm = ListedColormap(colors), BoundaryNorm(np.arange(-0.5, 7.5), len(colors))
@@ -257,10 +258,10 @@ def plot_hazard_context(iso: str, hazard: pd.DataFrame, out_path: Path) -> Path:
     rows, cols = row_col_from_id(means["cell_id"].to_numpy())
     r0, r1, c0, c1 = int(rows.min()), int(rows.max()), int(cols.min()), int(cols.max())
     extent = (
-        CELL_ORIGIN_LON + c0 * CELL_DEG,
-        CELL_ORIGIN_LON + (c1 + 1) * CELL_DEG,
-        CELL_ORIGIN_LAT - (r1 + 1) * CELL_DEG,
-        CELL_ORIGIN_LAT - r0 * CELL_DEG,
+        CELL_ORIGIN_LON + c0 * active_scale().cell_deg,
+        CELL_ORIGIN_LON + (c1 + 1) * active_scale().cell_deg,
+        CELL_ORIGIN_LAT - (r1 + 1) * active_scale().cell_deg,
+        CELL_ORIGIN_LAT - r0 * active_scale().cell_deg,
     )
     fig, axes = plt.subplots(2, 3, figsize=(16, 10), constrained_layout=True)
     loaded = style.load_relief(_aligned_path(iso, "elevation"))

@@ -20,6 +20,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from geofrea.core.scale import manifest_file_name, phase_directory_name
+
 
 class MissingPathEnvironmentError(RuntimeError):
     """A required environment variable for path resolution is not set."""
@@ -181,12 +183,13 @@ def phase_dir(iso3: str, phase: str, kind: str) -> Path:
         kind: Output kind (e.g. "artifacts", "figures", "reports").
 
     Returns:
-        GEOFREA_DATA_DIR / outputs / <iso3> / <phase> / <kind> as an absolute Path.
+        GEOFREA_DATA_DIR / outputs / <iso3> / <phase> / <kind> as an absolute Path. At a scale other than the default one
+        (`core.scale`), a phase that depends on the cell size is `<phase>__<scale id>` (A-08).
 
     Raises:
         MissingPathEnvironmentError: If GEOFREA_DATA_DIR is not set.
     """
-    return _ensure_data_env() / "outputs" / iso3 / phase / kind
+    return _ensure_data_env() / "outputs" / iso3 / phase_directory_name(phase) / kind
 
 
 def manifest_path(iso3: str) -> Path:
@@ -196,12 +199,13 @@ def manifest_path(iso3: str) -> Path:
         iso3: ISO-3166-alpha-3 country code.
 
     Returns:
-        GEOFREA_DATA_DIR / outputs / <iso3> / manifest.json as an absolute Path.
+        GEOFREA_DATA_DIR / outputs / <iso3> / manifest.json as an absolute Path (`manifest__<scale id>.json` at another
+        scale, A-08).
 
     Raises:
         MissingPathEnvironmentError: If GEOFREA_DATA_DIR is not set.
     """
-    return _ensure_data_env() / "outputs" / iso3 / "manifest.json"
+    return _ensure_data_env() / "outputs" / iso3 / manifest_file_name()
 
 
 def thesis_dir() -> Path:

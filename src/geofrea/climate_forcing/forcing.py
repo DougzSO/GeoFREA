@@ -1,7 +1,7 @@
 """Per-cell change factors for every member: `forcing.parquet` (M-F4-03, M-F4-04, M-F4-06).
 
 For each GCM the factors are computed on its native grid from monthly climatologies (M-F4-03) and then
-bilinearly interpolated to the 0.05 degree cell centers (M-F4-04). The interpolation reads the GLOBAL files
+bilinearly interpolated to the cell centers of the run scale (M-F4-04, 0.05 degree by default). The interpolation reads the GLOBAL files
 (subset to the country bounding box plus a margin), not the polygon crops of F1: a crop keeps only native cells whose
 centers lie inside the polygon, so near a border the four cells around a cell center are missing and the
 interpolation would return NaN there.
@@ -32,10 +32,9 @@ from geofrea.climate_forcing.members import (
     MemberResolutionError,
 )
 from geofrea.climate_forcing.table_schemas import CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow
-from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.tables import table_metadata, validate_columns
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
-from geofrea.land_eligibility.cells import cell_center, cell_id, grid_cell_origin
+from geofrea.land_eligibility.cells import cell_center, cell_id, lattice_window, pad_to_window
 
 _MARGIN_NATIVE_CELLS = 3
 
@@ -45,7 +44,7 @@ class ForcingGapError(ValueError):
 
 
 def country_cells(mask_path: Path) -> pd.DataFrame:
-    """Lattice cells (0.05 degree, global ids) that hold at least one in-country pixel of the F2a grid.
+    """Lattice cells of the active scale (0.05 degree by default, global ids) that hold at least one in-country pixel of the F2a grid.
 
     This is the definition F3 uses (`aggregate_to_cells` keeps a cell when its in-country area is positive), so the
     forcing covers exactly the cells F3 can later make candidates. It reads the F2a aligned raster's own valid
@@ -64,11 +63,12 @@ def country_cells(mask_path: Path) -> pd.DataFrame:
             np.isfinite(band) if src.nodata is None else (np.isfinite(band) & (band != src.nodata))
         )
         transform, height, width = src.transform, src.height, src.width
-    k = CELL_NESTING_PIXELS
-    row0, col0 = grid_cell_origin(transform, height, width)
-    any_valid = valid.reshape(height // k, k, width // k, k).any(axis=(1, 3))
+    window = lattice_window(transform, height, width)
+    k = window.k
+    padded = pad_to_window(valid, window, False)
+    any_valid = padded.reshape(window.n_rows, k, window.n_cols, k).any(axis=(1, 3))
     r, c = np.nonzero(any_valid)
-    rows, cols = r + row0, c + col0
+    rows, cols = r + window.row0, c + window.col0
     lat_c, lon_c = cell_center(rows, cols)
     out = pd.DataFrame({"cell_id": cell_id(rows, cols), "lat_c": lat_c, "lon_c": lon_c})
     return out.sort_values("cell_id").reset_index(drop=True)

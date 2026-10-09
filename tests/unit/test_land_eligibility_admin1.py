@@ -169,3 +169,22 @@ def test_a_layer_without_the_columns_or_with_a_repeated_identifier_is_refused():
         admin1.read_units(
             gpd.GeoDataFrame({"GID_1": [], "NAME_1": []}, geometry=[], crs="EPSG:4326")
         )
+
+
+@pytest.mark.unit
+def test_the_cells_of_the_coarse_scale_are_twice_as_wide_and_take_the_unit_that_covers_more_of_them():
+    from geofrea.core.scale import use_scale
+
+    with use_scale("0p1deg"):
+        # the 0.1 degree cell that holds the corner
+        row, col = cell_row_col(np.array([LAT0 - 0.01]), np.array([LON0 + 0.01]))
+        boxes = admin1.cell_boxes(row, col)
+        west, south, east, north = boxes[0].bounds
+        assert east - west == pytest.approx(0.1) and north - south == pytest.approx(0.1)
+        units = _units(
+            {
+                "A": box(west, south, west + 0.03, north),  # 30 percent of the cell
+                "B": box(west + 0.03, south, east, north),
+            }
+        )
+        assert admin1.assign_admin1(row, col, units).tolist() == ["B"]

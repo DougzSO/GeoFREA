@@ -37,6 +37,7 @@ from typing import Any, Generic, Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from geofrea.core.paths import StoredPath, to_stored_path
+from geofrea.core.scale import manifest_file_name
 from geofrea.core.schemas import CountryParams
 
 logger = logging.getLogger("geofrea.core.orchestrator")
@@ -577,7 +578,7 @@ class Orchestrator:
 
     @property
     def manifest_path(self) -> Path:
-        return self.outputs_dir / self.country_code / "manifest.json"
+        return self.outputs_dir / self.country_code / manifest_file_name()
 
     def _load_manifest(self) -> RunManifest:
         if not self.manifest_path.exists():

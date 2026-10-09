@@ -25,7 +25,8 @@ import pandas as pd
 import rasterio
 
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.land_eligibility.eligibility import EXCLUSION_NAMES
 
@@ -54,9 +55,14 @@ def _cell_grid(
     row0, col0 = int(rows.min()), int(cols.min())
     grid = np.full((int(rows.max()) - row0 + 1, int(cols.max()) - col0 + 1), np.nan)
     grid[rows - row0, cols - col0] = values
-    west = CELL_ORIGIN_LON + col0 * CELL_DEG
-    north = CELL_ORIGIN_LAT - row0 * CELL_DEG
-    return grid, (west, west + grid.shape[1] * CELL_DEG, north - grid.shape[0] * CELL_DEG, north)
+    west = CELL_ORIGIN_LON + col0 * active_scale().cell_deg
+    north = CELL_ORIGIN_LAT - row0 * active_scale().cell_deg
+    return grid, (
+        west,
+        west + grid.shape[1] * active_scale().cell_deg,
+        north - grid.shape[0] * active_scale().cell_deg,
+        north,
+    )
 
 
 def _draw(

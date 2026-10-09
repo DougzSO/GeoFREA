@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
 
 PANELS = (
@@ -74,10 +75,10 @@ def plot_member(
     if len(masked_rows):
         mask_img[mrows - r0, mcols - c0] = 0.5
 
-    west = CELL_ORIGIN_LON + c0 * CELL_DEG
-    east = CELL_ORIGIN_LON + (c1 + 1) * CELL_DEG
-    north = CELL_ORIGIN_LAT - r0 * CELL_DEG
-    south = CELL_ORIGIN_LAT - (r1 + 1) * CELL_DEG
+    west = CELL_ORIGIN_LON + c0 * active_scale().cell_deg
+    east = CELL_ORIGIN_LON + (c1 + 1) * active_scale().cell_deg
+    north = CELL_ORIGIN_LAT - r0 * active_scale().cell_deg
+    south = CELL_ORIGIN_LAT - (r1 + 1) * active_scale().cell_deg
     extent = (west, east, south, north)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.2), constrained_layout=True)

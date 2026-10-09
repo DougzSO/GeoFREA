@@ -108,6 +108,32 @@ def zzz(tmp_path_factory):
         patch.undo()
 
 
+@pytest.fixture(scope="module")
+def zzz_fine(zzz):
+    """The same phases at the 0.1 degree scale (V-07) in the same data directory: only the `scale` argument differs."""
+    import main
+
+    settings = load_settings(main.SETTINGS_YAML)
+    ok, _orchestrator, results = main.run_geofrea(
+        "ZZZ",
+        PHASES,
+        [],
+        settings.geospatial.resolutions,
+        settings.geospatial.distance_cap_km,
+        load_audit_config(main.AUDIT_YAML),
+        "zzz-end-to-end-0p1deg",
+        False,
+        None,
+        tuple(settings.run.technologies),
+        False,
+        settings.figures,
+        settings.memory.max_batch_gb,
+        "0p1deg",
+    )
+    assert ok, {k: v.status for k, v in results.items()}
+    return zzz[0], results
+
+
 def _phase(zzz, phase, kind="artifacts"):
     """`outputs/ZZZ/<phase>/<kind>` of the scratch data directory (the autouse conftest fixture re-points the env var per test)."""
     return zzz[0] / "outputs" / "ZZZ" / phase / kind
@@ -503,6 +529,84 @@ def test_sample_size_convergence_runs_on_zzz_with_small_sizes_to_prove_the_mecha
     )
     assert summary["technologies"][tech]["adopted_size"] == meta["adopted_size"]
     assert summary["technologies"][tech]["mr_function"] == "provisional"
+
+
+# -- the scale check: F3 to F6 at 0.1 degree with the same code (V-07, D-F3-013, D-F4-020) --------------
+
+
+def _fine(zzz_fine, phase, kind="artifacts"):
+    return zzz_fine[0] / "outputs" / "ZZZ" / f"{phase}__0p1deg" / kind
+
+
+@pytest.mark.synthetic
+def test_the_scale_check_runs_every_phase_and_leaves_the_default_scale_untouched(zzz, zzz_fine):
+    data, results = zzz_fine
+    assert {r.status for r in results.values()} == {"success"}
+    assert (data / "outputs" / "ZZZ" / "manifest__0p1deg.json").is_file()
+    assert (data / "outputs" / "ZZZ" / "manifest.json").is_file()
+    for phase in ("land_eligibility", "climate_forcing", "technical_potential", "lcoe_modeling"):
+        assert (data / "outputs" / "ZZZ" / f"{phase}__0p1deg").is_dir()
+    assert (
+        len(_eligibility(zzz, "wind", "central")) == N_CELLS
+    )  # the 0.05 degree tables are the ones of the first run
+    assert not list(
+        _fine(zzz_fine, "land_eligibility").glob("cells_0p1deg_*")
+    )  # the 2 x 2 area check is a 0.05 degree output
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+@pytest.mark.parametrize("scenario", SCENARIOS)
+def test_the_coarse_cells_hold_the_same_land_and_eligible_area_as_the_fine_cells(
+    zzz, zzz_fine, tech, scenario
+):
+    from geofrea.land_eligibility.cells import coarse_cell_id
+
+    fine = _eligibility(zzz, tech, scenario)
+    coarse = pd.read_parquet(
+        _fine(zzz_fine, "land_eligibility") / f"cells_{tech}__{scenario}.parquet"
+    )
+    assert set(coarse["cell_id"]) == set(coarse_cell_id(fine["cell_id"].to_numpy()))
+    assert len(coarse) < len(fine)
+    for column in ("cell_area_km2", "eligible_area_km2"):
+        assert coarse[column].sum() == pytest.approx(fine[column].sum(), rel=1e-9)
+    assert (
+        coarse["cell_id"] // 3600 == coarse["row"]
+    ).all()  # the 0.1 degree lattice is 3600 columns wide
+    assert coarse["admin1_id"].notna().all()
+
+
+@pytest.mark.synthetic
+def test_the_forcing_is_interpolated_at_the_coarse_centers_for_every_member(zzz, zzz_fine):
+    forcing = pd.read_parquet(_fine(zzz_fine, "climate_forcing") / "forcing.parquet")
+    masked = pd.read_parquet(_fine(zzz_fine, "climate_forcing") / "forcing_masked.parquet")
+    cells = _eligibility_fine(zzz_fine, "wind", "central")
+    assert set(forcing["cell_id"]) == set(cells["cell_id"])
+    assert len(forcing) + len(masked) == len(cells) * N_MEMBERS
+    assert set(masked["member"].astype(str)) <= {MASKED_MEMBER}
+
+
+def _eligibility_fine(zzz_fine, tech, scenario):
+    return pd.read_parquet(
+        _fine(zzz_fine, "land_eligibility") / f"cells_{tech}__{scenario}.parquet"
+    )
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f5_and_f6_run_on_the_coarse_cells_with_the_same_files(zzz, zzz_fine, tech):
+    candidates = pd.read_parquet(
+        _fine(zzz_fine, "land_eligibility") / f"candidates_{tech}__central.parquet"
+    )
+    potential = pd.read_parquet(
+        _fine(zzz_fine, "technical_potential") / f"potential_{tech}__central.parquet"
+    )
+    summary = pd.read_parquet(_fine(zzz_fine, "lcoe_modeling") / f"lcoe_summary_{tech}.parquet")
+    assert set(potential["cell_id"]) <= set(candidates["cell_id"])
+    assert len(summary) == len(potential) > 0
+    assert set(zip(summary["cell_id"], summary["member"].astype(str), strict=True)) == set(
+        zip(potential["cell_id"], potential["member"].astype(str), strict=True)
+    )
 
 
 @pytest.mark.synthetic

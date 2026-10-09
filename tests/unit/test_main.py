@@ -765,3 +765,26 @@ def test_run_geofrea_still_succeeds_for_bra_and_prt(monkeypatch, tmp_path):
         )
 
         assert ok is True
+
+
+@pytest.mark.unit
+def test_the_scale_is_a_command_line_option_with_the_default_scale_as_default():
+    """M-F3-06, V-07: `--scale 0p1deg` is the only difference between a run and its scale check."""
+    assert main._parse_args([]).scale == "0p05deg"
+    assert main._parse_args(["ZZZ", "--scale", "0p1deg"]).scale == "0p1deg"
+    with pytest.raises(SystemExit):
+        main._parse_args(["--scale", "0p2deg"])
+
+
+@pytest.mark.unit
+def test_the_run_id_depends_on_the_scale():
+    """A-12: a 0.1 degree run is a different run, so it has its own identifier, log and manifest."""
+    from geofrea.core.config_loader import load_parameters, load_settings
+
+    settings, parameters = load_settings(main.SETTINGS_YAML), load_parameters(main.PARAMETERS_JSON)
+    assert main._resolved_config_json(settings, parameters) == main._resolved_config_json(
+        settings, parameters, "0p05deg"
+    )
+    assert main._resolved_config_json(settings, parameters, "0p1deg") != main._resolved_config_json(
+        settings, parameters
+    )

@@ -28,8 +28,9 @@ from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
 from geofrea.core.raster_io import safe_raster_write
+from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
 
 CENTRAL = "central"
@@ -60,12 +61,12 @@ def _grid(cell_ids: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, int, in
 
 def _write_cog(path: Path, grid: np.ndarray, row0: int, col0: int) -> Path:
     transform = rasterio.Affine(
-        CELL_DEG,
+        active_scale().cell_deg,
         0,
-        CELL_ORIGIN_LON + col0 * CELL_DEG,
+        CELL_ORIGIN_LON + col0 * active_scale().cell_deg,
         0,
-        -CELL_DEG,
-        CELL_ORIGIN_LAT - row0 * CELL_DEG,
+        -active_scale().cell_deg,
+        CELL_ORIGIN_LAT - row0 * active_scale().cell_deg,
     )
     data = np.where(np.isnan(grid), NODATA_FLOAT, grid).astype("float32")
     with safe_raster_write(
@@ -86,12 +87,12 @@ def _write_cog(path: Path, grid: np.ndarray, row0: int, col0: int) -> Path:
 def _plot(
     grid: np.ndarray, row0: int, col0: int, title: str, label: str, cmap: str, path: Path
 ) -> Path:
-    west = CELL_ORIGIN_LON + col0 * CELL_DEG
-    north = CELL_ORIGIN_LAT - row0 * CELL_DEG
+    west = CELL_ORIGIN_LON + col0 * active_scale().cell_deg
+    north = CELL_ORIGIN_LAT - row0 * active_scale().cell_deg
     extent = (
         west,
-        west + grid.shape[1] * CELL_DEG,
-        north - grid.shape[0] * CELL_DEG,
+        west + grid.shape[1] * active_scale().cell_deg,
+        north - grid.shape[0] * active_scale().cell_deg,
         north,
     )
     fig, ax = plt.subplots(figsize=(7, 6))

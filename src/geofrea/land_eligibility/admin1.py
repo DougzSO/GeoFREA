@@ -16,7 +16,8 @@ import pandas as pd
 import shapely
 from shapely import STRtree
 
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
+from geofrea.core.scale import active_scale
 
 UNIT_ID_COLUMN = "GID_1"
 UNIT_NAME_COLUMN = "NAME_1"
@@ -47,10 +48,11 @@ def read_units(units: gpd.GeoDataFrame) -> pd.DataFrame:
 
 
 def cell_boxes(row: np.ndarray, col: np.ndarray) -> np.ndarray:
-    """Shapely boxes (degrees, EPSG:4326) of the cells at lattice `(row, col)`."""
-    west = CELL_ORIGIN_LON + np.asarray(col, dtype="float64") * CELL_DEG
-    north = CELL_ORIGIN_LAT - np.asarray(row, dtype="float64") * CELL_DEG
-    return shapely.box(west, north - CELL_DEG, west + CELL_DEG, north)
+    """Shapely boxes (degrees, EPSG:4326) of the cells at lattice `(row, col)` of the active scale."""
+    cell_deg = active_scale().cell_deg
+    west = CELL_ORIGIN_LON + np.asarray(col, dtype="float64") * cell_deg
+    north = CELL_ORIGIN_LAT - np.asarray(row, dtype="float64") * cell_deg
+    return shapely.box(west, north - cell_deg, west + cell_deg, north)
 
 
 def assign_admin1(row: np.ndarray, col: np.ndarray, units: pd.DataFrame) -> np.ndarray:

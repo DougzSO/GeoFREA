@@ -6,7 +6,7 @@ Reads the aligned F2a rasters, the F2b physical layers and the vector sources (p
   - `cells_<tech>.parquet`: every 0.05 degree cell with at least one in-country pixel (areas, excluded area per constraint,
     dominant exclusion, resource and distance means weighted by eligible area, `candidate` flag);
   - `candidates_<tech>.parquet`: the cells with `eligible_area_km2 >= min_eligible_area_km2` (M-F3-04/05);
-  - `cells_0p1deg_<tech>.parquet`: the same cells grouped 2 x 2 for the scale check (V-07);
+  - `cells_0p1deg_<tech>.parquet` (default scale only): the same cells grouped 2 x 2, the area check of a 0.1 degree run (V-07);
   - `admin1_units.parquet`: the GADM level-1 units that hold cells, with their cell counts (each cell table carries `admin1_id`, D-F3-012);
   - `eligible_fraction_<tech>.tif` (pixels), `eligible_area_km2_<tech>.tif` and `dominant_exclusion_<tech>.tif` (cells).
 
@@ -27,7 +27,7 @@ import rasterio
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_DEG, CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
+from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
 from geofrea.core.geo_utils import (
     clip_cache_is_current,
     clip_cache_key,
@@ -35,6 +35,7 @@ from geofrea.core.geo_utils import (
     write_clip_cache_key,
 )
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
+from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.admin1 import assign_admin1, read_units
@@ -122,7 +123,9 @@ class TechSummary(BaseModel):
     invalid_pixel_share: float
     candidates: Path
     cells: Path
-    cells_0p1deg: Path
+    cells_0p1deg: (
+        Path | None
+    )  # only at the default scale: the exact 2 x 2 sum of the 0.05 degree cells
     rasters: dict[str, Path]
     admin1_units: Path
 
@@ -264,13 +267,14 @@ def _required_resources(tech: str, siting: dict[str, Path]) -> dict[str, Path]:
 
 def _cell_raster(path: Path, values: np.ndarray, row0: int, col0: int, dtype: str, nodata) -> Path:
     n_r, n_c = values.shape
+    cell_deg = active_scale().cell_deg
     transform = rasterio.Affine(
-        CELL_DEG,
+        cell_deg,
         0,
-        CELL_ORIGIN_LON + col0 * CELL_DEG,
+        CELL_ORIGIN_LON + col0 * cell_deg,
         0,
-        -CELL_DEG,
-        CELL_ORIGIN_LAT - row0 * CELL_DEG,
+        -cell_deg,
+        CELL_ORIGIN_LAT - row0 * cell_deg,
     )
     with safe_raster_write(
         path,
@@ -510,13 +514,15 @@ def build_eligibility(
             central["cells"],
             central["candidates"],
         )
-        coarse_path = Path(str(out / f"cells_0p1deg_{tech}") + ".parquet")
-        write_table(
-            _coarse(cells),
-            coarse_path,
-            schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
-            row_model=CoarseCellRow,
-        )
+        coarse_path: Path | None = None
+        if active_scale().is_default:
+            coarse_path = Path(str(out / f"cells_0p1deg_{tech}") + ".parquet")
+            write_table(
+                _coarse(cells),
+                coarse_path,
+                schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
+                row_model=CoarseCellRow,
+            )
         rasters = _write_rasters(out, tech, eligible, cells, transform, grid_ref)
 
         valid = valid_pixels(layers)
