@@ -42,6 +42,22 @@ def _lerp(lower: np.ndarray, upper: np.ndarray, t: float) -> np.ndarray:
     return np.where(np.isinf(upper), upper, value)
 
 
+def quantiles_of_rows(draws: np.ndarray, qs: tuple[float, ...]) -> list[np.ndarray]:
+    """The quantiles `qs` of every row of `draws`, shape `(C, N)`, by linear interpolation of the order statistics (type 7).
+
+    The entries of each row are reordered in place (a partition). `+inf` entries give an infinite quantile, never NaN.
+    """
+    n = draws.shape[1]
+    positions = [(n - 1) * q for q in qs]
+    kth = sorted({int(np.floor(h)) for h in positions} | {int(np.ceil(h)) for h in positions})
+    draws.partition(kth, axis=1)
+    out = []
+    for h in positions:
+        lo, hi = int(np.floor(h)), int(np.ceil(h))
+        out.append(_lerp(draws[:, lo], draws[:, hi], h - lo))
+    return out
+
+
 def summarize_draws(draws: np.ndarray) -> BlockSummary:
     """Mean, variance, p10, p50, p90 and the count of non-finite draws of every row of `draws`, shape `(C, N)` with `N >= 2`.
 
@@ -81,17 +97,7 @@ def summarize_draws(draws: np.ndarray) -> BlockSummary:
     with np.errstate(invalid="ignore", divide="ignore"):
         var = np.where(finite_count >= 2, squares / (finite_count - 1), np.nan)
 
-    positions = {q: (n - 1) * q for q in QUANTILES}
-    kth = sorted(
-        {int(np.floor(h)) for h in positions.values()}
-        | {int(np.ceil(h)) for h in positions.values()}
-    )
-    draws.partition(kth, axis=1)
-    out = []
-    for q in QUANTILES:
-        h = positions[q]
-        lo, hi = int(np.floor(h)), int(np.ceil(h))
-        out.append(_lerp(draws[:, lo], draws[:, hi], h - lo))
+    out = quantiles_of_rows(draws, QUANTILES)
     return BlockSummary(
         mean=mean,
         var=var,

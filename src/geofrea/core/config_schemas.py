@@ -87,6 +87,10 @@ class SamplerConfig(BaseModel):
     method: Literal["latin_hypercube"]
     seed: int
     initial_size: int = Field(gt=0)
+    # ceiling of the doubling of the sample size (U-04, D-F6-004); null until the author sets it
+    max_size_for_convergence: int | None
+    # the Jaccard distance between the top-k sets of consecutive sizes below which the size is adopted (U-04)
+    convergence_tolerance: float = Field(gt=0)
 
 
 class ExperimentsFile(BaseModel):

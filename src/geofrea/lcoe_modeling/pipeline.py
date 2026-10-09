@@ -357,10 +357,14 @@ def read_member_inputs(
     forcing_path: Path,
     members: Sequence[str],
     x_range: tuple[float, float],
+    known_members: Sequence[str] | None = None,
 ) -> Iterator[MemberCells]:
     """Per member of `members`, in order, the cells with an F5 row and the kernel inputs of each.
 
     Implements: M-F6-01.
+
+    `known_members` (default `members`) is the full list of `members.yaml`: the F5 table may only hold members of it, whether or not
+    this call asks for all of them.
 
     Raises:
         LcoeInputError: the F5 table is stale or has members the member list lacks, a cell is missing from the candidates or the
@@ -381,7 +385,7 @@ def read_member_inputs(
     forcing = pd.read_parquet(forcing_path, columns=["cell_id", "member", "dT"])
     p_codes, p_names = _member_codes(potential)
     f_codes, f_names = _member_codes(forcing)
-    unknown = sorted(set(p_names) - set(members))
+    unknown = sorted(set(p_names) - set(known_members if known_members is not None else members))
     if unknown:
         raise LcoeInputError(
             f"{potential_path.name} has members not listed in members.yaml: {unknown}"

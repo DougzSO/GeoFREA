@@ -122,6 +122,7 @@ from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.lcoe_modeling.convergence import ConvergenceSummary, build_convergence
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
@@ -530,6 +531,31 @@ def _build_phase_specs(
         _register_json_artifact(context, "lcoe_modeling", result)
         return result
 
+    def sample_size_convergence_run(context: PhaseContext) -> ConvergenceSummary:
+        """F6 support (U-04, D-F6-004): double the Latin hypercube size until the top-k sets agree; needs ranges and the author's values."""
+        if max_batch_gb is None:
+            raise RuntimeError(
+                "sample_size_convergence needs settings.yaml memory.max_batch_gb (A-10)"
+            )
+        experiments = load_experiments(EXPERIMENTS_YAML)
+        core = experiments.windows["core"]
+        result = build_convergence(
+            context.country_code,
+            load_technologies(TECHNOLOGIES_YAML),
+            context.require_country_params("technologies"),
+            technologies,
+            sampler=experiments.sampler,
+            thresholds=experiments.thresholds,
+            core_window=f"{core['start_year']}-{core['end_year']}",
+            max_batch_gb=max_batch_gb,
+        )
+        for tech, entry in result.technologies.items():
+            context.register_artifact(
+                f"sample_size_convergence_{tech}", entry.table, LCOE_TABLE_SCHEMA_VERSION
+            )
+        _register_json_artifact(context, "sample_size_convergence", result)
+        return result
+
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
         result = build_potential_maps(context.country_code, technologies, figures)
@@ -665,6 +691,25 @@ def _build_phase_specs(
             summarize=lambda out: "; ".join(
                 f"{t}: {e.n_rows} cell-members, {e.n_samples} samples, "
                 f"nominal LCOE at m0 median {e.lcoe_nominal_m0_median} USD/MWh"
+                for t, e in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
+            name="sample_size_convergence",
+            output_model=ConvergenceSummary,
+            run=sample_size_convergence_run,
+            requires=frozenset({"land_eligibility", "forcing", "members"})
+            | {f"potential_{tech}__central" for tech in technologies},
+            produces=frozenset({"sample_size_convergence"})
+            | {f"sample_size_convergence_{tech}" for tech in technologies},
+            summarize=lambda out: "; ".join(
+                f"{t}: "
+                + (
+                    f"adopted {e.adopted_size} samples"
+                    if e.converged
+                    else f"NOT converged by {e.sizes[-1]} samples"
+                )
+                + f" (provisional MR, {e.n_cells} cells)"
                 for t, e in out.technologies.items()
             ),
         ),

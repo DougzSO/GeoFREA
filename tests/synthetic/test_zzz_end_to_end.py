@@ -2,7 +2,8 @@
 
 The ZZZ fixture and its miniature climate inputs are generated into a scratch data directory; the orchestrator then runs data_acquisition,
 data_quality_audit, grid_alignment, siting_layers, land_eligibility (F3), external_inputs, climate_forcing (F4), technical_potential and
-potential_maps (F5) and lcoe_modeling (F6) on them. Every socket connection is refused while the pipeline runs, so a hidden download fails the test.
+potential_maps (F5), lcoe_modeling and sample_size_convergence (F6) on them. The experiments file is copied with small sizes for
+the sample-size protocol (initial size 16, ceiling 64, top-k 25 percent): the real values are the author's and are null there. Every socket connection is refused while the pipeline runs, so a hidden download fails the test.
 
 F5 needs a power curve and an IEC class rule, which the real registry leaves null until OQ-005 closes (D-F5-003): this test copies the
 registry with the synthetic rule (one class, no bound) and points the phase at the synthetic curve of `tests/fixtures/power_curves/`.
@@ -13,6 +14,7 @@ river's setback trim them; wind has candidates in the cropland and grassland ban
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import subprocess
@@ -21,6 +23,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 import rasterio
 import yaml
@@ -30,7 +33,8 @@ from geofrea.land_eligibility.cells import pixel_row_area_km2
 
 REPO = Path(__file__).resolve().parents[2]
 CURVES = REPO / "tests" / "fixtures" / "power_curves"
-PHASES = ["technical_potential", "potential_maps", "lcoe_modeling"]
+PHASES = ["technical_potential", "potential_maps", "lcoe_modeling", "sample_size_convergence"]
+INITIAL_SIZE, CEILING, TOP_K_PERCENT = 16, 64, 25
 SCENARIOS = ("central", "restrictive", "permissive")
 MASKED_MEMBER = "m_miroc6_ssp370_2071_2100"
 N_CELLS = 24  # 6 x 4 decision cells
@@ -57,10 +61,21 @@ def zzz(tmp_path_factory):
     ]
     technologies = data / "technologies_with_synthetic_rule.yaml"
     technologies.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
+    experiments_text = (REPO / "config" / "experiments.yaml").read_text(encoding="utf-8")
+    for old, new in (
+        ("initial_size: 500", f"initial_size: {INITIAL_SIZE}"),
+        ("max_size_for_convergence: null", f"max_size_for_convergence: {CEILING}"),
+        ("top_k_percent: null", f"top_k_percent: {TOP_K_PERCENT}"),
+    ):
+        assert experiments_text.count(old) == 1, old
+        experiments_text = experiments_text.replace(old, new)
+    experiments = data / "experiments_zzz.yaml"
+    experiments.write_text(experiments_text, encoding="utf-8")
 
     patch = pytest.MonkeyPatch()
     patch.setenv("GEOFREA_DATA_DIR", str(data))
     patch.setattr(main, "TECHNOLOGIES_YAML", technologies)
+    patch.setattr(main, "EXPERIMENTS_YAML", experiments)
     patch.setattr(main, "POWER_CURVES_DIR", CURVES)
     try:
         subprocess.run(
@@ -118,6 +133,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "technical_potential",
             "potential_maps",
             "lcoe_modeling",
+            "sample_size_convergence",
         )
     }
 
@@ -353,11 +369,8 @@ def test_f6_produces_the_summary_design_matrix_and_supply_curve_from_the_f5_tabl
     summary = pd.read_parquet(art / f"lcoe_summary_{tech}.parquet")
     design = pd.read_parquet(art / f"design_matrix_{tech}.parquet")
     supply = pd.read_parquet(art / f"supply_curve_{tech}.parquet")
-    sampler = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))[
-        "sampler"
-    ]
     assert len(summary) == len(potential) == len(supply)  # one row per cell-member, in every table
-    assert len(design) == sampler["initial_size"] + 1 and design["sample"].iloc[0] == 0
+    assert len(design) == INITIAL_SIZE + 1 and design["sample"].iloc[0] == 0
     assert (
         np.isfinite(
             summary[["lcoe_nominal", "lcoe_mean", "lcoe_var", "lcoe_p10", "lcoe_p50", "lcoe_p90"]]
@@ -426,6 +439,31 @@ def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech
     assert row["lcoe_var"] == pytest.approx(draws.var(ddof=1), rel=1e-8)
     for column, q in (("lcoe_p10", 0.1), ("lcoe_p50", 0.5), ("lcoe_p90", 0.9)):
         assert row[column] == pytest.approx(np.quantile(draws, q), rel=1e-10)
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_sample_size_convergence_runs_on_zzz_with_small_sizes_to_prove_the_mechanism(zzz, tech):
+    """D-F6-004: the protocol doubles from the initial size within the ceiling; its MR is the provisional stand-in for F7's."""
+    table = pq.read_table(
+        _phase(zzz, "sample_size_convergence") / f"sample_size_convergence_{tech}.parquet"
+    )
+    meta = json.loads(table.schema.metadata[b"geofrea_convergence_provenance"])
+    rows = table.to_pandas()
+    assert meta["provisional"] is True and meta["mr_function"] == "provisional"
+    sizes = rows["n_samples"].tolist()
+    assert sizes[0] == INITIAL_SIZE and sizes == [INITIAL_SIZE * 2**i for i in range(len(sizes))]
+    assert max(sizes) <= CEILING and rows["k"].nunique() == 1
+    assert np.isnan(rows["jaccard_with_previous"].iloc[0])
+    converged = rows["meets_tolerance"].tolist()
+    assert meta["adopted_size"] == (sizes[converged.index(True)] if any(converged) else None)
+    summary = json.loads(
+        (zzz[0] / "outputs" / "ZZZ" / "artifacts" / "sample_size_convergence.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert summary["technologies"][tech]["adopted_size"] == meta["adopted_size"]
+    assert summary["technologies"][tech]["mr_function"] == "provisional"
 
 
 @pytest.mark.synthetic

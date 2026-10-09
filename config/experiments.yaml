@@ -109,7 +109,11 @@ sampler:
   # Once converged, record the adopted size here (along with the convergence analysis
   # in the F6 phase record)
   initial_size: 500
-  # max_size_for_convergence: null  # Pending U-04 protocol completion
+  # Ceiling of the doubling (D-F6-004): the phase sample_size_convergence stops at the last size not above it and reports no convergence
+  # if the criterion was not met. The value is the author's; null makes the phase refuse to run.
+  max_size_for_convergence: null
+  # U-04: the sample size is adopted when 1 - Jaccard of the top-k sets of two consecutive sizes is below this value
+  convergence_tolerance: 0.01
 
 # Land-availability parameters as ranges (E1-E6, minimum area; Douglas, 2026-10-07)
 # Each continuous parameter has a central value (`nominal`, feeds F4-F7) and, where a source gives one, a `low`-`high` range;
@@ -246,7 +250,7 @@ thresholds:
   #   - fixed p_k (0 < p_k <= 1): top p_k share of candidate cells by count
   #   - capacity_target_gw: minimum national capacity to identify top-k
   # OQ-021: top-k percentage p_k; OQ-010: national capacity target of the top-k sensitivity
-  top_k_percent: null  # Pending OQ-021
+  top_k_percent: null  # Pending OQ-021; a percent of the candidate cells, 0 < p_k <= 100 (read by sample_size_convergence, D-F6-004)
   top_k_capacity_gw: null  # Pending OQ-010
 
   # Feasibility threshold (M-F7-01)

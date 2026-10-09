@@ -96,6 +96,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "climate_forcing",
         "technical_potential",
         "lcoe_modeling",
+        "sample_size_convergence",
         "potential_maps",
         "hazard_context",
         "climate_maps",
@@ -136,6 +137,23 @@ def test_lcoe_modeling_reads_the_central_potential_forcing_and_members_and_produ
     assert f6.requires <= specs["technical_potential"].produces | specs[
         "climate_forcing"
     ].produces | {"land_eligibility"}
+
+
+@pytest.mark.unit
+def test_sample_size_convergence_is_a_support_phase_with_its_own_artifacts_and_no_dependence_on_the_f6_tables():
+    """D-F6-004: it reads the F5, F4 and F3 inputs and calls the kernel itself; it requires and produces nothing of `lcoe_modeling`."""
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), ("solar", "wind")
+        )
+    }
+    phase = specs["sample_size_convergence"]
+    assert phase.requires == specs["lcoe_modeling"].requires
+    assert phase.produces == frozenset(
+        {"sample_size_convergence", "sample_size_convergence_solar", "sample_size_convergence_wind"}
+    )
+    assert not (phase.requires & specs["lcoe_modeling"].produces)
 
 
 @pytest.mark.unit
