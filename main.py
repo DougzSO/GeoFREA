@@ -114,6 +114,14 @@ from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_
 from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
+from geofrea.external_validation.pipeline import (
+    TABLES as VALIDATION_TABLES,
+)
+from geofrea.external_validation.pipeline import (
+    ValidationSummary,
+    build_external_validation,
+)
+from geofrea.external_validation.table_schemas import VALIDATION_TABLE_SCHEMA_VERSION
 from geofrea.grid_alignment.adapter import (
     GridAlignmentRequiresBordersError,
     acquisition_result_to_grid_alignment_inputs,
@@ -587,6 +595,33 @@ def _build_phase_specs(
         _register_json_artifact(context, "robustness_analysis", result)
         return result
 
+    def external_validation_run(context: PhaseContext) -> ValidationSummary:
+        """F7b: existing plants against the exclusion set, the LCOE deciles and the published estimates (validation only, V-06)."""
+        acquisition = context.prior_results["data_acquisition"].output
+        layers = {layer.layer_name: layer for layer in acquisition.layers}
+        borders = resolved_path(layers.get("borders"))
+        if borders is None:
+            raise GridAlignmentRequiresBordersError(
+                f"external_validation requires a resolved 'borders' layer for {context.country_code!r}"
+            )
+        result = build_external_validation(
+            context.country_code,
+            load_technologies(TECHNOLOGIES_YAML),
+            technologies,
+            EXPERIMENTS_YAML,
+            context.prior_results["grid_alignment"].output,
+            context.prior_results["siting_layers"].output,
+            load_mainland_boundary(borders),
+            resolved_path(layers.get("protected")),
+            resolved_path(layers.get("lakes")),
+            resolved_path(layers.get("rivers")),
+            production=production,
+        )
+        for kind, path in result.tables.items():
+            context.register_artifact(kind, path, VALIDATION_TABLE_SCHEMA_VERSION)
+        _register_json_artifact(context, "external_validation", result)
+        return result
+
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
         result = build_potential_maps(context.country_code, technologies, figures)
@@ -784,6 +819,33 @@ def _build_phase_specs(
                 )
                 + (f" ({len(e.skipped)} outputs skipped)" if e.skipped else "")
                 for t, e in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
+            name="external_validation",
+            output_model=ValidationSummary,
+            run=external_validation_run,
+            requires=frozenset(
+                {
+                    "land_eligibility",
+                    "siting_layers",
+                    "layer_registry",
+                    "aligned/land_cover_counts",
+                    "aligned/slope_counts",
+                    "aligned/population",
+                    "aligned/grid",
+                }
+            )
+            | {
+                f"potential_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            }
+            | {f"lcoe_summary_{tech}" for tech in technologies},
+            produces=frozenset({"external_validation", *VALIDATION_TABLES}),
+            summarize=lambda out: "; ".join(
+                f"{t}: {v.n_units} units, {v.capacity_mw:,.0f} MW, {v.n_outside_grid} outside the grid"
+                for t, v in out.technologies.items()
             ),
         ),
         PhaseSpec(

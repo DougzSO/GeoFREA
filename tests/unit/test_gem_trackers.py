@@ -15,8 +15,9 @@ from geofrea.data_acquisition.fetchers import gem_trackers as gem
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "geofrea"
 ALLOWED_IMPORTERS = {
-    "data_acquisition/fetchers/gem_trackers.py"
-}  # F7b will be added here when it exists
+    "data_acquisition/fetchers/gem_trackers.py",  # the acquisition of the file
+    "external_validation/inventory.py",  # F7b, the only phase that reads the inventory (D-F7b-005)
+}
 
 
 def test_snapshot_date_needs_a_date_in_the_name():

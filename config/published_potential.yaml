@@ -1,0 +1,5 @@
+# Published national estimates of technical potential, for the comparison table of F7b (M-F7b-03, D-F7b-004, OQ-057).
+# Read only by the external_validation phase. Empty until the author records the estimates; no value is assumed.
+# Each entry: country (ISO3), technology (registry id), value, unit (GW or TWh_per_year), source, year,
+# definition (technical | economic | resource | other), tier (evidence tier of the source), note (optional).
+entries: []

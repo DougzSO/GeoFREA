@@ -100,6 +100,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "lcoe_modeling",
         "sample_size_convergence",
         "robustness_analysis",
+        "external_validation",
         "potential_maps",
         "hazard_context",
         "climate_maps",
@@ -839,3 +840,36 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
             for kind in ROW_MODELS
         }
     )
+
+
+@pytest.mark.unit
+def test_external_validation_is_a_sink_whose_tables_no_other_phase_requires():
+    """D-F7b-005 (V-06): the plant inventory reaches no other phase; only a later synthesis phase may read the F7b tables."""
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), ("solar", "wind")
+        )
+    }
+    f7b = specs["external_validation"]
+    assert {"land_eligibility", "lcoe_summary_solar", "lcoe_summary_wind"} <= f7b.requires
+    assert f7b.requires <= (
+        specs["land_eligibility"].produces
+        | specs["lcoe_modeling"].produces
+        | specs["technical_potential"].produces
+        | specs["grid_alignment"].produces
+        | specs["siting_layers"].produces
+        | specs["data_acquisition"].produces
+    )
+    assert f7b.produces == frozenset(
+        {
+            "external_validation",
+            "exclusion_shares",
+            "enrichment",
+            "published_comparison",
+            "validation_units",
+        }
+    )
+    for name, spec in specs.items():
+        if name != "external_validation":
+            assert not (spec.requires & f7b.produces), name

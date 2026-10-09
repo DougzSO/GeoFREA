@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 import geopandas as gpd
@@ -308,32 +309,45 @@ def _pixel_raster(path: Path, values: np.ndarray, like: Path) -> Path:
     return path
 
 
-def build_eligibility(
-    iso: str,
-    experiments_yaml: Path,
+@dataclass
+class SharedLayers:
+    """The aligned layers and sub-pixel shares that every technology of a country reads (M-F3-01)."""
+
+    transform: rasterio.Affine
+    shape: tuple[int, int]
+    country_mask: np.ndarray
+    pixel_area: np.ndarray
+    slope_counts: np.ndarray
+    slope_valid: np.ndarray
+    population: np.ndarray
+    land_cover_counts: np.ndarray
+    land_cover_classes: tuple[int, ...]
+    land_cover_valid: np.ndarray
+    samples_per_pixel: int
+    lakes_fraction: np.ndarray
+    protected_fraction: dict[tuple[str, ...], np.ndarray]
+    riparian_fraction: dict[tuple[float, float], np.ndarray]
+    flags: dict[str, np.ndarray]
+
+
+def prepare_shared_layers(
+    la: LandAvailability,
+    techs: list[str],
     grid_result: GridAlignmentResult,
-    siting_result: SitingLayersResult,
     country_gdf: gpd.GeoDataFrame,
     protected_path: Path | None,
     lakes_path: Path | None,
     rivers_path: Path | None,
-    admin1_path: Path | None,
-    technologies: list[str] | None = None,
-) -> EligibilitySummary:
-    """Eligibility, cells and candidate tables for every configured technology (nominal parameter set)."""
-    la: LandAvailability = load_land_availability(experiments_yaml)
-    techs = technologies or sorted(la.technologies)
-    out = artifacts_dir(iso)
-    interim = core_paths.interim(iso, "land_eligibility")
-    interim.mkdir(parents=True, exist_ok=True)
-    if admin1_path is None or not Path(admin1_path).exists():
-        raise MissingRequiredLayerError(
-            f"required layer 'admin1' is absent ({admin1_path}); every cell takes its admin1 unit from it (M-F3-03)"
-        )
-    units = read_units(gpd.read_file(str(admin1_path)))
-    admin1_by_cell: dict[int, str] = {}
-    units_path = Path(str(out / "admin1_units") + ".parquet")
+    interim: Path,
+) -> SharedLayers:
+    """Read the aligned layers and build (or load from the cache) the sub-pixel shares for the levels and setbacks of `techs`.
 
+    Used by F3 and, to evaluate the same engine at the pixels of existing plants, by F7b (M-F3-05, M-F7b-01).
+
+    Raises:
+        LandEligibilityError: an aligned layer is missing.
+        MissingRequiredLayerError: a protected-area, lake or river layer is absent.
+    """
     slope_counts, slope_valid = _read_slope_counts(grid_result.slope_counts)
     population = _read(grid_result.population, "population")
     land_cover_counts, land_cover_classes, land_cover_valid, samples_per_pixel = _read_class_counts(
@@ -407,28 +421,87 @@ def build_eligibility(
         == 1,
     }
 
+    return SharedLayers(
+        transform=transform,
+        shape=shape,
+        country_mask=country_mask,
+        pixel_area=pixel_area,
+        slope_counts=slope_counts,
+        slope_valid=slope_valid,
+        population=population,
+        land_cover_counts=land_cover_counts,
+        land_cover_classes=land_cover_classes,
+        land_cover_valid=land_cover_valid,
+        samples_per_pixel=samples_per_pixel,
+        lakes_fraction=lakes_fraction,
+        protected_fraction=protected_fraction,
+        riparian_fraction=riparian_fraction,
+        flags=flags,
+    )
+
+
+def technology_layers(
+    shared: SharedLayers, tech: str, siting_result: SitingLayersResult
+) -> tuple[EligibilityLayers, dict[str, np.ndarray]]:
+    """The eligibility layers of one technology (its resource layers must be valid) and the resource arrays."""
+    resource_paths = _required_resources(tech, siting_result.layers)
+    resources = {name: _read(path, name) for name, path in resource_paths.items()}
+    layers = EligibilityLayers(
+        country_mask=shared.country_mask,
+        pixel_area_km2=shared.pixel_area,
+        slope_counts=shared.slope_counts,
+        slope_valid=shared.slope_valid,
+        population_count=shared.population,
+        land_cover_counts=shared.land_cover_counts,
+        land_cover_classes=shared.land_cover_classes,
+        land_cover_valid=shared.land_cover_valid,
+        samples_per_pixel=shared.samples_per_pixel,
+        lakes_fraction=shared.lakes_fraction,
+        protected_fraction=shared.protected_fraction,
+        riparian_fraction=shared.riparian_fraction,
+        required_valid={name: np.isfinite(a) for name, a in resources.items()},
+    )
+    return layers, resources
+
+
+def build_eligibility(
+    iso: str,
+    experiments_yaml: Path,
+    grid_result: GridAlignmentResult,
+    siting_result: SitingLayersResult,
+    country_gdf: gpd.GeoDataFrame,
+    protected_path: Path | None,
+    lakes_path: Path | None,
+    rivers_path: Path | None,
+    admin1_path: Path | None,
+    technologies: list[str] | None = None,
+) -> EligibilitySummary:
+    """Eligibility, cells and candidate tables for every configured technology (nominal parameter set)."""
+    la: LandAvailability = load_land_availability(experiments_yaml)
+    techs = technologies or sorted(la.technologies)
+    out = artifacts_dir(iso)
+    interim = core_paths.interim(iso, "land_eligibility")
+    interim.mkdir(parents=True, exist_ok=True)
+    if admin1_path is None or not Path(admin1_path).exists():
+        raise MissingRequiredLayerError(
+            f"required layer 'admin1' is absent ({admin1_path}); every cell takes its admin1 unit from it (M-F3-03)"
+        )
+    units = read_units(gpd.read_file(str(admin1_path)))
+    admin1_by_cell: dict[int, str] = {}
+    units_path = Path(str(out / "admin1_units") + ".parquet")
+
+    shared = prepare_shared_layers(
+        la, techs, grid_result, country_gdf, protected_path, lakes_path, rivers_path, interim
+    )
+    transform, grid_ref = shared.transform, Path(grid_result.grid)
+    country_mask, pixel_area, flags = shared.country_mask, shared.pixel_area, shared.flags
+
     summaries: dict[str, TechSummary] = {}
     for tech in techs:
         sets = scenario_sets(la.technologies[tech])
         composition = scenario_composition(la.technologies[tech])
         params: ParameterSet = sets["central"]
-        resource_paths = _required_resources(tech, siting_result.layers)
-        resources = {name: _read(path, name) for name, path in resource_paths.items()}
-        layers = EligibilityLayers(
-            country_mask=country_mask,
-            pixel_area_km2=pixel_area,
-            slope_counts=slope_counts,
-            slope_valid=slope_valid,
-            population_count=population,
-            land_cover_counts=land_cover_counts,
-            land_cover_classes=land_cover_classes,
-            land_cover_valid=land_cover_valid,
-            samples_per_pixel=samples_per_pixel,
-            lakes_fraction=lakes_fraction,
-            protected_fraction=protected_fraction,
-            riparian_fraction=riparian_fraction,
-            required_valid={name: np.isfinite(a) for name, a in resources.items()},
-        )
+        layers, resources = technology_layers(shared, tech, siting_result)
         cells_by_scenario: dict[str, pd.DataFrame] = {}
         scenario_summaries: dict[str, ScenarioSummary] = {}
         central: dict = {}

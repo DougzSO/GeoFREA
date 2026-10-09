@@ -300,6 +300,119 @@ def gen_wind() -> None:
             dst.write(arr, 1)
 
 
+# Synthetic plant inventory for F7b (D-F7b-006): one unit per case so that every metric is a hand computation. (row, col) are pixels of the
+# 0.01 degree grid counted from the north-west corner; the expected excluded shares follow from `gen_land_cover`, `gen_protected` and
+# `gen_population` (density = people / pixel area of about 1.2265 km2, so rows 0 to 12 stay below the 200 per km2 limit and rows 13 and
+# above exceed it).
+GEM_UNITS = [
+    # (tech, status, MW, start_year, location accuracy, row, col)
+    ("wind", "operating", 10.0, 2012, "exact", 2, 2),  # inside the protected block: E1 = 1
+    (
+        "wind",
+        "operating",
+        20.0,
+        2018,
+        "exact",
+        7,
+        22,
+    ),  # cropland is allowed for wind, nothing excludes it
+    (
+        "wind",
+        "operating",
+        30.0,
+        2020,
+        "approximate",
+        12,
+        10,
+    ),  # grassland, density just below the limit: nothing excludes it
+    (
+        "wind",
+        "operating",
+        40.0,
+        2008,
+        "exact",
+        16,
+        10,
+    ),  # tree cover (E5 = 1) and density above the limit (E6 = 1)
+    ("wind", "construction", 99.0, 2025, "exact", 2, 2),  # not operating: left out
+    ("wind", "retired", 7.0, 2001, "exact", 7, 22),  # not operating: left out
+    ("solar", "operating", 12.0, 2019, "exact", 12, 5),  # grassland: nothing excludes it
+    (
+        "solar",
+        "operating",
+        8.0,
+        2015,
+        "approximate",
+        7,
+        12,
+    ),  # cropland is excluded for solar (E5 = 1)
+    (
+        "solar",
+        "operating",
+        6.0,
+        2021,
+        "exact",
+        3,
+        3,
+    ),  # protected block and cropland (E1 = 1, E5 = 1)
+    (
+        "solar",
+        "operating",
+        4.0,
+        2022,
+        "exact",
+        14,
+        25,
+    ),  # grassland, density above the limit (E6 = 1)
+    ("solar", "announced", 50.0, 2027, "exact", 12, 5),  # not operating: left out
+]
+GEM_OUTSIDE = ("wind", "operating", 5.0, 2019, "exact", -4.90, 19.50)  # west of the country grid
+
+
+def gen_gem_inventory() -> None:
+    """`raw/gem/ZZZ/gem_solar_wind_ZZZ.parquet` and its snapshot record with `synthetic: true` (refused by a production run)."""
+    import pandas as pd
+
+    rows = []
+    for i, (tech, status, mw, year, accuracy, r, c) in enumerate(GEM_UNITS):
+        rows.append(
+            (
+                f"ZZZ-U{i:02d}",
+                tech,
+                status,
+                mw,
+                year,
+                accuracy,
+                NORTH - (r + 0.5) * PIXEL_DEG,
+                WEST + (c + 0.5) * PIXEL_DEG,
+            )
+        )
+    tech, status, mw, year, accuracy, lat, lon = GEM_OUTSIDE
+    rows.append((f"ZZZ-U{len(GEM_UNITS):02d}", tech, status, mw, year, accuracy, lat, lon))
+    frame = pd.DataFrame(
+        rows,
+        columns=[
+            "gem_unit_id",
+            "tech",
+            "status",
+            "capacity_mw",
+            "start_year",
+            "location_accuracy",
+            "lat",
+            "lon",
+        ],
+    )
+    frame["start_year"] = frame["start_year"].astype("float64")
+    frame["country"] = "ZZZ"
+    out = Path(os.environ["GEOFREA_DATA_DIR"]) / "raw" / "gem" / "ZZZ"
+    out.mkdir(parents=True, exist_ok=True)
+    frame.to_parquet(out / "gem_solar_wind_ZZZ.parquet", index=False)
+    (out / "gem_snapshot.json").write_text(
+        json.dumps({"synthetic": True, "n_features": len(frame), "source": "synthetic ZZZ"}),
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     RAW.mkdir(parents=True, exist_ok=True)
     gen_borders()
@@ -315,6 +428,7 @@ def main() -> None:
     gen_grid()
     gen_solar()
     gen_wind()
+    gen_gem_inventory()
     if os.environ.get("ZZZ_CLIMATE") != "0":
         write_climate_summary = write_climate_fixture(
             Path(__file__).resolve().parents[1] / "config" / "experiments.yaml"

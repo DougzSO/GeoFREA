@@ -40,6 +40,7 @@ PHASES = [
     "lcoe_modeling",
     "sample_size_convergence",
     "robustness_analysis",
+    "external_validation",
 ]
 INITIAL_SIZE, CEILING, TOP_K_PERCENT = 16, 64, 25
 SCENARIOS = ("central", "restrictive", "permissive")
@@ -173,6 +174,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "lcoe_modeling",
             "sample_size_convergence",
             "robustness_analysis",
+            "external_validation",
         )
     }
 
@@ -831,3 +833,200 @@ def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_remo
 def test_the_run_used_no_network(zzz):
     """The fixture refused every socket connection while the phases ran; the run succeeded, so none was attempted."""
     assert socket.socket.connect is _no_network
+
+
+# -- F7b: existing units against the exclusion set, the LCOE deciles and the published estimates ----------------
+
+
+def _validation(zzz, name, fine=False):
+    base = _fine(zzz, "external_validation") if fine else _phase(zzz, "external_validation")
+    return pd.read_parquet(base / f"{name}.parquet")
+
+
+# hand values of `generate_zzz_fixture.GEM_UNITS`: capacity in valid pixels and the excluded share each constraint gives
+HAND_EXCLUSION = {
+    "wind": {  # units of 10 (E1), 20 (free), 30 (free) and 40 MW (E5 and E6), 100 MW in the grid, 5 MW outside it
+        "E1": 0.1,
+        "E2": 0.0,
+        "E3": 0.0,
+        "E4": 0.0,
+        "E5": 0.4,
+        "E6": 0.4,
+        "combined": 0.5,
+    },
+    "solar": {  # units of 12 (free), 8 (E5), 6 (E1 and E5) and 4 MW (E6), 30 MW in the grid
+        "E1": 6 / 30,
+        "E2": 0.0,
+        "E3": 0.0,
+        "E4": 0.0,
+        "E5": 14 / 30,
+        "E6": 4 / 30,
+        "combined": 18 / 30,
+    },
+}
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7b_excluded_shares_under_the_units_equal_the_hand_computation(zzz, tech):
+    table = _validation(zzz, "exclusion_shares")
+    rows = table[(table["technology"] == tech) & (table["row_set"] == "operating")].set_index(
+        "constraint"
+    )
+    assert set(rows.index) == {"E1", "E2", "E3", "E4", "E5", "E6", "combined"}
+    for constraint, expected in HAND_EXCLUSION[tech].items():
+        assert rows.loc[constraint, "mean_excluded_share"] == pytest.approx(expected, abs=1e-6)
+    combined = rows.loc["combined"]
+    assert combined["share_above_0"] == pytest.approx(HAND_EXCLUSION[tech]["combined"], abs=1e-6)
+    assert combined["share_at_least_half"] == pytest.approx(combined["share_above_0"])
+    assert combined["share_equal_1"] == pytest.approx(combined["share_above_0"])
+    assert rows.loc["E1", "share_equal_1"] == pytest.approx(HAND_EXCLUSION[tech]["E1"], abs=1e-6)
+
+
+@pytest.mark.synthetic
+def test_f7b_counts_the_unit_outside_the_grid_and_leaves_out_units_that_are_not_operating(zzz):
+    table = _validation(zzz, "exclusion_shares")
+    wind = table[(table["technology"] == "wind") & (table["constraint"] == "E1")].iloc[0]
+    assert wind["n_units"] == 5 and wind["capacity_mw"] == pytest.approx(105.0)
+    assert wind["n_outside_grid"] == 1 and wind["capacity_outside_grid_mw"] == pytest.approx(5.0)
+    assert wind["n_evaluated"] == 4 and wind["capacity_evaluated_mw"] == pytest.approx(100.0)
+    solar = table[(table["technology"] == "solar") & (table["constraint"] == "E1")].iloc[0]
+    assert solar["n_units"] == 4 and solar["capacity_mw"] == pytest.approx(
+        30.0
+    )  # 'announced' left out
+
+
+def _hand_deciles(candidates: pd.DataFrame, lcoe: pd.DataFrame) -> dict[int, int]:
+    """Deciles of eligible area ordered by LCOE, computed with plain loops (the cell goes to the decile of its area midpoint)."""
+    by_cell = dict(zip(lcoe["cell_id"], lcoe["lcoe_nominal"], strict=True))
+    ordered = sorted(
+        zip(candidates["cell_id"], candidates["eligible_area_km2"], strict=True),
+        key=lambda item: (by_cell[item[0]], item[0]),
+    )
+    total = sum(area for _, area in ordered)
+    done, out = 0.0, {}
+    for cell, area in ordered:
+        out[int(cell)] = min(int((done + area / 2.0) / total * 10), 9) + 1
+        done += area
+    return out
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7b_enrichment_equals_a_hand_recomputation_from_the_candidates_and_the_nominal_lcoe(
+    zzz, tech
+):
+    candidates = pd.read_parquet(
+        _phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet"
+    )
+    lcoe = pd.read_parquet(_phase(zzz, "lcoe_modeling") / f"lcoe_summary_{tech}.parquet")
+    lcoe = lcoe[lcoe["member"].astype(str) == "m0"]
+    decile = _hand_deciles(candidates, lcoe)
+    units = _validation(zzz, "validation_units")
+    units = units[(units["technology"] == tech) & units["in_grid"]]
+    assert {
+        int(c): int(d)
+        for c, d in zip(units["cell_id"], units["decile"], strict=True)
+        if pd.notna(d)
+    } == {int(c): decile[int(c)] for c in units["cell_id"] if int(c) in decile}
+    in_candidates = units[units["cell_id"].isin(decile)]
+    table = _validation(zzz, "enrichment")
+    rows = table[(table["technology"] == tech) & (table["row_set"] == "operating")]
+    total_area = candidates["eligible_area_km2"].sum()
+    for d in (1, 2, 3):
+        low = rows[(rows["kind"] == "lowest") & (rows["decile"] == d)].iloc[0]
+        cells = [c for c, k in decile.items() if k <= d]
+        area_share = (
+            candidates[candidates["cell_id"].isin(cells)]["eligible_area_km2"].sum() / total_area
+        )
+        capacity_share = (
+            in_candidates[in_candidates["cell_id"].map(decile) <= d]["capacity_mw"].sum()
+            / in_candidates["capacity_mw"].sum()
+        )
+        assert low["eligible_area_share"] == pytest.approx(area_share)
+        assert low["capacity_share"] == pytest.approx(capacity_share)
+        assert low["enrichment_ratio"] == pytest.approx(capacity_share / area_share)
+    non_candidate = (
+        units[~units["cell_id"].isin(decile)]["capacity_mw"].sum() / units["capacity_mw"].sum()
+    )
+    assert rows["capacity_share_non_candidate"].iloc[0] == pytest.approx(non_candidate)
+    assert rows[rows["kind"] == "decile"]["eligible_area_share"].sum() == pytest.approx(1.0)
+
+
+@pytest.mark.synthetic
+def test_f7b_published_comparison_is_empty_and_flagged_while_there_are_no_entries(zzz):
+    path = _phase(zzz, "external_validation") / "published_comparison.parquet"
+    assert len(pd.read_parquet(path)) == 0
+    flag = json.loads(pq.read_schema(path).metadata[b"geofrea_validation_skipped"])
+    assert flag["open_question"] == "OQ-057"
+    provenance = json.loads(pq.read_schema(path).metadata[b"geofrea_validation_provenance"])
+    assert (
+        provenance["synthetic_inventory"] is True
+        and "plausibility evidence" in provenance["interpretation"]
+    )
+
+
+@pytest.mark.synthetic
+def test_f7b_runs_at_the_coarse_scale_and_the_pixel_level_exclusions_do_not_change(zzz, zzz_fine):
+    fine = _validation(zzz_fine, "exclusion_shares", fine=True)
+    coarse = _validation(zzz, "exclusion_shares")
+    pd.testing.assert_frame_equal(
+        fine, coarse
+    )  # the engine is evaluated at the pixels, whatever the cell size
+    assert len(_validation(zzz_fine, "enrichment", fine=True)) == len(
+        _validation(zzz, "enrichment")
+    )
+
+
+def _tables_of(zzz_fine, phases):
+    """Every parquet table the phases wrote at the 0.1 degree scale, by relative path."""
+    out = {}
+    for phase in phases:
+        for path in sorted(_fine(zzz_fine, phase).glob("*.parquet")):
+            out[f"{phase}/{path.name}"] = pd.read_parquet(path)
+    return out
+
+
+@pytest.mark.synthetic
+def test_v06_f5_to_f7_do_not_change_when_the_plant_inventory_is_absent(zzz_fine, monkeypatch):
+    """D-F7b-005: the tables of F5, F6 and F7 are identical with and without the unit file (the inventory feeds F7b only)."""
+    import shutil
+
+    import main
+
+    # the scale check ran last, so its manifest is the one that matches the shared layer registry
+    monkeypatch.setenv(
+        "GEOFREA_DATA_DIR", str(zzz_fine[0])
+    )  # the autouse fixture re-points it per test
+    phases = ("technical_potential", "lcoe_modeling", "robustness_analysis")
+    before = _tables_of(zzz_fine, phases)
+    assert before
+    inventory = zzz_fine[0] / "raw" / "gem"
+    parked = zzz_fine[0] / "raw" / "gem_parked"
+    shutil.move(str(inventory), str(parked))
+    try:
+        settings = load_settings(main.SETTINGS_YAML)
+        ok, _orchestrator, results = main.run_geofrea(
+            "ZZZ",
+            ["robustness_analysis"],
+            list(phases),
+            settings.geospatial.resolutions,
+            settings.geospatial.distance_cap_km,
+            load_audit_config(main.AUDIT_YAML),
+            "zzz-v06-perturbation",
+            False,
+            None,
+            tuple(settings.run.technologies),
+            False,
+            settings.figures,
+            settings.memory.max_batch_gb,
+            "0p1deg",
+        )
+        assert ok, {k: v.status for k, v in results.items()}
+        assert all(results[name].status == "success" for name in phases)
+        after = _tables_of(zzz_fine, phases)
+    finally:
+        shutil.move(str(parked), str(inventory))
+    assert before.keys() == after.keys()
+    for key, frame in before.items():
+        pd.testing.assert_frame_equal(frame, after[key], obj=key)
