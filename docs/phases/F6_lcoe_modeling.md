@@ -11,6 +11,11 @@ Requires: `potential_<tech>__central.parquet` (F5; `cell_id`, `member`, `P_MW`, 
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
+| M-F6-01 | LCOE per cell and sample from CAPEX (plant, grid, substation, road), fixed and variable O&M, degradation and discounting; factored exactly so the variable O&M cancels and the numerator is one matrix product | `lcoe_modeling/kernel.py:lcoe_block`, `annuity_factor`, `energy_annuity_factor`, `capital_recovery_factor` | `test_lcoe_kernel.py::test_factored_kernel_equals_the_textbook_form_on_random_blocks`, `test_variable_om_adds_exactly_its_value_because_it_cancels_against_the_energy_denominator`, `test_lcoe_rises_with_capex_distance_and_discount_rate_and_falls_with_energy` | pass |
+| V-02 | Closed forms: without degradation and with constant OPEX the LCOE is `(CAPEX * CRF + OPEX) / E`; `r = 0` gives `(CAPEX + n * OPEX) / (n * E)`; CRF and annuity against the explicit sum and the tabulated value | `kernel.py:lcoe_direct` (textbook reference), `capital_recovery_factor` | `test_without_degradation_and_with_constant_opex_the_lcoe_is_the_crf_form`, `test_at_a_zero_discount_rate_the_lcoe_is_total_cost_over_total_energy`, `test_crf_and_annuity_match_the_explicit_sum_and_the_tabulated_value`, `test_energy_annuity_matches_the_explicit_degraded_sum` | pass |
+| D-F6-007 | Zero energy gives `+inf`, not an error; a negative or non-finite energy raises | `kernel.py:lcoe_block`, `_check_energy_not_negative` | `test_zero_energy_gives_plus_infinity_not_an_error_and_other_cells_stay_finite`, `test_energy_that_is_zero_only_at_one_sample_is_infinite_only_there`, `test_cells_with_negative_or_non_finite_values_and_negative_energy_raise` | pass |
+| D-F6-010 | Integer lifetime; zero discount rate by the limit, with no division by zero; degradation in `[0, 1)` | `kernel.py:SampleInputs`, `annuity_factor`, `energy_annuity_factor` | `test_zero_discount_rate_is_the_limit_of_the_formula_with_no_division_by_zero`, `test_samples_outside_their_domain_raise` | pass |
+| M-F6-05 | The kernel is a pure function importable by F7: arrays in, arrays out, no I/O | `kernel.py` (imports `numpy`, `dataclasses`, `collections` only) | `test_the_kernel_module_is_pure_it_imports_no_io_or_table_library` | pass |
 
 ## Active implementation decisions
 
@@ -42,3 +47,4 @@ Recorded before any code (Douglas's verdicts of 2026-10-09 on `docs/_audit/2026-
 ## History
 
 - 2026-10-09: design report, verdicts D1 to D16, METHODOLOGY 7.1.2, parameter keys and ZZZ test values; no phase code.
+- 2026-10-09: commit A, the pure LCOE kernel with its V-02 closed-form tests.
