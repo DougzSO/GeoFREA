@@ -5,8 +5,10 @@ Two ranges are derived, so nothing is looked up or judged:
 - **Air density** at hub height. A pixel at ground elevation `z` and a layer at height `h` above ground cannot be less dense than the
   International Standard Atmosphere at `z + h` nor denser than it at the lowest ground elevation of the country plus the lowest layer
   height. The envelope of a country is `[rho_ISA(z_max + h), rho_ISA(z_min + h)]`, with `z_min` and `z_max` the lowest and highest in-country
-  elevation of the DEM (F2a aligned layer) and `rho_ISA` the ISO 2533 troposphere formulas. Temperature and pressure anomalies are not
-  in the envelope on purpose: a pixel outside it is reported, never corrected.
+  elevation of the DEM (F2a aligned layer) and `rho_ISA` the ISO 2533 troposphere formulas. `h` is the layer height, a physical
+  quantity, not a margin. Real temperature and pressure anomalies are covered by a relative quality-control tolerance declared in
+  `audit.yaml` (`tolerance_rel`, +-5%, about +-15 K): the check exists to catch gross errors (unit, swapped layer, corrupt tile), not to
+  predict the density. A pixel outside the widened envelope is reported, never corrected.
 - **Distances** to the grid and to the road network. A distance between two in-country points cannot exceed the diagonal of the
   country's bounding box, and cannot be negative. The bound is loose by construction (a country's bounding box is larger than the
   country) and sound: the layer, which is uncapped (OQ-040), cannot break it unless the layer is wrong.
@@ -26,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from geofrea.core import paths as core_paths
 from geofrea.core.constants import (
     ISA_G_M_S2,
     ISA_LAPSE_K_PER_M,
@@ -34,6 +37,7 @@ from geofrea.core.constants import (
     ISA_T0_K,
 )
 from geofrea.core.geodesy import wgs84_km_per_degree
+from geofrea.data_quality_audit.schemas import AuditConfig, AuditLayerConfig
 
 logger = logging.getLogger("geofrea.siting_layers.sanity")
 
@@ -177,7 +181,10 @@ def country_geometry(
 
 
 def derived_range(
-    layer: str, geometry: CountryGeometry, height_m: float | None = None
+    layer: str,
+    geometry: CountryGeometry,
+    height_m: float | None = None,
+    tolerance_rel: float = 0.0,
 ) -> tuple[float, float] | None:
     """The derived `(low, high)` of a layer, or `None` when the layer has no derivation (Weibull A and k, OQ-053).
 
@@ -185,11 +192,47 @@ def derived_range(
         layer: `air_density`, `dist_grid_km` or `dist_road_km`.
         geometry: The country's geometry.
         height_m: Height above ground of an `air_density` layer.
+        tolerance_rel: Relative quality-control tolerance on each side of an `air_density` envelope (`audit.yaml`); ignored by
+            the distances, which are exact bounds.
     """
     if layer == "air_density":
         if height_m is None:
             raise SanityError("air_density needs the layer height")
-        return air_density_envelope(geometry.z_min_m, geometry.z_max_m, height_m)
+        low, high = air_density_envelope(geometry.z_min_m, geometry.z_max_m, height_m)
+        return low * (1.0 - tolerance_rel), high * (1.0 + tolerance_rel)
     if layer in ("dist_grid_km", "dist_road_km"):
         return 0.0, bbox_diagonal_km(geometry.west, geometry.south, geometry.east, geometry.north)
     return None
+
+
+def load_country_geometry(iso: str) -> CountryGeometry:
+    """`CountryGeometry` of a country from the pipeline's own files: the F2a aligned DEM widened by the 30 m tiles (cached).
+
+    Raises:
+        SanityError: no aligned DEM, no 30 m tile, or no valid pixel (a derived range cannot be built without them).
+    """
+    elevation = (
+        core_paths.phase_dir(iso, "grid_alignment", "artifacts") / f"{iso}_elevation_aligned.tif"
+    )
+    if not elevation.is_file():
+        raise SanityError(f"the F2a aligned DEM is missing: {elevation} (F2a must have run)")
+    return country_geometry(
+        elevation,
+        core_paths.fetched_raw("copernicus_dem30", iso),
+        core_paths.interim(iso, "sanity") / "dem30_extremes.json",
+    )
+
+
+def pvout_range(audit: AuditConfig, iso: str) -> tuple[tuple[float, float], str]:
+    """`((low, high), source)` of PVOUT in kWh/kWp/day: the country override of `audit.yaml` when there is one, else the product's range.
+
+    Raises:
+        SanityError: `audit.yaml` declares no PVOUT range.
+    """
+    override = audit.country_overrides.get(iso, {}).get("solar")
+    if override is not None and override.sanity_range is not None:
+        return override.sanity_range, f"audit.yaml country_overrides.{iso}.solar.sanity_range"
+    product = audit.layers.get("solar")
+    if isinstance(product, AuditLayerConfig) and product.sanity_range is not None:
+        return product.sanity_range, "audit.yaml layers.solar.sanity_range"
+    raise SanityError("audit.yaml has no sanity_range for the PVOUT layer")

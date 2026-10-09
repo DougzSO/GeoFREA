@@ -11,6 +11,7 @@ import rasterio
 from rasterio.transform import from_origin
 
 from geofrea.core.config_loader import load_audit_config
+from geofrea.core.constants import ISA_LAPSE_K_PER_M, ISA_T0_K
 from geofrea.siting_layers.sanity import (
     SanityError,
     air_density_envelope,
@@ -78,6 +79,60 @@ def test_bbox_diagonal_is_an_upper_bound_of_the_distance_across_the_box():
     assert south_wider > bbox_diagonal_km(0.0, 40.0, 10.0, 50.0)
     with pytest.raises(SanityError):
         bbox_diagonal_km(1.0, 0.0, 1.0, 1.0)
+
+
+@pytest.mark.unit
+def test_the_relative_tolerance_widens_the_density_envelope_on_each_side_and_not_the_distances():
+    geometry = country_geometry_stub()
+    low, high = derived_range("air_density", geometry, 100.0)
+    wide_low, wide_high = derived_range("air_density", geometry, 100.0, tolerance_rel=0.05)
+    assert wide_low == pytest.approx(0.95 * low) and wide_high == pytest.approx(1.05 * high)
+    assert derived_range("dist_grid_km", geometry, tolerance_rel=0.05) == derived_range(
+        "dist_grid_km", geometry
+    )
+
+
+@pytest.mark.unit
+def test_five_percent_of_density_is_about_15_kelvin_at_the_pressure_of_the_standard_atmosphere():
+    """The audit.yaml justification: rho goes as 1/T at a given pressure, so 5% of rho is 0.05 T: 14.4 K at sea level, 11.8 K at 8 km."""
+    for altitude in (0.0, 2000.0, 5000.0, 8000.0):
+        t = ISA_T0_K - ISA_LAPSE_K_PER_M * altitude
+        assert 11.0 <= 0.05 * t <= 15.0
+    assert 0.05 * ISA_T0_K == pytest.approx(14.4, abs=0.05)
+
+
+@pytest.mark.unit
+def test_the_prt_serra_da_estrela_pixel_passes_by_the_rule():
+    """0.9944 kg/m3 where the unwidened bound was 0.9971 (0.27% below): inside the 5% tolerance, with no per-pixel exception."""
+    bound = 0.9971
+    assert 0.9944 < bound
+    assert 0.9944 >= bound * (1 - 0.05)
+
+
+@pytest.mark.unit
+def test_a_tolerance_needs_its_justification_and_only_the_iso_derivation():
+    from pydantic import ValidationError
+
+    from geofrea.data_quality_audit.schemas import DerivedRangeConfig
+
+    ok = {"derivation": "iso2533_envelope", "source": "s", "tolerance_rel": 0.05}
+    with pytest.raises(ValidationError, match="both set or both null"):
+        DerivedRangeConfig(**ok)
+    DerivedRangeConfig(**ok, tolerance_justification="engineering tolerance")
+    with pytest.raises(ValidationError, match="only on the iso2533_envelope"):
+        DerivedRangeConfig(
+            derivation="country_bbox_diagonal",
+            source="s",
+            tolerance_rel=0.05,
+            tolerance_justification="j",
+        )
+    with pytest.raises(ValidationError):
+        DerivedRangeConfig(
+            derivation="iso2533_envelope",
+            source="s",
+            tolerance_rel=1.5,
+            tolerance_justification="j",
+        )
 
 
 def _write_dem(path: Path, z: np.ndarray, origin=(10.0, 5.0)) -> None:
@@ -156,4 +211,9 @@ def test_audit_yaml_declares_the_derivations_and_leaves_only_weibull_to_oq_053()
     assert all(
         v.source for v in cfg.derived_ranges.values() if v.derivation
     )  # a derivation names its source
+    density = cfg.derived_ranges["air_density"]
+    assert (
+        density.tolerance_rel == 0.05 and "engineering" in density.tolerance_justification.lower()
+    )
+    assert all(v.tolerance_rel is None for k, v in cfg.derived_ranges.items() if k != "air_density")
     assert cfg.layers["solar"].sanity_range == (0.7, 6.8)  # PVOUT keeps the product's own range

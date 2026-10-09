@@ -32,7 +32,9 @@ from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
+from geofrea.data_quality_audit.schemas import AuditConfig
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
 from geofrea.technical_potential.aggregates import aggregate_scenario
 from geofrea.technical_potential.capacity import annual_energy_mwh, capacity_mw
 from geofrea.technical_potential.cf_models import (
@@ -41,6 +43,13 @@ from geofrea.technical_potential.cf_models import (
     CfSettings,
     MissingParameterError,
     get_cf_model,
+)
+from geofrea.technical_potential.input_ranges import (
+    DISTANCE_COLUMNS,
+    InputRange,
+    resolve_input_ranges,
+    validate_candidates,
+    warn_unranged,
 )
 from geofrea.technical_potential.power_curve import (
     PowerCurve,
@@ -240,6 +249,7 @@ def build_technology_potential(
     members: Sequence[str],
     wind_valid_range: tuple[float, float],
     out_dir: Path,
+    input_ranges: Mapping[str, InputRange],
     production: bool = False,
 ) -> TechPotential:
     """Tables and aggregates of one technology for the given land scenarios.
@@ -247,6 +257,7 @@ def build_technology_potential(
     Implements: M-F5-01 to M-F5-06, M-F4-07.
 
     Raises:
+        InputRangeError: a resource or distance value of a candidate cell is outside its sanity range (V-04); raised before any output.
         ForcingContractError: a candidate cell-member is neither in the forcing nor declared masked, or a factor is out of range.
         CfModelError: a capacity factor outside [0, 1], or a forcing member not listed in `members.yaml`.
     """
@@ -261,10 +272,12 @@ def build_technology_potential(
         raise CfModelError(f"forcing.parquet has members not listed in members.yaml: {unknown}")
 
     candidates: dict[str, pd.DataFrame] = {}
+    warn_unranged(iso, tech, input_ranges)
     for scenario, path in candidates_paths.items():
         frame = pd.read_parquet(path).sort_values("cell_id", ignore_index=True)
         if frame["cell_id"].duplicated().any():
             raise CfModelError(f"{path.name}: duplicated cell_id")
+        validate_candidates(iso, tech, scenario, frame, input_ranges)
         # the forcing guard comes first: nothing is computed on a forcing that breaks the contract (M-F4-07)
         assert_forcing_usable(
             forcing, masked, frame["cell_id"].to_numpy(), list(members), wind_valid_range
@@ -404,7 +417,9 @@ def build_potential(
     experiments_yaml: Path,
     curves_dir: Path,
     *,
+    audit_config: AuditConfig,
     production: bool = False,
+    geometry: CountryGeometry | None = None,
     candidates_dir: Path | None = None,
     climate_dir: Path | None = None,
     out_dir: Path | None = None,
@@ -415,6 +430,8 @@ def build_potential(
 
     Raises:
         MissingParameterError: any technology lacks a parameter, curve or rule; raised before any input is read.
+        InputRangeError: a candidate-cell input is outside its sanity range in `audit_config` (V-04), or a layer has no declared range.
+        SanityError: the country geometry the derived ranges need cannot be read.
     """
     failures: list[str] = []
     resolved: dict[str, ResolvedTechnology] = {}
@@ -451,8 +468,15 @@ def build_potential(
         m["member"] for m in yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
     ]
 
+    geometry = geometry if geometry is not None else load_country_geometry(iso)
     result: dict[str, TechPotential] = {}
     for tech, res in resolved.items():
+        ranges = resolve_input_ranges(
+            iso,
+            audit_config,
+            geometry,
+            [*technologies.technologies[tech].resource_layers, *DISTANCE_COLUMNS],
+        )
         paths = {
             s: Path(candidates_dir) / f"candidates_{tech}__{s}.parquet" for s in LAND_SCENARIOS
         }
@@ -468,6 +492,7 @@ def build_potential(
             members=members,
             wind_valid_range=ensemble.wind_factor_valid_range,
             out_dir=Path(out_dir),
+            input_ranges=ranges,
             production=production,
         )
     return PotentialSummary(country_code=iso, technologies=result)

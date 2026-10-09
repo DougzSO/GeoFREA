@@ -45,6 +45,10 @@ class DerivedRangeConfig(BaseModel):
 
     `derivation` and `source` are both null together (the layer has no range: an OQ names what is missing), or both set (the
     range follows from the named derivation of the named standard or geometry; no number is stored here).
+
+    `tolerance_rel` (with its `tolerance_justification`) widens an `iso2533_envelope` range by a relative margin on each side. It is a
+    quality-control engineering tolerance, not a scientific parameter: it exists so that the check catches gross errors (a wrong unit,
+    a swapped layer, a corrupt tile) and does not predict the density.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -52,6 +56,8 @@ class DerivedRangeConfig(BaseModel):
     derivation: Literal["iso2533_envelope", "country_bbox_diagonal"] | None = None
     source: str | None = None
     open_question: str | None = None
+    tolerance_rel: float | None = Field(default=None, gt=0.0, lt=1.0)
+    tolerance_justification: str | None = None
 
     @model_validator(mode="after")
     def _derivation_with_source_or_an_open_question(self) -> DerivedRangeConfig:
@@ -60,6 +66,12 @@ class DerivedRangeConfig(BaseModel):
         if self.derivation is None and self.open_question is None:
             raise ValueError(
                 "a layer with no derivation names the open question that will give its range"
+            )
+        if (self.tolerance_rel is None) != (self.tolerance_justification is None):
+            raise ValueError("tolerance_rel and tolerance_justification are both set or both null")
+        if self.tolerance_rel is not None and self.derivation != "iso2533_envelope":
+            raise ValueError(
+                "a relative tolerance is declared only on the iso2533_envelope derivation"
             )
         return self
 

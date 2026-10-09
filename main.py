@@ -483,6 +483,7 @@ def _build_phase_specs(
             technologies,
             EXPERIMENTS_YAML,
             POWER_CURVES_DIR,
+            audit_config=load_audit_config(AUDIT_YAML),
             production=production,
         )
         for tech, potential in result.technologies.items():

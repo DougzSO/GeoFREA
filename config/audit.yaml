@@ -103,7 +103,8 @@ layers:
 # Sanity ranges of the F2b layers that are derived, not looked up (V-04, H-6; siting_layers/sanity.py). No number is stored: each range
 # follows from a named derivation, per country, so it needs no research and no judgement.
 #   iso2533_envelope      air density: [rho_ISA(z_max + h), rho_ISA(z_min + h)] with z_min and z_max the lowest and highest in-country
-#                         DEM elevation and h the layer height above ground (ISO 2533 troposphere; constants in core/constants.py)
+#                         DEM elevation and h the layer height above ground (ISO 2533 troposphere; constants in core/constants.py),
+#                         widened by `tolerance_rel` on each side: [(1 - t) * lower, (1 + t) * upper]
 #   country_bbox_diagonal distance to the grid or to the roads: [0, diagonal of the country's bounding box]
 # Weibull A and k have no derivation: a range needs a sourced reading of the Global Wind Atlas documentation (OQ-053).
 # PVOUT keeps the range under `layers.solar.sanity_range` above.
@@ -111,6 +112,8 @@ derived_ranges:
   air_density:
     derivation: iso2533_envelope
     source: "ISO 2533 International Standard Atmosphere, troposphere (T0 288.15 K, p0 101325 Pa, lapse 0.0065 K/m, g 9.80665 m/s2, R 287.05287 J/kg/K)"
+    tolerance_rel: 0.05
+    tolerance_justification: "Quality-control engineering tolerance, not a scientific parameter. At a given pressure the density goes as 1/T, so 5% of the density corresponds to a temperature departure from the standard atmosphere of 0.05 T: about 14 K at sea level (T = 288 K), about 13 K at 2 km and about 12 K at 8 km (T = 236 K), i.e. roughly 15 K in round figures. Real climates depart from the standard atmosphere by less than that, and a unit error (a factor of 10 or 1000) or a swapped layer lies far above it."
   dist_grid_km:
     derivation: country_bbox_diagonal
     source: "geometry of the F2a aligned grid of the country (no external source)"

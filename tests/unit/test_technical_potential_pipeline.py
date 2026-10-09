@@ -17,13 +17,14 @@ import pytest
 import yaml
 
 from geofrea.climate_forcing.forcing import ForcingContractError
-from geofrea.core.config_loader import load_parameters, load_technologies
+from geofrea.core.config_loader import load_audit_config, load_parameters, load_technologies
 from geofrea.core.config_schemas import IecClassBound, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_YEAR, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import read_schema_version
 from geofrea.land_eligibility.cells import cell_id
 from geofrea.land_eligibility.pipeline import WIND_HEIGHTS_M
+from geofrea.siting_layers.sanity import CountryGeometry
 from geofrea.technical_potential.aggregates import aggregate_scenario
 from geofrea.technical_potential.cf_models import (
     CF_MODELS,
@@ -32,6 +33,11 @@ from geofrea.technical_potential.cf_models import (
     get_cf_model,
 )
 from geofrea.technical_potential.iec_class import IecClassError, assign_by_mean_speed
+from geofrea.technical_potential.input_ranges import (
+    InputRangeError,
+    resolve_input_ranges,
+    validate_candidates,
+)
 from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential
 from geofrea.technical_potential.power_curve import SyntheticCurveError, load_power_curve
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
@@ -44,6 +50,13 @@ TECHNOLOGIES = REPO / "config" / "technologies.yaml"
 EXPERIMENTS = REPO / "config" / "experiments.yaml"
 REAL_CURVES_DIR = REPO / "config" / "power_curves"
 FIXTURE_CURVES = REPO / "tests" / "fixtures" / "power_curves"
+# V-04: F5 validates the candidate tables against audit.yaml. The ZZZ override of PVOUT (a constant 4.5) is dropped because these
+# tables carry a spread of PVOUT; the geometry is an elevation span of 0 to 1000 m inside a 10 degree box.
+AUDIT = load_audit_config(REPO / "config" / "audit.yaml").model_copy(
+    update={"country_overrides": {}}
+)
+GEOMETRY = CountryGeometry(z_min_m=0.0, z_max_m=1000.0, west=0.0, south=35.0, east=10.0, north=45.0)
+RANGE_ARGS = {"audit_config": AUDIT, "geometry": GEOMETRY}
 
 MEMBERS = ["m0", "m_gcmA_ssp245_2041-2070", "m_gcmB_ssp585_2071-2100"]
 MASKED_CELL_INDEX = (
@@ -184,6 +197,7 @@ def _run(tmp_path, registry, params, drop=(), techs=("solar", "wind"), productio
         EXPERIMENTS,
         FIXTURE_CURVES,
         production=production,
+        **RANGE_ARGS,
         candidates_dir=land,
         climate_dir=climate,
         out_dir=out,
@@ -348,7 +362,7 @@ def test_wind_factor_out_of_range_in_a_candidate_cell_raises(tmp_path, registry,
     with pytest.raises(ForcingContractError, match="outside"):
         build_potential(
             "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out",
+            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
 
@@ -390,10 +404,20 @@ def test_a_capacity_factor_above_one_raises(tmp_path, registry, synthetic_params
     frame = pd.read_parquet(path)
     frame.loc[0, "pvout_kwh_kwp_day"] = 30.0  # CF0 = 1.25
     frame.to_parquet(path)
+    # the range check of V-04 stops 30 first; widen the PVOUT range here to reach the capacity-factor guard behind it
+    wide = AUDIT.model_copy(
+        update={
+            "layers": {
+                **AUDIT.layers,
+                "solar": AUDIT.layers["solar"].model_copy(update={"sanity_range": (0.0, 40.0)}),
+            }
+        }
+    )
     with pytest.raises(CfModelError, match="outside \\[0, 1\\]"):
         build_potential(
             "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
             candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out",
+            audit_config=wide, geometry=GEOMETRY,
         )  # fmt: skip
 
 
@@ -437,6 +461,7 @@ def test_real_countries_fail_loud_listing_the_missing_parameters_and_write_nothi
             EXPERIMENTS,
             REAL_CURVES_DIR,
             out_dir=tmp_path / "out",
+            **RANGE_ARGS,
         )
     message = str(caught.value)
     for item in (
@@ -462,6 +487,7 @@ def test_missing_parameter_error_is_raised_before_inputs_are_read(tmp_path):
         build_potential(
             "PRT", technologies, params, ["wind"], EXPERIMENTS, REAL_CURVES_DIR,
             candidates_dir=tmp_path / "none", climate_dir=tmp_path / "none", out_dir=tmp_path / "out",
+            **RANGE_ARGS,
         )  # fmt: skip
 
 
@@ -481,7 +507,7 @@ def test_a_missing_curve_file_is_reported_as_missing(tmp_path, registry, synthet
     with pytest.raises(MissingParameterError, match="absent_curve.yaml"):
         build_potential(
             "ZZZ", reg, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out",
+            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
 
 
@@ -618,7 +644,7 @@ def test_a_technology_without_candidate_cells_gives_empty_tables_and_zero_totals
     out = tmp_path / "out"
     summary = build_potential(
         "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
-        candidates_dir=land, climate_dir=climate, out_dir=out,
+        candidates_dir=land, climate_dir=climate, out_dir=out, **RANGE_ARGS,
     )  # fmt: skip
     assert summary.technologies["solar"].scenarios["central"].n_rows == 0
     assert len(pd.read_parquet(out / "potential_solar__central.parquet")) == 0
@@ -628,3 +654,113 @@ def test_a_technology_without_candidate_cells_gives_empty_tables_and_zero_totals
         agg["cf_energy_weighted"].isna().all()
         and agg["delta_E_pct_vs_m0_like_for_like"].isna().all()
     )
+
+
+# -- V-04: F5 validates its inputs against audit.yaml --------------------------------------------
+
+
+def _corrupt(land: Path, tech: str, column: str, value, rows=(0,)) -> None:
+    for scenario in SCENARIO_AREAS:
+        path = land / f"candidates_{tech}__{scenario}.parquet"
+        frame = pd.read_parquet(path)
+        frame.loc[list(rows), column] = value
+        frame.to_parquet(path)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("tech", "column", "value", "range_text"),
+    [
+        (
+            "solar",
+            "pvout_kwh_kwp_day",
+            450.0,
+            "layers.solar.sanity_range",
+        ),  # W/m2 read as kWh/kWp/day
+        ("wind", "air_density_100m", 12.25, "derived_ranges.air_density"),  # a factor of 10
+        ("wind", "air_density_200m", 0.2, "derived_ranges.air_density"),
+        ("solar", "dist_grid_km", 99999.0, "derived_ranges.dist_grid_km"),
+        ("wind", "dist_road_km", -3.0, "derived_ranges.dist_road_km"),
+        ("wind", "air_density_150m", np.nan, "derived_ranges.air_density"),
+    ],
+)
+def test_an_input_outside_its_sanity_range_raises_a_named_error_and_writes_nothing(
+    tmp_path, registry, synthetic_params, tech, column, value, range_text
+):
+    land, climate = _write_inputs(tmp_path / "in")
+    _corrupt(land, tech, column, value, rows=(0, 2))
+    with pytest.raises(InputRangeError) as caught:
+        build_potential(
+            "ZZZ", registry, synthetic_params, [tech], EXPERIMENTS, FIXTURE_CURVES,
+            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+        )  # fmt: skip
+    message = str(caught.value)
+    assert column in message and "2 of 8 candidate cells" in message
+    assert f"ZZZ {tech} [" in message and "nothing was computed" in message
+    assert (
+        range_text.replace("derived_ranges.", "derived_ranges.") in message
+        or "audit.yaml" in message
+    )
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
+
+
+@pytest.mark.unit
+def test_every_layer_outside_its_range_is_listed_in_one_error(tmp_path, registry, synthetic_params):
+    land, climate = _write_inputs(tmp_path / "in")
+    _corrupt(land, "wind", "air_density_100m", 9.0)
+    _corrupt(land, "wind", "dist_grid_km", 1e6)
+    with pytest.raises(InputRangeError) as caught:
+        build_potential(
+            "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
+            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+        )  # fmt: skip
+    assert "air_density_100m" in str(caught.value) and "dist_grid_km" in str(caught.value)
+
+
+@pytest.mark.unit
+def test_weibull_layers_without_a_range_warn_and_do_not_raise(
+    tmp_path, registry, synthetic_params, caplog
+):
+    """Weibull A and k have no range yet (OQ-053): F5 does not range-check them and warns, naming the open question."""
+    land, climate = _write_inputs(tmp_path / "in")
+    _corrupt(
+        land, "wind", "weibull_a_100m", 5000.0
+    )  # a wild value: no range, so no error from the range check
+    with caplog.at_level("WARNING", logger="geofrea.technical_potential.input_ranges"):
+        build_potential(
+            "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
+            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+        )  # fmt: skip
+    text = caplog.text
+    for column in ("weibull_a_100m", "weibull_k_150m", "weibull_a_200m"):
+        assert column in text
+    assert (
+        text.count("weibull_a_100m has no sanity range") == 1
+    )  # once per technology, not once per scenario
+    assert "OQ-053" in text and "air_density_100m has no" not in text
+
+
+@pytest.mark.unit
+def test_a_registry_layer_with_no_declared_range_is_an_error():
+    with pytest.raises(InputRangeError, match="not a layer with a sanity range"):
+        resolve_input_ranges("ZZZ", AUDIT, GEOMETRY, ["wind_speed_100m"])
+
+
+@pytest.mark.unit
+def test_the_range_check_uses_the_zzz_pvout_override_for_zzz_and_the_product_range_otherwise():
+    real = load_audit_config(REPO / "config" / "audit.yaml")
+    zzz = resolve_input_ranges("ZZZ", real, GEOMETRY, ["pvout_kwh_kwp_day"])["pvout_kwh_kwp_day"]
+    prt = resolve_input_ranges("PRT", real, GEOMETRY, ["pvout_kwh_kwp_day"])["pvout_kwh_kwp_day"]
+    assert (zzz.low, zzz.high) == (4.5, 4.5) and (prt.low, prt.high) == (0.7, 6.8)
+
+
+@pytest.mark.unit
+def test_a_mean_equal_to_a_bound_up_to_floating_point_rounding_passes_and_a_real_excess_does_not():
+    """The synthetic PVOUT range is one value, [4.5, 4.5]; an area-weighted mean of it differs from 4.5 by rounding only."""
+    zzz = load_audit_config(REPO / "config" / "audit.yaml")
+    ranges = resolve_input_ranges("ZZZ", zzz, GEOMETRY, ["pvout_kwh_kwp_day"])
+    frame = pd.DataFrame({"cell_id": [1, 2], "pvout_kwh_kwp_day": [4.5 + 4e-16 * 4.5, 4.5 - 1e-13]})
+    validate_candidates("ZZZ", "solar", "central", frame, ranges)
+    frame["pvout_kwh_kwp_day"] = [4.5, 4.5001]
+    with pytest.raises(InputRangeError, match="1 of 2 candidate cells"):
+        validate_candidates("ZZZ", "solar", "central", frame, ranges)
