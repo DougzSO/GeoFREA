@@ -19,6 +19,7 @@ import pandas as pd
 from geofrea.core.config_schemas import IecClassBound
 from geofrea.technical_potential.iec_class import assign_by_mean_speed
 from geofrea.technical_potential.power_curve import PowerCurve
+from geofrea.technical_potential.rescale import solar_rescale_terms, wind_rescale_terms
 from geofrea.technical_potential.solar import solar_cf_member, solar_cf_reference
 from geofrea.technical_potential.weibull_cf import (
     equivalent_scale,
@@ -68,8 +69,15 @@ class PreparedCf(Protocol):
 class CfModel(Protocol):
     parameter_keys: tuple[str, ...]
     needs_curves: bool
+    # the uncertain parameter that scales the stored energy in F6 (D-F6-012)
+    sampled_parameter_key: str
 
     def prepare(self, candidates: pd.DataFrame, settings: CfSettings) -> PreparedCf: ...
+
+    def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Offset and slope per cell such that the stored energy times `offset + slope * x` is the energy at the value `x` of
+        `sampled_parameter_key`; the factor is 1 at `x = nominal` (D-F5-008, D-F6-012)."""
+        ...
 
 
 def _column(candidates: pd.DataFrame, name: str) -> np.ndarray:
@@ -97,6 +105,10 @@ class PvoutWithTemperature:
 
     parameter_keys = ("gamma",)
     needs_curves = False
+    sampled_parameter_key = "gamma"
+
+    def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        return solar_rescale_terms(d_t, nominal)
 
     def prepare(self, candidates: pd.DataFrame, settings: CfSettings) -> PreparedCf:
         if len(settings.resource_layers) != 1:
@@ -137,6 +149,10 @@ class WeibullWithAirDensity:
 
     parameter_keys = ("eta_loss", "hub_height_m")
     needs_curves = True
+    sampled_parameter_key = "eta_loss"
+
+    def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        return wind_rescale_terms(len(d_t), nominal)
 
     def prepare(self, candidates: pd.DataFrame, settings: CfSettings) -> PreparedCf:
         by_product: dict[str, dict[float, np.ndarray]] = {

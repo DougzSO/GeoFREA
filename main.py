@@ -122,6 +122,8 @@ from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
+from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
@@ -370,6 +372,7 @@ def _build_phase_specs(
     technologies: tuple[str, ...] = (),
     production: bool = False,
     figures: str = "all",
+    max_batch_gb: float | None = None,
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -400,6 +403,8 @@ def _build_phase_specs(
             (F5), whose `produces` names one artifact per technology and land scenario.
         production: whether this is a production run; F5 refuses a synthetic power curve in one.
         figures: settings.yaml's `figures` (A-08), closed over by potential_maps.
+        max_batch_gb: settings.yaml's `memory.max_batch_gb` (A-10), closed over by lcoe_modeling; the phase raises
+            if it is absent (no silent default).
 
     Returns:
         The registered PhaseSpecs.
@@ -495,6 +500,34 @@ def _build_phase_specs(
                 f"potential_aggregates_{tech}", potential.aggregates, POTENTIAL_TABLE_SCHEMA_VERSION
             )
         _register_json_artifact(context, "technical_potential", result)
+        return result
+
+    def lcoe_modeling_run(context: PhaseContext) -> LcoeSummary:
+        """F6: LCOE summaries, design matrix and nominal supply curves per technology; fails loudly while parameters are absent."""
+        if max_batch_gb is None:
+            raise RuntimeError("lcoe_modeling needs settings.yaml memory.max_batch_gb (A-10)")
+        sampler = load_experiments(EXPERIMENTS_YAML).sampler
+        result = build_lcoe(
+            context.country_code,
+            load_technologies(TECHNOLOGIES_YAML),
+            context.require_country_params("technologies"),
+            technologies,
+            sampler_seed=sampler.seed,
+            sampler_size=sampler.initial_size,
+            max_batch_gb=max_batch_gb,
+            production=production,
+        )
+        for tech, entry in result.technologies.items():
+            context.register_artifact(
+                f"lcoe_summary_{tech}", entry.lcoe_summary, LCOE_TABLE_SCHEMA_VERSION
+            )
+            context.register_artifact(
+                f"design_matrix_{tech}", entry.design_matrix, LCOE_TABLE_SCHEMA_VERSION
+            )
+            context.register_artifact(
+                f"supply_curve_{tech}", entry.supply_curve, LCOE_TABLE_SCHEMA_VERSION
+            )
+        _register_json_artifact(context, "lcoe_modeling", result)
         return result
 
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
@@ -618,6 +651,24 @@ def _build_phase_specs(
             ),
         ),
         PhaseSpec(
+            name="lcoe_modeling",
+            output_model=LcoeSummary,
+            run=lcoe_modeling_run,
+            requires=frozenset({"land_eligibility", "forcing", "members"})
+            | {f"potential_{tech}__central" for tech in technologies},
+            produces=frozenset({"lcoe_modeling"})
+            | {
+                f"{kind}_{tech}"
+                for tech in technologies
+                for kind in ("lcoe_summary", "design_matrix", "supply_curve")
+            },
+            summarize=lambda out: "; ".join(
+                f"{t}: {e.n_rows} cell-members, {e.n_samples} samples, "
+                f"nominal LCOE at m0 median {e.lcoe_nominal_m0_median} USD/MWh"
+                for t, e in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
             name="potential_maps",
             output_model=PotentialMapsSummary,
             run=potential_maps_run,
@@ -686,6 +737,7 @@ def run_geofrea(
     technologies: tuple[str, ...] = (),
     production: bool = False,
     figures: str = "all",
+    max_batch_gb: float | None = None,
 ) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
@@ -707,6 +759,7 @@ def run_geofrea(
         technologies: settings.yaml's `run.technologies`, threaded to technical_potential.
         production: Whether this is a production run, threaded to technical_potential.
         figures: settings.yaml's `figures`, threaded to potential_maps.
+        max_batch_gb: settings.yaml's `memory.max_batch_gb`, threaded to lcoe_modeling.
 
     Returns:
         A tuple: (True if every one of target_phases ended "success",
@@ -750,7 +803,13 @@ def run_geofrea(
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
     results = orchestrator.run(
         _build_phase_specs(
-            resolutions, distance_cap_km, audit_config, technologies, production, figures
+            resolutions,
+            distance_cap_km,
+            audit_config,
+            technologies,
+            production,
+            figures,
+            max_batch_gb,
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)
@@ -904,6 +963,7 @@ def main(argv: list[str] | None = None) -> int:
             tuple(settings.run.technologies),
             args.production,
             settings.figures,
+            settings.memory.max_batch_gb,
         )
         all_ok = all_ok and ok
         for phase_name, result in results.items():

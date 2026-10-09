@@ -95,11 +95,47 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "land_eligibility",
         "climate_forcing",
         "technical_potential",
+        "lcoe_modeling",
         "potential_maps",
         "hazard_context",
         "climate_maps",
         "overview",
     ]
+
+
+@pytest.mark.unit
+def test_lcoe_modeling_reads_the_central_potential_forcing_and_members_and_produces_three_tables_per_technology():
+    """D-F6-015: F6 requires the F5 central tables (not the other land scenarios), `forcing` and `members`; it produces its tables."""
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01),
+            100.0,
+            _audit_config(),
+            ("solar", "wind"),
+        )
+    }
+    f6 = specs["lcoe_modeling"]
+    assert f6.requires == frozenset(
+        {
+            "land_eligibility",
+            "forcing",
+            "members",
+            "potential_solar__central",
+            "potential_wind__central",
+        }
+    )
+    assert f6.produces == frozenset(
+        {"lcoe_modeling"}
+        | {
+            f"{kind}_{tech}"
+            for tech in ("solar", "wind")
+            for kind in ("lcoe_summary", "design_matrix", "supply_curve")
+        }
+    )
+    assert f6.requires <= specs["technical_potential"].produces | specs[
+        "climate_forcing"
+    ].produces | {"land_eligibility"}
 
 
 @pytest.mark.unit

@@ -1,8 +1,8 @@
-"""The synthetic country through F1 to F5 with no network (A-06, V-08, I-4, D13b).
+"""The synthetic country through F1 to F6 with no network (A-06, V-08, I-4, D13b, D-F6-014).
 
 The ZZZ fixture and its miniature climate inputs are generated into a scratch data directory; the orchestrator then runs data_acquisition,
 data_quality_audit, grid_alignment, siting_layers, land_eligibility (F3), external_inputs, climate_forcing (F4), technical_potential and
-potential_maps (F5) on them. Every socket connection is refused while the pipeline runs, so a hidden download fails the test.
+potential_maps (F5) and lcoe_modeling (F6) on them. Every socket connection is refused while the pipeline runs, so a hidden download fails the test.
 
 F5 needs a power curve and an IEC class rule, which the real registry leaves null until OQ-005 closes (D-F5-003): this test copies the
 registry with the synthetic rule (one class, no bound) and points the phase at the synthetic curve of `tests/fixtures/power_curves/`.
@@ -30,7 +30,7 @@ from geofrea.land_eligibility.cells import pixel_row_area_km2
 
 REPO = Path(__file__).resolve().parents[2]
 CURVES = REPO / "tests" / "fixtures" / "power_curves"
-PHASES = ["technical_potential", "potential_maps"]
+PHASES = ["technical_potential", "potential_maps", "lcoe_modeling"]
 SCENARIOS = ("central", "restrictive", "permissive")
 MASKED_MEMBER = "m_miroc6_ssp370_2071_2100"
 N_CELLS = 24  # 6 x 4 decision cells
@@ -85,6 +85,7 @@ def zzz(tmp_path_factory):
             tuple(settings.run.technologies),
             False,
             settings.figures,
+            settings.memory.max_batch_gb,
         )
         assert ok, {k: v.status for k, v in results.items()}
         yield data, results
@@ -102,7 +103,7 @@ def _eligibility(zzz, tech, scenario):
 
 
 @pytest.mark.synthetic
-def test_every_phase_from_f1_to_f5_runs_and_succeeds(zzz):
+def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
     _, results = zzz
     assert {name: r.status for name, r in results.items()} == {
         name: "success"
@@ -116,6 +117,7 @@ def test_every_phase_from_f1_to_f5_runs_and_succeeds(zzz):
             "climate_forcing",
             "technical_potential",
             "potential_maps",
+            "lcoe_modeling",
         )
     }
 
@@ -316,6 +318,114 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
     figures = _phase(zzz, "technical_potential", "figures")
     assert (figures / "potential_density_wind__ref__na__na.png").is_file()
     assert (figures / "potential_density_solar__ref__na__na.png").is_file()
+
+
+# -- F6 --------------------------------------------------------------------------------------------
+
+
+def _hand_lcoe(p, dist_grid, dist_road, e_year1, s):
+    """M-F6-01 year by year with plain floats, independent of the kernel module."""
+    capex_total = (
+        p * 1000 * s["capex_usd_per_kw"]
+        + p * dist_grid * s["grid_cost_usd_per_mw_km"]
+        + p * s["substation_cost_usd_per_mw"]
+        + dist_road * s["road_cost_usd_per_km"]
+    )
+    cost, energy = capex_total, 0.0
+    for t in range(1, int(s["lifetime_years"]) + 1):
+        e_t = e_year1 * (1 - s["degradation_rate"]) ** (t - 1)
+        opex_t = (
+            s["opex_fixed_frac"] * p * 1000 * s["capex_usd_per_kw"]
+            + s["opex_var_usd_per_mwh"] * e_t
+        )
+        cost += opex_t / (1 + s["discount_rate"]) ** t
+        energy += e_t / (1 + s["discount_rate"]) ** t
+    return cost / energy
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f6_produces_the_summary_design_matrix_and_supply_curve_from_the_f5_table(zzz, tech):
+    art = _phase(zzz, "lcoe_modeling")
+    potential = pd.read_parquet(
+        _phase(zzz, "technical_potential") / f"potential_{tech}__central.parquet"
+    )
+    summary = pd.read_parquet(art / f"lcoe_summary_{tech}.parquet")
+    design = pd.read_parquet(art / f"design_matrix_{tech}.parquet")
+    supply = pd.read_parquet(art / f"supply_curve_{tech}.parquet")
+    sampler = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))[
+        "sampler"
+    ]
+    assert len(summary) == len(potential) == len(supply)  # one row per cell-member, in every table
+    assert len(design) == sampler["initial_size"] + 1 and design["sample"].iloc[0] == 0
+    assert (
+        np.isfinite(
+            summary[["lcoe_nominal", "lcoe_mean", "lcoe_var", "lcoe_p10", "lcoe_p50", "lcoe_p90"]]
+        )
+        .all()
+        .all()
+    )
+    assert (summary["lcoe_p10"] <= summary["lcoe_p50"]).all() and (
+        summary["lcoe_p50"] <= summary["lcoe_p90"]
+    ).all()
+    assert (summary["n_nonfinite"] == 0).all()
+    cells = potential.drop_duplicates("cell_id")
+    assert summary["cell_id"].nunique() == len(cells)  # no cell lost
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech):
+    """A row of the F6 summary, recomputed from the F5 and F3 tables, the F4 forcing and the stored design matrix by plain arithmetic."""
+    from geofrea.core.config_loader import load_parameters
+
+    art = _phase(zzz, "lcoe_modeling")
+    summary = pd.read_parquet(art / f"lcoe_summary_{tech}.parquet").astype({"member": str})
+    design = pd.read_parquet(art / f"design_matrix_{tech}.parquet").set_index("sample")
+    potential = pd.read_parquet(
+        _phase(zzz, "technical_potential") / f"potential_{tech}__central.parquet"
+    ).astype({"member": str})
+    candidates = pd.read_parquet(
+        _phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet"
+    ).set_index("cell_id")
+    forcing = pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing.parquet").astype(
+        {"member": str}
+    )
+    nominal = {
+        k: float(v.value)
+        for k, v in getattr(
+            load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"].technologies, tech
+        ).__dict__.items()
+        if hasattr(v, "value") and v.value is not None
+    }
+    energy_key = "gamma" if tech == "solar" else "eta_loss"
+    warm = forcing[(forcing["member"] != "m0")].merge(potential, on=["cell_id", "member"])
+    pick = warm.iloc[len(warm) // 2]
+    cell, member = int(pick["cell_id"]), pick["member"]
+    d_t = float(pick["dT"])
+
+    def lcoe_of(sample):
+        s = {
+            k: float(design.loc[sample, k]) if k in design.columns else v
+            for k, v in nominal.items()
+        }
+        x, x0 = s[energy_key], nominal[energy_key]
+        factor = (1 + x * d_t) / (1 + x0 * d_t) if tech == "solar" else x / x0
+        return _hand_lcoe(
+            pick["P_MW"],
+            candidates.loc[cell, "dist_grid_km"],
+            candidates.loc[cell, "dist_road_km"],
+            pick["E_MWh"] * factor,
+            s,
+        )
+
+    draws = np.array([lcoe_of(i) for i in range(1, len(design))])
+    row = summary[(summary["cell_id"] == cell) & (summary["member"] == member)].iloc[0]
+    assert row["lcoe_nominal"] == pytest.approx(lcoe_of(0), rel=1e-10)
+    assert row["lcoe_mean"] == pytest.approx(draws.mean(), rel=1e-10)
+    assert row["lcoe_var"] == pytest.approx(draws.var(ddof=1), rel=1e-8)
+    for column, q in (("lcoe_p10", 0.1), ("lcoe_p50", 0.5), ("lcoe_p90", 0.9)):
+        assert row[column] == pytest.approx(np.quantile(draws, q), rel=1e-10)
 
 
 @pytest.mark.synthetic

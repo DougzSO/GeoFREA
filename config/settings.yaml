@@ -34,7 +34,8 @@ run:
   # F4 hazard_context, F4 climate_maps (diagnostic maps), F3 land_eligibility, overview, F5 technical_potential and
   # potential_maps. F5 is registered but not listed below: it fails loudly (MissingParameterError) while the real
   # countries lack LUF, power density, gamma, eta_loss, hub height and power curves (OQ-004, OQ-005, OQ-023); name it with
-  # `python main.py <ISO3> --phases technical_potential,potential_maps` once those values are entered. F6-F8 are not built yet.
+  # `python main.py <ISO3> --phases technical_potential,potential_maps` once those values are entered. F6 lcoe_modeling is
+  # registered and needs the same F5 values plus the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019, OQ-022); F7 and F8 are not built yet.
   # The legacy `suitability_criteria` phase was retired (V16).
   target_phases:
     - data_acquisition
@@ -78,6 +79,11 @@ geospatial:
     # frozen PRT/BRA baseline (docs/architecture/baseline-manifest.md). The grid is snapped so 0.05 degree
     # cells (S-06) nest exactly 5 x 5. The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
+
+# Memory budget of the batch phases (METHODOLOGY A-10, D-F6-005). F6 sizes its blocks of cells so that the live
+# cell-by-sample arrays (four of them at the peak) stay below this many GB; F7 does the same.
+memory:
+  max_batch_gb: 1
 
 # Which diagnostic figures a phase draws (METHODOLOGY A-08): all | summary | none. Rasters and tables are artifacts and are
 # always written; only PNG maps follow this setting. Honoured by climate_maps, overview (with its per-layer maps) and

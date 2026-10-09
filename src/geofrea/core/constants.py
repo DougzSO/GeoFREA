@@ -60,6 +60,9 @@ HOURS_PER_YEAR: float = 8760.0
 # Hours in a day, the unit conversion of PVOUT (kWh/kWp/day) to a capacity factor (M-F5-02).
 HOURS_PER_DAY: float = 24.0
 
+# Price base year of every cost in F6: constant 2024 USD (S-07). A cost parameter must declare it as its `price_year` (D-F6-008).
+PRICE_BASE_YEAR_USD: int = 2024
+
 # International Standard Atmosphere, ISO 2533, troposphere (V-04 sanity range of the air density; siting_layers/sanity.py).
 # Standard values of the atmosphere model, not parameters with a range (U-05).
 ISA_T0_K: float = 288.15  # temperature at mean sea level

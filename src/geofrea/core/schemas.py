@@ -451,6 +451,19 @@ class GeospatialConfig(BaseModel):
     distance_cap_km: PositiveFloat
 
 
+class MemoryConfig(BaseModel):
+    """memory section of settings.yaml (A-10).
+
+    Args:
+        max_batch_gb: Budget, in GB, of the largest cell-by-sample block F6 and F7 hold at once. The value lives only in
+            settings.yaml (no default here, CONVENTIONS); F6 derives its cell-block size from it (D-F6-005).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_batch_gb: PositiveFloat
+
+
 class SettingsFile(BaseModel):
     """Root schema for config/settings.yaml.
 
@@ -463,6 +476,7 @@ class SettingsFile(BaseModel):
         run: Country/phase selection for a pipeline execution.
         geospatial: Spatial processing configuration (currently just
             grid_alignment's target resolution).
+        memory: Memory budget of the batch phases (A-10).
         figures: Which diagnostic figures a phase draws (A-08): `all`, `summary` (the figure the thesis output
             needs, not the member-level ones) or `none`. Rasters and tables are artifacts and are always written.
             Honoured by climate_maps, overview (with its per-layer maps) and potential_maps.
@@ -472,6 +486,7 @@ class SettingsFile(BaseModel):
 
     run: RunConfig
     geospatial: GeospatialConfig
+    memory: MemoryConfig
     figures: Literal["all", "summary", "none"]
 
 

@@ -9,6 +9,7 @@ written under another contract. Values are written as they are.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Self
 
 import pandas as pd
 import pyarrow as pa
@@ -85,6 +86,83 @@ def write_table(
     table = table.cast(table_metadata(table.schema, schema_version, row_model, extra_metadata))
     pq.write_table(table, path, compression=compression)
     return path
+
+
+class TableWriter:
+    """Writes one Parquet table in chunks, so the whole table never sits in memory (A-10).
+
+    Each chunk is validated against `row_model` as `write_table` does; the first chunk fixes the schema, which carries the schema
+    version and the `extra_metadata`. The rows go to `<path>.partial`, which replaces `path` only on a clean `close`; an exception inside
+    the `with` block removes the partial file, so a failed run leaves no table that looks complete (A-09).
+
+    Implements: A-07, A-10.
+    """
+
+    def __init__(
+        self,
+        path: Path,
+        *,
+        schema_version: str,
+        row_model: type[BaseModel],
+        compression: str = "snappy",
+        extra_metadata: dict[str, str] | None = None,
+        empty_frame: pd.DataFrame | None = None,
+    ) -> None:
+        self.path = Path(path)
+        self._partial = self.path.with_name(self.path.name + ".partial")
+        self._schema_version = schema_version
+        self._row_model = row_model
+        self._compression = compression
+        self._extra = extra_metadata
+        self._empty = empty_frame
+        self._writer: pq.ParquetWriter | None = None
+        self._schema: pa.Schema | None = None
+        self.n_rows = 0
+
+    def write(self, df: pd.DataFrame) -> None:
+        """Append `df` as a row group."""
+        validate_columns(df, self._row_model)
+        table = pa.Table.from_pandas(df, preserve_index=False)
+        if self._writer is None:
+            self._schema = table_metadata(
+                table.schema, self._schema_version, self._row_model, self._extra
+            )
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._writer = pq.ParquetWriter(
+                self._partial, self._schema, compression=self._compression
+            )
+        self._writer.write_table(table.cast(self._schema))
+        self.n_rows += len(df)
+
+    def close(self) -> Path:
+        """Finish the file and move it to its final name; a writer that received no chunk writes `empty_frame` if it has one.
+
+        Raises:
+            TableSchemaError: nothing was written and no empty frame was given.
+        """
+        if self._writer is None:
+            if self._empty is None:
+                raise TableSchemaError(f"{self.path.name}: no rows written and no empty frame")
+            self.write(self._empty)
+        assert self._writer is not None
+        self._writer.close()
+        self._partial.replace(self.path)
+        return self.path
+
+    def abort(self) -> None:
+        """Drop the partial file."""
+        if self._writer is not None:
+            self._writer.close()
+        self._partial.unlink(missing_ok=True)
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if exc_type is not None:
+            self.abort()
+        else:
+            self.close()
 
 
 def read_schema_version(path: Path) -> str | None:

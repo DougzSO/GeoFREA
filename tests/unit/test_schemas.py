@@ -141,6 +141,7 @@ VALID_RUN_CONFIG = {
 VALID_SETTINGS_FILE = {
     "run": VALID_RUN_CONFIG,
     "geospatial": {"resolutions": {"suitability": 0.01}, "distance_cap_km": 100.0},
+    "memory": {"max_batch_gb": 1.0},
     "figures": "all",
 }
 

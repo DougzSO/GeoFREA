@@ -29,7 +29,7 @@ Requires: `candidates_<tech>__<scenario>.parquet` (F3; scenarios central, restri
 | A-01, A-03 | `PhaseSpec` `technical_potential` (requires `land_eligibility`, `forcing`, `forcing_masked`, `members`; produces per-technology, per-scenario keys) | `main.py:_build_phase_specs` | `test_main.py::test_build_phase_specs_returns_all_phases_in_order` | pass |
 | A-06, V-08 | Synthetic country runs F5 end to end (D-F5-013: candidate tables and forcing built in the test, ZZZ test values of `parameters.json`) | `tests/unit/test_technical_potential_pipeline.py` | `test_zzz_*`, `test_solar_values_follow_the_method`, `test_wind_values_follow_the_method` | pass (candidate tables and forcing built in the test; the real F3 and F4 output is covered by the synthetic end-to-end row) |
 | T-R1, D-F5-015 | COG of `P_MW / cell_area_km2` and of `CF` at `m0` (central scenario) and the potential-density figure, under `settings.yaml` `figures` | `maps.py:build_potential_maps`; `main.py` phase `potential_maps` | `test_technical_potential_maps.py` | pass |
-| A-06, V-08 | F1 to F5 on the synthetic country with F3 and F4 run for real (D-F5-018) | `tests/synthetic/test_zzz_end_to_end.py`, `scripts/zzz_climate_fixture.py` | `test_every_phase_from_f1_to_f5_runs_and_succeeds`, `test_wind_potential_has_no_row_for_a_declared_masked_cell_member_and_a_row_for_every_other` | pass |
+| A-06, V-08 | F1 to F5 on the synthetic country with F3 and F4 run for real (D-F5-018) | `tests/synthetic/test_zzz_end_to_end.py`, `scripts/zzz_climate_fixture.py` | `test_every_phase_from_f1_to_f6_runs_and_succeeds`, `test_wind_potential_has_no_row_for_a_declared_masked_cell_member_and_a_row_for_every_other` | pass |
 
 
 ## Active implementation decisions

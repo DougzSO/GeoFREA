@@ -49,6 +49,8 @@ KERNEL_PARAMETER_KEYS = (
     "road_cost_usd_per_km",
 )
 ENERGY_PARAMETER_KEY = "energy_parameter"
+# parameters the kernel sums over whole years (D-F6-010); the design matrix rounds them
+INTEGER_PARAMETER_KEYS = ("lifetime_years",)
 
 
 class KernelInputError(ValueError):
