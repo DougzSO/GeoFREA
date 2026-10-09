@@ -127,7 +127,7 @@ from geofrea.lcoe_modeling.convergence import ConvergenceSummary, build_converge
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
-from geofrea.robustness_analysis.pipeline import RobustnessSummary, build_robustness
+from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
@@ -580,14 +580,10 @@ def _build_phase_specs(
         )
         for tech, entry in result.technologies.items():
             for role, window in entry.windows.items():
-                context.register_artifact(
-                    f"robustness_{tech}__{role}", window.robustness, ROBUSTNESS_TABLE_SCHEMA_VERSION
-                )
-                context.register_artifact(
-                    f"nominal_lcoe_by_member_{tech}__{role}",
-                    window.nominal_by_member,
-                    ROBUSTNESS_TABLE_SCHEMA_VERSION,
-                )
+                for kind, path in window.tables.items():
+                    context.register_artifact(
+                        f"{kind}_{tech}__{role}", path, ROBUSTNESS_TABLE_SCHEMA_VERSION
+                    )
         _register_json_artifact(context, "robustness_analysis", result)
         return result
 
@@ -761,15 +757,24 @@ def _build_phase_specs(
             name="robustness_analysis",
             output_model=RobustnessSummary,
             run=robustness_analysis_run,
-            requires=frozenset({"land_eligibility", "forcing", "members"})
-            | {f"potential_{tech}__central" for tech in technologies}
-            | {f"lcoe_summary_{tech}" for tech in technologies},
+            requires=frozenset({"land_eligibility", "forcing", "members", "hazard_context"})
+            | {
+                f"potential_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            }
+            | {f"lcoe_summary_{tech}" for tech in technologies}
+            | {
+                f"lcoe_nominal_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS[1:]
+            },
             produces=frozenset({"robustness_analysis"})
             | {
                 f"{kind}_{tech}__{role}"
                 for tech in technologies
                 for role in ("core", "sensitivity")
-                for kind in ("robustness", "nominal_lcoe_by_member")
+                for kind in ROW_MODELS
             },
             summarize=lambda out: "; ".join(
                 f"{t}: "

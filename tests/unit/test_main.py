@@ -33,6 +33,8 @@ from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, A
 from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
 from geofrea.grid_alignment.adapter import GridAlignmentRequiresBordersError
 from geofrea.grid_alignment.schemas import GridAlignmentResult
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.robustness_analysis.pipeline import ROW_MODELS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
@@ -806,16 +808,26 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
             "land_eligibility",
             "forcing",
             "members",
-            "potential_solar__central",
-            "potential_wind__central",
+            "hazard_context",
+            *(
+                f"potential_{tech}__{scenario}"
+                for tech in ("solar", "wind")
+                for scenario in LAND_SCENARIOS
+            ),
             "lcoe_summary_solar",
             "lcoe_summary_wind",
+            *(
+                f"lcoe_nominal_{tech}__{scenario}"
+                for tech in ("solar", "wind")
+                for scenario in LAND_SCENARIOS[1:]
+            ),
         }
     )
     assert f7.requires <= (
         specs["lcoe_modeling"].produces
         | specs["technical_potential"].produces
         | specs["climate_forcing"].produces
+        | specs["hazard_context"].produces
         | {"land_eligibility"}
     )
     assert f7.produces == frozenset(
@@ -824,6 +836,6 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
             f"{kind}_{tech}__{role}"
             for tech in ("solar", "wind")
             for role in ("core", "sensitivity")
-            for kind in ("robustness", "nominal_lcoe_by_member")
+            for kind in ROW_MODELS
         }
     )

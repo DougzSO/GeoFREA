@@ -15,6 +15,7 @@ import yaml
 from geofrea.core.config_loader import load_parameters, load_technologies
 from geofrea.core.config_schemas import ExperimentsFile
 from geofrea.core.tables import write_table
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.pipeline import build_lcoe
 from geofrea.robustness_analysis.decision import (
     RobustnessConfigError,
@@ -22,6 +23,7 @@ from geofrea.robustness_analysis.decision import (
 )
 from geofrea.robustness_analysis.pipeline import (
     PROVENANCE_KEY,
+    ROW_MODELS,
     build_robustness,
     robustness_dir,
 )
@@ -65,7 +67,7 @@ def _country(**decision):
     )
 
 
-def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=("central",)):
+def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENARIOS):
     """F5-, F3- and F4-like inputs for 20 cells: `cf[(cell index, member)]` overrides a capacity factor, `absent` lists (cell index, member)."""
     cf = cf or {}
     rng = np.random.default_rng(21)
@@ -137,6 +139,11 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=("central"
             }
         ).to_parquet(cdir / f"candidates_{tech}__{scenario}.parquet")
     pd.concat(forcing, ignore_index=True).to_parquet(kdir / "forcing.parquet")
+    pd.DataFrame(
+        {"cell_id": pd.Series(dtype="int64"), "member": pd.Series(dtype="object")}
+    ).to_parquet(
+        kdir / "hazard_context.parquet"
+    )  # no member of these tests carries the hazard channel
     members = [
         {"member": "m0", "window": "1995-2014", "channels": {"resource": True, "hazard": False}}
     ]
@@ -158,6 +165,11 @@ def _run(tmp_path, tech="wind", country=None, experiments=None, gb=1.0, **stage)
     dirs = _stage(tmp_path / "in", tech, **stage)
     out = tmp_path / "out"
     out.mkdir(parents=True, exist_ok=True)
+    f6 = build_lcoe(
+        "ZZZ", load_technologies(REPO / "config" / "technologies.yaml"), country or _country(), [tech],
+        sampler_seed=42, sampler_size=24, max_batch_gb=gb, out_dir=tmp_path / "f6", **dirs,
+    )  # fmt: skip
+    dirs["lcoe_dir"] = Path(f6.technologies[tech].lcoe_summary).parent
     result = build_robustness(
         "ZZZ",
         load_technologies(REPO / "config" / "technologies.yaml"),
@@ -173,7 +185,7 @@ def _run(tmp_path, tech="wind", country=None, experiments=None, gb=1.0, **stage)
 
 
 def _table(entry, role="core") -> pd.DataFrame:
-    return pd.read_parquet(entry.windows[role].robustness)
+    return pd.read_parquet(entry.windows[role].tables["robustness"])
 
 
 def _meta(path: Path) -> dict:
@@ -246,11 +258,11 @@ def test_a_top_k_larger_than_the_ranked_set_takes_the_whole_set_and_says_so(tmp_
     country = _country(top_k_percent=100.0)
     entry, _, _ = _run(tmp_path, country=country, cf={(5, CORE[1]): 0.2, (6, CORE[0]): 0.2})
     window = entry.windows["core"]
-    table = pd.read_parquet(window.robustness)
+    table = pd.read_parquet(window.tables["robustness"])
     assert window.top_k_truncated and window.k == 20
     assert table["topk_robust"].sum() == 18  # the two fragile cells are not ranked
     assert table["topk_nominal"].sum() == 20
-    assert _meta(window.robustness)["top_k_truncated"] is True
+    assert _meta(window.tables["robustness"])["top_k_truncated"] is True
 
 
 @pytest.mark.unit
@@ -295,7 +307,7 @@ def test_a_null_tau_skips_sr_and_a_null_p_k_skips_the_top_k_flags_and_both_are_l
     assert {"OQ-008", "OQ-021", "OQ-010", "OQ-056"} <= skipped
     assert all(s["reason"] for s in entry.skipped)
     assert any("skipped" in r.message and "OQ-021" in r.message for r in caplog.records)
-    assert _meta(entry.windows["core"].robustness)["skipped_outputs"]
+    assert _meta(entry.windows["core"].tables["robustness"])["skipped_outputs"]
     assert table["robust_rank"].notna().any()  # the ranking by MR does not need p_k
 
 
@@ -340,14 +352,13 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
 
 @pytest.mark.unit
 def test_the_nominal_lcoe_of_f7_equals_the_lcoe_nominal_of_f6_for_every_member_and_cell(tmp_path):
-    entry, _, dirs = _run(tmp_path, scenarios=("central", "restrictive", "permissive"))
-    registry = load_technologies(REPO / "config" / "technologies.yaml")
-    f6 = build_lcoe(
-        "ZZZ", registry, _country(), ["wind"], sampler_seed=42, sampler_size=24, max_batch_gb=1.0,
-        out_dir=tmp_path / "f6", **dirs,
-    )  # fmt: skip
-    summary = pd.read_parquet(f6.technologies["wind"].lcoe_summary).astype({"member": str})
-    nominal = pd.read_parquet(entry.windows["core"].nominal_by_member).astype({"member": str})
+    entry, _, dirs = _run(tmp_path)
+    summary = pd.read_parquet(dirs["lcoe_dir"] / "lcoe_summary_wind.parquet").astype(
+        {"member": str}
+    )
+    nominal = pd.read_parquet(entry.windows["core"].tables["nominal_lcoe_by_member"]).astype(
+        {"member": str}
+    )
     merged = nominal.merge(
         summary, on=["cell_id", "member"], suffixes=("", "_f6"), validate="one_to_one"
     )
@@ -375,13 +386,10 @@ def test_the_sensitivity_window_has_its_own_set_and_files(tmp_path):
         and core.class_counts["climate_data_invalid"] == 0
     )
     names = sorted(p.name for p in out.iterdir())
-    assert names == [
-        "nominal_lcoe_by_member_wind__core.parquet",
-        "nominal_lcoe_by_member_wind__sensitivity.parquet",
-        "robustness_wind__core.parquet",
-        "robustness_wind__sensitivity.parquet",
-    ]
-    meta = _meta(core.robustness)
+    assert names == sorted(
+        f"{kind}_wind__{role}.parquet" for kind in ROW_MODELS for role in ("core", "sensitivity")
+    )
+    meta = _meta(core.tables["robustness"])
     assert (
         meta["provisional"] is False
         and meta["window"] == "2041-2070"
@@ -397,14 +405,14 @@ def test_an_empty_f7_set_writes_the_classes_only_and_warns(tmp_path, caplog):
     with caplog.at_level("WARNING"):
         entry, _, _ = _run(tmp_path, country=country)
     window = entry.windows["core"]
-    table = pd.read_parquet(window.robustness)
+    table = pd.read_parquet(window.tables["robustness"])
     assert window.n_f7_set == 0 and window.class_counts["infeasible_at_f0"] == N_CELLS
     assert (table["cell_class"] == "infeasible_at_f0").all() and len(table) == N_CELLS
     for column in ("lcoe_nominal", "mr", "sr", "nominal_rank", "robust_rank", "topk_robust"):
         assert table[column].isna().all(), column
-    assert len(pd.read_parquet(window.nominal_by_member)) == 0
+    assert len(pd.read_parquet(window.tables["nominal_lcoe_by_member"])) == 0
     assert any("F7 set is empty" in r.message for r in caplog.records)
-    assert _meta(window.robustness)["empty_f7_set"] is True
+    assert _meta(window.tables["robustness"])["empty_f7_set"] is True
 
 
 @pytest.mark.unit
@@ -445,3 +453,85 @@ def test_robustness_dir_is_under_the_phase_outputs(tmp_path, monkeypatch):
     assert (
         robustness_dir("ZZZ") == tmp_path / "outputs" / "ZZZ" / "robustness_analysis" / "artifacts"
     )
+
+
+# -- futures, hypotheses, T-R12 and T-R10 (F7-B) -------------------------------------------------------------
+
+
+def _with_rules(**rules) -> ExperimentsFile:
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    raw["sampler"]["initial_size"] = 24
+    raw["hypothesis_rules"] = {f"H{i}": rules.get(f"H{i}") for i in range(1, 6)}
+    return ExperimentsFile.model_validate(raw)
+
+
+@pytest.mark.unit
+def test_the_futures_table_has_one_row_per_member_and_sample_with_sample_zero_nominal(tmp_path):
+    entry, _, _ = _run(tmp_path)
+    futures = pd.read_parquet(entry.windows["core"].tables["futures"])
+    assert len(futures) == len(CORE) * (24 + 1)
+    assert set(futures["member"].astype(str)) == set(CORE)
+    assert (futures.groupby("member", observed=True)["sample"].min() == 0).all()
+
+
+@pytest.mark.unit
+def test_without_a_pre_registered_rule_every_statistic_has_no_verdict_and_a_warning_says_so(
+    tmp_path, caplog
+):
+    entry, _, _ = _run(tmp_path)
+    hypothesis = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
+    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5"}
+    assert hypothesis["verdict"].isna().all() and hypothesis["verdict_reason"].notna().all()
+    assert sum("no pre-registered rule" in r.message for r in caplog.records) >= 5
+
+
+@pytest.mark.unit
+def test_a_pre_registered_rule_gives_met_or_not_met_and_never_for_the_other_statistics(tmp_path):
+    rule = {"statistic": "h2_mr_median", "comparison": "ge", "threshold": -1.0}
+    entry, _, _ = _run(tmp_path, experiments=_with_rules(H2=[rule]))
+    table = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
+    named = table[table["statistic"] == "h2_mr_median"].iloc[0]
+    assert named["verdict"] == "met" and named["rule"]
+    assert (
+        table[table["statistic"] != "h2_mr_median"]
+        .query("hypothesis == 'H2'")["verdict"]
+        .isna()
+        .all()
+    )
+    impossible = {"statistic": "h2_mr_median", "comparison": "lt", "threshold": -1.0}
+    other, _, _ = _run(tmp_path / "b", experiments=_with_rules(H2=[impossible]))
+    again = pd.read_parquet(other.windows["core"].tables["hypothesis"])
+    assert again.set_index("statistic").loc["h2_mr_median", "verdict"] == "not_met"
+
+
+@pytest.mark.unit
+def test_a_rule_that_names_an_unknown_statistic_fails_loudly(tmp_path):
+    from geofrea.robustness_analysis.hypotheses import HypothesisRuleError
+
+    rule = {"statistic": "h9_nothing", "comparison": "ge", "threshold": 0.0}
+    with pytest.raises(HypothesisRuleError):
+        _run(tmp_path, experiments=_with_rules(H1=[rule]))
+
+
+@pytest.mark.unit
+def test_the_potential_below_tau_of_the_tables_matches_the_evaluation_and_covers_three_scenarios(
+    tmp_path,
+):
+    entry, _, _ = _run(tmp_path)  # the run itself raises when the two disagree (V-03)
+    table = pd.read_parquet(entry.windows["core"].tables["potential_below_tau"])
+    nominal = table[table["basis"] == "nominal"]
+    assert set(nominal["land_scenario"]) == set(LAND_SCENARIOS)
+    assert set(table[table["basis"] != "nominal"]["basis"]) == {"p10", "p50", "p90"}
+    draws = table[table["basis"].isin(["p10", "p50", "p90"])].pivot(
+        index="member", columns="basis", values="potential_gw"
+    )
+    assert (draws["p10"] <= draws["p50"]).all() and (draws["p50"] <= draws["p90"]).all()
+
+
+@pytest.mark.unit
+def test_exposure_is_written_empty_and_flagged_when_no_member_carries_the_hazard_channel(tmp_path):
+    entry, _, _ = _run(tmp_path)
+    path = entry.windows["core"].tables["hazard_exposure"]
+    assert len(pd.read_parquet(path)) == 0
+    flag = json.loads(pq.read_schema(path).metadata[b"geofrea_robustness_skipped"])
+    assert "hazard channel" in flag["reason"] and flag["open_question"] == "OQ-007"

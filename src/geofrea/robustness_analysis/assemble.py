@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -10,6 +11,8 @@ import pandas as pd
 from geofrea.robustness_analysis.cell_set import CellSet
 from geofrea.robustness_analysis.decision import TechDecision
 from geofrea.robustness_analysis.evaluator import Evaluation
+from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
+from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.rankings import (
     TopK,
     capacity_target_set,
@@ -248,3 +251,101 @@ def nominal_by_member_frame(cell_set: CellSet, evaluation: Evaluation) -> pd.Dat
             )
         )
     return pd.concat(frames, ignore_index=True)
+
+
+def futures_frame(
+    cell_set: CellSet,
+    evaluation: Evaluation,
+    futures: FuturesResult,
+    labels: Sequence[MemberLabel],
+    design: pd.DataFrame,
+    parameter_names: Sequence[str],
+    factor_means: pd.DataFrame,
+) -> pd.DataFrame:
+    """One row per future `(m, s)`, sample 0 the nominal vector: descriptors, reference level and the sample-major reductions.
+
+    Implements: M-F7-08 (the PRIM input), U-08.
+
+    Args:
+        design: The design matrix (`sample` index, one column per uncertain parameter).
+        parameter_names: The uncertain parameters, in registry order.
+        factor_means: `delta_rsds`, `dT`, `delta_wind` averaged over the F7 set, indexed by member.
+    """
+    n_samples = evaluation.lowest.shape[1]
+    parameters = design.loc[:, list(parameter_names)].reset_index(drop=True)
+    frames = []
+    for j, label in enumerate(labels):
+        frame = parameters.copy()
+        frame.insert(0, "sample", np.arange(n_samples))
+        frame.insert(0, "member", label.member)
+        frame.insert(2, "gcm", label.gcm)
+        frame.insert(3, "ssp", label.ssp)
+        means = factor_means.loc[label.member]
+        frame.insert(4, "delta_rsds_mean", float(means["delta_rsds"]))
+        frame.insert(5, "dT_mean", float(means["dT"]))
+        frame.insert(6, "delta_wind_mean", float(means["delta_wind"]))
+        frame.insert(7, "lowest_lcoe", evaluation.lowest[1 + j])
+        frame.insert(8, "share_nominal_top_k_leaving", futures.share_leaving[j])
+        frame.insert(9, "jaccard_with_nominal_top_k", futures.jaccard_nominal[j])
+        frame.insert(
+            10,
+            "potential_below_tau_gw",
+            evaluation.potential_gw[1 + j]
+            if evaluation.potential_gw is not None
+            else pd.Series([pd.NA] * n_samples, dtype="Float64"),
+        )
+        frame.insert(
+            11,
+            "potential_below_tau_twh",
+            evaluation.potential_twh[1 + j]
+            if evaluation.potential_twh is not None
+            else pd.Series([pd.NA] * n_samples, dtype="Float64"),
+        )
+        frames.append(frame)
+    assert len(labels) == len(evaluation.members) == len(cell_set.core)
+    return pd.concat(frames, ignore_index=True)
+
+
+def draw_statistics_frame(futures: FuturesResult) -> pd.DataFrame:
+    """The per-draw statistics of the sample-major pass in long form (sample 0 is the nominal vector)."""
+    frames = []
+    for name, values in futures.draw_statistics.items():
+        finite = np.isfinite(values)
+        frames.append(
+            pd.DataFrame(
+                {
+                    "sample": np.arange(values.size),
+                    "statistic": name,
+                    "value": pd.Series(np.where(finite, values, np.nan)),
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
+def hypothesis_frame(
+    statistics: Sequence[Statistic], verdicts: Sequence[dict], window: str
+) -> pd.DataFrame:
+    """The statistics of H1 to H5 with the rule that names each one and its result (M-F7-07, OQ-050)."""
+    rows = []
+    for stat, verdict in zip(statistics, verdicts, strict=True):
+        rows.append(
+            {
+                "hypothesis": stat.hypothesis,
+                "statistic": stat.statistic,
+                "window": window,
+                "value": stat.value,
+                "p10": stat.p10,
+                "p50": stat.p50,
+                "p90": stat.p90,
+                "range_axis": stat.range_axis,
+                "n_cells": stat.n_cells,
+                "k": stat.k,
+                "top_k_truncated": stat.top_k_truncated,
+                "note": stat.note,
+                "rule": verdict["rule"],
+                "verdict": verdict["verdict"],
+                "verdict_reason": verdict["verdict_reason"],
+            }
+        )
+    return pd.DataFrame(rows)

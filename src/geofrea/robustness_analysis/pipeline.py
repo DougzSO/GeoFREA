@@ -1,11 +1,14 @@
 """F7 robustness_analysis end to end for one country: regret, satisficing, rankings, hypotheses and scenario discovery (M-F7-01 to M-F7-11).
 
-Reads, per technology, the F5 potential tables, the F3 candidates (the central scenario), `forcing.parquet`, `members.yaml` (F4) and the
-parameters of F6; computes the LCOE of every future with the pure F6 kernel (nothing sample-level is persisted, M-F7-10) and writes under
+Reads, per technology, the F5 potential tables, the F3 candidates (the central scenario), `forcing.parquet`, `hazard_context.parquet`, `members.yaml` (F4) and the
+F5 and F6 tables; computes the LCOE of every future with the pure F6 kernel (nothing sample-level is persisted, M-F7-10) and writes under
 `outputs/<ISO3>/robustness_analysis/artifacts/`, per technology and window role (`core`, `sensitivity`):
 
   - `robustness_<tech>__<role>.parquet`: one row per candidate cell (M-F7-11, D-F7-025);
-  - `nominal_lcoe_by_member_<tech>__<role>.parquet`: the nominal LCOE of the F7 set in `m0` and each member of the window.
+  - `nominal_lcoe_by_member_<tech>__<role>.parquet`: the nominal LCOE of the F7 set in `m0` and each member of the window;
+  - `futures_`, `draw_statistics_`, `hypothesis_`, `potential_below_tau_` and `hazard_exposure_<tech>__<role>.parquet`: the futures, the H1 to H5
+    statistics with their pre-registered rule, T-R12 and T-R10. An output whose decision parameter is null is written empty and says why in
+    its metadata (`geofrea_robustness_skipped`), because the DAG fixes the files.
 
 Nothing is read before the F6 inputs and the feasibility rule are checked: `RobustnessMissingInputError` lists every missing item (A-09).
 Any other decision parameter that is null skips the outputs that need it, each listed with the open question that blocks it (D-F7-023).
@@ -16,10 +19,11 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -30,6 +34,7 @@ from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
 from geofrea.lcoe_modeling.inputs import (
     LcoeMissingInputError,
@@ -39,11 +44,15 @@ from geofrea.lcoe_modeling.inputs import (
     resolve_all,
 )
 from geofrea.lcoe_modeling.kernel import KERNEL_VERSION
+from geofrea.lcoe_modeling.pipeline import CENTRAL_SCENARIO
 from geofrea.robustness_analysis.assemble import (
     Rankings,
     classes_only_frame,
     compute_rankings,
+    draw_statistics_frame,
     empty_nominal_frame,
+    futures_frame,
+    hypothesis_frame,
     nominal_by_member_frame,
     robustness_frame,
 )
@@ -56,19 +65,44 @@ from geofrea.robustness_analysis.decision import (
     decision_values,
     refusals,
     regret_quantile,
+    rules_for,
     skipped_outputs,
 )
 from geofrea.robustness_analysis.evaluator import evaluate
+from geofrea.robustness_analysis.futures import MemberLabel, futures_pass
+from geofrea.robustness_analysis.hypotheses import evaluate_rules, h1, h2, h3, h4, h5
 from geofrea.robustness_analysis.table_schemas import (
     ROBUSTNESS_TABLE_SCHEMA_VERSION,
+    DrawStatisticRow,
+    ExposureRow,
+    FutureRow,
+    HypothesisRow,
     NominalByMemberRow,
+    PotentialBelowTauRow,
     RobustnessRow,
+)
+from geofrea.robustness_analysis.thesis_tables import (
+    HazardMember,
+    exposure_rows,
+    potential_below_tau_draws,
+    potential_below_tau_nominal,
 )
 
 logger = logging.getLogger("geofrea.robustness_analysis.pipeline")
 
 PROVENANCE_KEY = "geofrea_robustness_provenance"
+SKIPPED_KEY = "geofrea_robustness_skipped"
 WINDOW_ROLES = ("core", "sensitivity")
+ROW_MODELS: dict[str, type[BaseModel]] = {
+    "robustness": RobustnessRow,
+    "nominal_lcoe_by_member": NominalByMemberRow,
+    "futures": FutureRow,
+    "draw_statistics": DrawStatisticRow,
+    "hypothesis": HypothesisRow,
+    "potential_below_tau": PotentialBelowTauRow,
+    "hazard_exposure": ExposureRow,
+}
+WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
 class RobustnessInputError(RuntimeError):
@@ -86,8 +120,7 @@ class WindowResult(BaseModel):
     k: int | None
     top_k_truncated: bool
     target_unreachable: bool | None
-    robustness: Path
-    nominal_by_member: Path
+    tables: dict[str, Path]
 
 
 class TechRobustness(BaseModel):
@@ -190,6 +223,24 @@ def _read_candidates(path: Path) -> pd.DataFrame:
     return table.reset_index(drop=True)
 
 
+def member_factor_means(
+    forcing_path: Path, cell_ids: np.ndarray, members: Sequence[str]
+) -> pd.DataFrame:
+    """The country-mean change factors of each member over the cells of the F7 set (descriptors of the futures, M-F7-08)."""
+    forcing = pd.read_parquet(
+        forcing_path,
+        columns=["cell_id", "member", "delta_rsds", "dT", "delta_wind"],
+        filters=[("member", "in", list(members))],
+    )
+    forcing = forcing[forcing["cell_id"].isin(cell_ids)]
+    forcing = forcing.assign(member=forcing["member"].astype(str))
+    means = forcing.groupby("member")[["delta_rsds", "dT", "delta_wind"]].mean()
+    missing = sorted(set(members) - set(means.index))
+    if missing:
+        raise RobustnessInputError(f"forcing.parquet has no rows of the F7 set for {missing}")
+    return means.astype("float64")
+
+
 def _skipped_dicts(skipped: Sequence[SkippedOutput]) -> list[dict[str, str]]:
     return [
         {"output": s.output, "reason": s.reason, "open_question": s.open_question} for s in skipped
@@ -247,6 +298,70 @@ def _provenance(
     return {PROVENANCE_KEY: json.dumps(payload, sort_keys=True)}
 
 
+def _empty_frame(row_model: type[BaseModel]) -> pd.DataFrame:
+    """A zero-row frame with the columns of `row_model`: the table of an output that was skipped."""
+    return pd.DataFrame({name: pd.Series(dtype="object") for name in row_model.model_fields})
+
+
+@dataclass(frozen=True)
+class WindowPaths:
+    """Where the inputs of one technology are."""
+
+    potential_dir: Path
+    candidates_dir: Path
+    climate_dir: Path
+    lcoe_dir: Path
+    out_dir: Path
+
+
+def _write_tables(
+    tech: str,
+    role: str,
+    frames: Mapping[str, pd.DataFrame | None],
+    skips: Mapping[str, SkippedOutput],
+    provenance: dict[str, str],
+    out_dir: Path,
+) -> dict[str, Path]:
+    """Write every table of the window; one that was skipped is written empty and says why in its metadata (the DAG fixes the files)."""
+    paths: dict[str, Path] = {}
+    for kind in WINDOW_TABLES:
+        frame = frames.get(kind)
+        meta = dict(provenance)
+        if frame is None:
+            skip = skips[kind]
+            frame = _empty_frame(ROW_MODELS[kind])
+            meta[SKIPPED_KEY] = json.dumps(
+                {"output": skip.output, "reason": skip.reason, "open_question": skip.open_question}
+            )
+        paths[kind] = write_table(
+            frame,
+            out_dir / f"{kind}_{tech}__{role}.parquet",
+            schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION,
+            row_model=ROW_MODELS[kind],
+            compression="zstd",
+            extra_metadata=meta,
+        )
+    return paths
+
+
+def _scenario_tables(
+    scenario: str, tech: str, paths: WindowPaths
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """The F5 rows and the F6 nominal LCOE of a land scenario."""
+    potential = pd.read_parquet(
+        paths.potential_dir / f"potential_{tech}__{scenario}.parquet",
+        columns=["cell_id", "member", "P_MW", "CF", "E_MWh"],
+    )
+    if scenario == CENTRAL_SCENARIO:
+        lcoe = pd.read_parquet(
+            paths.lcoe_dir / f"lcoe_summary_{tech}.parquet",
+            columns=["cell_id", "member", "lcoe_nominal"],
+        )
+    else:
+        lcoe = pd.read_parquet(paths.lcoe_dir / f"lcoe_nominal_{tech}__{scenario}.parquet")
+    return potential, lcoe
+
+
 def run_window(
     iso: str,
     role: str,
@@ -256,26 +371,24 @@ def run_window(
     experiments: ExperimentsFile,
     entries: Sequence[MemberEntry],
     skipped: Sequence[SkippedOutput],
+    paths: WindowPaths,
     *,
-    potential_path: Path,
-    candidates_path: Path,
-    forcing_path: Path,
-    out_dir: Path,
     n_samples: int,
     seed: int,
     max_batch_gb: float,
     scale_id: str,
     production: bool,
 ) -> WindowResult:
-    """One window of one technology: the F7 set, the evaluation, the rankings and the per-cell tables.
+    """One window of one technology: the F7 set, the evaluation, the rankings, the hypotheses and the tables.
 
-    Implements: M-F7-01 to M-F7-06, M-F7-10, M-F7-11.
+    Implements: M-F7-01 to M-F7-07, M-F7-10, M-F7-11, T-R10, T-R12.
 
     An empty F7 set is not an error: the classes are written, every result column is null and a warning says so.
 
     Raises:
         RobustnessInputError: the window has no member.
         EvaluationError: a future has no feasible cell.
+        HypothesisRuleError: a pre-registered rule names a statistic that is not written.
     """
     tech = resolved.technology
     member_ids = [
@@ -284,6 +397,7 @@ def run_window(
     if not member_ids:
         raise RobustnessInputError(f"members.yaml has no member of the {role} window {window}")
     assert decision.cf_min is not None  # refused before any input is read otherwise
+    by_member = {e.member: e for e in entries}
     design = build_design(resolved.specs, n_samples, seed)
     samples = samples_from_design(design, resolved.nominal, resolved.energy_key)
     x = samples.energy_parameter
@@ -291,19 +405,39 @@ def run_window(
         item.member: item
         for item in read_member_inputs(
             resolved,
-            potential_path=potential_path,
-            candidates_path=candidates_path,
-            forcing_path=forcing_path,
+            potential_path=paths.potential_dir / f"potential_{tech}__{CENTRAL_SCENARIO}.parquet",
+            candidates_path=paths.candidates_dir / f"candidates_{tech}__{CENTRAL_SCENARIO}.parquet",
+            forcing_path=paths.climate_dir / "forcing.parquet",
             members=[REFERENCE_MEMBER_ID, *member_ids],
             x_range=(float(x.min()), float(x.max())),
             known_members=[e.member for e in entries],
         )
     }
-    candidates = _read_candidates(candidates_path)
+    candidates = _read_candidates(
+        paths.candidates_dir / f"candidates_{tech}__{CENTRAL_SCENARIO}.parquet"
+    )
     cell_set = build_cell_set(
         candidates["cell_id"].to_numpy(), data, REFERENCE_MEMBER_ID, member_ids, decision.cf_min
     )
     logger.info("%s %s [%s]: %s", iso, tech, role, cell_set.counts())
+
+    def provenance_for(ranking: Rankings | None) -> dict[str, str]:
+        return _provenance(
+            resolved,
+            decision,
+            experiments,
+            role=role,
+            window=window,
+            n_samples=n_samples,
+            seed=seed,
+            n_members=len(member_ids),
+            cell_set=cell_set,
+            ranking=ranking,
+            skipped=skipped,
+            scale_id=scale_id,
+            production=production,
+        )
+
     if cell_set.n_f7 == 0:
         logger.warning(
             "%s %s [%s]: the F7 set is empty (no candidate is present in m0 and in every member of the window and feasible at f0); only the classes are written",
@@ -311,31 +445,21 @@ def run_window(
             tech,
             role,
         )
-        return _write_window(
+        empty_skip = SkippedOutput("every result", "the F7 set is empty", "OQ-008")
+        frames = {
+            "robustness": classes_only_frame(cell_set, candidates),
+            "nominal_lcoe_by_member": empty_nominal_frame(),
+        }
+        tables = _write_tables(
             tech,
             role,
-            window,
-            cell_set,
-            None,
-            classes_only_frame(cell_set, candidates),
-            empty_nominal_frame(),
-            _provenance(
-                resolved,
-                decision,
-                experiments,
-                role=role,
-                window=window,
-                n_samples=n_samples,
-                seed=seed,
-                n_members=len(member_ids),
-                cell_set=cell_set,
-                ranking=None,
-                skipped=skipped,
-                scale_id=scale_id,
-                production=production,
-            ),
-            out_dir,
+            frames,
+            dict.fromkeys(WINDOW_TABLES, empty_skip),
+            provenance_for(None),
+            paths.out_dir,
         )
+        return _window_result(role, window, cell_set, None, tables)
+
     progress = PeriodicProgress(
         logger, len(member_ids) + 1, f"{iso} {tech} {role} members", every=5
     )
@@ -348,62 +472,176 @@ def run_window(
         progress=progress.step,
     )
     ranking = compute_rankings(cell_set, evaluation, decision)
-    provenance = _provenance(
-        resolved,
-        decision,
-        experiments,
-        role=role,
-        window=window,
-        n_samples=n_samples,
-        seed=seed,
-        n_members=len(member_ids),
-        cell_set=cell_set,
-        ranking=ranking,
-        skipped=skipped,
-        scale_id=scale_id,
-        production=production,
+    frames: dict[str, pd.DataFrame | None] = {
+        "robustness": robustness_frame(cell_set, evaluation, ranking, candidates),
+        "nominal_lcoe_by_member": nominal_by_member_frame(cell_set, evaluation),
+    }
+    skips: dict[str, SkippedOutput] = {}
+    admin1 = candidates["admin1_id"].to_numpy()[np.isin(cell_set.candidate_ids, cell_set.f7_ids)]
+    lat = candidates["lat_c"].to_numpy()[np.isin(cell_set.candidate_ids, cell_set.f7_ids)]
+    lon = candidates["lon_c"].to_numpy()[np.isin(cell_set.candidate_ids, cell_set.f7_ids)]
+
+    # the sample-major pass (H1, H3, the PRIM input, the ranges over the draws)
+    futures = None
+    if ranking.top_nominal is not None and ranking.k is not None:
+        labels = [
+            MemberLabel(m, by_member[m].gcm or "", by_member[m].ssp or "") for m in member_ids
+        ]
+        futures = futures_pass(
+            cell_set.core,
+            labels,
+            samples,
+            ranking.top_nominal.mask,
+            ranking.k,
+            max_batch_gb=max_batch_gb,
+            progress=PeriodicProgress(
+                logger, 1, f"{iso} {tech} {role} sample-major pass", every=1
+            ).step,
+        )
+        frames["futures"] = futures_frame(
+            cell_set,
+            evaluation,
+            futures,
+            labels,
+            design,
+            [s.name for s in resolved.specs],
+            member_factor_means(paths.climate_dir / "forcing.parquet", cell_set.f7_ids, member_ids),
+        )
+        frames["draw_statistics"] = draw_statistics_frame(futures)
+    else:
+        why = SkippedOutput(
+            "futures and per-draw statistics (H1, H3, PRIM input)",
+            "top_k_percent is null",
+            "OQ-021",
+        )
+        skips["futures"] = skips["draw_statistics"] = why
+
+    # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
+    land_range: dict[str, tuple[float, float]] = {}
+    if decision.tau is not None and evaluation.potential_gw is not None:
+        assert evaluation.potential_twh is not None
+        rows: list[dict] = []
+        for scenario in LAND_SCENARIOS:
+            potential, lcoe = _scenario_tables(scenario, tech, paths)
+            scenario_rows = potential_below_tau_nominal(
+                potential,
+                lcoe,
+                member_ids,
+                REFERENCE_MEMBER_ID,
+                decision.cf_min,
+                decision.tau,
+                decision.capacity_target_gw,
+                scenario,
+            )
+            rows += scenario_rows
+            like = [r for r in scenario_rows if r["series"] == "like_for_like"]
+            reference_gw = next(
+                r["potential_gw"] for r in like if r["member"] == REFERENCE_MEMBER_ID
+            )
+            land_range[scenario] = (
+                reference_gw,
+                float(
+                    np.median(
+                        [r["potential_gw"] for r in like if r["member"] != REFERENCE_MEMBER_ID]
+                    )
+                ),
+            )
+        rows += potential_below_tau_draws(
+            member_ids,
+            REFERENCE_MEMBER_ID,
+            evaluation.potential_gw,
+            evaluation.potential_twh,
+            decision.capacity_target_gw,
+        )
+        central_like = {
+            r["member"]: r["potential_gw"]
+            for r in rows
+            if r["land_scenario"] == CENTRAL_SCENARIO
+            and r["series"] == "like_for_like"
+            and r["basis"] == "nominal"
+        }
+        for slot, member in enumerate([REFERENCE_MEMBER_ID, *member_ids]):
+            if abs(central_like[member] - float(evaluation.potential_gw[slot, 0])) > 1e-9 * max(
+                1.0, abs(central_like[member])
+            ):
+                raise RobustnessInputError(
+                    f"{member}: the potential below tau of the tables and of the evaluation differ (V-03)"
+                )
+        frames["potential_below_tau"] = pd.DataFrame(rows)
+    else:
+        skips["potential_below_tau"] = SkippedOutput(
+            "potential below tau per member (T-R12)", "tau_lcoe_usd_per_mwh is null", "OQ-008"
+        )
+
+    # T-R10: exposure of potential to the hazard indicators, members with the hazard channel only
+    exposure_shares: dict[str, float] = {}
+    hazard_members = [e for e in entries if e.window == window and e.hazard]
+    thresholds = {k: v.threshold for k, v in experiments.hazard_thresholds.items()}
+    hazard_path = paths.climate_dir / "hazard_context.parquet"
+    if hazard_members and any(v is not None for v in thresholds.values()):
+        groups = {"f7_set": np.ones(cell_set.n_f7, dtype=bool)}
+        if ranking.top_nominal is not None and ranking.top_robust is not None:
+            groups["nominal_top_k"] = ranking.top_nominal.mask
+            groups["robust_top_k"] = ranking.top_robust.mask
+        members = []
+        for e in hazard_members:
+            item = data[e.member]
+            at = np.searchsorted(item.cell_id, cell_set.f7_ids)
+            members.append(
+                HazardMember(
+                    e.member,
+                    e.gcm or "",
+                    e.ssp or "",
+                    item.cells.p_mw[at],
+                    item.cells.energy_mwh[at],
+                )
+            )
+        rows, exposure_shares = exposure_rows(
+            pd.read_parquet(hazard_path), members, thresholds, cell_set.f7_ids, groups
+        )
+        frames["hazard_exposure"] = pd.DataFrame(rows)
+    elif not hazard_members:
+        skips["hazard_exposure"] = SkippedOutput(
+            "hazard exposure (T-R10)",
+            f"no member of the {window} window carries the hazard channel (S-05, L-021)",
+            "OQ-007",
+        )
+    else:
+        skips["hazard_exposure"] = SkippedOutput(
+            "hazard exposure (T-R10)", "every hazard_thresholds entry is null", "OQ-051"
+        )
+
+    # H1 to H5 and the pre-registered rules
+    statistics = h2(cell_set, evaluation, admin1) + h4(cell_set, evaluation, ranking)
+    if futures is not None:
+        statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
+    if evaluation.potential_gw is not None:
+        statistics += h5(
+            evaluation, cell_set.n_f7, decision.capacity_target_gw, exposure_shares, land_range
+        )
+    _, without_rule = rules_for(experiments)
+    for hypothesis in without_rule:
+        logger.warning(
+            "%s %s [%s]: %s has no pre-registered rule (OQ-050); its statistics carry no verdict",
+            iso,
+            tech,
+            role,
+            hypothesis,
+        )
+    frames["hypothesis"] = hypothesis_frame(
+        statistics, evaluate_rules(statistics, experiments.hypothesis_rules), window
     )
-    return _write_window(
-        tech,
-        role,
-        window,
-        cell_set,
-        ranking,
-        robustness_frame(cell_set, evaluation, ranking, candidates),
-        nominal_by_member_frame(cell_set, evaluation),
-        provenance,
-        out_dir,
-    )
+    tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
+    return _window_result(role, window, cell_set, ranking, tables)
 
 
-def _write_window(
-    tech: str,
+def _window_result(
     role: str,
     window: str,
     cell_set: CellSet,
     ranking: Rankings | None,
-    robustness: pd.DataFrame,
-    nominal: pd.DataFrame,
-    provenance: dict[str, str],
-    out_dir: Path,
+    tables: Mapping[str, Path],
 ) -> WindowResult:
-    """Write the two per-window tables and describe them."""
-    robustness_path = write_table(
-        robustness,
-        out_dir / f"robustness_{tech}__{role}.parquet",
-        schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION,
-        row_model=RobustnessRow,
-        compression="zstd",
-        extra_metadata=provenance,
-    )
-    nominal_path = write_table(
-        nominal,
-        out_dir / f"nominal_lcoe_by_member_{tech}__{role}.parquet",
-        schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION,
-        row_model=NominalByMemberRow,
-        compression="zstd",
-        extra_metadata=provenance,
-    )
     return WindowResult(
         role=role,
         window=window,
@@ -415,8 +653,7 @@ def _write_window(
         target_unreachable=None
         if ranking is None or ranking.target_reached is None
         else not ranking.target_reached,
-        robustness=robustness_path,
-        nominal_by_member=nominal_path,
+        tables=dict(tables),
     )
 
 
@@ -433,6 +670,7 @@ def build_robustness(
     potential_dir: Path | None = None,
     candidates_dir: Path | None = None,
     climate_dir: Path | None = None,
+    lcoe_dir: Path | None = None,
     out_dir: Path | None = None,
 ) -> RobustnessSummary:
     """F7 for `iso` and the technologies of the run, on the central land scenario, the core window and the sensitivity window.
@@ -442,29 +680,38 @@ def build_robustness(
     Raises:
         RobustnessConfigError: `q_ref` is not 0 (OQ-020).
         RobustnessMissingInputError: an F6 parameter or `CF_min` is missing; raised before any input is read.
-        FileNotFoundError: an F3, F4 or F5 input is absent.
+        FileNotFoundError: an F3, F4, F5 or F6 input is absent.
     """
     resolved, decisions = check_start(
         iso, technologies, country_params, run_technologies, experiments
     )
-    potential_dir = Path(
-        potential_dir or core_paths.phase_dir(iso, "technical_potential", "artifacts")
+    paths = WindowPaths(
+        potential_dir=Path(
+            potential_dir or core_paths.phase_dir(iso, "technical_potential", "artifacts")
+        ),
+        candidates_dir=Path(
+            candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
+        ),
+        climate_dir=Path(climate_dir or core_paths.phase_dir(iso, "climate_forcing", "artifacts")),
+        lcoe_dir=Path(lcoe_dir or core_paths.phase_dir(iso, "lcoe_modeling", "artifacts")),
+        out_dir=Path(out_dir or robustness_dir(iso)),
     )
-    candidates_dir = Path(
-        candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
-    )
-    climate_dir = Path(climate_dir or core_paths.phase_dir(iso, "climate_forcing", "artifacts"))
-    out_dir = Path(out_dir or robustness_dir(iso))
-    members_file = climate_dir / "members.yaml"
-    forcing_path = climate_dir / "forcing.parquet"
-    needed = [members_file, forcing_path]
+    needed = [
+        paths.climate_dir / "members.yaml",
+        paths.climate_dir / "forcing.parquet",
+        paths.climate_dir / "hazard_context.parquet",
+    ]
     for tech in resolved:
-        needed.append(potential_dir / f"potential_{tech}__central.parquet")
-        needed.append(candidates_dir / f"candidates_{tech}__central.parquet")
+        needed.append(paths.lcoe_dir / f"lcoe_summary_{tech}.parquet")
+        for scenario in LAND_SCENARIOS:
+            needed.append(paths.potential_dir / f"potential_{tech}__{scenario}.parquet")
+            needed.append(paths.candidates_dir / f"candidates_{tech}__{scenario}.parquet")
+            if scenario != CENTRAL_SCENARIO:
+                needed.append(paths.lcoe_dir / f"lcoe_nominal_{tech}__{scenario}.parquet")
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
-        raise FileNotFoundError(f"F7 input missing (F3, F4 and F5 must have run): {absent}")
-    entries = read_member_entries(members_file)
+        raise FileNotFoundError(f"F7 input missing (F3, F4, F5 and F6 must have run): {absent}")
+    entries = read_member_entries(paths.climate_dir / "members.yaml")
     has_hazard = any(e.hazard for e in entries)
     result: dict[str, TechRobustness] = {}
     for tech, res in resolved.items():
@@ -489,10 +736,7 @@ def build_robustness(
                 experiments,
                 entries,
                 skipped,
-                potential_path=potential_dir / f"potential_{tech}__central.parquet",
-                candidates_path=candidates_dir / f"candidates_{tech}__central.parquet",
-                forcing_path=forcing_path,
-                out_dir=out_dir,
+                paths,
                 n_samples=experiments.sampler.initial_size,
                 seed=experiments.sampler.seed,
                 max_batch_gb=max_batch_gb,

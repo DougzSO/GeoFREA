@@ -34,6 +34,7 @@ from geofrea.land_eligibility.cells import pixel_row_area_km2
 REPO = Path(__file__).resolve().parents[2]
 CURVES = REPO / "tests" / "fixtures" / "power_curves"
 PHASES = [
+    "hazard_context",
     "technical_potential",
     "potential_maps",
     "lcoe_modeling",
@@ -162,6 +163,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "land_eligibility",
             "external_inputs",
             "climate_forcing",
+            "hazard_context",
             "technical_potential",
             "potential_maps",
             "lcoe_modeling",
@@ -777,6 +779,23 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
         entry = summary["technologies"][tech]
         assert entry["provisional"] is False and set(entry["windows"]) == {"core", "sensitivity"}
         assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenarios(zzz, tech):
+    base = _phase(zzz, "robustness_analysis")
+    hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
+    assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5"}
+    assert hypothesis["verdict"].isna().all()  # no pre-registered rule in the shipped configuration
+    below = pd.read_parquet(base / f"potential_below_tau_{tech}__core.parquet")
+    assert set(below["land_scenario"]) == {"central", "restrictive", "permissive"}
+    futures = pd.read_parquet(base / f"futures_{tech}__core.parquet")
+    assert set(futures["sample"]) >= {0, 1}
+    # the 2041-2070 hazard members exist on ZZZ, but the shipped exposure thresholds are null (OQ-051)
+    exposure = base / f"hazard_exposure_{tech}__core.parquet"
+    assert len(pd.read_parquet(exposure)) == 0
+    assert b"geofrea_robustness_skipped" in pq.read_schema(exposure).metadata
 
 
 @pytest.mark.synthetic

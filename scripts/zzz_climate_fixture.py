@@ -7,8 +7,10 @@ small, deterministic stand-ins for all three under `GEOFREA_DATA_DIR/raw/{cmip6,
 - CMIP6: every GCM of `gcm_ensemble` x {historical 1995-2014, each SSP 2041-2100} x {rsds, sfcWind, tas}, on a 2 degree grid
   around the ZZZ extent. Values are a smooth base times a window effect; one scenario/window of one model carries a wind-speed
   ratio the validity mask must reject (M-F4-07), so the masked path runs in CI.
-- ISIMIP3b: three-day stubs for the hazard-channel models (the registry check is by size; no phase of F1 to F5 reads them).
-- ERA5: a constant annual-maximum gust product.
+- ISIMIP3b: daily `tasmax` and `pr` on a 3 x 3 grid of 0.25 degree for the hazard-channel models: the reference period 1995-2014 and each SSP in
+  2041-2070 (the only window with a hazard channel, D-F4-004), with hot days above 35 and 40 degrees and a wet-day pattern, so `hazard_context`
+  runs on ZZZ.
+- ERA5: a constant annual-maximum gust product, at the path `hazard_context` reads.
 
 Every file carries the mark `SYNTHETIC_MARK` and every registry has a `.synthetic` sidecar; `write_climate_fixture` refuses to
 overwrite a registry without one, so a data directory that holds real CMIP6 files is never touched. Use a scratch `GEOFREA_DATA_DIR` for it.
@@ -33,6 +35,10 @@ from geofrea.data_acquisition.cmip6_registry import (
 from geofrea.data_acquisition.era5_registry import Era5Registry, Era5RegistryEntry
 from geofrea.data_acquisition.isimip3b_registry import Isimip3bRegistry, Isimip3bRegistryEntry
 
+ISIMIP_LAT = np.array([-5.25, -5.0, -4.75])
+ISIMIP_LON = np.array([19.75, 20.0, 20.25])
+# warming of the daily maximum temperature per SSP (K), a test value that makes the 35 and 40 degree counts differ by scenario
+ISIMIP_WARMING_K = {"ssp126": 1.0, "ssp370": 2.5, "ssp585": 4.0}
 SYNTHETIC_MARK = "synthetic ZZZ fixture (scripts/zzz_climate_fixture.py)"
 CLIMATE_LAT = np.arange(
     -12.0, 3.0, 2.0
@@ -79,6 +85,34 @@ def _monthly_field(variable: str, years: tuple[int, int], effect: float, spike: 
     )
     ds[variable].attrs["units"] = UNITS[variable]
     return ds
+
+
+def _daily_field(
+    variable: str, years: tuple[int, int], g: int, warming: float, wetter: float
+) -> xr.Dataset:
+    """Daily (time, lat, lon) ISIMIP3b stand-in: a seasonal `tasmax` in K (peak about 310 K plus `warming`) or a `pr` flux with wet days."""
+    time = pd.date_range(f"{years[0]}-01-01", f"{years[1]}-12-31", freq="D")
+    doy = time.dayofyear.to_numpy()[:, None, None]
+    iy = np.arange(len(ISIMIP_LAT))[None, :, None]
+    ix = np.arange(len(ISIMIP_LON))[None, None, :]
+    if variable == "tasmax":
+        value = (
+            298.0
+            + 12.0 * np.sin(2 * np.pi * (doy - 100) / 365.0)
+            + 0.5 * g
+            + 0.3 * ix
+            + 0.2 * iy
+            + warming
+        )
+    else:
+        day = np.arange(len(time))[:, None, None]
+        wet = ((day + iy + 2 * ix) % 3) == 0
+        value = np.where(wet, 1.0e-4 * (1.5 + np.sin(day / 13.0)) * wetter, 0.0)
+    return xr.Dataset(
+        {variable: (("time", "lat", "lon"), value.astype("float32"))},
+        coords={"time": time, "lat": ISIMIP_LAT, "lon": ISIMIP_LON},
+        attrs={"title": SYNTHETIC_MARK},
+    )
 
 
 def _effect(variable: str, g: int, s: int, window_index: int) -> float:
@@ -182,12 +216,13 @@ def write_climate_fixture(experiments_yaml: Path, data_dir: Path | None = None) 
             for variable in ("tasmax", "pr"):
                 path = isimip_dir / "ZZZ" / f"{name}_{scenario}_{variable}_ZZZ.nc"
                 path.parent.mkdir(parents=True, exist_ok=True)
-                value = 300.0 if variable == "tasmax" else 1e-5
-                xr.Dataset(
-                    {variable: (("time",), np.full(3, value, dtype="float32"))},
-                    coords={"time": pd.date_range("2041-01-01", periods=3, freq="D")},
-                    attrs={"title": SYNTHETIC_MARK},
-                ).to_netcdf(path)
+                years = (1995, 2014) if scenario == "historical" else (2041, 2070)
+                warming = 0.0 if scenario == "historical" else ISIMIP_WARMING_K[scenario]
+                wetter = (
+                    1.0 if scenario == "historical" else 1.1 + 0.05 * experiments.index(scenario)
+                )
+                g = [x.cds_name for x in ensemble.gcms].index(gcm.cds_name)
+                _daily_field(variable, years, g, warming, wetter).to_netcdf(path)
                 entry = Isimip3bRegistryEntry(
                     gcm=name,
                     scenario=scenario,
@@ -202,7 +237,7 @@ def write_climate_fixture(experiments_yaml: Path, data_dir: Path | None = None) 
     Isimip3bRegistry(entries=isimip).save(paths[1])
     _mark_registry(paths[1])
 
-    era5_path = era5_dir / "ZZZ" / "fg10_annual_max_ZZZ.nc"
+    era5_path = raw / "era5" / "ZZZ" / "ZZZ_fg10_annual_max.nc"  # where `hazard_context` reads it
     era5_path.parent.mkdir(parents=True, exist_ok=True)
     xr.Dataset(
         {"fg10": (("year", "latitude", "longitude"), np.full((20, 3, 3), 15.0, dtype="float32"))},
