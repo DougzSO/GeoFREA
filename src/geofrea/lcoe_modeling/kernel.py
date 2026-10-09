@@ -23,8 +23,10 @@ Energy of a sample: `E_c(s) = energy_mwh_c * (energy_offset_c + energy_slope_c *
 parameter that scales the stored energy (`gamma` or `eta_loss`, D-F6-012) and offset and slope come from the capacity-factor model's
 `rescale_terms`. The factor is 1 at the nominal value of that parameter.
 
-Zero energy gives `LCOE = +inf` (D-F6-007). A negative or non-finite energy, a non-finite input, a non-integer lifetime or a rate outside
-its domain raises `KernelInputError` (A-09). A discount rate of zero is evaluated by the limit of the closed form (D-F6-010).
+Zero energy gives `LCOE = +inf` (D-F6-007). An optional energy floor per cell, `min_energy_mwh`, extends that rule: an entry whose sampled
+energy is below the floor is `+inf` too, so F7 can mark the cell-members that fail `CF_min` without a second energy block (M-F7-01,
+D-F7-007). A negative or non-finite energy, a non-finite input, a non-integer lifetime or a rate outside its domain raises
+`KernelInputError` (A-09). A discount rate of zero is evaluated by the limit of the closed form (D-F6-010).
 """
 
 from __future__ import annotations
@@ -244,10 +246,24 @@ def _check_energy_not_negative(cells: CellInputs, samples: SampleInputs) -> None
         raise KernelInputError("negative annual energy for some cell and sample (A-09)")
 
 
-def lcoe_block(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
+def _check_floor(cells: CellInputs, min_energy_mwh: np.ndarray) -> np.ndarray:
+    floor = np.asarray(min_energy_mwh, dtype="float64")
+    if floor.shape != (len(cells),):
+        raise KernelInputError(f"min_energy_mwh needs one value per cell, got shape {floor.shape}")
+    if np.isnan(floor).any() or (floor < 0).any():
+        raise KernelInputError("min_energy_mwh must be non-negative (infinity allowed) and not NaN")
+    return floor
+
+
+def lcoe_block(
+    cells: CellInputs, samples: SampleInputs, min_energy_mwh: np.ndarray | None = None
+) -> np.ndarray:
     """LCOE of every cell under every sample, shape `(C, S)`, USD2024/MWh.
 
-    Implements: M-F6-01, M-F6-05.
+    Implements: M-F6-01, M-F6-05, M-F7-01 (the energy floor).
+
+    `min_energy_mwh` is an optional floor per cell, in MWh per year: an entry whose annual sampled energy (before discounting) is below its floor is `+inf`, as an entry
+    of zero energy is. A floor of `0` changes nothing, a floor of `+inf` makes the whole row infeasible.
 
     Three temporaries of the block size are never alive together: the numerator block is built, the energy block is built beside it,
     the numerator is divided in place and the energy block is released, so the peak is two blocks plus a boolean mask.
@@ -256,6 +272,7 @@ def lcoe_block(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
         KernelInputError: an input is non-finite or outside its domain, or the sampled energy is negative.
     """
     _check_energy_not_negative(cells, samples)
+    floor = _check_floor(cells, min_energy_mwh) if min_energy_mwh is not None else None
     r, d, n = samples.discount_rate, samples.degradation_rate, samples.lifetime_years
     a_o = annuity_factor(r, n)
     a_e = energy_annuity_factor(r, d, n)
@@ -267,10 +284,16 @@ def lcoe_block(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
 
     energy = np.multiply.outer(cells.energy_mwh * cells.energy_slope, samples.energy_parameter)
     energy += (cells.energy_mwh * cells.energy_offset)[:, None]
+    below_floor = (
+        energy < floor[:, None] if floor is not None else None
+    )  # annual energy, before discounting
     energy *= a_e[None, :]
     with np.errstate(divide="ignore", invalid="ignore"):
         np.divide(block, energy, out=block)
     zero = energy == 0.0
+    if below_floor is not None:
+        zero |= below_floor
+        del below_floor
     del energy
     if zero.any():
         np.copyto(block, np.inf, where=zero)

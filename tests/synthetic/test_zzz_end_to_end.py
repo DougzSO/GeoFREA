@@ -33,7 +33,13 @@ from geofrea.land_eligibility.cells import pixel_row_area_km2
 
 REPO = Path(__file__).resolve().parents[2]
 CURVES = REPO / "tests" / "fixtures" / "power_curves"
-PHASES = ["technical_potential", "potential_maps", "lcoe_modeling", "sample_size_convergence"]
+PHASES = [
+    "technical_potential",
+    "potential_maps",
+    "lcoe_modeling",
+    "sample_size_convergence",
+    "robustness_analysis",
+]
 INITIAL_SIZE, CEILING, TOP_K_PERCENT = 16, 64, 25
 SCENARIOS = ("central", "restrictive", "permissive")
 MASKED_MEMBER = "m_miroc6_ssp370_2071_2100"
@@ -160,6 +166,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "potential_maps",
             "lcoe_modeling",
             "sample_size_convergence",
+            "robustness_analysis",
         )
     }
 
@@ -607,6 +614,188 @@ def test_f5_and_f6_run_on_the_coarse_cells_with_the_same_files(zzz, zzz_fine, te
     assert set(zip(summary["cell_id"], summary["member"].astype(str), strict=True)) == set(
         zip(potential["cell_id"], potential["member"].astype(str), strict=True)
     )
+
+
+# -- F7 ----------------------------------------------------------------------------------------------------
+
+
+def _robustness(zzz, tech, role="core"):
+    return pd.read_parquet(
+        _phase(zzz, "robustness_analysis") / f"robustness_{tech}__{role}.parquet"
+    )
+
+
+class _HandWorld:
+    """The ZZZ tables of one technology, read back for plain-arithmetic LCOE of any (cell, member, sample)."""
+
+    def __init__(self, zzz, tech):
+        from geofrea.core.config_loader import load_parameters
+
+        self.tech = tech
+        art = _phase(zzz, "lcoe_modeling")
+        self.design = pd.read_parquet(art / f"design_matrix_{tech}.parquet").set_index("sample")
+        self.potential = (
+            pd.read_parquet(
+                _phase(zzz, "technical_potential") / f"potential_{tech}__central.parquet"
+            )
+            .astype({"member": str})
+            .set_index(["cell_id", "member"])
+        )
+        self.candidates = pd.read_parquet(
+            _phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet"
+        ).set_index("cell_id")
+        self.forcing = (
+            pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing.parquet")
+            .astype({"member": str})
+            .set_index(["cell_id", "member"])
+        )
+        params = getattr(
+            load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"].technologies, tech
+        )
+        self.nominal = {
+            k: float(v.value)
+            for k, v in params.__dict__.items()
+            if hasattr(v, "value") and v.value is not None
+        }
+        self.energy_key = "gamma" if tech == "solar" else "eta_loss"
+
+    def lcoe(self, cell, member, sample):
+        s = {
+            k: float(self.design.loc[sample, k]) if k in self.design.columns else v
+            for k, v in self.nominal.items()
+        }
+        x, x0 = s[self.energy_key], self.nominal[self.energy_key]
+        row = self.potential.loc[(cell, member)]
+        d_t = float(self.forcing.loc[(cell, member), "dT"])
+        factor = (1 + x * d_t) / (1 + x0 * d_t) if self.tech == "solar" else x / x0
+        return _hand_lcoe(
+            row["P_MW"],
+            self.candidates.loc[cell, "dist_grid_km"],
+            self.candidates.loc[cell, "dist_road_km"],
+            row["E_MWh"] * factor,
+            s,
+        )
+
+
+def _core_members(zzz):
+    entries = yaml.safe_load(
+        (_phase(zzz, "climate_forcing") / "members.yaml").read_text(encoding="utf-8")
+    )["members"]
+    return [e["member"] for e in entries if e["window"] == "2041-2070"]
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_classifies_every_candidate_and_ranks_the_whole_f7_set_in_the_core_window(zzz, tech):
+    table = _robustness(zzz, tech)
+    candidates = pd.read_parquet(
+        _phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet"
+    )
+    assert sorted(table["cell_id"]) == sorted(candidates["cell_id"])
+    assert set(table["cell_class"]) == {"ranked"}  # cf_min is below every synthetic member
+    assert (table["failing_members"].map(len) == 0).all()
+    assert sorted(table["robust_rank"]) == list(range(1, len(table) + 1))
+    assert sorted(table["nominal_rank"]) == list(range(1, len(table) + 1))
+    assert (table["mr"] >= 0).all() and table["sr"].between(0, 1).all()
+    assert table["topk_robust"].sum() == table["topk_nominal"].sum() == -(-len(table) // 4)
+    assert set(table["admin1_id"]) <= {"ZZZ.1_1", "ZZZ.2_1"}
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_nominal_lcoe_is_the_nominal_lcoe_of_f6_for_the_reference_and_every_core_member(
+    zzz, tech
+):
+    nominal = pd.read_parquet(
+        _phase(zzz, "robustness_analysis") / f"nominal_lcoe_by_member_{tech}__core.parquet"
+    ).astype({"member": str})
+    f6 = pd.read_parquet(_phase(zzz, "lcoe_modeling") / f"lcoe_summary_{tech}.parquet").astype(
+        {"member": str}
+    )
+    merged = nominal.merge(
+        f6, on=["cell_id", "member"], suffixes=("", "_f6"), validate="one_to_one"
+    )
+    assert (
+        len(merged) == len(nominal) == len(_robustness(zzz, tech)) * (1 + len(_core_members(zzz)))
+    )
+    np.testing.assert_allclose(merged["lcoe_nominal"], merged["lcoe_nominal_f6"], rtol=1e-13)
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_max_regret_of_a_cell_is_recomputed_by_hand_from_the_pipeline_tables(zzz, tech):
+    """M-F7-03 with plain arithmetic: regret against the lowest LCOE of each future, P90 over the draws, maximum over the members."""
+    world = _HandWorld(zzz, tech)
+    table = _robustness(zzz, tech).set_index("cell_id")
+    cells = table.index.to_list()
+    probe = table.sort_values("robust_rank").index[len(table) // 2]
+    draws = range(1, len(world.design))
+    per_member = []
+    for member in _core_members(zzz):
+        regrets = []
+        for s in draws:
+            lcoe = {c: world.lcoe(c, member, s) for c in cells}
+            lowest = min(lcoe.values())
+            regrets.append((lcoe[probe] - lowest) / lowest)
+        per_member.append(np.quantile(regrets, 0.9))
+    assert table.loc[probe, "mr"] == pytest.approx(max(per_member), rel=1e-9)
+    # the same cell under the two single-axis families
+    climate_only = 0.0
+    for member in _core_members(zzz):
+        lowest = min(world.lcoe(c, member, 0) for c in cells)
+        climate_only = max(climate_only, (world.lcoe(probe, member, 0) - lowest) / lowest)
+    assert table.loc[probe, "mr_clim"] == pytest.approx(climate_only, rel=1e-9)
+    regrets = []
+    for s in draws:
+        lcoe = {c: world.lcoe(c, "m0", s) for c in cells}
+        lowest = min(lcoe.values())
+        regrets.append((lcoe[probe] - lowest) / lowest)
+    assert table.loc[probe, "mr_tech"] == pytest.approx(np.quantile(regrets, 0.9), rel=1e-9)
+
+
+@pytest.mark.synthetic
+def test_f7_flags_the_cells_a_masked_member_removes_from_the_sensitivity_window(zzz):
+    """D-F5-006: the masked cell-members of the 2071-2100 window make their cells climate-data-invalid there, and only there."""
+    masked = pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing_masked.parquet")
+    wind = _robustness(zzz, "wind", "sensitivity").set_index("cell_id")
+    expected = set(masked["cell_id"]) & set(wind.index)
+    assert set(wind.index[wind["cell_class"] == "climate_data_invalid"]) == expected
+    core = _robustness(zzz, "wind", "core")
+    assert set(core["cell_class"]) == {"ranked"}
+    assert (wind.loc[sorted(expected), "mr"].isna()).all()
+    assert (wind.loc[sorted(set(wind.index) - expected), "cell_class"] == "ranked").all()
+
+
+@pytest.mark.synthetic
+def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz):
+    summary = json.loads(
+        (zzz[0] / "outputs" / "ZZZ" / "artifacts" / "robustness_analysis.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for tech in ("solar", "wind"):
+        entry = summary["technologies"][tech]
+        assert entry["provisional"] is False and set(entry["windows"]) == {"core", "sensitivity"}
+        assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
+
+
+@pytest.mark.synthetic
+def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_the_solar_cells(
+    zzz_fine,
+):
+    """V-07: the 0.1 degree cells are fewer and wider, so the masked block of 2071-2100 covers every coarse solar cell."""
+    core = pd.read_parquet(
+        _fine(zzz_fine, "robustness_analysis") / "robustness_solar__core.parquet"
+    )
+    sensitivity = pd.read_parquet(
+        _fine(zzz_fine, "robustness_analysis") / "robustness_solar__sensitivity.parquet"
+    )
+    assert set(core["cell_class"]) == {"ranked"} and len(core) == len(sensitivity) > 0
+    assert set(sensitivity["cell_class"]) == {"climate_data_invalid"}
+    assert sensitivity["mr"].isna().all() and sensitivity["robust_rank"].isna().all()
+    wind = pd.read_parquet(_fine(zzz_fine, "robustness_analysis") / "robustness_wind__core.parquet")
+    assert sorted(wind["robust_rank"]) == list(range(1, len(wind) + 1))
+    assert (wind["cell_id"] // 3600 == wind["lat_c"].rsub(90.0).floordiv(0.1)).all()
 
 
 @pytest.mark.synthetic

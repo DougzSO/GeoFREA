@@ -106,7 +106,7 @@ from geofrea.core.production import (
     validate_run_technologies,
 )
 from geofrea.core.run_logging import configure_logging, render_run_table
-from geofrea.core.scale import DEFAULT_SCALE, SCALES, use_scale
+from geofrea.core.scale import DEFAULT_SCALE, SCALES, active_scale, use_scale
 from geofrea.core.schemas import ResolutionsConfig, SettingsFile
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
@@ -127,6 +127,8 @@ from geofrea.lcoe_modeling.convergence import ConvergenceSummary, build_converge
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
+from geofrea.robustness_analysis.pipeline import RobustnessSummary, build_robustness
+from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
@@ -562,6 +564,33 @@ def _build_phase_specs(
         _register_json_artifact(context, "sample_size_convergence", result)
         return result
 
+    def robustness_analysis_run(context: PhaseContext) -> RobustnessSummary:
+        """F7: regret, satisficing and the rankings over the F7 set; fails loudly while parameters or CF_min are absent."""
+        if max_batch_gb is None:
+            raise RuntimeError("robustness_analysis needs settings.yaml memory.max_batch_gb (A-10)")
+        result = build_robustness(
+            context.country_code,
+            load_technologies(TECHNOLOGIES_YAML),
+            context.require_country_params("technologies"),
+            technologies,
+            load_experiments(EXPERIMENTS_YAML),
+            max_batch_gb=max_batch_gb,
+            scale_id=active_scale().scale_id,
+            production=production,
+        )
+        for tech, entry in result.technologies.items():
+            for role, window in entry.windows.items():
+                context.register_artifact(
+                    f"robustness_{tech}__{role}", window.robustness, ROBUSTNESS_TABLE_SCHEMA_VERSION
+                )
+                context.register_artifact(
+                    f"nominal_lcoe_by_member_{tech}__{role}",
+                    window.nominal_by_member,
+                    ROBUSTNESS_TABLE_SCHEMA_VERSION,
+                )
+        _register_json_artifact(context, "robustness_analysis", result)
+        return result
+
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
         result = build_potential_maps(context.country_code, technologies, figures)
@@ -725,6 +754,30 @@ def _build_phase_specs(
                     else f"NOT converged by {e.sizes[-1]} samples"
                 )
                 + f" (provisional MR, {e.n_cells} cells)"
+                for t, e in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
+            name="robustness_analysis",
+            output_model=RobustnessSummary,
+            run=robustness_analysis_run,
+            requires=frozenset({"land_eligibility", "forcing", "members"})
+            | {f"potential_{tech}__central" for tech in technologies}
+            | {f"lcoe_summary_{tech}" for tech in technologies},
+            produces=frozenset({"robustness_analysis"})
+            | {
+                f"{kind}_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+                for kind in ("robustness", "nominal_lcoe_by_member")
+            },
+            summarize=lambda out: "; ".join(
+                f"{t}: "
+                + ", ".join(
+                    f"{r} {w.n_f7_set} of {w.n_candidates} cells in the F7 set"
+                    for r, w in e.windows.items()
+                )
+                + (f" ({len(e.skipped)} outputs skipped)" if e.skipped else "")
                 for t, e in out.technologies.items()
             ),
         ),

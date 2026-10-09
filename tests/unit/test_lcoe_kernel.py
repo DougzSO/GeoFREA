@@ -288,3 +288,43 @@ def test_the_kernel_module_is_pure_it_imports_no_io_or_table_library():
     }
     assert imported <= {"__future__", "collections", "dataclasses", "numpy"}
     assert not any(isinstance(n, ast.Name) and n.id in {"open", "print"} for n in ast.walk(tree))
+
+
+# -- the energy floor (M-F7-01, D-F7-007) ----------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_a_floor_of_zero_changes_nothing_and_an_infinite_floor_makes_the_row_infeasible():
+    cells = _cells([100.0, 200.0, 50.0], [10.0, 30.0, 5.0], [2.0, 4.0, 1.0], [3.0e5, 6.0e5, 1.5e5])
+    samples = _samples(energy_parameter=np.array([0.8, 0.9, 0.95]))
+    plain = lcoe_block(cells, samples)
+    np.testing.assert_array_equal(lcoe_block(cells, samples, min_energy_mwh=np.zeros(3)), plain)
+    floored = lcoe_block(cells, samples, min_energy_mwh=np.array([0.0, np.inf, 0.0]))
+    assert np.isposinf(floored[1]).all()
+    np.testing.assert_array_equal(floored[[0, 2]], plain[[0, 2]])
+
+
+@pytest.mark.unit
+def test_the_floor_compares_with_the_sampled_energy_and_is_the_cf_min_condition():
+    """`E >= P * 8760 * CF_min` is `CF >= CF_min`: a floor built that way marks exactly the cells below `CF_min`, per sample."""
+    p = np.array([100.0, 100.0, 100.0])
+    cf = np.array([0.20, 0.30, 0.40])
+    cells = _cells(p, 0.0, 0.0, p * cf * 8760.0, offset=np.ones(3), slope=np.zeros(3))
+    cf_min = 0.25
+    out = lcoe_block(cells, _samples(), min_energy_mwh=p * 8760.0 * cf_min)
+    assert np.isposinf(out[0]).all() and np.isfinite(out[1:]).all()
+    # a sampled energy that moves with the energy parameter crosses the floor inside one cell
+    slope = np.array([0.0, 0.0, 1.0])
+    offset = np.array([1.0, 1.0, 0.0])
+    moving = _cells(p, 0.0, 0.0, p * 0.4 * 8760.0, offset=offset, slope=slope)  # cell 2: E = E0 * x
+    samples = _samples(energy_parameter=np.array([0.5, 0.7, 0.9]))  # CF of cell 2 = 0.2, 0.28, 0.36
+    out = lcoe_block(moving, samples, min_energy_mwh=p * 8760.0 * cf_min)
+    assert np.isposinf(out[2, 0]) and np.isfinite(out[2, 1:]).all()
+
+
+@pytest.mark.unit
+def test_a_bad_floor_is_refused():
+    cells = _cells([100.0, 100.0], 1.0, 1.0, 1.0e5)
+    for bad in (np.zeros(3), np.array([0.0, -1.0]), np.array([0.0, np.nan])):
+        with pytest.raises(KernelInputError):
+            lcoe_block(cells, _samples(), min_energy_mwh=bad)

@@ -5,12 +5,25 @@ Methodology items: M-F7-01 to M-F7-11, V-03, V-07 (with the `scale` parameter of
 
 ## Contract
 
-Requires: F6 artifacts and kernel, `potential_<tech>__central.parquet`, `forcing.parquet`, `forcing_masked.parquet`, `hazard_context.parquet`, admin1 boundaries. Produces: `robustness_<tech>.parquet`, hypothesis test tables, PRIM boxes.
+Requires: the F6 kernel, inputs and `lcoe_summary_<tech>` (ordering and the `s0` invariant), `potential_<tech>__central.parquet`, `candidates_<tech>__central.parquet` (with `admin1_id`), `forcing.parquet`, `members.yaml`. Produces, per technology and window (`core`, `sensitivity`): `robustness_<tech>__<window>.parquet` and `nominal_lcoe_by_member_<tech>__<window>.parquet`; the hypothesis, futures, PRIM and exposure tables follow.
 
 ## Conformance
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
+| M-F7-01, D-F7-007 | Feasibility on the `CF(m, s0)` that F5 stores, handed to the kernel as an energy floor; the four classes of the candidates (ranked, climate-fragile with its failing members, climate-data-invalid, infeasible at f0) | `robustness_analysis/cell_set.py:build_cell_set`; `lcoe_modeling/kernel.py:lcoe_block` (`min_energy_mwh`) | `test_robustness_rankings.py::test_the_four_classes_follow_the_definitions_of_m_f7_01`, `test_lcoe_kernel.py` (floor), `test_robustness_pipeline.py::test_every_candidate_has_a_class_and_the_classes_follow_m_f7_01` | pass |
+| M-F7-02, D-F7-006 | `L*` over the feasible cells of the F7 set (`q_ref = 0`), relative regret, the worst-case regret for an infeasible entry; `q_ref` other than 0 refused | `evaluator.py:reference_levels`, `_member_pass_two`; `decision.py:regret_quantile` | `test_robustness_evaluator.py` (brute force, zero-energy draw, no feasible cell), `test_without_cf_min_or_with_another_q_ref_f7_refuses_before_reading_anything` | pass |
+| M-F7-03, D-F7-008, D-F7-010 | `MR` = maximum over core members of the exact P90 over the draws `s >= 1`; two passes; block-size independent | `evaluator.py:evaluate` | `test_the_streaming_evaluation_equals_the_brute_force_definition_whatever_the_block_size`, `test_one_cell_is_recomputed_by_hand_from_the_definitions`, `test_zzz_end_to_end.py::test_f7_max_regret_of_a_cell_is_recomputed_by_hand_from_the_pipeline_tables` | pass |
+| M-F7-04 | `SR` = share of the core futures that are feasible with LCOE at most `tau`; null without `tau` | `evaluator.py` (counter) | same files, `test_a_null_tau_skips_sr_and_a_null_p_k_skips_the_top_k_flags_and_both_are_listed` | pass |
+| M-F7-05, D-F7-012, D-F7-013 | Nominal and robust ranks, ties (exact float, `SR`, `cell_id`), `k` from the F7 set, truncation, capacity-target set | `rankings.py`, `assemble.py:compute_rankings` | `test_robustness_rankings.py`, `test_robustness_pipeline.py` (top-k, truncation, capacity target) | pass |
+| M-F7-06, D-F7-010 | `MR_clim`, `MR_tech`, their rankings and top-k sets; the variance of the relative LCOE split into the techno-economic and climate parts (law of total variance, exact) | `evaluator.py`, `assemble.py` | `test_the_variance_decomposition_is_the_law_of_total_variance_on_an_explicit_two_way_table` | partial (the Jaccard comparison and H4 follow) |
+| M-F7-10, A-10 | One member at a time, cell blocks with all samples, nothing sample-level kept; the peak memory stays near the block budget | `evaluator.py` | `test_the_peak_memory_of_the_evaluation_stays_near_the_block_budget`, `test_the_results_do_not_depend_on_the_memory_budget` | pass |
+| M-F7-11, D-F7-025 | `robustness_<tech>__<window>` per candidate and `nominal_lcoe_by_member_<tech>__<window>` per member, with provenance | `pipeline.py:run_window`, `assemble.py`, `table_schemas.py` | `test_robustness_pipeline.py`, `test_zzz_end_to_end.py` | partial (hypothesis, futures and PRIM tables follow) |
+| V-03 | `r >= 0`, `MR >= 0`, `0 <= SR <= 1`, every F7 cell ranked or fragile, no ranked cell with an infinite `MR`, the `s0` column equals F6's `lcoe_nominal` | `evaluator.py`, `pipeline.py` | `test_v03_invariants_hold`, `test_the_nominal_lcoe_of_f7_equals_the_lcoe_nominal_of_f6_for_every_member_and_cell` | pass |
+| A-09, D-F7-023 | Missing F6 inputs, `CF_min` or a price year: `RobustnessMissingInputError` lists all before any input is read (BRA, PRT and IND: the F6 items and `cf_min`); a null decision parameter skips the outputs that need it, each listed with its question; an empty F7 set writes the classes and warns | `decision.py`, `pipeline.py:check_start`, `build_robustness` | `test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min`, `test_a_null_tau_skips_sr_and_a_null_p_k_skips_the_top_k_flags_and_both_are_listed`, `test_an_empty_f7_set_writes_the_classes_only_and_warns` | pass |
+| A-04 | No technology name in the package | `robustness_analysis/` | `test_no_technology_name_appears_in_robustness_analysis` | pass |
+| A-01, A-02, D-F7-028 | `PhaseSpec` `robustness_analysis` | `main.py:_build_phase_specs` | `test_main.py::test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcing_and_members` | pass |
+| A-06, V-08 | F1 to F7 on the synthetic country at 0.05 and at 0.1 degree | `tests/synthetic/test_zzz_end_to_end.py` | `test_every_phase_from_f1_to_f6_runs_and_succeeds`, `test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_the_solar_cells` | pass |
 
 ## Active implementation decisions
 
@@ -56,4 +69,5 @@ Verdicts of 2026-10-09 on `docs/_audit/2026-10_F7_design.md` (METHODOLOGY 7.2.0;
 
 ## History
 
+- 2026-10-09: F7-A: the kernel energy floor, the neutral `lcoe_modeling/inputs.py`, the two-pass evaluator, the classes, the rankings, the per-cell tables and the `robustness_analysis` phase; ZZZ at both scales.
 - 2026-10-09: design report, verdicts D1 to D28, METHODOLOGY 7.2.0, decision parameters (null in BRA, PRT, IND; test values in ZZZ), OQ-056 and OQ-057; no phase code.

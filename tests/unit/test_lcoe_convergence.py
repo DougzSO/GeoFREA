@@ -23,13 +23,13 @@ from geofrea.lcoe_modeling.convergence import (
     run_protocol,
     top_k_cells,
 )
-from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_direct
-from geofrea.lcoe_modeling.pipeline import (
+from geofrea.lcoe_modeling.inputs import (
     LcoeInputError,
     LcoeMissingInputError,
     read_member_inputs,
     resolve_technology_costs,
 )
+from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_direct
 from geofrea.lcoe_modeling.provisional_regret import (
     ProvisionalRegretError,
     provisional_max_regret,

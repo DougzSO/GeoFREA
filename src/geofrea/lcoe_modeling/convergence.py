@@ -33,14 +33,14 @@ from geofrea.core.config_schemas import SamplerConfig, TechnologiesFile
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
-from geofrea.lcoe_modeling.kernel import CellInputs, lcoe_block
-from geofrea.lcoe_modeling.pipeline import (
+from geofrea.lcoe_modeling.inputs import (
     LcoeInputError,
     ResolvedLcoe,
     cells_per_block,
     read_member_inputs,
     resolve_all,
 )
+from geofrea.lcoe_modeling.kernel import CellInputs, lcoe_block
 from geofrea.lcoe_modeling.provisional_regret import PROVISIONAL, provisional_max_regret
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 

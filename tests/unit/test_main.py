@@ -97,6 +97,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "technical_potential",
         "lcoe_modeling",
         "sample_size_convergence",
+        "robustness_analysis",
         "potential_maps",
         "hazard_context",
         "climate_maps",
@@ -787,4 +788,42 @@ def test_the_run_id_depends_on_the_scale():
     )
     assert main._resolved_config_json(settings, parameters, "0p1deg") != main._resolved_config_json(
         settings, parameters
+    )
+
+
+@pytest.mark.unit
+def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcing_and_members():
+    """D-F7-028: F7 runs after F6 (the `s0` invariant reads its summary) and produces its tables per technology and window."""
+    specs = {
+        s.name: s
+        for s in main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), ("solar", "wind")
+        )
+    }
+    f7 = specs["robustness_analysis"]
+    assert f7.requires == frozenset(
+        {
+            "land_eligibility",
+            "forcing",
+            "members",
+            "potential_solar__central",
+            "potential_wind__central",
+            "lcoe_summary_solar",
+            "lcoe_summary_wind",
+        }
+    )
+    assert f7.requires <= (
+        specs["lcoe_modeling"].produces
+        | specs["technical_potential"].produces
+        | specs["climate_forcing"].produces
+        | {"land_eligibility"}
+    )
+    assert f7.produces == frozenset(
+        {"robustness_analysis"}
+        | {
+            f"{kind}_{tech}__{role}"
+            for tech in ("solar", "wind")
+            for role in ("core", "sensitivity")
+            for kind in ("robustness", "nominal_lcoe_by_member")
+        }
     )
