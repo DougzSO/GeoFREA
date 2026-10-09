@@ -44,7 +44,6 @@ from geofrea.lcoe_modeling.inputs import (
     resolve_all,
 )
 from geofrea.lcoe_modeling.kernel import KERNEL_VERSION
-from geofrea.lcoe_modeling.pipeline import CENTRAL_SCENARIO
 from geofrea.robustness_analysis.assemble import (
     Rankings,
     classes_only_frame,
@@ -93,6 +92,8 @@ from geofrea.robustness_analysis.thesis_tables import (
 )
 
 logger = logging.getLogger("geofrea.robustness_analysis.pipeline")
+
+CENTRAL_SCENARIO = LAND_SCENARIOS[0]
 
 PROVENANCE_KEY = "geofrea_robustness_provenance"
 SKIPPED_KEY = "geofrea_robustness_skipped"

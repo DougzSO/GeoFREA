@@ -245,13 +245,8 @@ thresholds:
     #   solar: 50  # USD/MWh
     #   wind: 60
 
-  # Top-k threshold (M-F7-05)
-  # Either:
-  #   - fixed p_k (0 < p_k <= 1): top p_k share of candidate cells by count
-  #   - capacity_target_gw: minimum national capacity to identify top-k
-  # OQ-021: top-k percentage p_k; OQ-010: national capacity target of the top-k sensitivity
-  top_k_percent: null  # Pending OQ-021; a percent of the candidate cells, 0 < p_k <= 100 (read by sample_size_convergence, D-F6-004)
-  top_k_capacity_gw: null  # Pending OQ-010
+  # The top-k share p_k (M-F7-05, OQ-021) and the capacity target (OQ-010) are per country and technology, in
+  # parameters.json (top_k_percent, capacity_target_gw); read by F7 and by sample_size_convergence.
 
   # Feasibility threshold (M-F7-01)
   # Capacity factor minimum for a cell to be feasible

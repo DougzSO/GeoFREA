@@ -44,7 +44,7 @@ PHASES = [
     "lcoe_maps",
     "robustness_maps",
 ]
-INITIAL_SIZE, CEILING, TOP_K_PERCENT = 16, 64, 25
+INITIAL_SIZE, CEILING = 16, 64
 SCENARIOS = ("central", "restrictive", "permissive")
 MASKED_MEMBER = "m_miroc6_ssp370_2071_2100"
 N_CELLS = 24  # 6 x 4 decision cells
@@ -75,7 +75,6 @@ def zzz(tmp_path_factory):
     for old, new in (
         ("initial_size: 500", f"initial_size: {INITIAL_SIZE}"),
         ("max_size_for_convergence: null", f"max_size_for_convergence: {CEILING}"),
-        ("top_k_percent: null", f"top_k_percent: {TOP_K_PERCENT}"),
         # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
         ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
@@ -528,13 +527,14 @@ def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech
 @pytest.mark.synthetic
 @pytest.mark.parametrize("tech", ["solar", "wind"])
 def test_sample_size_convergence_runs_on_zzz_with_small_sizes_to_prove_the_mechanism(zzz, tech):
-    """D-F6-004: the protocol doubles from the initial size within the ceiling; its MR is the provisional stand-in for F7's."""
+    """D-F6-004: the protocol doubles from the initial size within the ceiling; its MR is the definitive function of F7 (D-F7-027)."""
     table = pq.read_table(
         _phase(zzz, "sample_size_convergence") / f"sample_size_convergence_{tech}.parquet"
     )
     meta = json.loads(table.schema.metadata[b"geofrea_convergence_provenance"])
     rows = table.to_pandas()
-    assert meta["provisional"] is True and meta["mr_function"] == "provisional"
+    assert meta["provisional"] is False and meta["mr_function"] == "f7"
+    assert meta["cf_min"] > 0 and meta["top_k_percent"] == 25.0
     sizes = rows["n_samples"].tolist()
     assert sizes[0] == INITIAL_SIZE and sizes == [INITIAL_SIZE * 2**i for i in range(len(sizes))]
     assert max(sizes) <= CEILING and rows["k"].nunique() == 1
@@ -547,7 +547,7 @@ def test_sample_size_convergence_runs_on_zzz_with_small_sizes_to_prove_the_mecha
         )
     )
     assert summary["technologies"][tech]["adopted_size"] == meta["adopted_size"]
-    assert summary["technologies"][tech]["mr_function"] == "provisional"
+    assert summary["technologies"][tech]["mr_function"] == "f7"
 
 
 # -- the scale check: F3 to F6 at 0.1 degree with the same code (V-07, D-F3-013, D-F4-020) --------------

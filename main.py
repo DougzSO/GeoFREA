@@ -820,7 +820,7 @@ def _build_phase_specs(
                     if e.converged
                     else f"NOT converged by {e.sizes[-1]} samples"
                 )
-                + f" (provisional MR, {e.n_cells} cells)"
+                + f" (MR of F7, {e.n_cells} cells)"
                 for t, e in out.technologies.items()
             ),
         ),
