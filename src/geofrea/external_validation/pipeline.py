@@ -34,6 +34,7 @@ from geofrea.core.tables import write_table
 from geofrea.external_validation.enrichment import enrichment_rows, weighted_deciles
 from geofrea.external_validation.exclusion import exclusion_rows
 from geofrea.external_validation.inventory import (
+    inventory_path,
     load_inventory,
     pixel_of_units,
     row_sets,
@@ -75,6 +76,18 @@ OPERATING_SET = "operating"
 
 class ValidationInputError(RuntimeError):
     """An input table of F7b breaks its contract (A-09)."""
+
+
+class ValidationMissingInputError(FileNotFoundError):
+    """Inputs F7b needs are absent; the message lists every one of them before anything is read (A-09)."""
+
+    def __init__(self, iso: str, missing: Sequence[str]) -> None:
+        self.missing = list(missing)
+        super().__init__(
+            f"external_validation cannot run for {iso}: {len(self.missing)} missing input(s) "
+            "(F3, F5 and F6 must have run, and the plant inventory must be acquired): "
+            + "; ".join(self.missing)
+        )
 
 
 class TechValidation(BaseModel):
@@ -155,15 +168,14 @@ def build_external_validation(
     Implements: M-F7b-01 to M-F7b-04.
 
     Raises:
-        InventoryError: the plant inventory is absent, incomplete or synthetic in a production run.
-        FileNotFoundError: an F3, F5 or F6 input is absent.
+        InventoryError: the plant inventory is incomplete or synthetic in a production run.
+        ValidationMissingInputError: the inventory, or an F3, F5 or F6 input, is absent; every missing item is listed.
         ValidationInputError: a candidate has no nominal LCOE row at `m0`.
     """
     unknown = sorted(set(run_technologies) - set(technologies.technologies))
     if unknown:
         raise ValidationInputError(f"technologies not in the registry: {unknown}")
     config = load_experiments(experiments_yaml).external_validation
-    inventory = load_inventory(iso, production=production)
     potential_dir = Path(
         potential_dir or core_paths.phase_dir(iso, "technical_potential", "artifacts")
     )
@@ -171,15 +183,16 @@ def build_external_validation(
         candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
     )
     lcoe_dir = Path(lcoe_dir or core_paths.phase_dir(iso, "lcoe_modeling", "artifacts"))
-    out_dir = Path(out_dir or validation_dir(iso))
-    needed = []
+    needed = [inventory_path(iso)]
     for tech in run_technologies:
         needed.append(candidates_dir / f"candidates_{tech}__central.parquet")
         needed.append(lcoe_dir / f"lcoe_summary_{tech}.parquet")
         needed += [potential_dir / f"potential_{tech}__{s}.parquet" for s in LAND_SCENARIOS]
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
-        raise FileNotFoundError(f"F7b input missing (F3, F5 and F6 must have run): {absent}")
+        raise ValidationMissingInputError(iso, absent)
+    out_dir = Path(out_dir or validation_dir(iso))  # created only once every input is there
+    inventory = load_inventory(iso, production=production)
 
     la = load_land_availability(experiments_yaml)
     interim = core_paths.interim(iso, "land_eligibility")

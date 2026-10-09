@@ -726,7 +726,9 @@ def build_robustness(
         ),
         climate_dir=Path(climate_dir or core_paths.phase_dir(iso, "climate_forcing", "artifacts")),
         lcoe_dir=Path(lcoe_dir or core_paths.phase_dir(iso, "lcoe_modeling", "artifacts")),
-        out_dir=Path(out_dir or robustness_dir(iso)),
+        out_dir=Path(out_dir)
+        if out_dir
+        else core_paths.phase_dir(iso, "robustness_analysis", "artifacts"),
     )
     needed = [
         paths.climate_dir / "members.yaml",
@@ -743,6 +745,7 @@ def build_robustness(
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
         raise FileNotFoundError(f"F7 input missing (F3, F4, F5 and F6 must have run): {absent}")
+    paths.out_dir.mkdir(parents=True, exist_ok=True)  # created only once every input is there
     entries = read_member_entries(paths.climate_dir / "members.yaml")
     has_hazard = any(e.hazard for e in entries)
     result: dict[str, TechRobustness] = {}

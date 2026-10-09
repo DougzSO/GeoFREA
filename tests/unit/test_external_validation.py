@@ -290,3 +290,43 @@ def test_a_published_entry_with_an_unknown_unit_or_definition_is_refused():
         _entry(unit="MW")
     with pytest.raises(ValueError):
         _entry(definition="guess")
+
+
+# -- the real countries -----------------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
+def test_the_real_countries_fail_loud_listing_every_missing_input_and_write_nothing(
+    iso, tmp_path, monkeypatch
+):
+    from geofrea.core.config_loader import load_technologies
+    from geofrea.external_validation.pipeline import (
+        ValidationMissingInputError,
+        build_external_validation,
+    )
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    with pytest.raises(ValidationMissingInputError) as info:
+        build_external_validation(
+            iso,
+            load_technologies(REPO / "config" / "technologies.yaml"),
+            ["solar", "wind"],
+            REPO / "config" / "experiments.yaml",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    listed = info.value.missing
+    assert len(listed) == 1 + 2 * (
+        1 + 1 + 3
+    )  # the inventory, then per technology the candidates, the LCOE and three potentials
+    assert any(f"gem_solar_wind_{iso}.parquet" in item for item in listed)
+    for tech in ("solar", "wind"):
+        assert any(f"candidates_{tech}__central" in item for item in listed)
+        assert any(f"lcoe_summary_{tech}" in item for item in listed)
+        assert sum(f"potential_{tech}__" in item for item in listed) == 3
+    assert not (tmp_path / "outputs").exists()
