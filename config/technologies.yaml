@@ -40,6 +40,11 @@ solar:
     - power_density_mw_per_km2  # M-F5-01 (OQ-004)
     - gamma                     # M-F5-02 (OQ-023)
     - opex_var_usd_per_mwh      # M-F6-01 (OQ-016), not uncertain; F5 does not read it
+    - cf_min                    # M-F7-01 (OQ-008)
+    - tau_lcoe_usd_per_mwh      # M-F7-04, T-R12, H5 (OQ-008)
+    - capacity_target_gw        # M-F7-05, H5 (OQ-010)
+    - top_k_percent             # M-F7-05 (OQ-021)
+    - prim_outcome_share        # M-F7-08 (OQ-056)
 
   # Uncertain parameters (U-03, U-04)
   # Keys must exist in config/parameters.json countries.<ISO3>.technologies.solar
@@ -109,6 +114,11 @@ wind:
     - eta_loss                  # M-F5-03 (OQ-005)
     - hub_height_m              # M-F5-03 (OQ-005)
     - opex_var_usd_per_mwh      # M-F6-01 (OQ-016), not uncertain; F5 does not read it
+    - cf_min                    # M-F7-01 (OQ-008)
+    - tau_lcoe_usd_per_mwh      # M-F7-04, T-R12, H5 (OQ-008)
+    - capacity_target_gw        # M-F7-05, H5 (OQ-010)
+    - top_k_percent             # M-F7-05 (OQ-021)
+    - prim_outcome_share        # M-F7-08 (OQ-056)
 
   # Reference power curves (M-F5-03, D-F5-003, D-F5-004): IEC class -> curve id. The table and its
   # provenance live in config/power_curves/<curve_id>.yaml. No real curve exists until OQ-005 closes.

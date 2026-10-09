@@ -93,6 +93,60 @@ class SamplerConfig(BaseModel):
     convergence_tolerance: float = Field(gt=0)
 
 
+class HypothesisRule(BaseModel):
+    """One pre-registered decision rule (M-F7-07, OQ-050): the rule is met when `statistic <comparison> threshold`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    statistic: str
+    comparison: Literal["ge", "gt", "le", "lt"]
+    threshold: float
+
+
+class HazardThreshold(BaseModel):
+    """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    threshold: float | None
+    unit: str
+    source: str | None
+    tier: int | None
+
+
+class PrimConfig(BaseModel):
+    """PRIM peeling settings (M-F7-08, D-F7-023); null until the author records them with their source."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    peel_alpha: float | None = Field(gt=0, lt=1)
+    mass_min: float | None = Field(gt=0, lt=1)
+    source: str | None
+
+
+class ExternalValidationConfig(BaseModel):
+    """F7b settings (M-F7b-01 to M-F7b-03, D-F7b-004)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enrichment_lowest_deciles: list[int]
+    vintage_min_start_year: int | None
+    vintage_reason: str | None
+    excluded_location_accuracy: list[str] | None
+
+    @model_validator(mode="after")
+    def _deciles_and_reasons(self) -> ExternalValidationConfig:
+        if not self.enrichment_lowest_deciles or any(
+            d < 1 or d > 10 for d in self.enrichment_lowest_deciles
+        ):
+            raise ValueError(
+                "enrichment_lowest_deciles must be a non-empty list of integers in 1..10"
+            )
+        if self.vintage_min_start_year is not None and not self.vintage_reason:
+            raise ValueError("vintage_min_start_year needs vintage_reason")
+        return self
+
+
 class ExperimentsFile(BaseModel):
     """Root of `experiments.yaml`."""
 
@@ -105,3 +159,7 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
+    hypothesis_rules: dict[str, list[HypothesisRule] | None]
+    hazard_thresholds: dict[str, HazardThreshold]
+    prim: PrimConfig
+    external_validation: ExternalValidationConfig

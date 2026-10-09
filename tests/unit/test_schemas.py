@@ -75,6 +75,11 @@ VALID_SOLAR = {
     "grid_cost_usd_per_mw_km": dict(VALID_PENDING_VALUE),
     "substation_cost_usd_per_mw": dict(VALID_PENDING_VALUE),
     "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
+    "cf_min": dict(VALID_PENDING_VALUE),
+    "tau_lcoe_usd_per_mwh": dict(VALID_PENDING_VALUE),
+    "capacity_target_gw": dict(VALID_PENDING_VALUE),
+    "top_k_percent": dict(VALID_PENDING_VALUE),
+    "prim_outcome_share": dict(VALID_PENDING_VALUE),
 }
 
 VALID_WIND = {
@@ -92,6 +97,11 @@ VALID_WIND = {
     "grid_cost_usd_per_mw_km": dict(VALID_PENDING_VALUE),
     "substation_cost_usd_per_mw": dict(VALID_PENDING_VALUE),
     "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
+    "cf_min": dict(VALID_PENDING_VALUE),
+    "tau_lcoe_usd_per_mwh": dict(VALID_PENDING_VALUE),
+    "capacity_target_gw": dict(VALID_PENDING_VALUE),
+    "top_k_percent": dict(VALID_PENDING_VALUE),
+    "prim_outcome_share": dict(VALID_PENDING_VALUE),
 }
 
 VALID_TECHNOLOGIES = {"solar": VALID_SOLAR, "wind": VALID_WIND}

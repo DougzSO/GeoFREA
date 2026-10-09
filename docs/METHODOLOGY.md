@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.1.3 |
+| Version | 7.2.0 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-09 |
 | Owner | Douglas |
@@ -216,9 +216,10 @@ Critical transitions:
   - `dominant_exclusion`: constraint with the largest excluded area.
   - Resource attributes as eligible-area-weighted means: `pvout_kwh_kwp_day` (solar); `weibull_A_<h>`, `weibull_k_<h>`, `air_density_<h>` for each height (wind).
   - `dist_grid_km`, `dist_road_km`: eligible-area-weighted mean of the uncapped distance, plus `distance_capped` share (eligible-area share beyond the `distance_cap_km` threshold; a quality indicator, not a cost input).
+  - `admin1_id`: the GADM admin1 unit (first administrative level) that covers the largest area of the cell inside the country, by geometry intersection and never by bounding box (ties to the smallest unit identifier); the unit identifiers and names are written beside the cell table. H2 groups cells by it.
 - **M-F3-04.** A cell enters the candidate set if `eligible_area_km2 >= min_eligible_area_km2[tech]`. The candidate set of the central scenario is the set F7 uses (V1). The same rule applied to the other scenarios gives, per cell, the share of the named scenarios in which it is a candidate (candidate-set stability), reported beside the F7 results and not used by F7.
-- **M-F3-05.** Outputs: `candidates_<tech>.parquet` (one row per candidate cell, stable `cell_id`), pixel and cell eligibility COGs, dominant-exclusion COG.
-- **M-F3-06.** A 0.1 degree aggregation of the same pixels is produced for the scale check (V-07).
+- **M-F3-05.** Outputs: `candidates_<tech>.parquet` (one row per candidate cell, stable `cell_id`, with `admin1_id`), pixel and cell eligibility COGs, dominant-exclusion COG. The per-constraint excluded shares of the pixels are not persisted: F7b evaluates the pure eligibility engine of M-F3-01 at the pixels it needs (M-F7b-01). The files of a run at another scale (M-F3-06) are written under the scale-suffixed phase directory of A-08.
+- **M-F3-06.** The cell size is a parameter of the run, `scale` (0.05 degree, 5 x 5 pixels, the default; or 0.1 degree, 10 x 10 pixels). F3 aggregates the same pixels to the cells of that size with the same code (V-07). A run at 0.05 degree also writes `cells_0p1deg_<tech>.parquet`, the exact sum of the 2 x 2 cells, as an area check of the 0.1 degree run.
 
 ### F4 climate_forcing
 
@@ -234,7 +235,7 @@ Critical transitions:
   - `delta_wind = nbhd_mean(mean_window(sfcWind)) / nbhd_mean(mean_ref(sfcWind))` (multiplicative), where `nbhd_mean` is the mean over the `wind_ratio_neighbourhood_cells` x `wind_ratio_neighbourhood_cells` native cells centred on each cell (3 x 3, `config/experiments.yaml`). The neighbourhood keeps the ratio from exploding where a GCM's reference wind is near zero in a single cell (OQ-042); `delta_rsds` and `dT` stay per cell.
   - `dT = mean_window(tas) - mean_ref(tas)` (additive, K)
   - Reference period 1995-2014; annual means of the monthly climatology.
-- **M-F4-04.** Change factors are bilinearly interpolated to 0.05 degree cell centers.
+- **M-F4-04.** Change factors are bilinearly interpolated to the cell centers of the run scale (0.05 degree by default, 0.1 degree in the scale check of V-07).
 - **M-F4-05.** Hazard channels (D15 rule):
   - C1 (mean resource) always enters F5 through M-F4-03.
   - C2 (operational extremes: extreme heat, extreme wind) and C3 (damage and cost: extreme precipitation) enter F5 or F6 quantitatively only with a loss function of evidence Tier 1 or 2 (resolved in OQ-007). Otherwise they are computed as per-cell context indicators per member and reported in T-R10, never entering regret or satisficing.
@@ -271,32 +272,32 @@ Critical transitions:
 - **M-F6-03.** If a C3 loss function passes OQ-007, it enters as an OPEX adder per member.
 - **M-F6-04.** Streaming: per member, cells are processed in blocks with all samples of a block in memory, so that the quantiles are exact (A-10). Persisted per (`cell_id`, `member`): the nominal LCOE (sample `s0`), the mean, variance, p10, p50 and p90 over the draws `s >= 1` (the nominal vector is not among them), and the count of non-finite values. The design matrix is persisted. The full sample-level array is not.
 - **M-F6-05.** The kernel is a pure function importable by F7.
-- **M-F6-06.** Outputs: `lcoe_summary_<tech>.parquet`, `design_matrix_<tech>.parquet`, supply curves per member at nominal parameters.
+- **M-F6-06.** Outputs: `lcoe_summary_<tech>.parquet`, `design_matrix_<tech>.parquet`, supply curves per member at nominal parameters, and `lcoe_nominal_<tech>__<scenario>.parquet` for the restrictive and permissive land scenarios: the nominal LCOE (sample `s0`, no draws) per cell and member, which gives the land range of the potential below `tau` (U-08, T-R12, H5). Draws are taken for the central scenario only (V1).
 
 ### F7 robustness_analysis
 
 Definitions for one country and technology. `C` = candidate cells of the central land scenario (V1); land is not a factor of the futures. Futures `f = (m, s)` over climate members of the core window and samples; `f0 = (m0, s0)` is the nominal present future.
 
-- **M-F7-01. Feasibility.** `feasible(i, f) = CF_i,m >= CF_min[tech]` (OQ-008). A cell with `CF` below `CF_min` in the nominal future `f0 = (m0, s0)` leaves the F7 set. A cell feasible in `f0` and with `CF(m, s0) < CF_min` in at least one member `m` forms the class *climate-fragile*: the class is defined at the nominal parameters `s0` of each member, it is reported separately with the members in which it fails, and it is not ranked with an infinite MR. Infeasibility that arises only from the parameter samples (`CF(m, s0) >= CF_min` but `CF(m, s) < CF_min`) does not create the class (M-F7-02 gives it a finite regret). The set `C` of F7 is the candidates of the central land scenario that are present in every member of the core window. A cell for which at least one member is masked (M-F4-07) forms the class *climate-data-invalid*: it is reported with its count and a map, and it is neither ranked nor assigned a regret (D-F5-006).
-- **M-F7-02. Relative regret.** `L*_f` = the `q_ref` quantile of LCOE over feasible cells in `f` (default `q_ref = 0`, the minimum; OQ-020). `r_i,f = (LCOE_i,f - L*_f) / L*_f` for feasible cells. A cell that is not climate-fragile and is infeasible in a future `f = (m, s)` receives the regret of the feasible cell with the highest LCOE in `f` (the finite worst case), so no ranked cell has an infinite regret.
+- **M-F7-01. Feasibility.** `feasible(i, f) = CF_i,m >= CF_min[tech]` (OQ-008), evaluated on the capacity factor `CF(m, s0)` that F5 stores for the member at the nominal parameters, not on the parameter draws; the LCOE kernel receives it as an energy floor per cell, and for a feasible cell-member a draw is infeasible only when its energy is zero (infinite LCOE, M-F6-01). A cell with `CF` below `CF_min` in the nominal future `f0 = (m0, s0)` leaves the F7 set. A cell feasible in `f0` and with `CF(m, s0) < CF_min` in at least one member `m` forms the class *climate-fragile*: the class is defined at the nominal parameters `s0` of each member, it is reported separately with the members in which it fails, and it is not ranked with an infinite MR. Infeasibility that arises only from the parameter samples (`CF(m, s0) >= CF_min` but `CF(m, s) < CF_min`) does not create the class (M-F7-02 gives it a finite regret). The set `C` of F7 is the candidates of the central land scenario that are present in every member of the core window. A cell for which at least one member is masked (M-F4-07) forms the class *climate-data-invalid*: it is reported with its count and a map, and it is neither ranked nor assigned a regret (D-F5-006).
+- **M-F7-02. Relative regret.** `L*_f` = the `q_ref` quantile of LCOE over the feasible cells in `f` of the F7 set (the candidates of M-F7-01 that are feasible in `f0`, climate-fragile cells included where they are feasible in `f`; climate-data-invalid cells and cells infeasible in `f0` are outside it; default `q_ref = 0`, the minimum; OQ-020). `r_i,f = (LCOE_i,f - L*_f) / L*_f` for feasible cells. A cell that is not climate-fragile and is infeasible in a future `f = (m, s)` receives the regret of the feasible cell with the highest LCOE in `f` (the finite worst case), so no ranked cell has an infinite regret.
 - **M-F7-03. Primary metric.** `MR_i = max over members m of ( P90 over parameter samples s of r_i,(m,s) )`, the P90 taken over the draws `s >= 1` only; the nominal vector `s0` enters only the nominal ranking (M-F7-05) and the nominal future `f0`. Order of operations: `r` per future `(m, s)`; P90 over samples for each member; maximum over members. Secondary: SR (M-F7-04).
 - **M-F7-04. Satisficing robustness.** `SR_i` = share of futures with `feasible(i, f)` and `LCOE_i,f <= tau[country, tech]` (OQ-008).
-- **M-F7-05. Rankings.** Nominal rank by `LCOE_i,f0`; robust rank by `MR_i` (ties broken by `SR_i`), over the cells that are not climate-fragile. Top-k is the best `p_k` percent of candidate cells by count (OQ-021). Sensitivity, the strategy-level reading: top-k as the minimum cell set reaching a national capacity target (OQ-010).
-- **M-F7-06. Axis comparison (H4).** Primary: Jaccard(top-k nominal, top-k under climate-only futures `(m, s0)`) versus Jaccard(top-k nominal, top-k under techno-only futures `(m0, s)`). Secondary: per cell, law of total variance over futures, `Var(X) = E_m[Var_s(X)] + Var_m[E_s(X)]` (techno-economic part, climate part), computed on the relative LCOE `X = LCOE / L*_f`, accumulated by F7 in its own pass (`L*_f` depends on the future, so the moments of `X` are not a function of the F6 summaries).
+- **M-F7-05. Rankings.** Nominal rank by `LCOE_i,f0` over the F7 set; robust rank by `MR_i` (ties broken by `SR_i`, higher first) over the F7 set without the climate-fragile cells. Ties are exact equality of the float, then the next key, and finally ascending `cell_id` (A-12); no tolerance. Top-k is the best `k = ceil(p_k / 100 * n)` cells by count, at least 1, where `n` is the size of the F7 set (OQ-021): the nominal top-k is cut from the F7 set and the robust top-k from the ranked set, both with the same `k`, and a climate-fragile cell in the nominal top-k leaves it in every comparison. If the ranked set has fewer than `k` cells the robust top-k is the whole ranked set and the outputs flag `top_k_truncated`. Sensitivity, the strategy-level reading: top-k as the minimum cell set reaching the national capacity target of the technology (OQ-010), taking cells along the robust rank and adding their capacity until the target is met; a target above the capacity of the ranked set takes the whole set and the outputs flag `target_unreachable`.
+- **M-F7-06. Axis comparison (H4).** Primary: Jaccard(top-k nominal, top-k under climate-only futures `(m, s0)`) versus Jaccard(top-k nominal, top-k under techno-only futures `(m0, s)`), where the top-k under climate-only futures is the top-k by `MR_clim = max over members m of r_i,(m,s0)` and the top-k under techno-only futures is the top-k by `MR_tech = P90 over draws s >= 1 of r_i,(m0,s)`, both with the reference level, the feasibility and the ranked set of `MR` (M-F7-02, M-F7-03) and the tie rule of M-F7-05. Secondary: per cell, law of total variance over futures, `Var(X) = E_m[Var_s(X)] + Var_m[E_s(X)]` (techno-economic part, climate part), computed on the relative LCOE `X = LCOE / L*_f`, accumulated by F7 in its own pass (`L*_f` depends on the future, so the moments of `X` are not a function of the F6 summaries).
 - **M-F7-07. Hypothesis tests.**
   - H1: Spearman correlation of cell LCOE rankings between SSP pairs (per GCM and ensemble median); Jaccard of top-k between SSPs; share of nominal top-k cells leaving top-k under at least one member. Repeated for the 2071-2100 window as sensitivity. Decision rules (statistic and threshold) for H1 to H5 are pre-registered in OQ-050.
   - H2: within-country dispersion of `MR` (IQR relative to median; range across admin1 units) against the capacity-weighted national aggregate; repeated at 0.1 degree (V-07).
   - H3: Jaccard(top-k nominal, top-k robust); share of robust top-k capacity outside nominal top-k; capacity-weighted distance between the two sets' centroids.
   - H4: country ordering of the climate-only versus techno-only Jaccard comparison of M-F7-06 (primary), with the variance shares as secondary.
   - H5: per member, national potential (GW, TWh) below the cost threshold `tau` (OQ-008) and the share of potential in cells above the hazard exposure thresholds (OQ-051), each compared with the national target (OQ-010) at fixed central land; the land range is reported beside them (U-08). The decision rule is OQ-050.
-- **M-F7-08. Scenario discovery.** PRIM over future descriptors (parameter values, member change factors, SSP, GCM) with outcome "nominal top-k cell leaves top-k", per country and technology.
+- **M-F7-08. Scenario discovery.** PRIM over future descriptors (parameter values, member change factors, SSP, GCM), per country and technology, with one row per future `f = (m, s)` and the outcome "the share of the nominal top-k cells that are outside the top-k of `f` is at least `theta`" (OQ-056). The share is persisted for every future, so `theta` can change without a rerun.
 - **M-F7-09. Method agreement.** Kendall correlation between `MR` and `SR` rankings, supporting the RQ4 discussion.
 - **M-F7-10. Streaming.** One future at a time, vectorized over cells, updating running maxima and counters; a full evaluation of all futures is never held in memory.
 - **M-F7-11.** Outputs: `robustness_<tech>.parquet` (per cell: nominal LCOE and rank, MR, SR, climate-fragile flag and failing members, variance shares, top-k flags), hypothesis test tables, PRIM boxes.
 
 ### F7b external_validation
 
-- **M-F7b-01.** Share of existing plant capacity (GEM trackers) located in excluded pixels, per exclusion constraint. Tests the exclusion set.
+- **M-F7b-01.** Share of existing plant capacity (GEM trackers) located in excluded pixels, per exclusion constraint. Tests the exclusion set. The excluded share of each constraint at the pixel of a plant is evaluated by the pure eligibility engine of M-F3-01 on the aligned layers, not read from a stored layer.
 - **M-F7b-02.** Enrichment ratio: share of existing capacity in the lowest nominal-LCOE deciles divided by the share of eligible area in those deciles.
 - **M-F7b-03.** Comparison of national technical potential with published estimates, as a table with source and definition notes.
 - **M-F7b-04.** Existing plants reflect past auctions, policy, and grid access. Results are plausibility evidence, not accuracy.
@@ -364,7 +365,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
   - `raw/<source>/<ISO3|_global>/`: fetched raw data (GADM, HydroSHEDS, GEM trackers, WDPA, GWA)
   - `interim/<ISO3>/<layer>/`: intermediate processing caches
   - `outputs/<ISO3>/manifest.json`: run manifest per country
-  - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports)
+  - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports); a run at a scale other than 0.05 degree (M-F3-06) writes the phases that depend on the cell size (F3 onward, `overview`) under `<phase>__<scale>` (for example `land_eligibility__0p1deg`) and its manifest as `manifest__<scale>.json`
   - `outputs/thesis/`: F8 only
   - `reference/legacy_baseline_fc7b43d/`: frozen legacy results (read-only)
   - `logs/<ISO3>/`: per-country run logs
@@ -386,7 +387,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
 - **V-04. Sanity ranges.** Configured physical ranges for every resource layer and derived quantity; violations are reported by F1b and raise in F5.
 - **V-05. Convergence.** U-04.
 - **V-06. No calibration on validation data.** No parameter is fitted to existing plants. If a future version fits any parameter to plants, a spatial train and test split becomes mandatory for that parameter.
-- **V-07. Scale check.** F5-F7 rerun at 0.1 degree; H1 to H3 statistics reported side by side (MAUP).
+- **V-07. Scale check.** F3 to F7 rerun at 0.1 degree through the `scale` parameter of the run (M-F3-06), with the same code and no scale-specific branch; H1 to H3 statistics reported side by side (MAUP).
 - **V-08. Synthetic end-to-end.** A-06 in CI, through the last built phase; the test is extended with each phase built.
 
 ---
@@ -492,6 +493,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.2.0 | 2026-10-09 | MINOR (verdicts of 2026-10-09 on `docs/_audit/2026-10_F7_design.md`, recorded as D-F7-006 to D-F7-033 in `docs/phases/F7_robustness_analysis.md` and D-F7b-002 to D-F7b-007; no existing result is redefined, F7 and F7b are not built yet): M-F7-01 evaluates feasibility on `CF(m, s0)` through an energy floor in the kernel; M-F7-02 fixes the set of `L*`; M-F7-05 fixes the base of `k`, the ties, the truncation and the capacity-target reading; M-F7-06 defines the two criteria of the primary comparison; M-F7-08 gives the PRIM outcome per future; M-F3-03 adds `admin1_id`; M-F3-05 and M-F7b-01 state that the excluded shares of the pixels are not persisted and F7b evaluates the eligibility engine at the plant pixels; M-F3-06, M-F4-04, V-07 and A-08 make the cell size a run parameter (`scale`) of F3 to F7; M-F6-06 adds the nominal LCOE of the restrictive and permissive scenarios. IDs cited and not altered: M-F3-01, M-F6-01, M-F7-03, M-F7-07, OQ-008, OQ-010, OQ-020, OQ-021, OQ-056, U-08, V1, A-12. |
 | 7.1.3 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on the F6 commits): M-F7-03 states that the P90 over parameter samples uses only the draws `s >= 1`, the nominal vector entering only the nominal ranking (D-F6-003); U-04 states the convergence criterion as `1 - Jaccard` of the top-k sets of consecutive sizes below 0.01, adopting the larger size of the first pair that agrees, with the definitive F7 `MR` as the metric (D-F6-004; OQ-055 closed). IDs cited and not altered: M-F7-05, M-F7-02, M-F6-04. |
 | 7.1.2 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on `docs/_audit/2026-10_F6_design.md`, recorded as D-F6-001 to D-F6-016 in `docs/phases/F6_lcoe_modeling.md`; no result is redefined): M-F6-01 names the variable O&M key and unit (`opex_var_usd_per_mwh`, USD/MWh); M-F6-04 batches along cells with all samples in memory, and the summaries are taken over the draws `s >= 1`, with the nominal vector reported on its own and the count of non-finite values persisted (D2, D3, D7); M-F6-06 names the design matrix per technology (D13); M-F7-06 states that the secondary statistic is accumulated by F7, not read from the F6 summaries. IDs cited and not altered: A-10, U-03, M-F6-02, M-F7-03. |
 | 7.1.1 | 2026-10-08 | PATCH (a registered support phase had no mention): Sections 4.1 and 4.2 list `potential_maps` as a support phase of F5 (requires the central potential table, produces the potential-density and capacity-factor rasters and the maps, drawn as `settings.yaml` `figures` allows, A-08). IDs cited and not altered: A-01, A-07, A-08, T-R1. |

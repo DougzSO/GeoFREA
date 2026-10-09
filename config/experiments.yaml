@@ -265,6 +265,42 @@ thresholds:
   # OQ-020: Decision on q_ref
   regret_quantile: 0  # Pending OQ-020 (currently fixed at minimum)
 
+# F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
+# (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
+# `value <comparison> threshold`. All null until the author pre-registers them (before F7 runs on real data); F7 then writes
+# `verdict = null` and a warning, and never invents a rule.
+hypothesis_rules:
+  H1: null
+  H2: null
+  H3: null
+  H4: null
+  H5: null
+
+# Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
+# Source and tier are the author's; the wording is "exposed". All null until OQ-051 closes. The indicators are those of hazard_context.
+hazard_thresholds:
+  tx35_days: {threshold: null, unit: days, source: null, tier: null}
+  tx40_days: {threshold: null, unit: days, source: null, tier: null}
+  rx5day_mm: {threshold: null, unit: mm, source: null, tier: null}
+  wet_p95_exceed_freq: {threshold: null, unit: fraction, source: null, tier: null}
+  gust_mean_annual_max_ms: {threshold: null, unit: m/s, source: null, tier: null}
+
+# PRIM scenario discovery (M-F7-08, D-F7-023). Peeling fraction and minimum support (mass_min) follow Bryant and Lempert (2010); the
+# values and the source are the author's, null until recorded (the threshold theta of the outcome is `prim_outcome_share`, OQ-056).
+prim:
+  peel_alpha: null
+  mass_min: null
+  source: null
+
+# F7b external validation settings (M-F7b-01 to M-F7b-03, D-F7b-004). The deciles are the lowest eligible-area deciles of the nominal
+# LCOE at m0 whose enrichment ratio is reported. The vintage and location-accuracy filters are sensitivity rows: null reports only the
+# row for all operating units; a value needs its reason.
+external_validation:
+  enrichment_lowest_deciles: [1, 2, 3]
+  vintage_min_start_year: null
+  vintage_reason: null
+  excluded_location_accuracy: null
+
 # Future-only analysis (F7 onward)
 # OQ-013: Technical stack for the precomputed explorer (E1)
 # Not yet configurable here; placeholder for phase specification
