@@ -7,6 +7,12 @@
 
 ---
 
+## Addendum, 2026-10-09 (F6 design report) — F6, F7 and F7b have no CRAEI logic
+
+Rows M-F6-01, M-F6-02, M-F6-04, M-F7-01 to M-F7-10 and M-F7b-01 to M-F7b-04 were checked against `CRAEI_BASELINE_DIR` (HEAD `94e1050`, 2026-10-08) and found **not in CRAEI**: no LCOE kernel, Latin hypercube, streaming summary, feasibility filter, regret, satisficing, ranking, variance decomposition, hypothesis statistic, PRIM, Kendall correlation or F7b metric exists in its code, tests, configuration, documentation or git history (`docs/_audit/2026-10_F6_design.md`, section 1). Their verdict is *built fresh*; no A-11 header is needed in F6, F7 or F7b. The sentence of Notes for Douglas item 2, "30+ of the 47 not_implemented rows point to CRAEI", no longer holds for these rows. Consult-only, nothing copied: `hedge.py::p90_threshold` (quantile definition), `hedge.py::weighted_share` and `exposure/aggregate.py::_capacity_table` (capacity-weighted shares, F7b), and the per-unit loop of `scripts/04_daily_indices.py` (memory pattern of A-10).
+
+---
+
 ## Addendum, 2026-09-28 (COMMAND F4-1/F4-2) — two CRAEI attributions in this map disproved
 
 This map's row-34 claim for **M-F1-03** ("CRAEI (GEAR secondary): GWA Weibull and air-density fetch logic") and row-36 claim for **M-F1-05** ("CRAEI: ERA5 gust fetch logic") are both **wrong**: CRAEI does not carry a GWA Weibull/air-density fetch (M-F1-03 was built fresh, D-F1-014) and CRAEI explicitly decided against ERA5 gust in its own `D12` (`docs/DECISIONS.md:14`, closed 2026-09-16) — there is no ERA5 product anywhere in CRAEI's code, config, or data directories to adapt (verified directly against `CRAEI_BASELINE_DIR`, COMMAND F4-1). M-F1-05 is corrected in `docs/METHODOLOGY.md` v1.3.0 to drop the CRAEI/A-11 attribution and state it is built fresh.

@@ -157,7 +157,7 @@ def resolve_technology(
         )
     missing: list[str] = []
     values: dict[str, float] = {}
-    for key in dict.fromkeys(tech_cfg.required_parameters):
+    for key in dict.fromkeys(needed):  # the registry also lists F6 inputs, which F5 does not read
         entry = getattr(tech_params, key, None)
         if entry is None:
             missing.append(f"{key} (no entry in parameters.json)")

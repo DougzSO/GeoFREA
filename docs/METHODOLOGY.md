@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.1.1 |
+| Version | 7.1.2 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-08 |
+| Updated | 2026-10-09 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -262,16 +262,16 @@ Critical transitions:
 
 - **M-F6-01.** LCOE kernel, vectorized over cells, for member `m` and parameter vector `theta`:
   - `CAPEX_total = P_MW*1000*capex_usd_per_kw + P_MW*dist_grid_km*grid_cost_usd_per_mw_km + P_MW*substation_cost_usd_per_mw + dist_road_km*road_cost_usd_per_km`
-  - `OPEX_t = opex_fixed_frac * P_MW*1000*capex_usd_per_kw + opex_var_usd_per_mwh * E_t`
+  - `OPEX_t = opex_fixed_frac * P_MW*1000*capex_usd_per_kw + opex_var_usd_per_mwh * E_t`, with `opex_var_usd_per_mwh` the variable O&M in USD/MWh, under that key in `config/parameters.json`
   - `E_t = E_m * (1 - d)^(t-1)`, `t = 1..n`
   - `LCOE = [CAPEX_total + sum_t OPEX_t/(1+r)^t] / [sum_t E_t/(1+r)^t]` (USD2024/MWh, real terms)
   - Climate of the member window is held constant over the asset lifetime.
   - `dist_grid_km` and `dist_road_km` are the real (uncapped) distances from F3. The linear distance terms are a first-order approximation of connection cost, declared in `LIMITATIONS.md` (L-019); the direction for a richer connection-cost model (voltage, technology, capacity, route, losses) is tracked in OQ-041.
 - **M-F6-02.** Parameter samples `s` drawn by Latin hypercube over the uncertain parameters declared in `experiments.yaml` (U-03), with recorded seed. Sample `s0` is the nominal vector.
 - **M-F6-03.** If a C3 loss function passes OQ-007, it enters as an OPEX adder per member.
-- **M-F6-04.** Streaming: per member, samples are processed in batches. Persisted per (`cell_id`, `member`): nominal LCOE, mean, variance, p10, p50, p90 over samples. The design matrix is persisted. The full sample-level array is not.
+- **M-F6-04.** Streaming: per member, cells are processed in blocks with all samples of a block in memory, so that the quantiles are exact (A-10). Persisted per (`cell_id`, `member`): the nominal LCOE (sample `s0`), the mean, variance, p10, p50 and p90 over the draws `s >= 1` (the nominal vector is not among them), and the count of non-finite values. The design matrix is persisted. The full sample-level array is not.
 - **M-F6-05.** The kernel is a pure function importable by F7.
-- **M-F6-06.** Outputs: `lcoe_summary_<tech>.parquet`, `design_matrix.parquet`, supply curves per member at nominal parameters.
+- **M-F6-06.** Outputs: `lcoe_summary_<tech>.parquet`, `design_matrix_<tech>.parquet`, supply curves per member at nominal parameters.
 
 ### F7 robustness_analysis
 
@@ -282,7 +282,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
 - **M-F7-03. Primary metric.** `MR_i = max over members m of ( P90 over parameter samples s of r_i,(m,s) )`. Order of operations: `r` per future `(m, s)`; P90 over samples for each member; maximum over members. Secondary: SR (M-F7-04).
 - **M-F7-04. Satisficing robustness.** `SR_i` = share of futures with `feasible(i, f)` and `LCOE_i,f <= tau[country, tech]` (OQ-008).
 - **M-F7-05. Rankings.** Nominal rank by `LCOE_i,f0`; robust rank by `MR_i` (ties broken by `SR_i`), over the cells that are not climate-fragile. Top-k is the best `p_k` percent of candidate cells by count (OQ-021). Sensitivity, the strategy-level reading: top-k as the minimum cell set reaching a national capacity target (OQ-010).
-- **M-F7-06. Axis comparison (H4).** Primary: Jaccard(top-k nominal, top-k under climate-only futures `(m, s0)`) versus Jaccard(top-k nominal, top-k under techno-only futures `(m0, s)`). Secondary: per cell, law of total variance over futures, `Var(X) = E_m[Var_s(X)] + Var_m[E_s(X)]` (techno-economic part, climate part), computed from F6 summaries on the relative LCOE `X = LCOE / L*_f`.
+- **M-F7-06. Axis comparison (H4).** Primary: Jaccard(top-k nominal, top-k under climate-only futures `(m, s0)`) versus Jaccard(top-k nominal, top-k under techno-only futures `(m0, s)`). Secondary: per cell, law of total variance over futures, `Var(X) = E_m[Var_s(X)] + Var_m[E_s(X)]` (techno-economic part, climate part), computed on the relative LCOE `X = LCOE / L*_f`, accumulated by F7 in its own pass (`L*_f` depends on the future, so the moments of `X` are not a function of the F6 summaries).
 - **M-F7-07. Hypothesis tests.**
   - H1: Spearman correlation of cell LCOE rankings between SSP pairs (per GCM and ensemble median); Jaccard of top-k between SSPs; share of nominal top-k cells leaving top-k under at least one member. Repeated for the 2071-2100 window as sensitivity. Decision rules (statistic and threshold) for H1 to H5 are pre-registered in OQ-050.
   - H2: within-country dispersion of `MR` (IQR relative to median; range across admin1 units) against the capacity-weighted national aggregate; repeated at 0.1 degree (V-07).
@@ -492,6 +492,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.1.2 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on `docs/_audit/2026-10_F6_design.md`, recorded as D-F6-001 to D-F6-016 in `docs/phases/F6_lcoe_modeling.md`; no result is redefined): M-F6-01 names the variable O&M key and unit (`opex_var_usd_per_mwh`, USD/MWh); M-F6-04 batches along cells with all samples in memory, and the summaries are taken over the draws `s >= 1`, with the nominal vector reported on its own and the count of non-finite values persisted (D2, D3, D7); M-F6-06 names the design matrix per technology (D13); M-F7-06 states that the secondary statistic is accumulated by F7, not read from the F6 summaries. IDs cited and not altered: A-10, U-03, M-F6-02, M-F7-03. |
 | 7.1.1 | 2026-10-08 | PATCH (a registered support phase had no mention): Sections 4.1 and 4.2 list `potential_maps` as a support phase of F5 (requires the central potential table, produces the potential-density and capacity-factor rasters and the maps, drawn as `settings.yaml` `figures` allows, A-08). IDs cited and not altered: A-01, A-07, A-08, T-R1. |
 | 7.1.0 | 2026-10-08 | MINOR (registers verdicts D1 to D16 of `docs/_audit/2026-10_F5_design.md`, recorded as D-F5-001 to D-F5-016 in `docs/phases/F5_technical_potential.md`; no existing result is redefined): M-F5-03 gains the hub height in `parameters.json` (D-F5-012), the folded form `A_eq` (Section 2.3 of the design report), the exact piecewise-linear integral (D-F5-001, D-F5-002), the curve storage and the IEC class rule fixed across members (D-F5-003, D-F5-004), and `rho0` in `core/constants` (D-F5-009); M-F5-06 names the output per land scenario, the F6 and F7 reading of the central file and the two aggregate series (D-F5-005, D-F5-006); M-F7-01 defines the climate-data-invalid class and the F7 set (D-F5-006); M-F5-01 and M-F5-02 name the parameters as required parameters (D-F5-011); M-F5-05 cites the hours-per-year constant (D-F5-009); A-04 and Section 9 add the required-parameter keys, the IEC class rule, the class-to-curve map and `config/power_curves/`. IDs cited by the rewritten lines and not altered: M-F4-07, U-05, U-06, U-08, V1, V-02, V-03, OQ-005, OQ-004, OQ-023. |
 | 7.0.1 | 2026-10-08 | PATCH (verdicts A to G of 2026-10-08): OQ-052 is merged into OQ-008, so the cost threshold of economic potential (T-R12, H5) is the satisficing threshold `tau` (H5, M-F7-07, T-R12, MS-6 in Section 12). Climate-fragile is defined at the nominal parameters `s0` of each member and parametric-only infeasibility gets the finite worst-case regret (M-F7-01, M-F7-02; V9, V3). Section 4.1: F4 requires the `reference_grid` artifact and no aligned layer, F2b and F3 require named layers, and staleness follows artifact content (4.1, 4.2, A-02, A-01). The V-01 fixtures are refrozen with E1 to E3 as the shares F3 computes (V-01, M-F3-01). IDs cited by the rewritten lines and not altered: M-F7-03, M-F7-07, H5, T-R12, OQ-010, OQ-020, OQ-050, OQ-051, OQ-052, V-03, M-F4-07, M-F2b-01, M-F2b-05, A-06, A-09, F4, H1, H4, RQ3, U-08, and the OQ list of the MS-6 row: OQ-001, OQ-002, OQ-003, OQ-004, OQ-005, OQ-015, OQ-016, OQ-019, OQ-021, OQ-022, OQ-023, OQ-044, OQ-045. |

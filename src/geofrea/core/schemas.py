@@ -89,7 +89,7 @@ class VerifiedValue(BaseModel, Generic[T]):
     Args:
         value: The parameter value itself. May be None for parameters
             that are pending research (e.g. an unpopulated
-            opex_variable_usd_per_kwh for a technology whose source
+            opex_var_usd_per_mwh for a technology whose source
             doesn't split fixed/variable O&M).
         unit: Physical unit of the parameter (e.g. "USD/kW", "fraction",
             "deg", "km"). Required for all parameters.
@@ -137,6 +137,9 @@ class VerifiedValue(BaseModel, Generic[T]):
             O&M). Regional or global transfers of the same quantity and technology are
             Tier 2 (U-07), not proxies. A production run fails if a consumed parameter
             has proxy=True (`geofrea.core.production`).
+        price_year: Price base year of a cost value in USD (S-07: constant 2024 USD).
+            Null where the value is not a cost in USD or the year is not yet audited;
+            F6 refuses a cost parameter whose year is null or not 2024 (D-F6-008).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -154,6 +157,7 @@ class VerifiedValue(BaseModel, Generic[T]):
     status: str | None = None
     synthetic: bool = False
     proxy: bool = False
+    price_year: int | None = None
 
     @model_validator(mode="after")
     def _value_within_range_when_set(self) -> VerifiedValue:
@@ -198,8 +202,8 @@ class _TechnologyEconomicParams(BaseModel):
             figure, so this field holds that total instead — see the
             "note" on each concrete technology's field for the exact
             caveat. Constrained to [0, 1].
-        opex_variable_usd_per_kwh: Variable O&M cost, USD per kWh
-            generated. Populated (float) for biomass; left as an
+        opex_var_usd_per_mwh: Variable O&M cost, USD per MWh
+            generated (M-F6-01). Populated (float) for biomass; left as an
             unverified/null placeholder for solar and wind, whose
             source doesn't split fixed/variable O&M.
         lifetime_years: Asset operational lifetime, in years. Must be
@@ -217,7 +221,7 @@ class _TechnologyEconomicParams(BaseModel):
 
     capex_usd_per_kw: VerifiedValue[float]
     opex_fixed_frac: VerifiedValue[UnitInterval]
-    opex_variable_usd_per_kwh: VerifiedValue[float]
+    opex_var_usd_per_mwh: VerifiedValue[float]
     lifetime_years: VerifiedValue[PositiveInt]
     discount_rate: VerifiedValue[NonNegativeFloat]
     discount_rate_increment: VerifiedValue[float | None]
@@ -266,7 +270,7 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     populated (IRENA 2024/2025) and - slope_threshold_deg moved to
     parameters.json, for provenance of every field's value.
 
-    opex_variable_usd_per_kwh is an unpopulated placeholder (value=
+    opex_var_usd_per_mwh is an unpopulated placeholder (value=
     None, verified=False, status="pending_research"): IRENA's source
     data reports only a combined/total O&M figure for solar, not split
     into fixed+variable components like biomass — opex_fixed_frac
@@ -279,10 +283,14 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     to be zero.
     """
 
-    opex_variable_usd_per_kwh: VerifiedValue[float | None]
+    opex_var_usd_per_mwh: VerifiedValue[float | None]
     luf: VerifiedValue[UnitInterval | None]  # M-F5-01 (OQ-004)
     power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
     gamma: VerifiedValue[float | None]  # M-F5-02 (OQ-023), 1/K, negative
+    degradation_rate: VerifiedValue[UnitInterval | None]  # M-F6-01 (OQ-019), fraction per year
+    grid_cost_usd_per_mw_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    substation_cost_usd_per_mw: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
 
 
 class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
@@ -291,18 +299,22 @@ class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
     populated (IRENA 2024/2025) and - slope_threshold_deg moved to
     parameters.json, for provenance of every field's value. Same
-    opex_variable_usd_per_kwh and discount_rate_increment caveats as
+    opex_var_usd_per_mwh and discount_rate_increment caveats as
     SolarParams apply here.
 
     The F5 parameters (M-F5-01, M-F5-03) are null with `status = "pending_research"` until OQ-004 and OQ-005 give a sourced
     value; `hub_height_m` replaces the former `hub_heights` of `technologies.yaml` (D-F5-012).
     """
 
-    opex_variable_usd_per_kwh: VerifiedValue[float | None]
+    opex_var_usd_per_mwh: VerifiedValue[float | None]
     luf: VerifiedValue[UnitInterval | None]  # M-F5-01 (OQ-004)
     power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
     eta_loss: VerifiedValue[UnitInterval | None]  # M-F5-03 (OQ-005)
     hub_height_m: VerifiedValue[PositiveFloat | None]  # M-F5-03 (OQ-005), within 100 to 200 m
+    degradation_rate: VerifiedValue[UnitInterval | None]  # M-F6-01 (OQ-019), fraction per year
+    grid_cost_usd_per_mw_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    substation_cost_usd_per_mw: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
 
 
 class TechnologyParams(BaseModel):

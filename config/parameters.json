@@ -25,7 +25,7 @@
             "unit": "fraction/year",
             "tier": 2
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -112,6 +112,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         },
         "wind": {
@@ -137,7 +197,7 @@
             "unit": "fraction/year",
             "tier": 2
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -239,6 +299,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         }
       }
@@ -267,7 +387,7 @@
             "unit": "fraction/year",
             "tier": 2
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -354,6 +474,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         },
         "wind": {
@@ -380,7 +560,7 @@
             "tier": 3,
             "proxy": true
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -482,6 +662,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         }
       }
@@ -511,7 +751,7 @@
             "unit": "fraction/year",
             "tier": 3
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -599,6 +839,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         },
         "wind": {
@@ -625,7 +925,7 @@
             "tier": 3,
             "proxy": true
           },
-          "opex_variable_usd_per_kwh": {
+          "opex_var_usd_per_mwh": {
             "value": null,
             "source": null,
             "verified": false,
@@ -728,6 +1028,66 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": null,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": null,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "substation_cost_usd_per_mw": {
+            "value": null,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
+          },
+          "road_cost_usd_per_km": {
+            "value": null,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
+            "status": "pending_research",
+            "synthetic": false,
+            "proxy": false
           }
         }
       }
@@ -740,21 +1100,34 @@
             "unit": "USD/kW",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 800.0,
+              "max": 1200.0,
+              "distribution": "triangular",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Test value: round CAPEX chosen so the annualized fixed cost (CRF x CAPEX, see hand-check in docs/phases/core.md D-core-018) is a clean number, not a sourced cost estimate for any real technology or country.",
             "status": null,
-            "synthetic": true
+            "synthetic": true,
+            "price_year": 2024
           },
           "opex_fixed_frac": {
             "value": 0.05,
             "unit": "fraction/year",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 0.03,
+              "max": 0.07,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -763,8 +1136,8 @@
             "status": null,
             "synthetic": true
           },
-          "opex_variable_usd_per_kwh": {
-            "value": 0.0,
+          "opex_var_usd_per_mwh": {
+            "value": 2.0,
             "unit": "USD/MWh",
             "source": null,
             "tier": null,
@@ -773,16 +1146,23 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Test value: zero, so it drops out of any hand-computed cost check cleanly. Not a claim that variable O&M is zero for a real technology.",
+            "note": "Test value: 2 USD/MWh, nonzero so the variable-O&M term of M-F6-01 is exercised by the synthetic F6 run. Not a claim about any real technology.",
             "status": null,
-            "synthetic": true
+            "synthetic": true,
+            "price_year": 2024
           },
           "lifetime_years": {
             "value": 20,
             "unit": "years",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 15.0,
+              "max": 25.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -796,7 +1176,13 @@
             "unit": "fraction",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 0.03,
+              "max": 0.08,
+              "distribution": "triangular",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -852,7 +1238,13 @@
             "unit": "1/K",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": -0.007,
+              "max": -0.003,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -860,6 +1252,89 @@
             "note": "Test value: round -0.005 per K, not a module datasheet figure.",
             "status": null,
             "synthetic": true
+          },
+          "degradation_rate": {
+            "value": 0.005,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 0.0,
+              "max": 0.01,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: 0.5% per year, round.",
+            "status": null,
+            "synthetic": true
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": 1000.0,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 500.0,
+              "max": 1500.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 1000 USD per MW and km.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
+          },
+          "substation_cost_usd_per_mw": {
+            "value": 20000.0,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 10000.0,
+              "max": 30000.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 20000 USD per MW.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
+          },
+          "road_cost_usd_per_km": {
+            "value": 50000.0,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 25000.0,
+              "max": 75000.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 50000 USD per km.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
           }
         },
         "wind": {
@@ -868,21 +1343,34 @@
             "unit": "USD/kW",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 800.0,
+              "max": 1200.0,
+              "distribution": "triangular",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Test value: round CAPEX chosen so the annualized fixed cost (CRF x CAPEX, see hand-check in docs/phases/core.md D-core-018) is a clean number, not a sourced cost estimate for any real technology or country.",
             "status": null,
-            "synthetic": true
+            "synthetic": true,
+            "price_year": 2024
           },
           "opex_fixed_frac": {
             "value": 0.05,
             "unit": "fraction/year",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 0.03,
+              "max": 0.07,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -891,8 +1379,8 @@
             "status": null,
             "synthetic": true
           },
-          "opex_variable_usd_per_kwh": {
-            "value": 0.0,
+          "opex_var_usd_per_mwh": {
+            "value": 2.0,
             "unit": "USD/MWh",
             "source": null,
             "tier": null,
@@ -901,16 +1389,23 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Test value: zero, so it drops out of any hand-computed cost check cleanly. Not a claim that variable O&M is zero for a real technology.",
+            "note": "Test value: 2 USD/MWh, nonzero so the variable-O&M term of M-F6-01 is exercised by the synthetic F6 run. Not a claim about any real technology.",
             "status": null,
-            "synthetic": true
+            "synthetic": true,
+            "price_year": 2024
           },
           "lifetime_years": {
             "value": 20,
             "unit": "years",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 15.0,
+              "max": 25.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -924,7 +1419,13 @@
             "unit": "fraction",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 0.03,
+              "max": 0.08,
+              "distribution": "triangular",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -980,7 +1481,13 @@
             "unit": "fraction",
             "source": null,
             "tier": null,
-            "range": null,
+            "range": {
+              "min": 0.8,
+              "max": 0.95,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
@@ -1002,6 +1509,89 @@
             "note": "Test value: 125 m lies between the 100 m and 150 m data heights, so the power-law interpolation is exercised, not a sourced hub height.",
             "status": null,
             "synthetic": true
+          },
+          "degradation_rate": {
+            "value": 0.005,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 0.0,
+              "max": 0.01,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: 0.5% per year, round.",
+            "status": null,
+            "synthetic": true
+          },
+          "grid_cost_usd_per_mw_km": {
+            "value": 1000.0,
+            "unit": "USD/(MW km)",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 500.0,
+              "max": 1500.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 1000 USD per MW and km.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
+          },
+          "substation_cost_usd_per_mw": {
+            "value": 20000.0,
+            "unit": "USD/MW",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 10000.0,
+              "max": 30000.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 20000 USD per MW.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
+          },
+          "road_cost_usd_per_km": {
+            "value": 50000.0,
+            "unit": "USD/km",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 25000.0,
+              "max": 75000.0,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: round 50000 USD per km.",
+            "status": null,
+            "synthetic": true,
+            "price_year": 2024
           }
         }
       }

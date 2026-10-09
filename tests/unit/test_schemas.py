@@ -55,7 +55,7 @@ VALID_PENDING_VALUE = {
 VALID_BIOMASS = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 3606},
     "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.04},
-    "opex_variable_usd_per_kwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
+    "opex_var_usd_per_mwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
@@ -64,19 +64,23 @@ VALID_BIOMASS = {
 VALID_SOLAR = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 823},
     "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.0092},
-    "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
+    "opex_var_usd_per_mwh": dict(VALID_PENDING_VALUE),
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.042},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
     "luf": dict(VALID_PENDING_VALUE),
     "power_density_mw_per_km2": dict(VALID_PENDING_VALUE),
     "gamma": dict(VALID_PENDING_VALUE),
+    "degradation_rate": dict(VALID_PENDING_VALUE),
+    "grid_cost_usd_per_mw_km": dict(VALID_PENDING_VALUE),
+    "substation_cost_usd_per_mw": dict(VALID_PENDING_VALUE),
+    "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
 }
 
 VALID_WIND = {
     "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 976},
     "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.0348},
-    "opex_variable_usd_per_kwh": dict(VALID_PENDING_VALUE),
+    "opex_var_usd_per_mwh": dict(VALID_PENDING_VALUE),
     "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 25},
     "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.037},
     "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
@@ -84,6 +88,10 @@ VALID_WIND = {
     "power_density_mw_per_km2": dict(VALID_PENDING_VALUE),
     "eta_loss": dict(VALID_PENDING_VALUE),
     "hub_height_m": dict(VALID_PENDING_VALUE),
+    "degradation_rate": dict(VALID_PENDING_VALUE),
+    "grid_cost_usd_per_mw_km": dict(VALID_PENDING_VALUE),
+    "substation_cost_usd_per_mw": dict(VALID_PENDING_VALUE),
+    "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
 }
 
 VALID_TECHNOLOGIES = {"solar": VALID_SOLAR, "wind": VALID_WIND}
@@ -146,7 +154,7 @@ TECH_MODELS = {
 REQUIRED_TECH_FIELDS = [
     "capex_usd_per_kw",
     "opex_fixed_frac",
-    "opex_variable_usd_per_kwh",
+    "opex_var_usd_per_mwh",
     "lifetime_years",
     "discount_rate",
     "discount_rate_increment",
@@ -168,7 +176,7 @@ def test_biomass_params_accepts_valid_payload():
     result = BiomassParams.model_validate(VALID_BIOMASS)
     assert result.capex_usd_per_kw.value == 3606
     assert result.discount_rate.value == 0.05
-    assert result.opex_variable_usd_per_kwh.value == 0.004
+    assert result.opex_var_usd_per_mwh.value == 0.004
 
 
 @pytest.mark.unit
@@ -177,8 +185,8 @@ def test_solar_params_accepts_valid_payload():
     assert result.capex_usd_per_kw.value == 823
     assert result.discount_rate.value == 0.042
     # solar's source doesn't split fixed/variable OPEX - variable stays unpopulated.
-    assert result.opex_variable_usd_per_kwh.value is None
-    assert result.opex_variable_usd_per_kwh.status == "pending_research"
+    assert result.opex_var_usd_per_mwh.value is None
+    assert result.opex_var_usd_per_mwh.status == "pending_research"
 
 
 @pytest.mark.unit
@@ -186,8 +194,8 @@ def test_wind_params_accepts_valid_payload():
     result = WindParams.model_validate(VALID_WIND)
     assert result.capex_usd_per_kw.value == 976
     assert result.discount_rate.value == 0.037
-    assert result.opex_variable_usd_per_kwh.value is None
-    assert result.opex_variable_usd_per_kwh.status == "pending_research"
+    assert result.opex_var_usd_per_mwh.value is None
+    assert result.opex_var_usd_per_mwh.status == "pending_research"
 
 
 @pytest.mark.unit

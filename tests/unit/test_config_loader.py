@@ -24,7 +24,7 @@ treating module-mapping.md as the source.
 opex has no like-for-like legacy comparison: the legacy value was a
 single flat USD/kW/yr figure, while GeoFREA's IRENA-2025-sourced value
 is structurally split into opex_fixed_frac (dimensionless
-fraction) and opex_variable_usd_per_kwh (USD/kWh) - different units,
+fraction) and opex_var_usd_per_mwh (USD/MWh) - different units,
 not just different numbers, per docs/DECISIONS.md 2026-08-20.
 
 capacity_factor and discount_rate_increment are NEW parameters with no
