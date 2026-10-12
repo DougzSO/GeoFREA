@@ -85,6 +85,7 @@ no change to the mosaic's output content, no METHODOLOGY_REVISION.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -97,6 +98,7 @@ import geopandas as gpd
 from rasterio.enums import Resampling
 
 from geofrea.core import paths as core_paths
+from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import (
     clip_cache_is_current,
@@ -125,6 +127,10 @@ from geofrea.grid_alignment.vector_alignment import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Version of the alignment logic, part of every aligned layer's cache key (OQ-026). Bump it by hand when the logic of any aligner
+# changes (resampling, masking, binning, distance rasterization), or the previous outputs would be reused.
+ALIGNMENT_ALGORITHM_VERSION = 1
 
 
 @contextmanager
@@ -325,18 +331,38 @@ def run_grid_alignment_phase(
     def _exists(p: Path | None) -> bool:
         return bool(p and Path(p).exists())
 
-    def _execute_or_load(label: str, fn, condition: bool = True):
+    hash_memo = FileHashMemo(interim_dir / "input_sha256.json")
+    polygon_sha256 = hashlib.sha256(
+        b"".join(g.wkb for g in inputs.country_gdf.geometry)
+    ).hexdigest()
+
+    def _key(files, **config) -> str:
+        # Output-affecting config shared by every layer: the grid (resolution, nesting, country polygon).
+        common = {
+            "resolution_deg": float(inputs.resolution_deg),
+            "cell_nesting_pixels": CELL_NESTING_PIXELS,
+            "country_polygon_sha256": polygon_sha256,
+        }
+        return cache_key(ALIGNMENT_ALGORITHM_VERSION, files, {**common, **config}, hash_memo)
+
+    def _execute_or_load(label: str, fn, condition: bool = True, files=(), **config):
         p = _path(label)
+        key = _key(files, **config) if condition else None
         if p.exists():
-            with safe_raster_open(p) as src:
-                if (src.height, src.width) == (grid.height, grid.width):
-                    logger.info("    %s: cached.", label)
-                    return p
+            if key is not None and cache_is_current(p, key):
+                with safe_raster_open(p) as src:
+                    if (src.height, src.width) == (grid.height, grid.width):
+                        logger.info("    %s: cached.", label)
+                        return p
+            else:
+                logger.info("    %s: cache key differs or is absent; recomputing.", label)
             p.unlink()
         if condition:
             result = fn()
             if result is None:
                 logger.info("    %s: no data generated.", label)
+            elif Path(result) == p:
+                write_cache_key(p, key)
             return result
         return None
 
@@ -359,6 +385,7 @@ def run_grid_alignment_phase(
             "elevation",
             lambda: reproject_to_grid(inputs.elevation_path, _path("elevation"), grid),
             _exists(inputs.elevation_path),
+            files=[inputs.elevation_path],
         )
 
     # slope is NOT an acquired layer — it is derived here from the DEM at
@@ -380,6 +407,7 @@ def run_grid_alignment_phase(
             "slope",
             _align_slope,
             _exists(inputs.slope_path) or _exists(inputs.elevation_path),
+            files=[inputs.slope_path if _exists(inputs.slope_path) else inputs.elevation_path],
         )
 
     with timer("solar", timings), gdal_quiet():
@@ -387,6 +415,7 @@ def run_grid_alignment_phase(
             "solar",
             lambda: reproject_to_grid(inputs.solar_path, _path("solar"), grid),
             _exists(inputs.solar_path),
+            files=[inputs.solar_path],
         )
 
     # M-F2a-04 (G-2): every GWA product at every height is aligned on its own; nothing is
@@ -403,6 +432,8 @@ def run_grid_alignment_phase(
                     src_crs=_gwa_crs_for(key, wind_src, inputs.wind_layers),
                 ),
                 _exists(wind_src),
+                # The CRS of a tile without one is taken from the wind-speed file of the same height.
+                files=[wind_src, inputs.wind_layers.get(f"wind_speed_{key.rsplit('_', 1)[-1]}")],
             )
         if out is not None:
             wind_layers[key] = out
@@ -419,6 +450,7 @@ def run_grid_alignment_phase(
                 inputs.land_cover_tiles, _path("land_cover"), grid, inputs.country_gdf
             ),
             bool(inputs.land_cover_tiles),
+            files=inputs.land_cover_tiles,
         )
         aligned["land_cover_counts"] = _execute_or_load(
             "land_cover_counts",
@@ -429,6 +461,7 @@ def run_grid_alignment_phase(
                 inputs.country_gdf,
             ),
             bool(inputs.land_cover_tiles),
+            files=inputs.land_cover_count_tiles or inputs.land_cover_tiles,
         )
 
     with timer("slope_counts", timings):
@@ -436,6 +469,7 @@ def run_grid_alignment_phase(
             "slope_counts",
             lambda: slope_class_counts(inputs.slope_dem_tiles, _path("slope_counts"), grid),
             bool(inputs.slope_dem_tiles),
+            files=inputs.slope_dem_tiles,
         )
 
     with timer("population", timings), gdal_quiet():
@@ -447,6 +481,7 @@ def run_grid_alignment_phase(
                 inputs.population_path, _path("population"), grid, resampling=Resampling.sum
             ),
             _exists(inputs.population_path),
+            files=[inputs.population_path],
         )
 
     with timer("grid_distance", timings):
@@ -461,6 +496,8 @@ def run_grid_alignment_phase(
                 inputs.distance_cap_km,
             ),
             _exists(inputs.grid_source),
+            files=[inputs.grid_source],
+            distance_cap_km=inputs.distance_cap_km,
         )
 
     with timer("roads", timings):
@@ -475,6 +512,8 @@ def run_grid_alignment_phase(
                 inputs.distance_cap_km,
             ),
             _exists(inputs.roads_source),
+            files=[inputs.roads_source],
+            distance_cap_km=inputs.distance_cap_km,
         )
 
     with timer("lakes", timings):
@@ -482,6 +521,7 @@ def run_grid_alignment_phase(
             "lakes",
             lambda: align_lakes(_clipped_gdf(inputs.lakes_path, "lakes"), _path("lakes"), grid),
             _exists(inputs.lakes_path),
+            files=[inputs.lakes_path],
         )
 
     with timer("rivers", timings):
@@ -494,6 +534,8 @@ def run_grid_alignment_phase(
                 inputs.distance_cap_km,
             ),
             _exists(inputs.rivers_path),
+            files=[inputs.rivers_path],
+            distance_cap_km=inputs.distance_cap_km,
         )
 
     for layer in ("roads", "grid", "rivers"):

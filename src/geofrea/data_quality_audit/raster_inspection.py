@@ -36,6 +36,7 @@ from rasterio.features import geometry_mask
 from rasterio.windows import from_bounds as window_from_bounds
 from shapely.geometry import box, mapping
 
+from geofrea.core.cache_key import cache_key
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.run_logging import PeriodicProgress
@@ -655,6 +656,12 @@ def inspect_raster(
     return result
 
 
+# Version of the per-tile class-area computation, part of every tile cache key (OQ-026). Bump it by hand when the logic of
+# `inspect_land_cover_tiles` changes (masking, area weights, class handling), or old cache entries would be reused.
+LAND_COVER_TILE_ALGORITHM_VERSION = 1
+_LAND_COVER_WINDOW_PX = 8192
+
+
 def _land_cover_geom_fingerprint(country_geom) -> str:
     """Short hash of the country polygon actually used to mask tiles.
 
@@ -665,37 +672,17 @@ def _land_cover_geom_fingerprint(country_geom) -> str:
     return hashlib.sha256(country_geom.wkb).hexdigest()[:16]
 
 
-def _file_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
-    """sha256 of a file's actual bytes, read in chunks (tiles run tens of MB)."""
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(chunk_size), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
-    """Cache key for one tile: sha256 of the tile's own bytes + the
-    masking polygon's fingerprint. Either changing invalidates the
-    cached entry; identical content always hits regardless of mtime.
+    """Cache key for one tile (OQ-026): the algorithm version, the tile's SHA-256 and the config values that change the result.
 
-    Content-stable since 2026-09-23 (task F1-3 item C): the prior
-    version (2026-09-22 through earlier today) also concatenated
-    `stat.st_mtime_ns` and `stat.st_size` into this same string, so a
-    re-fetch of byte-identical content (same URL, same bytes) still
-    produced a different key — the whole string differs even though
-    the embedded sha256 alone would have matched, because
-    _load_land_cover_tile_cache() compares the two full strings, not
-    the sha256 in isolation. That is the real, observed cause of the
-    88%-of-runtime cache invalidation documented in
-    docs/phases/F1b_data_quality_audit.md's "BRA F1b total runtime"
-    entry: F1-2's acquisition rerun rewrote all 111 BRA tiles on disk
-    (new mtime each), invalidating every cache entry even where content
-    had not changed. Dropping mtime/size fixes that without weakening
-    correctness: content really changing still changes the sha256,
-    still misses.
+    The inputs are the tile (by content, so a re-fetch of identical bytes still hits) and the config is the masking polygon's
+    fingerprint and the window size of the scan. Any of the three changing, or `LAND_COVER_TILE_ALGORITHM_VERSION`, misses.
     """
-    return f"{_file_sha256(tile)}:{geom_fingerprint}"
+    return cache_key(
+        LAND_COVER_TILE_ALGORITHM_VERSION,
+        [tile],
+        {"country_polygon_fingerprint": geom_fingerprint, "window_px": _LAND_COVER_WINDOW_PX},
+    )
 
 
 def _load_land_cover_tile_cache(
@@ -822,7 +809,7 @@ def inspect_land_cover_tiles(
                     row_areas_global = row_area_km2((src.height, src.width), src.transform)
                     tile_class_areas: dict[int, float] = {}
 
-                    step = 8192
+                    step = _LAND_COVER_WINDOW_PX
                     for r in range(0, src.height, step):
                         for c in range(0, src.width, step):
                             window = rasterio.windows.Window(
