@@ -17,7 +17,7 @@ members:
   # To be populated via M-F4-02: GCM selection protocol at F4 implementation
   # For each selected model and SSP × window combination:
   # - m_<gcm>_<ssp>_<window>: {gcm: <name>, ssp: "SSP1-2.6"|"SSP3-7.0"|"SSP5-8.5", window: "2041-2070"|"2071-2100"}
-  # Example (not yet implemented):
+  # Example:
   # m_gfdl_esm4_ssp3_70_2041_2070:
   #   gcm: "GFDL-ESM4"
   #   ssp: "SSP3-7.0"
@@ -237,10 +237,10 @@ land_availability:
 thresholds:
   # Satisficing LCOE threshold (M-F7-04)
   # tau[country, tech] = maximum acceptable LCOE for satisficing robustness
-  # OQ-008: Per-country and technology thresholds pending review
+  # OQ-008: per-country and technology thresholds
   satisficing_lcoe_usd_per_mwh:
     # Format: {country: {technology: threshold_value}}
-    # Example (not yet implemented):
+    # Example:
     # PRT:
     #   solar: 50  # USD/MWh
     #   wind: 60
@@ -252,13 +252,13 @@ thresholds:
   # Capacity factor minimum for a cell to be feasible
   # OQ-008: Per-technology CF_min
   capacity_factor_min:
-    # solar: null  # Pending OQ-008
+    # solar: null  # Set by OQ-008
     # wind: null
 
   # Regret quantile (M-F7-02)
   # q_ref for the "optimal" LCOE definition (default 0 = minimum)
   # OQ-020: Decision on q_ref
-  regret_quantile: 0  # Pending OQ-020 (currently fixed at minimum)
+  regret_quantile: 0  # Set by OQ-020 (0 = minimum)
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
@@ -298,4 +298,4 @@ external_validation:
 
 # Future-only analysis (F7 onward)
 # OQ-013: Technical stack for the precomputed explorer (E1)
-# Not yet configurable here; placeholder for phase specification
+# Phase specification: no keys here

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 7.2.1 |
+| Version | 7.2.2 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-09 |
+| Updated | 2026-10-12 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -447,24 +447,24 @@ Per-phase maps are diagnostics for inspection and for the future platform, gener
 
 ## 12. Implementation roadmap
 
-Sequenced by dependency; each milestone closes before the next opens, except where marked parallel. State as of 2026-10-08.
+Sequenced by dependency; each milestone closes before the next opens, except where marked parallel. The state of each milestone, phase and country lives only in `docs/PROGRESS.json` (CONVENTIONS, "Where status lives").
 
-| Milestone | Content | State | Gate |
-|---|---|---|---|
-| MS-0 | Planning adopted; records migrated; repository restructured | done | This document committed |
-| MS-1 | Core: A-01 to A-03, A-05, configuration schemas (U-05, Section 9) | done | Tests for DAG validation and ISO3 literal check pass |
-| MS-2 | F1 and F1b conformance, including India wiring and new wind and CMIP6 products | done | F1-F2a run for BRA, PRT, IND |
-| MS-3 | F2a conformance | done | V-01 fixtures refrozen and passing |
-| MS-4 | F2b rebuild as `siting_layers` | in progress | Exclusion parity E1-E3; sanity ranges pass for three countries |
-| MS-5 | F3 | built, pending conformance | Closes with the three named scenarios of U-06 (V2), the 10 m land cover for IND (M-F2a-06, V19) and a clean rerun in BRA, PRT and IND; candidate tables for three countries and two technologies |
-| MS-6 | Parameter research, in parallel with MS-4 and MS-5, by priority: F5 first (OQ-004, OQ-005, OQ-023), then F6 (OQ-001, OQ-016 to OQ-019, OQ-022), then F7 (OQ-008, OQ-010, OQ-020, OQ-021, OQ-050); also OQ-051 | in progress (OQ-002, OQ-003, OQ-015, OQ-044, OQ-045 resolved) | Every uncertain parameter has range and tier |
-| MS-7 | F4, including GCM selection | in progress | Forcing tables for the selected ensemble |
-| MS-8 | F5: code and tests on the synthetic country before real values; real execution only with parameter values recorded under MS-6 | not started | V-02, V-03 pass |
-| MS-9 | F6, including sampling (U-02), convergence (U-04) and batches (A-10) | not started | U-04 convergence recorded |
-| MS-10 | F7 and F7b | not started | H1-H5 tables for three countries |
-| MS-11 | F8 and E1 | not started | All essential outputs generated |
+| Milestone | Content | Gate |
+|---|---|---|
+| MS-0 | Planning adopted; records migrated; repository restructured | This document committed |
+| MS-1 | Core: A-01 to A-03, A-05, configuration schemas (U-05, Section 9) | Tests for DAG validation and ISO3 literal check pass |
+| MS-2 | F1 and F1b conformance, including India wiring and new wind and CMIP6 products | F1-F2a run for BRA, PRT, IND |
+| MS-3 | F2a conformance | V-01 fixtures refrozen and passing |
+| MS-4 | F2b rebuild as `siting_layers` | Exclusion parity E1-E3; sanity ranges pass for three countries |
+| MS-5 | F3 | Closes with the three named scenarios of U-06 (V2), the 10 m land cover for IND (M-F2a-06, V19) and a clean rerun in BRA, PRT and IND; candidate tables for three countries and two technologies |
+| MS-6 | Parameter research, in parallel with MS-4 and MS-5, by priority: F5 first (OQ-004, OQ-005, OQ-023), then F6 (OQ-001, OQ-016 to OQ-019, OQ-022), then F7 (OQ-008, OQ-010, OQ-020, OQ-021, OQ-050); also OQ-051 | Every uncertain parameter has range and tier |
+| MS-7 | F4, including GCM selection | Forcing tables for the selected ensemble |
+| MS-8 | F5: code and tests on the synthetic country before real values; real execution only with parameter values recorded under MS-6 | V-02, V-03 pass |
+| MS-9 | F6, including sampling (U-02), convergence (U-04) and batches (A-10) | U-04 convergence recorded |
+| MS-10 | F7 and F7b | H1-H5 tables for three countries |
+| MS-11 | F8 and E1 | All essential outputs generated |
 
-A-06 and V-08 are extended with every phase built: no milestone from MS-5 on closes without its phase running on the synthetic country.
+A-06 and V-08 are extended with every phase that exists: no milestone from MS-5 on closes without its phase running on the synthetic country.
 
 ---
 
@@ -497,6 +497,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 7.2.2 | 2026-10-12 | PATCH (status leaves the roadmap): Section 12 loses the State column and the dated state sentence and points to `docs/PROGRESS.json`, the only place where status lives (CONVENTIONS, "Where status lives"); the MS-6 row loses its list of resolved questions. Content and gates are unchanged. IDs cited and not altered: MS-0, MS-1, MS-2, MS-3, MS-4, MS-5, MS-6, MS-7, MS-8, MS-9, MS-10, MS-11, A-06, V-08. |
 | 7.2.1 | 2026-10-09 | PATCH (two registered support phases had no mention): Sections 4.1 and 4.2 list `lcoe_maps` (after F6; COG and maps of the LCOE at the reference member, by SSP, and the supply curve) and `robustness_maps` (after F7; COG and maps of the F7 results per window) as support phases, drawn as `settings.yaml` `figures` allows, rasters always written (A-08). IDs cited and not altered: A-01, A-07, A-08, T-R4, T-R11. |
 | 7.2.0 | 2026-10-09 | MINOR (verdicts of 2026-10-09 on `docs/_audit/2026-10_F7_design.md`, recorded as D-F7-006 to D-F7-033 in `docs/phases/F7_robustness_analysis.md` and D-F7b-002 to D-F7b-007; no existing result is redefined, F7 and F7b are not built yet): M-F7-01 evaluates feasibility on `CF(m, s0)` through an energy floor in the kernel; M-F7-02 fixes the set of `L*`; M-F7-05 fixes the base of `k`, the ties, the truncation and the capacity-target reading; M-F7-06 defines the two criteria of the primary comparison; M-F7-08 gives the PRIM outcome per future; M-F3-03 adds `admin1_id`; M-F3-05 and M-F7b-01 state that the excluded shares of the pixels are not persisted and F7b evaluates the eligibility engine at the plant pixels; M-F3-06, M-F4-04, V-07 and A-08 make the cell size a run parameter (`scale`) of F3 to F7; M-F6-06 adds the nominal LCOE of the restrictive and permissive scenarios. IDs cited and not altered: M-F3-01, M-F6-01, M-F7-03, M-F7-07, OQ-008, OQ-010, OQ-020, OQ-021, OQ-056, U-08, V1, A-12. |
 | 7.1.3 | 2026-10-09 | PATCH (verdicts of 2026-10-09 on the F6 commits): M-F7-03 states that the P90 over parameter samples uses only the draws `s >= 1`, the nominal vector entering only the nominal ranking (D-F6-003); U-04 states the convergence criterion as `1 - Jaccard` of the top-k sets of consecutive sizes below 0.01, adopting the larger size of the first pair that agrees, with the definitive F7 `MR` as the metric (D-F6-004; OQ-055 closed). IDs cited and not altered: M-F7-05, M-F7-02, M-F6-04. |

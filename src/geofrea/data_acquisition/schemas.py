@@ -1,19 +1,19 @@
 """Pydantic schemas for the data_acquisition phase.
 
 This module defines the acquisition contract; it contains no fetch/
-download logic itself, and (as of 2026-09-08) no local-database
+download logic itself, and no local-database
 resolution logic either (see phase.py, fetchers/, and
-local_layers.py). As of 2026-09-11 (2026-08-25 "real fetchers for
+local_layers.py). History (2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
 borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
 banco local" (Fase 1 + Fase 2) + 2026-09-11 "protected_planet API
-activation", all docs/DECISIONS.md), every one of the 13 AcquiredLayer
+activation", all docs/DECISIONS.md), each of the 13 AcquiredLayer
 entries run_acquisition_phase() produces can have a real `path`/`paths`
 — 7 via a real fetcher (power_plants, wind, lakes, rivers, borders,
 admin1, protected) and 6 via local-database resolution (elevation,
 population, grid, roads, land_cover, solar). See docs/DECISIONS.md
 2026-08-24 (data_acquisition skeleton) for the original rationale and
-the open gaps flagged below, most still unresolved.
+the gaps flagged below.
 
 wind vs. land_cover (RESOLVED 2026-08-24, see DECISIONS.md same date):
 both are multi-file in legacy's DataOrchestrator, but they are NOT

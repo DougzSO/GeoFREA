@@ -35,10 +35,9 @@ THIRD KNOWN GAP, NOT defensive by design (flagged, not fixed — see
 DECISIONS.md 2026-08-24): _load_mainland_boundary() below has no
 try/except. A corrupted/non-geospatial file at the boundary path
 raises pyogrio's DataSourceError. It propagates straight out of this
-adapter today — unlike data_quality_audit's inspect_raster() and (as of
-2026-08-24) inspect_vector_layer(), both of which catch broadly and
-report {"error": str(exc)} instead of raising. Left as-is pending
-authorization — see tests/unit/test_data_acquisition_adapter.py's
+adapter — unlike data_quality_audit's inspect_raster() and
+inspect_vector_layer(), both of which catch broadly and
+report {"error": str(exc)} instead of raising. Not changed here — see tests/unit/test_data_acquisition_adapter.py's
 characterization tests for the exact exceptions each failure mode
 raises. Note this gap is specific to
 _load_mainland_boundary() — the plain pass-through Path fields added

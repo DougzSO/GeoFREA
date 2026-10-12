@@ -58,16 +58,11 @@ dependency between phases on its own — RunConfig.phases (settings.yaml)
 is a flat enabled/disabled toggle map with no ordering semantics at
 all; execution order is entirely the position of this PhaseSpec in the
 list main.py passes to Orchestrator.run(). This phase MUST be placed
-before data_quality_audit in that list for the (future) real fetch
+before data_quality_audit in that list for the fetch
 logic to make sense — the orchestrator will not infer that.
 
-settings.yaml does not have a "data_acquisition" key yet in
-run.phases — adding one is a config change out of scope for this
-stage (not touched here, still blocked pending review — see
-DECISIONS.md 2026-08-25). Until it's added,
-phases_enabled.get("data_acquisition", False) defaults to False and
-this phase is skipped entirely by Orchestrator.run(), same as any
-other unlisted phase name.
+The phase runs when settings.yaml run.target_phases names it or a phase that requires it (A-03); the
+orchestrator takes the order from the requires/produces graph.
 """
 
 from __future__ import annotations
@@ -139,7 +134,7 @@ class DataAcquisitionLayerFailedError(RuntimeError):
 
 
 # layer_name -> fetch function, for the 7 layers with a real fetcher
-# wired in as of 2026-09-11 (see module docstring). Each fetcher
+# wired in (see module docstring). Each fetcher
 # already catches its own network/parsing failures internally and
 # returns None rather than raising (see fetchers/*.py) — deliberate
 # exceptions are hydrosheds.fetch_rivers() raising KeyError for a
@@ -261,7 +256,7 @@ assert not set(_LOCAL_MULTI_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
 _HASH_BUDGET_S = 60.0
 
 # Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single
-# source of truth as of 2026-09-24, ADJ-7 — this module previously
+# source of truth, ADJ-7 — this module previously
 # defined its own 1 MiB constant; see that constant's docstring for why
 # 8 MiB was chosen over it).
 

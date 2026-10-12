@@ -18,7 +18,7 @@ solar:
   cf_model: "pvout_with_temperature"
 
   # Exclusion set (M-F2b-01, applied in F3)
-  # Currently a subset of M-F2b-01's E1-E6; exact enum pending F3 design
+  # A subset of M-F2b-01's E1-E6; the exact enum is a F3 design decision
   exclusions:
     - protected  # E1: WDPA protected areas
     - water      # E2: Lakes
@@ -121,12 +121,12 @@ wind:
     - prim_outcome_share        # M-F7-08 (OQ-056)
 
   # Reference power curves (M-F5-03, D-F5-003, D-F5-004): IEC class -> curve id. The table and its
-  # provenance live in config/power_curves/<curve_id>.yaml. No real curve exists until OQ-005 closes.
-  power_curves: null  # Pending OQ-005
+  # provenance live in config/power_curves/<curve_id>.yaml. The real curves come from OQ-005.
+  power_curves: null  # Set by OQ-005
 
   # IEC class per cell (M-F5-03, D-F5-004, D-F5-017): a siting rule, not a property of a turbine curve. The class is taken from
   # the annual mean wind speed at hub height in the reference climate and is fixed across members. A list of
   # {iec_class, mean_speed_upper_ms, source}, lowest class first, the last upper bound null (no limit); the classes must be
-  # those of power_curves. All null until OQ-005 closes (the thresholds come from the IEC standard, sourced by the author).
+  # those of power_curves. All null; OQ-005 sets them (the thresholds come from the IEC standard, sourced by the author).
   # (Moved here from solar 2026-09-24, ADJ-7.)
-  iec_class_rule: null  # Pending OQ-005
+  iec_class_rule: null  # Set by OQ-005

@@ -38,6 +38,15 @@ Used in `docs/PROGRESS.json` and phase records:
 
 Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
 
+## Where status lives
+
+The status of a phase, of a country run and of a milestone lives only in `docs/PROGRESS.json`.
+
+- METHODOLOGY Section 12 holds milestones, content and gates, with no state column and no sentence about the state. A milestone is described by what it contains and what closes it.
+- Comments in `config/*.yaml` and docstrings in `src/` do not assert state: no "not built yet", "pending", "in progress" or a date of state. They say what a key or function does and which question (OQ) sets a value.
+- Phase records (`docs/phases/`) record decisions, their reasons and their tests, not the current status of the phase.
+- `test_status_lives_only_in_progress` enforces this for METHODOLOGY Section 12 and the config files.
+
 ## Docstrings
 
 Google style. Cover purpose, `Args`, `Returns`, `Raises` when relevant. Geospatial functions state units and CRS for every spatial input and output; a geospatial function without units and CRS is incomplete. Functions that implement a methodology item cite it:

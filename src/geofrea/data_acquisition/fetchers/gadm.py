@@ -62,7 +62,7 @@ _GADM_URL_TEMPLATE = "https://geodata.ucdavis.edu/gadm/gadm4.1/shp/gadm41_{code}
 _NATURALEARTH_ISO_COLUMNS = ("iso_a3", "ISO_A3", "ADM0_A3")
 
 # Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single
-# source of truth as of 2026-09-24, ADJ-7 — this module previously
+# source of truth, ADJ-7 — this module previously
 # defined its own 8 MiB constant locally; unchanged value, just no
 # longer a second definition of it).
 

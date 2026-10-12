@@ -88,7 +88,7 @@ class VerifiedValue(BaseModel, Generic[T]):
 
     Args:
         value: The parameter value itself. May be None for parameters
-            that are pending research (e.g. an unpopulated
+            that have no researched value (e.g. an unpopulated
             opex_var_usd_per_mwh for a technology whose source
             doesn't split fixed/variable O&M).
         unit: Physical unit of the parameter (e.g. "USD/kW", "fraction",

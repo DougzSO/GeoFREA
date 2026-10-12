@@ -12,8 +12,7 @@ grid_alignment contract, roads_source/grid_source vs. data_quality_audit's
 cache_path): GridAlignmentInputs.roads_source/grid_source are always
 the RAW, unclipped acquisition source — the same AcquiredLayer.path
 data_acquisition resolved — never a data_quality_audit output.
-run_grid_alignment_phase() (not implemented yet — schema only, this
-stage) is expected to call core.geo_utils.read_clipped_to_country()
+run_grid_alignment_phase() calls core.geo_utils.read_clipped_to_country()
 itself for `roads_source`, using the SAME on-disk cache_path
 convention audit.py already uses
 (outputs_dir/country_code/processed/roads_clipped.gpkg) — reuse by

@@ -140,32 +140,32 @@ IND:
   gadm_level0_sha256: "6d53f0bd76c64d1c28453b8716642632aee7fcb6c447a2d13f413dc42f241263"
 
 CHN:
-  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
-  hydrosheds_region: null  # Region code pending resolution
+  # OQ-012: GRIP4 region is open; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code: see OQ-012
   elevation_dir: "China"
   land_cover_dir: "China"
   grip4_region_dir: null
   grip4_region_file: null
 
 EGY:
-  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
-  hydrosheds_region: null  # Region code pending resolution
+  # OQ-012: GRIP4 region is open; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code: see OQ-012
   elevation_dir: "EGY"
   land_cover_dir: "Egypt"
   grip4_region_dir: null
   grip4_region_file: null
 
 RUS:
-  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
-  hydrosheds_region: null  # Region code pending resolution
+  # OQ-012: GRIP4 region is open; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code: see OQ-012
   elevation_dir: "Russia"
   land_cover_dir: "Russia"
   grip4_region_dir: null
   grip4_region_file: null
 
 ZAF:
-  # OQ-012: GRIP4 region pending; elevation/land_cover confirmed from local database
-  hydrosheds_region: null  # Region code pending resolution
+  # OQ-012: GRIP4 region is open; elevation/land_cover confirmed from local database
+  hydrosheds_region: null  # Region code: see OQ-012
   elevation_dir: "South Africa"
   land_cover_dir: "South Africa"
   grip4_region_dir: null
