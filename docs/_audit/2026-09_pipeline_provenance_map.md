@@ -7,6 +7,12 @@
 
 ---
 
+## Addendum, 2026-10-12 — F5, F6, F7 and F7b are built fresh; the rows below say so
+
+The table rows of F5 (M-F5-02, M-F5-03), F6 (M-F6-01, M-F6-02, M-F6-04), F7 (M-F7-01 to M-F7-10) and F7b (M-F7b-01 to M-F7b-04) that named CRAEI as the reference now read *built fresh*. For F6, F7 and F7b the evidence is `docs/_audit/2026-10_F6_design.md`, section 1 (CRAEI HEAD `94e1050`). For F5 that report does not apply; a search of CRAEI at the same HEAD found no Weibull, power-curve, hub-height, air-density or capacity-factor code in its sources or scripts (only `solar_noct_cell_air_diff_c` in `config/params.yaml` and the NOCT sentence of `docs/METHODS_SPEC.md`, both for its hazard loss functions), and no file under `src/geofrea/technical_potential` carries an A-11 header. The other columns of those rows describe the state of 2026-09 and are not edited here; the status of each phase is in `docs/PROGRESS.json`. The counts of the section "A-11 reuse: not yet active anywhere" for F5 to F7b no longer hold.
+
+---
+
 ## Addendum, 2026-10-09 (F6 design report) — F6, F7 and F7b have no CRAEI logic
 
 Rows M-F6-01, M-F6-02, M-F6-04, M-F7-01 to M-F7-10 and M-F7b-01 to M-F7b-04 were checked against `CRAEI_BASELINE_DIR` (HEAD `94e1050`, 2026-10-08) and found **not in CRAEI**: no LCOE kernel, Latin hypercube, streaming summary, feasibility filter, regret, satisficing, ranking, variance decomposition, hypothesis statistic, PRIM, Kendall correlation or F7b metric exists in its code, tests, configuration, documentation or git history (`docs/_audit/2026-10_F6_design.md`, section 1). Their verdict is *built fresh*; no A-11 header is needed in F6, F7 or F7b. The sentence of Notes for Douglas item 2, "30+ of the 47 not_implemented rows point to CRAEI", no longer holds for these rows. Consult-only, nothing copied: `hedge.py::p90_threshold` (quantile definition), `hedge.py::weighted_share` and `exposure/aggregate.py::_capacity_table` (capacity-weighted shares, F7b), and the per-unit loop of `scripts/04_daily_indices.py` (memory pattern of A-10).
@@ -74,32 +80,32 @@ This audit examines the current state of the GeoFREA pipeline against the comple
 | F4 | M-F4-05 | not_implemented | unavailable | match (not_started) | CRAEI: hazard channel processors (C2/C3 context indicators) |
 | F4 | M-F4-06 | not_implemented | unavailable | match (not_started) | none (parquet outputs and members.yaml are new) |
 | F5 | M-F5-01 | not_implemented | unavailable | match (not_started) | GeoWorld: capacity calculation (P_MW = area * LUF * PD) |
-| F5 | M-F5-02 | not_implemented | unavailable | match (not_started) | CRAEI (GEAR secondary): solar CF with thermal correction (gamma * dT) |
-| F5 | M-F5-03 | not_implemented | unavailable | match (not_started) | CRAEI (GEAR secondary): wind CF from Weibull, hub-height interpolation, air-density correction |
+| F5 | M-F5-02 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: addendum 2026-10-12) |
+| F5 | M-F5-03 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: addendum 2026-10-12) |
 | F5 | M-F5-04 | not_implemented | unavailable | match (not_started) | none (C2 loss function integration is new) |
 | F5 | M-F5-05 | not_implemented | unavailable | match (not_started) | GeoWorld: annual energy (E_m = P * CF * 8760) |
 | F5 | M-F5-06 | not_implemented | unavailable | match (not_started) | none (parquet outputs are new) |
-| F6 | M-F6-01 | not_implemented | unavailable | match (not_started) | CRAEI (GEAR secondary): LCOE kernel (CAPEX, OPEX, NPV) |
-| F6 | M-F6-02 | not_implemented | unavailable | match (not_started) | CRAEI: Latin hypercube sampling with seed |
+| F6 | M-F6-01 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F6 | M-F6-02 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
 | F6 | M-F6-03 | not_implemented | unavailable | match (not_started) | none (C3 loss function integration is new) |
-| F6 | M-F6-04 | not_implemented | unavailable | match (not_started) | CRAEI: streaming batch processing and summaries |
+| F6 | M-F6-04 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
 | F6 | M-F6-05 | not_implemented | unavailable | match (not_started) | none (purity constraint is new) |
 | F6 | M-F6-06 | not_implemented | unavailable | match (not_started) | none (parquet outputs are new) |
-| F7 | M-F7-01 | not_implemented | unavailable | match (not_started) | CRAEI: feasibility filtering (CF >= CF_min) |
-| F7 | M-F7-02 | not_implemented | unavailable | match (not_started) | CRAEI: regret computation (L*_f, R_i,f) |
-| F7 | M-F7-03 | not_implemented | unavailable | match (not_started) | CRAEI: max regret and p90 regret |
-| F7 | M-F7-04 | not_implemented | unavailable | match (not_started) | CRAEI: satisficing robustness (SR) metric |
-| F7 | M-F7-05 | not_implemented | unavailable | match (not_started) | CRAEI: nominal and robust ranking |
-| F7 | M-F7-06 | not_implemented | unavailable | match (not_started) | CRAEI: variance decomposition (law of total variance) |
-| F7 | M-F7-07 | not_implemented | unavailable | match (not_started) | CRAEI: hypothesis test statistics (H1–H4) |
-| F7 | M-F7-08 | not_implemented | unavailable | match (not_started) | CRAEI: PRIM scenario discovery |
-| F7 | M-F7-09 | not_implemented | unavailable | match (not_started) | CRAEI: Kendall correlation (MR vs SR) |
-| F7 | M-F7-10 | not_implemented | unavailable | match (not_started) | CRAEI: streaming vectorized updates |
+| F7 | M-F7-01 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-02 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-03 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-04 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-05 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-06 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-07 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-08 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-09 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7 | M-F7-10 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
 | F7 | M-F7-11 | not_implemented | unavailable | match (not_started) | none (parquet outputs are new) |
-| F7b | M-F7b-01 | not_implemented | unavailable | match (not_started) | CRAEI: existing-plant capacity exclusion share |
-| F7b | M-F7b-02 | not_implemented | unavailable | match (not_started) | CRAEI: enrichment ratio calculation |
-| F7b | M-F7b-03 | not_implemented | unavailable | match (not_started) | CRAEI: published technical-potential comparison |
-| F7b | M-F7b-04 | not_implemented | unavailable | match (not_started) | CRAEI: plausibility interpretation |
+| F7b | M-F7b-01 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7b | M-F7b-02 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7b | M-F7b-03 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
+| F7b | M-F7b-04 | not_implemented | unavailable | match (not_started) | built fresh (CRAEI has no such logic: docs/_audit/2026-10_F6_design.md, section 1) |
 | F8 | M-F8-01 | not_implemented | unavailable | match (not_started) | none (no-recompute principle is new) |
 | F8 | M-F8-02 | not_implemented | unavailable | match (not_started) | none (thesis outputs T-M1 to T-O3 are new) |
 | E1 | M-E1-01 | not_implemented | unavailable | match (not_started) | none (static explorer is new; technology stack in OQ-013) |
