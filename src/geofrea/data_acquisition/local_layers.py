@@ -173,12 +173,7 @@ _LAND_COVER_TILE_GLOB = "ESA_WorldCover_10m_2020_v100_*_Map.tif"
 # opened to read their own header bounds).
 _TILE_NAME_PATTERN = re.compile(r"v100_([NS])(\d+)([EW])(\d+)_Map")
 
-# A tile is excluded by the geometry filter only when its intersection
-# with the country polygon is (effectively) exactly zero — not merely
-# small. This deliberately does NOT auto-exclude genuine small-overlap
-# border tiles (e.g. N03W051's ~2.7e-5 deg^2 sliver, flagged as a
-# judgment call in TILE-SCAN, 2026-09-22) — those stay in unless a
-# human adds them to excluded_land_cover_tiles explicitly.
+# Engineering tolerance, not a science parameter: below 1e-6 deg2 (~0.01 km2) an overlap is numerical zero; real slivers are excluded by hand.
 _MIN_OVERLAP_DEG2 = 1e-6
 
 
