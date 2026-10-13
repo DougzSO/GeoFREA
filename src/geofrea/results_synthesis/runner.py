@@ -24,10 +24,13 @@ from geofrea.results_synthesis import names
 from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
+from geofrea.results_synthesis.potential_and_cost import t_o3, t_r2
 
 SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-M2": t_m2,
     "T-M3": t_m3,
+    "T-R2": t_r2,
+    "T-O3": t_o3,
 }
 MANIFEST_NAME = "thesis_manifest.json"
 
