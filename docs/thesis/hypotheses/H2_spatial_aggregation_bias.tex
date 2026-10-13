@@ -1,0 +1,367 @@
+% ============================================================================
+% Hypothesis H2: spatial aggregation bias in robust site selection
+% Pre-registered decision rule (OQ-050, H2), fixed 2026-10-13, before any
+% real-country result was produced. Primary threshold gamma = 0.30.
+% Notation follows docs/METHODOLOGY.md and the H1 section (sec:h1).
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Hypothesis H2: Spatial Aggregation Bias in Robust Site Selection}
+\label{sec:h2}
+
+\subsection{Purpose and Position in the Research Design}
+\label{subsec:h2_purpose}
+
+Hypothesis H2 asks whether assessing renewable expansion at the level of
+administrative regions, instead of at the level of individual cells, leads to
+the selection of different and less robust locations. The question is not
+whether resources and costs vary within a country, which is true of any large
+territory, but whether that variation is large enough to change a siting
+decision. H2 is therefore tested through a decision outcome: two procedures
+select the same amount of capacity, one ranking cells and one ranking regions,
+and the agreement between their selections is measured.
+
+The question is grounded in the Modifiable Areal Unit Problem (MAUP), the
+dependence of spatial results on the scale and the boundaries of the units used
+to aggregate observations \cite{openshaw1984,gotwayyoung2002}. It is related to,
+but distinct from, the ecological fallacy, which concerns inferring
+individual-level properties from aggregate relationships \cite{robinson1950}:
+H2 does not infer anything about cells from regional statistics, but compares
+the selections that each level of representation would produce. In energy
+system modelling, spatial resolution has been shown to affect the placement of
+renewable generation, the representation of network constraints and the
+estimated cost of expansion \cite{hoerschbrown2017,frysztacki2021,trondle2020},
+and spatial representation is identified as a central methodological choice in
+reviews of energy system models \cite{pfenninger2014,javanmardi2025}.
+% verify javanmardi2025
+
+The mechanism tested is simple. A regional score summarises many cells. A
+region whose average is mediocre may contain the best sites of the country,
+diluted by poor ones; a region with a good average may contain no excellent
+site at all. Ranking whole regions by their average can therefore select
+capacity that a cell-level ranking would not choose. H2 measures how much of
+the cell-level selection survives regional aggregation.
+
+\subsection{Notation}
+\label{subsec:h2_notation}
+
+The notation of Section~\ref{sec:h1} applies. For one country and one
+technology, $\mathcal{I}$ is the set of cells entering the robustness analysis,
+with $N=|\mathcal{I}|$. For each cell $i\in\mathcal{I}$:
+\begin{itemize}
+    \item $q_i$ is the installable capacity (MW) of the central land scenario,
+    computed by GeoFREA from the eligible area, the land-utilisation factor and
+    the power density; it does not depend on the climate member;
+    \item $z_i=\mathrm{MR}_i$ is the primary robustness score of the thesis,
+    the maximum over climate members of the core window of the 90th percentile
+    over parameter samples of the relative regret
+    (Equation~\ref{eq:h1_relative_regret}). Lower values are better.
+\end{itemize}
+The partition $\mathcal{A}=\{A_1,\dots,A_M\}$ groups the cells of
+$\mathcal{I}$ by first-level administrative unit (Admin1: states in Brazil and
+India, districts in mainland Portugal), using the Admin1 identifier assigned to
+each cell by GeoFREA. Regions without cells in $\mathcal{I}$ do not enter the
+analysis. The capacity of region $A_m$ is $Q_m=\sum_{i\in A_m}q_i$ and the total
+candidate capacity is $Q_{\max}=\sum_{i\in\mathcal{I}}q_i$.
+
+Ranks are assigned in ascending order of score with the deterministic tie
+convention of the F7 phase record, applied identically to cells and regions.
+
+\subsubsection{Capacity target}
+
+The target capacity is the capacity of the robust top-$k$ set used in H1:
+\begin{equation}
+    T=\sum_{i\in S_k}q_i,
+    \qquad
+    S_k=\{\,k \text{ cells of } \mathcal{I} \text{ with the lowest } z_i\,\},
+    \qquad
+    k=\lceil p_k N\rceil .
+    \label{eq:h2_target}
+\end{equation}
+Defining $T$ through the same top-$k$ set links H1 and H2 to one shortlist and
+guarantees that the target exists for every country and technology. National
+capacity targets are used as a sensitivity where they are available.
+
+\subsection{The Two Selections}
+\label{subsec:h2_selections}
+
+\subsubsection{Cell-level selection}
+
+Cells are taken in ascending order of $z_i$ until the cumulative capacity
+reaches $T$. By construction of Equation~\ref{eq:h2_target}, this selection is
+exactly $S_k$. Its selection vector is $x^{\mathrm{cell}}_i=1$ for $i\in S_k$
+and $0$ otherwise, so that $\sum_i q_i x^{\mathrm{cell}}_i=T$.
+
+\subsubsection{Regional selection}
+
+Each region receives the capacity-weighted mean score
+\begin{equation}
+    \overline{z}_m=\frac{\sum_{i\in A_m}q_i z_i}{Q_m}.
+    \label{eq:h2_region_score}
+\end{equation}
+Capacity weighting is the summary a regional study would naturally use: a
+region's score reflects where its capacity is. Regions are taken whole, in
+ascending order of $\overline{z}_m$, until the target is reached. The last
+region $A_{m^{*}}$ enters with the fraction
+\begin{equation}
+    y_{m^{*}}=\frac{T-\sum_{m\in\mathcal{M}_{\mathrm{prev}}}Q_m}{Q_{m^{*}}},
+    \qquad 0<y_{m^{*}}\leq 1,
+    \label{eq:h2_fractional_region}
+\end{equation}
+where $\mathcal{M}_{\mathrm{prev}}$ is the set of regions taken before it. Every
+cell inherits the fraction of its region, $x^{\mathrm{admin}}_i=y_m$ for
+$i\in A_m$, with $y_m=1$ for the regions taken whole and $y_m=0$ for those not
+taken, so that $\sum_i q_i x^{\mathrm{admin}}_i=T$.
+
+The fractional last region is an accounting device that makes the two
+selections exactly equal in capacity. It does not represent how projects would
+be distributed inside that region, and it applies the same fraction to all of
+its cells.
+
+\subsection{Primary Statistic: Capacity Overlap Index}
+\label{subsec:h2_overlap}
+
+The capacity common to both selections is
+\begin{equation}
+    \mathrm{Cap}_{\mathrm{common}}
+    =\sum_{i\in\mathcal{I}}q_i\min\!\left(x^{\mathrm{cell}}_i,x^{\mathrm{admin}}_i\right),
+    \label{eq:h2_common_capacity}
+\end{equation}
+and the Capacity Overlap Index is
+\begin{equation}
+    O=\frac{\mathrm{Cap}_{\mathrm{common}}}{T},\qquad 0\leq O\leq 1 .
+    \label{eq:h2_overlap}
+\end{equation}
+$O$ is the share of the robust cell-level capacity that the regional procedure
+also selects. Because both selections total $T$, $1-O$ is at the same time the
+share of the cell-level selection missed by the regional one and the share of
+the regional selection that the cell-level ranking would not choose.
+
+\subsubsection{Reference value}
+
+If the regional procedure carried no information about where the robust cells
+are, it would behave like a single national region (Admin0): every cell would
+receive the same fraction $T/Q_{\max}$, and the overlap would be
+\begin{equation}
+    O_{\mathrm{ref}}=O_{\mathrm{Admin0}}=\frac{T}{Q_{\max}} .
+    \label{eq:h2_reference}
+\end{equation}
+$O_{\mathrm{ref}}$ is the agreement obtained by spreading the target uniformly
+over the country. It is reported with every result, and it defines when the
+test is informative (Section~\ref{subsec:h2_rule}).
+
+\subsection{Hypothesis and Decision Rule}
+\label{subsec:h2_rule}
+
+H2 states that the Admin1 selection shares little of the capacity of the
+spatially explicit robust selection. The verdict for each country and
+technology is:
+\begin{equation}
+    \text{H2 is}\;
+    \begin{cases}
+        \text{not testable}, & O_{\mathrm{ref}}\geq\gamma,\\
+        \text{supported}, & O_{\mathrm{ref}}<\gamma \text{ and } O<\gamma,\\
+        \text{not supported}, & O_{\mathrm{ref}}<\gamma \text{ and } O\geq\gamma,
+    \end{cases}
+    \qquad \gamma=0.30 .
+    \label{eq:h2_rule}
+\end{equation}
+
+The threshold $\gamma=0.30$ requires that less than three-tenths of the robust
+cell-level capacity be selected by the regional procedure; equivalently, more
+than seven-tenths of it is lost to aggregation. It is deliberately stricter
+than a majority criterion ($\gamma=0.50$): a lower threshold makes it harder to
+conclude that aggregation distorts the selection, so a supported verdict
+requires strong disagreement between the two procedures. The strict inequality
+means that $O=0.30$ does not support H2. The rule is deterministic, applied to a
+computed index; it is not a statistical test with a sampling distribution, and
+its stringency is a property of the threshold, not a reduction of a Type I error
+rate.
+
+The not-testable case protects the rule from a degenerate outcome. When the
+target is a large share of the candidate capacity, even a uniform spread over
+the country reaches an overlap of $\gamma$ or more, and a low overlap can no
+longer be distinguished from the effect of the target size. For the top-$k$
+shares used in the thesis $O_{\mathrm{ref}}$ is expected to lie well below
+$0.30$, but the condition is checked and reported for every case.
+
+The value of $\gamma$ is a decision threshold of this thesis. The MAUP and
+spatial-resolution literature establishes that aggregation can change results,
+but provides no universal overlap threshold. The defence of $\gamma=0.30$ rests
+on its being fixed before any real result was produced, on its direct reading
+(less than three-tenths shared), and on the decision profile reported in
+Section~\ref{subsec:h2_sensitivity}.
+
+\subsection{Complementary Diagnostics (No Verdict)}
+\label{subsec:h2_diagnostics}
+
+Three diagnostics describe the nature of the mismatch. None of them changes the
+verdict.
+
+\subsubsection{Robustness penalty of the regional selection}
+
+\begin{equation}
+    \Delta_z=\frac{1}{T}\sum_{i\in\mathcal{I}}q_i x^{\mathrm{admin}}_i z_i
+    -\frac{1}{T}\sum_{i\in\mathcal{I}}q_i x^{\mathrm{cell}}_i z_i .
+    \label{eq:h2_penalty}
+\end{equation}
+$\Delta_z$ is the increase in the capacity-weighted maximum relative regret
+caused by selecting regions instead of cells, in the same units as
+$\mathrm{MR}$. Since the cell-level selection takes the lowest scores first,
+$\Delta_z\geq 0$ up to ties. A low overlap with a small $\Delta_z$ indicates
+that the two procedures choose different but similarly robust capacity; a low
+overlap with a large $\Delta_z$ indicates a material loss of robustness.
+
+\subsubsection{Within-region heterogeneity}
+
+\begin{equation}
+    \sigma^{2}_{z,m}=\frac{\sum_{i\in A_m}q_i\left(z_i-\overline{z}_m\right)^{2}}{Q_m}.
+    \label{eq:h2_within_variance}
+\end{equation}
+Large within-region dispersion is the mechanism through which aggregation can
+hide the best sites, but it does not by itself imply a low overlap, which also
+depends on the ordering of the regional means and on where the capacity lies.
+The interquartile range of $z_i$ over the country, relative to its median, is
+reported alongside.
+
+\subsubsection{Regional distribution of the selected capacity}
+
+With $P^{\mathrm{cell}}_m$ and $P^{\mathrm{admin}}_m$ the shares of $T$ selected
+in region $A_m$ by each procedure, the total variation distance is
+\begin{equation}
+    D_{\mathrm{TV}}=\frac{1}{2}\sum_{m=1}^{M}
+    \left|P^{\mathrm{cell}}_m-P^{\mathrm{admin}}_m\right| .
+    \label{eq:h2_tv}
+\end{equation}
+It shows whether the mismatch is between regions (high $D_{\mathrm{TV}}$) or
+within the same regions (low $D_{\mathrm{TV}}$ with low $O$).
+
+\subsection{Sensitivity Analyses}
+\label{subsec:h2_sensitivity}
+
+The verdict is issued from the primary configuration only. A change of verdict
+in a variant is reported as a dependence of the result on that choice, not as a
+revised verdict.
+
+\begin{enumerate}
+    \item Decision profile. Since $O$ does not depend on $\gamma$, the profile
+    reports the verdict for $\gamma\in\{0.10,0.15,\dots,0.70\}$, with $0.50$
+    marked as the majority benchmark. H2 is supported for every
+    $\gamma>O$, so the profile shows the smallest threshold that would still
+    support it.
+    \item Target size. $T$ is recomputed for $p_k\in\{0.05,0.10,0.20\}$ and, where
+    an official national target is available for the technology and horizon,
+    for that target. The overlap converges to 1 as $T$ approaches $Q_{\max}$;
+    no other monotonic behaviour is assumed.
+    \item Regional ranking statistic. Regions ranked by the capacity-weighted
+    median of $z_i$ instead of the mean.
+    \item Climate configuration. $z_i$ recomputed without IPSL-CM6A-LR, the
+    climate model retained as a recorded exception, and for the 2071--2100
+    window.
+    \item Cell scale. The analysis repeated at 0.1 degree, which separates the
+    effect of the cell resolution from that of the regional aggregation.
+\end{enumerate}
+Finer administrative partitions (Admin2) and electricity market zones are not
+part of the present design, because they are not available consistently for the
+three countries; their absence is stated as a limitation.
+
+\subsection{Worked Example}
+\label{subsec:h2_example}
+
+A country has $Q_{\max}=1{,}000$~MW of candidate capacity in three states, and
+the robust top-$k$ set holds $T=100$~MW, so $O_{\mathrm{ref}}=0.10<0.30$ and the
+test is informative.
+
+\begin{itemize}
+    \item State A holds 60~MW of the most robust cells and 300~MW of poor ones;
+    its capacity-weighted mean is mediocre.
+    \item State B holds 400~MW of uniformly intermediate cells and no cell of
+    the top-$k$; its mean is the best of the three.
+    \item State C holds 40~MW of top-$k$ cells and 200~MW of poor ones.
+\end{itemize}
+The cell-level selection takes the 60~MW of A and the 40~MW of C. The regional
+selection ranks B first and takes 100~MW from it, a fraction $y_B=0.25$ of its
+capacity. No selected capacity is common, so $O=0$ and H2 is supported: the
+regional averages of A and C dilute their best sites, and B, without a single
+top site, wins on its average. $\Delta_z$ then measures how much robustness is
+lost by building in B.
+
+If instead 42~MW were common, $O=0.42$: H2 would not be supported under
+$\gamma=0.30$, although it would be under the majority benchmark $0.50$. The
+decision profile makes this dependence explicit. The values are illustrative
+and are not GeoFREA results.
+
+\subsection{Parameters}
+\label{subsec:h2_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pre-registered parameters of H2.}
+    \label{tab:h2_parameters}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.4cm}
+        >{\raggedright\arraybackslash}p{3.0cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+        \midrule
+        $\gamma$ & 0.30 & Primary threshold; H2 is supported when less than
+        three-tenths of the robust cell-level capacity is selected by the
+        regional procedure. \\
+        \addlinespace
+        $z_i$ & $\mathrm{MR}_i$ & Primary robustness score; lower is better. \\
+        \addlinespace
+        $q_i$ & Central-scenario capacity & Capacity weight of each cell. \\
+        \addlinespace
+        $T$ & Capacity of the top-$k$ set & Same shortlist as H1;
+        $k=\lceil p_k N\rceil$, $p_k$ fixed in OQ-021. \\
+        \addlinespace
+        $\mathcal{A}$ & Admin1 & Primary regional partition. \\
+        \addlinespace
+        $\overline{z}_m$ & Capacity-weighted mean & Regional ranking
+        statistic. \\
+        \addlinespace
+        $O_{\mathrm{ref}}$ & $T/Q_{\max}$ & Overlap of a uniform national
+        spread; the test is not testable when $O_{\mathrm{ref}}\geq\gamma$. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:h2_limitations}
+
+Dependence on the target. $O$ is conditional on $T$; the sensitivity to the
+top-$k$ share and to national targets shows whether the conclusion holds across
+expansion scales.
+
+Dependence on the score. The regional and cell-level selections are both
+determined by $\mathrm{MR}_i$. H2 evaluates the consequence of aggregation for
+this score; it does not establish that the score is the only valid measure of
+robustness. The cell-level selection is the benchmark of the GeoFREA framework,
+not an independently verified optimum.
+
+Meaning of a low overlap. A low $O$ shows that the two procedures choose
+different capacity. Whether this implies higher system costs, transmission needs
+or curtailment requires the robustness penalty $\Delta_z$ and, beyond this
+thesis, system-level modelling.
+
+Few regions. Countries with few Admin1 units, such as mainland Portugal, give a
+coarse regional selection, and the result there depends more on the boundaries
+than on the scale. The reference value and the regional distribution distance
+are read together with $O$ in those cases.
+
+Partitions. Only the Admin1 partition is tested. Administrative units are not
+necessarily the units of energy planning, and other partitions at similar scale
+may give different overlaps (zoning effect).
+
+Fractional accounting. The fractional last region equalises capacity for the
+comparison and does not represent indivisible projects, minimum plant sizes or
+network constraints.
+
+Generalisation. Results are conditional on the country, technology, candidate
+set, target and partition, and are reported per country and technology.

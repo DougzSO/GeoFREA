@@ -45,6 +45,10 @@ land scenario that are feasible in the nominal future and have a valid climate
 forcing in every member of the core window. Cells classified as
 \textit{climate-fragile} or \textit{climate-data-invalid} are reported
 separately and do not enter $\mathcal{I}$.
+Let $\mathcal{I}_0$ be $\mathcal{I}$ together with the climate-fragile cells: the
+cells feasible in the nominal future. The nominal set $S^{\mathrm{nom}}_{k}$ is
+drawn from $\mathcal{I}_0$, so that a present-optimal site that becomes
+infeasible under climate change is retained in H1b.
 
 Climate members are $m=(g,\sigma,w)$, with $g$ one of six CMIP6 general
 circulation models, $\sigma\in\Sigma=\{\mathrm{SSP1\text{-}2.6},
@@ -98,7 +102,7 @@ with $p_k$ the top-$k$ share fixed in OQ-021. Because $k$ scales with the
 number of candidates, the same rule applies to countries whose candidate sets
 differ by two orders of magnitude. The sets used by H1 are:
 \begin{itemize}
-    \item $S^{\mathrm{nom}}_{k}$: the $k$ cells with the lowest
+    \item $S^{\mathrm{nom}}_{k}$: the $k$ cells of $\mathcal{I}_0$ with the lowest
     $\mathrm{LCOE}_{i,f_0}$ (nominal present ranking);
     \item $S^{\sigma}_{k}$: the $k$ cells with the lowest
     $\mathrm{MR}_{i,\sigma}$;
@@ -152,6 +156,8 @@ climate-only ranking in at least one SSP:
     \qquad m=k.
     \label{eq:h1b_indicator}
 \end{equation}
+A climate-fragile site in $S^{\mathrm{nom}}_{k}$ has no climate-only rank and is
+counted as vulnerable.
 The tolerance $m=k$ means that a site counts as vulnerable only when it leaves
 the top $2k$. Movements across the top-$k$ boundary that stay within $2k$ are
 treated as boundary fluctuation, because cells near the cut-off differ by
