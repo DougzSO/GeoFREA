@@ -1,0 +1,11 @@
+# Text files are stored and checked out with LF on every platform (no CRLF/LF normalization noise in diffs).
+* text=auto eol=lf
+
+# Binary data, never converted.
+*.npz binary
+*.parquet binary
+*.tif binary
+*.tiff binary
+*.png binary
+*.gpkg binary
+*.nc binary
