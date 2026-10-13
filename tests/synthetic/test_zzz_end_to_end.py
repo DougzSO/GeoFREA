@@ -19,7 +19,6 @@ import os
 import socket
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import numpy as np
@@ -1127,8 +1126,31 @@ def test_parquet_metadata_holds_no_timestamp_or_absolute_path(zzz):
     assert not offenders, offenders
 
 
+@pytest.fixture
+def advancing_clock(monkeypatch):
+    """A clock injected into the orchestrator and the audit: every reading is one hour after the previous, so no two runs share a time."""
+    from datetime import UTC, datetime, timedelta
+
+    import geofrea.core.orchestrator as orchestrator_module
+    import geofrea.data_quality_audit.audit as audit_module
+
+    ticks = iter(range(10_000))
+    base = datetime(2030, 1, 1, tzinfo=UTC)
+
+    def now(tz=None):
+        return base + timedelta(hours=next(ticks))
+
+    class FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now(tz)
+
+    monkeypatch.setattr(orchestrator_module, "_now_iso", lambda: now().isoformat())
+    monkeypatch.setattr(audit_module, "datetime", FakeDatetime)
+
+
 @pytest.mark.synthetic
-def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch):
+def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch, advancing_clock):
     import main
 
     monkeypatch.setenv(
@@ -1157,7 +1179,6 @@ def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch
         return entry.sha256, orchestrator.manifest.phases["data_quality_audit"].finished_at
 
     first_hash, first_finished = audit_hash()
-    time.sleep(1.1)  # the manifest times have a resolution of one second
     second_hash, second_finished = audit_hash()
     assert second_finished != first_finished  # the phase really ran again
     assert second_hash == first_hash
