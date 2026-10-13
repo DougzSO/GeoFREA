@@ -85,6 +85,12 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 - One map per file. Figures respect `settings.yaml` `figures`.
 - Thesis outputs are produced only by F8 into `GEOFREA_DATA_DIR/outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
 
+## Thesis text
+
+- `docs/thesis/` holds the LaTeX text of the thesis, in US English, one file per section; hypothesis sections go under `docs/thesis/hypotheses/`.
+- File names: `<ID>_<snake_case_topic>.tex` (for example `H1_climate_rank_robustness.tex`).
+- The METHODOLOGY stays the single source of the method. Thesis figures and tables stay in `GEOFREA_DATA_DIR/outputs/thesis/` (F8).
+
 ## Error handling
 
 - Fail-loud. Never fall back silently to a degraded path.

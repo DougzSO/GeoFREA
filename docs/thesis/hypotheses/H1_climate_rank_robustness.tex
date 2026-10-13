@@ -1,0 +1,326 @@
+% ============================================================================
+% Hypothesis H1: climate robustness of the site ranking
+% Pre-registered decision rule (OQ-050, H1). Fixed before any real-country
+% result was produced. Notation follows docs/METHODOLOGY.md (M-F7-01 to M-F7-07).
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Hypothesis H1: Climate Robustness of the Site Ranking}
+\label{sec:h1}
+
+\subsection{Purpose and Position in the Research Design}
+\label{subsec:h1_purpose}
+
+Hypothesis H1 asks whether the spatial ranking of candidate sites produced by
+GeoFREA holds across climate futures. It examines two distinct properties.
+The first is \textit{core stability}: whether the sites that are robust under
+one emission scenario are largely the same sites that are robust under the
+others. The second is \textit{climate vulnerability}: whether a relevant share
+of the sites that are optimal under present conditions lose their position once
+climate change alone is introduced.
+
+The two properties answer different questions and are therefore tested with
+independent statistics. Core stability compares the Shared Socioeconomic
+Pathways (SSPs) with one another; climate vulnerability compares the present
+with each SSP. H1 is restricted to climate uncertainty: the comparison between
+the nominal ranking and the ranking under combined climate and
+techno-economic uncertainty is the object of H3
+(Section~\ref{sec:h3}).
+
+The design follows the Decision Making under Deep Uncertainty (DMDU)
+perspective, in which futures are explored without assigning them probabilities
+\cite{lempert2003,marchau2019}. Emission scenarios and climate models are
+treated as plausible, unweighted futures, while techno-economic parameters are
+treated as a sampled probabilistic space. Robustness metrics differ in what they
+capture and may disagree \cite{herman2015,kwakkel2016,mcphail2018}; for this
+reason one primary statistic is fixed for each sub-hypothesis, and every other
+metric is reported as descriptive evidence without a verdict.
+
+\subsection{Notation}
+\label{subsec:h1_notation}
+
+Let $\mathcal{I}$ be the set of candidate cells that enter the robustness
+analysis for one country and one technology (the F7 set): cells of the central
+land scenario that are feasible in the nominal future and have a valid climate
+forcing in every member of the core window. Cells classified as
+\textit{climate-fragile} or \textit{climate-data-invalid} are reported
+separately and do not enter $\mathcal{I}$.
+
+Climate members are $m=(g,\sigma,w)$, with $g$ one of six CMIP6 general
+circulation models, $\sigma\in\Sigma=\{\mathrm{SSP1\text{-}2.6},
+\mathrm{SSP3\text{-}7.0},\mathrm{SSP5\text{-}8.5}\}$ and $w$ the time window;
+the core window is 2041--2070. The reference climate is $m_0$. Techno-economic
+parameter vectors are $s=1,\dots,S$, drawn by Latin hypercube sampling, and
+$s_0$ is the nominal vector. A future is $f=(m,s)$, and the nominal present
+future is $f_0=(m_0,s_0)$.
+
+For cell $i$ in future $f$, the relative regret is
+\begin{equation}
+    r_{i,f}=\frac{\mathrm{LCOE}_{i,f}-L^{*}_{f}}{L^{*}_{f}},
+    \label{eq:h1_relative_regret}
+\end{equation}
+where $L^{*}_{f}$ is the reference LCOE of future $f$ over $\mathcal{I}$
+(the minimum, or the low quantile $q_{\mathrm{ref}}$ fixed in OQ-020). The
+relative form removes cost shifts common to every cell, so that the regret
+reflects differences between sites rather than the general level of costs.
+
+Two scenario-level scores are defined for each SSP $\sigma$.
+
+\paragraph{Robust score per SSP.}
+\begin{equation}
+    \mathrm{MR}_{i,\sigma}
+    =\max_{g}\;
+    \mathrm{P}_{90,\,s\geq 1}\!\left(r_{i,(g,\sigma,w_{\mathrm{core}}),s}\right),
+    \label{eq:h1_mr_ssp}
+\end{equation}
+the worst case over climate models of the 90th percentile over parameter
+samples. It has the same structure as the primary robustness metric of the
+thesis, restricted to one SSP.
+
+\paragraph{Climate-only score per SSP.}
+\begin{equation}
+    R^{\mathrm{clim}}_{i,\sigma}
+    =\max_{g}\; r_{i,\left((g,\sigma,w_{\mathrm{core}}),\,s_0\right)},
+    \label{eq:h1_clim_ssp}
+\end{equation}
+the worst case over climate models with all techno-economic parameters held at
+their nominal values. It isolates the effect of climate.
+
+\paragraph{Ranks and top-$k$ sets.}
+Ranks are assigned in ascending order of score (rank 1 is best), with the
+deterministic tie convention recorded in the F7 phase record, applied
+identically in every scenario. Let $N=|\mathcal{I}|$ and
+\begin{equation}
+    k=\left\lceil p_k\,N\right\rceil,
+    \label{eq:h1_k}
+\end{equation}
+with $p_k$ the top-$k$ share fixed in OQ-021. Because $k$ scales with the
+number of candidates, the same rule applies to countries whose candidate sets
+differ by two orders of magnitude. The sets used by H1 are:
+\begin{itemize}
+    \item $S^{\mathrm{nom}}_{k}$: the $k$ cells with the lowest
+    $\mathrm{LCOE}_{i,f_0}$ (nominal present ranking);
+    \item $S^{\sigma}_{k}$: the $k$ cells with the lowest
+    $\mathrm{MR}_{i,\sigma}$;
+    \item $r^{\mathrm{clim}}_{i,\sigma}$: the rank of cell $i$ by
+    $R^{\mathrm{clim}}_{i,\sigma}$.
+\end{itemize}
+
+\subsection{H1a: Core Stability Across Emission Scenarios}
+\label{subsec:h1a}
+
+\paragraph{Statement.}
+A majority of the sites that are robust under one emission scenario are robust
+under all three.
+
+\paragraph{Primary statistic.}
+The core share is the fraction of the top-$k$ set common to the three SSPs:
+\begin{equation}
+    C_k=\frac{1}{k}\left|\,\bigcap_{\sigma\in\Sigma} S^{\sigma}_{k}\right|.
+    \label{eq:h1a_core}
+\end{equation}
+
+\paragraph{Decision rule.}
+\begin{equation}
+    \text{H1a holds}\iff C_k\geq\alpha,\qquad \alpha=0.60.
+    \label{eq:h1a_rule}
+\end{equation}
+
+\paragraph{Reference value.}
+If the three rankings were independent, the expected size of the intersection
+of three random $k$-subsets of $N$ cells would be $k\,(k/N)^{2}$, so that
+$\mathbb{E}[C_k]\approx p_k^{2}$. For $p_k=0.10$ this is $0.01$; the threshold
+$\alpha=0.60$ requires a majority of shared sites, sixty times the chance
+level. The reference value is reported with every result.
+
+\subsection{H1b: Climate Vulnerability of Present-Optimal Sites}
+\label{subsec:h1b}
+
+\paragraph{Statement.}
+At least one in five of the sites that are optimal under present conditions
+lose their position under at least one emission scenario when only the climate
+changes.
+
+\paragraph{Vulnerability indicator.}
+A nominal top-$k$ site is vulnerable if it falls outside the top $k+m$ of the
+climate-only ranking in at least one SSP:
+\begin{equation}
+    I^{\mathrm{vuln}}_{i}
+    =\mathbb{1}\!\left[\exists\,\sigma\in\Sigma:\;
+    r^{\mathrm{clim}}_{i,\sigma}>k+m\right],
+    \qquad i\in S^{\mathrm{nom}}_{k},
+    \qquad m=k.
+    \label{eq:h1b_indicator}
+\end{equation}
+The tolerance $m=k$ means that a site counts as vulnerable only when it leaves
+the top $2k$. Movements across the top-$k$ boundary that stay within $2k$ are
+treated as boundary fluctuation, because cells near the cut-off differ by
+small LCOE margins and would otherwise be classified as vulnerable by
+construction. The tolerance scales with $k$ for the same reason as $k$ scales
+with $N$.
+
+\paragraph{Primary statistic and decision rule.}
+\begin{equation}
+    V_k=\frac{1}{k}\sum_{i\in S^{\mathrm{nom}}_{k}} I^{\mathrm{vuln}}_{i},
+    \qquad
+    \text{H1b holds}\iff V_k\geq\beta,\qquad \beta=0.20.
+    \label{eq:h1b_rule}
+\end{equation}
+
+\paragraph{Magnitude.}
+Prevalence and magnitude are reported separately. For every vulnerable site
+the analysis reports the worst rank displacement
+$\Delta r_i=\max_{\sigma}\left(r^{\mathrm{clim}}_{i,\sigma}-r_{i,f_0}\right)$,
+the SSP and climate model responsible, and $\max_{\sigma}R^{\mathrm{clim}}_{i,\sigma}$.
+No threshold is applied to the magnitude, so that the verdict does not depend
+on a second, unanchored parameter.
+
+\paragraph{Independence from H1a.}
+H1a compares the SSPs with one another under combined uncertainty; H1b compares
+the present with each SSP under climate uncertainty alone. Neither statistic is
+a function of the other, and all four combinations of outcomes are possible.
+
+\subsection{Verdict}
+\label{subsec:h1_verdict}
+
+The verdict is issued for each country and technology:
+\begin{itemize}
+    \item \textit{supported}: H1a and H1b hold;
+    \item \textit{partially supported}: exactly one holds;
+    \item \textit{not supported}: neither holds.
+\end{itemize}
+The combination of the six country-technology verdicts into the cross-country
+assessment follows the rule of the synthesis table (T-R8), fixed together with
+the rules of H2 to H5.
+
+\subsection{Descriptive Evidence (No Verdict)}
+\label{subsec:h1_descriptive}
+
+The following metrics are reported to characterise the result; none of them
+changes the verdict.
+\begin{itemize}
+    \item \textit{Pairwise Jaccard overlap} of the SSP top-$k$ sets,
+    $J_k(\sigma,\sigma')=|S^{\sigma}_{k}\cap S^{\sigma'}_{k}|\,/\,
+    |S^{\sigma}_{k}\cup S^{\sigma'}_{k}|$, which shows which pair of scenarios
+    drives a low core share \cite{fagin2003}.
+    \item \textit{Rank-biased overlap} (RBO) between the SSP rankings
+    \cite{webber2010}, with persistence $p=1-1/k$ so that the expected
+    evaluation depth equals the top-$k$ set. With the commonly used
+    $p=0.9$ the metric would weigh only the first ten or so positions, which is
+    a negligible fraction of the candidate set of a large country. The finite,
+    truncated estimator is used and documented.
+    \item \textit{Rank displacement, median rank and interquartile range} of the
+    nominal top-$k$ sites across SSPs. A small dispersion is not by itself
+    evidence of robustness, since a site may be consistently poor.
+\end{itemize}
+
+\subsection{Sensitivity Analyses}
+\label{subsec:h1_sensitivity}
+
+The verdict is issued from the primary configuration only. The following
+variants are reported alongside it; a change of verdict in any of them is
+reported as a fragility of the result, not as a revised verdict.
+\begin{enumerate}
+    \item Without IPSL-CM6A-LR, the climate model kept as a recorded exception
+    to the transient climate response screening.
+    \item The 2071--2100 window, in which the SSPs diverge more strongly.
+    \item The 0.1-degree cell scale (modifiable areal unit problem).
+    \item Top-$k$ share $p_k\in\{0.05,0.10,0.20\}$ and tolerance
+    $m\in\{k/2,\,k,\,2k\}$, reporting $C_k$ and $V_k$ in each case.
+\end{enumerate}
+
+\subsection{Worked Example}
+\label{subsec:h1_example}
+
+Consider a country with $N=1{,}000$ cells in $\mathcal{I}$ and $p_k=0.05$, so
+$k=50$ and $m=50$.
+
+\paragraph{H1a.}
+Suppose 36 cells belong to the robust top-50 of all three SSPs. Then
+$C_{50}=36/50=0.72\geq0.60$ and H1a holds. Under independence the expected
+core share would be about $0.0025$.
+
+\paragraph{H1b.}
+Suppose a site ranked 5th in the nominal ranking falls to rank 78 in the
+climate-only ranking of SSP5-8.5. Since $78\leq k+m=100$, it is not
+vulnerable: it left the top-50 but stayed within the top-100. Another site,
+ranked 12th, falls to rank 340 under SSP3-7.0; it is vulnerable. If 11 of the
+50 nominal sites are vulnerable, $V_{50}=0.22\geq0.20$ and H1b holds.
+
+\paragraph{Verdict.}
+Both sub-hypotheses hold, so H1 is supported for this country and technology:
+most robust sites are the same under every emission scenario, and more than
+one in five of the sites that are optimal today lose their position under at
+least one scenario through climate change alone.
+
+\subsection{Parameters}
+\label{subsec:h1_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pre-registered parameters of H1.}
+    \label{tab:h1_parameters}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.4cm}
+        >{\raggedright\arraybackslash}p{2.6cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Role and justification} \\
+        \midrule
+        $\alpha$ & 0.60 & Minimum core share for H1a; a majority of shared
+        robust sites, far above the chance level $p_k^{2}$. \\
+        \addlinespace
+        $\beta$ & 0.20 & Minimum share of vulnerable nominal sites for H1b;
+        one in five of the present-optimal sites. \\
+        \addlinespace
+        $m$ & $k$ & Tolerance beyond the top-$k$ boundary; separates
+        boundary fluctuation from loss of position. \\
+        \addlinespace
+        $k$ & $\lceil p_k N\rceil$ & Top-$k$ size scaled to the candidate set;
+        $p_k$ fixed in OQ-021. \\
+        \addlinespace
+        $p$ (RBO) & $1-1/k$ & Descriptive metric only; expected depth equal
+        to $k$. \\
+        \addlinespace
+        $q_{\mathrm{ref}}$ & OQ-020 & Reference quantile of $L^{*}_{f}$. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+The thresholds $\alpha$ and $\beta$ are decision thresholds of this thesis, not
+values established by the literature, which provides robustness metrics and the
+recommendation to test sensitivity to them but no universal cut-offs
+\cite{mcphail2018}. Their defence rests on three elements: they were fixed
+before any real-country result was produced, they are interpretable (a
+majority; one in five), and the sensitivity curves of
+Section~\ref{subsec:h1_sensitivity} show how the conclusions depend on them.
+
+\subsection{Limitations}
+\label{subsec:h1_limitations}
+
+\paragraph{Cut-off dependence.}
+Top-$k$ membership is sensitive to small differences near the boundary. The
+tolerance $m=k$ addresses this for H1b; for H1a the variation of $p_k$ and the
+pairwise Jaccard curves show the extent of the effect.
+
+\paragraph{Climate signal.}
+Climate enters GeoFREA through annual-mean change factors of the mean resource,
+with near-surface wind ratios applied at hub height and a fixed Weibull shape.
+These simplifications may understate the spatial differentiation of climate
+impacts, which would bias H1a towards stability and H1b towards rejection.
+
+\paragraph{Ties.}
+Cells with nearly identical scores can exchange positions arbitrarily. The
+deterministic tie convention is applied identically in every scenario; where
+ties are frequent, results are also reported with near-ties treated as
+equivalent \cite{corsi2024}. % verify reference
+
+\paragraph{Scenario interpretation.}
+The SSPs are not equally probable outcomes. Results are reported per scenario
+and as worst cases, without averaging across scenarios
+\cite{marchau2019,kwakkel2016}.
