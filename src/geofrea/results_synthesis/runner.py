@@ -25,11 +25,17 @@ from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
 from geofrea.results_synthesis.potential_and_cost import t_o3, t_r2
+from geofrea.results_synthesis.robustness_tables import t_o2, t_r6, t_r9, t_r10, t_r12
 
 SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-M2": t_m2,
     "T-M3": t_m3,
     "T-R2": t_r2,
+    "T-R6": t_r6,
+    "T-R9": t_r9,
+    "T-R10": t_r10,
+    "T-R12": t_r12,
+    "T-O2": t_o2,
     "T-O3": t_o3,
 }
 MANIFEST_NAME = "thesis_manifest.json"

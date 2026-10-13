@@ -43,6 +43,7 @@ PHASES = [
     "external_validation",
     "lcoe_maps",
     "robustness_maps",
+    "results_synthesis",
 ]
 INITIAL_SIZE, CEILING = 16, 64
 SCENARIOS = ("central", "restrictive", "permissive")
@@ -178,6 +179,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "external_validation",
             "lcoe_maps",
             "robustness_maps",
+            "results_synthesis",
         )
     }
 
@@ -1214,3 +1216,194 @@ def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch
     second_hash, second_finished = audit_hash()
     assert second_finished != first_finished  # the phase really ran again
     assert second_hash == first_hash
+
+
+# -- F8: the thesis outputs, read from the registered artifacts (M-F8-01, M-F8-02) ----------------------------------
+
+THESIS_TABLES = {
+    "T-M2": ["methods_ZZZ_{t}"],
+    "T-M3": ["uncertain_parameters_ZZZ_{t}"],
+    "T-R2": ["potential_ZZZ_{t}", "land_interval_ZZZ_{t}"],
+    "T-R6": ["hypothesis_statistics_ZZZ_{t}", "h1_summary_ZZZ_{t}"],
+    "T-R10": ["hazard_exposure_ZZZ_{t}"],
+    "T-R12": ["potential_below_tau_ZZZ_{t}"],
+}
+THESIS_FIGURES = {"T-O2": "mr_sr_agreement_ZZZ_{t}", "T-O3": "supply_curves_ZZZ_{t}"}
+
+
+def _thesis(zzz):
+    return zzz[0] / "outputs" / "thesis"
+
+
+def _build_thesis(out_dir, technologies=("solar", "wind")):
+    import main
+    from geofrea.results_synthesis.runner import build_thesis
+
+    return build_thesis(
+        "ZZZ",
+        technologies,
+        technologies_yaml=main.TECHNOLOGIES_YAML,
+        experiments_yaml=main.EXPERIMENTS_YAML,
+        parameters_json=main.PARAMETERS_JSON,
+        methodology_md=main.METHODOLOGY_MD,
+        out_dir=out_dir,
+    )
+
+
+@pytest.mark.synthetic
+def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenance_file(zzz):
+    _, results = zzz
+    assert results["results_synthesis"].status == "success"
+    thesis = _thesis(zzz)
+    for t_id, whats in THESIS_TABLES.items():
+        for what in whats:
+            for tech in ("solar", "wind"):
+                stem = f"T-{t_id[2:]}_{what.format(t=tech)}"
+                for suffix in (".csv", ".tex", ".provenance.json"):
+                    assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+    for t_id, what in THESIS_FIGURES.items():
+        for tech in ("solar", "wind"):
+            stem = f"T-{t_id[2:]}_{what.format(t=tech)}"
+            for suffix in (".png", ".pdf", ".provenance.json"):
+                assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+    assert (thesis / "T-M3_members_ZZZ.csv").is_file()
+    for what in ("exclusion_shares", "enrichment", "published_comparison"):
+        assert (thesis / f"T-R9_{what}_ZZZ.csv").is_file()
+        assert (thesis / f"T-R9_{what}_ZZZ.tex").is_file()
+    assert (thesis / "T-R9_units_ZZZ.csv").is_file()
+    manifest = json.loads((thesis / "thesis_manifest.json").read_text(encoding="utf-8"))
+    built = manifest["countries"]["ZZZ"]["built"]
+    assert set(built) >= {"T-M2", "T-M3", "T-R2", "T-R6", "T-R9", "T-R10", "T-R12", "T-O2", "T-O3"}
+
+
+@pytest.mark.synthetic
+def test_f8_stamps_a_fixture_build_as_test_values_in_the_caption_and_the_provenance(zzz):
+    thesis = _thesis(zzz)
+    stem = thesis / "T-R2_potential_ZZZ_solar"
+    provenance = json.loads(stem.with_suffix(".provenance.json").read_text(encoding="utf-8"))
+    assert provenance["test_values"] is True and provenance["caption"].startswith("TEST VALUES")
+    assert provenance["methodology_version"] == "8.0.0"
+    assert provenance["artifacts_read"]["potential_aggregates_solar"]
+    assert "TEST VALUES" in stem.with_suffix(".tex").read_text(encoding="utf-8")
+
+
+@pytest.mark.synthetic
+def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
+    thesis = _thesis(zzz)
+    base = _phase(zzz, "robustness_analysis")
+    for tech in ("solar", "wind"):
+        aggregates = pd.read_parquet(
+            _phase(zzz, "technical_potential") / f"potential_aggregates_{tech}.parquet"
+        )
+        table = pd.read_csv(thesis / f"T-R2_potential_ZZZ_{tech}.csv")
+        row = table[(table["scenario"] == "central") & (table["quantity"] == "P_GW")].iloc[0]
+        central = aggregates[aggregates["scenario"] == "central"]
+        assert row["reference_m0"] == pytest.approx(
+            float(central[central["member"] == "m0"]["P_GW"].iloc[0])
+        )
+        others = central[central["member"] != "m0"]["P_GW"]
+        assert others.min() - 1e-9 <= row["core_min"] <= row["core_max"] <= others.max() + 1e-9
+        interval = pd.read_csv(thesis / f"T-R2_land_interval_ZZZ_{tech}.csv")
+        assert set(interval.columns) >= {"restrictive", "central", "permissive"}
+
+        hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
+        statistics = pd.read_csv(thesis / f"T-R6_hypothesis_statistics_ZZZ_{tech}.csv")
+        core = statistics[(statistics["scale"] == "0p05deg") & (statistics["role"] == "core")]
+        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H3"]).sum())
+        stored = hypothesis.set_index("statistic")
+        for stat in ("h1a_core_share", "h1b_vulnerable_share"):
+            shown = core.set_index("statistic").loc[stat]
+            assert shown["value"] == pytest.approx(float(stored.loc[stat, "value"]))
+            assert shown["verdict"] == stored.loc[stat, "verdict"]
+        summary = pd.read_csv(thesis / f"T-R6_h1_summary_ZZZ_{tech}.csv")
+        primary = summary[
+            summary["primary"] & (summary["role"] == "core") & (summary["scale"] == "0p05deg")
+        ]
+        stored_h1 = (
+            pd.read_parquet(base / f"h1_summary_{tech}__core.parquet").query("primary").iloc[0]
+        )
+        assert primary["verdict"].iloc[0] == stored_h1["verdict"]
+        assert primary["c_k"].iloc[0] == pytest.approx(float(stored_h1["c_k"]))
+
+        below = pd.read_parquet(base / f"potential_below_tau_{tech}__core.parquet")
+        shown = pd.read_csv(thesis / f"T-R12_potential_below_tau_ZZZ_{tech}.csv")
+        assert len(shown) == len(below)
+        assert shown["potential_gw"].sum() == pytest.approx(float(below["potential_gw"].sum()))
+        exposure = pd.read_parquet(base / f"hazard_exposure_{tech}__core.parquet")
+        assert len(pd.read_csv(thesis / f"T-R10_hazard_exposure_ZZZ_{tech}.csv")) == len(exposure)
+
+        tau = float(stored.loc["mr_sr_kendall_tau_b", "value"])
+        caption = json.loads(
+            (thesis / f"T-O2_mr_sr_agreement_ZZZ_{tech}.provenance.json").read_text(
+                encoding="utf-8"
+            )
+        )["caption"]
+        assert "Kendall tau-b" in caption
+        assert -1.0 <= tau <= 1.0
+
+
+@pytest.mark.synthetic
+def test_f8_shows_the_empty_published_comparison_as_empty_and_says_why(zzz):
+    published = pd.read_csv(_thesis(zzz) / "T-R9_published_comparison_ZZZ.csv")
+    provenance = json.loads(
+        (_thesis(zzz) / "T-R9_published_comparison_ZZZ.provenance.json").read_text(encoding="utf-8")
+    )
+    stored = pd.read_parquet(_phase(zzz, "external_validation") / "published_comparison.parquet")
+    assert len(published) == len(stored)
+    assert "M-F7b-04" in provenance["caption"]
+    if stored.empty:
+        assert "The table is empty" in provenance["caption"]
+
+
+@pytest.mark.synthetic
+def test_f8_is_deterministic_and_needs_only_the_registered_artifacts(zzz, tmp_path, monkeypatch):
+    """Copy `outputs/ZZZ` alone (no raw, interim or shared data) to a new data directory and build twice: the same bytes each time and as the phase's."""
+    import shutil
+
+    copied = tmp_path / "copy"
+    shutil.copytree(zzz[0] / "outputs" / "ZZZ", copied / "outputs" / "ZZZ")
+    # the phase ran before the scale check existed, so its T-R6 holds the default scale only
+    (copied / "outputs" / "ZZZ" / "manifest__0p1deg.json").unlink(missing_ok=True)
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(copied))
+    first, second = tmp_path / "first", tmp_path / "second"
+    summary = _build_thesis(first)
+    _build_thesis(second)
+    files = sorted(p.name for p in first.iterdir())
+    assert files == sorted(p.name for p in second.iterdir()) and len(files) > 40
+    for name in files:
+        assert (first / name).read_bytes() == (second / name).read_bytes(), name
+        original = _thesis(zzz) / name
+        if name != "thesis_manifest.json" and original.is_file():
+            assert (first / name).read_bytes() == original.read_bytes(), name
+    assert summary.test_values is True
+
+
+@pytest.mark.synthetic
+def test_f8_refuses_an_artifact_that_changed_after_it_was_registered(zzz, tmp_path, monkeypatch):
+    import shutil
+
+    from geofrea.results_synthesis.inputs import ThesisInputError
+
+    copied = tmp_path / "copy"
+    shutil.copytree(zzz[0] / "outputs" / "ZZZ", copied / "outputs" / "ZZZ")
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(copied))
+    target = (
+        copied
+        / "outputs"
+        / "ZZZ"
+        / "technical_potential"
+        / "artifacts"
+        / "potential_aggregates_solar.parquet"
+    )
+    target.write_bytes(target.read_bytes() + b"\0")
+    with pytest.raises(ThesisInputError, match="changed since it was registered"):
+        _build_thesis(tmp_path / "out", technologies=("solar",))
+
+
+@pytest.mark.synthetic
+def test_the_scale_check_writes_its_thesis_outputs_apart(zzz, zzz_fine):
+    fine_dir = zzz[0] / "outputs" / "thesis__0p1deg"
+    assert (fine_dir / "T-R2_potential_ZZZ_solar.csv").is_file()
+    default = pd.read_csv(_thesis(zzz) / "T-R2_potential_ZZZ_solar.csv")
+    fine = pd.read_csv(fine_dir / "T-R2_potential_ZZZ_solar.csv")
+    assert len(default) == len(fine)
