@@ -1,6 +1,5 @@
 # F1b data_quality_audit
 
-Status: `built_pending_conformance`
 Methodology items: M-F1b-01, M-F1b-02, V-04
 
 ## Contract

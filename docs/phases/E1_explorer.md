@@ -1,6 +1,5 @@
 # E1 explorer
 
-Status: `not_started`
 Methodology items: M-E1-01, OQ-013
 
 ## Contract

@@ -1,6 +1,6 @@
 """Status lives only in docs/PROGRESS.json (CONVENTIONS, "Where status lives").
 
-METHODOLOGY Section 12 and the comments of the config files carry no state term. The list is closed and kept here. `parameters.json`
+METHODOLOGY Section 12 and the comments of the config files carry no state term, and the phase records carry no status line. The list is closed and kept here. `parameters.json`
 is out of scope: its `status` values are the verification vocabulary of one parameter, not the state of a phase, a country or a
 milestone.
 """
@@ -48,3 +48,26 @@ def test_the_detector_flags_an_inserted_state_phrase():
     assert state_terms(
         roadmap_section("## 12. Implementation roadmap\n| MS-0 | x | in progress |\n## 13. x")
     ) == ["in progress"]
+
+
+STATUS_LINE = re.compile(r"^\s*(?:\*\*)?(?:status|state)(?:\*\*)?\s*[:=]", re.IGNORECASE)
+
+
+def status_lines(text: str) -> list[str]:
+    return [line for line in text.splitlines() if STATUS_LINE.match(line)]
+
+
+def test_phase_records_carry_no_status_line():
+    offenders = {}
+    for path in sorted((REPO / "docs" / "phases").glob("*.md")):
+        found = status_lines(path.read_text(encoding="utf-8"))
+        if found:
+            offenders[path.name] = found
+    assert not offenders, f"phase records record decisions, not status: {offenders}"
+
+
+def test_the_status_line_detector_flags_the_forms_the_records_used():
+    assert status_lines("Status: `in_progress`") == ["Status: `in_progress`"]
+    assert status_lines("**Status:** built") == ["**Status:** built"]
+    assert status_lines("  state: done") == ["  state: done"]
+    assert status_lines("The status of the phase is recorded elsewhere.") == []

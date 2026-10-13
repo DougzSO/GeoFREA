@@ -1,6 +1,5 @@
 # F7b external_validation
 
-Status: `built_on_synthetic_country`
 Methodology items: M-F7b-01 to M-F7b-04, V-06, L-016
 
 ## Contract

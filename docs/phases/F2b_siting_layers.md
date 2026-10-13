@@ -1,6 +1,5 @@
 # F2b siting_layers
 
-Status: `rework_required`
 Methodology items: M-F2b-01 to M-F2b-05, V-01, U-06
 
 ## Contract

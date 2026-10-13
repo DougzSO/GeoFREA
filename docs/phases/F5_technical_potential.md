@@ -1,6 +1,5 @@
 # F5 technical_potential
 
-Status: `built_pending_conformance`
 Methodology items: M-F5-01 to M-F5-06, M-F4-07, V-02, V-03
 
 ## Contract

@@ -1,6 +1,5 @@
 # F6 lcoe_modeling
 
-Status: `in_progress`
 Methodology items: M-F6-01 to M-F6-06, U-01 to U-04, V-02, V-03
 
 ## Contract

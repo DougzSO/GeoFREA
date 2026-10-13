@@ -1,6 +1,5 @@
 # F1 data_acquisition
 
-Status: `built_pending_conformance`
 Methodology items: M-F1-01 to M-F1-07, A-05, A-11
 
 ## Contract

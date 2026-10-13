@@ -1,6 +1,5 @@
 # F7 robustness_analysis
 
-Status: `in_progress`
 Methodology items: M-F7-01 to M-F7-11, V-03, V-07 (with the `scale` parameter of M-F3-06)
 
 ## Contract

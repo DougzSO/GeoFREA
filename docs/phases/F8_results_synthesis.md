@@ -1,6 +1,5 @@
 # F8 results_synthesis
 
-Status: `not_started`
 Methodology items: M-F8-01, M-F8-02, Section 10
 
 ## Contract

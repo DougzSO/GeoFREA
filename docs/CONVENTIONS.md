@@ -28,7 +28,7 @@ Never write an unqualified `F2` or `F7`.
 
 ## Status vocabulary
 
-Used in `docs/PROGRESS.json` and phase records:
+Used in `docs/PROGRESS.json` only (phase records carry no status line):
 
 - `not_started`
 - `in_progress`

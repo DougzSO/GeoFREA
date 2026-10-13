@@ -1,6 +1,5 @@
 # F4 climate_forcing
 
-Status: `in_progress`
 Methodology items: M-F4-01 to M-F4-06, A-11, L-002, L-003, L-005, L-008
 
 ## Contract
