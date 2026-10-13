@@ -93,12 +93,12 @@ their nominal values. It isolates the effect of climate.
 \paragraph{Ranks and top-$k$ sets.}
 Ranks are assigned in ascending order of score (rank 1 is best), with the
 deterministic tie convention recorded in the F7 phase record, applied
-identically in every scenario. Let $N=|\mathcal{I}|$ and
+identically in every scenario. Let $N=|\mathcal{I}_0|$ and
 \begin{equation}
     k=\left\lceil p_k\,N\right\rceil,
     \label{eq:h1_k}
 \end{equation}
-with $p_k$ the top-$k$ share fixed in OQ-021. Because $k$ scales with the
+with $p_k$ the top-$k$ share fixed in OQ-021. k is computed on $\mathcal{I}_0$, so that the same shortlist size applies to H1a, H1b and H2 regardless of how many cells become climate-fragile. Because $k$ scales with the
 number of candidates, the same rule applies to countries whose candidate sets
 differ by two orders of magnitude. The sets used by H1 are:
 \begin{itemize}
@@ -238,7 +238,7 @@ reported as a fragility of the result, not as a revised verdict.
 \subsection{Worked Example}
 \label{subsec:h1_example}
 
-Consider a country with $N=1{,}000$ cells in $\mathcal{I}$ and $p_k=0.05$, so
+Consider a country with $N=1{,}000$ cells in $\mathcal{I}_0$ and $p_k=0.05$, so
 $k=50$ and $m=50$.
 
 \paragraph{H1a.}
