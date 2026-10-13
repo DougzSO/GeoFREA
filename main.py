@@ -140,6 +140,7 @@ from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
 from geofrea.results_synthesis.runner import ThesisSummary, build_thesis
+from geofrea.robustness_analysis.cross_country import build_h4_verdict
 from geofrea.robustness_analysis.maps import (
     MAPS as ROBUSTNESS_MAPS,
 )
@@ -1293,6 +1294,7 @@ def main(argv: list[str] | None = None) -> int:
 
     all_ok = True
     table_rows: list[dict] = []
+    f7_done = False
     for country_code in countries:
         ok, orchestrator, results = run_geofrea(
             country_code,
@@ -1311,6 +1313,9 @@ def main(argv: list[str] | None = None) -> int:
             args.scale,
         )
         all_ok = all_ok and ok
+        f7_done = f7_done or (
+            "robustness_analysis" in results and results["robustness_analysis"].status == "success"
+        )
         for phase_name, result in results.items():
             elapsed_s = (
                 datetime.fromisoformat(result.finished_at)
@@ -1333,6 +1338,15 @@ def main(argv: list[str] | None = None) -> int:
     # country, plus the run id — COMMAND ADJ-7 action 6. Logged (not
     # print()ed) so it lands in both the console and the run's log file.
     logger.info("Run summary:\n%s", render_run_table(table_rows, run_id))
+
+    # the support phase cross_country_h4 (METHODOLOGY 4.1): the verdict of H4 needs the profiles of all the countries, so it runs once, here
+    if f7_done:
+        try:
+            with use_scale(args.scale):
+                build_h4_verdict(countries, tuple(settings.run.technologies), run_id=run_id)
+        except Exception:
+            logger.exception("cross_country_h4 failed for %s", countries)
+            all_ok = False
 
     return 0 if all_ok else 1
 

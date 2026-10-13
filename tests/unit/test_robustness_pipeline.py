@@ -834,3 +834,78 @@ def test_a_null_h3_rule_or_a_null_p_k_writes_the_h3_tables_empty_and_names_the_q
         assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
     hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
     assert not hypothesis["statistic"].str.startswith("h3_beyond").any()
+
+
+# -- H4: the axis displacements, the dominance ratio and the profile of the country (OQ-050, H4) -------------------
+
+
+def _share_beyond(ranked: pd.DataFrame, score: str, k: int, m: int) -> float:
+    """The H3 statistic on the `k` lowest cells of `score` (ties by cell_id), against the nominal rank within the ranked set."""
+    by_cost = ranked.sort_values(["lcoe_nominal", "cell_id"])["cell_id"]
+    nominal_rank = ranked["cell_id"].map(
+        pd.Series(range(1, len(by_cost) + 1), index=by_cost.to_numpy())
+    )
+    shortlist = ranked.assign(nominal_rank=nominal_rank).sort_values([score, "cell_id"]).head(k)
+    return float(
+        shortlist[shortlist["nominal_rank"] > k + m]["p_mw"].sum() / shortlist["p_mw"].sum()
+    )
+
+
+@pytest.mark.unit
+def test_the_h4_country_table_recomputes_from_the_robustness_table_and_carries_the_profile(
+    tmp_path,
+):
+    entry, _, _ = _run(tmp_path)
+    tables = entry.windows["core"].tables
+    robustness = _table(entry)
+    ranked = robustness[robustness["cell_class"] == "ranked"]
+    summary = pd.read_parquet(tables["h4_country"])
+    primary = summary[summary["primary"]].iloc[0]
+    assert summary["primary"].sum() == 1 and primary["variant"] == "primary"
+    assert (primary["lower"], primary["upper"], primary["m"]) == (0.40, 0.60, primary["k"])
+    k, m = int(primary["k"]), int(primary["m"])
+    assert primary["d_clim"] == pytest.approx(_share_beyond(ranked, "mr_clim", k, m))
+    assert primary["d_tec"] == pytest.approx(_share_beyond(ranked, "mr_tech", k, m))
+    assert primary["d_joint"] == pytest.approx(
+        pd.read_parquet(tables["h3_summary"]).query("primary")["d"].iloc[0]
+    )
+    assert primary["d_sum"] == pytest.approx(primary["d_clim"] + primary["d_tec"])
+    if primary["d_sum"] == 0:
+        assert pd.isna(primary["rho"]) and primary["profile"] == "no_displacement"
+    else:
+        assert primary["rho"] == pytest.approx(primary["d_clim"] / primary["d_sum"])
+        expected = (
+            "climate_dominated"
+            if primary["rho"] > 0.60
+            else "techno_economic_dominated"
+            if primary["rho"] < 0.40
+            else "mixed"
+        )
+        assert primary["profile"] == expected
+    variants = set(summary["variant"])
+    assert {"top_k_percent_5", "top_k_percent_20", "tolerance_0.5k", "tolerance_2k"} <= variants
+    assert {"boundaries_0.30_0.70", "boundaries_0.45_0.55"} <= variants
+    assert any(v.startswith("climate_ssp_") for v in variants)
+    by_ssp = summary[summary["ssp"].notna()]
+    assert len(by_ssp) >= 2 and (by_ssp["d_tec"] == primary["d_tec"]).all()
+    hypothesis = pd.read_parquet(tables["hypothesis"]).set_index("statistic")
+    assert hypothesis.loc["h4_displacement_climate", "value"] == pytest.approx(primary["d_clim"])
+    assert hypothesis.loc["h4_displacement_techno", "value"] == pytest.approx(primary["d_tec"])
+    assert pd.isna(
+        hypothesis.loc["h4_displacement_climate", "verdict"]
+    )  # the verdict is across countries
+    # the earlier statistics of H4 stay as descriptive rows
+    assert "descriptive" in hypothesis.loc["h4_jaccard_climate_only", "note"]
+    assert "descriptive" in hypothesis.loc["h4_variance_share_climate", "note"]
+
+
+@pytest.mark.unit
+def test_a_null_h4_rule_or_a_null_p_k_writes_the_h4_table_empty_and_names_the_question(tmp_path):
+    entry, _, _ = _run(tmp_path / "a", experiments=_with_rules())
+    path = entry.windows["core"].tables["h4_country"]
+    assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-050"
+    other, _, _ = _run(tmp_path / "b", country=_country(top_k_percent=None))
+    path = other.windows["core"].tables["h4_country"]
+    assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
+    hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
+    assert not hypothesis["statistic"].str.startswith("h4_displacement").any()

@@ -15,6 +15,7 @@ from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
 from geofrea.robustness_analysis.h1_rank_robustness import H1Detail, H1Inputs, H1Variant
 from geofrea.robustness_analysis.h2_aggregation import H2Detail, H2Variant
 from geofrea.robustness_analysis.h3_robust_vs_nominal import H3Detail, H3Inputs, H3Variant
+from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
@@ -612,3 +613,46 @@ def h3_sites_frame(inputs: H3Inputs, detail: H3Detail) -> pd.DataFrame:
             "counts_in_d": detail.beyond[sites],
         }
     ).sort_values(["robust_rank", "nominal_rank"], ignore_index=True)
+
+
+def h4_country_frame(variants: Sequence[H4Variant], window: str) -> pd.DataFrame:
+    """The profile of the country (primary row), the climate axis by SSP, the sensitivities and the boundary variants, one row each (D-F7-047)."""
+    return pd.DataFrame(
+        [
+            {
+                "variant": v.variant,
+                "primary": i == 0,
+                "window": window,
+                "top_k_percent": v.top_k_percent,
+                "k": v.k,
+                "m": v.m,
+                "tolerance_multiple": v.tolerance_multiple,
+                "excluded_gcms": "|".join(v.excluded_gcms),
+                "ssp": v.ssp,
+                "lower": v.lower,
+                "upper": v.upper,
+                "n_cells": v.n_cells,
+                "n_ranked": v.n_ranked,
+                "top_k_truncated": v.top_k_truncated,
+                "clim_capacity_mw": v.clim_capacity_mw,
+                "tec_capacity_mw": v.tec_capacity_mw,
+                "d_clim": v.d_clim,
+                "d_tec": v.d_tec,
+                "d_sum": v.d_sum,
+                "rho": v.rho,
+                "profile": v.profile,
+                "d_joint": v.d_joint,
+                "distance_to_lower": v.distance_to_lower,
+                "distance_to_upper": v.distance_to_upper,
+            }
+            for i, v in enumerate(variants)
+        ]
+    ).astype(
+        {
+            "top_k_percent": "float64",
+            "rho": "float64",
+            "distance_to_lower": "float64",
+            "distance_to_upper": "float64",
+            "ssp": "object",
+        }
+    )

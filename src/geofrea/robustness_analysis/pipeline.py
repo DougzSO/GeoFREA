@@ -57,6 +57,7 @@ from geofrea.robustness_analysis.assemble import (
     h2_summary_frame,
     h3_sites_frame,
     h3_summary_frame,
+    h4_country_frame,
     hypothesis_frame,
     nominal_by_member_frame,
     prim_frame,
@@ -75,6 +76,7 @@ from geofrea.robustness_analysis.decision import (
     h1_rule,
     h2_rule,
     h3_rule,
+    h4_rule,
     refusals,
     regret_quantile,
     rules_for,
@@ -117,6 +119,19 @@ from geofrea.robustness_analysis.h3_robust_vs_nominal import (
 from geofrea.robustness_analysis.h3_robust_vs_nominal import (
     sensitivity_variants as h3_sensitivity_variants,
 )
+from geofrea.robustness_analysis.h4_axis_dominance import (
+    PRIMARY as H4_PRIMARY_VARIANT,
+)
+from geofrea.robustness_analysis.h4_axis_dominance import (
+    H4Error,
+    H4Inputs,
+)
+from geofrea.robustness_analysis.h4_axis_dominance import (
+    evaluate_variant as evaluate_h4,
+)
+from geofrea.robustness_analysis.h4_axis_dominance import (
+    sensitivity_variants as h4_sensitivity_variants,
+)
 from geofrea.robustness_analysis.hypotheses import (
     agreement,
     evaluate_rules,
@@ -129,6 +144,7 @@ from geofrea.robustness_analysis.hypotheses import (
     h3_primary,
     h3_verdict_entry,
     h4,
+    h4_primary,
     h5,
 )
 from geofrea.robustness_analysis.prim import run_prim
@@ -143,6 +159,7 @@ from geofrea.robustness_analysis.table_schemas import (
     H2SummaryRow,
     H3SiteRow,
     H3SummaryRow,
+    H4CountryRow,
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
@@ -180,10 +197,12 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "h2_regions": H2RegionRow,
     "h3_summary": H3SummaryRow,
     "h3_sites": H3SiteRow,
+    "h4_country": H4CountryRow,
 }
 H1_TABLES = ("ssp_scores", "h1_sites", "h1_summary")
 H2_TABLES = ("h2_summary", "h2_regions")
 H3_TABLES = ("h3_summary", "h3_sites")
+H4_TABLES = ("h4_country",)
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -636,6 +655,12 @@ def run_window(
                 "top_k_percent is null",
                 "OQ-021",
             )
+        for kind in H4_TABLES:
+            skips[kind] = SkippedOutput(
+                "H4 axis displacements, the dominance ratio and the profile (M-F7-06, M-F7-07)",
+                "top_k_percent is null",
+                "OQ-021",
+            )
         skips["prim_boxes"] = SkippedOutput(
             "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
         )
@@ -844,6 +869,71 @@ def run_window(
                 rule3.delta,
             )
 
+    # H4: the axis displacements, the dominance ratio and the profile of the country (the verdict needs the other countries)
+    h4_statistics: list = []
+    rule4 = h4_rule(experiments)
+    if ranking.top_nominal is not None and ranking.k is not None:
+        if rule4 is None:
+            for kind in H4_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H4 axis displacements, the dominance ratio, the profile and the sensitivities (M-F7-06, M-F7-07)",
+                    "hypothesis_rules.H4 is null",
+                    "OQ-050",
+                )
+        elif not cell_set.ranked.any():
+            for kind in H4_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H4 axis displacements, the dominance ratio and the profile (M-F7-06, M-F7-07)",
+                    "every cell of the F7 set is climate-fragile, there is no ranked cell",
+                    "OQ-008",
+                )
+        else:
+            assert decision.top_k_percent is not None
+            h4_inputs = H4Inputs(
+                r_clim=climate_only_regret(evaluation),
+                z_tec=evaluation.mr_tech,
+                z_joint=evaluation.mr,
+                lcoe=evaluation.nominal_lcoe[:, 0],
+                q=cell_set.p_mw,
+                ranked=cell_set.ranked,
+                sr=evaluation.sr,
+                ssps=tuple(by_member[m].ssp or "" for m in member_ids),
+                gcms=tuple(by_member[m].gcm or "" for m in member_ids),
+            )
+            try:
+                h4_primary_variant = evaluate_h4(
+                    h4_inputs,
+                    variant=H4_PRIMARY_VARIANT,
+                    lower=rule4.lower,
+                    upper=rule4.upper,
+                    tolerance_multiple=rule4.tolerance_multiple_of_k,
+                    top_k_percent=decision.top_k_percent,
+                )
+                h4_variants = [
+                    h4_primary_variant,
+                    *h4_sensitivity_variants(
+                        h4_inputs,
+                        h4_primary_variant,
+                        tcr_exception_gcms=sorted(
+                            {e.gcm or "" for e in entries if e.tcr_exception}
+                        ),
+                    ),
+                ]
+            except H4Error as exc:
+                raise RobustnessInputError(f"H4 cannot be computed: {exc}") from exc
+            frames["h4_country"] = h4_country_frame(h4_variants, window)
+            h4_statistics = h4_primary(h4_primary_variant, cell_set.n_f7)
+            logger.info(
+                "%s %s [%s]: H4 profile %s (D_clim %.3f, D_tec %.3f, rho %s)",
+                iso,
+                tech,
+                role,
+                h4_primary_variant.profile,
+                h4_primary_variant.d_clim,
+                h4_primary_variant.d_tec,
+                "n/a" if h4_primary_variant.rho is None else f"{h4_primary_variant.rho:.3f}",
+            )
+
     # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
     land_range: dict[str, tuple[float, float]] = {}
     if decision.tau is not None and evaluation.potential_gw is not None:
@@ -945,7 +1035,7 @@ def run_window(
         + h4(cell_set, evaluation, ranking)
         + agreement(cell_set, evaluation)
     )
-    statistics += h1_statistics + h2_statistics + h3_statistics
+    statistics += h1_statistics + h2_statistics + h3_statistics + h4_statistics
     if futures is not None:
         statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
     if evaluation.potential_gw is not None:

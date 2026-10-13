@@ -359,3 +359,69 @@ class H3SiteRow(BaseModel):
     in_nominal: bool
     within_tolerance: bool
     counts_in_d: bool
+
+
+class H4CountryRow(BaseModel):
+    """H4 for one country, technology, window and setting: `variant` `primary` carries the profile (D-F7-047).
+
+    `d_clim` and `d_tec` are the H3 statistic on the shortlists of the climate-only and the techno-economic-only score, `rho` is
+    `d_clim / d_sum` (null when `d_sum` is 0, profile `no_displacement`), `d_joint` the statistic of H3 on the joint shortlist. The profile uses
+    the boundaries `lower` and `upper` of the row. `ssp` is set on the rows that keep the members of one SSP in the climate axis,
+    `excluded_gcms` is joined by `|`. A sensitivity or a reading by SSP never revises the profile of the primary row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant: str
+    primary: bool
+    window: str
+    top_k_percent: float
+    k: int
+    m: int
+    tolerance_multiple: float
+    excluded_gcms: str
+    ssp: str | None
+    lower: float
+    upper: float
+    n_cells: int
+    n_ranked: int
+    top_k_truncated: bool
+    clim_capacity_mw: float
+    tec_capacity_mw: float
+    d_clim: float
+    d_tec: float
+    d_sum: float
+    rho: float | None
+    profile: str
+    d_joint: float
+    distance_to_lower: float | None
+    distance_to_upper: float | None
+
+
+class H4VerdictRow(BaseModel):
+    """The verdict of H4 for one technology and window across countries (D-F7-049): one row per country and one row `ALL` (`kind` `technology`).
+
+    A `country` row carries the profile and the statistics read from the primary row of its `h4_country` table, or `available` false and the
+    `reason` (an empty table with the question that blocks it, or no table). The `technology` row carries the count of countries by profile
+    and the `verdict` (`supported`, `not_supported`, `not_testable`) with its `reason`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    country: str
+    window: str
+    available: bool
+    profile: str | None
+    d_clim: float | None
+    d_tec: float | None
+    d_sum: float | None
+    rho: float | None
+    n_countries: int | None
+    n_available: int | None
+    n_climate_dominated: int | None
+    n_techno_economic_dominated: int | None
+    n_mixed: int | None
+    n_no_displacement: int | None
+    verdict: str | None
+    reason: str | None

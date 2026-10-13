@@ -43,6 +43,7 @@ __all__ = [
     "H3Error",
     "H3Inputs",
     "H3Variant",
+    "capacity_share_beyond",
     "centroid_distance_km",
     "evaluate_variant",
     "sensitivity_variants",
@@ -125,6 +126,20 @@ def centroid_distance_km(
         points.append(((w * lat[mask]).sum() / w.sum(), (w * lon[mask]).sum() / w.sum()))
     (lat1, lon1), (lat2, lon2) = points
     return float(_GEOD.inv(lon1, lat1, lon2, lat2)[2] / 1000.0)
+
+
+def capacity_share_beyond(
+    q: np.ndarray, shortlist: np.ndarray, nominal_rank: np.ndarray, threshold: int
+) -> float:
+    """The statistic of H3 for any shortlist: the share of its capacity in cells whose nominal rank exceeds `threshold` (`k + m`).
+
+    Raises:
+        H3Error: the shortlist has no capacity.
+    """
+    capacity = float(q[shortlist].sum())
+    if capacity <= 0:
+        raise H3Error("the shortlist has no capacity")
+    return float(q[shortlist & (nominal_rank > threshold)].sum()) / capacity
 
 
 def _weighted_mean(values: np.ndarray, q: np.ndarray, mask: np.ndarray) -> float | None:
@@ -240,12 +255,10 @@ def evaluate_variant(
     robust_rank = ranks_from_order(robust_order, n)
     q = inputs.q
     robust_capacity = float(q[robust].sum())
-    if robust_capacity <= 0:
-        raise H3Error("the robust shortlist has no capacity")
+    d = capacity_share_beyond(q, robust, nominal_rank, k + m)
     beyond = robust & (nominal_rank > k + m)
     within = robust & (nominal_rank > k) & (nominal_rank <= k + m)
     outside = float(q[beyond].sum())
-    d = outside / robust_capacity
     d_ref = 1.0 - (k + m) / n_ranked
     verdict = verdict_of(d, d_ref, delta)
     lcoe_robust = _weighted_mean(inputs.lcoe, q, robust)

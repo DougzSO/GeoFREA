@@ -220,6 +220,19 @@ def thesis_dir() -> Path:
     return _ensure_data_env() / "outputs" / "thesis"
 
 
+def cross_country_dir() -> Path:
+    """Get the directory of the outputs that depend on several countries (the support phase `cross_country_h4`).
+
+    Returns:
+        GEOFREA_DATA_DIR / outputs / cross_country as an absolute Path. The manifest of those outputs is
+        `manifest.json` in it (`manifest__<scale id>.json` at another scale, A-08).
+
+    Raises:
+        MissingPathEnvironmentError: If GEOFREA_DATA_DIR is not set.
+    """
+    return _ensure_data_env() / "outputs" / "cross_country"
+
+
 def log_path(iso3: str, run_id: str) -> Path:
     """Get the run log file for a country and run.
 

@@ -29,6 +29,7 @@ from geofrea.robustness_analysis.h3_robust_vs_nominal import (
     H3Variant,
     centroid_distance_km,
 )
+from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
 from geofrea.robustness_analysis.rankings import jaccard_masks
 
 if TYPE_CHECKING:
@@ -458,8 +459,56 @@ def h3(
     ]
 
 
+H4_DESCRIPTIVE = "descriptive evidence, no verdict (the primary statistics of H4 are h4_displacement_climate, h4_displacement_techno and h4_dominance_ratio)"
+H4_PROFILE_NOTE = "the profile and the verdict of H4 are in the h4_country table and, across countries, in h4_verdict (cross_country_h4)"
+
+
+def h4_primary(variant: H4Variant, n_cells: int) -> list[Statistic]:
+    """H4: the displacements `D_clim` and `D_tec`, their sum, the dominance ratio and the joint displacement of one country and technology.
+
+    Implements: M-F7-07 (H4). The statistics carry no verdict: the profile of the country is in `h4_country` and the verdict needs the other
+    countries (`cross_country_h4`).
+    """
+
+    def row(name: str, value: float | None, note: str) -> Statistic:
+        return Statistic(
+            "H4",
+            name,
+            _clean(value),
+            n_cells=n_cells,
+            k=variant.k,
+            top_k_truncated=variant.top_k_truncated,
+            note=note,
+        )
+
+    return [
+        row(
+            "h4_displacement_climate",
+            variant.d_clim,
+            f"D_clim: share of the capacity of the climate-axis shortlist beyond the nominal top k + m; {H4_PROFILE_NOTE}",
+        ),
+        row(
+            "h4_displacement_techno",
+            variant.d_tec,
+            f"D_tec: share of the capacity of the techno-economic-axis shortlist beyond the nominal top k + m; {H4_PROFILE_NOTE}",
+        ),
+        row("h4_displacement_sum", variant.d_sum, f"D_clim + D_tec; {H4_PROFILE_NOTE}"),
+        row(
+            "h4_dominance_ratio",
+            variant.rho,
+            f"rho = D_clim / (D_clim + D_tec), null when both are 0; profile {variant.profile}; {H4_PROFILE_NOTE}",
+        ),
+        row(
+            "h4_displacement_joint",
+            variant.d_joint,
+            f"{H4_DESCRIPTIVE}; D of H3 (both axes together), beside D_clim and D_tec",
+        ),
+    ]
+
+
 def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> list[Statistic]:
-    """H4: Jaccard of the nominal top-k with the climate-only and the techno-only top-k, and the variance shares (secondary)."""
+    """H4, descriptive rows over the F7 set: the variance shares and the Jaccard of the nominal top-k with the climate-only and the techno-only top-k
+    (the primary statistics of H4 are `h4_displacement_*` and `h4_dominance_ratio`)."""
     ranked = cell_set.ranked
     total = float(evaluation.var_total[ranked].sum())
     rows = []
@@ -470,6 +519,7 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
                 "h4_variance_share_climate",
                 float(evaluation.var_between[ranked].sum() / total),
                 n_cells=int(ranked.sum()),
+                note=H4_DESCRIPTIVE,
             )
         )
         rows.append(
@@ -478,6 +528,7 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
                 "h4_variance_share_techno",
                 float(evaluation.var_within[ranked].sum() / total),
                 n_cells=int(ranked.sum()),
+                note=H4_DESCRIPTIVE,
             )
         )
     if ranking is not None and ranking.top_nominal is not None:
@@ -493,6 +544,7 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
                 n_cells=cell_set.n_f7,
                 k=k,
                 top_k_truncated=truncated,
+                note=H4_DESCRIPTIVE,
             ),
             Statistic(
                 "H4",
@@ -501,6 +553,7 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
                 n_cells=cell_set.n_f7,
                 k=k,
                 top_k_truncated=truncated,
+                note=H4_DESCRIPTIVE,
             ),
             Statistic(
                 "H4",
@@ -509,6 +562,7 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
                 n_cells=cell_set.n_f7,
                 k=k,
                 top_k_truncated=truncated,
+                note=H4_DESCRIPTIVE,
             ),
         ]
     return rows

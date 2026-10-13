@@ -922,6 +922,104 @@ def test_f7_writes_the_h3_table_with_d_the_reference_the_verdict_and_the_sensiti
 
 
 @pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_the_h4_country_table_with_the_displacements_the_ratio_and_the_profile(zzz, tech):
+    base = _phase(zzz, "robustness_analysis")
+    summary = pd.read_parquet(base / f"h4_country_{tech}__core.parquet")
+    primary = summary[summary["primary"]].iloc[0]
+    assert primary["profile"] in {
+        "climate_dominated",
+        "techno_economic_dominated",
+        "mixed",
+        "no_displacement",
+    }
+    assert 0.0 <= primary["d_clim"] <= 1.0 and 0.0 <= primary["d_tec"] <= 1.0
+    assert primary["d_sum"] == pytest.approx(primary["d_clim"] + primary["d_tec"])
+    assert (primary["lower"], primary["upper"], primary["m"]) == (0.40, 0.60, primary["k"])
+    if primary["d_sum"] > 0:
+        assert primary["rho"] == pytest.approx(primary["d_clim"] / primary["d_sum"])
+    else:
+        assert pd.isna(primary["rho"]) and primary["profile"] == "no_displacement"
+    variants = set(summary["variant"])
+    assert {"top_k_percent_5", "tolerance_2k", "boundaries_0.30_0.70"} <= variants
+    assert {v for v in variants if v.startswith("climate_ssp_")} == {
+        "climate_ssp_SSP1-2.6",
+        "climate_ssp_SSP3-7.0",
+        "climate_ssp_SSP5-8.5",
+    }
+    assert (base / f"h4_country_{tech}__sensitivity.parquet").is_file()  # the 2071-2100 window
+    joint = pd.read_parquet(base / f"h3_summary_{tech}__core.parquet").query("primary")["d"].iloc[0]
+    assert primary["d_joint"] == pytest.approx(joint)
+
+
+@pytest.mark.synthetic
+def test_cross_country_h4_gives_not_testable_for_one_country_and_a_verdict_for_three(
+    zzz, tmp_path, monkeypatch
+):
+    """ZZZ alone cannot test H4; ZZZ beside two copies whose profiles are set apart (a Climate- and a Techno-Economic-Dominated one) does."""
+    import hashlib
+    import shutil
+
+    from geofrea.core.artifact_reader import ArtifactReader
+    from geofrea.core.tables import write_table
+    from geofrea.robustness_analysis.cross_country import build_h4_verdict, manifest_file
+    from geofrea.robustness_analysis.table_schemas import (
+        ROBUSTNESS_TABLE_SCHEMA_VERSION,
+        H4CountryRow,
+    )
+
+    data = tmp_path / "data"
+    shutil.copytree(zzz[0] / "outputs" / "ZZZ", data / "outputs" / "ZZZ")
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(data))
+    alone = build_h4_verdict(["ZZZ"], ("solar", "wind"))
+    assert {v.verdict for v in alone.verdicts} == {"not_testable"}
+    assert {(v.n_countries, v.n_available) for v in alone.verdicts} == {(1, 1)}
+
+    for iso, (d_clim, d_tec) in (("ZZB", (0.42, 0.08)), ("ZZC", (0.12, 0.38))):
+        manifest = {"artifacts": {}}
+        for tech in ("solar", "wind"):
+            for role in ("core", "sensitivity"):
+                real = _phase(zzz, "robustness_analysis") / f"h4_country_{tech}__{role}.parquet"
+                frame = pd.read_parquet(real)
+                at = frame.index[frame["primary"]][0]
+                frame.loc[at, ["d_clim", "d_tec", "d_sum", "rho"]] = [
+                    d_clim,
+                    d_tec,
+                    d_clim + d_tec,
+                    d_clim / (d_clim + d_tec),
+                ]
+                frame.loc[at, "profile"] = (
+                    "climate_dominated" if d_clim > d_tec else "techno_economic_dominated"
+                )
+                rel = f"outputs/{iso}/h4_country_{tech}__{role}.parquet"
+                path = write_table(
+                    frame,
+                    data / rel,
+                    schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION,
+                    row_model=H4CountryRow,
+                )
+                manifest["artifacts"][f"h4_country_{tech}__{role}"] = {
+                    "path": {"root": "data", "rel": rel},
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                }
+        (data / "outputs" / iso / "manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+
+    three = build_h4_verdict(["ZZZ", "ZZB", "ZZC"], ("solar", "wind"))
+    assert {(v.technology, v.role): v.verdict for v in three.verdicts} == dict.fromkeys(
+        [(t, r) for t in ("solar", "wind") for r in ("core", "sensitivity")], "supported"
+    )
+    reader = ArtifactReader("cross_country", manifest_file=manifest_file())
+    table = reader.table("h4_verdict_wind__core", {ROBUSTNESS_TABLE_SCHEMA_VERSION})
+    real = pd.read_parquet(_phase(zzz, "robustness_analysis") / "h4_country_wind__core.parquet")
+    shown = table[table["kind"] == "country"].set_index("country")
+    assert shown.loc["ZZZ", "profile"] == real[real["primary"]]["profile"].iloc[0]
+    assert shown.loc["ZZB", "profile"] == "climate_dominated"
+    assert shown.loc["ZZC", "profile"] == "techno_economic_dominated"
+
+
+@pytest.mark.synthetic
 def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_the_solar_cells(
     zzz_fine,
 ):
