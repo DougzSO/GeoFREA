@@ -103,6 +103,22 @@ class HypothesisRule(BaseModel):
     threshold: float
 
 
+class H1Rule(BaseModel):
+    """The pre-registered decision rule of H1 (M-F7-07, OQ-050): `C_k >= alpha` (H1a) and `V_k >= beta` (H1b) with the tolerance `m`.
+
+    `tolerance_multiple_of_k` is `m / k`. `rbo_p` is the persistence of the descriptive rank-biased overlap, written as the formula the
+    code evaluates (`1 - 1/k`); no other form is accepted. `source` is the citation of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    alpha: float = Field(gt=0, le=1)
+    beta: float = Field(gt=0, le=1)
+    tolerance_multiple_of_k: float = Field(gt=0)
+    rbo_p: Literal["1 - 1/k"]
+    source: str = Field(min_length=1)
+
+
 class HazardThreshold(BaseModel):
     """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
 
@@ -159,7 +175,19 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
-    hypothesis_rules: dict[str, list[HypothesisRule] | None]
+    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | None]
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     external_validation: ExternalValidationConfig
+
+    @model_validator(mode="after")
+    def _h1_has_its_own_form(self) -> ExperimentsFile:
+        """H1 is a pre-registered `H1Rule` (or null); the other hypotheses are lists of rules (or null)."""
+        for name, rule in self.hypothesis_rules.items():
+            if name == "H1" and isinstance(rule, list):
+                raise ValueError(
+                    "hypothesis_rules.H1 is an H1Rule mapping (alpha, beta, ...), not a list"
+                )
+            if name != "H1" and isinstance(rule, H1Rule):
+                raise ValueError(f"hypothesis_rules.{name}: the H1Rule form belongs to H1")
+        return self
