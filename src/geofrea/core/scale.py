@@ -87,6 +87,11 @@ SCALE_DEPENDENT_PHASES = frozenset(
 _active: CellScale = DEFAULT_SCALE
 
 
+def other_scales() -> list[CellScale]:
+    """The registered scales other than the active one (the scale check of V-07 for a reader of both)."""
+    return [s for s in SCALES.values() if s != _active]
+
+
 def get_scale(scale_id: str) -> CellScale:
     """The registered scale called `scale_id`.
 

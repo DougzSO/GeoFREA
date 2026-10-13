@@ -104,6 +104,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "lcoe_maps",
         "robustness_maps",
         "potential_maps",
+        "results_synthesis",
         "hazard_context",
         "climate_maps",
         "overview",
@@ -873,5 +874,8 @@ def test_external_validation_is_a_sink_whose_tables_no_other_phase_requires():
         }
     )
     for name, spec in specs.items():
-        if name != "external_validation":
+        if name not in ("external_validation", "results_synthesis"):
             assert not (spec.requires & f7b.produces), name
+    assert (
+        f7b.produces <= specs["results_synthesis"].requires
+    )  # the synthesis phase reads them (T-R9)

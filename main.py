@@ -139,6 +139,7 @@ from geofrea.lcoe_modeling.maps import slug as ssp_slug
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.overview.figures import OverviewSummary, build_overview
+from geofrea.results_synthesis.runner import ThesisSummary, build_thesis
 from geofrea.robustness_analysis.maps import (
     MAPS as ROBUSTNESS_MAPS,
 )
@@ -669,6 +670,19 @@ def _build_phase_specs(
         _register_json_artifact(context, "potential_maps", result)
         return result
 
+    def results_synthesis_run(context: PhaseContext) -> ThesisSummary:
+        """F8 (M-F8-01): the thesis tables and figures of the country, read from its registered artifacts into `outputs/thesis/`."""
+        result = build_thesis(
+            context.country_code,
+            technologies,
+            technologies_yaml=TECHNOLOGIES_YAML,
+            experiments_yaml=EXPERIMENTS_YAML,
+            parameters_json=PARAMETERS_JSON,
+            methodology_md=METHODOLOGY_MD,
+        )
+        _register_json_artifact(context, "results_synthesis", result)
+        return result
+
     def overview_run(context: PhaseContext) -> OverviewSummary:
         """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
         result = build_overview(context.country_code, figures)
@@ -935,6 +949,30 @@ def _build_phase_specs(
             | {f"potential_density_{tech}" for tech in technologies}
             | {f"capacity_factor_{tech}" for tech in technologies},
             summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
+        ),
+        PhaseSpec(
+            name="results_synthesis",
+            output_model=ThesisSummary,
+            run=results_synthesis_run,
+            requires=frozenset({"members", "external_validation", *VALIDATION_TABLES})
+            | {
+                f"{kind}_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+                for kind in ("hypothesis", "h1_summary")
+            }
+            | {
+                f"{kind}_{tech}__core"
+                for tech in technologies
+                for kind in ("robustness", "hazard_exposure", "potential_below_tau")
+            }
+            | {f"potential_aggregates_{tech}" for tech in technologies}
+            | {f"supply_curve_{tech}" for tech in technologies},
+            produces=frozenset({"results_synthesis"}),
+            summarize=lambda out: (
+                f"{sum(len(f) for f in out.built.values())} files for {len(out.built)} outputs"
+                + (f"; {len(out.not_built)} items not built" if out.not_built else "")
+            ),
         ),
         PhaseSpec(
             name="hazard_context",
