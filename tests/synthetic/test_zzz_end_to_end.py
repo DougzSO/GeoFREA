@@ -80,8 +80,8 @@ def zzz(tmp_path_factory):
         ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
         (
-            "H3: null",
-            "H3: [{statistic: h3_jaccard_nominal_robust, comparison: ge, threshold: -1.0}]",
+            "H4: null",
+            "H4: [{statistic: h4_jaccard_climate_only, comparison: ge, threshold: -1.0}]",
         ),
     ):
         assert experiments_text.count(old) == 1, old
@@ -804,14 +804,14 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     verdicts = hypothesis.set_index("statistic")["verdict"]
     assert (
-        verdicts["h3_jaccard_nominal_robust"] == "met"
-    )  # the test rule of H3 in this copy of the configuration
+        verdicts["h4_jaccard_climate_only"] == "met"
+    )  # the test rule of H4 in this copy of the configuration
     h1_rules = [
         "h1a_core_share",
         "h1b_vulnerable_share",
     ]  # H1 carries its pre-registered rule (OQ-050)
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
-    assert verdicts.drop(["h3_jaccard_nominal_robust", "h2_overlap_index", *h1_rules]).isna().all()
+    assert verdicts.drop(["h4_jaccard_climate_only", "h2_overlap_index", *h1_rules]).isna().all()
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
     assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0

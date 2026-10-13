@@ -136,6 +136,23 @@ class H2Rule(BaseModel):
     source: str = Field(min_length=1)
 
 
+class H3Rule(BaseModel):
+    """The pre-registered decision rule of H3 (M-F7-07, OQ-050): `D` is the share of the robust capacity outside the reach of the nominal plan.
+
+    H3 is not testable when `D_ref = 1 - (k + m) / |I|` is below `delta`, supported when `D >= delta` and not supported when `D < delta`, with
+    the tolerance `m = tolerance_multiple_of_k * k`. The domain of both rankings and the weight are named so that no other form is read by
+    accident. `source` is the citation of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    delta: float = Field(gt=0, le=1)
+    tolerance_multiple_of_k: float = Field(gt=0)
+    domain: Literal["I"]
+    weight: Literal["capacity"]
+    source: str = Field(min_length=1)
+
+
 class HazardThreshold(BaseModel):
     """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
 
@@ -192,23 +209,24 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
-    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | None]
+    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | H3Rule | None]
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")
-    def _h1_and_h2_have_their_own_form(self) -> ExperimentsFile:
-        """H1 is a pre-registered `H1Rule` and H2 an `H2Rule` (or null); the other hypotheses are lists of rules (or null)."""
-        own = {"H1": H1Rule, "H2": H2Rule}
+    def _h1_to_h3_have_their_own_form(self) -> ExperimentsFile:
+        """H1, H2 and H3 are pre-registered `H1Rule`, `H2Rule` and `H3Rule` (or null); the other hypotheses are lists of rules (or null)."""
+        own = {"H1": H1Rule, "H2": H2Rule, "H3": H3Rule}
+        owner = {form: name for name, form in own.items()}
         for name, rule in self.hypothesis_rules.items():
             form = own.get(name)
             if form is not None and rule is not None and not isinstance(rule, form):
                 raise ValueError(
                     f"hypothesis_rules.{name} is a {form.__name__} mapping, not a list or another form"
                 )
-            if form is None and isinstance(rule, H1Rule | H2Rule):
+            if form is None and isinstance(rule, H1Rule | H2Rule | H3Rule):
                 raise ValueError(
-                    f"hypothesis_rules.{name}: the {type(rule).__name__} form belongs to {'H1' if isinstance(rule, H1Rule) else 'H2'}"
+                    f"hypothesis_rules.{name}: the {type(rule).__name__} form belongs to {owner[type(rule)]}"
                 )
         return self

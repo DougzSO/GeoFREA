@@ -262,7 +262,7 @@ thresholds:
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
-# `value <comparison> threshold`. H1 and H2 are pre-registered; H3 to H5 are null until the author pre-registers them (before F7 runs on real data); F7 then writes
+# `value <comparison> threshold`. H1, H2 and H3 are pre-registered; H4 and H5 are null until the author pre-registers them (before F7 runs on real data); F7 then writes
 # `verdict = null` and a warning, and never invents a rule.
 hypothesis_rules:
   # H1 (docs/thesis/hypotheses/H1_climate_rank_robustness.tex): H1a holds when C_k >= alpha, H1b when V_k >= beta, with the tolerance
@@ -282,7 +282,15 @@ hypothesis_rules:
     region_statistic: capacity_weighted_mean
     target: top_k_capacity
     source: "OQ-050 (H2), pre-registered 2026-10-13"
-  H3: null
+  # H3 (docs/thesis/hypotheses/H3_robust_versus_nominal.tex): D is the share of the capacity of the robust top-k set (by MR) that lies in
+  # cells whose nominal rank (by LCOE at f0) exceeds k + m, both rankings over the ranked set I, m = tolerance_multiple_of_k * k. H3 is not
+  # testable when D_ref = 1 - (k + m) / |I| is below delta, supported when D >= delta, not supported when D < delta.
+  H3:
+    delta: 0.20
+    tolerance_multiple_of_k: 1.0
+    domain: I
+    weight: capacity
+    source: "OQ-050 (H3), pre-registered 2026-10-13"
   H4: null
   H5: null
 

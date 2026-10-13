@@ -1,0 +1,277 @@
+% ============================================================================
+% Hypothesis H3: robust versus nominal site selection
+% Pre-registered decision rule (OQ-050, H3), fixed 2026-10-13, before any
+% real-country result was produced. Primary threshold delta = 0.20, m = k.
+% Notation follows docs/METHODOLOGY.md and the H1 and H2 sections.
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Hypothesis H3: Robust Versus Nominal Site Selection}
+\label{sec:h3}
+
+\subsection{Purpose and Position in the Research Design}
+\label{subsec:h3_purpose}
+
+Hypothesis H3 asks whether planning for robustness changes where renewable
+capacity would be built. It compares two shortlists of the same size: the sites
+that are best under present climate and nominal costs, which a conventional
+assessment would select, and the sites that are best when climate and
+techno-economic uncertainty are considered together, measured by the maximum
+relative regret. If the two shortlists largely coincide, a conventional
+assessment already identifies robust sites and the added complexity of a
+robustness analysis changes little for siting. If they differ materially, a plan
+based on present conditions would place a substantial part of the capacity in
+locations that are not robust.
+
+The question is a spatial instance of a general contrast in decision analysis
+under uncertainty: a strategy that is optimal for a single best-estimate future
+need not perform well across the range of plausible futures, and a robust
+strategy may accept some loss of performance in the nominal case in exchange
+for lower sensitivity to assumptions
+\cite{lempert2003,lempertcollins2007}. In optimisation, the loss accepted in the
+nominal case is known as the price of robustness \cite{bertsimassim2004}; in
+stochastic programming, the benefit of planning with the uncertainty rather than
+with a single expected scenario is the value of the stochastic solution
+\cite{birge1982}. In energy system modelling, the existence of many
+near-optimal and structurally different solutions shows that a single optimum
+is a weak basis for siting advice \cite{decarolis2011,neumannbrown2021}.
+% verify decarolis2011
+
+H3 is distinct from the two preceding hypotheses. H1b starts from the
+present-optimal sites and asks how many are lost when only the climate changes;
+H3 starts from the robust sites, under climate and techno-economic uncertainty
+together, and asks how much of them a present-based plan would have missed. H2
+compares two spatial scales under the same criterion; H3 compares two criteria
+at the same scale.
+
+\subsection{Notation}
+\label{subsec:h3_notation}
+
+The notation of Sections~\ref{sec:h1} and~\ref{sec:h2} applies. Both rankings
+are computed over the same set $\mathcal{I}$ of cells that enter the robustness
+analysis, so that any difference between them reflects the criterion and not the
+definition of the candidate set. For each cell $i\in\mathcal{I}$, $q_i$ is the
+installable capacity of the central land scenario and
+$z_i=\mathrm{MR}_i$ is the primary robustness score.
+
+The shortlist size is $k=\lceil p_k N\rceil$ with $N=|\mathcal{I}_0|$, as in H1
+and H2. The tolerance is $m=k$. The sets used are:
+\begin{itemize}
+    \item $S_k$: the $k$ cells of $\mathcal{I}$ with the lowest $z_i$ (the
+    robust shortlist, identical to the one that defines the target of H2);
+    \item $r^{\mathrm{nom}}_i$: the rank of cell $i$ within $\mathcal{I}$ by
+    $\mathrm{LCOE}_{i,f_0}$, the levelised cost under the reference climate and
+    nominal parameters;
+    \item $S^{\mathrm{nom}}_k$: the $k$ cells of $\mathcal{I}$ with the lowest
+    $\mathrm{LCOE}_{i,f_0}$ (the nominal shortlist).
+\end{itemize}
+Ranks follow the deterministic tie convention of the F7 phase record, applied
+identically to both criteria.
+
+\subsection{Primary Statistic: Robust Capacity Outside the Nominal Plan}
+\label{subsec:h3_statistic}
+
+The statistic is the share of the robust capacity located in cells that a
+present-based plan would not reach even with the tolerance:
+\begin{equation}
+    D=\frac{\sum_{i\in S_k}q_i\,\mathbb{1}\!\left[r^{\mathrm{nom}}_i>k+m\right]}
+    {\sum_{i\in S_k}q_i}.
+    \label{eq:h3_statistic}
+\end{equation}
+A robust cell ranked between $k+1$ and $k+m$ in the nominal ranking is not
+counted: it lies just outside the nominal shortlist, at a small cost margin, and
+its exclusion is boundary fluctuation rather than a different siting choice. The
+tolerance $m=k$ is the same as in H1b. Capacity weighting follows H2, so that the
+statistic measures where megawatts would be built rather than how many cells
+change.
+
+\subsubsection{Reference value}
+
+If the robust and nominal rankings were unrelated, the nominal rank of a robust
+cell would be uniform over $\mathcal{I}$, and the expected share would be
+\begin{equation}
+    D_{\mathrm{ref}}=1-\frac{k+m}{|\mathcal{I}|}.
+    \label{eq:h3_reference}
+\end{equation}
+For $p_k=0.10$ this is close to $0.8$. Since the quality of the solar or wind
+resource enters both criteria, the observed $D$ is expected to lie well below
+$D_{\mathrm{ref}}$; how far below is the substance of the result.
+$D_{\mathrm{ref}}$ is reported with every result.
+
+\subsection{Hypothesis and Decision Rule}
+\label{subsec:h3_rule}
+
+H3 states that a material share of the robust capacity lies outside the reach of
+a present-based plan. For each country and technology:
+\begin{equation}
+    \text{H3 is}\;
+    \begin{cases}
+        \text{not testable}, & D_{\mathrm{ref}}<\delta,\\
+        \text{supported}, & D_{\mathrm{ref}}\geq\delta \text{ and } D\geq\delta,\\
+        \text{not supported}, & D_{\mathrm{ref}}\geq\delta \text{ and } D<\delta,
+    \end{cases}
+    \qquad \delta=0.20 .
+    \label{eq:h3_rule}
+\end{equation}
+
+The threshold $\delta=0.20$ reads as one in five robust megawatts placed where a
+present-based plan would not go, and it is the same proportion that defines
+vulnerability in H1b. The not-testable case covers shortlists so large that even
+unrelated rankings could not reach $\delta$; for the top-$k$ shares used in the
+thesis it does not occur, but it is checked and reported. As for H1 and H2, the
+threshold is a decision of this thesis: the literature on robust and optimal
+strategies motivates the comparison but provides no universal cut-off for a
+material difference. The defence rests on its pre-registration, its direct
+reading and its consistency with H1b.
+
+\subsection{Magnitude: Price and Benefit of Robustness (No Verdict)}
+\label{subsec:h3_magnitude}
+
+Whether the two shortlists differ says nothing, by itself, about how much is at
+stake. Two capacity-weighted quantities translate the difference into terms a
+planner can use. For a set $S$ of cells, let
+$\overline{X}(S)=\sum_{i\in S}q_iX_i\,/\sum_{i\in S}q_i$ denote the
+capacity-weighted mean of a cell quantity $X_i$.
+
+\subsubsection{Price of robustness}
+
+\begin{equation}
+    \Pi=\frac{\overline{\mathrm{LCOE}}_{f_0}(S_k)
+    -\overline{\mathrm{LCOE}}_{f_0}(S^{\mathrm{nom}}_k)}
+    {\overline{\mathrm{LCOE}}_{f_0}(S^{\mathrm{nom}}_k)}.
+    \label{eq:h3_price}
+\end{equation}
+$\Pi$ is the relative increase of the present levelised cost incurred by
+choosing the robust shortlist instead of the nominal one.
+
+\subsubsection{Benefit of robustness}
+
+\begin{equation}
+    B=\overline{\mathrm{MR}}(S^{\mathrm{nom}}_k)-\overline{\mathrm{MR}}(S_k).
+    \label{eq:h3_benefit}
+\end{equation}
+$B$ is the reduction of the worst-case relative regret obtained by choosing the
+robust shortlist, in the units of $\mathrm{MR}$.
+
+The pair $(\Pi,B)$ is the main descriptive result of H3. A small $\Pi$ with a
+large $B$ means that robustness is cheap; a large $\Pi$ with a small $B$ means
+that it is expensive for little protection. Both are conditional on the futures
+and parameter ranges of the analysis, and $\Pi$ is evaluated in the nominal
+future only. The capacities of the two shortlists, which may differ because cells
+differ in capacity, are reported alongside.
+
+\subsection{Complementary Diagnostics (No Verdict)}
+\label{subsec:h3_diagnostics}
+
+\begin{itemize}
+    \item Location. The geodesic distance between the capacity-weighted centroids
+    of $S_k$ and $S^{\mathrm{nom}}_k$; the total variation distance between their
+    distributions of capacity across Admin1 units, defined as in H2; and a map of
+    the two shortlists.
+    \item Ranking. The Spearman rank correlation between $\mathrm{LCOE}_{i,f_0}$
+    and $z_i$ over $\mathcal{I}$, and the Jaccard overlap of $S_k$ and
+    $S^{\mathrm{nom}}_k$ by cell count.
+\end{itemize}
+
+The attribution of the difference to the climate or to the techno-economic axis
+is the object of H4 and is not repeated here.
+
+\subsection{Sensitivity Analyses}
+\label{subsec:h3_sensitivity}
+
+The verdict is issued from the primary configuration only; a change of verdict
+in a variant is reported as a dependence of the result on that choice.
+\begin{enumerate}
+    \item Without IPSL-CM6A-LR, the climate model retained as a recorded
+    exception.
+    \item The 2071--2100 window.
+    \item The 0.1-degree cell scale.
+    \item Top-$k$ share $p_k\in\{0.05,0.10,0.20\}$.
+    \item Tolerance $m\in\{k/2,\,2k\}$.
+\end{enumerate}
+
+\subsection{Worked Example}
+\label{subsec:h3_example}
+
+A country has $|\mathcal{I}|=1{,}000$ cells and $k=50$, so $m=50$ and
+$D_{\mathrm{ref}}=1-100/1{,}000=0.90\geq0.20$; the test is informative. The
+robust shortlist $S_k$ holds 500~MW. By nominal rank:
+\begin{itemize}
+    \item 300~MW lie in cells ranked 1 to 50 nominally, which a present-based
+    plan would also select;
+    \item 50~MW lie in cells ranked 51 to 100, just outside the nominal
+    shortlist; they are not counted;
+    \item 150~MW lie in cells ranked beyond 100, which a present-based plan
+    would not select.
+\end{itemize}
+Then $D=150/500=0.30\geq0.20$ and H3 is supported. If, in addition, the
+capacity-weighted present LCOE is 40.8 for the robust shortlist and 40.0 for the
+nominal one, and the capacity-weighted maximum relative regret is 0.10 and 0.25
+respectively, then $\Pi=0.02$ and $B=0.15$: building the robust shortlist costs
+two per cent more under present conditions and reduces the worst-case regret by
+fifteen percentage points. The values are illustrative and are not GeoFREA
+results.
+
+\subsection{Parameters}
+\label{subsec:h3_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pre-registered parameters of H3.}
+    \label{tab:h3_parameters}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.4cm}
+        >{\raggedright\arraybackslash}p{3.0cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+        \midrule
+        $\delta$ & 0.20 & Primary threshold; H3 is supported when at least one in
+        five robust megawatts lies beyond the nominal top $k+m$. \\
+        \addlinespace
+        $m$ & $k$ & Tolerance beyond the nominal shortlist, as in H1b. \\
+        \addlinespace
+        $k$ & $\lceil p_k N\rceil$, $N=|\mathcal{I}_0|$ & Shortlist size shared
+        with H1 and H2; $p_k$ fixed in OQ-021. \\
+        \addlinespace
+        Domain & $\mathcal{I}$ & Both rankings over the same candidate set. \\
+        \addlinespace
+        Weight & $q_i$ & Central-scenario capacity, as in H2. \\
+        \addlinespace
+        $D_{\mathrm{ref}}$ & $1-(k+m)/|\mathcal{I}|$ & Expected share under
+        unrelated rankings; the test is not testable when
+        $D_{\mathrm{ref}}<\delta$. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:h3_limitations}
+
+Shared drivers. The quality of the resource enters both the nominal cost and the
+robustness score, so the two rankings are correlated by construction. H3 measures
+how much of the difference survives this common driver; a not-supported verdict
+is therefore an informative result, indicating that present-day assessment
+already captures most of what robustness requires for siting.
+
+Dependence on the robustness score. The robust shortlist is defined by
+$\mathrm{MR}_i$, the maximum over climate members of the 90th percentile over
+parameter samples. Another robustness metric could select a different shortlist;
+the agreement between the regret and satisficing rankings is reported separately
+as part of the robustness analysis.
+
+Scope of the price of robustness. $\Pi$ is computed under present climate and
+nominal parameters only. It is a statement about the present cost of a robust
+choice, not about system costs, which would require system-level modelling.
+
+Capacity differences. The two shortlists have the same number of cells but not
+necessarily the same capacity; the statistic and the magnitudes are
+capacity-weighted, and the two capacities are reported.
+
+Generalisation. Results are conditional on the country, technology, candidate
+set, futures and parameter ranges, and are reported per country and technology.
