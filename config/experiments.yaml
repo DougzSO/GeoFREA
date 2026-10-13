@@ -262,7 +262,7 @@ thresholds:
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
-# `value <comparison> threshold`. H1 is pre-registered; H2 to H5 are null until the author pre-registers them (before F7 runs on real data); F7 then writes
+# `value <comparison> threshold`. H1 and H2 are pre-registered; H3 to H5 are null until the author pre-registers them (before F7 runs on real data); F7 then writes
 # `verdict = null` and a warning, and never invents a rule.
 hypothesis_rules:
   # H1 (docs/thesis/hypotheses/H1_climate_rank_robustness.tex): H1a holds when C_k >= alpha, H1b when V_k >= beta, with the tolerance
@@ -273,7 +273,15 @@ hypothesis_rules:
     tolerance_multiple_of_k: 1.0
     rbo_p: "1 - 1/k"
     source: "OQ-050 (H1), pre-registered 2026-10-13"
-  H2: null
+  # H2 (docs/thesis/hypotheses/H2_spatial_aggregation_bias.tex): the cell selection and the Admin1 selection take the same capacity T (that of
+  # the robust top-k set); O is the share of T both select. H2 is not testable when T / Q_max >= gamma, supported when O < gamma, not
+  # supported when O >= gamma.
+  H2:
+    gamma: 0.30
+    partition: admin1
+    region_statistic: capacity_weighted_mean
+    target: top_k_capacity
+    source: "OQ-050 (H2), pre-registered 2026-10-13"
   H3: null
   H4: null
   H5: null

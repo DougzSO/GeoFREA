@@ -79,7 +79,10 @@ def zzz(tmp_path_factory):
         # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
         ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
-        ("H2: null", "H2: [{statistic: h2_mr_median, comparison: ge, threshold: -1.0}]"),
+        (
+            "H3: null",
+            "H3: [{statistic: h3_jaccard_nominal_robust, comparison: ge, threshold: -1.0}]",
+        ),
     ):
         assert experiments_text.count(old) == 1, old
         experiments_text = experiments_text.replace(old, new)
@@ -801,14 +804,14 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     verdicts = hypothesis.set_index("statistic")["verdict"]
     assert (
-        verdicts["h2_mr_median"] == "met"
-    )  # the test rule of H2 in this copy of the configuration
+        verdicts["h3_jaccard_nominal_robust"] == "met"
+    )  # the test rule of H3 in this copy of the configuration
     h1_rules = [
         "h1a_core_share",
         "h1b_vulnerable_share",
     ]  # H1 carries its pre-registered rule (OQ-050)
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
-    assert verdicts.drop(["h2_mr_median", *h1_rules]).isna().all()
+    assert verdicts.drop(["h3_jaccard_nominal_robust", *h1_rules]).isna().all()
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
     assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
@@ -1282,7 +1285,9 @@ def test_f8_stamps_a_fixture_build_as_test_values_in_the_caption_and_the_provena
     stem = thesis / "T-R2_potential_ZZZ_solar"
     provenance = json.loads(stem.with_suffix(".provenance.json").read_text(encoding="utf-8"))
     assert provenance["test_values"] is True and provenance["caption"].startswith("TEST VALUES")
-    assert provenance["methodology_version"] == "8.0.0"
+    import main
+
+    assert provenance["methodology_version"] == main._read_methodology_version(main.METHODOLOGY_MD)
     assert provenance["artifacts_read"]["potential_aggregates_solar"]
     assert "TEST VALUES" in stem.with_suffix(".tex").read_text(encoding="utf-8")
 

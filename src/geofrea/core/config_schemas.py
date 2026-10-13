@@ -119,6 +119,23 @@ class H1Rule(BaseModel):
     source: str = Field(min_length=1)
 
 
+class H2Rule(BaseModel):
+    """The pre-registered decision rule of H2 (M-F7-07, OQ-050): `O` is the Capacity Overlap Index of the cell selection and the regional one.
+
+    H2 is not testable when `O_ref = T / Q_max` is at least `gamma`, supported when `O < gamma` and not supported when `O >= gamma`. The
+    partition, the regional ranking statistic and the target are named so that no other form is read by accident. `source` is the citation
+    of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    gamma: float = Field(gt=0, le=1)
+    partition: Literal["admin1"]
+    region_statistic: Literal["capacity_weighted_mean"]
+    target: Literal["top_k_capacity"]
+    source: str = Field(min_length=1)
+
+
 class HazardThreshold(BaseModel):
     """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
 
@@ -175,19 +192,23 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
-    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | None]
+    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | None]
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")
-    def _h1_has_its_own_form(self) -> ExperimentsFile:
-        """H1 is a pre-registered `H1Rule` (or null); the other hypotheses are lists of rules (or null)."""
+    def _h1_and_h2_have_their_own_form(self) -> ExperimentsFile:
+        """H1 is a pre-registered `H1Rule` and H2 an `H2Rule` (or null); the other hypotheses are lists of rules (or null)."""
+        own = {"H1": H1Rule, "H2": H2Rule}
         for name, rule in self.hypothesis_rules.items():
-            if name == "H1" and isinstance(rule, list):
+            form = own.get(name)
+            if form is not None and rule is not None and not isinstance(rule, form):
                 raise ValueError(
-                    "hypothesis_rules.H1 is an H1Rule mapping (alpha, beta, ...), not a list"
+                    f"hypothesis_rules.{name} is a {form.__name__} mapping, not a list or another form"
                 )
-            if name != "H1" and isinstance(rule, H1Rule):
-                raise ValueError(f"hypothesis_rules.{name}: the H1Rule form belongs to H1")
+            if form is None and isinstance(rule, H1Rule | H2Rule):
+                raise ValueError(
+                    f"hypothesis_rules.{name}: the {type(rule).__name__} form belongs to {'H1' if isinstance(rule, H1Rule) else 'H2'}"
+                )
         return self

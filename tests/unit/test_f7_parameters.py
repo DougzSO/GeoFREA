@@ -73,8 +73,18 @@ def test_the_experiment_blocks_of_f7_are_null_in_the_shipped_file():
     h1 = experiments.hypothesis_rules["H1"]  # pre-registered 2026-10-13 (OQ-050, H1)
     assert (h1.alpha, h1.beta, h1.tolerance_multiple_of_k, h1.rbo_p) == (0.60, 0.20, 1.0, "1 - 1/k")
     assert h1.source == "OQ-050 (H1), pre-registered 2026-10-13"
+    h2 = experiments.hypothesis_rules["H2"]  # pre-registered 2026-10-13 (OQ-050, H2)
+    assert (h2.gamma, h2.partition, h2.region_statistic, h2.target) == (
+        0.30,
+        "admin1",
+        "capacity_weighted_mean",
+        "top_k_capacity",
+    )
+    assert h2.source == "OQ-050 (H2), pre-registered 2026-10-13"
     assert all(
-        rules is None for name, rules in experiments.hypothesis_rules.items() if name != "H1"
+        rules is None
+        for name, rules in experiments.hypothesis_rules.items()
+        if name not in ("H1", "H2")
     )
     assert set(experiments.hazard_thresholds) == {
         "tx35_days",
@@ -97,12 +107,12 @@ def test_a_vintage_filter_needs_its_reason_and_a_rule_needs_a_known_comparison()
     with pytest.raises(ValueError, match="vintage_reason"):
         ExperimentsFile.model_validate(bad)
     bad = json.loads(json.dumps(raw))
-    bad["hypothesis_rules"]["H2"] = [{"statistic": "x", "comparison": "approx", "threshold": 1}]
+    bad["hypothesis_rules"]["H3"] = [{"statistic": "x", "comparison": "approx", "threshold": 1}]
     with pytest.raises(ValueError):
         ExperimentsFile.model_validate(bad)
     ok = json.loads(json.dumps(raw))
-    ok["hypothesis_rules"]["H2"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
-    assert ExperimentsFile.model_validate(ok).hypothesis_rules["H2"][0].threshold == 0.5
+    ok["hypothesis_rules"]["H3"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
+    assert ExperimentsFile.model_validate(ok).hypothesis_rules["H3"][0].threshold == 0.5
 
 
 @pytest.mark.unit
@@ -113,7 +123,7 @@ def test_h1_has_its_own_form_and_no_other_form_is_accepted():
     with pytest.raises(ValueError, match="H1Rule"):
         ExperimentsFile.model_validate(as_list)
     on_h2 = json.loads(json.dumps(raw))
-    on_h2["hypothesis_rules"]["H2"] = raw["hypothesis_rules"]["H1"]
+    on_h2["hypothesis_rules"]["H3"] = raw["hypothesis_rules"]["H1"]
     with pytest.raises(ValueError, match="belongs to H1"):
         ExperimentsFile.model_validate(on_h2)
     other_rbo = json.loads(json.dumps(raw))
@@ -124,3 +134,29 @@ def test_h1_has_its_own_form_and_no_other_form_is_accepted():
     del missing_threshold["hypothesis_rules"]["H1"]["beta"]
     with pytest.raises(ValueError):
         ExperimentsFile.model_validate(missing_threshold)
+
+
+@pytest.mark.unit
+def test_h2_has_its_own_form_and_no_other_form_is_accepted():
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    as_list = json.loads(json.dumps(raw))
+    as_list["hypothesis_rules"]["H2"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
+    with pytest.raises(ValueError, match="H2Rule"):
+        ExperimentsFile.model_validate(as_list)
+    on_h3 = json.loads(json.dumps(raw))
+    on_h3["hypothesis_rules"]["H3"] = raw["hypothesis_rules"]["H2"]
+    with pytest.raises(ValueError, match="belongs to H2"):
+        ExperimentsFile.model_validate(on_h3)
+    for key, value in (
+        ("partition", "admin2"),
+        ("region_statistic", "median"),
+        ("target", "national"),
+    ):
+        other = json.loads(json.dumps(raw))
+        other["hypothesis_rules"]["H2"][key] = value
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(other)
+    missing = json.loads(json.dumps(raw))
+    del missing["hypothesis_rules"]["H2"]["gamma"]
+    with pytest.raises(ValueError):
+        ExperimentsFile.model_validate(missing)
