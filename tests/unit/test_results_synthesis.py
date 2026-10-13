@@ -284,3 +284,53 @@ def test_f8_source_carries_no_country_or_technology_literal():
             ):
                 offenders.append((path.name, node.lineno, node.value))
     assert not offenders, offenders
+
+
+@pytest.mark.unit
+def test_the_t_r6_verdict_row_takes_the_primary_statistic_reference_threshold_and_verdict():
+    from geofrea.results_synthesis.robustness_tables import VERDICT_COLUMNS, _verdict_row
+
+    base = {"scale": "0p05deg", "role": "core", "window": "2041-2070"}
+    h1 = pd.Series(
+        base
+        | {
+            "c_k": 0.7,
+            "v_k": 0.1,
+            "reference": 0.01,
+            "alpha": 0.6,
+            "beta": 0.2,
+            "verdict": "partially_supported",
+        }
+    )
+    h2 = pd.Series(
+        base | {"overlap": 0.2, "overlap_ref": 0.1, "gamma": 0.3, "verdict": "supported"}
+    )
+    h3 = pd.Series(base | {"d": 0.3, "d_ref": 0.9, "delta": 0.2, "verdict": "supported"})
+    rows = [_verdict_row(name, row) for name, row in (("H1", h1), ("H2", h2), ("H3", h3))]
+    assert all(set(row) == set(VERDICT_COLUMNS) for row in rows)
+    first, second, third = rows
+    assert (first["statistic"], first["value"], first["reference"], first["threshold"]) == (
+        "h1a_core_share",
+        0.7,
+        0.01,
+        0.6,
+    )
+    assert (first["statistic_2"], first["value_2"], first["threshold_2"]) == (
+        "h1b_vulnerable_share",
+        0.1,
+        0.2,
+    )
+    assert first["verdict"] == "partially_supported"
+    assert (second["statistic"], second["value"], second["reference"], second["threshold"]) == (
+        "h2_overlap_index",
+        0.2,
+        0.1,
+        0.3,
+    )
+    assert (third["statistic"], third["value"], third["reference"], third["threshold"]) == (
+        "h3_beyond_reach_share",
+        0.3,
+        0.9,
+        0.2,
+    )
+    assert third["verdict"] == "supported" and second["statistic_2"] is None

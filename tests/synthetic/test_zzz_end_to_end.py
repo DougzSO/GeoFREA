@@ -1297,7 +1297,13 @@ THESIS_TABLES = {
     "T-M2": ["methods_ZZZ_{t}"],
     "T-M3": ["uncertain_parameters_ZZZ_{t}"],
     "T-R2": ["potential_ZZZ_{t}", "land_interval_ZZZ_{t}"],
-    "T-R6": ["hypothesis_statistics_ZZZ_{t}", "h1_summary_ZZZ_{t}"],
+    "T-R6": [
+        "hypothesis_statistics_ZZZ_{t}",
+        "hypothesis_verdicts_ZZZ_{t}",
+        "h1_summary_ZZZ_{t}",
+        "h2_summary_ZZZ_{t}",
+        "h3_summary_ZZZ_{t}",
+    ],
     "T-R10": ["hazard_exposure_ZZZ_{t}"],
     "T-R12": ["potential_below_tau_ZZZ_{t}"],
 }
@@ -1384,7 +1390,7 @@ def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
         hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
         statistics = pd.read_csv(thesis / f"T-R6_hypothesis_statistics_ZZZ_{tech}.csv")
         core = statistics[(statistics["scale"] == "0p05deg") & (statistics["role"] == "core")]
-        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H3"]).sum())
+        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H2", "H3"]).sum())
         stored = hypothesis.set_index("statistic")
         for stat in ("h1a_core_share", "h1b_vulnerable_share"):
             shown = core.set_index("statistic").loc[stat]
@@ -1415,6 +1421,49 @@ def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
         )["caption"]
         assert "Kendall tau-b" in caption
         assert -1.0 <= tau <= 1.0
+
+
+@pytest.mark.synthetic
+def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_summaries(zzz):
+    thesis = _thesis(zzz)
+    base = _phase(zzz, "robustness_analysis")
+    for tech in ("solar", "wind"):
+        table = pd.read_csv(thesis / f"T-R6_hypothesis_verdicts_ZZZ_{tech}.csv")
+        for role in ("core", "sensitivity"):
+            rows = table[(table["scale"] == "0p05deg") & (table["role"] == role)]
+            assert list(rows["hypothesis"]) == ["H1", "H2", "H3"], (tech, role)
+            stored = {
+                name: pd.read_parquet(base / f"{name}_summary_{tech}__{role}.parquet")
+                .query("primary")
+                .iloc[0]
+                for name in ("h1", "h2", "h3")
+            }
+            by = rows.set_index("hypothesis")
+            h1, h2, h3 = stored["h1"], stored["h2"], stored["h3"]
+            assert by.loc["H1", "statistic"] == "h1a_core_share"
+            assert by.loc["H1", "value"] == pytest.approx(float(h1["c_k"]))
+            assert by.loc["H1", "reference"] == pytest.approx(float(h1["reference"]))
+            assert by.loc["H1", "threshold"] == pytest.approx(0.60)
+            assert by.loc["H1", "statistic_2"] == "h1b_vulnerable_share"
+            assert by.loc["H1", "value_2"] == pytest.approx(float(h1["v_k"]))
+            assert by.loc["H1", "threshold_2"] == pytest.approx(0.20)
+            assert by.loc["H2", "statistic"] == "h2_overlap_index"
+            assert by.loc["H2", "value"] == pytest.approx(float(h2["overlap"]))
+            assert by.loc["H2", "reference"] == pytest.approx(float(h2["overlap_ref"]))
+            assert by.loc["H2", "threshold"] == pytest.approx(0.30)
+            assert by.loc["H3", "statistic"] == "h3_beyond_reach_share"
+            assert by.loc["H3", "value"] == pytest.approx(float(h3["d"]))
+            assert by.loc["H3", "reference"] == pytest.approx(float(h3["d_ref"]))
+            assert by.loc["H3", "threshold"] == pytest.approx(0.20)
+            for name, row in (("H1", h1), ("H2", h2), ("H3", h3)):
+                assert by.loc[name, "verdict"] == row["verdict"]
+                assert by.loc[name, "rule"]
+        # the summaries of H2 and H3 are shown whole, with their sensitivities
+        h3_shown = pd.read_csv(thesis / f"T-R6_h3_summary_ZZZ_{tech}.csv")
+        assert {"top_k_percent_5", "tolerance_2k"} <= set(h3_shown["variant"])
+        h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
+        assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
+        assert set(h3_shown["role"]) == {"core", "sensitivity"}
 
 
 @pytest.mark.synthetic

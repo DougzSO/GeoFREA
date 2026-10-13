@@ -33,12 +33,76 @@ def _readers(ctx: BuildContext) -> list[ArtifactReader]:
     return [r for r in (ctx.reader, ctx.other_scale) if r is not None]
 
 
+# What T-R6 shows of each hypothesis: the F7 summary table, the columns of its primary statistic, its reference value and its threshold, and
+# the rule as F7 applies it (M-F7-07). H1 has two primary statistics (H1a and H1b), the second one in the `*_2` columns.
+VERDICT_COLUMNS = [
+    "scale",
+    "role",
+    "window",
+    "hypothesis",
+    "statistic",
+    "value",
+    "reference",
+    "threshold",
+    "verdict",
+    "rule",
+    "statistic_2",
+    "value_2",
+    "reference_2",
+    "threshold_2",
+]
+_SUMMARIES = ("h1", "h2", "h3")
+
+
+def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
+    """The one row of a hypothesis in the verdict table, from the primary row of its F7 summary."""
+    common = {
+        "scale": row["scale"],
+        "role": row["role"],
+        "window": row["window"],
+        "hypothesis": hypothesis,
+        "verdict": row["verdict"],
+        "statistic_2": None,
+        "value_2": None,
+        "reference_2": None,
+        "threshold_2": None,
+    }
+    if hypothesis == "H1":
+        return common | {
+            "statistic": "h1a_core_share",
+            "value": row["c_k"],
+            "reference": row["reference"],
+            "threshold": row["alpha"],
+            "rule": "supported if C_k >= alpha and V_k >= beta; partially supported if exactly one holds",
+            "statistic_2": "h1b_vulnerable_share",
+            "value_2": row["v_k"],
+            "threshold_2": row["beta"],
+        }
+    if hypothesis == "H2":
+        return common | {
+            "statistic": "h2_overlap_index",
+            "value": row["overlap"],
+            "reference": row["overlap_ref"],
+            "threshold": row["gamma"],
+            "rule": "supported if O < gamma; not testable if O_ref >= gamma",
+        }
+    return common | {
+        "statistic": "h3_beyond_reach_share",
+        "value": row["d"],
+        "reference": row["d_ref"],
+        "threshold": row["delta"],
+        "rule": "supported if D >= delta; not testable if D_ref < delta",
+    }
+
+
 def t_r6(ctx: BuildContext) -> None:
-    """T-R6, per technology: the H1 and H3 statistics for the core window, the 2071-2100 window and the other cell scale, each with its
-    pre-registered rule and verdict, and the H1 summary (C_k, V_k, the reference value, the verdict and the sensitivities)."""
+    """T-R6, per technology: the H1, H2 and H3 statistics for the core window, the 2071-2100 window and the other cell scale, each with its
+    pre-registered rule and verdict; the verdict table (one row per hypothesis: primary statistic, reference, threshold, verdict); and the
+    F7 summaries of H1 (C_k, V_k), H2 (O) and H3 (D, the price and the benefit of robustness) with their sensitivities."""
     for technology in ctx.technologies:
         ctx.begin()
-        statistics, summaries = [], []
+        statistics: list[pd.DataFrame] = []
+        summaries: dict[str, list[pd.DataFrame]] = {name: [] for name in _SUMMARIES}
         for reader in _readers(ctx):
             for role in ROLES:
                 try:
@@ -46,17 +110,19 @@ def t_r6(ctx: BuildContext) -> None:
                 except MissingArtifactError as exc:
                     ctx.skip(T_R6, f"{technology} {reader.scale_id} {role}", str(exc))
                     continue
-                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H3"])]
+                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H2", "H3"])]
                 statistics.append(part.assign(scale=reader.scale_id, role=role))
-                key = f"h1_summary_{technology}__{role}"
-                if reader.has(key):
+                for name in _SUMMARIES:
+                    key = f"{name}_summary_{technology}__{role}"
+                    if not reader.has(key):
+                        continue
                     summary = reader.table(key, _VERSIONS)
                     if len(summary):
-                        summaries.append(summary.assign(scale=reader.scale_id, role=role))
+                        summaries[name].append(summary.assign(scale=reader.scale_id, role=role))
                     else:
                         ctx.skip(
                             T_R6,
-                            f"{technology} {reader.scale_id} {role} H1 summary",
+                            f"{technology} {reader.scale_id} {role} {name.upper()} summary",
                             _reason(reader, key),
                         )
         if statistics:
@@ -85,20 +151,49 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_statistics",
                 frame,
-                f"H1 and H3 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered, not that the hypothesis fails.",
+                f"H1, H2 and H3 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
                 technology=technology,
             )
         else:
             ctx.skip(T_R6, technology, "no hypothesis table is registered")
-        if summaries:
+        verdicts = [
+            _verdict_row(name.upper(), row)
+            for name in _SUMMARIES
+            for table in summaries[name]
+            for _, row in table[table["primary"]].iterrows()
+        ]
+        if verdicts:
+            frame = pd.DataFrame(verdicts, columns=VERDICT_COLUMNS)
+            frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3})
+            frame["_role"] = frame["role"].map({role: at for at, role in enumerate(ROLES)})
+            frame = (
+                frame.sort_values(["scale", "_role", "_order"])
+                .drop(columns=["_order", "_role"])
+                .reset_index(drop=True)
+            )
             write_table(
                 ctx,
                 T_R6,
-                "h1_summary",
-                pd.concat(summaries, ignore_index=True),
-                f"H1 for {technology}: core share C_k (H1a), vulnerable share V_k (H1b), the chance-level reference (k/n)^2 and the verdict, with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
+                "hypothesis_verdicts",
+                frame,
+                f"Verdict of H1, H2 and H3 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2). A sensitivity never revises a verdict.",
                 technology=technology,
             )
+        captions = {
+            "h1": f"H1 for {technology}: core share C_k (H1a), vulnerable share V_k (H1b), the chance-level reference (k/n)^2 and the verdict, with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
+            "h2": f"H2 for {technology}: the Capacity Overlap Index O of the cell and the Admin1 selections, the reference T/Q_max, the verdict, the robustness penalty and the total variation distance, with the decision profile over gamma and the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
+            "h3": f"H3 for {technology}: the share D of the robust capacity beyond the reach of the nominal plan, the reference 1 - (k + m)/|I|, the verdict, the price of robustness (relative increase of the present LCOE) and the benefit of robustness (reduction of the capacity-weighted maximum regret, no verdict), with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
+        }
+        for name in _SUMMARIES:
+            if summaries[name]:
+                write_table(
+                    ctx,
+                    T_R6,
+                    f"{name}_summary",
+                    pd.concat(summaries[name], ignore_index=True),
+                    captions[name],
+                    technology=technology,
+                )
 
 
 def t_r10(ctx: BuildContext) -> None:

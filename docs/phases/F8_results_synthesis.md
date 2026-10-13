@@ -4,7 +4,7 @@ Methodology items: M-F8-01, M-F8-02, Section 10
 
 ## Contract
 
-Requires: persisted artifacts of F4 (`members`), F5 (`potential_aggregates_<tech>`), F6 (`supply_curve_<tech>`), F7 (`robustness_`, `hypothesis_`, `h1_summary_`, `hazard_exposure_` and `potential_below_tau_<tech>__<window>`) and F7b (the four validation tables), all read through the manifest of the country (`inputs.py:ArtifactReader`), and the configuration files for T-M2 and T-M3. Produces, per country, under `outputs/thesis/` (`outputs/thesis__<scale id>/` at another scale): tables as `.csv` and `.tex`, figures as `.png` and `.pdf`, a `<stem>.provenance.json` beside each output, and `thesis_manifest.json` (what was built and what was not, per country). The phase registers `results_synthesis.json` (the summary).
+Requires: persisted artifacts of F4 (`members`), F5 (`potential_aggregates_<tech>`), F6 (`supply_curve_<tech>`), F7 (`robustness_`, `hypothesis_`, `h1_summary_`, `h2_summary_`, `h3_summary_`, `hazard_exposure_` and `potential_below_tau_<tech>__<window>`) and F7b (the four validation tables), all read through the manifest of the country (`inputs.py:ArtifactReader`), and the configuration files for T-M2 and T-M3. Produces, per country, under `outputs/thesis/` (`outputs/thesis__<scale id>/` at another scale): tables as `.csv` and `.tex`, figures as `.png` and `.pdf`, a `<stem>.provenance.json` beside each output, and `thesis_manifest.json` (what was built and what was not, per country). The phase registers `results_synthesis.json` (the summary).
 
 ## Conformance
 
@@ -15,6 +15,7 @@ Requires: persisted artifacts of F4 (`members`), F5 (`potential_aggregates_<tech
 | T-M2, T-M3, D-F8-007 | Method tables from configuration; proxy and test values refused in a thesis build | `method_tables.py` | `test_a_thesis_build_refuses_test_values_and_a_test_build_accepts_them`, ZZZ end to end | pass |
 | T-R2, T-O3 | Potential and its ranges from F5; supply curves from F6 | `potential_and_cost.py` | `test_f8_numbers_equal_the_rows_they_were_read_from` | pass |
 | T-R6, T-R9, T-R10, T-R12, T-O2 | The F7 and F7b tables, a skipped table shown as empty with its reason | `robustness_tables.py` | same, and `test_f8_shows_the_empty_published_comparison_as_empty_and_says_why` | pass |
+| T-R6, D-F8-011 | The statistics of H1, H2 and H3; one verdict row per hypothesis (primary statistic, reference, threshold, verdict) read from `h1_summary`, `h2_summary` and `h3_summary`; the three summaries with their sensitivities | `robustness_tables.py:t_r6`, `_verdict_row` | `test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_summaries`, `test_the_t_r6_verdict_row_takes_the_primary_statistic_reference_threshold_and_verdict` | pass |
 | D-F8-008 | Provenance file per output, no time, no machine path, same inputs give the same bytes | `output.py` | `test_a_table_is_written_with_a_provenance_file_that_holds_no_time_and_no_path`, the determinism test | pass |
 
 ## Active implementation decisions
@@ -31,12 +32,14 @@ Decisions D1 to D10 of `docs/_audit/2026-10_F8_design.md` that the first nine sc
 - **D-F8-008 — D10(a): formats (recommended, accepted 2026-10-13).** Tables as CSV and LaTeX (booktabs; the unit table of T-R9 as CSV only), figures as PNG and PDF, a provenance JSON per output (artifact keys and hashes, configuration hashes, METHODOLOGY version, scale, caption) and `thesis_manifest.json` per thesis directory.
 - **D-F8-009 — Scales (V-07, T-R6).** The run at the default scale writes `outputs/thesis`; a run at another scale writes `outputs/thesis__<scale id>` so it never overwrites the thesis outputs. T-R6 reads the manifests of both scales and shows the rows of the 2071-2100 window and of the other scale beside the core ones.
 - **D-F8-010 — Outputs not built here and the decision that blocks each.** T-R3 waits for D2 (the GCM-agreement convention) and T-R8 for D6 (the combination rule and the rules of OQ-050); both stay untouched until the author decides. T-M1, T-R1, T-R4, T-R5, T-R7, T-R11 and T-O1 were not in the group of outputs whose inputs are all on the synthetic country; they follow in later commands.
+- **D-F8-011 — T-R6 reads H1, H2 and H3 (2026-10-13).** T-R6 per technology writes `hypothesis_statistics` (the H1, H2 and H3 rows of the F7 hypothesis table, core window, 2071-2100 window and other scale), `hypothesis_verdicts` (one row per hypothesis, window and scale: the primary statistic, its reference value, the pre-registered threshold, the verdict and the rule as F7 applies it; H1 has two primary statistics, H1a in `statistic` and H1b in the columns ending in 2) and the summaries `h1_summary`, `h2_summary` and `h3_summary` with their sensitivities. The verdict row is the primary row of the F7 summary, so F8 recomputes nothing; a summary written empty (null rule or null `top_k_percent`) gives no row and the reason is recorded as a skip.
 
 ## Known issues
 
 - The LaTeX tables and the PDF figures have not been compiled in an environment with a TeX engine.
-- The real thesis build needs the real F5 to F7b runs, the rules of OQ-050 for H2 to H5, and the sourced parameter values (D9 refuses test and proxy values).
+- The real thesis build needs the real F5 to F7b runs, the rules of OQ-050 for H4 and H5, and the sourced parameter values (D9 refuses test and proxy values).
 
 ## History
 
 - 2026-10-13: design report verdicts D1, D4, D5, D7, D8, D9, D10 accepted as recommended; reader, names, style, provenance, runner and the first nine scripts (T-M2, T-M3, T-R2, T-R6, T-R9, T-R10, T-R12, T-O2, T-O3); PhaseSpec `results_synthesis`.
+- 2026-10-13: T-R6 reads the H1, H2 and H3 summaries and adds the verdict table (D-F8-011).
