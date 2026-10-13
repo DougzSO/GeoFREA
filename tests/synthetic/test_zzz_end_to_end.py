@@ -19,6 +19,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -1156,6 +1157,7 @@ def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch
         return entry.sha256, orchestrator.manifest.phases["data_quality_audit"].finished_at
 
     first_hash, first_finished = audit_hash()
+    time.sleep(1.1)  # the manifest times have a resolution of one second
     second_hash, second_finished = audit_hash()
     assert second_finished != first_finished  # the phase really ran again
     assert second_hash == first_hash
