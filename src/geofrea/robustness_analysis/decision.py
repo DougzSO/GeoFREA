@@ -157,6 +157,14 @@ def skipped_outputs(
                 "OQ-050",
             )
         )
+    if h2_rule(experiments) is None:
+        skipped.append(
+            SkippedOutput(
+                "H2 selections, the Capacity Overlap Index, the verdict and the sensitivities (M-F7-07)",
+                "hypothesis_rules.H2 is null",
+                "OQ-050",
+            )
+        )
     prim = experiments.prim
     if decision.prim_outcome_share is None or prim.peel_alpha is None or prim.mass_min is None:
         reasons = [

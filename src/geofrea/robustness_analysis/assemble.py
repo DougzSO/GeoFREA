@@ -13,6 +13,7 @@ from geofrea.robustness_analysis.decision import TechDecision
 from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
 from geofrea.robustness_analysis.h1_rank_robustness import H1Detail, H1Inputs, H1Variant
+from geofrea.robustness_analysis.h2_aggregation import H2Detail, H2Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
@@ -476,5 +477,61 @@ def h1_summary_frame(
                 "verdict": v.verdict,
             }
             for i, v in enumerate(variants)
+        ]
+    )
+
+
+def h2_summary_frame(variants: Sequence[H2Variant], window: str, partition: str) -> pd.DataFrame:
+    """The primary result of H2, the decision profile and the sensitivities, one row each (D-F7-040); the first variant is the primary one."""
+    return pd.DataFrame(
+        [
+            {
+                "variant": v.variant,
+                "primary": i == 0,
+                "window": window,
+                "partition": partition,
+                "region_statistic": v.region_statistic,
+                "top_k_percent": v.top_k_percent,
+                "k": v.k,
+                "excluded_gcms": "|".join(v.excluded_gcms),
+                "gamma": v.gamma,
+                "n_ranked": v.n_ranked,
+                "n_regions": v.n_regions,
+                "target_mw": v.target_mw,
+                "q_max_mw": v.q_max_mw,
+                "overlap": v.overlap,
+                "overlap_ref": v.overlap_ref,
+                "testable": v.testable,
+                "verdict": v.verdict,
+                "robustness_penalty": v.robustness_penalty,
+                "tv_distance": v.tv_distance,
+                "iqr_over_median": v.iqr_over_median,
+                "smallest_supporting_gamma": v.smallest_supporting_gamma,
+                "target_unreachable": v.target_unreachable,
+            }
+            for i, v in enumerate(variants)
+        ]
+    ).astype({"top_k_percent": "float64", "k": "Int64"})
+
+
+def h2_regions_frame(detail: H2Detail) -> pd.DataFrame:
+    """One row per Admin1 region of the primary H2 result, in the order the regional selection takes them."""
+    return pd.DataFrame(
+        [
+            {
+                "region": r.region,
+                "n_cells": r.n_cells,
+                "capacity_mw": r.capacity_mw,
+                "mean_z": r.mean_z,
+                "median_z": r.median_z,
+                "within_variance": r.within_variance,
+                "position": r.position,
+                "fraction_taken": r.fraction_taken,
+                "selected_cell_mw": r.selected_cell_mw,
+                "selected_admin_mw": r.selected_admin_mw,
+                "share_cell": r.share_cell,
+                "share_admin": r.share_admin,
+            }
+            for r in detail.regions
         ]
     )

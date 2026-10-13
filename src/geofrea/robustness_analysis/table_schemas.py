@@ -239,3 +239,56 @@ class H1SummaryRow(BaseModel):
     h1a_holds: bool
     h1b_holds: bool
     verdict: str
+
+
+class H2SummaryRow(BaseModel):
+    """H2 for one setting: `variant` `primary` carries the verdict, the `gamma_*` rows are the decision profile, the others sensitivities (D-F7-040).
+
+    `overlap` is the Capacity Overlap Index `O`, `overlap_ref` is `T / Q_max`, the overlap of a uniform spread over the country; the verdict is
+    `not_testable` when `overlap_ref >= gamma`. `excluded_gcms` is joined by `|`. `smallest_supporting_gamma` is the smallest `gamma` of the
+    profile under which H2 would be supported (null if none). A sensitivity never revises the verdict.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant: str
+    primary: bool
+    window: str
+    partition: str
+    region_statistic: str
+    top_k_percent: float | None
+    k: int | None
+    excluded_gcms: str
+    gamma: float
+    n_ranked: int
+    n_regions: int
+    target_mw: float
+    q_max_mw: float
+    overlap: float
+    overlap_ref: float
+    testable: bool
+    verdict: str
+    robustness_penalty: float
+    tv_distance: float
+    iqr_over_median: float | None
+    smallest_supporting_gamma: float | None
+    target_unreachable: bool
+
+
+class H2RegionRow(BaseModel):
+    """One Admin1 region in the primary H2 result: capacity, score statistics, the fraction taken and the shares of `T` by procedure (D-F7-041)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    region: str
+    n_cells: int
+    capacity_mw: float
+    mean_z: float
+    median_z: float
+    within_variance: float
+    position: int
+    fraction_taken: float
+    selected_cell_mw: float
+    selected_admin_mw: float
+    share_cell: float
+    share_admin: float

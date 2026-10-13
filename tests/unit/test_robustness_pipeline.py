@@ -678,3 +678,68 @@ def test_a_null_p_k_writes_the_h1_tables_empty_and_names_oq_021(tmp_path):
     assert (
         not hypothesis["statistic"].str.startswith("h1").any()
     )  # no H1 row, so its rule names nothing
+
+
+# -- H2: the cell and the Admin1 selections, O and the verdict (OQ-050, H2) -------------------------------------
+
+
+@pytest.mark.unit
+def test_the_h2_tables_agree_with_the_robust_top_k_and_carry_the_rule(tmp_path):
+    entry, _, _ = _run(tmp_path)
+    tables = entry.windows["core"].tables
+    robustness = _table(entry)
+    ranked = robustness[robustness["cell_class"] == "ranked"]
+    summary = pd.read_parquet(tables["h2_summary"])
+    primary = summary[summary["primary"]].iloc[0]
+    assert summary["primary"].sum() == 1 and primary["variant"] == "primary"
+    assert (primary["gamma"], primary["partition"]) == (0.30, "admin1")
+    # T is the capacity of the robust top-k set of H1, Q_max the capacity of the ranked set
+    assert primary["target_mw"] == pytest.approx(
+        float(robustness[robustness["topk_robust"].fillna(False).astype(bool)]["p_mw"].sum())
+    )
+    assert primary["q_max_mw"] == pytest.approx(float(ranked["p_mw"].sum()))
+    assert primary["overlap_ref"] == pytest.approx(primary["target_mw"] / primary["q_max_mw"])
+    assert 0.0 <= primary["overlap"] <= 1.0 and primary["robustness_penalty"] >= -1e-12
+    assert primary["verdict"] == (
+        "not_testable"
+        if primary["overlap_ref"] >= 0.30
+        else ("supported" if primary["overlap"] < 0.30 else "not_supported")
+    )
+    assert {f"gamma_{g:.2f}" for g in (0.10, 0.50, 0.70)} <= set(summary["variant"])
+    assert {"top_k_percent_5", "top_k_percent_10", "top_k_percent_20", "median_statistic"} <= set(
+        summary["variant"]
+    )
+    regions = pd.read_parquet(tables["h2_regions"])
+    assert regions["selected_cell_mw"].sum() == pytest.approx(primary["target_mw"])
+    assert regions["selected_admin_mw"].sum() == pytest.approx(primary["target_mw"])
+    assert regions["share_cell"].sum() == pytest.approx(1.0)
+    assert sorted(regions["position"]) == list(range(1, len(regions) + 1))
+    assert (regions["fraction_taken"].between(0, 1)).all()
+    hypothesis = pd.read_parquet(tables["hypothesis"]).set_index("statistic")
+    shown = hypothesis.loc["h2_overlap_index"]
+    assert shown["value"] == pytest.approx(primary["overlap"])
+    assert shown["verdict"] == {
+        "supported": "met",
+        "not_supported": "not_met",
+        "not_testable": None,
+    }[primary["verdict"]] or (pd.isna(shown["verdict"]) and primary["verdict"] == "not_testable")
+    assert hypothesis.loc["h2_overlap_reference", "value"] == pytest.approx(primary["overlap_ref"])
+    assert (
+        "h2_mr_median" in hypothesis.index
+    )  # the earlier dispersion statistics stay as descriptive rows
+    assert "descriptive" in hypothesis.loc["h2_mr_median", "note"]
+    assert pd.isna(hypothesis.loc["h2_mr_median", "verdict"])
+
+
+@pytest.mark.unit
+def test_a_null_h2_rule_or_a_null_p_k_writes_the_h2_tables_empty_and_names_the_question(tmp_path):
+    entry, _, _ = _run(tmp_path / "a", experiments=_with_rules())
+    for kind in ("h2_summary", "h2_regions"):
+        path = entry.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-050"
+    other, _, _ = _run(tmp_path / "b", country=_country(top_k_percent=None))
+    for kind in ("h2_summary", "h2_regions"):
+        path = other.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
+    hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
+    assert not hypothesis["statistic"].str.startswith("h2_overlap").any()

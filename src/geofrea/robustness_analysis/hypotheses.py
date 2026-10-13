@@ -25,6 +25,7 @@ from geofrea.robustness_analysis.cell_set import CellSet
 from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, slug
 from geofrea.robustness_analysis.h1_rank_robustness import H1Descriptive, H1Variant
+from geofrea.robustness_analysis.h2_aggregation import NOT_TESTABLE, SUPPORTED, H2Variant
 from geofrea.robustness_analysis.rankings import jaccard_masks
 
 if TYPE_CHECKING:
@@ -187,6 +188,68 @@ def h1_primary(
     return rows
 
 
+H2_DESCRIPTIVE = (
+    "descriptive evidence, no verdict (the primary statistic of H2 is h2_overlap_index)"
+)
+H2_PRIMARY = "h2_overlap_index"
+
+
+def h2_primary(variant: H2Variant, n_cells: int) -> list[Statistic]:
+    """H2: the Capacity Overlap Index `O` (the statistic the pre-registered rule names), its reference and the diagnostics.
+
+    Implements: M-F7-07 (H2). The verdict is given by `h2_verdict_entry`; the full result is in the `h2_summary` table.
+    """
+
+    def row(name: str, value: float | None, note: str | None = None) -> Statistic:
+        return Statistic("H2", name, _clean(value), n_cells=n_cells, k=variant.k, note=note)
+
+    return [
+        row(
+            H2_PRIMARY,
+            variant.overlap,
+            "H2: O, the share of the target capacity T that the cell selection and the Admin1 selection both take",
+        ),
+        row(
+            "h2_overlap_reference",
+            variant.overlap_ref,
+            "T / Q_max: the overlap of a uniform spread over the country; H2 is not testable when it reaches gamma",
+        ),
+        row("h2_target_mw", variant.target_mw, "T, the capacity of the robust top-k set (MW)"),
+        row(
+            "h2_candidate_capacity_mw",
+            variant.q_max_mw,
+            "Q_max, the capacity of the ranked set (MW)",
+        ),
+        row("h2_n_regions", float(variant.n_regions), H2_DESCRIPTIVE),
+        row(
+            "h2_robustness_penalty",
+            variant.robustness_penalty,
+            f"{H2_DESCRIPTIVE}; Delta_z: capacity-weighted increase of MR from selecting regions instead of cells",
+        ),
+        row(
+            "h2_tv_distance",
+            variant.tv_distance,
+            f"{H2_DESCRIPTIVE}; total variation distance between the regional shares of T of the two selections",
+        ),
+    ]
+
+
+def h2_verdict_entry(variant: H2Variant) -> dict[str, str | None]:
+    """The rule, the verdict (`met` is supported) and the reason of the primary statistic of H2: not testable gives no verdict."""
+    text = f"{H2_PRIMARY} lt {variant.gamma} (testable when h2_overlap_reference < {variant.gamma})"
+    if variant.verdict == NOT_TESTABLE:
+        return {
+            "rule": text,
+            "verdict": None,
+            "verdict_reason": f"not testable: the reference overlap {variant.overlap_ref:.3f} reaches gamma {variant.gamma}",
+        }
+    return {
+        "rule": text,
+        "verdict": "met" if variant.verdict == SUPPORTED else "not_met",
+        "verdict_reason": None,
+    }
+
+
 def h2(cell_set: CellSet, evaluation: Evaluation, admin1: np.ndarray) -> list[Statistic]:
     """H2: dispersion of `MR` across the ranked cells, across admin1 units, and the capacity-weighted national aggregate."""
     ranked = cell_set.ranked
@@ -201,21 +264,31 @@ def h2(cell_set: CellSet, evaluation: Evaluation, admin1: np.ndarray) -> list[St
     medians = np.array([np.median(mr[units == u]) for u in np.unique(units)])
     spread = float(medians.max() - medians.min())
     rows = [
-        Statistic("H2", "h2_mr_median", _clean(median), n_cells=n),
+        Statistic("H2", "h2_mr_median", _clean(median), n_cells=n, note=H2_DESCRIPTIVE),
         Statistic(
             "H2",
             "h2_mr_iqr_over_median",
             _clean((q75 - q25) / median) if median > 0 else None,
             n_cells=n,
+            note=H2_DESCRIPTIVE,
         ),
-        Statistic("H2", "h2_mr_capacity_weighted_national", _clean(national), n_cells=n),
-        Statistic("H2", "h2_n_admin1_units", float(medians.size), n_cells=n),
-        Statistic("H2", "h2_mr_admin1_median_range", _clean(spread), n_cells=n),
+        Statistic(
+            "H2",
+            "h2_mr_capacity_weighted_national",
+            _clean(national),
+            n_cells=n,
+            note=H2_DESCRIPTIVE,
+        ),
+        Statistic("H2", "h2_n_admin1_units", float(medians.size), n_cells=n, note=H2_DESCRIPTIVE),
+        Statistic(
+            "H2", "h2_mr_admin1_median_range", _clean(spread), n_cells=n, note=H2_DESCRIPTIVE
+        ),
         Statistic(
             "H2",
             "h2_mr_admin1_median_range_over_national",
             _clean(spread / national) if national > 0 else None,
             n_cells=n,
+            note=H2_DESCRIPTIVE,
         ),
     ]
     return rows

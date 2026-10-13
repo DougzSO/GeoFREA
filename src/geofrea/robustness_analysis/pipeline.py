@@ -53,6 +53,8 @@ from geofrea.robustness_analysis.assemble import (
     futures_frame,
     h1_sites_frame,
     h1_summary_frame,
+    h2_regions_frame,
+    h2_summary_frame,
     hypothesis_frame,
     nominal_by_member_frame,
     prim_frame,
@@ -69,6 +71,7 @@ from geofrea.robustness_analysis.decision import (
     decision_values,
     expanded_rules,
     h1_rule,
+    h2_rule,
     refusals,
     regret_quantile,
     rules_for,
@@ -85,12 +88,27 @@ from geofrea.robustness_analysis.h1_rank_robustness import (
     evaluate_variant,
     sensitivity_variants,
 )
+from geofrea.robustness_analysis.h2_aggregation import (
+    PRIMARY as H2_PRIMARY_VARIANT,
+)
+from geofrea.robustness_analysis.h2_aggregation import (
+    H2Error,
+    H2Inputs,
+)
+from geofrea.robustness_analysis.h2_aggregation import (
+    evaluate_variant as evaluate_h2,
+)
+from geofrea.robustness_analysis.h2_aggregation import (
+    sensitivity_variants as h2_sensitivity_variants,
+)
 from geofrea.robustness_analysis.hypotheses import (
     agreement,
     evaluate_rules,
     h1,
     h1_primary,
     h2,
+    h2_primary,
+    h2_verdict_entry,
     h3,
     h4,
     h5,
@@ -103,6 +121,8 @@ from geofrea.robustness_analysis.table_schemas import (
     FutureRow,
     H1SiteRow,
     H1SummaryRow,
+    H2RegionRow,
+    H2SummaryRow,
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
@@ -136,8 +156,11 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "ssp_scores": SspScoreRow,
     "h1_sites": H1SiteRow,
     "h1_summary": H1SummaryRow,
+    "h2_summary": H2SummaryRow,
+    "h2_regions": H2RegionRow,
 }
 H1_TABLES = ("ssp_scores", "h1_sites", "h1_summary")
+H2_TABLES = ("h2_summary", "h2_regions")
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -578,6 +601,12 @@ def run_window(
                 "top_k_percent is null",
                 "OQ-021",
             )
+        for kind in H2_TABLES:
+            skips[kind] = SkippedOutput(
+                "H2 selections, the Capacity Overlap Index and the verdict (M-F7-07)",
+                "top_k_percent is null",
+                "OQ-021",
+            )
         skips["prim_boxes"] = SkippedOutput(
             "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
         )
@@ -650,6 +679,72 @@ def run_window(
                 rule.alpha,
                 primary.v_k,
                 rule.beta,
+            )
+
+    # H2: the cell and the Admin1 selections of the capacity of the robust top-k set, O, O_ref and the verdict
+    h2_statistics: list = []
+    h2_variant = None
+    rule2 = h2_rule(experiments)
+    if ranking.top_nominal is not None and ranking.k is not None:
+        if rule2 is None:
+            for kind in H2_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H2 selections, the Capacity Overlap Index, the verdict and the sensitivities (M-F7-07)",
+                    "hypothesis_rules.H2 is null",
+                    "OQ-050",
+                )
+        elif not cell_set.ranked.any():
+            for kind in H2_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H2 selections, the Capacity Overlap Index and the verdict (M-F7-07)",
+                    "every cell of the F7 set is climate-fragile, there is no ranked cell",
+                    "OQ-008",
+                )
+        else:
+            h2_inputs = H2Inputs(
+                z=evaluation.mr,
+                q=cell_set.p_mw,
+                region=admin1.astype(str),
+                ranked=cell_set.ranked,
+                sr=evaluation.sr,
+                p90=evaluation.p90_by_member,
+                gcms=tuple(by_member[m].gcm or "" for m in member_ids),
+            )
+            try:
+                h2_variant, h2_detail = evaluate_h2(
+                    h2_inputs, variant=H2_PRIMARY_VARIANT, gamma=rule2.gamma, k=ranking.k
+                )
+                target_mw = (
+                    None
+                    if decision.capacity_target_gw is None
+                    else decision.capacity_target_gw * 1000.0
+                )
+                h2_variants = [
+                    h2_variant,
+                    *h2_sensitivity_variants(
+                        h2_inputs,
+                        h2_variant,
+                        k=ranking.k,
+                        national_target_mw=target_mw,
+                        tcr_exception_gcms=sorted(
+                            {e.gcm or "" for e in entries if e.tcr_exception}
+                        ),
+                    ),
+                ]
+            except H2Error as exc:
+                raise RobustnessInputError(f"H2 cannot be computed: {exc}") from exc
+            frames["h2_summary"] = h2_summary_frame(h2_variants, window, rule2.partition)
+            frames["h2_regions"] = h2_regions_frame(h2_detail)
+            h2_statistics = h2_primary(h2_variant, cell_set.n_f7)
+            logger.info(
+                "%s %s [%s]: H2 %s (O %.3f, O_ref %.3f, gamma %.2f)",
+                iso,
+                tech,
+                role,
+                h2_variant.verdict,
+                h2_variant.overlap,
+                h2_variant.overlap_ref,
+                rule2.gamma,
             )
 
     # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
@@ -753,7 +848,7 @@ def run_window(
         + h4(cell_set, evaluation, ranking)
         + agreement(cell_set, evaluation)
     )
-    statistics += h1_statistics
+    statistics += h1_statistics + h2_statistics
     if futures is not None:
         statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
     if evaluation.potential_gw is not None:
@@ -774,9 +869,12 @@ def run_window(
         not h1_statistics
     ):  # H1 was skipped (its output is listed with the reason), so its rule names nothing
         rules_in_force["H1"] = None
-    frames["hypothesis"] = hypothesis_frame(
-        statistics, evaluate_rules(statistics, rules_in_force), window
-    )
+    verdicts = evaluate_rules(statistics, rules_in_force)
+    if h2_variant is not None:  # H2's verdict depends on testability, so its module gives it
+        for at, stat in enumerate(statistics):
+            if stat.statistic == "h2_overlap_index":
+                verdicts[at] = h2_verdict_entry(h2_variant)
+    frames["hypothesis"] = hypothesis_frame(statistics, verdicts, window)
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
     return _window_result(role, window, cell_set, ranking, tables)
 

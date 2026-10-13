@@ -811,7 +811,7 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
         "h1b_vulnerable_share",
     ]  # H1 carries its pre-registered rule (OQ-050)
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
-    assert verdicts.drop(["h3_jaccard_nominal_robust", *h1_rules]).isna().all()
+    assert verdicts.drop(["h3_jaccard_nominal_robust", "h2_overlap_index", *h1_rules]).isna().all()
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
     assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
@@ -849,6 +849,38 @@ def test_f7_writes_the_h1_table_with_c_k_v_k_the_reference_the_verdict_and_the_s
     assert len(sites) == primary["k"] and sites["vulnerable"].sum() == primary["n_vulnerable"]
     # the 2071-2100 window is the sensitivity run of the same table
     assert (base / f"h1_summary_{tech}__sensitivity.parquet").is_file()
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_the_h2_table_with_o_the_reference_the_verdict_and_the_sensitivities(zzz, tech):
+    base = _phase(zzz, "robustness_analysis")
+    summary = pd.read_parquet(base / f"h2_summary_{tech}__core.parquet")
+    primary = summary[summary["primary"]].iloc[0]
+    assert primary["verdict"] in {"supported", "not_supported", "not_testable"}
+    assert 0.0 <= primary["overlap"] <= 1.0 and 0.0 < primary["overlap_ref"] <= 1.0
+    assert primary["overlap_ref"] == pytest.approx(primary["target_mw"] / primary["q_max_mw"])
+    assert (primary["gamma"], primary["partition"]) == (0.30, "admin1")
+    assert primary["robustness_penalty"] >= -1e-12
+    assert bool(primary["testable"]) == (primary["overlap_ref"] < 0.30)
+    variants = set(summary["variant"])
+    assert {"gamma_0.10", "gamma_0.30", "gamma_0.70"} <= variants
+    assert {
+        "top_k_percent_5",
+        "top_k_percent_10",
+        "top_k_percent_20",
+        "median_statistic",
+    } <= variants
+    regions = pd.read_parquet(base / f"h2_regions_{tech}__core.parquet")
+    assert len(regions) == primary["n_regions"] > 0
+    assert regions["selected_admin_mw"].sum() == pytest.approx(primary["target_mw"])
+    assert (base / f"h2_summary_{tech}__sensitivity.parquet").is_file()  # the 2071-2100 window
+    hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet").set_index("statistic")
+    verdict = hypothesis.loc["h2_overlap_index", "verdict"]
+    expected = {"supported": "met", "not_supported": "not_met", "not_testable": None}[
+        primary["verdict"]
+    ]
+    assert (verdict == expected) or (expected is None and pd.isna(verdict))
 
 
 @pytest.mark.synthetic
