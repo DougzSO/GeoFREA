@@ -9,7 +9,8 @@ the budget (A-10):
 
   - pass 1 gives, per sample, the reference level `L*` (the minimum LCOE over the feasible cells of the F7 set, `q_ref = 0`) and the highest
     feasible LCOE (the worst-case regret of M-F7-02 is `(H - L*) / L*`);
-  - pass 2 gives the regret `r = LCOE / L* - 1`, its P90 over the draws (`MR` is the maximum over members), the satisficing counter, the
+  - pass 2 gives the regret `r = LCOE / L* - 1`, its P90 over the draws (`MR` is the maximum over members; the P90 of each member is kept,
+    cells x members, for the scores per SSP of H1), the satisficing counter, the
     moments of `r` (the variance of `X = LCOE / L*` is the variance of `r`), `MR_clim`, `MR_tech` and the potential below `tau` of each
     future.
 
@@ -81,6 +82,7 @@ class Evaluation:
         np.ndarray
     )  # (C, 1 + M): nominal LCOE at s0, USD/MWh; column 0 is the reference member
     mr: np.ndarray  # (C,): max over core members of the P90 over draws of r (NaN for a cell that fails CF_min in some core member)
+    p90_by_member: np.ndarray  # (C, M): P90 over draws of r in each core member, before the maximum over members (H1, per SSP)
     mr_clim: np.ndarray  # (C,): max over core members of r at s0
     mr_tech: np.ndarray  # (C,): P90 over draws of r in the reference member
     sr: (
@@ -164,6 +166,7 @@ class _Accumulator:
         self.nominal = np.full((n_cells, 1 + n_members), np.nan)
         self.mr = np.full(n_cells, -np.inf)
         self.mr_clim = np.full(n_cells, -np.inf)
+        self.p90_member = np.full((n_cells, n_members), np.nan)
         self.mr_tech = np.full(n_cells, np.nan)
         self.sr_count = np.zeros(n_cells, dtype="int64")
         self.mean = np.zeros((n_cells, n_members))
@@ -233,6 +236,7 @@ def _member_pass_two(
         del regret
         if core:
             acc.mr[window] = np.maximum(acc.mr[window], p90)
+            acc.p90_member[window, slot - 1] = p90
         else:
             acc.mr_tech[window] = p90
 
@@ -308,6 +312,7 @@ def evaluate(
         n_draws=n_draws,
         nominal_lcoe=acc.nominal,
         mr=mr,
+        p90_by_member=acc.p90_member,
         mr_clim=np.maximum(acc.mr_clim, 0.0),
         mr_tech=np.maximum(acc.mr_tech, 0.0),
         sr=None if tau is None else acc.sr_count / (len(core) * n_draws),

@@ -12,7 +12,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from geofrea.core.config_schemas import ExperimentsFile
+from geofrea.core.config_schemas import ExperimentsFile, H1Rule, HypothesisRule
 from geofrea.core.constants import PRICE_BASE_YEAR_USD
 
 logger = logging.getLogger("geofrea.robustness_analysis.decision")
@@ -149,6 +149,14 @@ def skipped_outputs(
                 "OQ-010",
             )
         )
+    if h1_rule(experiments) is None:
+        skipped.append(
+            SkippedOutput(
+                "H1 scores per SSP, C_k, V_k, the verdict and the sensitivities (M-F7-07)",
+                "hypothesis_rules.H1 is null",
+                "OQ-050",
+            )
+        )
     prim = experiments.prim
     if decision.prim_outcome_share is None or prim.peel_alpha is None or prim.mass_min is None:
         reasons = [
@@ -182,8 +190,39 @@ def skipped_outputs(
     return skipped
 
 
+H1_PRIMARY_STATISTICS = (
+    "h1a_core_share",
+    "h1b_vulnerable_share",
+)  # H1a and H1b, in the order of alpha and beta
+
+
+def h1_rule(experiments: ExperimentsFile) -> H1Rule | None:
+    """The pre-registered rule of H1 (OQ-050), or None while it is null."""
+    rule = experiments.hypothesis_rules.get("H1")
+    return rule if isinstance(rule, H1Rule) else None
+
+
+def expanded_rules(experiments: ExperimentsFile) -> dict[str, list[HypothesisRule] | None]:
+    """The rules as lists of (statistic, comparison, threshold): the H1 rule becomes `C_k >= alpha` and `V_k >= beta` (OQ-050)."""
+    out: dict[str, list[HypothesisRule] | None] = {}
+    for hypothesis, rule in experiments.hypothesis_rules.items():
+        if isinstance(rule, H1Rule):
+            out[hypothesis] = [
+                HypothesisRule(
+                    statistic=H1_PRIMARY_STATISTICS[0], comparison="ge", threshold=rule.alpha
+                ),
+                HypothesisRule(
+                    statistic=H1_PRIMARY_STATISTICS[1], comparison="ge", threshold=rule.beta
+                ),
+            ]
+        else:
+            out[hypothesis] = rule
+    return out
+
+
 def rules_for(experiments: ExperimentsFile) -> tuple[Mapping[str, list], list[str]]:
     """The pre-registered rules per hypothesis and the hypotheses that have none (OQ-050)."""
-    rules = {h: r for h, r in experiments.hypothesis_rules.items() if r}
-    missing = [h for h, r in experiments.hypothesis_rules.items() if not r]
+    expanded = expanded_rules(experiments)
+    rules = {h: r for h, r in expanded.items() if r}
+    missing = [h for h, r in expanded.items() if not r]
     return rules, missing

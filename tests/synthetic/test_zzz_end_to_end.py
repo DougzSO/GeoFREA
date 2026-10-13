@@ -798,8 +798,15 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
     assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     verdicts = hypothesis.set_index("statistic")["verdict"]
-    assert verdicts["h2_mr_median"] == "met"  # the only pre-registered rule of this run
-    assert verdicts.drop("h2_mr_median").isna().all()
+    assert (
+        verdicts["h2_mr_median"] == "met"
+    )  # the test rule of H2 in this copy of the configuration
+    h1_rules = [
+        "h1a_core_share",
+        "h1b_vulnerable_share",
+    ]  # H1 carries its pre-registered rule (OQ-050)
+    assert verdicts[h1_rules].isin(["met", "not_met"]).all()
+    assert verdicts.drop(["h2_mr_median", *h1_rules]).isna().all()
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
     assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
@@ -812,6 +819,31 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
         "tx35_days"
     }  # the only indicator with a threshold in this run
     assert (exposure["potential_gw"] >= 0).all() and set(exposure["group"]) >= {"f7_set"}
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_the_h1_table_with_c_k_v_k_the_reference_the_verdict_and_the_sensitivities(
+    zzz, tech
+):
+    base = _phase(zzz, "robustness_analysis")
+    summary = pd.read_parquet(base / f"h1_summary_{tech}__core.parquet")
+    primary = summary[summary["primary"]].iloc[0]
+    assert primary["verdict"] in {"supported", "partially_supported", "not_supported"}
+    assert 0.0 <= primary["c_k"] <= 1.0 and 0.0 <= primary["v_k"] <= 1.0
+    assert primary["reference"] == pytest.approx((primary["k"] / primary["n_cells"]) ** 2)
+    assert (primary["alpha"], primary["beta"], primary["m"]) == (0.60, 0.20, primary["k"])
+    assert bool(primary["h1a_holds"]) == (primary["c_k"] >= 0.60)
+    assert bool(primary["h1b_holds"]) == (primary["v_k"] >= 0.20)
+    variants = set(summary["variant"])
+    assert {"top_k_percent_5", "top_k_percent_10", "top_k_percent_20"} <= variants
+    assert {"tolerance_0.5k", "tolerance_1k", "tolerance_2k"} <= variants
+    scores = pd.read_parquet(base / f"ssp_scores_{tech}__core.parquet")
+    assert set(scores["ssp"]) == {"SSP1-2.6", "SSP3-7.0", "SSP5-8.5"}
+    sites = pd.read_parquet(base / f"h1_sites_{tech}__core.parquet")
+    assert len(sites) == primary["k"] and sites["vulnerable"].sum() == primary["n_vulnerable"]
+    # the 2071-2100 window is the sensitivity run of the same table
+    assert (base / f"h1_summary_{tech}__sensitivity.parquet").is_file()
 
 
 @pytest.mark.synthetic

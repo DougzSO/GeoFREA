@@ -478,7 +478,7 @@ def test_the_futures_table_has_one_row_per_member_and_sample_with_sample_zero_no
 def test_without_a_pre_registered_rule_every_statistic_has_no_verdict_and_a_warning_says_so(
     tmp_path, caplog
 ):
-    entry, _, _ = _run(tmp_path)
+    entry, _, _ = _run(tmp_path, experiments=_with_rules())
     hypothesis = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
     assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     assert hypothesis["verdict"].isna().all() and hypothesis["verdict_reason"].notna().all()
@@ -510,7 +510,7 @@ def test_a_rule_that_names_an_unknown_statistic_fails_loudly(tmp_path):
 
     rule = {"statistic": "h9_nothing", "comparison": "ge", "threshold": 0.0}
     with pytest.raises(HypothesisRuleError):
-        _run(tmp_path, experiments=_with_rules(H1=[rule]))
+        _run(tmp_path, experiments=_with_rules(H2=[rule]))
 
 
 @pytest.mark.unit
@@ -585,3 +585,96 @@ def test_the_kendall_statistic_equals_scipy_on_the_ranked_cells_and_counts_the_t
     assert hypothesis.loc["mr_sr_pairs", "value"] == n * (n - 1) / 2
     by_hand = sum(c * (c - 1) // 2 for c in ranked["mr"].value_counts())
     assert hypothesis.loc["mr_sr_tied_pairs_mr", "value"] == by_hand
+
+
+# -- H1: the scores per SSP, C_k, V_k and the verdict (OQ-050, H1) ---------------------------------------------
+
+
+def _skip_note(path: Path) -> dict:
+    return json.loads(pq.read_schema(path).metadata[b"geofrea_robustness_skipped"])
+
+
+@pytest.mark.unit
+def test_the_scores_per_ssp_agree_with_the_member_level_results_and_the_h1_tables_carry_the_rule(
+    tmp_path,
+):
+    entry, _, _ = _run(tmp_path)
+    tables = entry.windows["core"].tables
+    robustness = _table(entry).set_index("cell_id")
+    scores = pd.read_parquet(tables["ssp_scores"])
+    assert set(scores["ssp"]) == {"SSP1-2.6", "SSP3-7.0"}
+    ranked = robustness[robustness["cell_class"] == "ranked"]
+    best = scores.groupby("cell_id")[["mr_ssp", "r_clim_ssp"]].max().loc[ranked.index]
+    assert np.allclose(best["mr_ssp"], ranked["mr"])  # the maximum of MR over the SSPs is MR
+    assert np.allclose(best["r_clim_ssp"], ranked["mr_clim"])  # and of R^clim is MR_clim (M-F7-06)
+    for _, one in scores.groupby("ssp"):  # a complete ordering of the ranked set in every SSP
+        assert sorted(one["mr_ssp_rank"].dropna()) == list(range(1, len(ranked) + 1))
+        assert sorted(one["r_clim_ssp_rank"].dropna()) == list(range(1, len(ranked) + 1))
+    assert set(scores["r_clim_gcm"].dropna()) <= {"GCM-A", "GCM-B"}
+
+    summary = pd.read_parquet(tables["h1_summary"])
+    primary = summary[summary["primary"]].iloc[0]
+    assert summary["primary"].sum() == 1 and primary["variant"] == "primary"
+    assert primary["k"] == entry.windows["core"].k and primary["m"] == primary["k"]
+    assert (primary["alpha"], primary["beta"]) == (0.60, 0.20)
+    assert primary["reference"] == pytest.approx(
+        (primary["k"] / entry.windows["core"].n_f7_set) ** 2
+    )
+    assert bool(primary["h1a_holds"]) == (primary["c_k"] >= 0.60)
+    assert bool(primary["h1b_holds"]) == (primary["v_k"] >= 0.20)
+    assert (
+        primary["verdict"]
+        == {2: "supported", 1: "partially_supported", 0: "not_supported"}[
+            int(primary["h1a_holds"]) + int(primary["h1b_holds"])
+        ]
+    )
+    assert {
+        "top_k_percent_5", "top_k_percent_10", "top_k_percent_20",
+        "tolerance_0.5k", "tolerance_1k", "tolerance_2k",
+    } <= set(summary["variant"])  # fmt: skip
+
+    sites = pd.read_parquet(tables["h1_sites"])
+    assert len(sites) == primary["k"] and sites["vulnerable"].sum() == primary["n_vulnerable"]
+    hypothesis = pd.read_parquet(tables["hypothesis"]).set_index("statistic")
+    for name, holds in (("h1a_core_share", "h1a_holds"), ("h1b_vulnerable_share", "h1b_holds")):
+        assert hypothesis.loc[name, "verdict"] == ("met" if primary[holds] else "not_met")
+    assert hypothesis.loc["h1a_core_share", "value"] == pytest.approx(primary["c_k"])
+    assert hypothesis.loc["h1b_vulnerable_share", "value"] == pytest.approx(primary["v_k"])
+    descriptive_rows = hypothesis.filter(like="h1_ssp_", axis=0)
+    assert len(descriptive_rows) == 2 and descriptive_rows["verdict"].isna().all()
+    assert hypothesis.loc["h1_subhypotheses_holding", "note"] == f"verdict: {primary['verdict']}"
+
+
+@pytest.mark.unit
+def test_a_climate_fragile_cell_in_the_nominal_top_k_is_vulnerable_without_a_displacement(tmp_path):
+    first, _, _ = _run(tmp_path / "a")
+    best = _table(first).query("nominal_rank == 1").iloc[0]["cell_id"]
+    entry, _, _ = _run(tmp_path / "b", cf={(int(best) - 500, CORE[1]): 0.2})
+    sites = pd.read_parquet(entry.windows["core"].tables["h1_sites"]).set_index("cell_id")
+    fragile = sites.loc[best]
+    assert fragile["nominal_rank"] == 1 and bool(fragile["vulnerable"])
+    assert fragile["reason"] == "climate_fragile" and pd.isna(fragile["displacement"])
+    scores = pd.read_parquet(entry.windows["core"].tables["ssp_scores"])
+    assert scores[scores["cell_id"] == best]["mr_ssp"].isna().all()
+
+
+@pytest.mark.unit
+def test_a_null_h1_rule_writes_the_h1_tables_empty_and_names_oq_050(tmp_path, caplog):
+    entry, _, _ = _run(tmp_path, experiments=_with_rules())
+    for kind in ("ssp_scores", "h1_sites", "h1_summary"):
+        path = entry.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0
+        assert _skip_note(path)["open_question"] == "OQ-050"
+    assert any(i["open_question"] == "OQ-050" for i in entry.skipped)
+
+
+@pytest.mark.unit
+def test_a_null_p_k_writes_the_h1_tables_empty_and_names_oq_021(tmp_path):
+    entry, _, _ = _run(tmp_path, country=_country(top_k_percent=None))
+    for kind in ("ssp_scores", "h1_sites", "h1_summary"):
+        path = entry.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
+    hypothesis = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
+    assert (
+        not hypothesis["statistic"].str.startswith("h1").any()
+    )  # no H1 row, so its rule names nothing

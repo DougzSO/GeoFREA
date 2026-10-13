@@ -51,11 +51,14 @@ from geofrea.robustness_analysis.assemble import (
     draw_statistics_frame,
     empty_nominal_frame,
     futures_frame,
+    h1_sites_frame,
+    h1_summary_frame,
     hypothesis_frame,
     nominal_by_member_frame,
     prim_frame,
     prim_input,
     robustness_frame,
+    ssp_scores_frame,
 )
 from geofrea.robustness_analysis.cell_set import CellSet, build_cell_set
 from geofrea.robustness_analysis.decision import (
@@ -64,6 +67,8 @@ from geofrea.robustness_analysis.decision import (
     TechDecision,
     check_ranges,
     decision_values,
+    expanded_rules,
+    h1_rule,
     refusals,
     regret_quantile,
     rules_for,
@@ -71,18 +76,39 @@ from geofrea.robustness_analysis.decision import (
 )
 from geofrea.robustness_analysis.evaluator import evaluate
 from geofrea.robustness_analysis.futures import MemberLabel, futures_pass
-from geofrea.robustness_analysis.hypotheses import agreement, evaluate_rules, h1, h2, h3, h4, h5
+from geofrea.robustness_analysis.h1_rank_robustness import (
+    PRIMARY,
+    H1Error,
+    H1Inputs,
+    climate_only_regret,
+    descriptive,
+    evaluate_variant,
+    sensitivity_variants,
+)
+from geofrea.robustness_analysis.hypotheses import (
+    agreement,
+    evaluate_rules,
+    h1,
+    h1_primary,
+    h2,
+    h3,
+    h4,
+    h5,
+)
 from geofrea.robustness_analysis.prim import run_prim
 from geofrea.robustness_analysis.table_schemas import (
     ROBUSTNESS_TABLE_SCHEMA_VERSION,
     DrawStatisticRow,
     ExposureRow,
     FutureRow,
+    H1SiteRow,
+    H1SummaryRow,
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
     PrimBoxRow,
     RobustnessRow,
+    SspScoreRow,
 )
 from geofrea.robustness_analysis.thesis_tables import (
     HazardMember,
@@ -107,7 +133,11 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "potential_below_tau": PotentialBelowTauRow,
     "hazard_exposure": ExposureRow,
     "prim_boxes": PrimBoxRow,
+    "ssp_scores": SspScoreRow,
+    "h1_sites": H1SiteRow,
+    "h1_summary": H1SummaryRow,
 }
+H1_TABLES = ("ssp_scores", "h1_sites", "h1_summary")
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -156,6 +186,7 @@ class MemberEntry:
     gcm: str | None
     ssp: str | None
     hazard: bool
+    tcr_exception: bool = False
 
 
 def robustness_dir(iso: str) -> Path:
@@ -174,6 +205,7 @@ def read_member_entries(members_file: Path) -> list[MemberEntry]:
             gcm=e.get("gcm"),
             ssp=e.get("ssp"),
             hazard=bool(e.get("channels", {}).get("hazard", False)),
+            tcr_exception=bool(e.get("tcr_exception", False)),
         )
         for e in entries
     ]
@@ -540,9 +572,85 @@ def run_window(
             "OQ-021",
         )
         skips["futures"] = skips["draw_statistics"] = why
+        for kind in H1_TABLES:
+            skips[kind] = SkippedOutput(
+                "H1 scores per SSP, C_k, V_k and the verdict (M-F7-07)",
+                "top_k_percent is null",
+                "OQ-021",
+            )
         skips["prim_boxes"] = SkippedOutput(
             "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
         )
+
+    # H1: the scores per SSP, C_k, V_k, the verdict and the sensitivities (the rule is read from configuration)
+    h1_statistics: list = []
+    rule = h1_rule(experiments)
+    if ranking.top_nominal is not None and ranking.k is not None:
+        if rule is None:
+            for kind in H1_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H1 scores per SSP, C_k, V_k, the verdict and the sensitivities (M-F7-07)",
+                    "hypothesis_rules.H1 is null",
+                    "OQ-050",
+                )
+        elif not cell_set.ranked.any():
+            for kind in H1_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H1 scores per SSP, C_k, V_k and the verdict (M-F7-07)",
+                    "every cell of the F7 set is climate-fragile, there is no ranked cell",
+                    "OQ-008",
+                )
+        else:
+            assert decision.top_k_percent is not None
+            inputs = H1Inputs(
+                p90=evaluation.p90_by_member,
+                r_clim=climate_only_regret(evaluation),
+                ssps=tuple(by_member[m].ssp or "" for m in member_ids),
+                gcms=tuple(by_member[m].gcm or "" for m in member_ids),
+                ranked=cell_set.ranked,
+                nominal_order=ranking.nominal_order,
+                nominal_rank=ranking.nominal_rank,
+            )
+            try:
+                primary, detail = evaluate_variant(
+                    inputs,
+                    variant=PRIMARY,
+                    top_k_percent=decision.top_k_percent,
+                    tolerance_multiple=rule.tolerance_multiple_of_k,
+                    alpha=rule.alpha,
+                    beta=rule.beta,
+                )
+            except H1Error as exc:
+                raise RobustnessInputError(f"H1 cannot be computed: {exc}") from exc
+            exceptions = sorted({e.gcm or "" for e in entries if e.tcr_exception})
+            variants = [
+                primary,
+                *sensitivity_variants(
+                    inputs,
+                    top_k_percent=decision.top_k_percent,
+                    tolerance_multiple=rule.tolerance_multiple_of_k,
+                    alpha=rule.alpha,
+                    beta=rule.beta,
+                    tcr_exception_gcms=exceptions,
+                ),
+            ]
+            frames["ssp_scores"] = ssp_scores_frame(cell_set, detail)
+            frames["h1_sites"] = h1_sites_frame(cell_set, inputs, detail)
+            frames["h1_summary"] = h1_summary_frame(variants, window, rule.alpha, rule.beta)
+            h1_statistics = h1_primary(
+                primary, descriptive(inputs, primary, detail), cell_set.n_f7, False
+            )
+            logger.info(
+                "%s %s [%s]: H1 %s (C_k %.3f against alpha %.2f, V_k %.3f against beta %.2f)",
+                iso,
+                tech,
+                role,
+                primary.verdict,
+                primary.c_k,
+                rule.alpha,
+                primary.v_k,
+                rule.beta,
+            )
 
     # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
     land_range: dict[str, tuple[float, float]] = {}
@@ -645,6 +753,7 @@ def run_window(
         + h4(cell_set, evaluation, ranking)
         + agreement(cell_set, evaluation)
     )
+    statistics += h1_statistics
     if futures is not None:
         statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
     if evaluation.potential_gw is not None:
@@ -660,8 +769,13 @@ def run_window(
             role,
             hypothesis,
         )
+    rules_in_force = expanded_rules(experiments)
+    if (
+        not h1_statistics
+    ):  # H1 was skipped (its output is listed with the reason), so its rule names nothing
+        rules_in_force["H1"] = None
     frames["hypothesis"] = hypothesis_frame(
-        statistics, evaluate_rules(statistics, experiments.hypothesis_rules), window
+        statistics, evaluate_rules(statistics, rules_in_force), window
     )
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
     return _window_result(role, window, cell_set, ranking, tables)

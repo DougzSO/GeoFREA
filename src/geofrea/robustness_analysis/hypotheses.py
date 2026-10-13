@@ -23,7 +23,8 @@ from scipy.stats import kendalltau
 from geofrea.core.config_schemas import HypothesisRule
 from geofrea.robustness_analysis.cell_set import CellSet
 from geofrea.robustness_analysis.evaluator import Evaluation
-from geofrea.robustness_analysis.futures import FuturesResult
+from geofrea.robustness_analysis.futures import FuturesResult, slug
+from geofrea.robustness_analysis.h1_rank_robustness import H1Descriptive, H1Variant
 from geofrea.robustness_analysis.rankings import jaccard_masks
 
 if TYPE_CHECKING:
@@ -91,8 +92,14 @@ def with_range(
     )
 
 
+H1_DESCRIPTIVE = "descriptive evidence, no verdict (the primary statistics of H1 are h1a_core_share and h1b_vulnerable_share)"
+
+
 def h1(futures: FuturesResult, cell_set: CellSet, ranking: Rankings) -> list[Statistic]:
-    """H1: Spearman of the rankings and Jaccard of the top-k sets between SSPs, share of the nominal top-k that leaves under a member."""
+    """H1, descriptive: Spearman of the rankings and Jaccard of the top-k sets between SSPs, share of the nominal top-k that leaves under a member.
+
+    These are the draw-level statistics of the sample-major pass; they carry no verdict (M-F7-07, H1).
+    """
     return [
         with_range(
             "H1",
@@ -101,10 +108,83 @@ def h1(futures: FuturesResult, cell_set: CellSet, ranking: Rankings) -> list[Sta
             n_cells=cell_set.n_f7,
             k=ranking.k,
             truncated=False,
-            note="Spearman of ranking positions (ties by cell_id)" if "spearman" in name else None,
+            note=(
+                f"{H1_DESCRIPTIVE}; Spearman of ranking positions (ties by cell_id)"
+                if "spearman" in name
+                else H1_DESCRIPTIVE
+            ),
         )
         for name, values in futures.draw_statistics.items()
     ]
+
+
+def h1_primary(
+    variant: H1Variant, extra: H1Descriptive, n_cells: int, truncated: bool
+) -> list[Statistic]:
+    """H1: the primary statistics `C_k` and `V_k` (the ones the pre-registered rule names) and the descriptive evidence.
+
+    Implements: M-F7-07 (H1). The verdict on the hypothesis is in the `h1_summary` table; the rows here carry the rule of each statistic.
+    """
+    k = variant.k
+
+    def row(name: str, value: float | None, note: str | None = None) -> Statistic:
+        return Statistic(
+            "H1", name, _clean(value), n_cells=n_cells, k=k, top_k_truncated=truncated, note=note
+        )
+
+    rows = [
+        row("h1a_core_share", variant.c_k, "H1a: C_k, the share of the top-k common to all SSPs"),
+        row(
+            "h1b_vulnerable_share",
+            variant.v_k,
+            f"H1b: V_k, the share of the nominal top-k outside the top {variant.k + variant.m} of the climate-only ranking in some SSP",
+        ),
+        row(
+            "h1_core_share_reference",
+            variant.reference,
+            "p_k^2 with p_k = k / n: the expected C_k if the SSP rankings were independent",
+        ),
+        row("h1_core_size", float(variant.core_size)),
+        row("h1_vulnerable_count", float(variant.n_vulnerable)),
+        row(
+            "h1_subhypotheses_holding",
+            float(variant.h1a_holds) + float(variant.h1b_holds),
+            f"verdict: {variant.verdict}",
+        ),
+    ]
+    for a, b, jaccard, value, residual in extra.pairs:
+        pair = f"{slug(a)}_vs_{slug(b)}"
+        rows.append(row(f"h1_ssp_jaccard__{pair}", jaccard, H1_DESCRIPTIVE))
+        rows.append(
+            row(
+                f"h1_ssp_rbo__{pair}",
+                value,
+                f"{H1_DESCRIPTIVE}; RBO truncated at the ranked set, p = {extra.rbo_p:.6g}, lower bound with residual {residual:.3g}",
+            )
+        )
+    rows += [
+        row(
+            "h1_nominal_top_k_median_rank_across_ssps",
+            extra.median_rank_across_ssps,
+            f"{H1_DESCRIPTIVE}; median over the nominal top-k of the median rank (by MR per SSP) across SSPs, over {extra.n_sites_with_rank} cells with a rank",
+        ),
+        row(
+            "h1_nominal_top_k_ssp_rank_iqr_median",
+            extra.ssp_rank_iqr_median,
+            f"{H1_DESCRIPTIVE}; median over the nominal top-k of the interquartile range of the rank across SSPs",
+        ),
+        row(
+            "h1_nominal_top_k_displacement_median",
+            extra.displacement_median,
+            f"{H1_DESCRIPTIVE}; worst climate-only rank minus nominal rank, median over the nominal top-k",
+        ),
+        row(
+            "h1_nominal_top_k_displacement_iqr",
+            extra.displacement_iqr,
+            f"{H1_DESCRIPTIVE}; interquartile range of the same displacement",
+        ),
+    ]
+    return rows
 
 
 def h2(cell_set: CellSet, evaluation: Evaluation, admin1: np.ndarray) -> list[Statistic]:

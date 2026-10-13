@@ -169,3 +169,73 @@ class PrimBoxRow(BaseModel):
     k: int
     n_restricted: int
     theta: float
+
+
+class SspScoreRow(BaseModel):
+    """The scores of one cell of the F7 set in one SSP (H1, D-F7-035): `MR_i,sigma`, `R^clim_i,sigma`, their ranks and the top-k flag.
+
+    The ranks are among the ranked set (1 is best); the scores, ranks and flag are null for a climate-fragile cell. `r_clim_gcm` is the GCM
+    whose regret at `s0` is the largest in the SSP (the one that sets `R^clim_i,sigma`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: int
+    ssp: str
+    mr_ssp: float | None
+    mr_ssp_rank: int | None
+    topk_ssp: bool | None
+    r_clim_ssp: float | None
+    r_clim_ssp_rank: int | None
+    r_clim_gcm: str | None
+
+
+class H1SiteRow(BaseModel):
+    """One cell of the nominal top-k and what H1b says about it (D-F7-036).
+
+    `vulnerable` is true when the cell is outside the top `k + m` of the climate-only ranking in at least one SSP, or has no rank
+    (`reason` `climate_fragile`). The magnitude (`displacement` = worst `r^clim` rank minus the nominal rank, the SSP and the GCM that set it, the
+    largest `R^clim`) is reported for every cell with a rank, vulnerable or not, and carries no threshold.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: int
+    nominal_rank: int
+    vulnerable: bool
+    reason: str | None
+    displacement: int | None
+    worst_ssp: str | None
+    worst_gcm: str | None
+    max_r_clim: float | None
+
+
+class H1SummaryRow(BaseModel):
+    """H1 for one setting: `variant` `primary` carries the verdict, the others are sensitivities (D-F7-037).
+
+    `excluded_gcms` is the list joined by `|` (empty for none). `reference` is `(k / n)^2`, the expected core share if the SSP rankings were
+    independent. `rule` is the pre-registered rule as applied. A sensitivity is reported beside the primary result and never revises it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant: str
+    primary: bool
+    window: str
+    top_k_percent: float
+    k: int
+    m: int
+    excluded_gcms: str
+    n_cells: int
+    n_ranked: int
+    n_ssps: int
+    core_size: int
+    n_vulnerable: int
+    c_k: float
+    v_k: float
+    reference: float
+    alpha: float
+    beta: float
+    h1a_holds: bool
+    h1b_holds: bool
+    verdict: str

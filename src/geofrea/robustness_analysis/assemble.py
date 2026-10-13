@@ -12,6 +12,7 @@ from geofrea.robustness_analysis.cell_set import CellSet
 from geofrea.robustness_analysis.decision import TechDecision
 from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
+from geofrea.robustness_analysis.h1_rank_robustness import H1Detail, H1Inputs, H1Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
@@ -391,3 +392,89 @@ def prim_frame(result: PrimResult, theta: float) -> pd.DataFrame:
             row[f"{name}__in"] = "|".join(step.categories[name])
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def ssp_scores_frame(cell_set: CellSet, detail: H1Detail) -> pd.DataFrame:
+    """The scores of every cell of the F7 set in every SSP (`MR_i,sigma`, `R^clim_i,sigma`, ranks, top-k flag), null for a cell without a rank."""
+    frames = []
+    scores = detail.scores
+    for s, ssp in enumerate(scores.ssps):
+        has_rank = detail.mr_rank[s] > 0
+        gcm = np.asarray(scores.gcms, dtype=object)[scores.r_clim_gcm[s]]
+        frames.append(
+            pd.DataFrame(
+                {
+                    "cell_id": cell_set.f7_ids,
+                    "ssp": np.full(cell_set.n_f7, ssp, dtype=object),
+                    "mr_ssp": _nullable(scores.mr[s], has_rank, "float64"),
+                    "mr_ssp_rank": _nullable(detail.mr_rank[s], has_rank, "Int64"),
+                    "topk_ssp": _nullable(detail.top_k[s], has_rank, "boolean"),
+                    "r_clim_ssp": _nullable(scores.r_clim[s], has_rank, "float64"),
+                    "r_clim_ssp_rank": _nullable(detail.clim_rank[s], has_rank, "Int64"),
+                    "r_clim_gcm": pd.Series(gcm, dtype=object).where(pd.Series(has_rank), None),
+                }
+            )
+        )
+    return pd.concat(frames, ignore_index=True)
+
+
+def h1_sites_frame(cell_set: CellSet, inputs: H1Inputs, detail: H1Detail) -> pd.DataFrame:
+    """One row per nominal top-k cell: whether it is vulnerable (H1b) and the magnitude of its loss of position."""
+    sites = np.flatnonzero(detail.nominal_top)
+    has_rank = ~np.isnan(detail.displacement[sites])
+    ssps = np.asarray(detail.scores.ssps, dtype=object)
+    gcms = np.asarray(detail.scores.gcms, dtype=object)
+    reason = np.where(
+        ~has_rank,
+        "climate_fragile",
+        np.where(detail.vulnerable[sites], "beyond_top_k_plus_m", None),
+    )
+    return pd.DataFrame(
+        {
+            "cell_id": cell_set.f7_ids[sites],
+            "nominal_rank": inputs.nominal_rank[sites].astype("int64"),
+            "vulnerable": detail.vulnerable[sites],
+            "reason": pd.Series(reason, dtype=object),
+            "displacement": _nullable(np.nan_to_num(detail.displacement[sites]), has_rank, "Int64"),
+            "worst_ssp": pd.Series(
+                ssps[np.maximum(detail.worst_ssp[sites], 0)], dtype=object
+            ).where(pd.Series(has_rank), None),
+            "worst_gcm": pd.Series(
+                gcms[np.maximum(detail.worst_gcm[sites], 0)], dtype=object
+            ).where(pd.Series(has_rank), None),
+            "max_r_clim": _nullable(np.nan_to_num(detail.max_r_clim[sites]), has_rank, "float64"),
+        }
+    ).sort_values("nominal_rank", ignore_index=True)
+
+
+def h1_summary_frame(
+    variants: Sequence[H1Variant], window: str, alpha: float, beta: float
+) -> pd.DataFrame:
+    """The primary result of H1 and its sensitivities, one row each (D-F7-037); the first variant is the primary one."""
+    return pd.DataFrame(
+        [
+            {
+                "variant": v.variant,
+                "primary": i == 0,
+                "window": window,
+                "top_k_percent": v.top_k_percent,
+                "k": v.k,
+                "m": v.m,
+                "excluded_gcms": "|".join(v.excluded_gcms),
+                "n_cells": v.n_cells,
+                "n_ranked": v.n_ranked,
+                "n_ssps": v.n_ssps,
+                "core_size": v.core_size,
+                "n_vulnerable": v.n_vulnerable,
+                "c_k": v.c_k,
+                "v_k": v.v_k,
+                "reference": v.reference,
+                "alpha": alpha,
+                "beta": beta,
+                "h1a_holds": v.h1a_holds,
+                "h1b_holds": v.h1b_holds,
+                "verdict": v.verdict,
+            }
+            for i, v in enumerate(variants)
+        ]
+    )
