@@ -743,3 +743,90 @@ def test_a_null_h2_rule_or_a_null_p_k_writes_the_h2_tables_empty_and_names_the_q
         assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
     hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
     assert not hypothesis["statistic"].str.startswith("h2_overlap").any()
+
+
+# -- H3: the robust and the nominal shortlists over the ranked set, D and the verdict (OQ-050, H3) ---------------
+
+
+def _weighted(frame: pd.DataFrame, column: str) -> float:
+    """The capacity-weighted mean of a column."""
+    return float((frame["p_mw"] * frame[column]).sum() / frame["p_mw"].sum())
+
+
+@pytest.mark.unit
+def test_the_h3_tables_agree_with_the_shortlists_recomputed_from_the_robustness_table(tmp_path):
+    entry, _, _ = _run(tmp_path)
+    tables = entry.windows["core"].tables
+    robustness = _table(entry)
+    ranked = robustness[robustness["cell_class"] == "ranked"].copy()
+    summary = pd.read_parquet(tables["h3_summary"])
+    primary = summary[summary["primary"]].iloc[0]
+    assert summary["primary"].sum() == 1 and primary["variant"] == "primary"
+    assert (primary["delta"], primary["m"]) == (0.20, primary["k"])
+    # the robust shortlist is the robust top-k set of H1 and H2; the nominal one is cut from the ranked set
+    robust = ranked[ranked["topk_robust"].fillna(False).astype(bool)]
+    assert primary["robust_capacity_mw"] == pytest.approx(float(robust["p_mw"].sum()))
+    by_cost = ranked.sort_values(["lcoe_nominal", "cell_id"])["cell_id"]
+    ranked["nominal_rank_in_i"] = ranked["cell_id"].map(
+        pd.Series(range(1, len(by_cost) + 1), index=by_cost.to_numpy())
+    )
+    robust = ranked[ranked["topk_robust"].fillna(False).astype(bool)]
+    nominal = ranked[ranked["nominal_rank_in_i"] <= primary["k"]]
+    assert primary["nominal_capacity_mw"] == pytest.approx(float(nominal["p_mw"].sum()))
+    beyond = robust[robust["nominal_rank_in_i"] > 2 * primary["k"]]
+    assert primary["outside_capacity_mw"] == pytest.approx(float(beyond["p_mw"].sum()))
+    assert primary["d"] == pytest.approx(float(beyond["p_mw"].sum() / robust["p_mw"].sum()))
+    assert primary["n_ranked"] == len(ranked)
+    assert primary["d_ref"] == pytest.approx(1 - 2 * primary["k"] / len(ranked))
+    assert primary["verdict"] == (
+        "not_testable"
+        if primary["d_ref"] < 0.20
+        else ("supported" if primary["d"] >= 0.20 else "not_supported")
+    )
+    expected_price = (
+        _weighted(robust, "lcoe_nominal") - _weighted(nominal, "lcoe_nominal")
+    ) / _weighted(nominal, "lcoe_nominal")
+    assert primary["price_of_robustness"] == pytest.approx(expected_price)
+    assert primary["benefit_of_robustness"] == pytest.approx(
+        _weighted(nominal, "mr") - _weighted(robust, "mr")
+    )
+    assert {"top_k_percent_5", "top_k_percent_10", "top_k_percent_20"} <= set(summary["variant"])
+    assert {"tolerance_0.5k", "tolerance_2k"} <= set(summary["variant"])
+    sites = pd.read_parquet(tables["h3_sites"])
+    union = set(robust["cell_id"]) | set(nominal["cell_id"])
+    assert set(sites["cell_id"]) == union and sites["cell_id"].is_unique
+    assert sites["counts_in_d"].sum() == len(beyond)
+    assert not (sites["counts_in_d"] & sites["within_tolerance"]).any()
+    assert sites.loc[sites["in_robust"], "capacity_mw"].sum() == pytest.approx(
+        primary["robust_capacity_mw"]
+    )
+    hypothesis = pd.read_parquet(tables["hypothesis"]).set_index("statistic")
+    shown = hypothesis.loc["h3_beyond_reach_share"]
+    assert shown["value"] == pytest.approx(primary["d"])
+    assert shown["verdict"] == {
+        "supported": "met",
+        "not_supported": "not_met",
+        "not_testable": None,
+    }[primary["verdict"]] or (pd.isna(shown["verdict"]) and primary["verdict"] == "not_testable")
+    assert hypothesis.loc["h3_reference_share", "value"] == pytest.approx(primary["d_ref"])
+    assert hypothesis.loc["h3_price_of_robustness", "value"] == pytest.approx(
+        primary["price_of_robustness"]
+    )
+    # the statistics of the earlier H3 stay as descriptive rows without a verdict
+    assert "descriptive" in hypothesis.loc["h3_jaccard_nominal_robust", "note"]
+    assert pd.isna(hypothesis.loc["h3_jaccard_nominal_robust", "verdict"])
+    assert pd.isna(hypothesis.loc["h3_price_of_robustness", "verdict"])
+
+
+@pytest.mark.unit
+def test_a_null_h3_rule_or_a_null_p_k_writes_the_h3_tables_empty_and_names_the_question(tmp_path):
+    entry, _, _ = _run(tmp_path / "a", experiments=_with_rules())
+    for kind in ("h3_summary", "h3_sites"):
+        path = entry.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-050"
+    other, _, _ = _run(tmp_path / "b", country=_country(top_k_percent=None))
+    for kind in ("h3_summary", "h3_sites"):
+        path = other.windows["core"].tables[kind]
+        assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
+    hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
+    assert not hypothesis["statistic"].str.startswith("h3_beyond").any()

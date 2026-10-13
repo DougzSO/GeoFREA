@@ -292,3 +292,70 @@ class H2RegionRow(BaseModel):
     selected_admin_mw: float
     share_cell: float
     share_admin: float
+
+
+class H3SummaryRow(BaseModel):
+    """H3 for one setting: `variant` `primary` carries the verdict, the others are sensitivities (D-F7-044).
+
+    `d` is the share of the capacity of the robust shortlist `S_k` whose nominal rank exceeds `k + m`, `d_ref` is `1 - (k + m) / |I|`, the
+    share for unrelated rankings; the verdict is `not_testable` when `d_ref < delta`. `price_of_robustness` is the relative increase of the
+    capacity-weighted LCOE at `f0` from the nominal to the robust shortlist and `benefit_of_robustness` the reduction of the
+    capacity-weighted `MR`; neither has a verdict. `excluded_gcms` is joined by `|`. A sensitivity never revises the verdict.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant: str
+    primary: bool
+    window: str
+    top_k_percent: float
+    k: int
+    m: int
+    tolerance_multiple: float
+    excluded_gcms: str
+    delta: float
+    n_cells: int
+    n_ranked: int
+    top_k_truncated: bool
+    robust_capacity_mw: float
+    nominal_capacity_mw: float
+    outside_capacity_mw: float
+    n_outside: int
+    d: float
+    d_ref: float
+    testable: bool
+    verdict: str
+    robust_lcoe_mean: float | None
+    nominal_lcoe_mean: float | None
+    robust_mr_mean: float | None
+    nominal_mr_mean: float | None
+    price_of_robustness: float | None
+    benefit_of_robustness: float | None
+    centroid_distance_km: float | None
+    tv_distance: float | None
+    spearman_lcoe_mr: float | None
+    jaccard: float
+
+
+class H3SiteRow(BaseModel):
+    """One cell of the union of the robust and the nominal shortlists of H3 (D-F7-045).
+
+    The ranks are among the ranked set (1 is best). `counts_in_d` is true for a robust cell whose nominal rank exceeds `k + m`;
+    `within_tolerance` for a robust cell ranked from `k + 1` to `k + m`, whose capacity is not counted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: int
+    admin1_id: str
+    lat_c: float
+    lon_c: float
+    capacity_mw: float
+    lcoe_f0: float
+    mr: float
+    nominal_rank: int
+    robust_rank: int
+    in_robust: bool
+    in_nominal: bool
+    within_tolerance: bool
+    counts_in_d: bool

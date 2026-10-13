@@ -811,7 +811,13 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
         "h1b_vulnerable_share",
     ]  # H1 carries its pre-registered rule (OQ-050)
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
-    assert verdicts.drop(["h4_jaccard_climate_only", "h2_overlap_index", *h1_rules]).isna().all()
+    assert (
+        verdicts.drop(
+            ["h4_jaccard_climate_only", "h2_overlap_index", "h3_beyond_reach_share", *h1_rules]
+        )
+        .isna()
+        .all()
+    )
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
     assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
@@ -877,6 +883,38 @@ def test_f7_writes_the_h2_table_with_o_the_reference_the_verdict_and_the_sensiti
     assert (base / f"h2_summary_{tech}__sensitivity.parquet").is_file()  # the 2071-2100 window
     hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet").set_index("statistic")
     verdict = hypothesis.loc["h2_overlap_index", "verdict"]
+    expected = {"supported": "met", "not_supported": "not_met", "not_testable": None}[
+        primary["verdict"]
+    ]
+    assert (verdict == expected) or (expected is None and pd.isna(verdict))
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_the_h3_table_with_d_the_reference_the_verdict_and_the_sensitivities(zzz, tech):
+    base = _phase(zzz, "robustness_analysis")
+    summary = pd.read_parquet(base / f"h3_summary_{tech}__core.parquet")
+    primary = summary[summary["primary"]].iloc[0]
+    assert primary["verdict"] in {"supported", "not_supported", "not_testable"}
+    assert 0.0 <= primary["d"] <= 1.0
+    assert primary["d_ref"] == pytest.approx(1 - 2 * primary["k"] / primary["n_ranked"])
+    assert (primary["delta"], primary["m"]) == (0.20, primary["k"])
+    assert primary["outside_capacity_mw"] == pytest.approx(
+        primary["d"] * primary["robust_capacity_mw"]
+    )
+    assert bool(primary["testable"]) == (primary["d_ref"] >= 0.20)
+    assert primary["price_of_robustness"] is not None and primary["benefit_of_robustness"] >= -1e-9
+    variants = set(summary["variant"])
+    assert {"top_k_percent_5", "top_k_percent_10", "top_k_percent_20"} <= variants
+    assert {"tolerance_0.5k", "tolerance_2k"} <= variants
+    sites = pd.read_parquet(base / f"h3_sites_{tech}__core.parquet")
+    assert (
+        sites["in_robust"].sum() == primary["k"]
+        and sites["counts_in_d"].sum() == primary["n_outside"]
+    )
+    assert (base / f"h3_summary_{tech}__sensitivity.parquet").is_file()  # the 2071-2100 window
+    hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet").set_index("statistic")
+    verdict = hypothesis.loc["h3_beyond_reach_share", "verdict"]
     expected = {"supported": "met", "not_supported": "not_met", "not_testable": None}[
         primary["verdict"]
     ]

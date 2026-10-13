@@ -55,6 +55,8 @@ from geofrea.robustness_analysis.assemble import (
     h1_summary_frame,
     h2_regions_frame,
     h2_summary_frame,
+    h3_sites_frame,
+    h3_summary_frame,
     hypothesis_frame,
     nominal_by_member_frame,
     prim_frame,
@@ -72,6 +74,7 @@ from geofrea.robustness_analysis.decision import (
     expanded_rules,
     h1_rule,
     h2_rule,
+    h3_rule,
     refusals,
     regret_quantile,
     rules_for,
@@ -101,6 +104,19 @@ from geofrea.robustness_analysis.h2_aggregation import (
 from geofrea.robustness_analysis.h2_aggregation import (
     sensitivity_variants as h2_sensitivity_variants,
 )
+from geofrea.robustness_analysis.h3_robust_vs_nominal import (
+    PRIMARY as H3_PRIMARY_VARIANT,
+)
+from geofrea.robustness_analysis.h3_robust_vs_nominal import (
+    H3Error,
+    H3Inputs,
+)
+from geofrea.robustness_analysis.h3_robust_vs_nominal import (
+    evaluate_variant as evaluate_h3,
+)
+from geofrea.robustness_analysis.h3_robust_vs_nominal import (
+    sensitivity_variants as h3_sensitivity_variants,
+)
 from geofrea.robustness_analysis.hypotheses import (
     agreement,
     evaluate_rules,
@@ -110,6 +126,8 @@ from geofrea.robustness_analysis.hypotheses import (
     h2_primary,
     h2_verdict_entry,
     h3,
+    h3_primary,
+    h3_verdict_entry,
     h4,
     h5,
 )
@@ -123,6 +141,8 @@ from geofrea.robustness_analysis.table_schemas import (
     H1SummaryRow,
     H2RegionRow,
     H2SummaryRow,
+    H3SiteRow,
+    H3SummaryRow,
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
@@ -158,9 +178,12 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "h1_summary": H1SummaryRow,
     "h2_summary": H2SummaryRow,
     "h2_regions": H2RegionRow,
+    "h3_summary": H3SummaryRow,
+    "h3_sites": H3SiteRow,
 }
 H1_TABLES = ("ssp_scores", "h1_sites", "h1_summary")
 H2_TABLES = ("h2_summary", "h2_regions")
+H3_TABLES = ("h3_summary", "h3_sites")
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -607,6 +630,12 @@ def run_window(
                 "top_k_percent is null",
                 "OQ-021",
             )
+        for kind in H3_TABLES:
+            skips[kind] = SkippedOutput(
+                "H3 shortlists, the robust capacity beyond the nominal plan and the verdict (M-F7-07)",
+                "top_k_percent is null",
+                "OQ-021",
+            )
         skips["prim_boxes"] = SkippedOutput(
             "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
         )
@@ -747,6 +776,74 @@ def run_window(
                 rule2.gamma,
             )
 
+    # H3: the robust and the nominal shortlists over the ranked set, D, D_ref, the verdict, Pi and B
+    h3_statistics: list = []
+    h3_variant = None
+    rule3 = h3_rule(experiments)
+    if ranking.top_nominal is not None and ranking.k is not None:
+        if rule3 is None:
+            for kind in H3_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H3 shortlists, the robust capacity beyond the nominal plan, the verdict and the sensitivities (M-F7-07)",
+                    "hypothesis_rules.H3 is null",
+                    "OQ-050",
+                )
+        elif not cell_set.ranked.any():
+            for kind in H3_TABLES:
+                skips[kind] = SkippedOutput(
+                    "H3 shortlists, the robust capacity beyond the nominal plan and the verdict (M-F7-07)",
+                    "every cell of the F7 set is climate-fragile, there is no ranked cell",
+                    "OQ-008",
+                )
+        else:
+            assert decision.top_k_percent is not None
+            h3_inputs = H3Inputs(
+                cell_id=cell_set.f7_ids,
+                z=evaluation.mr,
+                lcoe=evaluation.nominal_lcoe[:, 0],
+                q=cell_set.p_mw,
+                region=admin1.astype(str),
+                lat=lat,
+                lon=lon,
+                ranked=cell_set.ranked,
+                sr=evaluation.sr,
+                p90=evaluation.p90_by_member,
+                gcms=tuple(by_member[m].gcm or "" for m in member_ids),
+            )
+            try:
+                h3_variant, h3_detail = evaluate_h3(
+                    h3_inputs,
+                    variant=H3_PRIMARY_VARIANT,
+                    delta=rule3.delta,
+                    tolerance_multiple=rule3.tolerance_multiple_of_k,
+                    top_k_percent=decision.top_k_percent,
+                )
+                h3_variants = [
+                    h3_variant,
+                    *h3_sensitivity_variants(
+                        h3_inputs,
+                        h3_variant,
+                        tcr_exception_gcms=sorted(
+                            {e.gcm or "" for e in entries if e.tcr_exception}
+                        ),
+                    ),
+                ]
+            except H3Error as exc:
+                raise RobustnessInputError(f"H3 cannot be computed: {exc}") from exc
+            frames["h3_summary"] = h3_summary_frame(h3_variants, window)
+            frames["h3_sites"] = h3_sites_frame(h3_inputs, h3_detail)
+            h3_statistics = h3_primary(h3_variant, cell_set.n_f7)
+            logger.info(
+                "%s %s [%s]: H3 %s (D %.3f, D_ref %.3f, delta %.2f)",
+                iso,
+                tech,
+                role,
+                h3_variant.verdict,
+                h3_variant.d,
+                h3_variant.d_ref,
+                rule3.delta,
+            )
+
     # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
     land_range: dict[str, tuple[float, float]] = {}
     if decision.tau is not None and evaluation.potential_gw is not None:
@@ -848,7 +945,7 @@ def run_window(
         + h4(cell_set, evaluation, ranking)
         + agreement(cell_set, evaluation)
     )
-    statistics += h1_statistics + h2_statistics
+    statistics += h1_statistics + h2_statistics + h3_statistics
     if futures is not None:
         statistics += h1(futures, cell_set, ranking) + h3(cell_set, ranking, futures, lat, lon)
     if evaluation.potential_gw is not None:
@@ -874,6 +971,10 @@ def run_window(
         for at, stat in enumerate(statistics):
             if stat.statistic == "h2_overlap_index":
                 verdicts[at] = h2_verdict_entry(h2_variant)
+    if h3_variant is not None:  # so is H3's
+        for at, stat in enumerate(statistics):
+            if stat.statistic == "h3_beyond_reach_share":
+                verdicts[at] = h3_verdict_entry(h3_variant)
     frames["hypothesis"] = hypothesis_frame(statistics, verdicts, window)
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
     return _window_result(role, window, cell_set, ranking, tables)

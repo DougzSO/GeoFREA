@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pyproj import Geod
 from scipy.stats import kendalltau
 
 from geofrea.core.config_schemas import HypothesisRule
@@ -26,6 +25,10 @@ from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, slug
 from geofrea.robustness_analysis.h1_rank_robustness import H1Descriptive, H1Variant
 from geofrea.robustness_analysis.h2_aggregation import NOT_TESTABLE, SUPPORTED, H2Variant
+from geofrea.robustness_analysis.h3_robust_vs_nominal import (
+    H3Variant,
+    centroid_distance_km,
+)
 from geofrea.robustness_analysis.rankings import jaccard_masks
 
 if TYPE_CHECKING:
@@ -35,7 +38,6 @@ logger = logging.getLogger("geofrea.robustness_analysis.hypotheses")
 
 DRAW_AXIS = "techno-economic draws s >= 1 (members fixed)"
 _COMPARISONS = {"ge": operator.ge, "gt": operator.gt, "le": operator.le, "lt": operator.lt}
-_GEOD = Geod(ellps="WGS84")
 
 
 class HypothesisRuleError(ValueError):
@@ -294,18 +296,98 @@ def h2(cell_set: CellSet, evaluation: Evaluation, admin1: np.ndarray) -> list[St
     return rows
 
 
-def centroid_distance_km(
-    lat: np.ndarray, lon: np.ndarray, weight: np.ndarray, first: np.ndarray, second: np.ndarray
-) -> float | None:
-    """Geodesic distance (WGS84, km) between the capacity-weighted centroids of two sets of cells; None if one set has no capacity."""
-    points = []
-    for mask in (first, second):
-        w = weight[mask]
-        if not mask.any() or w.sum() <= 0:
-            return None
-        points.append(((w * lat[mask]).sum() / w.sum(), (w * lon[mask]).sum() / w.sum()))
-    (lat1, lon1), (lat2, lon2) = points
-    return float(_GEOD.inv(lon1, lat1, lon2, lat2)[2] / 1000.0)
+H3_DESCRIPTIVE = (
+    "descriptive evidence, no verdict (the primary statistic of H3 is h3_beyond_reach_share)"
+)
+H3_PRIMARY = "h3_beyond_reach_share"
+
+
+def h3_primary(variant: H3Variant, n_cells: int) -> list[Statistic]:
+    """H3: `D`, the share of the robust capacity beyond the reach of the nominal plan (the statistic the pre-registered rule names), its
+    reference, the price and the benefit of robustness and the diagnostics.
+
+    Implements: M-F7-07 (H3). The verdict is given by `h3_verdict_entry`; the full result is in the `h3_summary` table.
+    """
+
+    def row(name: str, value: float | None, note: str | None = None) -> Statistic:
+        return Statistic(
+            "H3",
+            name,
+            _clean(value),
+            n_cells=n_cells,
+            k=variant.k,
+            top_k_truncated=variant.top_k_truncated,
+            note=note,
+        )
+
+    return [
+        row(
+            H3_PRIMARY,
+            variant.d,
+            "H3: D, the share of the capacity of the robust shortlist whose nominal rank exceeds k + m",
+        ),
+        row(
+            "h3_reference_share",
+            variant.d_ref,
+            "1 - (k + m) / |I|: the share for unrelated rankings; H3 is not testable when it is below delta",
+        ),
+        row(
+            "h3_price_of_robustness",
+            variant.price_of_robustness,
+            f"{H3_DESCRIPTIVE}; Pi: relative increase of the capacity-weighted LCOE at f0 from the nominal to the robust shortlist",
+        ),
+        row(
+            "h3_benefit_of_robustness",
+            variant.benefit_of_robustness,
+            f"{H3_DESCRIPTIVE}; B: reduction of the capacity-weighted MR from the nominal to the robust shortlist",
+        ),
+        row(
+            "h3_robust_capacity_mw",
+            variant.robust_capacity_mw,
+            "capacity of the robust shortlist (MW)",
+        ),
+        row(
+            "h3_nominal_capacity_mw",
+            variant.nominal_capacity_mw,
+            "capacity of the nominal shortlist (MW)",
+        ),
+        row(
+            "h3_shortlist_centroid_distance_km",
+            variant.centroid_distance_km,
+            f"{H3_DESCRIPTIVE}; geodesic distance between the capacity-weighted centroids of the two shortlists",
+        ),
+        row(
+            "h3_tv_distance",
+            variant.tv_distance,
+            f"{H3_DESCRIPTIVE}; total variation distance between the Admin1 distributions of capacity of the two shortlists",
+        ),
+        row(
+            "h3_spearman_lcoe_mr",
+            variant.spearman_lcoe_mr,
+            f"{H3_DESCRIPTIVE}; Spearman correlation between LCOE at f0 and MR over the ranked set",
+        ),
+        row(
+            "h3_shortlist_jaccard",
+            variant.jaccard,
+            f"{H3_DESCRIPTIVE}; Jaccard overlap of the two shortlists by cell count",
+        ),
+    ]
+
+
+def h3_verdict_entry(variant: H3Variant) -> dict[str, str | None]:
+    """The rule, the verdict (`met` is supported) and the reason of the primary statistic of H3: not testable gives no verdict."""
+    text = f"{H3_PRIMARY} ge {variant.delta} (testable when h3_reference_share >= {variant.delta})"
+    if variant.verdict == NOT_TESTABLE:
+        return {
+            "rule": text,
+            "verdict": None,
+            "verdict_reason": f"not testable: the reference share {variant.d_ref:.3f} is below delta {variant.delta}",
+        }
+    return {
+        "rule": text,
+        "verdict": "met" if variant.verdict == SUPPORTED else "not_met",
+        "verdict_reason": None,
+    }
 
 
 def h3(
@@ -315,7 +397,8 @@ def h3(
     lat: np.ndarray,
     lon: np.ndarray,
 ) -> list[Statistic]:
-    """H3: Jaccard of the nominal and robust top-k, capacity of the robust top-k outside the nominal one, distance between centroids."""
+    """H3, descriptive rows over the F7 set: Jaccard of the nominal and robust top-k, capacity of the robust top-k outside the nominal one, distance
+    between centroids, and the per-future statistics of the sample-major pass (the primary statistic of H3 is `h3_beyond_reach_share`)."""
     assert ranking.top_nominal is not None and ranking.top_robust is not None
     nominal, robust = ranking.top_nominal.mask, ranking.top_robust.mask
     p_mw = cell_set.p_mw
@@ -334,6 +417,7 @@ def h3(
             n_cells=n,
             k=k,
             top_k_truncated=truncated,
+            note=H3_DESCRIPTIVE,
         ),
         Statistic(
             "H3",
@@ -342,6 +426,7 @@ def h3(
             n_cells=n,
             k=k,
             top_k_truncated=truncated,
+            note=H3_DESCRIPTIVE,
         ),
         Statistic(
             "H3",
@@ -350,6 +435,7 @@ def h3(
             n_cells=n,
             k=k,
             top_k_truncated=truncated,
+            note=H3_DESCRIPTIVE,
         ),
         with_range(
             "H3",
@@ -358,6 +444,7 @@ def h3(
             n_cells=n,
             k=k,
             truncated=False,
+            note=H3_DESCRIPTIVE,
         ),
         with_range(
             "H3",
@@ -366,6 +453,7 @@ def h3(
             n_cells=n,
             k=k,
             truncated=False,
+            note=H3_DESCRIPTIVE,
         ),
     ]
 

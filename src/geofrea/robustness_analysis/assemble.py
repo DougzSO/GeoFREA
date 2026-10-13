@@ -14,6 +14,7 @@ from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.futures import FuturesResult, MemberLabel
 from geofrea.robustness_analysis.h1_rank_robustness import H1Detail, H1Inputs, H1Variant
 from geofrea.robustness_analysis.h2_aggregation import H2Detail, H2Variant
+from geofrea.robustness_analysis.h3_robust_vs_nominal import H3Detail, H3Inputs, H3Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
@@ -535,3 +536,79 @@ def h2_regions_frame(detail: H2Detail) -> pd.DataFrame:
             for r in detail.regions
         ]
     )
+
+
+def h3_summary_frame(variants: Sequence[H3Variant], window: str) -> pd.DataFrame:
+    """The primary result of H3 and the sensitivities, one row each (D-F7-044); the first variant is the primary one."""
+    return pd.DataFrame(
+        [
+            {
+                "variant": v.variant,
+                "primary": i == 0,
+                "window": window,
+                "top_k_percent": v.top_k_percent,
+                "k": v.k,
+                "m": v.m,
+                "tolerance_multiple": v.tolerance_multiple,
+                "excluded_gcms": "|".join(v.excluded_gcms),
+                "delta": v.delta,
+                "n_cells": v.n_cells,
+                "n_ranked": v.n_ranked,
+                "top_k_truncated": v.top_k_truncated,
+                "robust_capacity_mw": v.robust_capacity_mw,
+                "nominal_capacity_mw": v.nominal_capacity_mw,
+                "outside_capacity_mw": v.outside_capacity_mw,
+                "n_outside": v.n_outside,
+                "d": v.d,
+                "d_ref": v.d_ref,
+                "testable": v.testable,
+                "verdict": v.verdict,
+                "robust_lcoe_mean": v.robust_lcoe_mean,
+                "nominal_lcoe_mean": v.nominal_lcoe_mean,
+                "robust_mr_mean": v.robust_mr_mean,
+                "nominal_mr_mean": v.nominal_mr_mean,
+                "price_of_robustness": v.price_of_robustness,
+                "benefit_of_robustness": v.benefit_of_robustness,
+                "centroid_distance_km": v.centroid_distance_km,
+                "tv_distance": v.tv_distance,
+                "spearman_lcoe_mr": v.spearman_lcoe_mr,
+                "jaccard": v.jaccard,
+            }
+            for i, v in enumerate(variants)
+        ]
+    ).astype(
+        {
+            "top_k_percent": "float64",
+            "robust_lcoe_mean": "float64",
+            "nominal_lcoe_mean": "float64",
+            "robust_mr_mean": "float64",
+            "nominal_mr_mean": "float64",
+            "price_of_robustness": "float64",
+            "benefit_of_robustness": "float64",
+            "centroid_distance_km": "float64",
+            "tv_distance": "float64",
+            "spearman_lcoe_mr": "float64",
+        }
+    )
+
+
+def h3_sites_frame(inputs: H3Inputs, detail: H3Detail) -> pd.DataFrame:
+    """One row per cell of the union of the robust and the nominal shortlists: scores, ranks, membership and whether the capacity counts in `D`."""
+    sites = np.flatnonzero(detail.robust | detail.nominal)
+    return pd.DataFrame(
+        {
+            "cell_id": inputs.cell_id[sites].astype("int64"),
+            "admin1_id": pd.Series(inputs.region[sites].astype(str), dtype=object),
+            "lat_c": inputs.lat[sites].astype("float64"),
+            "lon_c": inputs.lon[sites].astype("float64"),
+            "capacity_mw": inputs.q[sites].astype("float64"),
+            "lcoe_f0": inputs.lcoe[sites].astype("float64"),
+            "mr": detail.z[sites].astype("float64"),
+            "nominal_rank": detail.nominal_rank[sites].astype("int64"),
+            "robust_rank": detail.robust_rank[sites].astype("int64"),
+            "in_robust": detail.robust[sites],
+            "in_nominal": detail.nominal[sites],
+            "within_tolerance": detail.within_tolerance[sites],
+            "counts_in_d": detail.beyond[sites],
+        }
+    ).sort_values(["robust_rank", "nominal_rank"], ignore_index=True)

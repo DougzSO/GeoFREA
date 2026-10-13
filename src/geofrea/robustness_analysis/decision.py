@@ -165,6 +165,14 @@ def skipped_outputs(
                 "OQ-050",
             )
         )
+    if h3_rule(experiments) is None:
+        skipped.append(
+            SkippedOutput(
+                "H3 shortlists, the robust capacity outside the nominal plan, the verdict and the sensitivities (M-F7-07)",
+                "hypothesis_rules.H3 is null",
+                "OQ-050",
+            )
+        )
     prim = experiments.prim
     if decision.prim_outcome_share is None or prim.peel_alpha is None or prim.mass_min is None:
         reasons = [
@@ -214,6 +222,12 @@ def h2_rule(experiments: ExperimentsFile) -> H2Rule | None:
     """The pre-registered rule of H2 (OQ-050), or None while it is null."""
     rule = experiments.hypothesis_rules.get("H2")
     return rule if isinstance(rule, H2Rule) else None
+
+
+def h3_rule(experiments: ExperimentsFile) -> H3Rule | None:
+    """The pre-registered rule of H3 (OQ-050), or None while it is null."""
+    rule = experiments.hypothesis_rules.get("H3")
+    return rule if isinstance(rule, H3Rule) else None
 
 
 def expanded_rules(experiments: ExperimentsFile) -> dict[str, list[HypothesisRule] | None]:
