@@ -18,20 +18,21 @@ from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_experiments, load_parameters, load_technologies
-from geofrea.core.scale import active_scale, other_scales
+from geofrea.core.scale import active_scale, other_scales, use_scale
 from geofrea.core.schemas import CountryParams, VerifiedValue
 from geofrea.results_synthesis import names
 from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
 from geofrea.results_synthesis.potential_and_cost import t_o3, t_r2
-from geofrea.results_synthesis.robustness_tables import t_o2, t_r6, t_r9, t_r10, t_r12
+from geofrea.results_synthesis.robustness_tables import t_o2, t_r6, t_r7, t_r9, t_r10, t_r12
 
 SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-M2": t_m2,
     "T-M3": t_m3,
     "T-R2": t_r2,
     "T-R6": t_r6,
+    "T-R7": t_r7,
     "T-R9": t_r9,
     "T-R10": t_r10,
     "T-R12": t_r12,
@@ -96,6 +97,17 @@ def _other_scale(iso: str) -> ArtifactReader | None:
     return None
 
 
+def _cross_country_readers() -> tuple[ArtifactReader, ...]:
+    """The readers of the `cross_country_h4` manifests that exist: the active scale first, then the other scales."""
+    readers = []
+    for scale in (active_scale(), *other_scales()):
+        with use_scale(scale.scale_id):
+            manifest = core_paths.cross_country_manifest_path()
+        if manifest.is_file():
+            readers.append(ArtifactReader("cross_country", scale.scale_id, manifest_file=manifest))
+    return tuple(readers)
+
+
 def _update_manifest(out_dir: Path, summary: ThesisSummary) -> None:
     path = out_dir / MANIFEST_NAME
     current = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"countries": {}}
@@ -140,6 +152,7 @@ def build_thesis(
         technologies=technologies,
         reader=ArtifactReader(iso),
         other_scale=_other_scale(iso),
+        cross_country=_cross_country_readers(),
         out_dir=Path(out_dir) if out_dir else thesis_output_dir(),
         config_files={
             "technologies.yaml": technologies_yaml,

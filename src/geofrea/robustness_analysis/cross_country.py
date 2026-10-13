@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
 from geofrea.core.artifact_reader import ArtifactReader, ThesisInputError
-from geofrea.core.scale import active_scale, manifest_file_name
+from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.robustness_analysis.h4_axis_dominance import (
     PROFILES,
@@ -74,7 +74,7 @@ def output_dir() -> Path:
 
 
 def manifest_file() -> Path:
-    return core_paths.cross_country_dir() / manifest_file_name()
+    return core_paths.cross_country_manifest_path()
 
 
 def country_profile(

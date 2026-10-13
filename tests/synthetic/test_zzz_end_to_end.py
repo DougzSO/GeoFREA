@@ -120,6 +120,19 @@ def zzz(tmp_path_factory):
             settings.memory.max_batch_gb,
         )
         assert ok, {k: v.status for k, v in results.items()}
+        # what main.main does after the country runs: the support phase cross_country_h4, then the thesis outputs again
+        from geofrea.results_synthesis.runner import build_thesis
+        from geofrea.robustness_analysis.cross_country import build_h4_verdict
+
+        build_h4_verdict(["ZZZ"], tuple(settings.run.technologies))
+        build_thesis(
+            "ZZZ",
+            tuple(settings.run.technologies),
+            technologies_yaml=main.TECHNOLOGIES_YAML,
+            experiments_yaml=main.EXPERIMENTS_YAML,
+            parameters_json=main.PARAMETERS_JSON,
+            methodology_md=main.METHODOLOGY_MD,
+        )
         yield data, results
     finally:
         patch.undo()
@@ -1018,6 +1031,31 @@ def test_cross_country_h4_gives_not_testable_for_one_country_and_a_verdict_for_t
     assert shown.loc["ZZB", "profile"] == "climate_dominated"
     assert shown.loc["ZZC", "profile"] == "techno_economic_dominated"
 
+    # F8 reads the same tables: T-R6 has the H4 row with the verdict and T-R7 one bar pair per country
+    import main
+    from geofrea.results_synthesis.runner import build_thesis
+
+    out = tmp_path / "thesis"
+    build_thesis(
+        "ZZZ",
+        ("solar", "wind"),
+        technologies_yaml=main.TECHNOLOGIES_YAML,
+        experiments_yaml=main.EXPERIMENTS_YAML,
+        parameters_json=main.PARAMETERS_JSON,
+        methodology_md=main.METHODOLOGY_MD,
+        out_dir=out,
+    )
+    verdicts = pd.read_csv(out / "T-R6_hypothesis_verdicts_ZZZ_wind.csv")
+    h4 = verdicts[(verdicts["hypothesis"] == "H4") & (verdicts["role"] == "core")].iloc[0]
+    assert h4["verdict"] == "supported" and h4["value"] == 1.0 and h4["value_2"] == 3.0
+    cross = pd.read_csv(out / "T-R6_h4_verdict_wind.csv")
+    assert set(cross.loc[cross["kind"] == "country", "country"]) == {"ZZZ", "ZZB", "ZZC"}
+    axis = pd.read_csv(out / "T-R7_axis_displacement_wind.csv")
+    core = axis[(axis["scale"] == "0p05deg") & (axis["role"] == "core")]
+    assert list(core["country"]) == ["ZZZ", "ZZB", "ZZC"]
+    assert core.set_index("country").loc["ZZB", "rho"] == pytest.approx(0.84)
+    assert (out / "T-R7_axis_displacement_wind.png").stat().st_size > 0
+
 
 @pytest.mark.synthetic
 def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_the_solar_cells(
@@ -1401,11 +1439,15 @@ THESIS_TABLES = {
         "h1_summary_ZZZ_{t}",
         "h2_summary_ZZZ_{t}",
         "h3_summary_ZZZ_{t}",
+        "h4_country_ZZZ_{t}",
     ],
     "T-R10": ["hazard_exposure_ZZZ_{t}"],
     "T-R12": ["potential_below_tau_ZZZ_{t}"],
 }
 THESIS_FIGURES = {"T-O2": "mr_sr_agreement_ZZZ_{t}", "T-O3": "supply_curves_ZZZ_{t}"}
+# the outputs that are about the countries together carry no ISO3 (names.stem)
+THESIS_CROSS_TABLES = {"T-R6": ["h4_verdict_{t}"], "T-R7": ["axis_displacement_{t}"]}
+THESIS_CROSS_FIGURES = {"T-R7": "axis_displacement_{t}"}
 
 
 def _thesis(zzz):
@@ -1443,6 +1485,17 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
             stem = f"T-{t_id[2:]}_{what.format(t=tech)}"
             for suffix in (".png", ".pdf", ".provenance.json"):
                 assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+    for t_id, whats in THESIS_CROSS_TABLES.items():
+        for what in whats:
+            for tech in ("solar", "wind"):
+                stem = f"T-{t_id[2:]}_{what.format(t=tech)}"
+                for suffix in (".csv", ".tex", ".provenance.json"):
+                    assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+    for t_id, what in THESIS_CROSS_FIGURES.items():
+        for tech in ("solar", "wind"):
+            stem = f"T-{t_id[2:]}_{what.format(t=tech)}"
+            for suffix in (".png", ".pdf", ".provenance.json"):
+                assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
     assert (thesis / "T-M3_members_ZZZ.csv").is_file()
     for what in ("exclusion_shares", "enrichment", "published_comparison"):
         assert (thesis / f"T-R9_{what}_ZZZ.csv").is_file()
@@ -1450,7 +1503,18 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
     assert (thesis / "T-R9_units_ZZZ.csv").is_file()
     manifest = json.loads((thesis / "thesis_manifest.json").read_text(encoding="utf-8"))
     built = manifest["countries"]["ZZZ"]["built"]
-    assert set(built) >= {"T-M2", "T-M3", "T-R2", "T-R6", "T-R9", "T-R10", "T-R12", "T-O2", "T-O3"}
+    assert set(built) >= {
+        "T-M2",
+        "T-M3",
+        "T-R2",
+        "T-R6",
+        "T-R7",
+        "T-R9",
+        "T-R10",
+        "T-R12",
+        "T-O2",
+        "T-O3",
+    }
 
 
 @pytest.mark.synthetic
@@ -1488,7 +1552,7 @@ def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
         hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
         statistics = pd.read_csv(thesis / f"T-R6_hypothesis_statistics_ZZZ_{tech}.csv")
         core = statistics[(statistics["scale"] == "0p05deg") & (statistics["role"] == "core")]
-        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H2", "H3"]).sum())
+        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4"]).sum())
         stored = hypothesis.set_index("statistic")
         for stat in ("h1a_core_share", "h1b_vulnerable_share"):
             shown = core.set_index("statistic").loc[stat]
@@ -1529,7 +1593,7 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_s
         table = pd.read_csv(thesis / f"T-R6_hypothesis_verdicts_ZZZ_{tech}.csv")
         for role in ("core", "sensitivity"):
             rows = table[(table["scale"] == "0p05deg") & (table["role"] == role)]
-            assert list(rows["hypothesis"]) == ["H1", "H2", "H3"], (tech, role)
+            assert list(rows["hypothesis"]) == ["H1", "H2", "H3", "H4"], (tech, role)
             stored = {
                 name: pd.read_parquet(base / f"{name}_summary_{tech}__{role}.parquet")
                 .query("primary")
@@ -1556,12 +1620,41 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_s
             for name, row in (("H1", h1), ("H2", h2), ("H3", h3)):
                 assert by.loc[name, "verdict"] == row["verdict"]
                 assert by.loc[name, "rule"]
+            # H4 is read from the support phase: ZZZ alone has one country with a profile, so the rule cannot be tested
+            assert by.loc["H4", "statistic"] == "h4_strict_pair_count"
+            assert by.loc["H4", "verdict"] == "not_testable"
+            assert by.loc["H4", "threshold"] == 1.0 and by.loc["H4", "value_2"] == 1.0
+            assert by.loc["H4", "threshold_2"] == 2.0
         # the summaries of H2 and H3 are shown whole, with their sensitivities
         h3_shown = pd.read_csv(thesis / f"T-R6_h3_summary_ZZZ_{tech}.csv")
         assert {"top_k_percent_5", "tolerance_2k"} <= set(h3_shown["variant"])
         h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
         assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
         assert set(h3_shown["role"]) == {"core", "sensitivity"}
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f8_t_r7_shows_the_displacements_and_rho_of_the_country_with_the_boundaries(zzz, tech):
+    thesis = _thesis(zzz)
+    stored = pd.read_parquet(
+        _phase(zzz, "robustness_analysis") / f"h4_country_{tech}__core.parquet"
+    ).query("primary")
+    table = pd.read_csv(thesis / f"T-R7_axis_displacement_{tech}.csv")
+    shown = table[(table["scale"] == "0p05deg") & (table["role"] == "core")]
+    assert list(shown["country"]) == ["ZZZ"]
+    assert shown["d_clim"].iloc[0] == pytest.approx(float(stored["d_clim"].iloc[0]))
+    assert shown["d_tec"].iloc[0] == pytest.approx(float(stored["d_tec"].iloc[0]))
+    assert shown["profile"].iloc[0] == stored["profile"].iloc[0]
+    if stored["d_sum"].iloc[0] > 0:
+        assert shown["rho"].iloc[0] == pytest.approx(float(stored["rho"].iloc[0]))
+    provenance = json.loads(
+        (thesis / f"T-R7_axis_displacement_{tech}.provenance.json").read_text(encoding="utf-8")
+    )
+    assert "0.40 and 0.60" in provenance["caption"]
+    assert provenance["artifacts_read_cross_country"][
+        "0p05deg"
+    ]  # the table of cross_country_h4 was read
 
 
 @pytest.mark.synthetic
@@ -1584,6 +1677,7 @@ def test_f8_is_deterministic_and_needs_only_the_registered_artifacts(zzz, tmp_pa
 
     copied = tmp_path / "copy"
     shutil.copytree(zzz[0] / "outputs" / "ZZZ", copied / "outputs" / "ZZZ")
+    shutil.copytree(zzz[0] / "outputs" / "cross_country", copied / "outputs" / "cross_country")
     # the phase ran before the scale check existed, so its T-R6 holds the default scale only
     (copied / "outputs" / "ZZZ" / "manifest__0p1deg.json").unlink(missing_ok=True)
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(copied))

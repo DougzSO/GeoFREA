@@ -1295,6 +1295,7 @@ def main(argv: list[str] | None = None) -> int:
     all_ok = True
     table_rows: list[dict] = []
     f7_done = False
+    thesis_done: list[str] = []
     for country_code in countries:
         ok, orchestrator, results = run_geofrea(
             country_code,
@@ -1316,6 +1317,8 @@ def main(argv: list[str] | None = None) -> int:
         f7_done = f7_done or (
             "robustness_analysis" in results and results["robustness_analysis"].status == "success"
         )
+        if "results_synthesis" in results and results["results_synthesis"].status == "success":
+            thesis_done.append(country_code)
         for phase_name, result in results.items():
             elapsed_s = (
                 datetime.fromisoformat(result.finished_at)
@@ -1339,11 +1342,21 @@ def main(argv: list[str] | None = None) -> int:
     # print()ed) so it lands in both the console and the run's log file.
     logger.info("Run summary:\n%s", render_run_table(table_rows, run_id))
 
-    # the support phase cross_country_h4 (METHODOLOGY 4.1): the verdict of H4 needs the profiles of all the countries, so it runs once, here
+    # the support phase cross_country_h4 (METHODOLOGY 4.1): the verdict of H4 needs the profiles of all the countries, so it runs once, here;
+    # F8 then builds the thesis outputs of the countries again, because T-R6 and T-R7 read its tables (D-F8-012)
     if f7_done:
         try:
             with use_scale(args.scale):
                 build_h4_verdict(countries, tuple(settings.run.technologies), run_id=run_id)
+                for country_code in thesis_done:
+                    build_thesis(
+                        country_code,
+                        tuple(settings.run.technologies),
+                        technologies_yaml=TECHNOLOGIES_YAML,
+                        experiments_yaml=EXPERIMENTS_YAML,
+                        parameters_json=PARAMETERS_JSON,
+                        methodology_md=METHODOLOGY_MD,
+                    )
         except Exception:
             logger.exception("cross_country_h4 failed for %s", countries)
             all_ok = False

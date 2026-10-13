@@ -233,6 +233,18 @@ def cross_country_dir() -> Path:
     return _ensure_data_env() / "outputs" / "cross_country"
 
 
+def cross_country_manifest_path() -> Path:
+    """Get the manifest of the support phase `cross_country_h4` at the active scale.
+
+    Returns:
+        GEOFREA_DATA_DIR / outputs / cross_country / manifest.json (`manifest__<scale id>.json` at another scale, A-08).
+
+    Raises:
+        MissingPathEnvironmentError: If GEOFREA_DATA_DIR is not set.
+    """
+    return cross_country_dir() / manifest_file_name()
+
+
 def log_path(iso3: str, run_id: str) -> Path:
     """Get the run log file for a country and run.
 

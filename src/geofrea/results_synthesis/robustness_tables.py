@@ -6,16 +6,19 @@ available" is never shown as zero (D7, D-F8-007).
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
+from matplotlib.patches import Patch
 
+from geofrea.core.config_schemas import H4Rule
 from geofrea.external_validation.table_schemas import VALIDATION_TABLE_SCHEMA_VERSION
 from geofrea.results_synthesis import style
 from geofrea.results_synthesis.inputs import ArtifactReader, MissingArtifactError
 from geofrea.results_synthesis.members import members_table
-from geofrea.results_synthesis.output import BuildContext, write_figure, write_table
+from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_figure, write_table
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 
-T_R6, T_R9, T_R10, T_R12, T_O2 = "T-R6", "T-R9", "T-R10", "T-R12", "T-O2"
+T_R6, T_R7, T_R9, T_R10, T_R12, T_O2 = "T-R6", "T-R7", "T-R9", "T-R10", "T-R12", "T-O2"
 ROLES = ("core", "sensitivity")
 _VERSIONS = {ROBUSTNESS_TABLE_SCHEMA_VERSION}
 
@@ -52,6 +55,47 @@ VERDICT_COLUMNS = [
     "threshold_2",
 ]
 _SUMMARIES = ("h1", "h2", "h3")
+
+
+def _window_of(ctx: BuildContext, role: str) -> str:
+    """The years of the window of a role, as `2041-2070`."""
+    window = ctx.experiments.windows[role]
+    return f"{window['start_year']}-{window['end_year']}"
+
+
+def _h4_verdict_tables(ctx: BuildContext, technology: str) -> list[pd.DataFrame]:
+    """The `h4_verdict` tables of the support phase `cross_country_h4` (one per scale and window role that exist), with `scale` and `role`."""
+    tables = []
+    for reader in ctx.cross_country:
+        for role in ROLES:
+            key = f"h4_verdict_{technology}__{role}"
+            if reader.has(key):
+                tables.append(
+                    reader.table(key, _VERSIONS).assign(
+                        scale=reader.scale_id, role=role, window=_window_of(ctx, role)
+                    )
+                )
+    return tables
+
+
+def _h4_verdict_row(total: pd.Series) -> dict:
+    """The one row of H4 in the verdict table, from the `technology` row of the cross-country table (one row per technology, not per country)."""
+    return {
+        "scale": total["scale"],
+        "role": total["role"],
+        "window": total["window"],
+        "hypothesis": "H4",
+        "statistic": "h4_strict_pair_count",
+        "value": float(total["n_climate_dominated"] * total["n_techno_economic_dominated"]),
+        "reference": None,
+        "threshold": 1.0,
+        "verdict": total["verdict"],
+        "rule": "supported if a country is Climate-Dominated (rho > 0.60) and another Techno-Economic-Dominated (rho < 0.40); not testable if fewer than two countries have a profile",
+        "statistic_2": "countries_with_profile",
+        "value_2": float(total["n_available"]),
+        "reference_2": None,
+        "threshold_2": 2.0,
+    }
 
 
 def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
@@ -103,6 +147,7 @@ def t_r6(ctx: BuildContext) -> None:
         ctx.begin()
         statistics: list[pd.DataFrame] = []
         summaries: dict[str, list[pd.DataFrame]] = {name: [] for name in _SUMMARIES}
+        h4_country: list[pd.DataFrame] = []
         for reader in _readers(ctx):
             for role in ROLES:
                 try:
@@ -110,7 +155,7 @@ def t_r6(ctx: BuildContext) -> None:
                 except MissingArtifactError as exc:
                     ctx.skip(T_R6, f"{technology} {reader.scale_id} {role}", str(exc))
                     continue
-                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H2", "H3"])]
+                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4"])]
                 statistics.append(part.assign(scale=reader.scale_id, role=role))
                 for name in _SUMMARIES:
                     key = f"{name}_summary_{technology}__{role}"
@@ -123,6 +168,17 @@ def t_r6(ctx: BuildContext) -> None:
                         ctx.skip(
                             T_R6,
                             f"{technology} {reader.scale_id} {role} {name.upper()} summary",
+                            _reason(reader, key),
+                        )
+                key = f"h4_country_{technology}__{role}"
+                if reader.has(key):
+                    table = reader.table(key, _VERSIONS)
+                    if len(table):
+                        h4_country.append(table.assign(scale=reader.scale_id, role=role))
+                    else:
+                        ctx.skip(
+                            T_R6,
+                            f"{technology} {reader.scale_id} {role} H4 country table",
                             _reason(reader, key),
                         )
         if statistics:
@@ -151,7 +207,7 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_statistics",
                 frame,
-                f"H1, H2 and H3 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
+                f"H1 to H4 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
                 technology=technology,
             )
         else:
@@ -162,9 +218,21 @@ def t_r6(ctx: BuildContext) -> None:
             for table in summaries[name]
             for _, row in table[table["primary"]].iterrows()
         ]
+        h4_verdict = _h4_verdict_tables(ctx, technology)
+        verdicts += [
+            _h4_verdict_row(total)
+            for table in h4_verdict
+            for _, total in table[table["kind"] == "technology"].iterrows()
+        ]
+        if not h4_verdict:
+            ctx.skip(
+                T_R6,
+                f"{technology} H4 verdict",
+                "the support phase cross_country_h4 has not run (no manifest in outputs/cross_country)",
+            )
         if verdicts:
             frame = pd.DataFrame(verdicts, columns=VERDICT_COLUMNS)
-            frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3})
+            frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3, "H4": 4})
             frame["_role"] = frame["role"].map({role: at for at, role in enumerate(ROLES)})
             frame = (
                 frame.sort_values(["scale", "_role", "_order"])
@@ -176,7 +244,7 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_verdicts",
                 frame,
-                f"Verdict of H1, H2 and H3 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2). A sensitivity never revises a verdict.",
+                f"Verdict of H1 to H4 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2). H4 is a statement about the countries together: its row counts the pairs of a Climate-Dominated and a Techno-Economic-Dominated country (threshold 1) and the countries with a profile (at least 2), and is read from the support phase cross_country_h4. A sensitivity never revises a verdict.",
                 technology=technology,
             )
         captions = {
@@ -194,6 +262,194 @@ def t_r6(ctx: BuildContext) -> None:
                     captions[name],
                     technology=technology,
                 )
+        if h4_country:
+            write_table(
+                ctx,
+                T_R6,
+                "h4_country",
+                pd.concat(h4_country, ignore_index=True),
+                f"H4 for {technology} in this country: the displacements D_clim and D_tec of the climate-only and the techno-economic-only shortlists, the dominance ratio rho, the profile (boundaries 0.40 and 0.60), the displacement D of the joint shortlist, the climate axis by SSP and the sensitivities (variant column) beside the primary result. The verdict needs the other countries (h4_verdict). A sensitivity never revises the profile.",
+                technology=technology,
+            )
+        if h4_verdict:
+            write_table(
+                ctx,
+                T_R6,
+                "h4_verdict",
+                pd.concat(h4_verdict, ignore_index=True),
+                f"H4 for {technology} across countries: the profile of each country (or why it is unavailable), the count of countries by profile and the verdict of the strict rule (supported with one Climate-Dominated and one Techno-Economic-Dominated country; not testable with fewer than two countries that have a profile).",
+                technology=technology,
+                per_country=False,
+            )
+
+
+def t_r7(ctx: BuildContext) -> None:
+    """T-R7, per technology: the climate and techno-economic displacement (D_clim, D_tec) and the dominance ratio rho by country, with the
+    profile boundaries marked. The countries are those of the support phase cross_country_h4; without it the country alone is shown from its
+    own h4_country table, and the caption says so."""
+    rule = ctx.experiments.hypothesis_rules.get("H4")
+    if not isinstance(rule, H4Rule):
+        raise NotBuilt("hypothesis_rules.H4 is null (OQ-050)")
+    for technology in ctx.technologies:
+        ctx.begin()
+        frames = [
+            table[table["kind"] == "country"]
+            for table in _h4_verdict_tables(ctx, technology)
+            if (table["kind"] == "country").any()
+        ]
+        scope = "the countries of the support phase cross_country_h4"
+        if not frames:
+            scope = f"{ctx.iso} alone (the support phase cross_country_h4 has not run)"
+            for reader in _readers(ctx):
+                for role in ROLES:
+                    key = f"h4_country_{technology}__{role}"
+                    if not reader.has(key):
+                        continue
+                    table = reader.table(key, _VERSIONS)
+                    primary = table[table["primary"]]
+                    if primary.empty:
+                        ctx.skip(
+                            T_R7, f"{technology} {reader.scale_id} {role}", _reason(reader, key)
+                        )
+                        continue
+                    frames.append(
+                        pd.DataFrame(
+                            {
+                                "kind": "country",
+                                "country": ctx.iso,
+                                "window": _window_of(ctx, role),
+                                "available": True,
+                                "profile": primary["profile"],
+                                "d_clim": primary["d_clim"],
+                                "d_tec": primary["d_tec"],
+                                "d_sum": primary["d_sum"],
+                                "rho": primary["rho"],
+                                "reason": None,
+                                "scale": reader.scale_id,
+                                "role": role,
+                            }
+                        )
+                    )
+        if not frames:
+            ctx.skip(T_R7, technology, "no h4_country or h4_verdict table is registered")
+            continue
+        frame = pd.concat(frames, ignore_index=True)[
+            [
+                "scale",
+                "role",
+                "window",
+                "country",
+                "available",
+                "profile",
+                "d_clim",
+                "d_tec",
+                "d_sum",
+                "rho",
+                "reason",
+            ]
+        ]
+        scale_shown = (
+            ctx.reader.scale_id
+            if (frame["scale"] == ctx.reader.scale_id).any()
+            else frame["scale"].iloc[0]
+        )
+        shown = frame[(frame["scale"] == scale_shown) & (frame["role"] == "core")].reset_index(
+            drop=True
+        )
+        text = (
+            f"Displacement of the site ranking by each uncertainty axis for {technology} ({scope}). Left: D_clim (climate alone) and D_tec "
+            f"(techno-economic parameters alone), the share of the capacity of the axis shortlist beyond the nominal top k + m. Right: the dominance "
+            f"ratio rho = D_clim / (D_clim + D_tec) with the boundaries {rule.lower:.2f} and {rule.upper:.2f}; between them the profile is Mixed. "
+            "The ratio is relative: read it with the displacements."
+        )
+
+        def draw(shown=shown, technology=technology, rule=rule):
+            with style.thesis_style():
+                fig, (ax_d, ax_r) = style.new_figure(1.0, 0.45, ncols=2)
+                x = np.arange(len(shown))
+                labels = []
+                for at, row in shown.iterrows():
+                    labels.append(
+                        str(row["country"]) + ("" if row["available"] else "\n(unavailable)")
+                    )
+                    if not row["available"]:
+                        continue
+                    ax_d.bar(at - 0.2, row["d_clim"], 0.38, color=style.AXIS_COLORS["climate"])
+                    ax_d.bar(
+                        at + 0.2, row["d_tec"], 0.38, color=style.AXIS_COLORS["techno_economic"]
+                    )
+                ax_d.set_xticks(x, labels)
+                ax_d.set_ylim(0.0, 1.0)
+                ax_d.set_ylabel("Displacement D")
+                ax_d.legend(
+                    handles=[
+                        Patch(color=style.AXIS_COLORS["climate"], label="D_clim (climate)"),
+                        Patch(
+                            color=style.AXIS_COLORS["techno_economic"],
+                            label="D_tec (techno-economic)",
+                        ),
+                    ],
+                    loc="upper right",
+                    frameon=False,
+                )
+                ax_r.axhspan(rule.lower, rule.upper, color="0.88", zorder=0)
+                for level in (rule.lower, rule.upper):
+                    ax_r.axhline(level, color=style.REFERENCE_COLOR, linestyle="--", linewidth=0.8)
+                colors = {
+                    "climate_dominated": style.AXIS_COLORS["climate"],
+                    "techno_economic_dominated": style.AXIS_COLORS["techno_economic"],
+                    "mixed": style.REFERENCE_COLOR,
+                }
+                for at, row in shown.iterrows():
+                    if row["available"] and pd.notna(row["rho"]):
+                        ax_r.scatter(
+                            at, row["rho"], s=36, color=colors.get(row["profile"], "0.5"), zorder=3
+                        )
+                    elif row["available"]:
+                        ax_r.annotate(
+                            "no\ndisplacement",
+                            (at, 0.5),
+                            ha="center",
+                            va="center",
+                            fontsize=style.FONT_SIZE - 1,
+                        )
+                ax_r.set_xticks(x, labels)
+                ax_r.set_xlim(-0.6, len(shown) - 0.4)
+                ax_r.set_ylim(0.0, 1.0)
+                ax_r.set_ylabel("Dominance ratio rho")
+                right = len(shown) - 0.45
+                ax_r.text(
+                    right,
+                    rule.upper + 0.02,
+                    "Climate-Dominated",
+                    ha="right",
+                    va="bottom",
+                    fontsize=style.FONT_SIZE - 1,
+                )
+                ax_r.text(
+                    right,
+                    (rule.lower + rule.upper) / 2,
+                    "Mixed",
+                    ha="right",
+                    va="center",
+                    fontsize=style.FONT_SIZE - 1,
+                )
+                ax_r.text(
+                    right,
+                    rule.lower - 0.02,
+                    "Techno-Economic-Dominated",
+                    ha="right",
+                    va="top",
+                    fontsize=style.FONT_SIZE - 1,
+                )
+                return fig
+
+        write_table(
+            ctx, T_R7, "axis_displacement", frame, text, technology=technology, per_country=False
+        )
+        write_figure(
+            ctx, T_R7, "axis_displacement", draw, text, technology=technology, per_country=False
+        )
 
 
 def t_r10(ctx: BuildContext) -> None:

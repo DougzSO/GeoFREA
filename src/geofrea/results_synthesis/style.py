@@ -31,6 +31,10 @@ DPI = 200
 SSP_COLORS = {"SSP1-2.6": "#1b7837", "SSP3-7.0": "#e08214", "SSP5-8.5": "#b2182b"}
 SSP_FALLBACK = "#6a51a3"
 REFERENCE_COLOR = "#222222"
+AXIS_COLORS = {
+    "climate": "#1f78b4",
+    "techno_economic": "#e6550d",
+}  # H4: one colour per uncertainty axis
 TECHNOLOGY_COLORS = ("#d95f02", "#1f78b4", "#33a02c", "#6a3d9a", "#b15928")
 
 _RC = {

@@ -51,6 +51,7 @@ class BuildContext:
         technologies: The technologies of the run.
         reader: Artifacts of the active scale.
         other_scale: Reader of the other scale (the 0.1 degree check of V-07), or None when no such manifest exists.
+        cross_country: Readers of the manifests of the support phase `cross_country_h4` (one per scale that has one), empty when it has not run.
         out_dir: `outputs/thesis`.
         config_files: Name -> path of the configuration files read (hashed into the provenance).
         methodology_version: Version of `docs/METHODOLOGY.md`.
@@ -75,12 +76,15 @@ class BuildContext:
     test_values: bool
     written: dict[str, list[Path]] = field(default_factory=dict)
     not_built: list[tuple[str, str, str]] = field(default_factory=list)
+    cross_country: tuple[ArtifactReader, ...] = ()
 
     def begin(self) -> None:
         """Start a group of outputs: from here on, the provenance lists only the artifacts read after this call."""
         self.reader.used.clear()
         if self.other_scale is not None:
             self.other_scale.used.clear()
+        for reader in self.cross_country:
+            reader.used.clear()
 
     def skip(self, t_id: str, item: str, reason: str) -> None:
         """Record that `item` of `t_id` was not built and why."""
@@ -148,6 +152,13 @@ def _provenance(
             "scale": ctx.other_scale.scale_id,
             **dict(sorted(ctx.other_scale.used.items())),
         }
+    used_cross = {
+        reader.scale_id: dict(sorted(reader.used.items()))
+        for reader in ctx.cross_country
+        if reader.used
+    }
+    if used_cross:
+        payload["artifacts_read_cross_country"] = used_cross
     if extra:
         payload.update(extra)
     return payload
