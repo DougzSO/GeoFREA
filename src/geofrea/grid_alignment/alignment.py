@@ -191,10 +191,10 @@ def _read_clipped_with_cache(
         # own output schema has no slot for the report itself (unlike
         # data_quality_audit's VectorLayerInspection.geometry_repair) —
         # logged here so a repair on this phase's inputs is still
-        # visible, not just on the audit/criteria side.
-        logger.warning(
+        # visible, not just on the audit/criteria side. INFO, not WARNING: the repair is documented behavior (D-F2a-020).
+        logger.info(
             "%s: %d/%d features were topologically invalid and repaired "
-            "before clipping (reasons: %s).",
+            "before clipping (expected, A-02; reasons: %s; decision D-F2a-020).",
             path,
             repair_report.n_invalid,
             repair_report.n_total,

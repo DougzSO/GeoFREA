@@ -158,9 +158,10 @@ def reproject_to_grid(
                     dst_nodata=nd_out,
                 )
             if nan_total:
-                logger.warning(
+                logger.info(
                     "    %s: %d source pixels are literal NaN despite a finite "
-                    "declared nodata (%s) -- sanitized to nodata before reproject.",
+                    "declared nodata (%s) -- sanitized to nodata before reproject "
+                    "(expected for the DEM, decision D-F2a-020).",
                     Path(src_path).name,
                     nan_total,
                     src_nodata,
