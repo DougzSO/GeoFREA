@@ -12,7 +12,14 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from geofrea.core.config_schemas import ExperimentsFile, H1Rule, H2Rule, H3Rule, HypothesisRule
+from geofrea.core.config_schemas import (
+    ExperimentsFile,
+    H1Rule,
+    H2Rule,
+    H3Rule,
+    H4Rule,
+    HypothesisRule,
+)
 from geofrea.core.constants import PRICE_BASE_YEAR_USD
 
 logger = logging.getLogger("geofrea.robustness_analysis.decision")
@@ -243,7 +250,7 @@ def expanded_rules(experiments: ExperimentsFile) -> dict[str, list[HypothesisRul
                     statistic=H1_PRIMARY_STATISTICS[1], comparison="ge", threshold=rule.beta
                 ),
             ]
-        elif isinstance(rule, H2Rule | H3Rule):
+        elif isinstance(rule, H2Rule | H3Rule | H4Rule):
             out[hypothesis] = (
                 None  # the verdict depends on testability, so the module of the hypothesis gives it (h2_aggregation, h3_robust_vs_nominal)
             )
@@ -256,7 +263,9 @@ def rules_for(experiments: ExperimentsFile) -> tuple[Mapping[str, list], list[st
     """The pre-registered rules per hypothesis and the hypotheses that have none (OQ-050)."""
     expanded = expanded_rules(experiments)
     own_form = {
-        h for h, r in experiments.hypothesis_rules.items() if isinstance(r, H2Rule | H3Rule)
+        h
+        for h, r in experiments.hypothesis_rules.items()
+        if isinstance(r, H2Rule | H3Rule | H4Rule)
     }
     rules = {h: r for h, r in expanded.items() if r}
     missing = [h for h, r in expanded.items() if not r and h not in own_form]

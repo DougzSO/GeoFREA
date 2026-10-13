@@ -1,0 +1,311 @@
+% ============================================================================
+% Hypothesis H4: context-dependent dominance of climate and techno-economic
+% uncertainty in the spatial site ranking.
+% Pre-registered decision rule (OQ-050, H4), fixed 2026-10-13, before any
+% real-country result was produced. Classification thresholds 0.40 and 0.60;
+% strict cross-country rule; verdict per technology.
+% Notation follows docs/METHODOLOGY.md and the H1 to H3 sections.
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Hypothesis H4: Context-Dependent Dominance of Climate and
+Techno-Economic Uncertainty}
+\label{sec:h4}
+
+\subsection{Purpose and Position in the Research Design}
+\label{subsec:h4_purpose}
+
+Hypothesis H4 asks whether the source of uncertainty that most changes the
+spatial ranking of candidate sites, climate or techno-economic, is the same in
+every country. It states that it is not: for a given technology, the climate
+axis dominates the displacement of the ranking in some of the countries studied
+and the techno-economic axis in others, so that no country-independent ordering
+of the two sources holds.
+
+H1 to H3 are evaluated for each country and technology. H4 is comparative across
+countries and is evaluated for each technology. It answers the question of
+generalisation (RQ5) and relies on the separability of the two uncertainty axes
+(RQ4): each axis is introduced alone, with the other held at its nominal value,
+and the displacement each produces in the site ranking is compared. H3 measured
+the displacement produced by the two axes together; H4 attributes it.
+
+The partitioning of uncertainty by source is established practice in climate
+science, where the contributions of model, scenario and internal variability to
+projection uncertainty are separated \cite{hawkinssutton2009}, and in
+sensitivity analysis, where factor prioritisation identifies the inputs that
+most affect an output \cite{saltelli2008,pianosi2016}. H4 applies the same
+logic with one change: the output is not a model quantity such as the
+levelised cost of energy, but the site selection that the ranking produces. The
+design follows the Decision Making under Deep Uncertainty perspective, in which
+climate futures are explored without probabilities
+\cite{lempert2003,marchau2019}.
+
+\subsection{Why the Ranking and Not the Cost Variance}
+\label{subsec:h4_ranking}
+
+A source of uncertainty can change the cost of every site substantially without
+changing which sites are best. If an uncertain parameter transforms the
+levelised cost of all sites by the same increasing function, for instance
+$\mathrm{LCOE}'_i=a+b\,\mathrm{LCOE}_i$ with $b>0$, the order of the sites is
+preserved:
+\begin{equation}
+    \mathrm{LCOE}_i<\mathrm{LCOE}_j\iff\mathrm{LCOE}'_i<\mathrm{LCOE}'_j .
+    \label{eq:h4_rank_invariance}
+\end{equation}
+Capital cost and the discount rate act almost in this way, because they scale the
+cost of every site in a country. In a decomposition of the variance of the
+levelised cost, the techno-economic axis would therefore appear dominant
+everywhere, almost by construction, while changing few siting decisions. Only
+the parameters whose effect differs between sites, such as the cost per
+kilometre of grid and road connection or the temperature coefficient of the
+modules interacting with local temperature, move the ranking. A variance-based
+attribution answers a different question from the one posed here, and is
+reported only as secondary evidence. The primary statistic is defined on the
+selection.
+
+\subsection{Notation}
+\label{subsec:h4_notation}
+
+The notation of Sections~\ref{sec:h1} to~\ref{sec:h3} applies, for one country
+and one technology. Both axis-specific rankings and the nominal ranking are
+computed over the same set $\mathcal{I}$; $q_i$ is the installable capacity of
+the central land scenario; $k=\lceil p_k N\rceil$ with $N=|\mathcal{I}_0|$; and
+$m=k$. The nominal rank $r^{\mathrm{nom}}_i$ is the rank of cell $i$ within
+$\mathcal{I}$ by $\mathrm{LCOE}_{i,f_0}$, as in H3.
+
+Two axis-isolated scores are defined from the relative regret $r_{i,f}$ of
+Equation~\ref{eq:h1_relative_regret}.
+
+Climate axis. Techno-economic parameters are held at their nominal values and
+the climate varies over all members $m$ of the core window:
+\begin{equation}
+    Z^{\mathrm{clim}}_i=\max_{m}\; r_{i,(m,s_0)} .
+    \label{eq:h4_clim_score}
+\end{equation}
+
+Techno-economic axis. The climate is held at the reference $m_0$ and the
+parameters vary over the samples:
+\begin{equation}
+    Z^{\mathrm{tec}}_i=\mathrm{P}_{90,\,s\geq1}\!\left(r_{i,(m_0,s)}\right) .
+    \label{eq:h4_tec_score}
+\end{equation}
+
+Each score keeps the operator that the primary robustness metric applies to its
+axis: the worst case over the climate members, which carry no probabilities,
+and the 90th percentile over the parameter samples, which form a sampled
+probabilistic space. With both axes active, the two operators combined give the
+primary metric $\mathrm{MR}_i$.
+
+For each axis $a\in\{\mathrm{clim},\mathrm{tec}\}$, $S^{a}_k$ is the set of the
+$k$ cells of $\mathcal{I}$ with the lowest $Z^{a}_i$. Ranks follow the
+deterministic tie convention of the F7 phase record.
+
+\subsection{Axis Displacement}
+\label{subsec:h4_displacement}
+
+The displacement produced by axis $a$ is the statistic of H3 applied to the
+axis-isolated shortlist:
+\begin{equation}
+    D_a=\frac{\sum_{i\in S^{a}_k}q_i\,\mathbb{1}\!\left[r^{\mathrm{nom}}_i>k+m\right]}
+    {\sum_{i\in S^{a}_k}q_i},
+    \qquad a\in\{\mathrm{clim},\mathrm{tec}\}.
+    \label{eq:h4_displacement}
+\end{equation}
+$D_a$ is the share of the capacity of the axis-isolated shortlist located in
+cells that the nominal ranking does not reach even with the tolerance $m=k$.
+Movements within the top $k+m$ are boundary fluctuation and are not counted.
+$0\leq D_a\leq1$.
+
+\subsection{Dominance Ratio and Country Profile}
+\label{subsec:h4_profile}
+
+The dominance ratio is the climate share of the combined axis displacement:
+\begin{equation}
+    \rho=\frac{D_{\mathrm{clim}}}{D_{\mathrm{clim}}+D_{\mathrm{tec}}},
+    \qquad D_{\mathrm{sum}}=D_{\mathrm{clim}}+D_{\mathrm{tec}}>0 .
+    \label{eq:h4_ratio}
+\end{equation}
+Each country and technology receives one profile:
+\begin{equation}
+    \mathrm{Profile}=
+    \begin{cases}
+        \text{No Displacement}, & D_{\mathrm{sum}}=0,\\
+        \text{Climate-Dominated}, & \rho>0.60,\\
+        \text{Techno-Economic-Dominated}, & \rho<0.40,\\
+        \text{Mixed}, & 0.40\leq\rho\leq0.60 .
+    \end{cases}
+    \label{eq:h4_profile}
+\end{equation}
+The interval $[0.40,0.60]$ prevents a dominance label when the two axes displace
+similar amounts of capacity; values exactly at 0.40 or 0.60 are Mixed. A country
+whose inputs do not allow both displacements to be computed is reported as
+unavailable and receives no profile.
+
+The ratio is relative: it can be high when both displacements are small.
+$D_{\mathrm{clim}}$, $D_{\mathrm{tec}}$ and $D_{\mathrm{sum}}$ are therefore
+reported with every profile, and the profile is read together with them.
+
+\subsection{Hypothesis and Decision Rule}
+\label{subsec:h4_rule}
+
+For a technology $\tau$, let $\mathcal{N}_\tau$ be the countries with a profile.
+\begin{equation}
+    \text{H4 is supported for }\tau\iff
+    \exists\, n_1\neq n_2\in\mathcal{N}_\tau:\;
+    \mathrm{Profile}(n_1)=\text{Climate-Dominated},\;
+    \mathrm{Profile}(n_2)=\text{Techno-Economic-Dominated}.
+    \label{eq:h4_rule}
+\end{equation}
+The rule is strict. Combinations of one dominance class with Mixed or No
+Displacement countries do not support H4, because a Mixed profile does not show
+a different dominant axis but the absence of one. The verdict is issued for
+solar photovoltaics and for onshore wind separately; a combined statement across
+the two technologies is descriptive.
+
+The rule is deterministic and categorical: it is not a significance test and
+does not estimate the probability that either axis will dominate in the future.
+With three countries, a supported verdict shows that the dominant axis differs
+in at least two of the national contexts studied; it does not establish a
+pattern beyond them.
+
+The thresholds 0.40 and 0.60 are decision thresholds of this thesis. The
+literature on uncertainty partitioning and sensitivity analysis motivates the
+attribution of displacement to sources but provides no universal boundary for
+dominance. Their defence rests on pre-registration, on their reading (one axis
+accounts for more than three-fifths of the combined displacement) and on the
+reporting of the continuous ratio.
+
+An outcome in which every country is Techno-Economic-Dominated is plausible,
+because climate enters GeoFREA through annual-mean changes of the resource. It
+would not support H4, and it would be a substantive finding: for siting up to
+the core window, techno-economic uncertainty would outweigh climate change in
+all the contexts studied.
+
+\subsection{Complementary Evidence (No Verdict)}
+\label{subsec:h4_complementary}
+
+\begin{itemize}
+    \item Interaction. The displacement of the joint shortlist, $D$ of H3, is
+    reported beside $D_{\mathrm{clim}}$ and $D_{\mathrm{tec}}$. A joint
+    displacement different from what either axis produces alone indicates that
+    the two axes interact in the ranking.
+    \item Variance shares. The decomposition of the variance of the relative
+    regret over futures into a climate part and a techno-economic part, by the
+    law of total variance, is reported as secondary evidence, with the caveat of
+    Section~\ref{subsec:h4_ranking}.
+    \item Scenario detail. $D_{\mathrm{clim}}$ recomputed with the climate members
+    of each SSP separately, to show which scenario drives the climate axis.
+    \item Distance to the boundaries. $|\rho-0.40|$ and $|\rho-0.60|$, which
+    identify profiles close to a change of class.
+\end{itemize}
+
+\subsection{Sensitivity Analyses}
+\label{subsec:h4_sensitivity}
+
+The verdict is issued from the primary configuration only; a change of profile or
+verdict in a variant is reported as a dependence on that choice.
+\begin{enumerate}
+    \item Without IPSL-CM6A-LR in the climate axis.
+    \item The 2071--2100 window for the climate axis, in which the scenarios
+    diverge more strongly.
+    \item The 0.1-degree cell scale.
+    \item Top-$k$ share $p_k\in\{0.05,0.10,0.20\}$ and tolerance
+    $m\in\{k/2,\,2k\}$.
+    \item Classification boundaries $\{0.30,0.70\}$ and $\{0.45,0.55\}$, reported
+    as descriptive variants only.
+\end{enumerate}
+
+\subsection{Worked Example}
+\label{subsec:h4_example}
+
+Three countries are evaluated for solar photovoltaics. The values are
+illustrative and are not GeoFREA results.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Illustrative axis displacements and profiles for H4.}
+    \label{tab:h4_example}
+    \small
+    \begin{tabular}{lccccl}
+        \toprule
+        \textbf{Country} & $D_{\mathrm{clim}}$ & $D_{\mathrm{tec}}$ &
+        $D_{\mathrm{sum}}$ & $\rho$ & \textbf{Profile} \\
+        \midrule
+        A & 0.12 & 0.38 & 0.50 & 0.24 & Techno-Economic-Dominated \\
+        B & 0.42 & 0.08 & 0.50 & 0.84 & Climate-Dominated \\
+        C & 0.25 & 0.25 & 0.50 & 0.50 & Mixed \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Country A is techno-economic-dominated and country B climate-dominated, so H4 is
+supported for solar photovoltaics. In country A, getting the connection costs
+right matters more than the climate for choosing where to build; in country B
+the reverse holds. Neither statement implies that the other axis is negligible
+in that country: the profile says which axis accounts for the larger share of
+the combined displacement. If country B had $\rho=0.55$, the three profiles
+would be techno-economic, Mixed and Mixed, and H4 would not be supported.
+
+\subsection{Parameters}
+\label{subsec:h4_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pre-registered parameters of H4.}
+    \label{tab:h4_parameters}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.6cm}
+        >{\raggedright\arraybackslash}p{3.0cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+        \midrule
+        $Z^{\mathrm{clim}}_i$ & $\max_m r_{i,(m,s_0)}$ & Climate-only score;
+        worst case over the core-window members. \\
+        \addlinespace
+        $Z^{\mathrm{tec}}_i$ & $\mathrm{P}_{90,s\geq1}\,r_{i,(m_0,s)}$ &
+        Techno-economic-only score; 90th percentile over samples. \\
+        \addlinespace
+        $D_a$ & Statistic of H3 & Capacity of the axis shortlist beyond the
+        nominal top $k+m$. \\
+        \addlinespace
+        $m$ & $k$ & Tolerance, as in H1b and H3. \\
+        \addlinespace
+        Boundaries & 0.40 and 0.60 & Techno-economic below 0.40, climate above
+        0.60, Mixed between, inclusive. \\
+        \addlinespace
+        Verdict & Strict, per technology & At least one climate-dominated and
+        one techno-economic-dominated country. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:h4_limitations}
+
+Isolation of the axes. Holding one axis at its nominal value measures each
+source alone and does not capture their interaction, which is reported through
+the joint displacement of H3 but not attributed.
+
+Dependence on the nominal reference. Both displacements are measured against the
+nominal ranking at $f_0$; a different reference would change the cells counted
+as displaced.
+
+Dependence on the uncertainty representation. The climate axis depends on the
+six climate models, the three scenarios and the representation of climate
+change through annual-mean change factors of the resource; the techno-economic
+axis depends on the parameter ranges and their independent sampling. A narrower
+climate representation tends to understate the climate axis.
+
+Relative measure. A dominance profile can be assigned when both displacements are
+small; the absolute values are reported to prevent over-interpretation.
+
+Few countries. Three national contexts can show that the dominant axis is not
+universal, but they cannot characterise how it varies with geography or explain
+why; attributing a profile to a physical or economic mechanism requires evidence
+beyond the classification.

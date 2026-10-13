@@ -80,8 +80,8 @@ def zzz(tmp_path_factory):
         ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
         (
-            "H4: null",
-            "H4: [{statistic: h4_jaccard_climate_only, comparison: ge, threshold: -1.0}]",
+            "H5: null",
+            "H5: [{statistic: h5_potential_below_tau_gw_m0, comparison: ge, threshold: -1.0}]",
         ),
     ):
         assert experiments_text.count(old) == 1, old
@@ -804,8 +804,8 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert set(hypothesis["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5", "RQ4"}
     verdicts = hypothesis.set_index("statistic")["verdict"]
     assert (
-        verdicts["h4_jaccard_climate_only"] == "met"
-    )  # the test rule of H4 in this copy of the configuration
+        verdicts["h5_potential_below_tau_gw_m0"] == "met"
+    )  # the test rule of H5 in this copy of the configuration
     h1_rules = [
         "h1a_core_share",
         "h1b_vulnerable_share",
@@ -813,7 +813,7 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
     assert (
         verdicts.drop(
-            ["h4_jaccard_climate_only", "h2_overlap_index", "h3_beyond_reach_share", *h1_rules]
+            ["h5_potential_below_tau_gw_m0", "h2_overlap_index", "h3_beyond_reach_share", *h1_rules]
         )
         .isna()
         .all()

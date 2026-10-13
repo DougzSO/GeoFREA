@@ -153,6 +153,29 @@ class H3Rule(BaseModel):
     source: str = Field(min_length=1)
 
 
+class H4Rule(BaseModel):
+    """The pre-registered decision rule of H4 (M-F7-07, OQ-050): the dominance ratio `rho = D_clim / (D_clim + D_tec)` and its profile.
+
+    A country and technology is Climate-Dominated when `rho > upper`, Techno-Economic-Dominated when `rho < lower`, Mixed when
+    `lower <= rho <= upper` and has No Displacement when `D_clim + D_tec = 0`. The verdict of a technology is `strict_per_technology`: supported
+    only if one country is Climate-Dominated and another Techno-Economic-Dominated. `source` is the citation of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    lower: float = Field(gt=0, lt=1)
+    upper: float = Field(gt=0, lt=1)
+    rule: Literal["strict_per_technology"]
+    tolerance_multiple_of_k: float = Field(gt=0)
+    source: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _lower_is_below_upper(self) -> H4Rule:
+        if not self.lower < self.upper:
+            raise ValueError(f"H4 lower {self.lower} must be below upper {self.upper}")
+        return self
+
+
 class HazardThreshold(BaseModel):
     """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
 
@@ -209,15 +232,15 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
-    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | H3Rule | None]
+    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | H3Rule | H4Rule | None]
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")
-    def _h1_to_h3_have_their_own_form(self) -> ExperimentsFile:
-        """H1, H2 and H3 are pre-registered `H1Rule`, `H2Rule` and `H3Rule` (or null); the other hypotheses are lists of rules (or null)."""
-        own = {"H1": H1Rule, "H2": H2Rule, "H3": H3Rule}
+    def _h1_to_h4_have_their_own_form(self) -> ExperimentsFile:
+        """H1 to H4 are pre-registered `H1Rule` to `H4Rule` (or null); the other hypotheses are lists of rules (or null)."""
+        own = {"H1": H1Rule, "H2": H2Rule, "H3": H3Rule, "H4": H4Rule}
         owner = {form: name for name, form in own.items()}
         for name, rule in self.hypothesis_rules.items():
             form = own.get(name)
@@ -225,7 +248,7 @@ class ExperimentsFile(BaseModel):
                 raise ValueError(
                     f"hypothesis_rules.{name} is a {form.__name__} mapping, not a list or another form"
                 )
-            if form is None and isinstance(rule, H1Rule | H2Rule | H3Rule):
+            if form is None and isinstance(rule, H1Rule | H2Rule | H3Rule | H4Rule):
                 raise ValueError(
                     f"hypothesis_rules.{name}: the {type(rule).__name__} form belongs to {owner[type(rule)]}"
                 )

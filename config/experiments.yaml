@@ -262,7 +262,7 @@ thresholds:
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
-# `value <comparison> threshold`. H1, H2 and H3 are pre-registered; H4 and H5 are null until the author pre-registers them (before F7 runs on real data); F7 then writes
+# `value <comparison> threshold`. H1 to H4 are pre-registered; H5 is null until the author pre-registers them (before F7 runs on real data); F7 then writes
 # `verdict = null` and a warning, and never invents a rule.
 hypothesis_rules:
   # H1 (docs/thesis/hypotheses/H1_climate_rank_robustness.tex): H1a holds when C_k >= alpha, H1b when V_k >= beta, with the tolerance
@@ -291,7 +291,16 @@ hypothesis_rules:
     domain: I
     weight: capacity
     source: "OQ-050 (H3), pre-registered 2026-10-13"
-  H4: null
+  # H4 (docs/thesis/hypotheses/H4_axis_dominance.tex): D_clim and D_tec are the H3 statistic on the shortlists of the climate-only and the
+  # techno-only scores; rho = D_clim / (D_clim + D_tec) gives the profile of a country and technology (Climate-Dominated above `upper`,
+  # Techno-Economic-Dominated below `lower`, Mixed between, inclusive). The verdict is per technology across countries: supported when one country
+  # is Climate-Dominated and another Techno-Economic-Dominated (strict_per_technology).
+  H4:
+    lower: 0.40
+    upper: 0.60
+    rule: strict_per_technology
+    tolerance_multiple_of_k: 1.0
+    source: "OQ-050 (H4), pre-registered 2026-10-13"
   H5: null
 
 # Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.

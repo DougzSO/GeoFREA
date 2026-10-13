@@ -487,21 +487,25 @@ def test_without_a_pre_registered_rule_every_statistic_has_no_verdict_and_a_warn
 
 @pytest.mark.unit
 def test_a_pre_registered_rule_gives_met_or_not_met_and_never_for_the_other_statistics(tmp_path):
-    rule = {"statistic": "h4_jaccard_climate_only", "comparison": "ge", "threshold": -1.0}
-    entry, _, _ = _run(tmp_path, experiments=_with_rules(H4=[rule]))
+    rule = {"statistic": "h5_potential_below_tau_gw_m0", "comparison": "ge", "threshold": -1.0}
+    entry, _, _ = _run(tmp_path, experiments=_with_rules(H5=[rule]))
     table = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
-    named = table[table["statistic"] == "h4_jaccard_climate_only"].iloc[0]
+    named = table[table["statistic"] == "h5_potential_below_tau_gw_m0"].iloc[0]
     assert named["verdict"] == "met" and named["rule"]
     assert (
-        table[table["statistic"] != "h4_jaccard_climate_only"]
-        .query("hypothesis == 'H4'")["verdict"]
+        table[table["statistic"] != "h5_potential_below_tau_gw_m0"]
+        .query("hypothesis == 'H5'")["verdict"]
         .isna()
         .all()
     )
-    impossible = {"statistic": "h4_jaccard_climate_only", "comparison": "lt", "threshold": -1.0}
-    other, _, _ = _run(tmp_path / "b", experiments=_with_rules(H4=[impossible]))
+    impossible = {
+        "statistic": "h5_potential_below_tau_gw_m0",
+        "comparison": "lt",
+        "threshold": -1.0,
+    }
+    other, _, _ = _run(tmp_path / "b", experiments=_with_rules(H5=[impossible]))
     again = pd.read_parquet(other.windows["core"].tables["hypothesis"])
-    assert again.set_index("statistic").loc["h4_jaccard_climate_only", "verdict"] == "not_met"
+    assert again.set_index("statistic").loc["h5_potential_below_tau_gw_m0", "verdict"] == "not_met"
 
 
 @pytest.mark.unit
@@ -510,7 +514,7 @@ def test_a_rule_that_names_an_unknown_statistic_fails_loudly(tmp_path):
 
     rule = {"statistic": "h9_nothing", "comparison": "ge", "threshold": 0.0}
     with pytest.raises(HypothesisRuleError):
-        _run(tmp_path, experiments=_with_rules(H4=[rule]))
+        _run(tmp_path, experiments=_with_rules(H5=[rule]))
 
 
 @pytest.mark.unit
