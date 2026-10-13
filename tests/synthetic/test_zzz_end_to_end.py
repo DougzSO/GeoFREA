@@ -1088,3 +1088,74 @@ def test_the_robustness_maps_are_written_for_both_windows_and_the_max_regret_mat
     window = "2041-2070"
     figures = {p.name for p in _phase(zzz, "robustness_analysis", "figures").glob("*.png")}
     assert f"cell_class_{tech}__{window}__na__na.png" in figures
+
+
+# -- deterministic artifacts (COMMAND 24, A-02) ----------------------------------------------------------
+
+
+@pytest.mark.synthetic
+def test_every_registered_json_artifact_holds_no_timestamp_run_time_or_absolute_path(zzz):
+    from geofrea.core.artifact_json import find_nondeterministic
+
+    files = sorted((zzz[0] / "outputs" / "ZZZ" / "artifacts").glob("*.json"))
+    assert files
+    offenders = {}
+    for path in files:
+        found = find_nondeterministic(json.loads(path.read_text(encoding="utf-8")))
+        if found:
+            offenders[path.name] = found[:3]
+    assert not offenders, offenders
+
+
+@pytest.mark.synthetic
+def test_parquet_metadata_holds_no_timestamp_or_absolute_path(zzz):
+    import re
+
+    pattern = re.compile(
+        r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}|[A-Za-z]:[\/]|(?<![\w.])/(?:Users|home|mnt|tmp|var)/"
+    )
+    offenders = {}
+    for path in sorted((zzz[0] / "outputs" / "ZZZ").rglob("*.parquet")):
+        meta = pq.read_schema(path).metadata or {}
+        for key, value in meta.items():
+            if key == b"pandas":
+                continue
+            text = key.decode("utf-8", "replace") + "=" + value.decode("utf-8", "replace")
+            if pattern.search(text):
+                offenders.setdefault(path.name, []).append(text[:120])
+    assert not offenders, offenders
+
+
+@pytest.mark.synthetic
+def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch):
+    import main
+
+    monkeypatch.setenv(
+        "GEOFREA_DATA_DIR", str(zzz[0])
+    )  # the autouse conftest fixture re-points it per test
+
+    def audit_hash():
+        settings = load_settings(main.SETTINGS_YAML)
+        ok, orchestrator, _ = main.run_geofrea(
+            "ZZZ",
+            ["data_quality_audit"],
+            ["data_quality_audit"],
+            settings.geospatial.resolutions,
+            settings.geospatial.distance_cap_km,
+            load_audit_config(main.AUDIT_YAML),
+            "zzz-f1b-twice",
+            False,
+            None,
+            tuple(settings.run.technologies),
+            False,
+            settings.figures,
+            settings.memory.max_batch_gb,
+        )
+        assert ok
+        entry = orchestrator.manifest.artifacts["audit_report"]
+        return entry.sha256, orchestrator.manifest.phases["data_quality_audit"].finished_at
+
+    first_hash, first_finished = audit_hash()
+    second_hash, second_finished = audit_hash()
+    assert second_finished != first_finished  # the phase really ran again
+    assert second_hash == first_hash

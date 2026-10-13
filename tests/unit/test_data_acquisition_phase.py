@@ -31,6 +31,7 @@ functions themselves, same pattern as the fetcher tests below.
 """
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -660,14 +661,16 @@ def test_partial_layer_failure_still_registers_layer_registry_with_the_failed_la
 
     # The artifact was still persisted despite the phase failing (A-02).
     artifact_entry = orchestrator.manifest.artifacts["layer_registry"]
-    registry = AcquisitionResult.model_validate_json(artifact_entry.path.resolve().read_text())
+    # The artifact is deterministic (D-core-026): it holds the layers, not the run's timestamp.
+    registry = json.loads(artifact_entry.path.resolve().read_text(encoding="utf-8"))
+    assert "timestamp" not in registry
 
-    assert len(registry.layers) == len(_LAYER_REGISTRY)
-    rivers = next(layer for layer in registry.layers if layer.layer_name == "rivers")
-    assert rivers.resolution_status == "failed"
-    assert rivers.error_type == "KeyError"
-    other_layers = [layer for layer in registry.layers if layer.layer_name != "rivers"]
-    assert all(layer.resolution_status != "failed" for layer in other_layers)
+    assert len(registry["layers"]) == len(_LAYER_REGISTRY)
+    rivers = next(layer for layer in registry["layers"] if layer["layer_name"] == "rivers")
+    assert rivers["resolution_status"] == "failed"
+    assert rivers["error_type"] == "KeyError"
+    other_layers = [layer for layer in registry["layers"] if layer["layer_name"] != "rivers"]
+    assert all(layer["resolution_status"] != "failed" for layer in other_layers)
 
 
 @pytest.mark.unit

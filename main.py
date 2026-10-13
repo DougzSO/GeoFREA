@@ -80,6 +80,7 @@ from geofrea.climate_forcing.pipeline import (
     build_hazard_context,
     build_maps,
 )
+from geofrea.core.artifact_json import dump_artifact
 from geofrea.core.config_loader import (
     load_audit_config,
     load_countries,
@@ -194,7 +195,9 @@ def _register_json_artifact(
     artifact_dir = context.outputs_dir / context.country_code / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / f"{key}.json"
-    path.write_text(output.model_dump_json(indent=2), encoding="utf-8")
+    path.write_text(
+        dump_artifact(output), encoding="utf-8"
+    )  # deterministic: the volatile fields stay in the manifest entry
     context.register_artifact(key, path, schema_version)
 
 
