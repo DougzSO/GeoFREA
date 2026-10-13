@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 11.0.0 |
+| Version | 11.0.1 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-13 |
 | Owner | Douglas |
@@ -313,7 +313,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
   - H4: per country, technology and window, the domain is `I` and the capacity `q_i` that of the central land scenario (M-F5-01); `k = ceil(p_k N)` with `N = |I_0|` (M-F7-05), `m = k` (`tolerance_multiple_of_k = 1.0`); the shortlists, the displacements `D_clim` and `D_tec` and the nominal rank are those of M-F7-06 and H3.
     - Primary statistics: `D_clim`, `D_tec`, `D_sum = D_clim + D_tec` (all reported with every profile) and the dominance ratio `rho = D_clim / D_sum` (defined for `D_sum > 0`).
     - Profile of a country and technology (boundaries `0.40` and `0.60`, `lower` and `upper` of `hypothesis_rules.H4`): No Displacement if `D_sum = 0`; Climate-Dominated if `rho > 0.60`; Techno-Economic-Dominated if `rho < 0.40`; Mixed if `0.40 <= rho <= 0.60` (both boundaries inclusive). A country whose inputs do not allow both displacements to be computed (the F7 tables are empty or absent for a null decision parameter, or the technology has no F7 result) is `unavailable` and has no profile.
-    - Verdict, per technology, across countries (strict rule): H4 is supported if at least one country with a profile is Climate-Dominated and another is Techno-Economic-Dominated; not supported if at least two countries have a profile and no such pair exists (a Mixed or No Displacement country does not support it); not testable if fewer than two countries have a profile. The verdict across the two technologies is descriptive. It is a deterministic rule, not a significance test.
+    - Verdict, per technology, across countries (strict rule): H4 is supported if at least one country with a profile is Climate-Dominated and another is Techno-Economic-Dominated; not testable if fewer than two countries have a profile, since a single national context cannot show a difference between contexts; not supported if at least two countries have a profile and no such pair exists (a Mixed or No Displacement country does not support it). The verdict across the two technologies is descriptive. It is a deterministic rule, not a significance test.
     - Complementary, no verdict: the displacement `D` of the joint shortlist (H3) beside `D_clim` and `D_tec` (interaction); the variance shares of M-F7-06; `D_clim` recomputed with the members of each SSP separately (and `rho` with it); the distances `|rho - 0.40|` and `|rho - 0.60|`.
     - Sensitivities, reported beside the primary result and never changing the verdict: without the GCM that carries the TCR exception (M-F4-02 item 5) in the climate axis; the 2071-2100 window (the sensitivity-window run); the 0.1 degree scale (V-07); `p_k` in {0.05, 0.10, 0.20} and `m` in {k/2, 2k}; the boundaries {0.30, 0.70} and {0.45, 0.55}, descriptive variants only. A change of profile or verdict in a sensitivity is reported as a dependence on that choice.
     - Computation: F7 writes the per-country profile (`h4_country`); the verdict needs the profiles of all the countries and is written by the support phase `cross_country_h4` (4.1, 4.2).
@@ -496,8 +496,8 @@ A-06 and V-08 are extended with every phase that exists: no milestone from MS-5 
 
 Full bibliographic details must be confirmed during the literature review before citation in the thesis.
 
-- Bertsimas, D., and Sim, M. (2004). The price of robustness (Operations Research 52(1):35-53).
-- Birge, J. R. (1982). The value of the stochastic solution in stochastic linear programs with fixed recourse (Mathematical Programming 24:314-325).
+- Bertsimas, D., and Sim, M. (2004). The price of robustness (Operations Research 52(1):35-53). doi:10.1287/opre.1030.0065
+- Birge, J. R. (1982). The value of the stochastic solution in stochastic linear programs with fixed recourse (Mathematical Programming 24(1):314-325). doi:10.1007/BF01585113
 - Bryant, B. P., and Lempert, R. J. (2010). Scenario discovery (Technological Forecasting and Social Change).
 - Corsi, M., et al. (2024). Ranking with near-ties (title and venue to be confirmed). Verify.
 - DeCarolis, J. F. (2011). Using modeling to generate alternatives (MGA) to expand our thinking on energy futures (Energy Economics). Verify.
@@ -506,7 +506,7 @@ Full bibliographic details must be confirmed during the literature review before
 - Frysztacki, M. M., Hörsch, J., Hagenmeyer, V., and Brown, T. (2021). The strong effect of network resolution on electricity system models with high shares of wind and solar (Applied Energy). Verify.
 - Gotway, C. A., and Young, L. J. (2002). Combining incompatible spatial data (Journal of the American Statistical Association). Verify.
 - Hausfather, Z., et al. (2022). Climate simulations: recognize the hot model problem (Nature).
-- Hawkins, E., and Sutton, R. (2009). The potential to narrow uncertainty in regional climate predictions (Bulletin of the American Meteorological Society 90(8):1095-1107). Verify.
+- Hawkins, E., and Sutton, R. (2009). The potential to narrow uncertainty in regional climate predictions (Bulletin of the American Meteorological Society 90(8):1095-1107). doi:10.1175/2009BAMS2607.1. Verify pages.
 - Herman, J. D., et al. (2015). How should robustness be defined for water systems planning under change? (Journal of Water Resources Planning and Management).
 - Hörsch, J., and Brown, T. (2017). The role of spatial scale in joint optimisations of generation and transmission for European highly renewable scenarios (International Conference on the European Energy Market). Verify.
 - IEC 61400-1 and IEC 61400-12-1.
@@ -514,7 +514,7 @@ Full bibliographic details must be confirmed during the literature review before
 - Javanmardi, E., et al. (2025). Spatial representation in energy system models (title and venue to be confirmed). Verify.
 - Jordan, D. C., and Kurtz, S. R. (2013). Photovoltaic degradation rates (Progress in Photovoltaics).
 - Kwakkel, J. H., Walker, W. E., and Haasnoot, M. (2016). Coping with the wickedness of public policy problems: approaches for decision making under deep uncertainty (Journal of Water Resources Planning and Management). Verify.
-- Lempert, R. J., and Collins, M. T. (2007). Managing the risk of uncertain threshold responses: comparison of robust, optimum, and precautionary approaches (Risk Analysis 27(4):1009-1026).
+- Lempert, R. J., and Collins, M. T. (2007). Managing the risk of uncertain threshold responses: comparison of robust, optimum, and precautionary approaches (Risk Analysis 27(4):1009-1026). doi:10.1111/j.1539-6924.2007.00940.x
 - Lempert, R. J., Popper, S. W., and Bankes, S. C. (2003). Shaping the Next One Hundred Years (RAND).
 - Lopez, A., et al. (2012). U.S. Renewable Energy Technical Potentials (NREL).
 - Maclaurin, G., et al. (2019). The Renewable Energy Potential (reV) Model (NREL).
@@ -527,7 +527,7 @@ Full bibliographic details must be confirmed during the literature review before
 - Pfenninger, S., Hawkes, A., and Keirstead, J. (2014). Energy systems modeling for twenty-first century energy challenges (Renewable and Sustainable Energy Reviews). Verify.
 - Robinson, W. S. (1950). Ecological correlations and the behavior of individuals (American Sociological Review). Verify.
 - Ryberg, D. S., et al. (2018). Evaluating land eligibility constraints of renewable energy sources in Europe (Energies).
-- Pianosi, F., et al. (2016). Sensitivity analysis of environmental models: a systematic review with practical workflow (Environmental Modelling and Software 79:214-232). Verify.
+- Pianosi, F., Beven, K., Freer, J., Hall, J. W., Rougier, J., Stephenson, D. B., and Wagener, T. (2016). Sensitivity analysis of environmental models: A systematic review with practical workflow (Environmental Modelling & Software 79:214-232). doi:10.1016/j.envsoft.2016.02.008
 - Saltelli, A., et al. (2008). Global Sensitivity Analysis: The Primer (Wiley). Verify.
 - Savage, L. J. (1951). The theory of statistical decision (Journal of the American Statistical Association).
 - Solargis / World Bank ESMAP. Global Solar Atlas PVOUT metadata (2025).
@@ -542,6 +542,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 11.0.1 | 2026-10-13 | PATCH (closes the open points of 11.0.0, no result definition changes): the verdict `not testable` of H4 (fewer than two countries with a profile, otherwise not supported) is now in the text of the hypothesis (`H4_axis_dominance.tex`, after `eq:h4_rule`) and in the H4 block of M-F7-07, which closes D-F7-048; the equation `eq:h4_rule` is broken in an `aligned` block to fit the margin (same statement). Section 13: Bertsimas and Sim (2004), Birge (1982), Hawkins and Sutton (2009), Lempert and Collins (2007) and Pianosi et al. (2016) carry the DOI, and Pianosi et al. the full author list; Neumann and Brown (2021) confirmed; all lose the verify mark except the pages of Hawkins and Sutton. IDs cited and not altered: M-F7-07, OQ-050. |
 | 11.0.0 | 2026-10-13 | MAJOR (changes a result definition and the phase list): the decision rule of H4 is pre-registered (OQ-050, part H4). H4 in 1.3 and the H4 block of M-F7-07 now define the profile of a country and technology from the dominance ratio `rho = D_clim / (D_clim + D_tec)` (No Displacement, Climate-Dominated above 0.60, Techno-Economic-Dominated below 0.40, Mixed between, inclusive) and the strict verdict per technology across countries (supported, not supported, not testable), with the complementary evidence (joint `D`, `D_clim` by SSP, distances to the boundaries) and the sensitivities (without the TCR-exception GCM, 2071-2100, 0.1 degree, `p_k`, `m`, the boundaries {0.30, 0.70} and {0.45, 0.55} as descriptive variants). M-F7-06 is rewritten: the primary statistics are the displacements `D_clim` and `D_tec`, the H3 statistic on the shortlists of `Z_clim` and `Z_tec`; the variance decomposition and the Jaccard overlap become descriptive. M-F7-11 gains `h4_country` and `h4_verdict`. The support phase `cross_country_h4`, which takes the list of countries, is added to 4.1 and 4.2. T-R6 and T-R7 are reworded to the H1 to H4 verdicts and to the displacements and `rho` by country. Section 13 gains Hawkins and Sutton (2009), Pianosi et al. (2016) and Saltelli et al. (2008), marked verify. IDs cited and not altered: M-F4-02, M-F5-01, M-F7-02, M-F7-03, M-F7-05, V-07, OQ-050. |
 | 10.0.0 | 2026-10-13 | MAJOR (changes a result definition): the decision rule of H3 is pre-registered (OQ-050, part H3). H3 in 1.3 and the H3 block of M-F7-07 now define the domain `I` for both rankings, the robust shortlist `S_k` (the same as the target of H2), the nominal rank `r^nom` by `LCOE_i,f0` within `I`, the statistic `D` (share of the capacity of `S_k` with `r^nom > k + m`, `m = k`), the reference `D_ref = 1 - (k + m) / |I|`, the verdict not testable, supported or not supported with `delta = 0.20`, the magnitudes `Pi` (price of robustness, relative, at `f0`) and `B` (reduction of the capacity-weighted `MR`) without verdict, the diagnostics (geodesic distance between centroids, `D_TV` by Admin1, Spearman of `LCOE_i,f0` against `MR_i`, Jaccard by count) and the sensitivities (without the TCR-exception GCM, 2071-2100, 0.1 degree, `p_k` in {0.05, 0.10, 0.20}, `m` in {k/2, 2k}). The statistics of the earlier H3 become descriptive rows. M-F7-11 gains the tables `h3_summary` and `h3_sites`. Section 13 gains Bertsimas and Sim (2004), Birge (1982), DeCarolis (2011, verify), Lempert and Collins (2007) and Neumann and Brown (2021). IDs cited and not altered: M-F4-02, M-F5-01, M-F7-05, V-07, OQ-050. |
 | 9.0.1 | 2026-10-13 | PATCH (wording; closes D-F7-042): the H1 and H2 blocks of M-F7-07 state that `k` is computed on `N = |I_0|`, the size of the F7 set including the climate-fragile cells, which is what M-F7-05 and the code already did; the thesis texts of H1 and H2 say the same. No result changes. IDs cited and not altered: M-F7-05. |
