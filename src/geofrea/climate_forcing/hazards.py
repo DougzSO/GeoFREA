@@ -23,18 +23,13 @@ import pandas as pd
 import xarray as xr
 from scipy.spatial import cKDTree
 
+from geofrea.core.config_schemas import HazardIndicators
 from geofrea.core.constants import REFERENCE_PERIOD
 
 logger = logging.getLogger(__name__)
 
 KELVIN_OFFSET_C = 273.15  # CRAEI hazards/pet.py KELVIN_OFFSET_C
 PR_FLUX_TO_MM_PER_DAY = 86400.0  # kg m-2 s-1 -> mm d-1 (CRAEI hazards/loading.py)
-WET_DAY_THRESHOLD_MM = 1.0  # CRAEI hazards/precip.py WET_DAY_THRESHOLD_MM
-HEAT_THRESHOLDS_C = (
-    35.0,
-    40.0,
-)  # CRAEI config/params.yaml heat_tx35/tx40_threshold_c (tier 1, IPCC AR6 Atlas)
-WET_DAY_PERCENTILE = 95.0
 
 INDICATOR_COLUMNS = (
     "tx35_days",
@@ -92,10 +87,10 @@ def mean_annual_rx5day(pr_mm: xr.DataArray) -> xr.DataArray:
 # Adaptation: per-cell percentile of wet days on the grid; computed on the reference period only (CRAEI rule 4:
 # the threshold cannot see future rows).
 def wet_day_percentile(
-    pr_ref_mm: xr.DataArray, percentile: float = WET_DAY_PERCENTILE
+    pr_ref_mm: xr.DataArray, percentile: float, wet_day_mm: float
 ) -> xr.DataArray:
-    """Per-cell `percentile` of the wet-day (>= 1 mm) precipitation of the reference period."""
-    wet = pr_ref_mm.where(pr_ref_mm >= WET_DAY_THRESHOLD_MM)
+    """Per-cell `percentile` of the wet-day (>= `wet_day_mm`) precipitation of the reference period."""
+    wet = pr_ref_mm.where(pr_ref_mm >= wet_day_mm)
     return (
         wet.quantile(percentile / 100.0, dim="time", skipna=True)
         .drop_vars("quantile")
@@ -105,9 +100,11 @@ def wet_day_percentile(
 
 # Adapted from CRAEI commit 76c9f8212e3bba0fd138409a809156f6fc0b77b1, src/craei/hazards/precip.py::exceedance_frequency.
 # Adaptation: pooled counts over the whole window (a single ratio, not an average of yearly ratios), on the grid.
-def wet_day_exceedance_frequency(pr_mm: xr.DataArray, p95_mm: xr.DataArray) -> xr.DataArray:
+def wet_day_exceedance_frequency(
+    pr_mm: xr.DataArray, p95_mm: xr.DataArray, wet_day_mm: float
+) -> xr.DataArray:
     """Share of wet days above each cell's baseline P95, pooled over the window; NaN where no wet day exists."""
-    wet = pr_mm >= WET_DAY_THRESHOLD_MM
+    wet = pr_mm >= wet_day_mm
     n_wet = wet.sum("time")
     n_exceed = (wet & (pr_mm > p95_mm)).sum("time")
     return (n_exceed / n_wet.where(n_wet > 0)).astype("float32")
@@ -187,26 +184,29 @@ def hazard_fields(
     historical_pr: Path,
     scenario_pr: Path,
     window: tuple[int, int],
+    indicators: HazardIndicators,
 ) -> dict[str, xr.DataArray]:
-    """Native-grid indicator fields (window and reference) for one GCM and scenario."""
+    """Native-grid indicator fields (window and reference) for one GCM and scenario, with the definitions of `experiments.yaml` `hazard_indicators`."""
+    tx35, tx40 = indicators.tx35_days.threshold_c, indicators.tx40_days.threshold_c
+    wet = indicators.wet_p95_exceed_freq
     ref0, ref1 = REFERENCE_PERIOD
     tx_ref = to_celsius(load_daily(historical_tasmax, "tasmax", ref0, ref1))
     tx_win = to_celsius(load_daily(scenario_tasmax, "tasmax", *window))
     pr_ref = to_mm_per_day(load_daily(historical_pr, "pr", ref0, ref1))
     pr_win = to_mm_per_day(load_daily(scenario_pr, "pr", *window))
-    p95 = wet_day_percentile(pr_ref)
+    p95 = wet_day_percentile(pr_ref, wet.percentile, wet.wet_day_mm)
     n_years_ref = ref1 - ref0 + 1
     return {
-        "tx35_days": mean_annual_hot_days(tx_win, 35.0),
-        "tx35_days_ref": mean_annual_hot_days(tx_ref, 35.0),
-        "tx40_days": mean_annual_hot_days(tx_win, 40.0),
-        "tx40_days_ref": mean_annual_hot_days(tx_ref, 40.0),
+        "tx35_days": mean_annual_hot_days(tx_win, tx35),
+        "tx35_days_ref": mean_annual_hot_days(tx_ref, tx35),
+        "tx40_days": mean_annual_hot_days(tx_win, tx40),
+        "tx40_days_ref": mean_annual_hot_days(tx_ref, tx40),
         "rx5day_mm": mean_annual_rx5day(pr_win),
         "rx5day_mm_ref": mean_annual_rx5day(pr_ref),
-        "wet_p95_exceed_freq": wet_day_exceedance_frequency(pr_win, p95),
-        "wet_days_per_year_ref": (
-            (pr_ref >= WET_DAY_THRESHOLD_MM).sum("time") / n_years_ref
-        ).astype("float32"),
+        "wet_p95_exceed_freq": wet_day_exceedance_frequency(pr_win, p95, wet.wet_day_mm),
+        "wet_days_per_year_ref": ((pr_ref >= wet.wet_day_mm).sum("time") / n_years_ref).astype(
+            "float32"
+        ),
     }
 
 

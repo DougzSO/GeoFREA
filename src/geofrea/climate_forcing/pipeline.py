@@ -33,6 +33,7 @@ from geofrea.climate_forcing.table_schemas import (
     HazardContextRow,
 )
 from geofrea.core import paths as core_paths
+from geofrea.core.config_loader import load_experiments
 from geofrea.core.tables import write_table
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 
@@ -203,6 +204,7 @@ def _isimip(iso: str, gcm: str, experiment: str, variable: str) -> Path:
 def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     """J-4: hazard_context.parquet for the members that carry the hazard channel."""
     ensemble = load_ensemble(experiments_yaml)
+    indicators = load_experiments(experiments_yaml).hazard_indicators
     members = [
         m
         for m in resolve_members(ensemble)
@@ -226,6 +228,7 @@ def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
             _isimip(iso, m.gcm.cds_name, "historical", "pr"),
             _isimip(iso, m.gcm.cds_name, m.experiment, "pr"),
             m.window,
+            indicators,
         )
         frames.append(hazard_frame(cells, m.member_id, fields, gust, ISIMIP_MAX_DISTANCE_DEG))
     out = pd.concat(frames, ignore_index=True)

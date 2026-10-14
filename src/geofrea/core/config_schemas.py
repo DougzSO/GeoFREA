@@ -11,7 +11,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, model_validator
 
 from geofrea.land_eligibility.parameters import LandAvailability
 
@@ -230,6 +230,39 @@ class HazardThreshold(BaseModel):
     tier: int | None
 
 
+class HeatIndicator(BaseModel):
+    """Definition of a heat-day indicator of `hazard_context` (M-F4-05): the days per year with the daily maximum temperature at or above `threshold_c`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    threshold_c: float
+    unit: str
+    source: str
+    tier: int = Field(ge=1, le=3)
+
+
+class WetDayIndicator(BaseModel):
+    """Definition of the wet-day exceedance indicator (M-F4-05): wet days are those with at least `wet_day_mm` of precipitation, compared with the cell's `percentile` of the reference period."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    wet_day_mm: PositiveFloat
+    percentile: float = Field(gt=0.0, lt=100.0)
+    unit: str
+    source: str
+    tier: int = Field(ge=1, le=3)
+
+
+class HazardIndicators(BaseModel):
+    """The definitions of the indicators of `hazard_context`, keyed by the column names `tx35_days`, `tx40_days` and `wet_p95_exceed_freq`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tx35_days: HeatIndicator
+    tx40_days: HeatIndicator
+    wet_p95_exceed_freq: WetDayIndicator
+
+
 class PrimSensitivity(BaseModel):
     """The other values of the PRIM settings that are reported beside the primary result (M-F7-08)."""
 
@@ -373,6 +406,7 @@ class ExperimentsFile(BaseModel):
     ]
     national_targets: dict[str, dict[str, NationalTarget]] = Field(default_factory=dict)
     hazard_thresholds: dict[str, HazardThreshold]
+    hazard_indicators: HazardIndicators
     prim: PrimConfig
     synthesis: SynthesisConfig
     thesis_figures: ThesisFiguresConfig

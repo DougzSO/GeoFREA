@@ -351,6 +351,15 @@ hazard_thresholds:
   wet_p95_exceed_freq: {threshold: null, unit: fraction, source: null, tier: null}
   gust_mean_annual_max_ms: {threshold: null, unit: m/s, source: null, tier: null}
 
+# Definitions of the hazard indicators of hazard_context (M-F4-05), named as the columns of hazard_context.parquet: the heat-day thresholds, the
+# wet-day threshold and the percentile of the wet-day indicator. They are definitions of the indicator, not exposure thresholds (those are
+# `hazard_thresholds`, OQ-051): tx35_days counts the days per year with daily maximum temperature at or above 35 C, tx40_days at or above 40 C,
+# wet_p95_exceed_freq the share of wet days (precipitation at or above `wet_day_mm`) above the cell's own 95th percentile of the reference period.
+hazard_indicators:
+  tx35_days: {threshold_c: 35.0, unit: days, source: "CRAEI config/params.yaml heat_tx35_threshold_c (IPCC AR6 Atlas)", tier: 1}
+  tx40_days: {threshold_c: 40.0, unit: days, source: "CRAEI config/params.yaml heat_tx40_threshold_c (IPCC AR6 Atlas)", tier: 1}
+  wet_p95_exceed_freq: {wet_day_mm: 1.0, percentile: 95.0, unit: fraction, source: "CRAEI hazards/precip.py WET_DAY_THRESHOLD_MM and wet_day_p95", tier: 2}
+
 # PRIM scenario discovery (M-F7-08; docs/thesis/methods/synthesis_and_scenario_discovery.tex). The unit is the future of the core window; a
 # future is a case of interest when the capacity share V_f of the nominal shortlist whose rank by relative regret exceeds k + m is at least
 # `outcome_threshold` (theta); m = tolerance_multiple_of_k * k. Peeling and pasting fraction and minimum support follow Bryant and Lempert (2010).

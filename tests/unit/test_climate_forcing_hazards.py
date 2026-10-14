@@ -49,8 +49,8 @@ def test_wet_day_threshold_comes_from_the_reference_only_and_exceedance_is_poole
         2041, 2050, lambda t: float(1 + (t.dayofyear % 20)) * 2.0
     )  # twice as wet: more exceedances
 
-    p95 = hz.wet_day_percentile(ref)
-    freq = hz.wet_day_exceedance_frequency(win, p95)
+    p95 = hz.wet_day_percentile(ref, 95.0, 1.0)
+    freq = hz.wet_day_exceedance_frequency(win, p95, 1.0)
 
     assert float(p95.isel(lat=0, lon=0)) == pytest.approx(
         np.percentile(np.arange(1, 21), 95), rel=0.06
@@ -58,7 +58,7 @@ def test_wet_day_threshold_comes_from_the_reference_only_and_exceedance_is_poole
     assert (
         float(freq.isel(lat=0, lon=0)) > 0.05
     )  # a wetter window exceeds the baseline P95 more than 5% of wet days
-    same = hz.wet_day_exceedance_frequency(ref, p95)
+    same = hz.wet_day_exceedance_frequency(ref, p95, 1.0)
     assert float(same.isel(lat=0, lon=0)) == pytest.approx(
         0.05, abs=0.03
     )  # about 5% by construction
@@ -71,7 +71,7 @@ def test_dry_cells_have_nan_exceedance_not_a_filled_value():
         np.full((2, 2), 5.0), dims=("lat", "lon"), coords={"lat": [0.0, 0.5], "lon": [10.0, 10.5]}
     )
 
-    assert bool(np.isnan(hz.wet_day_exceedance_frequency(pr, p95)).all())
+    assert bool(np.isnan(hz.wet_day_exceedance_frequency(pr, p95, 1.0)).all())
 
 
 @pytest.mark.unit
@@ -140,3 +140,32 @@ def test_maps_draw_one_png_per_member_and_show_masked_cells(tmp_path):
         "ZZZ_m_a_ssp370_2041_2070.png",
     ]  # no m0
     assert all(p.exists() and p.stat().st_size > 5000 for p in out)
+
+
+@pytest.mark.unit
+def test_the_wet_day_threshold_and_the_percentile_are_the_ones_given():
+    ref = _daily(1995, 2014, lambda t: float(1 + (t.dayofyear % 20)))
+    low = hz.wet_day_percentile(ref, 50.0, 1.0)
+    high = hz.wet_day_percentile(ref, 95.0, 1.0)
+    strict = hz.wet_day_percentile(ref, 50.0, 10.0)  # only the wet days of 10 mm or more
+    assert float(low.isel(lat=0, lon=0)) < float(high.isel(lat=0, lon=0))
+    assert float(strict.isel(lat=0, lon=0)) > float(low.isel(lat=0, lon=0))
+
+
+@pytest.mark.unit
+def test_the_indicator_definitions_are_in_the_configuration_with_their_names():
+    """M-8 of the pre-research audit: 35 and 40 C and the 95th percentile of the wet-day indicator are read from experiments.yaml."""
+    from pathlib import Path
+
+    from geofrea.core.config_loader import load_experiments
+
+    experiments = load_experiments(
+        Path(__file__).resolve().parents[2] / "config" / "experiments.yaml"
+    )
+    indicators = experiments.hazard_indicators
+    assert (indicators.tx35_days.threshold_c, indicators.tx40_days.threshold_c) == (35.0, 40.0)
+    assert (
+        indicators.wet_p95_exceed_freq.percentile,
+        indicators.wet_p95_exceed_freq.wet_day_mm,
+    ) == (95.0, 1.0)
+    assert not hasattr(hz, "HEAT_THRESHOLDS_C") and not hasattr(hz, "WET_DAY_PERCENTILE")
