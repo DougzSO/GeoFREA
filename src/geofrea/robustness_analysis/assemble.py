@@ -370,7 +370,11 @@ def prim_input(
     nominal shortlist beyond the tolerance; the case of interest is decided by the threshold of each search.
     """
     draws = futures[futures["sample"] >= 1].reset_index(drop=True)
-    real = [*parameter_names, "delta_rsds_mean", "dT_mean", "delta_wind_mean"]
+    real = [*parameter_names, "delta_rsds_mean", "dT_mean"]
+    if (
+        draws["delta_wind_mean"].notna().all()
+    ):  # a technology with a member that has no wind channel does not read the wind ratio: no such descriptor
+        real.append("delta_wind_mean")
     x = draws[real].astype("float64")
     x["gcm"] = draws["gcm"].astype(str)
     x["ssp"] = draws["ssp"].astype(str)

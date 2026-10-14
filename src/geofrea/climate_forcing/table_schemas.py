@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-CLIMATE_TABLE_SCHEMA_VERSION = "1.0"
+CLIMATE_TABLE_SCHEMA_VERSION = "1.1"
 
 
 class ForcingRow(BaseModel):
@@ -16,7 +16,10 @@ class ForcingRow(BaseModel):
     member: str
     delta_rsds: float
     dT: float
-    delta_wind: float
+    delta_wind: (
+        float | None
+    )  # NaN where the member has no wind channel or the ratio is masked (M-F4-06, M-F4-07)
+    dT_isolated_native_cell: bool  # the cell is interpolated from an isolated native cell of dT; nothing is corrected (V-82)
 
 
 class ForcingMaskedRow(BaseModel):

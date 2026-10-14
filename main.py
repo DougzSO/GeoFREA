@@ -100,6 +100,7 @@ from geofrea.core.orchestrator import (
     phase_graph,
 )
 from geofrea.core.paths import log_path, outputs_dir, phase_dir
+from geofrea.core.power import keep_awake
 from geofrea.core.production import (
     ConfigConsistencyError,
     ProductionRunError,
@@ -132,6 +133,11 @@ from geofrea.grid_alignment.adapter import (
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
+from geofrea.land_eligibility.parameters import (
+    elevation_role,
+    elevation_sensitivity_m,
+    load_land_availability,
+)
 from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.convergence import ConvergenceSummary, build_convergence
@@ -542,8 +548,15 @@ def _build_phase_specs(
             sampler_size=sampler.initial_size,
             max_batch_gb=max_batch_gb,
             production=production,
+            elevation_sensitivity=elevation_sensitivities(technologies),
         )
         for tech, entry in result.technologies.items():
+            if entry.supply_curve_below_elevation_sensitivity is not None:
+                context.register_artifact(
+                    f"supply_curve_{tech}__below_elevation",
+                    entry.supply_curve_below_elevation_sensitivity,
+                    LCOE_TABLE_SCHEMA_VERSION,
+                )
             context.register_artifact(
                 f"lcoe_summary_{tech}", entry.lcoe_summary, LCOE_TABLE_SCHEMA_VERSION
             )
@@ -822,6 +835,11 @@ def _build_phase_specs(
                 f"lcoe_nominal_{tech}__{scenario}"
                 for tech in technologies
                 for scenario in LAND_SCENARIOS[1:]
+            }
+            | {
+                f"supply_curve_{tech}__below_elevation"
+                for tech, cap in elevation_sensitivities(technologies).items()
+                if cap is not None
             },
             summarize=lambda out: "; ".join(
                 f"{t}: {e.n_rows} cell-members, {e.n_samples} samples, "
@@ -869,6 +887,12 @@ def _build_phase_specs(
                 f"{kind}_{tech}__{role}"
                 for tech in technologies
                 for role in ("core", "sensitivity")
+                for kind in ROW_MODELS
+            }
+            | {
+                f"{kind}_{tech}__{elevation_role(cap)}"
+                for tech, cap in elevation_sensitivities(technologies).items()
+                if cap is not None
                 for kind in ROW_MODELS
             },
             summarize=lambda out: "; ".join(
@@ -1241,7 +1265,21 @@ def _parse_args(argv: list[str]):
     return parser.parse_args(argv)
 
 
+def elevation_sensitivities(technologies: tuple[str, ...]) -> dict[str, float | None]:
+    """The altitude (m) above which each technology's results are also reported without the cells (OQ-058); None when it has none."""
+    la = load_land_availability(EXPERIMENTS_YAML)
+    return {
+        t: elevation_sensitivity_m(la, t) if t in la.technologies else None for t in technologies
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
+    """Run the pipeline with the computer kept awake (V-T: no suspension in the middle of a phase; nothing on other systems)."""
+    with keep_awake():
+        return _main(argv)
+
+
+def _main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv or [])
     settings = load_settings(SETTINGS_YAML)
     parameters = load_parameters(PARAMETERS_JSON)

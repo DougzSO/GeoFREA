@@ -56,7 +56,11 @@ def changes_by_ssp(
         index="cell_id", columns="member", values="CF"
     )
     base = wide[reference[0]]
-    core = members[(members["window"] == core_window) & members["ssp"].notna()]
+    core = members[
+        (members["window"] == core_window)
+        & members["ssp"].notna()
+        & members["member"].isin(wide.columns)
+    ]  # a member the technology does not carry (no wind channel) has no column
     out = {
         str(ssp): (
             part["member"].tolist(),

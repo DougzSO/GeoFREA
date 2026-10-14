@@ -91,13 +91,22 @@ def _country(**decision):
     )
 
 
+CHANNELS = {"resource_rsds": True, "resource_tas": True, "resource_wind": True}
 HAZARD_MEMBERS = (
     CORE[0],
     CORE[2],
 )  # the members that carry the hazard channel when `hazard` is set
 
 
-def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENARIOS, hazard=False):
+def _stage(
+    tmp_path: Path,
+    tech="wind",
+    cf=None,
+    absent=(),
+    scenarios=LAND_SCENARIOS,
+    hazard=False,
+    no_wind=(),
+):
     """F5-, F3- and F4-like inputs for 20 cells: `cf[(cell index, member)]` overrides a capacity factor, `absent` lists (cell index, member)."""
     cf = cf or {}
     rng = np.random.default_rng(21)
@@ -122,7 +131,12 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
             pd.DataFrame(
                 {
                     "cell_id": IDS[keep].astype("int64"),
-                    "member": pd.Categorical([member] * int(keep.sum()), categories=ALL_MEMBERS),
+                    "member": pd.Categorical(
+                        [member] * int(keep.sum()),
+                        categories=[
+                            m for m in ALL_MEMBERS if not (tech == "wind" and m in no_wind)
+                        ],
+                    ),  # F5 lists only the members of the technology
                     "P_MW": p_mw[keep],
                     "CF": values[keep],
                     "E_MWh": (p_mw * values * 8760.0)[keep],
@@ -136,7 +150,7 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
                     "member": pd.Categorical([member] * int(keep.sum()), categories=ALL_MEMBERS),
                     "delta_rsds": np.ones(int(keep.sum())),
                     "dT": d_t[keep],
-                    "delta_wind": np.ones(int(keep.sum())),
+                    "delta_wind": np.full(int(keep.sum()), np.nan if member in no_wind else 1.0),
                 }
             )
         )
@@ -166,6 +180,9 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
                 "cell_area_km2": np.full(N_CELLS, 25.0),
                 "dist_grid_km": rng.uniform(0.0, 120.0, N_CELLS),
                 "dist_road_km": rng.uniform(0.0, 30.0, N_CELLS),
+                "elevation_m": np.linspace(
+                    100.0, 3600.0, N_CELLS
+                ),  # the last cells lie above the 3000 m of the wind sensitivity (OQ-058)
             }
         ).to_parquet(cdir / f"candidates_{tech}__{scenario}.parquet")
     pd.concat(forcing, ignore_index=True).to_parquet(kdir / "forcing.parquet")
@@ -198,9 +215,7 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
         ).to_parquet(
             kdir / "hazard_context.parquet"
         )  # no member of these tests carries the hazard channel
-    members = [
-        {"member": "m0", "window": "1995-2014", "channels": {"resource": True, "hazard": False}}
-    ]
+    members = [{"member": "m0", "window": "1995-2014", "channels": CHANNELS | {"hazard": False}}]
     for name, (gcm, ssp, window) in META.items():
         members.append(
             {
@@ -208,7 +223,11 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
                 "gcm": gcm,
                 "ssp": ssp,
                 "window": window,
-                "channels": {"resource": True, "hazard": hazard and name in HAZARD_MEMBERS},
+                "channels": CHANNELS
+                | {
+                    "resource_wind": name not in no_wind,
+                    "hazard": hazard and name in HAZARD_MEMBERS,
+                },
             }
         )
     (kdir / "members.yaml").write_text(yaml.safe_dump({"members": members}), encoding="utf-8")
@@ -460,6 +479,36 @@ def test_the_results_do_not_depend_on_the_memory_budget(tmp_path):
 
 
 @pytest.mark.unit
+def test_wind_repeats_the_core_window_without_the_cells_above_the_altitude_sensitivity_and_solar_does_not(
+    tmp_path,
+):
+    """OQ-058: the wind core window is run again on the candidates not above 3000 m (cells 16 to 19 of the fixture are), with the whole analysis."""
+    entry, _, dirs = _run(tmp_path / "w")
+    core, below = entry.windows["core"], entry.windows["core_below_3000m"]
+    elevation = pd.read_parquet(
+        dirs["candidates_dir"] / "candidates_wind__central.parquet"
+    ).set_index("cell_id")["elevation_m"]
+    kept = elevation.index[elevation <= 3000.0]
+    assert (
+        0 < len(kept) < N_CELLS and below.n_candidates == len(kept) and below.n_f7_set == len(kept)
+    )
+    assert core.n_candidates == N_CELLS
+    table = pd.read_parquet(below.tables["robustness"])
+    assert sorted(table["cell_id"]) == sorted(kept) and table["cell_class"].notna().all()
+    meta = _meta(below.tables["robustness"])
+    assert meta["window_role"] == "core_below_3000m" and meta["window"] == "2041-2070"
+    # the rest of the analysis ran on the same cells: the nominal LCOE of a kept cell is the one of the full run
+    full = pd.read_parquet(core.tables["robustness"]).set_index("cell_id")
+    pd.testing.assert_series_equal(
+        full.loc[kept, "lcoe_nominal"],
+        table.set_index("cell_id")["lcoe_nominal"].loc[kept],
+        check_names=False,
+    )
+    solar, _, _ = _run(tmp_path / "s", tech="solar")
+    assert set(solar.windows) == {"core", "sensitivity"}
+
+
+@pytest.mark.unit
 def test_the_sensitivity_window_has_its_own_set_and_files(tmp_path):
     entry, out, _ = _run(tmp_path, absent=[(2, SENSITIVITY[0])])
     core, sens = entry.windows["core"], entry.windows["sensitivity"]
@@ -470,7 +519,13 @@ def test_the_sensitivity_window_has_its_own_set_and_files(tmp_path):
     )
     names = sorted(p.name for p in out.iterdir())
     assert names == sorted(
-        f"{kind}_wind__{role}.parquet" for kind in ROW_MODELS for role in ("core", "sensitivity")
+        f"{kind}_wind__{role}.parquet"
+        for kind in ROW_MODELS
+        for role in (
+            "core",
+            "sensitivity",
+            "core_below_3000m",
+        )  # the third is the altitude sensitivity of wind (OQ-058)
     )
     meta = _meta(core.tables["robustness"])
     assert (
@@ -968,3 +1023,87 @@ def test_a_null_h4_rule_or_a_null_p_k_writes_the_h4_table_empty_and_names_the_qu
     assert len(pd.read_parquet(path)) == 0 and _skip_note(path)["open_question"] == "OQ-021"
     hypothesis = pd.read_parquet(other.windows["core"].tables["hypothesis"])
     assert not hypothesis["statistic"].str.startswith("h4_displacement").any()
+
+
+# -- members by channel (M-F4-02 item 6, M-F4-06) -----------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_wind_uses_the_members_that_carry_the_wind_channel_and_solar_uses_all_of_them(tmp_path):
+    """A member without the wind channel (MIROC6) has no F5 wind rows: it is not a member of the wind analysis, so its cells are not
+    `climate_data_invalid`; solar keeps it."""
+    no_wind = CORE[2]  # the GCM-B member of SSP1-2.6; the others keep both SSPs for H1
+    every_cell = [(i, no_wind) for i in range(N_CELLS)]  # F5 wrote no wind row of the member
+    wind, _, _ = _run(tmp_path / "w", tech="wind", absent=every_cell, no_wind=(no_wind,))
+    solar, _, _ = _run(tmp_path / "s", tech="solar", no_wind=(no_wind,))
+
+    assert (
+        wind.windows["core"].n_f7_set == N_CELLS
+        and wind.windows["core"].class_counts["climate_data_invalid"] == 0
+    )
+    wind_members = set(
+        pd.read_parquet(wind.windows["core"].tables["nominal_lcoe_by_member"])["member"]
+    )
+    solar_members = set(
+        pd.read_parquet(solar.windows["core"].tables["nominal_lcoe_by_member"])["member"]
+    )
+    assert no_wind not in wind_members and no_wind in solar_members
+    assert len(solar_members) == len(wind_members) + 1
+    futures = pd.read_parquet(solar.windows["core"].tables["futures"])
+    assert (
+        futures["delta_wind_mean"].isna().any()
+    )  # the MIROC6-like solar futures have no wind ratio
+    assert pd.read_parquet(wind.windows["core"].tables["futures"])["delta_wind_mean"].notna().all()
+    # undeclared, the same absence would make every cell invalid: the declaration is what removes the member
+    undeclared, _, _ = _run(tmp_path / "u", tech="wind", absent=every_cell)
+    assert undeclared.windows["core"].class_counts["climate_data_invalid"] == N_CELLS
+
+
+@pytest.mark.unit
+def test_prim_has_no_wind_descriptor_when_a_member_has_no_wind_ratio():
+    from geofrea.robustness_analysis.assemble import prim_input
+
+    futures = pd.DataFrame(
+        {
+            "sample": [1, 2, 1, 2],
+            "member": ["a", "a", "b", "b"],
+            "gcm": ["G1", "G1", "G2", "G2"],
+            "ssp": ["SSP1-2.6"] * 4,
+            "p": [1.0, 2.0, 3.0, 4.0],
+            "delta_rsds_mean": 1.0,
+            "dT_mean": 2.0,
+            "delta_wind_mean": [1.0, 1.0, np.nan, np.nan],
+            "displaced_capacity_share": [0.1, 0.2, 0.3, 0.4],
+        }
+    )
+
+    x, _ = prim_input(futures, ["p"])
+    assert "delta_wind_mean" not in x.columns and {"p", "delta_rsds_mean", "dT_mean"} <= set(
+        x.columns
+    )
+    complete, _ = prim_input(futures.assign(delta_wind_mean=1.0), ["p"])
+    assert "delta_wind_mean" in complete.columns
+
+
+@pytest.mark.unit
+def test_the_member_factor_means_of_a_member_without_wind_are_nan_not_zero(tmp_path):
+    from geofrea.robustness_analysis.pipeline import member_factor_means
+
+    forcing = pd.DataFrame(
+        {
+            "cell_id": [1, 2, 1, 2],
+            "member": ["a", "a", "b", "b"],
+            "delta_rsds": 1.0,
+            "dT": 2.0,
+            "delta_wind": [1.1, 1.3, np.nan, np.nan],
+        }
+    )
+    path = tmp_path / "forcing.parquet"
+    forcing.to_parquet(path)
+
+    means = member_factor_means(path, np.array([1, 2]), ["a", "b"])
+
+    assert means.loc["a", "delta_wind"] == pytest.approx(1.2) and np.isnan(
+        means.loc["b", "delta_wind"]
+    )
+    assert means.loc["b", "delta_rsds"] == 1.0

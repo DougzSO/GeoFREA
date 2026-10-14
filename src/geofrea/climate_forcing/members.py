@@ -17,6 +17,25 @@ from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 
 SSP_EXPERIMENT = {"SSP1-2.6": "ssp126", "SSP3-7.0": "ssp370", "SSP5-8.5": "ssp585"}
 VARIABLES = ("rsds", "sfcWind", "tas")
+# The channels a member declares (M-F4-06). A technology needs the resource channels of its capacity-factor model: solar reads
+# rsds and tas, wind reads the wind ratio. The hazard channel is context only and is not a requirement of any technology.
+CHANNEL_NAMES = ("resource_rsds", "resource_tas", "resource_wind", "hazard")
+CHANNELS_BY_CF_MODEL: dict[str, tuple[str, ...]] = {
+    "pvout_with_temperature": ("resource_rsds", "resource_tas"),
+    "weibull_with_air_density": ("resource_wind",),
+}
+
+
+def required_channels(cf_model: str) -> tuple[str, ...]:
+    """The resource channels a member must carry for a technology whose capacity-factor model is `cf_model`."""
+    try:
+        return CHANNELS_BY_CF_MODEL[cf_model]
+    except KeyError:
+        raise MemberResolutionError(
+            f"no channel requirement is declared for cf_model {cf_model!r}"
+        ) from None
+
+
 REFERENCE_MEMBER_ID = "m0"
 REFERENCE_WINDOW = (1995, 2014)
 
@@ -33,6 +52,9 @@ class Gcm:
     tcr_ar6_k: float | None = None
     tcr_exception: bool = False
     note: str | None = None
+    wind_channel: bool = (
+        True  # False: the wind ratio of this GCM is not used (M-F4-02 item 6); rsds and tas are
+    )
 
 
 @dataclass(frozen=True)
@@ -57,6 +79,9 @@ class Ensemble:
     hazard_windows_available: tuple[
         tuple[int, int], ...
     ] = ()  # windows with ISIMIP3b daily data on disk
+    dt_isolated_native_cell_threshold_k: float | None = (
+        None  # V-82: flag threshold for isolated native dT cells
+    )
 
 
 def _parse_window(text: str) -> tuple[int, int]:
@@ -82,6 +107,7 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
             tcr_ar6_k=g.get("tcr_ar6_k"),
             tcr_exception=bool(g.get("tcr_exception", False)),
             note=g.get("note"),
+            wind_channel=bool(g.get("wind_channel", True)),
         )
         for g in cfg["gcms"]
     )
@@ -96,6 +122,7 @@ def load_ensemble(experiments_yaml: Path) -> Ensemble:
         hazard_windows_available=tuple(
             _parse_window(w) for w in cfg.get("hazard_windows_available", [])
         ),
+        dt_isolated_native_cell_threshold_k=cfg.get("dt_isolated_native_cell_threshold_k"),
     )
 
 
@@ -130,6 +157,18 @@ def has_hazard_channel(member: Member, hazard_windows: tuple[tuple[int, int], ..
     return member.gcm is not None and member.gcm.hazard_channel and member.window in hazard_windows
 
 
+def member_channels(member: Member, hazard_windows: tuple[tuple[int, int], ...]) -> dict[str, bool]:
+    """The channels a member declares: `resource_rsds`, `resource_tas`, `resource_wind` and `hazard` (M-F4-06)."""
+    if member.gcm is None:
+        return {"resource_rsds": True, "resource_tas": True, "resource_wind": True, "hazard": False}
+    return {
+        "resource_rsds": True,
+        "resource_tas": True,
+        "resource_wind": member.gcm.wind_channel,
+        "hazard": has_hazard_channel(member, hazard_windows),
+    }
+
+
 def members_manifest(
     members: list[Member], registry: Cmip6Registry, hazard_windows: tuple[tuple[int, int], ...] = ()
 ) -> dict:
@@ -146,13 +185,15 @@ def members_manifest(
                     "member": m.member_id,
                     "description": "reference climatology, no change (delta_rsds = delta_wind = 1, dT = 0)",
                     "window": "1995-2014",
-                    "channels": {"resource": True, "hazard": False},
+                    "channels": member_channels(m, hazard_windows),
                 }
             )
             continue
         sources: dict[str, dict] = {}
         realizations: set[str] = set()
         for variable in VARIABLES:
+            if variable == "sfcWind" and not m.gcm.wind_channel:
+                continue  # declared by `channels.resource_wind: false`; the file is not read
             for experiment in ("historical", m.experiment):
                 e = _entry(registry, m.gcm, experiment, variable)
                 realizations.add(e.realization)
@@ -170,7 +211,7 @@ def members_manifest(
             "gcm": m.gcm.name,
             "ssp": m.ssp,
             "window": f"{m.window[0]}-{m.window[1]}",
-            "channels": {"resource": True, "hazard": has_hazard_channel(m, hazard_windows)},
+            "channels": member_channels(m, hazard_windows),
             "realization": next(iter(realizations)),
             "native_grid": grid.model_dump() if grid else None,
             "tcr_ar6_k": m.gcm.tcr_ar6_k,
@@ -178,5 +219,7 @@ def members_manifest(
         }
         if m.gcm.tcr_exception:
             entry["tcr_exception"] = True
+        if not m.gcm.wind_channel:
+            entry["wind_channel_exception"] = True
         out.append(entry)
     return {"reference_period": "1995-2014", "n_members": len(out), "members": out}

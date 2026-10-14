@@ -26,13 +26,18 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.forcing import assert_forcing_usable
-from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, load_ensemble
+from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, load_ensemble, required_channels
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
 from geofrea.data_quality_audit.schemas import AuditConfig
+from geofrea.land_eligibility.parameters import (
+    ELEVATION_COLUMN,
+    elevation_sensitivity_m,
+    load_land_availability,
+)
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
 from geofrea.technical_potential.aggregates import aggregate_scenario
@@ -114,6 +119,14 @@ class ResolvedTechnology:
     settings: CfSettings
     parameters: Mapping[str, float]
     curve_sha256: Mapping[str, str]
+
+
+CENTRAL_SCENARIO = LAND_SCENARIOS[0]
+
+
+def elevation_sensitivity_scenario(elevation_m: float) -> str:
+    """The label of the aggregate rows computed without the cells above `elevation_m` (OQ-058), for example `central__below_3000m`."""
+    return f"{CENTRAL_SCENARIO}__below_{elevation_m:.0f}m"
 
 
 def potential_dir(iso: str) -> Path:
@@ -251,10 +264,16 @@ def build_technology_potential(
     out_dir: Path,
     input_ranges: Mapping[str, InputRange],
     production: bool = False,
+    member_channels: Mapping[str, Mapping[str, bool]] | None = None,
+    elevation_sensitivity_m: float | None = None,
 ) -> TechPotential:
     """Tables and aggregates of one technology for the given land scenarios.
 
     Implements: M-F5-01 to M-F5-06, M-F4-07.
+
+    The members of the technology are those whose `members.yaml` channels include the ones its capacity-factor model reads (`member_channels`;
+    a member that declares no entry carries every channel). A member without the channel is absent by declaration, not masked (M-F4-06), and
+    a technology that does not read the wind ratio keeps a cell-member whose wind ratio is masked.
 
     Raises:
         InputRangeError: a resource or distance value of a candidate cell is outside its sanity range (V-04); raised before any output.
@@ -264,10 +283,18 @@ def build_technology_potential(
     tech = resolved.technology
     if REFERENCE_MEMBER_ID not in members:
         raise CfModelError(f"the member list has no reference member {REFERENCE_MEMBER_ID!r}")
+    channels = required_channels(resolved.cf_model_name)
+    all_members = list(members)
+    members = [
+        m
+        for m in all_members
+        if all((member_channels or {}).get(m, {}).get(c, True) for c in channels)
+    ]
+    uses_wind = "resource_wind" in channels
     forcing = pd.read_parquet(forcing_path)
     forcing["member"] = forcing["member"].astype(str)
     masked = pd.read_parquet(forcing_masked_path)
-    unknown = sorted(set(forcing["member"]) - set(members))
+    unknown = sorted(set(forcing["member"]) - set(all_members))
     if unknown:
         raise CfModelError(f"forcing.parquet has members not listed in members.yaml: {unknown}")
 
@@ -280,7 +307,12 @@ def build_technology_potential(
         validate_candidates(iso, tech, scenario, frame, input_ranges)
         # the forcing guard comes first: nothing is computed on a forcing that breaks the contract (M-F4-07)
         assert_forcing_usable(
-            forcing, masked, frame["cell_id"].to_numpy(), list(members), wind_valid_range
+            forcing,
+            masked,
+            frame["cell_id"].to_numpy(),
+            list(members),
+            wind_valid_range,
+            channels,
         )
         candidates[scenario] = frame
 
@@ -312,6 +344,10 @@ def build_technology_potential(
             rows = np.flatnonzero(position >= 0)
             if len(rows):
                 taken = factors.iloc[position[rows]]
+                if uses_wind:  # a masked wind ratio (NaN, declared in forcing_masked.parquet) is an absent cell-member for wind only
+                    present = np.isfinite(taken["delta_wind"].to_numpy(dtype="float64"))
+                    rows, taken = rows[present], taken[present]
+            if len(rows):
                 cf = prepared.member(
                     rows,
                     taken["delta_rsds"].to_numpy(dtype="float64"),
@@ -370,6 +406,24 @@ def build_technology_potential(
             HOURS_PER_YEAR,
         )
         aggregate_frames.append(aggregate)
+        if (
+            scenario == CENTRAL_SCENARIO
+            and elevation_sensitivity_m is not None
+            and ELEVATION_COLUMN in frame.columns
+        ):
+            # OQ-058: the totals again without the cells above the sensitivity altitude, as extra rows of the aggregates (not a land scenario)
+            keep = frame[ELEVATION_COLUMN].to_numpy(dtype="float64") <= elevation_sensitivity_m
+            aggregate_frames.append(
+                aggregate_scenario(
+                    elevation_sensitivity_scenario(elevation_sensitivity_m),
+                    list(members),
+                    p_mw[keep],
+                    area[keep],
+                    {m: e[keep] for m, e in energy_by_member.items()},
+                    REFERENCE_MEMBER_ID,
+                    HOURS_PER_YEAR,
+                )
+            )
         ref = aggregate[aggregate["member"] == REFERENCE_MEMBER_ID].iloc[0]
         scenario_results[scenario] = ScenarioPotential(
             scenario=scenario,
@@ -451,6 +505,7 @@ def build_potential(
         raise MissingParameterError(iso, ", ".join(run_technologies), failures)
 
     ensemble = load_ensemble(experiments_yaml)
+    land_availability = load_land_availability(experiments_yaml)
     if ensemble.wind_factor_valid_range is None:
         raise CfModelError("experiments.yaml has no wind_factor_valid_range (M-F4-07)")
     candidates_dir = candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
@@ -464,9 +519,9 @@ def build_potential(
     ):
         if not needed.is_file():
             raise FileNotFoundError(f"F5 input missing (F4 must have run): {needed}")
-    members = [
-        m["member"] for m in yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
-    ]
+    member_entries = yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
+    members = [m["member"] for m in member_entries]
+    member_channels = {m["member"]: m.get("channels", {}) for m in member_entries}
 
     geometry = geometry if geometry is not None else load_country_geometry(iso)
     result: dict[str, TechPotential] = {}
@@ -494,5 +549,7 @@ def build_potential(
             out_dir=Path(out_dir),
             input_ranges=ranges,
             production=production,
+            member_channels=member_channels,
+            elevation_sensitivity_m=elevation_sensitivity_m(land_availability, tech),
         )
     return PotentialSummary(country_code=iso, technologies=result)

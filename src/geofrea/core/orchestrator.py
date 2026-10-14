@@ -48,7 +48,9 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.3"
+_MANIFEST_SCHEMA_VERSION = "2.4"
+# 2.4 (METHODOLOGY 14.0.0, A-02): every PhaseManifestEntry records, besides its time stamps, the wall-clock time and the CPU time of the process
+# for the phase (`wall_s`, `cpu_s`, None for entries written before 2.4), so that a phase whose wall time is far above its CPU time is visible.
 # 2.3 (METHODOLOGY 7.0.0, A-02): every PhaseManifestEntry records the METHODOLOGY version it ran under
 # (`methodology_version`, None for entries written before 2.3).
 # 2.1 and 2.2 manifests are readable without migration: PhaseManifestEntry's new
@@ -57,7 +59,7 @@ _MANIFEST_SCHEMA_VERSION = "2.3"
 # on-disk tag to "2.3" in memory before validating (RunManifest's
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
-_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", "2.2", _MANIFEST_SCHEMA_VERSION})
+_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", "2.2", "2.3", _MANIFEST_SCHEMA_VERSION})
 
 
 def _now_iso() -> str:
@@ -227,6 +229,8 @@ class PhaseResult(BaseModel, Generic[T]):
             None if "success".
         started_at: ISO-8601 UTC timestamp.
         finished_at: ISO-8601 UTC timestamp.
+        wall_s: Wall-clock seconds of the execution (None for a phase that was resumed or not attempted).
+        cpu_s: CPU seconds of the process during the execution (None as `wall_s`).
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -237,6 +241,8 @@ class PhaseResult(BaseModel, Generic[T]):
     error: str | None
     started_at: str
     finished_at: str
+    wall_s: float | None = None
+    cpu_s: float | None = None
 
 
 class PhaseManifestEntry(BaseModel):
@@ -273,6 +279,8 @@ class PhaseManifestEntry(BaseModel):
     invalidated_by: str | None = None
     invalidated_in_run: str | None = None
     methodology_version: str | None = None
+    wall_s: float | None = None
+    cpu_s: float | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -319,7 +327,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.3"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.4"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -970,6 +978,7 @@ class Orchestrator:
             )
             started_at = _now_iso()
             start_monotonic = time.monotonic()
+            start_cpu = time.process_time()
 
             try:
                 output = spec.run(context)
@@ -1056,6 +1065,8 @@ class Orchestrator:
                     error=str(exc),
                     started_at=started_at,
                     finished_at=finished_at,
+                    wall_s=time.monotonic() - start_monotonic,
+                    cpu_s=time.process_time() - start_cpu,
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
@@ -1092,6 +1103,8 @@ class Orchestrator:
                 error=None,
                 started_at=started_at,
                 finished_at=finished_at,
+                wall_s=time.monotonic() - start_monotonic,
+                cpu_s=time.process_time() - start_cpu,
             )
             results[spec.name] = result
             consumed_run_ids = {
@@ -1108,6 +1121,8 @@ class Orchestrator:
                 finished_at=finished_at,
                 consumed_run_ids=consumed_run_ids,
                 methodology_version=self.methodology_version,
+                wall_s=result.wall_s,
+                cpu_s=result.cpu_s,
             )
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
@@ -1143,6 +1158,7 @@ class Orchestrator:
             self._write_manifest()
 
             elapsed_s = time.monotonic() - start_monotonic
+            cpu_s = time.process_time() - start_cpu
             artifact_lines = "\n".join(
                 f"    {key}: {entry.path.resolve()} ({entry.size_bytes} bytes)"
                 for key, entry in sorted(new_artifacts.items())
@@ -1151,10 +1167,11 @@ class Orchestrator:
             if spec.summarize is not None:
                 summary_line = f"\n  summary: {spec.summarize(output)}"
             logger.info(
-                "Phase '%s' [%s] completed in %.1fs\n  artifacts:\n%s%s",
+                "Phase '%s' [%s] completed in %.1fs (CPU %.1fs)\n  artifacts:\n%s%s",
                 spec.name,
                 self.country_code,
                 elapsed_s,
+                cpu_s,
                 artifact_lines if artifact_lines else "    (none)",
                 summary_line,
             )

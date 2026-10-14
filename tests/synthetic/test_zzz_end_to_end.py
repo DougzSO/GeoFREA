@@ -47,7 +47,8 @@ PHASES = [
 ]
 INITIAL_SIZE, CEILING = 16, 64
 SCENARIOS = ("central", "restrictive", "permissive")
-MASKED_MEMBER = "m_miroc6_ssp370_2071_2100"
+MASKED_MEMBER = "m_cnrm_cm6_1_ssp370_2071_2100"
+N_NO_WIND = 6  # the MIROC6 members: no wind channel (M-F4-02 item 6)
 N_CELLS = 24  # 6 x 4 decision cells
 N_MEMBERS = 37  # 36 and the reference member
 
@@ -314,13 +315,35 @@ def test_the_forcing_comes_from_the_miniature_cmip6_files_and_declares_its_maske
         pd.read_parquet(art / "forcing.parquet"),
         pd.read_parquet(art / "forcing_masked.parquet"),
     )
-    assert len(forcing) + len(masked) == N_CELLS * N_MEMBERS
+    assert (
+        len(forcing) == N_CELLS * N_MEMBERS
+    )  # a row for every cell and member, whatever the wind ratio (M-F4-07)
     assert set(masked["member"].astype(str)) == {MASKED_MEMBER} and len(masked) > 0
+    nan = forcing[forcing["delta_wind"].isna()].assign(member=lambda d: d["member"].astype(str))
+    no_wind = nan["member"].str.startswith("m_miroc6")
+    assert (
+        no_wind.sum() == N_CELLS * N_NO_WIND
+    )  # every cell of the MIROC6 members, declared by `members.yaml`
+    assert set(zip(nan.loc[~no_wind, "cell_id"], nan.loc[~no_wind, "member"], strict=True)) == set(
+        zip(masked["cell_id"], masked["member"].astype(str), strict=True)
+    )  # every other NaN is a declared mask
+    assert forcing["dT_isolated_native_cell"].dtype == bool
+    members = yaml.safe_load((art / "members.yaml").read_text(encoding="utf-8"))
+    channels = {m["member"]: m["channels"] for m in members["members"]}
+    assert channels["m_miroc6_ssp370_2041_2070"] == {
+        "resource_rsds": True,
+        "resource_tas": True,
+        "resource_wind": False,
+        "hazard": False,
+    }
+    assert (
+        channels[MASKED_MEMBER]["resource_wind"] is True and "dt_isolated_cell_members" in members
+    )
     lo, hi = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))[
         "gcm_ensemble"
     ]["wind_factor_valid_range"]
     assert ((masked["delta_wind"] < lo) | (masked["delta_wind"] > hi)).all()
-    assert forcing["delta_wind"].between(lo, hi).all()
+    assert forcing["delta_wind"].dropna().between(lo, hi).all()
     m0 = forcing[forcing["member"].astype(str) == "m0"]
     assert (m0["delta_rsds"] == 1).all() and (m0["dT"] == 0).all() and (m0["delta_wind"] == 1).all()
     warm = forcing[forcing["member"].astype(str) != "m0"]
@@ -337,7 +360,8 @@ def test_f5_writes_the_tables_for_three_scenarios_and_the_aggregates_with_both_s
         for scenario in SCENARIOS:
             assert (art / f"potential_{tech}__{scenario}.parquet").is_file()
         agg = pd.read_parquet(art / f"potential_aggregates_{tech}.parquet")
-        assert len(agg) == 3 * N_MEMBERS
+        # wind: no MIROC6 member, and the rows without the cells above its altitude sensitivity (OQ-058)
+        assert len(agg) == (4 * (N_MEMBERS - N_NO_WIND) if tech == "wind" else 3 * N_MEMBERS)
         assert {"P_GW", "P_GW_like_for_like", "E_TWh", "E_TWh_like_for_like"} <= set(agg.columns)
 
 
@@ -393,10 +417,8 @@ def test_solar_follows_m_f5_02_with_the_forcing_f4_wrote(zzz, scenario):
     np.testing.assert_allclose(
         m0["CF"], m0["pvout_kwh_kwp_day"] / 24.0, rtol=1e-12
     )  # the reference member is PVOUT / 24
-    # a cell-member declared masked for the wind factor is absent for solar too (D-F5-007)
-    masked = pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing_masked.parquet")
-    masked_here = masked[masked["cell_id"].isin(candidates["cell_id"])]
-    assert len(table) == len(candidates) * N_MEMBERS - len(masked_here)
+    # a cell-member masked for the wind factor keeps its solar row: solar never loses a cell-member for a wind reason (M-F4-07)
+    assert len(table) == len(candidates) * N_MEMBERS
 
 
 @pytest.mark.synthetic
@@ -411,7 +433,8 @@ def test_wind_potential_has_no_row_for_a_declared_masked_cell_member_and_a_row_f
     )
     masked = pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing_masked.parquet")
     masked_candidates = masked[masked["cell_id"].isin(candidates["cell_id"])]
-    assert len(table) == len(candidates) * N_MEMBERS - len(masked_candidates)
+    assert len(table) == len(candidates) * (N_MEMBERS - N_NO_WIND) - len(masked_candidates)
+    assert not table["member"].astype(str).str.startswith("m_miroc6").any()  # absent by declaration
     present = set(zip(table["cell_id"], table["member"].astype(str), strict=True))
     for cell, member in zip(
         masked_candidates["cell_id"], masked_candidates["member"].astype(str), strict=True
@@ -665,7 +688,7 @@ def test_the_forcing_is_interpolated_at_the_coarse_centers_for_every_member(zzz,
     masked = pd.read_parquet(_fine(zzz_fine, "climate_forcing") / "forcing_masked.parquet")
     cells = _eligibility_fine(zzz_fine, "wind", "central")
     assert set(forcing["cell_id"]) == set(cells["cell_id"])
-    assert len(forcing) + len(masked) == len(cells) * N_MEMBERS
+    assert len(forcing) == len(cells) * N_MEMBERS
     assert set(masked["member"].astype(str)) <= {MASKED_MEMBER}
 
 
@@ -753,11 +776,16 @@ class _HandWorld:
         )
 
 
-def _core_members(zzz):
+def _carries(entry, tech):
+    """The member declares the channel the technology reads (M-F4-06): wind needs `resource_wind`, solar reads none of the wind channel."""
+    return entry["channels"]["resource_wind"] if tech == "wind" else True
+
+
+def _core_members(zzz, tech=None):
     entries = yaml.safe_load(
         (_phase(zzz, "climate_forcing") / "members.yaml").read_text(encoding="utf-8")
     )["members"]
-    return [e["member"] for e in entries if e["window"] == "2041-2070"]
+    return [e["member"] for e in entries if e["window"] == "2041-2070" and _carries(e, tech)]
 
 
 @pytest.mark.synthetic
@@ -792,7 +820,9 @@ def test_f7_nominal_lcoe_is_the_nominal_lcoe_of_f6_for_the_reference_and_every_c
         f6, on=["cell_id", "member"], suffixes=("", "_f6"), validate="one_to_one"
     )
     assert (
-        len(merged) == len(nominal) == len(_robustness(zzz, tech)) * (1 + len(_core_members(zzz)))
+        len(merged)
+        == len(nominal)
+        == len(_robustness(zzz, tech)) * (1 + len(_core_members(zzz, tech)))
     )
     np.testing.assert_allclose(merged["lcoe_nominal"], merged["lcoe_nominal_f6"], rtol=1e-13)
 
@@ -807,7 +837,7 @@ def test_f7_max_regret_of_a_cell_is_recomputed_by_hand_from_the_pipeline_tables(
     probe = table.sort_values("robust_rank").index[len(table) // 2]
     draws = range(1, len(world.design))
     per_member = []
-    for member in _core_members(zzz):
+    for member in _core_members(zzz, tech):
         regrets = []
         for s in draws:
             lcoe = {c: world.lcoe(c, member, s) for c in cells}
@@ -817,7 +847,7 @@ def test_f7_max_regret_of_a_cell_is_recomputed_by_hand_from_the_pipeline_tables(
     assert table.loc[probe, "mr"] == pytest.approx(max(per_member), rel=1e-9)
     # the same cell under the two single-axis families
     climate_only = 0.0
-    for member in _core_members(zzz):
+    for member in _core_members(zzz, tech):
         lowest = min(world.lcoe(c, member, 0) for c in cells)
         climate_only = max(climate_only, (world.lcoe(probe, member, 0) - lowest) / lowest)
     assert table.loc[probe, "mr_clim"] == pytest.approx(climate_only, rel=1e-9)
@@ -851,7 +881,8 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
     )
     for tech in ("solar", "wind"):
         entry = summary["technologies"][tech]
-        assert entry["provisional"] is False and set(entry["windows"]) == {"core", "sensitivity"}
+        roles = {"core", "sensitivity"} | ({"core_below_3000m"} if tech == "wind" else set())
+        assert entry["provisional"] is False and set(entry["windows"]) == roles
         assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
 
 
@@ -1197,10 +1228,11 @@ def test_cross_country_h4_gives_not_testable_for_one_country_and_a_verdict_for_t
 
 
 @pytest.mark.synthetic
-def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_the_solar_cells(
+def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_removes_only_wind_cells(
     zzz_fine,
 ):
-    """V-07: the 0.1 degree cells are fewer and wider, so the masked block of 2071-2100 covers every coarse solar cell."""
+    """V-07, M-F4-07: the 0.1 degree cells are fewer and wider, so the masked block of 2071-2100 reaches the coarse wind cells that it reaches; solar, which does
+    not read the wind ratio, keeps all of them in both windows."""
     core = pd.read_parquet(
         _fine(zzz_fine, "robustness_analysis") / "robustness_solar__core.parquet"
     )
@@ -1208,11 +1240,20 @@ def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_remo
         _fine(zzz_fine, "robustness_analysis") / "robustness_solar__sensitivity.parquet"
     )
     assert set(core["cell_class"]) == {"ranked"} and len(core) == len(sensitivity) > 0
-    assert set(sensitivity["cell_class"]) == {"climate_data_invalid"}
-    assert sensitivity["mr"].isna().all() and sensitivity["robust_rank"].isna().all()
+    assert set(sensitivity["cell_class"]) == {"ranked"}  # a wind mask never removes a solar cell
     wind = pd.read_parquet(_fine(zzz_fine, "robustness_analysis") / "robustness_wind__core.parquet")
     assert sorted(wind["robust_rank"]) == list(range(1, len(wind) + 1))
     assert (wind["cell_id"] // 3600 == wind["lat_c"].rsub(90.0).floordiv(0.1)).all()
+    wind_sensitivity = pd.read_parquet(
+        _fine(zzz_fine, "robustness_analysis") / "robustness_wind__sensitivity.parquet"
+    )
+    masked = pd.read_parquet(_fine(zzz_fine, "climate_forcing") / "forcing_masked.parquet")
+    invalid = wind_sensitivity["cell_class"] == "climate_data_invalid"
+    assert invalid.any() and set(wind_sensitivity["cell_id"][invalid]) == set(
+        masked["cell_id"]
+    ) & set(wind_sensitivity["cell_id"])
+    assert wind_sensitivity.loc[invalid, ["mr", "robust_rank"]].isna().all().all()
+    assert (wind_sensitivity.loc[~invalid, "cell_class"] == "ranked").all()
 
 
 @pytest.mark.synthetic
@@ -1824,7 +1865,8 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_summaries_of_f
         assert {"top_k_percent_5", "tolerance_2k"} <= set(h3_shown["variant"])
         h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
         assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
-        assert set(h3_shown["role"]) == {"core", "sensitivity"}
+        roles = {"core", "sensitivity"} | ({"core_below_3000m"} if tech == "wind" else set())
+        assert set(h3_shown["role"]) == roles
 
 
 @pytest.mark.synthetic
@@ -1849,7 +1891,7 @@ def test_f8_t_r10_and_t_r12_agree_with_the_numbers_of_h5_in_t_r6(zzz, tech):
     ].set_index("member")
     assert fixed.loc["m0", "potential_twh"] == pytest.approx(primary["e0_twh"])
     core_energy = fixed.drop(index="m0").query("potential_twh == potential_twh")
-    core_energy = core_energy[core_energy.index.isin(_core_members(zzz))]["potential_twh"]
+    core_energy = core_energy[core_energy.index.isin(_core_members(zzz, tech))]["potential_twh"]
     loss = max(0.0, primary["e0_twh"] - core_energy.min())
     assert loss == pytest.approx(primary["delta_e_twh"])
     assert loss / primary["h0_twh"] == pytest.approx(r_loss)
@@ -1871,12 +1913,12 @@ def test_f8_t_r10_and_t_r12_agree_with_the_numbers_of_h5_in_t_r6(zzz, tech):
     assert reference["potential_twh"].max() == pytest.approx(primary["e_exp_reference_twh"])
 
 
-def _core_members(zzz):
-    """The members of the core window, from `members.yaml` of the climate phase."""
+def _core_members(zzz, tech=None):
+    """The members of the core window that carry the channels of `tech`, from `members.yaml` of the climate phase."""
     entries = yaml.safe_load(
         (_phase(zzz, "climate_forcing") / "members.yaml").read_text(encoding="utf-8")
     )["members"]
-    return {e["member"] for e in entries if str(e["window"]) == "2041-2070"}
+    return {e["member"] for e in entries if str(e["window"]) == "2041-2070" and _carries(e, tech)}
 
 
 @pytest.mark.synthetic
@@ -2130,7 +2172,12 @@ def test_f8_t_r3_share_in_agreement_equals_the_share_recomputed_from_the_potenti
         _phase(zzz, "technical_potential") / f"potential_{tech}__central.parquet"
     )
     wide = potential.pivot(index="cell_id", columns="member", values="CF")
-    core = members[members["window"].astype(str) == "2041-2070"]
+    core = members[
+        (members["window"].astype(str) == "2041-2070")
+        & members["member"].isin(
+            potential["member"].astype(str)
+        )  # wind has no member of the GCM whose wind channel is excluded
+    ]
     table = pd.read_csv(_thesis(zzz) / f"T-R3_cf_agreement_ZZZ_{tech}.csv").set_index("ssp")
     assert sorted(table.index) == sorted(core["ssp"].unique())
     for ssp, part in core.groupby("ssp"):

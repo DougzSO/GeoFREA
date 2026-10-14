@@ -67,7 +67,9 @@ class FutureRow(BaseModel):
     ssp: str
     delta_rsds_mean: float
     dT_mean: float
-    delta_wind_mean: float
+    delta_wind_mean: (
+        float | None
+    )  # null for a member without the wind channel (a future of a GCM whose wind channel is excluded)
     lowest_lcoe: float
     share_nominal_top_k_leaving: float | None
     displaced_capacity_share: float | None

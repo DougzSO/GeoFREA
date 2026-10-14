@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -28,16 +28,22 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
+from geofrea.land_eligibility.parameters import (
+    ELEVATION_COLUMN,
+    elevation_role,
+    elevation_sensitivity_m,
+)
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
 from geofrea.lcoe_modeling.inputs import (
     LcoeMissingInputError,
+    MemberCells,
     ResolvedLcoe,
     cells_per_block,
     read_member_inputs,
@@ -291,6 +297,11 @@ class MemberEntry:
     ssp: str | None
     hazard: bool
     tcr_exception: bool = False
+    channels: Mapping[str, bool] = field(default_factory=dict)
+
+    def carries(self, required: Sequence[str]) -> bool:
+        """True if the member declares every channel in `required` (an undeclared channel counts as carried, old `members.yaml`)."""
+        return all(self.channels.get(c, True) for c in required)
 
 
 def robustness_dir(iso: str) -> Path:
@@ -310,6 +321,7 @@ def read_member_entries(members_file: Path) -> list[MemberEntry]:
             ssp=e.get("ssp"),
             hazard=bool(e.get("channels", {}).get("hazard", False)),
             tcr_exception=bool(e.get("tcr_exception", False)),
+            channels={k: bool(v) for k, v in e.get("channels", {}).items()},
         )
         for e in entries
     ]
@@ -395,12 +407,20 @@ def member_factor_means(
         .mul(forcing["weight"], axis=0)
         .assign(member=forcing["member"], weight=forcing["weight"])
     )
-    totals = weighted.groupby("member")[[*columns, "weight"]].sum()
+    totals = weighted.groupby("member")[[*columns, "weight"]].sum(
+        min_count=1
+    )  # a column that is NaN throughout stays NaN (no wind channel)
     means = totals[columns].div(totals["weight"], axis=0)
     missing = sorted(set(members) - set(means.index))
     if missing:
         raise RobustnessInputError(f"forcing.parquet has no rows of the F7 set for {missing}")
     return means.astype("float64")
+
+
+def _restrict_member(item: MemberCells, keep_ids: np.ndarray) -> MemberCells:
+    """The cells of a member that are in `keep_ids` (sorted ids stay sorted)."""
+    keep = np.isin(item.cell_id, keep_ids)
+    return MemberCells(item.member, item.cell_id[keep], item.cells.take(keep), item.cf[keep])
 
 
 def _skipped_dicts(skipped: Sequence[SkippedOutput]) -> list[dict[str, str]]:
@@ -511,9 +531,9 @@ def _write_tables(
 
 
 def _scenario_tables(
-    scenario: str, tech: str, paths: WindowPaths
+    scenario: str, tech: str, paths: WindowPaths, keep_ids: np.ndarray | None = None
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The F5 rows and the F6 nominal LCOE of a land scenario."""
+    """The F5 rows and the F6 nominal LCOE of a land scenario; with `keep_ids` only the rows of those cells (the altitude sensitivity, OQ-058)."""
     potential = pd.read_parquet(
         paths.potential_dir / f"potential_{tech}__{scenario}.parquet",
         columns=["cell_id", "member", "P_MW", "CF", "E_MWh"],
@@ -525,6 +545,9 @@ def _scenario_tables(
         )
     else:
         lcoe = pd.read_parquet(paths.lcoe_dir / f"lcoe_nominal_{tech}__{scenario}.parquet")
+    if keep_ids is not None:
+        potential = potential[potential["cell_id"].isin(keep_ids)]
+        lcoe = lcoe[lcoe["cell_id"].isin(keep_ids)]
     return potential, lcoe
 
 
@@ -609,10 +632,14 @@ def run_window(
     max_batch_gb: float,
     scale_id: str,
     production: bool,
+    exclude_above_m: float | None = None,
 ) -> WindowResult:
     """One window of one technology: the F7 set, the evaluation, the rankings, the hypotheses and the tables.
 
     Implements: M-F7-01 to M-F7-07, M-F7-10, M-F7-11, T-R10, T-R12.
+
+    With `exclude_above_m` (OQ-058, the altitude sensitivity) the candidates whose cell altitude is above it, and their rows in every member, are
+    left out before the F7 set is built; the whole analysis then runs on the remaining cells and its tables carry the role in their names.
 
     An empty F7 set is not an error: the classes are written, every result column is null and a warning says so.
 
@@ -647,6 +674,23 @@ def run_window(
     candidates = _read_candidates(
         paths.candidates_dir / f"candidates_{tech}__{CENTRAL_SCENARIO}.parquet"
     )
+    kept: np.ndarray | None = None  # the cells that stay when the altitude sensitivity is run
+    if exclude_above_m is not None:
+        elevation = pd.read_parquet(
+            paths.candidates_dir / f"candidates_{tech}__{CENTRAL_SCENARIO}.parquet",
+            columns=["cell_id", ELEVATION_COLUMN],
+        )
+        kept = elevation.loc[elevation[ELEVATION_COLUMN] <= exclude_above_m, "cell_id"].to_numpy()
+        candidates = candidates[candidates["cell_id"].isin(kept)].reset_index(drop=True)
+        data = {name: _restrict_member(item, kept) for name, item in data.items()}
+        logger.info(
+            "%s %s [%s]: %d candidates left after excluding cells above %.0f m",
+            iso,
+            tech,
+            role,
+            len(candidates),
+            exclude_above_m,
+        )
     cell_set = build_cell_set(
         candidates["cell_id"].to_numpy(), data, REFERENCE_MEMBER_ID, member_ids, decision.cf_min
     )
@@ -715,7 +759,10 @@ def run_window(
     # the nominal shortlist over the ranked set (as in H3) and the capacity-weighted descriptors of the PRIM outcome (core window only)
     prim_cfg = experiments.prim
     shortlist = None
-    if role == "core" and ranking.k is not None and cell_set.ranked.any():
+    is_core = (
+        role == "core" or exclude_above_m is not None
+    )  # the altitude sensitivity repeats the core window
+    if is_core and ranking.k is not None and cell_set.ranked.any():
         nominal_order = order_by(evaluation.nominal_lcoe[:, 0], candidates=cell_set.ranked)
         shortlist = OutcomeShortlist(
             ranked=cell_set.ranked,
@@ -759,7 +806,7 @@ def run_window(
             ),
         )
         frames["draw_statistics"] = draw_statistics_frame(futures)
-        if role != "core":
+        if not is_core:
             for kind in PRIM_TABLES:
                 skips[kind] = SkippedOutput(
                     "PRIM scenario discovery (M-F7-08)",
@@ -1193,7 +1240,7 @@ def run_window(
         target, alternatives = _national_target(experiments, iso, tech)
         rows: list[dict] = []
         for scenario in LAND_SCENARIOS:
-            potential, lcoe = _scenario_tables(scenario, tech, paths)
+            potential, lcoe = _scenario_tables(scenario, tech, paths, kept)
             scenario_rows = potential_below_tau_nominal(
                 potential,
                 lcoe,
@@ -1481,6 +1528,12 @@ def build_robustness(
     result: dict[str, TechRobustness] = {}
     for tech, res in resolved.items():
         decision = decisions[tech]
+        # the members of a technology are those that carry the channels its model reads (M-F4-06): a GCM whose wind channel is excluded is no member of the wind analysis
+        tech_entries = [
+            e
+            for e in entries
+            if e.carries(required_channels(technologies.technologies[tech].cf_model))
+        ]
         skipped = skipped_outputs(decision, experiments, has_hazard_members=has_hazard)
         for item in skipped:
             logger.warning(
@@ -1499,7 +1552,7 @@ def build_robustness(
                 res,
                 decision,
                 experiments,
-                entries,
+                tech_entries,
                 skipped,
                 paths,
                 n_samples=experiments.sampler.initial_size,
@@ -1510,6 +1563,27 @@ def build_robustness(
             )
             for role in WINDOW_ROLES
         }
+        cap = elevation_sensitivity_m(experiments.land_availability, tech)
+        if (
+            cap is not None
+        ):  # OQ-058: the core window again without the cells above the sensitivity altitude
+            windows[elevation_role(cap)] = run_window(
+                iso,
+                elevation_role(cap),
+                window_name(experiments, "core"),
+                res,
+                decision,
+                experiments,
+                tech_entries,
+                skipped,
+                paths,
+                n_samples=experiments.sampler.initial_size,
+                seed=experiments.sampler.seed,
+                max_batch_gb=max_batch_gb,
+                scale_id=scale_id,
+                production=production,
+                exclude_above_m=cap,
+            )
         result[tech] = TechRobustness(
             technology=tech,
             n_samples=experiments.sampler.initial_size,

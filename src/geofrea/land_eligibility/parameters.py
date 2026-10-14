@@ -17,6 +17,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
+ELEVATION_COLUMN = "elevation_m"  # eligible-area-weighted mean of the aligned DEM, a column of the F3 cell tables (OQ-058)
+
 
 class LandAvailabilityError(ValueError):
     """The land-availability configuration is missing, incomplete or inconsistent (A-09: fail loud)."""
@@ -48,6 +50,33 @@ class Ranged(BaseModel):
         return self.low is not None
 
 
+class ElevationCap(BaseModel):
+    """The altitude limit of a technology (OQ-058): `nominal` null means no limit in the central case.
+
+    `sensitivity` is the value F5 to F8 use for the reported sensitivity without the cells above it. It never enters a land scenario.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nominal: float | None = None
+    sensitivity: float | None = None
+    unit: str
+    source: str | None = None
+    tier: int | None = None
+    status: str
+    note: str | None = None
+
+    @model_validator(mode="after")
+    def _unsourced_values_are_declared(self) -> ElevationCap:
+        if (
+            (self.sensitivity is not None or self.nominal is not None)
+            and self.source is None
+            and self.status == "sourced"
+        ):
+            raise ValueError("a value without a source cannot have status sourced")
+        return self
+
+
 class Levels(BaseModel):
     """A categorical parameter: named alternatives, one of which is nominal."""
 
@@ -74,6 +103,7 @@ class TechParameters(BaseModel):
     riparian_setback_km: Ranged
     riparian_min_discharge_m3s: Ranged
     min_eligible_area_km2: Ranged
+    elevation_max_m: ElevationCap | None = None
     excluded_classes: Levels
     iucn_categories: Levels
 
@@ -107,6 +137,7 @@ class ParameterSet:
     excluded_classes: tuple[int, ...]
     iucn_categories: tuple[str, ...]
     riparian_min_discharge_m3s: float = 0.0
+    elevation_max_m: float | None = None
     label: str = "nominal"
 
 
@@ -132,6 +163,7 @@ def nominal_set(params: TechParameters) -> ParameterSet:
         riparian_setback_km=params.riparian_setback_km.nominal,
         riparian_min_discharge_m3s=params.riparian_min_discharge_m3s.nominal,
         min_eligible_area_km2=params.min_eligible_area_km2.nominal,
+        elevation_max_m=params.elevation_max_m.nominal if params.elevation_max_m else None,
         excluded_classes=tuple(
             int(c) for c in params.excluded_classes.levels[params.excluded_classes.nominal]
         ),
@@ -171,3 +203,14 @@ def strictest_slope_max_deg(la: LandAvailability, technology: str) -> float:
     """
     q = la.technologies[technology].slope_max_deg
     return q.low if q.has_range else q.nominal
+
+
+def elevation_sensitivity_m(la: LandAvailability, technology: str) -> float | None:
+    """The altitude (m) above which F5 to F8 report the sensitivity without the cells, or None when the technology has none (OQ-058)."""
+    cap = la.technologies[technology].elevation_max_m
+    return cap.sensitivity if cap else None
+
+
+def elevation_role(elevation_m: float) -> str:
+    """The F7 window role of the core-window run without the candidates above `elevation_m` (OQ-058), for example `core_below_3000m`."""
+    return f"core_below_{elevation_m:.0f}m"

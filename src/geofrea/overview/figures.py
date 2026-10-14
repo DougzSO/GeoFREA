@@ -343,6 +343,8 @@ def build_tables(
                 "member": member,
                 "cells": len(g),
                 "masked": int(m_counts.get(member, 0)),
+                "wind ratio NaN": int(g.delta_wind.isna().sum()),
+                "isolated dT cells": int(g.dT_isolated_native_cell.sum()),
                 "delta_rsds (min / median / max)": " / ".join(
                     _fmt(x) for x in (g.delta_rsds.min(), g.delta_rsds.median(), g.delta_rsds.max())
                 ),
@@ -376,7 +378,11 @@ def build_tables(
         _md(pd.DataFrame(layer_rows)),
         "\n## Climate members: change factors per cell (after masking)\n",
         _md(pd.DataFrame(member_rows)),
-        f"\nMasked cell-members in total: {len(masked):,} (OQ-042 option C; bound tracked as OQ-043).\n",
+        (
+            f"\nMasked cell-members in total: {len(masked):,} (OQ-042 option C; bound tracked as OQ-043). A masked cell-member keeps its row with a NaN wind ratio; "
+            "a member without a wind channel (M-F4-02 item 6) has a NaN wind ratio in every cell, counted in the column `wind ratio NaN`. "
+            "`isolated dT cells` counts the cells interpolated from an isolated native cell of `dT` (flagged, not corrected).\n"
+        ),
         "## Hazard context: mean over cells, per member (window 2041-2070)\n",
         _md(pd.DataFrame(haz_rows)),
         "",

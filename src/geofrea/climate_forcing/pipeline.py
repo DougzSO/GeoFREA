@@ -47,6 +47,7 @@ class ForcingSummary(BaseModel):
     n_members: int
     n_rows: int
     n_masked_cell_members: int
+    n_isolated_dt_cell_members: int
     forcing: Path
     forcing_masked: Path
     members: Path
@@ -97,6 +98,15 @@ def _ratio_qc(forcing_path: Path) -> dict:
     }
 
 
+def _isolated_counts(forcing_path: Path) -> dict[str, int]:
+    """Cell-members per member whose cell is interpolated from an isolated native dT cell (V-82); members with none are omitted."""
+    df = pd.read_parquet(forcing_path, columns=["member", "dT_isolated_native_cell"])
+    df["member"] = df["member"].astype(str)
+    return {
+        k: int(v) for k, v in df.groupby("member")["dT_isolated_native_cell"].sum().items() if v
+    }
+
+
 def build_forcing(
     iso: str, experiments_yaml: Path, registry_path: Path | None = None
 ) -> ForcingSummary:
@@ -121,6 +131,7 @@ def build_forcing(
             ensemble.wind_ratio_neighbourhood_cells,
             ensemble.wind_factor_valid_range,
             masked,
+            ensemble.dt_isolated_native_cell_threshold_k,
         ),
         out_dir / "forcing.parquet",
     )
@@ -158,6 +169,8 @@ def build_forcing(
                 k: int(v) for k, v in masked_df.groupby("member").size().items()
             },
             "qc_factor_ranges_after_masking": _ratio_qc(out_dir / "forcing.parquet"),
+            "dt_isolated_native_cell_threshold_k": ensemble.dt_isolated_native_cell_threshold_k,
+            "dt_isolated_cell_members": _isolated_counts(out_dir / "forcing.parquet"),
         }
     )
     members_path = out_dir / "members.yaml"
@@ -168,6 +181,7 @@ def build_forcing(
         n_members=len(members),
         n_rows=n_rows,
         n_masked_cell_members=len(masked_df),
+        n_isolated_dt_cell_members=int(sum(manifest["dt_isolated_cell_members"].values())),
         forcing=out_dir / "forcing.parquet",
         forcing_masked=out_dir / "forcing_masked.parquet",
         members=members_path,
@@ -249,9 +263,18 @@ def build_maps(iso: str, figures_mode: str) -> MapsSummary:
     forcing = pd.read_parquet(art / "forcing.parquet")
     masked = pd.read_parquet(art / "forcing_masked.parquet")
     notes = {
-        m: "OQ-042: grey cells have no valid wind factor for this member (masked, not zero change)"
+        m: "OQ-042: grey cells have no valid wind factor for this member (masked, not zero change; solar keeps the cell)"
         for m in masked["member"].astype(str).unique()
     }
+    no_wind = (
+        forcing.assign(member=forcing["member"].astype(str))
+        .groupby("member")["delta_wind"]
+        .apply(lambda v: bool(v.isna().all()))
+    )
+    for m in no_wind[no_wind].index:
+        notes[m] = (
+            "no wind channel (M-F4-02 item 6): the wind panel is empty by declaration, not masked"
+        )
     figures = plot_all_members(
         forcing, masked, core_paths.phase_dir(iso, "climate_forcing", "figures"), iso, notes
     )

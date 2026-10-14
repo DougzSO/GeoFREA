@@ -103,7 +103,9 @@ def check_scenario_order(
 
 
 def candidate_stability(
-    cells_by_scenario: dict[str, pd.DataFrame], min_eligible_area_km2: float
+    cells_by_scenario: dict[str, pd.DataFrame],
+    min_eligible_area_km2: float,
+    elevation_max_m: float | None = None,
 ) -> pd.DataFrame:
     """Per cell that is a candidate in at least one scenario: eligible area per scenario and how often it is a candidate.
 
@@ -116,6 +118,10 @@ def candidate_stability(
         part = df[["cell_id", "eligible_area_km2"]].rename(
             columns={"eligible_area_km2": f"area_km2_{scenario}"}
         )
+        if (
+            elevation_max_m is not None
+        ):  # a cell above the altitude limit is not a candidate in any scenario (OQ-058)
+            part.loc[df["elevation_m"].to_numpy() > elevation_max_m, f"area_km2_{scenario}"] = 0.0
         table = part if table is None else table.merge(part, on="cell_id", how="outer")
     assert table is not None
     for scenario in scenarios:

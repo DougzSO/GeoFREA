@@ -639,7 +639,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.3"
+    assert orchestrator.manifest.schema_version == "2.4"
 
 
 @pytest.mark.unit
@@ -653,7 +653,7 @@ def test_manifest_records_methodology_version(tmp_path):
     orchestrator.run([ok, bad])
 
     on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == "2.3"
+    assert on_disk["schema_version"] == "2.4"
     assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
         "phase_ok": "test-1.0.0",
         "phase_bad": "test-1.0.0",
@@ -921,3 +921,45 @@ def test_cross_run_id_resume_warns_without_failing(tmp_path, caplog):
     assert call_log == []  # "b" resumed, not re-invoked
     assert results["b"].status == "success"
     assert any("lineage drift" in message for message in caplog.messages)
+
+
+# ─── wall and CPU time per phase (A-02, manifest 2.4) ─────────────────────
+
+
+@pytest.mark.unit
+def test_every_executed_phase_records_wall_and_cpu_time_and_a_resumed_phase_keeps_them(tmp_path):
+    """V-T: the manifest holds `wall_s` and `cpu_s` of each executed phase, so a phase whose wall time is far above its CPU time shows."""
+    call_log: list[str] = []
+    ok = _make_spec("phase_ok", call_log, produces=frozenset({"ok_key"}))
+    bad = _make_spec("phase_bad", call_log, fail=True)
+    orchestrator = _orchestrator(tmp_path, ["phase_ok", "phase_bad"])
+
+    orchestrator.run([ok, bad])
+
+    on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
+    for name in ("phase_ok", "phase_bad"):  # a failed phase also took time
+        entry = on_disk["phases"][name]
+        assert entry["wall_s"] >= 0.0 and entry["cpu_s"] >= 0.0
+    resumed = _orchestrator(tmp_path, ["phase_ok"])
+    resumed.run([ok])
+    assert resumed.manifest.phases["phase_ok"].wall_s == on_disk["phases"]["phase_ok"]["wall_s"]
+
+
+@pytest.mark.unit
+def test_a_manifest_of_schema_2_3_is_readable_and_its_phases_have_no_times(tmp_path):
+    call_log: list[str] = []
+    spec = _make_spec("phase_a", call_log, produces=frozenset({"a_out"}))
+    first = _orchestrator(tmp_path, ["phase_a"])
+    first.run([spec])
+    data = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    data["schema_version"] = "2.3"
+    for entry in data["phases"].values():
+        entry.pop("wall_s", None)
+        entry.pop("cpu_s", None)
+    first.manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    reloaded = _orchestrator(tmp_path, ["phase_a"])
+
+    assert reloaded.manifest.schema_version == "2.4"
+    assert reloaded.manifest.phases["phase_a"].wall_s is None
+    assert reloaded.manifest.phases["phase_a"].cpu_s is None

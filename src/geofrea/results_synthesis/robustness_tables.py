@@ -12,6 +12,7 @@ from matplotlib.patches import Patch
 
 from geofrea.core.config_schemas import H4Rule
 from geofrea.external_validation.table_schemas import VALIDATION_TABLE_SCHEMA_VERSION
+from geofrea.land_eligibility.parameters import elevation_role, elevation_sensitivity_m
 from geofrea.results_synthesis import style
 from geofrea.results_synthesis.inputs import ArtifactReader, MissingArtifactError
 from geofrea.results_synthesis.members import members_table
@@ -57,6 +58,12 @@ VERDICT_COLUMNS = [
     "threshold_2",
 ]
 _SUMMARIES = ("h1", "h2", "h3", "h5")
+
+
+def _elevation_roles(ctx: BuildContext, technology: str) -> tuple[str, ...]:
+    """The window role of the run without the cells above the sensitivity altitude (OQ-058), empty for a technology that has none."""
+    cap = elevation_sensitivity_m(ctx.experiments.land_availability, technology)
+    return () if cap is None else (elevation_role(cap),)
 
 
 def _window_of(ctx: BuildContext, role: str) -> str:
@@ -170,8 +177,11 @@ def t_r6(ctx: BuildContext) -> None:
         statistics: list[pd.DataFrame] = []
         summaries: dict[str, list[pd.DataFrame]] = {name: [] for name in _SUMMARIES}
         h4_country: list[pd.DataFrame] = []
+        extra_roles = _elevation_roles(ctx, technology)
         for reader in _readers(ctx):
-            for role in ROLES:
+            for role in (*ROLES, *extra_roles):
+                if role in extra_roles and not reader.has(f"hypothesis_{technology}__{role}"):
+                    continue  # the altitude sensitivity is run at the active scale only (OQ-058)
                 try:
                     hypothesis = reader.table(f"hypothesis_{technology}__{role}", _VERSIONS)
                 except MissingArtifactError as exc:
@@ -255,7 +265,9 @@ def t_r6(ctx: BuildContext) -> None:
         if verdicts:
             frame = pd.DataFrame(verdicts, columns=VERDICT_COLUMNS)
             frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3, "H4": 4, "H5": 5})
-            frame["_role"] = frame["role"].map({role: at for at, role in enumerate(ROLES)})
+            frame["_role"] = frame["role"].map(
+                {role: at for at, role in enumerate((*ROLES, *extra_roles))}
+            )
             frame = (
                 frame.sort_values(["scale", "_role", "_order"])
                 .drop(columns=["_order", "_role"])

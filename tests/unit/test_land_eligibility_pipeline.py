@@ -116,7 +116,12 @@ def world(tmp_path, monkeypatch):
     base = tmp_path / "rasters"
     base.mkdir()
     flag = np.zeros((H, W))
+    elevation = np.full((H, W), 500.0)
+    elevation[:, 25:] = (
+        3500.0  # the last cell column lies above the 3000 m of the wind sensitivity (OQ-058)
+    )
     grid_result = SimpleNamespace(
+        elevation=_write(base / "elev.tif", elevation),
         slope=_write(base / "slope.tif", slope),
         population=_write(base / "pop.tif", population),
         land_cover=_write(base / "lc.tif", land_cover),
@@ -192,6 +197,33 @@ def _run(world, techs=("solar",), **override):
         paths["admin1"],
         list(techs),
     )
+
+
+def test_cells_carry_the_altitude_and_f3_counts_what_lies_above_the_sensitivity_and_excludes_nothing(
+    world,
+):
+    """OQ-058, V-B3: `elevation_m` is a cell column; the candidates above the sensitivity altitude (3000 m, wind only) and the ones with Weibull k below 1
+    are counted, and every candidate stays in the table."""
+    summary = _run(world, ("solar", "wind"))
+    wind, solar = summary.technologies["wind"], summary.technologies["solar"]
+    candidates = pd.read_parquet(wind.candidates)
+    assert set(np.round(candidates["elevation_m"], 6)) <= {500.0, 3500.0}
+    above = int((candidates["elevation_m"] > 3000.0).sum())
+    assert above > 0 and wind.elevation_sensitivity_m == 3000.0
+    assert wind.n_candidates_above_elevation_sensitivity == above and wind.n_candidates == len(
+        candidates
+    )
+    assert wind.n_candidates_weibull_k_below_1 == {
+        "weibull_k_100m": 0,
+        "weibull_k_150m": 0,
+        "weibull_k_200m": 0,
+    }
+    assert (
+        solar.elevation_sensitivity_m is None
+        and solar.n_candidates_above_elevation_sensitivity is None
+    )
+    assert solar.n_candidates_weibull_k_below_1 == {}
+    assert "elevation_m" in pd.read_parquet(solar.candidates).columns
 
 
 def test_named_land_scenarios_are_ordered(world):
@@ -401,3 +433,41 @@ def test_steep_share_reads_whole_bins_and_a_proportion_of_the_bin_holding_the_th
     assert e4(40.0) == pytest.approx(0.25)  # only the open-ended bin
     with pytest.raises(MissingExclusionLayerError):
         e4(45.0)
+
+
+def test_a_central_altitude_limit_removes_the_cells_above_it_from_every_candidate_table_when_one_is_set(
+    world, tmp_path
+):
+    """OQ-058: `elevation_max_m` is null in the real configuration (no exclusion in the central case); with a value the limit applies to the candidates
+    of every scenario and to the stability table, and the cells stay in the cell tables."""
+    text = EXPERIMENTS.read_text(encoding="utf-8")
+    old = "nominal: null\n        sensitivity: 3000.0"
+    assert text.count(old) == 1
+    limited = tmp_path / "experiments_limited.yaml"
+    limited.write_text(
+        text.replace(old, "nominal: 3000.0\n        sensitivity: 3000.0"), encoding="utf-8"
+    )
+
+    free = _run(world, ("wind",)).technologies["wind"]
+    capped = build_eligibility(
+        "ZZZ",
+        limited,
+        world.grid_result,
+        world.siting,
+        world.country,
+        world.protected,
+        world.lakes,
+        world.rivers,
+        world.admin1,
+        ["wind"],
+    ).technologies["wind"]
+
+    assert capped.n_candidates < free.n_candidates
+    for scenario, summary in capped.scenarios.items():
+        assert (pd.read_parquet(summary.candidates)["elevation_m"] <= 3000.0).all()
+        assert len(pd.read_parquet(summary.cells)) == len(
+            pd.read_parquet(free.scenarios[scenario].cells)
+        )  # the cells are all there
+    stability = pd.read_parquet(capped.stability)
+    above = pd.read_parquet(capped.cells).set_index("cell_id")["elevation_m"] > 3000.0
+    assert not stability["cell_id"].isin(above.index[above]).any()

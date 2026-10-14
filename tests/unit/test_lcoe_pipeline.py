@@ -117,9 +117,16 @@ def _write_inputs(root: Path, resolved, n_cells=30, zero_energy_cell=None, drop=
         extra_metadata=meta,
     )
     candidates_path = root / "candidates.parquet"
-    pd.DataFrame({"cell_id": ids, "dist_grid_km": dist_grid, "dist_road_km": dist_road}).to_parquet(
-        candidates_path
-    )
+    pd.DataFrame(
+        {
+            "cell_id": ids,
+            "dist_grid_km": dist_grid,
+            "dist_road_km": dist_road,
+            "elevation_m": np.linspace(
+                100.0, 3500.0, n_cells
+            ),  # the top fifth lies above the 3000 m of the wind sensitivity (OQ-058)
+        }
+    ).to_parquet(candidates_path)
     forcing_path = root / "forcing.parquet"
     pd.concat(forcing, ignore_index=True).to_parquet(forcing_path)
     return potential_path, candidates_path, forcing_path
@@ -811,3 +818,82 @@ def test_no_technology_name_appears_in_lcoe_modeling(registry):
 def test_lcoe_dir_is_under_the_phase_outputs(tmp_path, monkeypatch):
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
     assert lcoe_dir("ZZZ") == tmp_path / "outputs" / "ZZZ" / "lcoe_modeling" / "artifacts"
+
+
+# -- the altitude sensitivity and the members of a technology (OQ-058, M-F4-06) -----------------------------
+
+
+@pytest.mark.unit
+def test_a_technology_with_an_altitude_sensitivity_also_gets_the_supply_curve_without_the_cells_above_it(
+    tmp_path,
+):
+    dirs = _stage(tmp_path, "wind")
+    registry = load_technologies(TECHNOLOGIES)
+    zzz = load_parameters(PARAMETERS).countries["ZZZ"]
+    result = build_lcoe(
+        "ZZZ", registry, zzz, ["wind"], sampler_seed=7, sampler_size=40, max_batch_gb=1.0,
+        out_dir=tmp_path / "out", elevation_sensitivity={"wind": 3000.0, "solar": None}, **dirs,
+    )  # fmt: skip
+    entry = result.technologies["wind"]
+    below = pd.read_parquet(entry.supply_curve_below_elevation_sensitivity)
+    central = pd.read_parquet(entry.supply_curve)
+    assert (
+        entry.supply_curve_below_elevation_sensitivity.name
+        == "supply_curve_wind__below_3000m.parquet"
+    )
+    elevation = pd.read_parquet(
+        dirs["candidates_dir"] / "candidates_wind__central.parquet"
+    ).set_index("cell_id")["elevation_m"]
+    kept = set(elevation.index[elevation <= 3000.0])
+    assert 0 < len(kept) < len(elevation)
+    assert set(below["cell_id"]) == kept and set(central["cell_id"]) == set(elevation.index)
+    # the same nominal LCOE per member and cell, only fewer cells, and the cumulative columns start again from the cheapest kept cell
+    merged = below.merge(central, on=["member", "cell_id"], suffixes=("", "_central"))
+    assert (
+        len(merged) == len(below)
+        and (merged["lcoe_nominal"] == merged["lcoe_nominal_central"]).all()
+    )
+    for _, curve in below.groupby("member"):
+        assert (curve["rank"] == range(1, len(curve) + 1)).all() and curve[
+            "cum_E_TWh"
+        ].is_monotonic_increasing
+    assert (tmp_path / "out" / "supply_curve_wind.parquet").is_file()
+    # without the argument no second curve is written (solar has no sensitivity)
+    solar_dirs = _stage(tmp_path / "s", "solar")
+    solar = build_lcoe(
+        "ZZZ", registry, zzz, ["solar"], sampler_seed=7, sampler_size=40, max_batch_gb=1.0,
+        out_dir=tmp_path / "out_solar", elevation_sensitivity={"wind": 3000.0, "solar": None}, **solar_dirs,
+    )  # fmt: skip
+    assert solar.technologies["solar"].supply_curve_below_elevation_sensitivity is None
+
+
+@pytest.mark.unit
+def test_f6_computes_only_the_members_that_carry_the_channels_of_the_technology(tmp_path):
+    """A member without the wind channel has no F5 wind rows and is not a member of the wind LCOE; solar keeps it."""
+    no_wind = "m_a"
+    every_cell = tuple((c, no_wind) for c in range(100, 130))
+    wind_dirs = _stage(tmp_path / "w", "wind", drop=every_cell)
+    solar_dirs = _stage(tmp_path / "s", "solar")
+    members = [
+        {
+            "member": m,
+            "channels": {
+                "resource_rsds": True,
+                "resource_tas": True,
+                "resource_wind": m != no_wind,
+            },
+        }
+        for m in MEMBERS
+    ]
+    for dirs in (wind_dirs, solar_dirs):
+        (dirs["climate_dir"] / "members.yaml").write_text(
+            yaml.safe_dump({"members": members}), encoding="utf-8"
+        )
+    registry = load_technologies(TECHNOLOGIES)
+    zzz = load_parameters(PARAMETERS).countries["ZZZ"]
+    wind = build_lcoe("ZZZ", registry, zzz, ["wind"], sampler_seed=7, sampler_size=40, max_batch_gb=1.0, out_dir=tmp_path / "ow", **wind_dirs)  # fmt: skip
+    solar = build_lcoe("ZZZ", registry, zzz, ["solar"], sampler_seed=7, sampler_size=40, max_batch_gb=1.0, out_dir=tmp_path / "os", **solar_dirs)  # fmt: skip
+    assert wind.technologies["wind"].n_members == len(MEMBERS) - 1
+    assert solar.technologies["solar"].n_members == len(MEMBERS)
+    assert no_wind not in set(pd.read_parquet(wind.technologies["wind"].lcoe_summary)["member"])
+    assert no_wind in set(pd.read_parquet(solar.technologies["solar"].lcoe_summary)["member"])

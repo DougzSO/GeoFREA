@@ -46,8 +46,12 @@ CLIMATE_LAT = np.arange(
 CLIMATE_LON = np.arange(14.0, 29.0, 2.0)
 UNITS = {"rsds": "W m-2", "sfcWind": "m s-1", "tas": "K"}
 # test value: this scenario and window of this model get a wind-speed block the validity mask must reject
-MASKED_GCM, MASKED_EXPERIMENT, MASKED_WINDOW = "miroc6", "ssp370", (2071, 2100)
-MASKED_WIND_FACTOR = 11.0
+MASKED_GCM, MASKED_EXPERIMENT, MASKED_WINDOW = (
+    "cnrm_cm6_1",
+    "ssp370",
+    (2071, 2100),
+)  # not MIROC6: its wind channel is excluded (M-F4-02 item 6)
+MASKED_WIND_FACTOR = 12.0  # test value: after the 3 x 3 mean and the interpolation the ratio of the ZZZ cells must still exceed 1.5
 MASKED_BLOCK_CENTER = (-8.0, 22.0)  # lat, lon of the one native cell that is raised
 MASKED_BLOCK_HALF_WIDTH_DEG = 0.0  # a single native cell
 

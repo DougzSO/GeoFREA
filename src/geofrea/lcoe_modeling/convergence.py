@@ -24,7 +24,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import SamplerConfig, TechnologiesFile
 from geofrea.core.schemas import CountryParams
@@ -196,11 +196,16 @@ def run_protocol(
     return rows, adopted, cell_set.n_f7, cell_set.f7_ids, previous
 
 
-def _core_members(members_file: Path, core_window: str) -> tuple[list[str], list[str]]:
-    """All member identifiers of `members.yaml`, and the ones of the core window."""
+def _core_members(
+    members_file: Path, core_window: str, required: Sequence[str] = ()
+) -> tuple[list[str], list[str]]:
+    """All member identifiers of `members.yaml`, and the ones of the core window that carry the `required` channels (M-F4-06)."""
     entries = yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
     return [e["member"] for e in entries], [
-        e["member"] for e in entries if e.get("window") == core_window
+        e["member"]
+        for e in entries
+        if e.get("window") == core_window
+        and all(e.get("channels", {}).get(c, True) for c in required)
     ]
 
 
@@ -263,12 +268,15 @@ def build_convergence(
         raise FileNotFoundError(
             f"sample_size_convergence input missing (F3, F4 and F5 must have run): {absent}"
         )
-    all_members, core = _core_members(members_file, core_window)
-    if not core:
-        raise LcoeInputError(f"members.yaml has no member of the core window {core_window}")
+    all_members, _ = _core_members(members_file, core_window)
     result: dict[str, TechConvergence] = {}
     for tech, res in resolved.items():
         decision = decisions[tech]
+        _, core = _core_members(
+            members_file, core_window, required_channels(technologies.technologies[tech].cf_model)
+        )
+        if not core:
+            raise LcoeInputError(f"members.yaml has no member of the core window {core_window}")
         x_values = [s for s in res.specs if s.name == res.energy_key]
         x_range = (
             (x_values[0].low, x_values[0].high) if x_values else (res.nominal[res.energy_key],) * 2

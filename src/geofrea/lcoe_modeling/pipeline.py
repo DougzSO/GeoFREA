@@ -20,19 +20,21 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
+from contextlib import nullcontext
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
-from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile
 from geofrea.core.constants import PRICE_BASE_YEAR_USD
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import TableWriter, write_table
+from geofrea.land_eligibility.parameters import ELEVATION_COLUMN
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
 from geofrea.lcoe_modeling.inputs import (
@@ -83,6 +85,9 @@ class TechLcoe(BaseModel):
     lcoe_summary: Path
     design_matrix: Path
     supply_curve: Path
+    supply_curve_below_elevation_sensitivity: Path | None = (
+        None  # OQ-058: the curve without the cells above the sensitivity altitude
+    )
     lcoe_nominal_scenarios: dict[str, Path]
 
 
@@ -258,10 +263,14 @@ def build_technology_lcoe(
     max_batch_gb: float,
     production: bool = False,
     other_scenarios: Mapping[str, tuple[Path, Path]] | None = None,
+    elevation_sensitivity_m: float | None = None,
 ) -> TechLcoe:
     """Summary, design matrix and supply curve of one technology.
 
     Implements: M-F6-01, M-F6-02, M-F6-04, M-F6-05, M-F6-06.
+
+    With `elevation_sensitivity_m` (OQ-058) a second supply curve is written without the candidates above that altitude
+    (`supply_curve_<tech>__below_<N>m.parquet`); the summary and the central curve keep every candidate.
 
     Raises:
         LcoeInputError: an input table breaks its contract.
@@ -279,6 +288,18 @@ def build_technology_lcoe(
 
     summary_path = out_dir / f"lcoe_summary_{tech}.parquet"
     supply_path = out_dir / f"supply_curve_{tech}.parquet"
+    below_path = (
+        None
+        if elevation_sensitivity_m is None
+        else out_dir / f"supply_curve_{tech}__below_{elevation_sensitivity_m:.0f}m.parquet"
+    )
+    elevation_of = (
+        None
+        if below_path is None
+        else pd.read_parquet(candidates_path, columns=["cell_id", ELEVATION_COLUMN]).set_index(
+            "cell_id"
+        )[ELEVATION_COLUMN]
+    )
     design_path = out_dir / f"design_matrix_{tech}.parquet"
     progress = PeriodicProgress(logger, len(members), f"{iso} {tech} LCOE members", every=5)
     n_rows = n_nonfinite_nominal = n_draw_nonfinite = 0
@@ -301,6 +322,18 @@ def build_technology_lcoe(
             extra_metadata=provenance,
             empty_frame=_empty_supply_frame(),
         ) as supply_writer,
+        (
+            nullcontext()
+            if below_path is None
+            else TableWriter(
+                below_path,
+                schema_version=LCOE_TABLE_SCHEMA_VERSION,
+                row_model=SupplyCurveRow,
+                compression="zstd",
+                extra_metadata=provenance,
+                empty_frame=_empty_supply_frame(),
+            )
+        ) as below_writer,
     ):
         member_inputs = read_member_inputs(
             resolved,
@@ -347,6 +380,20 @@ def build_technology_lcoe(
                     item.cells.energy_mwh,
                 )
             )
+            if below_writer is not None:
+                keep = (
+                    elevation_of.reindex(item.cell_id).to_numpy(dtype="float64")
+                    <= elevation_sensitivity_m
+                )
+                below_writer.write(
+                    supply_curve(
+                        item.member,
+                        item.cell_id[keep],
+                        nominal_all[keep],
+                        item.cells.p_mw[keep],
+                        item.cells.energy_mwh[keep],
+                    )
+                )
             if item.member == REFERENCE_MEMBER_ID:
                 m0_nominal = nominal_all
             progress.step()
@@ -387,6 +434,7 @@ def build_technology_lcoe(
         lcoe_summary=summary_path,
         design_matrix=design_path,
         supply_curve=supply_path,
+        supply_curve_below_elevation_sensitivity=below_path,
         lcoe_nominal_scenarios=scenario_tables,
     )
     logger.info(
@@ -417,6 +465,7 @@ def build_lcoe(
     candidates_dir: Path | None = None,
     climate_dir: Path | None = None,
     out_dir: Path | None = None,
+    elevation_sensitivity: Mapping[str, float | None] | None = None,
 ) -> LcoeSummary:
     """F6 for `iso` and the technologies of the run, on the central land scenario and every member.
 
@@ -441,7 +490,6 @@ def build_lcoe(
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
         raise FileNotFoundError(f"F6 input missing (F3, F4 and F5 must have run): {absent}")
-    members = read_member_ids(members_file)
     result = {
         tech: build_technology_lcoe(
             iso,
@@ -449,12 +497,15 @@ def build_lcoe(
             potential_path=Path(potential_dir) / f"potential_{tech}__central.parquet",
             candidates_path=Path(candidates_dir) / f"candidates_{tech}__central.parquet",
             forcing_path=forcing_path,
-            members=members,
+            members=read_member_ids(
+                members_file, required_channels(technologies.technologies[tech].cf_model)
+            ),
             out_dir=Path(out_dir),
             n_samples=sampler_size,
             seed=sampler_seed,
             max_batch_gb=max_batch_gb,
             production=production,
+            elevation_sensitivity_m=(elevation_sensitivity or {}).get(tech),
             other_scenarios={
                 scenario: (
                     Path(potential_dir) / f"potential_{tech}__{scenario}.parquet",

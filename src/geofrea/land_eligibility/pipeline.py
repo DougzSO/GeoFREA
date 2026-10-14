@@ -42,7 +42,6 @@ from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.admin1 import assign_admin1, read_units
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
-    candidate_cells,
     coarse_cell_id,
     pixel_row_area_km2,
 )
@@ -54,8 +53,10 @@ from geofrea.land_eligibility.eligibility import (
 )
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
 from geofrea.land_eligibility.parameters import (
+    ELEVATION_COLUMN,
     LandAvailability,
     ParameterSet,
+    elevation_sensitivity_m,
     load_land_availability,
     nominal_set,
     riparian_discharges_m3s,
@@ -129,6 +130,11 @@ class TechSummary(BaseModel):
     )  # only at the default scale: the exact 2 x 2 sum of the 0.05 degree cells
     rasters: dict[str, Path]
     admin1_units: Path
+    # OQ-058: candidates of the central scenario above the sensitivity altitude (None: the technology has none), and V-B3: candidates whose
+    # Weibull shape is below 1 at each data height (an empty mapping for a technology without Weibull layers); counted, never excluded
+    elevation_sensitivity_m: float | None = None
+    n_candidates_above_elevation_sensitivity: int | None = None
+    n_candidates_weibull_k_below_1: dict[str, int] = {}
 
 
 class EligibilitySummary(BaseModel):
@@ -495,6 +501,9 @@ def build_eligibility(
     )
     transform, grid_ref = shared.transform, Path(grid_result.grid)
     country_mask, pixel_area, flags = shared.country_mask, shared.pixel_area, shared.flags
+    elevation = _read(
+        grid_result.elevation, "elevation"
+    )  # the aligned DEM: the altitude of a cell is its eligible-area-weighted mean (OQ-058)
 
     summaries: dict[str, TechSummary] = {}
     for tech in techs:
@@ -502,13 +511,17 @@ def build_eligibility(
         composition = scenario_composition(la.technologies[tech])
         params: ParameterSet = sets["central"]
         layers, resources = technology_layers(shared, tech, siting_result)
+        cell_resources = {
+            **resources,
+            ELEVATION_COLUMN: elevation,
+        }  # elevation is a column of the cells, not a validity requirement
         cells_by_scenario: dict[str, pd.DataFrame] = {}
         scenario_summaries: dict[str, ScenarioSummary] = {}
         central: dict = {}
         for scenario, sparams in sets.items():
             eligible, excl = eligible_fraction(layers, sparams)
             cells = aggregate_to_cells(
-                transform, country_mask, eligible, excl, resources=resources, flags=flags
+                transform, country_mask, eligible, excl, resources=cell_resources, flags=flags
             )
             if not admin1_by_cell:
                 ids = assign_admin1(cells["row"].to_numpy(), cells["col"].to_numpy(), units)
@@ -525,10 +538,8 @@ def build_eligibility(
                     f"{tech}/{scenario}: cells that the first table did not have (the cells of one country do not depend on the scenario)"
                 )
             _check_invariants(f"{tech}/{scenario}", cells, eligible, pixel_area, country_mask)
-            cells["candidate"] = cells["eligible_area_km2"] >= sparams.min_eligible_area_km2
-            candidates = candidate_cells(cells, sparams.min_eligible_area_km2).drop(
-                columns="candidate"
-            )
+            cells["candidate"] = _is_candidate(cells, sparams)
+            candidates = cells[cells["candidate"]].reset_index(drop=True).drop(columns="candidate")
             cells_path = _table_path(out, "cells", tech, scenario)
             cand_path = _table_path(out, "candidates", tech, scenario)
             write_table(
@@ -575,7 +586,9 @@ def build_eligibility(
         check_scenario_order(tech, cells_by_scenario)
         stability_path = Path(str(out / f"candidate_stability_{tech}") + ".parquet")
         write_table(
-            candidate_stability(cells_by_scenario, params.min_eligible_area_km2),
+            candidate_stability(
+                cells_by_scenario, params.min_eligible_area_km2, params.elevation_max_m
+            ),
             stability_path,
             schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
             row_model=CandidateStabilityRow,
@@ -600,6 +613,28 @@ def build_eligibility(
 
         valid = valid_pixels(layers)
         total_area = float(cells["cell_area_km2"].sum())
+        sensitivity_m = elevation_sensitivity_m(la, tech)
+        k_below_1 = {
+            col: int((candidates[col] < 1.0).sum())
+            for col in sorted(candidates.columns)
+            if col.startswith("weibull_k_")
+        }
+        if k_below_1:
+            logger.info(
+                "%s %s: candidates with Weibull k below 1 (counted, not excluded): %s",
+                iso,
+                tech,
+                k_below_1,
+            )
+        if sensitivity_m is not None:
+            logger.info(
+                "%s %s: %d of %d candidates lie above %.0f m (reported as a sensitivity, not excluded; OQ-058)",
+                iso,
+                tech,
+                int((candidates[ELEVATION_COLUMN] > sensitivity_m).sum()),
+                len(candidates),
+                sensitivity_m,
+            )
         summaries[tech] = TechSummary(
             technology=tech,
             parameter_set={
@@ -624,8 +659,21 @@ def build_eligibility(
             cells_0p1deg=coarse_path,
             rasters=rasters,
             admin1_units=units_path,
+            elevation_sensitivity_m=sensitivity_m,
+            n_candidates_above_elevation_sensitivity=None
+            if sensitivity_m is None
+            else int((candidates[ELEVATION_COLUMN] > sensitivity_m).sum()),
+            n_candidates_weibull_k_below_1=k_below_1,
         )
     return EligibilitySummary(country_code=iso, technologies=summaries)
+
+
+def _is_candidate(cells: pd.DataFrame, params: ParameterSet) -> pd.Series:
+    """M-F3-04: eligible area at least the minimum and, when the technology has an altitude limit, a cell altitude not above it (OQ-058)."""
+    ok = cells["eligible_area_km2"] >= params.min_eligible_area_km2
+    if params.elevation_max_m is not None:
+        ok &= cells[ELEVATION_COLUMN] <= params.elevation_max_m
+    return ok
 
 
 def _admin1_units(cells: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:

@@ -60,6 +60,7 @@ def _write_climate(base):
                     "delta_rsds": 1.0 + 0.01 * rng.random(len(ids)),
                     "dT": 2.0 * rng.random(len(ids)),
                     "delta_wind": 1.0 + 0.02 * rng.random(len(ids)),
+                    "dT_isolated_native_cell": False,
                 }
             )
             for m in members

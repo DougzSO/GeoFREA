@@ -236,7 +236,10 @@ def read_member_inputs(
     forcing = pd.read_parquet(forcing_path, columns=["cell_id", "member", "dT"])
     p_codes, p_names = _member_codes(potential)
     f_codes, f_names = _member_codes(forcing)
-    unknown = sorted(set(p_names) - set(known_members if known_members is not None else members))
+    observed = {
+        p_names[code] for code in np.unique(p_codes)
+    }  # a category with no row (a member of another technology) is not a member of the table
+    unknown = sorted(observed - set(known_members if known_members is not None else members))
     if unknown:
         raise LcoeInputError(
             f"{potential_path.name} has members not listed in members.yaml: {unknown}"
@@ -312,8 +315,13 @@ def resolve_all(
     return resolved
 
 
-def read_member_ids(members_file: Path) -> list[str]:
-    """Member identifiers of `members.yaml`, in its order."""
+def read_member_ids(members_file: Path, required_channels: Sequence[str] = ()) -> list[str]:
+    """Member identifiers of `members.yaml`, in its order; with `required_channels` only the members that declare every one of them.
+
+    A member whose entry declares no channels carries every channel (an old `members.yaml`). Implements: M-F4-06.
+    """
     return [
-        m["member"] for m in yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
+        m["member"]
+        for m in yaml.safe_load(members_file.read_text(encoding="utf-8"))["members"]
+        if all(m.get("channels", {}).get(c, True) for c in required_channels)
     ]

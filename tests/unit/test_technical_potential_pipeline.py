@@ -81,6 +81,9 @@ K100 = np.array([2.0, 2.1, 2.2, 2.3, 2.4, 2.0, 2.2, 2.4])
 K150, K200 = K100 + 0.1, K100 + 0.2
 RHO100 = np.linspace(1.10, 1.22, N_CELLS)
 RHO150, RHO200 = RHO100 - 0.01, RHO100 - 0.02
+ELEVATION = np.linspace(
+    100.0, 3500.0, N_CELLS
+)  # the last two cells are above the 3000 m of the wind sensitivity (OQ-058)
 
 
 def _candidates(scenario: str, technology_columns: dict[str, np.ndarray]) -> pd.DataFrame:
@@ -100,6 +103,7 @@ def _candidates(scenario: str, technology_columns: dict[str, np.ndarray]) -> pd.
             "dist_road_km": 2.0,
             "dist_grid_capped_share": 0.0,
             "dist_road_capped_share": 0.0,
+            "elevation_m": ELEVATION,
         }
     )
     for name, values in technology_columns.items():
@@ -107,7 +111,12 @@ def _candidates(scenario: str, technology_columns: dict[str, np.ndarray]) -> pd.
     return frame
 
 
-def _write_inputs(root: Path, drop_forcing_rows: list[tuple[int, str]] = (), wind_override=None):
+def _write_inputs(
+    root: Path,
+    drop_forcing_rows: list[tuple[int, str]] = (),
+    wind_override=None,
+    no_wind: tuple[str, ...] = (),
+):
     """Candidate tables of the three scenarios for both technologies, forcing, forcing_masked and members.yaml."""
     land, climate = root / "land", root / "climate"
     land.mkdir(parents=True), climate.mkdir(parents=True)
@@ -137,11 +146,18 @@ def _write_inputs(root: Path, drop_forcing_rows: list[tuple[int, str]] = (), win
     for member in MEMBERS:
         rsds, d_t, wind = FACTORS[member]
         for i, cid in enumerate(CELL_IDS):
-            if member == MEMBERS[2] and i == MASKED_CELL_INDEX:
+            delta_wind = wind if wind_override is None else wind_override
+            if (
+                member == MEMBERS[2] and i == MASKED_CELL_INDEX
+            ):  # masked (M-F4-07): the row stays, the wind ratio is NaN and declared
                 masked.append(
                     {"cell_id": int(cid), "member": member, "delta_wind": 1.9, "reason": "test"}
                 )
-                continue
+                delta_wind = np.nan
+            if (
+                member in no_wind
+            ):  # no wind channel (M-F4-02 item 6): NaN everywhere, declared by `members.yaml`
+                delta_wind = np.nan
             if (i, member) in drop_forcing_rows:
                 continue
             rows.append(
@@ -150,13 +166,29 @@ def _write_inputs(root: Path, drop_forcing_rows: list[tuple[int, str]] = (), win
                     "member": member,
                     "delta_rsds": rsds,
                     "dT": d_t,
-                    "delta_wind": wind if wind_override is None else wind_override,
+                    "delta_wind": delta_wind,
                 }
             )
     pd.DataFrame(rows).to_parquet(climate / "forcing.parquet")
     pd.DataFrame(masked).to_parquet(climate / "forcing_masked.parquet")
     (climate / "members.yaml").write_text(
-        yaml.safe_dump({"members": [{"member": m} for m in MEMBERS]}), encoding="utf-8"
+        yaml.safe_dump(
+            {
+                "members": [
+                    {
+                        "member": m,
+                        "channels": {
+                            "resource_rsds": True,
+                            "resource_tas": True,
+                            "resource_wind": m not in no_wind,
+                            "hazard": False,
+                        },
+                    }
+                    for m in MEMBERS
+                ]
+            }
+        ),
+        encoding="utf-8",
     )
     return land, climate
 
@@ -186,8 +218,10 @@ def _with(params: CountryParams, tech: str, key: str, value) -> CountryParams:
     return CountryParams.model_validate(data)
 
 
-def _run(tmp_path, registry, params, drop=(), techs=("solar", "wind"), production=False):
-    land, climate = _write_inputs(tmp_path / "in", drop)
+def _run(
+    tmp_path, registry, params, drop=(), techs=("solar", "wind"), production=False, no_wind=()
+):
+    land, climate = _write_inputs(tmp_path / "in", drop, no_wind=no_wind)
     out = tmp_path / "out"
     summary = build_potential(
         "ZZZ",
@@ -224,7 +258,8 @@ def test_zzz_produces_the_potential_files_for_three_scenarios_and_the_aggregates
             assert list(table.columns) == ["cell_id", "member", "P_MW", "CF", "E_MWh"]
             assert table["P_MW"].dtype == "float64" and table["CF"].dtype == "float64"
         agg = pd.read_parquet(out / f"potential_aggregates_{tech}.parquet")
-        assert len(agg) == 3 * len(MEMBERS)
+        # wind also has the rows without the cells above its altitude sensitivity (OQ-058), solar has none
+        assert len(agg) == (4 if tech == "wind" else 3) * len(MEMBERS)
         assert {"P_GW", "E_TWh", "P_GW_like_for_like", "E_TWh_like_for_like"} <= set(agg.columns)
     assert set(summary.technologies) == {"solar", "wind"}
 
@@ -239,7 +274,9 @@ def test_solar_values_follow_the_method(run_ok, synthetic_params):
     assert (gamma, luf, density) == (-0.005, 0.5, 10.0)
     for member, (rsds, d_t, _wind) in FACTORS.items():
         part = table[table["member"].astype(str) == member].sort_values("cell_id")
-        keep = [i for i in range(N_CELLS) if not (member == MEMBERS[2] and i == MASKED_CELL_INDEX)]
+        keep = list(
+            range(N_CELLS)
+        )  # solar does not read the wind ratio: the wind-masked cell-member keeps its row
         expected_cf = PVOUT[keep] / 24.0 * rsds * (1 + gamma * d_t)
         expected_p = np.array(SCENARIO_AREAS["central"])[keep] * luf * density
         np.testing.assert_allclose(part["CF"], expected_cf, rtol=1e-14)
@@ -283,31 +320,79 @@ def test_reference_member_is_the_unperturbed_cf(run_ok):
 
 
 @pytest.mark.unit
-def test_declared_masked_cell_member_has_no_row_and_is_counted(run_ok):
+def test_a_wind_ratio_masked_cell_member_is_absent_for_wind_only_and_solar_keeps_it(run_ok):
+    """M-F4-07 (V-B1): the cell-member whose wind ratio is masked has no wind row and is counted; solar, which does not read it, keeps the row."""
     _, out = run_ok
-    for tech in ("solar", "wind"):
-        table = pd.read_parquet(out / f"potential_{tech}__central.parquet")
-        masked_cell = int(CELL_IDS[MASKED_CELL_INDEX])
-        member_rows = table[table["member"].astype(str) == MEMBERS[2]]
-        assert masked_cell not in set(member_rows["cell_id"])
-        assert masked_cell in set(table[table["member"].astype(str) == "m0"]["cell_id"])
-        assert len(table) == len(MEMBERS) * N_CELLS - 1
-        agg = pd.read_parquet(out / f"potential_aggregates_{tech}.parquet")
-        row = agg[(agg["scenario"] == "central") & (agg["member"] == MEMBERS[2])].iloc[0]
-        assert (row["n_cells"], row["n_cells_absent"], row["n_cells_like_for_like"]) == (7, 1, 7)
-        meta = json.loads(
-            pq.read_schema(out / f"potential_{tech}__central.parquet").metadata[
-                PROVENANCE_KEY.encode()
-            ]
-        )
-        assert meta["absent_cell_members"] == {MEMBERS[2]: 1}
+    masked_cell = int(CELL_IDS[MASKED_CELL_INDEX])
+    solar = pd.read_parquet(out / "potential_solar__central.parquet")
+    assert masked_cell in set(solar[solar["member"].astype(str) == MEMBERS[2]]["cell_id"])
+    assert len(solar) == len(MEMBERS) * N_CELLS
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    member_rows = table[table["member"].astype(str) == MEMBERS[2]]
+    assert masked_cell not in set(member_rows["cell_id"])
+    assert masked_cell in set(table[table["member"].astype(str) == "m0"]["cell_id"])
+    assert len(table) == len(MEMBERS) * N_CELLS - 1
+    agg = pd.read_parquet(out / "potential_aggregates_wind.parquet")
+    row = agg[(agg["scenario"] == "central") & (agg["member"] == MEMBERS[2])].iloc[0]
+    assert (row["n_cells"], row["n_cells_absent"], row["n_cells_like_for_like"]) == (7, 1, 7)
+    meta = json.loads(
+        pq.read_schema(out / "potential_wind__central.parquet").metadata[PROVENANCE_KEY.encode()]
+    )
+    assert meta["absent_cell_members"] == {MEMBERS[2]: 1}
+    solar_meta = json.loads(
+        pq.read_schema(out / "potential_solar__central.parquet").metadata[PROVENANCE_KEY.encode()]
+    )
+    assert solar_meta["absent_cell_members"] == {}
+
+
+@pytest.mark.unit
+def test_a_member_without_a_wind_channel_is_absent_for_wind_by_declaration_and_present_for_solar(
+    tmp_path, registry, synthetic_params
+):
+    """M-F4-02 item 6 (V-B1): a MIROC6-like member has no wind rows and is not counted as masked; its solar rows are all there."""
+    _, out = _run(tmp_path, registry, synthetic_params, no_wind=(MEMBERS[1],))
+    solar = pd.read_parquet(out / "potential_solar__central.parquet")
+    wind = pd.read_parquet(out / "potential_wind__central.parquet")
+    assert len(solar[solar["member"].astype(str) == MEMBERS[1]]) == N_CELLS
+    assert MEMBERS[1] not in set(wind["member"].astype(str))
+    assert set(wind["member"].astype(str)) == {MEMBERS[0], MEMBERS[2]}
+    wind_agg = pd.read_parquet(out / "potential_aggregates_wind.parquet")
+    solar_agg = pd.read_parquet(out / "potential_aggregates_solar.parquet")
+    assert MEMBERS[1] not in set(wind_agg["member"]) and MEMBERS[1] in set(solar_agg["member"])
+    meta = json.loads(
+        pq.read_schema(out / "potential_wind__central.parquet").metadata[PROVENANCE_KEY.encode()]
+    )
+    assert MEMBERS[1] not in meta["absent_cell_members"]  # absent by declaration, not by mask
+
+
+@pytest.mark.unit
+def test_the_aggregates_of_wind_repeat_the_central_totals_without_the_cells_above_the_altitude_sensitivity(
+    run_ok,
+):
+    """OQ-058: rows `central__below_3000m` of the wind aggregates sum the cells not above 3000 m (cells 6 and 7 of the fixture are); solar has none."""
+    _, out = run_ok
+    agg = pd.read_parquet(out / "potential_aggregates_wind.parquet")
+    assert "central__below_3000m" in set(agg["scenario"])
+    assert "central__below_3000m" not in set(
+        pd.read_parquet(out / "potential_aggregates_solar.parquet")["scenario"]
+    )
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    kept = CELL_IDS[ELEVATION <= 3000.0]
+    assert 0 < len(kept) < N_CELLS
+    below = agg[agg["scenario"] == "central__below_3000m"].set_index("member")
+    central = agg[agg["scenario"] == "central"].set_index("member")
+    for member in MEMBERS:
+        rows = table[(table["member"].astype(str) == member) & table["cell_id"].isin(kept)]
+        assert below.loc[member, "E_TWh"] == pytest.approx(rows["E_MWh"].sum() / 1e6, rel=1e-13)
+        assert below.loc[member, "P_GW"] == pytest.approx(rows["P_MW"].sum() / 1e3, rel=1e-13)
+        assert below.loc[member, "E_TWh"] < central.loc[member, "E_TWh"]
 
 
 @pytest.mark.unit
 def test_like_for_like_series_excludes_the_masked_cell_and_the_climate_effect_uses_it(run_ok):
     _, out = run_ok
-    table = pd.read_parquet(out / "potential_solar__central.parquet")
-    agg = pd.read_parquet(out / "potential_aggregates_solar.parquet")
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    agg = pd.read_parquet(out / "potential_aggregates_wind.parquet")
     agg = agg[agg["scenario"] == "central"].set_index("member")
     masked_cell = int(CELL_IDS[MASKED_CELL_INDEX])
     kept = table[table["cell_id"] != masked_cell]
@@ -351,20 +436,28 @@ def test_aggregate_scenario_hand_example():
 def test_an_undeclared_absence_raises_before_anything_is_written(
     tmp_path, registry, synthetic_params
 ):
-    with pytest.raises(ForcingContractError, match="neither in forcing.parquet nor declared"):
+    with pytest.raises(ForcingContractError, match="have no row in forcing.parquet"):
         _run(tmp_path, registry, synthetic_params, drop=[(1, MEMBERS[1])])
     assert not list((tmp_path / "out").glob("*")) if (tmp_path / "out").exists() else True
 
 
 @pytest.mark.unit
-def test_wind_factor_out_of_range_in_a_candidate_cell_raises(tmp_path, registry, synthetic_params):
+def test_wind_factor_out_of_range_in_a_candidate_cell_raises_for_wind_and_not_for_solar(
+    tmp_path, registry, synthetic_params
+):
     land, climate = _write_inputs(tmp_path / "in", wind_override=1.8)
     with pytest.raises(ForcingContractError, match="outside"):
         build_potential(
-            "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
+            "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
             candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
+    # solar never reads the wind ratio: the same forcing is usable (V-B1)
+    summary = build_potential(
+        "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
+        candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out_solar", **RANGE_ARGS,
+    )  # fmt: skip
+    assert set(summary.technologies) == {"solar"}
 
 
 # -- V-03 invariants ------------------------------------------------------------------------------
