@@ -170,3 +170,25 @@ def test_neighbourhood_applies_to_ratio_factors_only_and_must_be_odd():
 
     with pytest.raises(ValueError, match="odd"):
         cf.neighbourhood_mean(ref.isel(time=0), 2)
+
+
+@pytest.mark.unit
+def test_float32_inputs_give_float64_means_and_factors():
+    """M-3 of the pre-research audit: the files hold float32, the means and the factors are computed in float64."""
+    da = _monthly(lambda y, m: 288.15 + 0.001 * (y - 1995) + 0.01 * m).astype("float32")
+    assert da.dtype == np.float32
+    clim = cf.monthly_climatology(da, (1995, 2014))
+    annual = cf.annual_mean_of_climatology(da, (1995, 2014))
+    assert clim.dtype == np.float64 and annual.dtype == np.float64
+    exact = np.mean(
+        [
+            np.float32(288.15 + 0.001 * (y - 1995) + 0.01 * m).astype(np.float64)
+            for y in range(1995, 2015)
+            for m in range(1, 13)
+        ]
+    )
+    assert float(annual.isel(lat=0, lon=0)) == pytest.approx(exact, rel=0, abs=1e-12)
+    factor = cf.compute_change_factor(
+        "tas", da, da.assign_coords(time=da["time"]), (1995, 2014), (2041, 2070)
+    )
+    assert factor.dtype == np.float64

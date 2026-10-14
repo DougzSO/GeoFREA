@@ -59,7 +59,8 @@ def monthly_climatology(da: xr.DataArray, years: tuple[int, int]) -> xr.DataArra
     per_year = window["time"].groupby("time.year").count()
     if not (per_year == 12).all():
         raise IncompletePeriodError(f"{start}-{end}: not every year has 12 months")
-    return window.groupby("time.month").mean("time")
+    # the files hold float32; the means and the factors are computed in float64 so the single-precision rounding of the inputs is not repeated (M-3 of the audit)
+    return window.astype("float64").groupby("time.month").mean("time")
 
 
 def annual_mean_of_climatology(da: xr.DataArray, years: tuple[int, int]) -> xr.DataArray:
