@@ -143,7 +143,7 @@ class DataAcquisitionLayerFailedError(RuntimeError):
 # no token is configured. Both are intentionally NOT caught here
 # either: an unmapped country or a missing token are configuration
 # gaps, not transient failures, so they should fail this phase loudly
-# (surfaced via the Orchestrator's own PhaseExecutionError) rather
+# (surfaced by the Orchestrator as a failed phase) rather
 # than silently degrade to path=None like a real network error would.
 _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
     "wind": lambda ctx: fetch_wind(ctx.outputs_dir, ctx.country_code),

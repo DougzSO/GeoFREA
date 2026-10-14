@@ -35,13 +35,6 @@ class MissingPathEnvironmentError(RuntimeError):
         self.var_name = var_name
 
 
-class ReadOnlyLocationError(RuntimeError):
-    """Attempted to write to a read-only data location."""
-
-    def __init__(self, path: str, location: str) -> None:
-        super().__init__(f"Cannot write to {path}: it is under read-only location '{location}'")
-
-
 class StoredPath(BaseModel):
     """A filesystem path for storage in manifests and Pydantic models.
 
@@ -324,43 +317,3 @@ def to_stored_path(path: Path) -> StoredPath:
         f"Path {path} is not under any known root "
         "(GEOFREA_DATA_DIR, GEOFREA_SHARED_RAW_DIR, or GEOFREA_LEGACY_BASELINE_DIR)"
     )
-
-
-def ensure_writable(path: Path) -> None:
-    """Ensure a path is not under any read-only location.
-
-    Args:
-        path: Path to validate.
-
-    Raises:
-        ReadOnlyLocationError: If path is under a read-only location.
-    """
-    path_str = str(path.resolve())
-
-    try:
-        shared_raw_str = str(shared_raw().resolve())
-        if path_str.startswith(shared_raw_str):
-            raise ReadOnlyLocationError(path_str, "GEOFREA_SHARED_RAW_DIR")
-    except MissingPathEnvironmentError:
-        pass
-
-    try:
-        legacy_baseline_str = str(Path(_ensure_env("GEOFREA_LEGACY_BASELINE_DIR")).resolve())
-        if path_str.startswith(legacy_baseline_str):
-            raise ReadOnlyLocationError(path_str, "GEOFREA_LEGACY_BASELINE_DIR")
-    except MissingPathEnvironmentError:
-        pass
-
-    try:
-        geoworld_str = str(Path(_ensure_env("GEOWORLD_BASELINE_DIR")).resolve())
-        if path_str.startswith(geoworld_str):
-            raise ReadOnlyLocationError(path_str, "GEOWORLD_BASELINE_DIR")
-    except MissingPathEnvironmentError:
-        pass
-
-    try:
-        craei_str = str(Path(_ensure_env("CRAEI_BASELINE_DIR")).resolve())
-        if path_str.startswith(craei_str):
-            raise ReadOnlyLocationError(path_str, "CRAEI_BASELINE_DIR")
-    except MissingPathEnvironmentError:
-        pass

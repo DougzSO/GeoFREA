@@ -16,8 +16,8 @@ O&M cancels against the denominator:
     LCOE = opex_var + [ P*U + (P*dist_grid)*grid_cost + dist_road*road_cost ] / ( E * A_e ),
     U    = 1000*capex*(1 + opex_fixed_frac*A_o) + substation_cost.
 
-The numerator of the whole (cells x samples) block is one matrix product, `(C x 3) @ (3 x S)`. `lcoe_direct` is the textbook form with
-an explicit loop over the years; the tests use it as the reference.
+The numerator of the whole (cells x samples) block is one matrix product, `(C x 3) @ (3 x S)`. The textbook form with
+an explicit loop over the years, the reference of the tests, is in `tests/oracles/kernel.py`.
 
 Energy of a sample: `E_c(s) = energy_mwh_c * (energy_offset_c + energy_slope_c * x_s)`, where `x_s` is the sampled value of the
 parameter that scales the stored energy (`gamma` or `eta_loss`, D-F6-012) and offset and slope come from the capacity-factor model's
@@ -74,14 +74,6 @@ def annuity_factor(rate: np.ndarray | float, years: np.ndarray | float) -> np.nd
     with np.errstate(divide="ignore", invalid="ignore"):
         value = -np.expm1(-n * np.log1p(r)) / r
     return np.where(r == 0.0, n, value)
-
-
-def capital_recovery_factor(rate: np.ndarray | float, years: np.ndarray | float) -> np.ndarray:
-    """`CRF = r / (1 - (1 + r)^-n)`, the inverse of the annuity factor; the limit `1/n` at `r = 0`.
-
-    Implements: M-F6-01, V-02.
-    """
-    return 1.0 / annuity_factor(rate, years)
 
 
 def energy_annuity_factor(
@@ -300,37 +292,3 @@ def lcoe_block(
     del zero
     block += samples.opex_var_usd_per_mwh[None, :]
     return block
-
-
-def lcoe_direct(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
-    """The textbook form of M-F6-01 with an explicit loop over the years, shape `(C, S)`; the reference of the tests.
-
-    Implements: M-F6-01, V-02.
-    """
-    _check_energy_not_negative(cells, samples)
-    out = np.empty((len(cells), len(samples)))
-    for s in range(len(samples)):
-        capex_kw = samples.capex_usd_per_kw[s]
-        capex_total = (
-            cells.p_mw * 1000.0 * capex_kw
-            + cells.p_mw * cells.dist_grid_km * samples.grid_cost_usd_per_mw_km[s]
-            + cells.p_mw * samples.substation_cost_usd_per_mw[s]
-            + cells.dist_road_km * samples.road_cost_usd_per_km[s]
-        )
-        energy_1 = cells.energy_mwh * (
-            cells.energy_offset + cells.energy_slope * samples.energy_parameter[s]
-        )
-        numerator = capex_total.copy()
-        denominator = np.zeros(len(cells))
-        r, d = samples.discount_rate[s], samples.degradation_rate[s]
-        for t in range(1, int(samples.lifetime_years[s]) + 1):
-            e_t = energy_1 * (1.0 - d) ** (t - 1)
-            opex_t = samples.opex_fixed_frac[s] * cells.p_mw * 1000.0 * capex_kw + (
-                samples.opex_var_usd_per_mwh[s] * e_t
-            )
-            numerator += opex_t / (1.0 + r) ** t
-            denominator += e_t / (1.0 + r) ** t
-        with np.errstate(divide="ignore", invalid="ignore"):
-            value = numerator / denominator
-        out[:, s] = np.where(denominator == 0.0, np.inf, value)
-    return out

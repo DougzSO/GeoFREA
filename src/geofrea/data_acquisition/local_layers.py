@@ -46,7 +46,7 @@ explicit instruction this stage — not symmetric by oversight):
     CONFIGURATION gap — the same class of problem as hydrosheds.py's
     _COUNTRY_TO_REGION KeyError for an unmapped country. Raises
     KeyError, uncaught, so it surfaces loudly via the Orchestrator's own
-    PhaseExecutionError instead of silently producing path=None for a
+    a failed phase instead of silently producing path=None for a
     country nobody remembered to add to the table.
   - GEOFREA_SHARED_RAW_DIR unset, or the expected file/directory genuinely
     absent under it (download never completed, drive not mounted, wrong

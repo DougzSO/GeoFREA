@@ -32,13 +32,9 @@ from geofrea.lcoe_modeling.pipeline import (
 from geofrea.lcoe_modeling.summary import SummaryError, summarize_draws
 from geofrea.lcoe_modeling.supply_curve import supply_curve
 from geofrea.technical_potential.pipeline import PROVENANCE_KEY as POTENTIAL_KEY
-from geofrea.technical_potential.rescale import (
-    rescale_cf_solar,
-    rescale_cf_wind,
-    solar_rescale_terms,
-    wind_rescale_terms,
-)
+from geofrea.technical_potential.rescale import solar_rescale_terms, wind_rescale_terms
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION, PotentialRow
+from tests.oracles.rescale import rescale_cf_solar, rescale_cf_wind
 
 REPO = Path(__file__).resolve().parents[2]
 PARAMETERS = REPO / "config" / "parameters.json"

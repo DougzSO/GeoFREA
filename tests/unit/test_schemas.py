@@ -5,7 +5,7 @@ parametrized case per field, not a single "missing fields in general"
 test) by removing exactly that field from an otherwise-valid payload
 and asserting pydantic raises ValidationError. The same per-case
 pattern is used for the extra="forbid" and range-constraint tests
-below. BiomassParams/SolarParams/WindParams share required-field,
+below. SolarParams/WindParams share required-field,
 extra="forbid", and range-constraint tests via TECH_MODELS, since they
 share the same shape (_TechnologyEconomicParams).
 """
@@ -16,7 +16,6 @@ import pytest
 from pydantic import ValidationError
 
 from geofrea.core.schemas import (
-    BiomassParams,
     CountryParams,
     ParametersFile,
     RunConfig,
@@ -50,15 +49,6 @@ VALID_PENDING_VALUE = {
     "verified_date": None,
     "verification_method": "unverified",
     "status": "pending_research",
-}
-
-VALID_BIOMASS = {
-    "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 3606},
-    "opex_fixed_frac": {**VALID_VERIFIED_VALUE, "value": 0.04},
-    "opex_var_usd_per_mwh": {**VALID_VERIFIED_VALUE, "value": 0.004},
-    "lifetime_years": {**VALID_VERIFIED_VALUE, "value": 20},
-    "discount_rate": {**VALID_VERIFIED_VALUE, "value": 0.05},
-    "discount_rate_increment": {**VALID_VERIFIED_VALUE, "value": 0.0},
 }
 
 VALID_SOLAR = {
@@ -153,7 +143,6 @@ VALID_SETTINGS_FILE = {
 
 # tech_name -> (model class, valid payload) - shared across the tech-model tests below.
 TECH_MODELS = {
-    "biomass": (BiomassParams, VALID_BIOMASS),
     "solar": (SolarParams, VALID_SOLAR),
     "wind": (WindParams, VALID_WIND),
 }
@@ -176,14 +165,6 @@ def test_verified_value_accepts_valid_payload():
     result = VerifiedValue[float].model_validate(VALID_VERIFIED_VALUE)
     assert result.value == 1.0
     assert result.verified is True
-
-
-@pytest.mark.unit
-def test_biomass_params_accepts_valid_payload():
-    result = BiomassParams.model_validate(VALID_BIOMASS)
-    assert result.capex_usd_per_kw.value == 3606
-    assert result.discount_rate.value == 0.05
-    assert result.opex_var_usd_per_mwh.value == 0.004
 
 
 @pytest.mark.unit
@@ -287,7 +268,7 @@ def test_verified_value_missing_required_field_raises(field):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("tech_name", ["solar", "wind"])
 @pytest.mark.parametrize("field", REQUIRED_TECH_FIELDS)
 def test_tech_economic_params_missing_required_field_raises(tech_name, field):
     model_cls, valid = TECH_MODELS[tech_name]
@@ -353,7 +334,7 @@ def test_verified_value_rejects_unexpected_field():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("tech_name", ["solar", "wind"])
 def test_tech_economic_params_rejects_unexpected_field(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = {**copy.deepcopy(valid), "unexpected_key": "typo"}
@@ -402,7 +383,7 @@ def test_settings_file_rejects_unexpected_field():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("tech_name", ["solar", "wind"])
 def test_opex_fixed_frac_out_of_range_raises(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = copy.deepcopy(valid)
@@ -412,7 +393,7 @@ def test_opex_fixed_frac_out_of_range_raises(tech_name):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("tech_name", ["solar", "wind"])
 def test_lifetime_years_out_of_range_raises(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = copy.deepcopy(valid)
@@ -422,7 +403,7 @@ def test_lifetime_years_out_of_range_raises(tech_name):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("tech_name", ["biomass", "solar", "wind"])
+@pytest.mark.parametrize("tech_name", ["solar", "wind"])
 def test_discount_rate_out_of_range_raises(tech_name):
     model_cls, valid = TECH_MODELS[tech_name]
     data = copy.deepcopy(valid)

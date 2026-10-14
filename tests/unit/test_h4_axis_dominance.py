@@ -8,7 +8,7 @@ import dataclasses
 import numpy as np
 import pytest
 
-from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_direct
+from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs
 from geofrea.robustness_analysis.evaluator import MemberWorld, evaluate
 from geofrea.robustness_analysis.h4_axis_dominance import (
     CLIMATE_DOMINATED,
@@ -27,6 +27,7 @@ from geofrea.robustness_analysis.h4_axis_dominance import (
     technology_verdict,
 )
 from geofrea.robustness_analysis.rankings import order_by
+from tests.oracles.kernel import lcoe_direct
 
 LOWER, UPPER = 0.40, 0.60
 

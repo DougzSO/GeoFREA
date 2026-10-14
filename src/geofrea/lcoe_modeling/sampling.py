@@ -15,8 +15,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import qmc, triang
 
-from geofrea.core.schemas import ParametersFile
-
 
 class SamplingError(ValueError):
     """A parameter cannot be sampled: it has no value or no range (U-05), or the request is malformed."""
@@ -39,28 +37,6 @@ class UncertainSpec:
             )
         if self.distribution not in ("uniform", "triangular"):
             raise SamplingError(f"{self.name}: unknown distribution {self.distribution!r}")
-
-
-def specs_from_parameters(
-    parameters: ParametersFile, country: str, technology: str, keys: Sequence[str]
-) -> list[UncertainSpec]:
-    """Specifications of the uncertain parameters `keys` of one country and technology, read from `parameters.json`.
-
-    Raises:
-        SamplingError: a key has no entry, no value or no range (nothing is invented).
-    """
-    params = getattr(parameters.countries[country].technologies, technology)
-    specs = []
-    for key in keys:
-        vv = getattr(params, key, None)
-        if vv is None or vv.value is None or vv.range is None:
-            raise SamplingError(
-                f"{country} {technology} {key}: no value or no range in parameters.json (U-05)"
-            )
-        specs.append(
-            UncertainSpec(key, float(vv.value), vv.range.min, vv.range.max, vv.range.distribution)
-        )
-    return specs
 
 
 def _transform(u: np.ndarray, spec: UncertainSpec) -> np.ndarray:

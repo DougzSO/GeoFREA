@@ -429,22 +429,6 @@ class PhaseSpec:
     summarize: Callable[[BaseModel], str] | None = None
 
 
-class PhaseExecutionError(RuntimeError):
-    """Raised only for a phase failure the orchestrator cannot record and continue past.
-
-    Normal phase failures are recorded as PhaseResult(status="failed",
-    ...) and do NOT raise (see A-09: independent branches keep running).
-    This is reserved for structural failures (e.g. a phase omits a
-    required artifact registration) that indicate a broken PhaseSpec,
-    not a data/runtime failure of the phase's own logic.
-    """
-
-    def __init__(self, phase_name: str, original: Exception) -> None:
-        super().__init__(f"Phase '{phase_name}' failed: {original}")
-        self.phase_name = phase_name
-        self.original = original
-
-
 def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
     """Validate the requires/produces graph and return phases in topological order.
 

@@ -171,7 +171,7 @@ class GridAlignmentResult(BaseModel):
     raster failing the topology check). Legacy's `_verify_alignment()`
     raises RuntimeError rather than returning a flag, so this schema
     has no separate "verified" field — a topology mismatch is expected
-    to surface as PhaseExecutionError from the orchestrator, not as
+    to surface as a failed phase of the orchestrator, not as
     data carried in this result.
 
     Args:

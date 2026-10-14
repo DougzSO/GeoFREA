@@ -221,7 +221,7 @@ def _verify_alignment(aligned: dict[str, Path | None], grid: GridContext) -> Non
             Deliberately NOT caught anywhere in this module — see
             docs/DECISIONS.md 2026-09-08, grid_alignment Passo 3: a
             topology mismatch must propagate to the orchestrator as
-            PhaseExecutionError, the same as any other unhandled
+            a failed phase, the same as any other unhandled
             exception from a phase's run() (DECISIONS.md 2026-08-20 -
             orchestrator + data_quality_audit phase, "try/except único
             no orchestrator").
@@ -550,7 +550,7 @@ def run_grid_alignment_phase(
     # own docstring and docs/DECISIONS.md 2026-09-08, grid_alignment
     # Passo 3, item 2. A RuntimeError here propagates uncaught out of
     # run_grid_alignment_phase(), to the orchestrator's single
-    # try/except, becoming PhaseExecutionError.
+    # try/except, becoming a failed phase.
     _verify_alignment({**aligned, **{f"wind_{k}": v for k, v in wind_layers.items()}}, grid)
 
     return GridAlignmentResult(

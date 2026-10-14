@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
-from geofrea.core.config_loader import load_parameters
 from geofrea.lcoe_modeling.sampling import (
     SamplingError,
     UncertainSpec,
     draw_lhs,
-    specs_from_parameters,
 )
 
 SPECS = [
@@ -70,10 +66,3 @@ def test_malformed_requests_raise():
         draw_lhs([SPECS[0], SPECS[0]], 10, seed=1)
     with pytest.raises(SamplingError, match="outside"):
         UncertainSpec("z", 11.0, 1.0, 10.0, "uniform")
-
-
-@pytest.mark.unit
-def test_specs_from_parameters_refuses_a_parameter_without_a_range():
-    parameters = load_parameters(Path(__file__).resolve().parents[2] / "config" / "parameters.json")
-    with pytest.raises(SamplingError, match="no value or no range"):
-        specs_from_parameters(parameters, "PRT", "solar", ["capex_usd_per_kw"])

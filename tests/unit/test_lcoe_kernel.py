@@ -14,11 +14,10 @@ from geofrea.lcoe_modeling.kernel import (
     KernelInputError,
     SampleInputs,
     annuity_factor,
-    capital_recovery_factor,
     energy_annuity_factor,
     lcoe_block,
-    lcoe_direct,
 )
+from tests.oracles.kernel import capital_recovery_factor, lcoe_direct
 
 KERNEL_FILE = Path(kernel.__file__)
 

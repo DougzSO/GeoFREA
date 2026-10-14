@@ -247,22 +247,6 @@ class _TechnologySitingParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class BiomassParams(_TechnologyEconomicParams, _TechnologySitingParams):
-    """Biomass technology parameters for a single country.
-
-    See docs/DECISIONS.md 2026-08-20 - biomass parameters restructure
-    (IRENA 2025), - biomass discount_rate and discount_rate_increment
-    - resolucao das pendencias, and - slope_threshold_deg moved to
-    parameters.json, for provenance of every field's value.
-
-    discount_rate_increment here is 0.0 because bioenergy is NOT
-    covered by IRENA's technology-specific WACC benchmark tool (which
-    only differentiates onshore wind/offshore wind/solar PV) — it uses
-    the flat OECD/non-OECD default directly, with no separate
-    technology premium layered on top.
-    """
-
-
 class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     """Solar PV technology parameters for a single country.
 
@@ -331,8 +315,7 @@ class TechnologyParams(BaseModel):
         wind: Onshore wind technology parameters.
 
     Note: biomass technology parameters were removed per METHODOLOGY A-04
-    and Section 9 (S-02 scope: only solar and wind). BiomassParams class
-    is retained in schemas.py for backward compatibility.
+    and Section 9 (S-02 scope: only solar and wind).
     """
 
     model_config = ConfigDict(extra="forbid")

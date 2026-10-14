@@ -12,9 +12,7 @@ import pytest
 
 from geofrea.core.paths import (
     MissingPathEnvironmentError,
-    ReadOnlyLocationError,
     StoredPath,
-    ensure_writable,
     to_stored_path,
 )
 
@@ -120,73 +118,3 @@ class TestToStoredPath:
                 pytest.raises(ValueError, match="not under any known root"),
             ):
                 to_stored_path(test_file)
-
-
-class TestEnsureWritable:
-    """ReadOnlyLocationError guard for writes."""
-
-    def test_write_to_data_dir_is_allowed(self):
-        """ensure_writable() allows writes under GEOFREA_DATA_DIR."""
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            mock.patch.dict(os.environ, {"GEOFREA_DATA_DIR": tmpdir}),
-        ):
-            path = Path(tmpdir) / "outputs" / "BRA" / "test.json"
-            # Should not raise
-            ensure_writable(path)
-
-    def test_write_to_shared_raw_raises(self):
-        """ensure_writable() raises for writes under GEOFREA_SHARED_RAW_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            shared_raw = Path(tmpdir) / "shared_raw"
-            shared_raw.mkdir()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": tmpdir, "GEOFREA_SHARED_RAW_DIR": str(shared_raw)},
-            ):
-                path = shared_raw / "gadm" / "file.shp"
-                with pytest.raises(ReadOnlyLocationError, match="GEOFREA_SHARED_RAW_DIR"):
-                    ensure_writable(path)
-
-    def test_write_to_legacy_baseline_raises(self):
-        """ensure_writable() raises for writes under GEOFREA_LEGACY_BASELINE_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            legacy = Path(tmpdir) / "legacy"
-            legacy.mkdir()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": tmpdir, "GEOFREA_LEGACY_BASELINE_DIR": str(legacy)},
-            ):
-                path = legacy / "BRA" / "results.tif"
-                with pytest.raises(ReadOnlyLocationError, match="GEOFREA_LEGACY_BASELINE_DIR"):
-                    ensure_writable(path)
-
-    def test_write_to_craei_raises(self):
-        """ensure_writable() raises for writes under CRAEI_BASELINE_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            craei = Path(tmpdir) / "craei"
-            craei.mkdir()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": tmpdir, "CRAEI_BASELINE_DIR": str(craei)},
-            ):
-                path = craei / "climate_data.nc"
-                with pytest.raises(ReadOnlyLocationError, match="CRAEI_BASELINE_DIR"):
-                    ensure_writable(path)
-
-    def test_write_to_geoworld_raises(self):
-        """ensure_writable() raises for writes under GEOWORLD_BASELINE_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            geoworld = Path(tmpdir) / "geoworld"
-            geoworld.mkdir()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": tmpdir, "GEOWORLD_BASELINE_DIR": str(geoworld)},
-            ):
-                path = geoworld / "framework.py"
-                with pytest.raises(ReadOnlyLocationError, match="GEOWORLD_BASELINE_DIR"):
-                    ensure_writable(path)

@@ -165,27 +165,6 @@ def pad_to_window(a: np.ndarray, window: LatticeWindow, fill: float | bool = 0) 
     return out
 
 
-def pixel_eligibility(
-    exclusions: dict[str, np.ndarray], required_valid: list[np.ndarray] | None = None
-) -> np.ndarray:
-    """M-F3-01: `eligible = NOT (E1 OR ... OR E6) AND all required layers valid` (bool, pixel grid).
-
-    `exclusions` maps a name (E1..E6) to a boolean array, True = excluded; `required_valid` are boolean
-    arrays, True = the required layer has a value there.
-    """
-    shape = next(iter(exclusions.values())).shape if exclusions else None
-    eligible = np.ones(shape, dtype=bool) if shape is not None else None
-    for name, excluded in exclusions.items():
-        if excluded.shape != eligible.shape:
-            raise ValueError(
-                f"exclusion {name} has shape {excluded.shape}, expected {eligible.shape}"
-            )
-        eligible &= ~excluded.astype(bool)
-    for valid in required_valid or []:
-        eligible &= valid.astype(bool)
-    return eligible
-
-
 def _block_sum(a: np.ndarray, k: int) -> np.ndarray:
     h, w = a.shape
     return a.reshape(h // k, k, w // k, k).sum(axis=(1, 3))

@@ -20,15 +20,12 @@ from geofrea.technical_potential.power_curve import (
     curve_file_sha256,
     load_power_curve,
 )
-from geofrea.technical_potential.rescale import rescale_cf_solar, rescale_cf_wind
 from geofrea.technical_potential.solar import solar_cf_member, solar_cf_reference
 from geofrea.technical_potential.weibull_cf import (
     equivalent_scale,
-    member_cf_ratio,
     weibull_capacity_factor,
     weibull_mean_speed,
     wind_cf_member,
-    wind_cf_reference,
 )
 from geofrea.technical_potential.wind_profile import (
     HubHeightError,
@@ -37,6 +34,8 @@ from geofrea.technical_potential.wind_profile import (
     resource_at_hub_height,
     weibull_scale_at_height,
 )
+from tests.oracles.rescale import rescale_cf_solar, rescale_cf_wind
+from tests.oracles.weibull_cf import member_cf_ratio, wind_cf_reference
 
 CURVE_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "power_curves" / "synthetic_curve.yaml"

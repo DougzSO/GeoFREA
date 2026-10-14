@@ -88,17 +88,6 @@ def test_grid_off_the_lattice_or_not_whole_cells_fails_loud():
     assert cells.grid_cell_origin(_transform(), 10, 15) == (1020, 3600 - 180)
 
 
-@pytest.mark.unit
-def test_pixel_eligibility_is_not_any_exclusion_and_all_required_layers_valid():
-    e1 = np.array([[True, False], [False, False]])
-    e2 = np.array([[False, False], [True, False]])
-    valid = np.array([[True, True], [True, False]])
-
-    out = cells.pixel_eligibility({"E1": e1, "E2": e2}, [valid])
-
-    assert out.tolist() == [[False, True], [False, False]]
-
-
 def _grid_inputs():
     h, w = 10, 15  # 2 x 3 cells
     country = np.ones((h, w), bool)
@@ -115,7 +104,7 @@ def _grid_inputs():
 def test_aggregation_areas_dominant_exclusion_and_candidate_filter():
     t = _transform()
     country, e1, e2 = _grid_inputs()
-    elig = cells.pixel_eligibility({"E1": e1, "E2": e2}) & country
+    elig = ~(e1 | e2) & country
 
     df = cells.aggregate_to_cells(t, country, elig, {"E1": e1, "E2": e2})
     areas = cells.pixel_row_area_km2(t, 10)

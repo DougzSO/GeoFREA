@@ -106,10 +106,8 @@ def test_load_settings_rejects_leftover_force_rerun_key(tmp_path):
 
 
 # Biomass technology tests removed 2026-09-21 per METHODOLOGY S-02:
-# only solar and wind are in active scope. BiomassParams class remains in
-# schemas.py for backward compatibility (criteria.biomass still exists), but
-# biomass has been removed from parameters.json, TechnologyParams, and
-# config/technologies.yaml. The below tests are no longer applicable.
+# only solar and wind are in active scope: biomass was removed from
+# parameters.json, TechnologyParams, and config/technologies.yaml.
 #
 # Previous tests removed:
 # - test_biomass_verification_metadata_readable (parametrized)

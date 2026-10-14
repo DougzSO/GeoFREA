@@ -7,13 +7,14 @@ import tracemalloc
 import numpy as np
 import pytest
 
-from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_block, lcoe_direct
+from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_block
 from geofrea.robustness_analysis.evaluator import (
     EvaluationError,
     MemberWorld,
     evaluate,
     reference_levels,
 )
+from tests.oracles.kernel import lcoe_direct
 
 N_DRAWS = 40
 

@@ -153,31 +153,6 @@ class PeriodicProgress:
             self.step()
 
 
-def periodic_progress(
-    logger: logging.Logger,
-    iterable: Sequence[T] | Iterable[T],
-    label: str,
-    total: int | None = None,
-    every: int = 10,
-    min_interval_s: float = 30.0,
-) -> Iterator[T]:
-    """Wrap `iterable`, logging periodic "`done`/`total`" progress lines.
-
-    Convenience wrapper over `PeriodicProgress.track()` for the common case
-    (a `for tile in periodic_progress(logger, tiles, "land_cover mosaic"):`
-    loop) — see `PeriodicProgress` for the logging behavior.
-
-    Args:
-        total: Item count, if not derivable from `len(iterable)` (e.g.
-            `iterable` is a generator). Required in that case.
-    """
-    if total is None:
-        total = len(iterable)  # type: ignore[arg-type]
-    return PeriodicProgress(logger, total, label, every=every, min_interval_s=min_interval_s).track(
-        iterable
-    )
-
-
 def render_run_table(rows: Sequence[dict], run_id: str) -> str:
     """Render the end-of-run table: phase, status, elapsed time, artifact count, per country.
 
