@@ -125,7 +125,37 @@ def test_the_experiment_blocks_of_f7_are_null_in_the_shipped_file():
         "gust_mean_annual_max_ms",
     }
     assert all(h.threshold is None for h in experiments.hazard_thresholds.values())
-    assert experiments.prim.peel_alpha is None and experiments.prim.mass_min is None
+    prim = experiments.prim  # pre-registered 2026-10-14 (OQ-056)
+    assert (
+        prim.outcome_threshold,
+        prim.tolerance_multiple_of_k,
+        prim.peel_alpha,
+        prim.mass_min,
+    ) == (
+        0.20,
+        1.0,
+        0.05,
+        0.05,
+    )
+    assert (prim.max_restricted_descriptors, prim.box_choice, prim.min_coverage) == (
+        3,
+        "max_density_given_min_coverage",
+        0.50,
+    )
+    assert (prim.bootstrap_replicates, prim.percentile_low, prim.percentile_high) == (200, 5, 95)
+    assert prim.sensitivity.outcome_threshold == [0.10, 0.30]
+    assert prim.sensitivity.min_coverage == [0.40, 0.60]
+    assert prim.sensitivity.mass_min == [0.02, 0.10]
+    assert prim.source == "OQ-056, pre-registered 2026-10-14"
+    synthesis = experiments.synthesis  # pre-registered 2026-10-14 (OQ-050, T-R8)
+    assert (
+        synthesis.labels.consistent,
+        synthesis.labels.context_dependent,
+        synthesis.labels.not_assessable,
+    ) == ("consistent", "context-dependent", "not assessable")
+    assert (synthesis.min_testable_cases, synthesis.rule) == (2, "all_testable_same_verdict")
+    assert synthesis.partial_classes_separate == ["H1", "H5"]
+    assert synthesis.source == "OQ-050 (T-R8), pre-registered 2026-10-14"
     assert experiments.external_validation.vintage_min_start_year is None
     assert experiments.thresholds["regret_quantile"] == 0
 
@@ -303,3 +333,57 @@ def test_a_national_target_value_needs_its_unit_source_and_horizon():
     negative["national_targets"]["PRT"]["solar"]["value"] = -1.0
     with pytest.raises(ValueError):
         ExperimentsFile.model_validate(negative)
+
+
+@pytest.mark.unit
+def test_the_prim_block_needs_every_setting_and_refuses_values_outside_their_domain():
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    for key in (
+        "outcome_threshold",
+        "peel_alpha",
+        "mass_min",
+        "min_coverage",
+        "source",
+        "sensitivity",
+    ):
+        missing = json.loads(json.dumps(raw))
+        del missing["prim"][key]
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(missing)
+    for key, value in (
+        ("outcome_threshold", 0.0),
+        ("peel_alpha", 0.6),
+        ("mass_min", 1.0),
+        ("max_restricted_descriptors", 0),
+        ("box_choice", "highest_coverage"),
+        ("bootstrap_replicates", 0),
+        ("unknown_key", 1),
+    ):
+        other = json.loads(json.dumps(raw))
+        other["prim"][key] = value
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(other)
+    shares = json.loads(json.dumps(raw))
+    shares["prim"]["sensitivity"]["min_coverage"] = [0.4, 1.5]
+    with pytest.raises(ValueError, match="shares"):
+        ExperimentsFile.model_validate(shares)
+
+
+@pytest.mark.unit
+def test_the_synthesis_block_needs_its_labels_two_testable_cases_and_its_rule():
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    for key in ("labels", "min_testable_cases", "rule", "partial_classes_separate", "source"):
+        missing = json.loads(json.dumps(raw))
+        del missing["synthesis"][key]
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(missing)
+    for key, value in (
+        ("min_testable_cases", 1),
+        ("rule", "majority"),
+        ("partial_classes_separate", ["H2"]),
+        ("unknown_key", 1),
+    ):
+        other = json.loads(json.dumps(raw))
+        other["synthesis"][key] = value
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(other)

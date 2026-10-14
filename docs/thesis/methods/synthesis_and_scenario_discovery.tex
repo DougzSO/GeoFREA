@@ -1,0 +1,203 @@
+% ============================================================================
+% Cross-country synthesis (T-R8) and scenario discovery (PRIM).
+% Pre-registered 2026-10-14 (OQ-050 closure; OQ-056), before any
+% real-country result was produced.
+% Notation follows docs/METHODOLOGY.md and the H1 to H5 sections.
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Cross-Country Synthesis of the Hypotheses}
+\label{sec:synthesis}
+
+\subsection{Purpose}
+\label{subsec:synthesis_purpose}
+
+The five hypotheses produce verdicts at different levels. H1, H2, H3 and H5 are
+evaluated for each country and technology, giving six verdicts each for Brazil,
+Portugal and India with solar photovoltaics and onshore wind. H4 is comparative
+and gives one verdict per technology. The synthesis answers the question of
+generalisation (RQ5): which hypotheses are observed in which national contexts,
+and whether the pattern is the same across them.
+
+The synthesis reports what was observed; it does not compress the verdicts into
+a single score. With three countries and two technologies, a majority rule would
+turn a small number of cases into an apparently general conclusion, and the
+choice of its threshold would weigh more than the evidence. The counts and the
+consistency of the verdicts are therefore reported as they are.
+
+\subsection{Country Profiles}
+\label{subsec:synthesis_profiles}
+
+For each country and technology, the profile gathers the verdict of each
+hypothesis and the numbers on which it rests:
+\begin{itemize}
+    \item H1: $C_k$ and $V_k$ with the reference value $p_k^2$, and the verdict;
+    \item H2: $O$, $O_{\mathrm{ref}}$ and the robustness penalty $\Delta_z$;
+    \item H3: $D$, $D_{\mathrm{ref}}$, and the price and benefit of robustness
+    $(\Pi,B)$;
+    \item H4: $D_{\mathrm{clim}}$, $D_{\mathrm{tec}}$, $\rho$ and the country
+    profile, with the technology-level verdict;
+    \item H5: $E_0$, $G$, $H_0$, $R_{\mathrm{loss}}$ and $R_{\mathrm{exp}}$;
+\end{itemize}
+together with the size of the candidate set, the shortlist size $k$ and, for
+every number that has one, its range across the sensitivity variants
+(Section~\ref{subsec:synthesis_ranges}). The profile is the unit from which the
+thesis chapters, the articles derived from them and, later, a per-country page
+of an interactive platform are built; it is produced once, in a structured form,
+from the persisted results.
+
+\subsection{Cross-Country Summary}
+\label{subsec:synthesis_summary}
+
+For each hypothesis and each technology, the summary reports the number of
+countries in each verdict class (supported, partially supported, not supported,
+not testable, and the special statuses of H5). The pattern is then labelled:
+\begin{itemize}
+    \item consistent, when every testable case has the same verdict;
+    \item context-dependent, when the testable cases differ;
+    \item not assessable, when fewer than two cases are testable.
+\end{itemize}
+For H1 and H5 the two partial classes are kept distinct, since they point to
+different mechanisms. For H4, whose verdict is already comparative, the summary
+reports the verdict per technology and the three country profiles on which it
+rests. A context-dependent pattern is a result in its own right: it states that
+the conclusion does not transfer from one national context to another without
+evidence specific to that context.
+
+\subsection{Ranges Instead of Single Values}
+\label{subsec:synthesis_ranges}
+
+Every hypothesis statistic is accompanied by its range across the pre-registered
+sensitivity variants of its hypothesis (shortlist share, tolerance, climate
+configuration, window, cell scale and land scenario where applicable), and by the
+number of variants in which the verdict differs from the primary one. The primary
+verdict is the one stated; the range shows how far the evidence extends around
+it.
+
+% ============================================================================
+
+\section{Scenario Discovery}
+\label{sec:prim}
+
+\subsection{Purpose}
+\label{subsec:prim_purpose}
+
+Scenario discovery identifies the conditions under which a decision fails, as
+regions of the space of uncertain inputs that are simple enough to be
+communicated \cite{bryantlempert2010}. In GeoFREA it answers the question that
+the hypotheses leave open: under which combinations of costs and climate does the
+present-optimal shortlist stop being a good choice? It uses the Patient Rule
+Induction Method (PRIM) \cite{friedmanfisher1999}, which searches for a box,
+that is, a set of bounds on a few input variables, in which the futures with an
+undesirable outcome are concentrated.
+% verify friedmanfisher1999
+
+\subsection{Unit of Analysis and Outcome}
+\label{subsec:prim_outcome}
+
+The unit of analysis is the future $f=(m,s)$, not the cell. The descriptors of a
+future, its parameter values and its climate member, are shared by all cells, so
+a cell-by-cell analysis would repeat the same search thousands of times and
+return boxes describing individual cells rather than conditions of the system.
+The outcome therefore summarises, for each future, what happens to the
+present-optimal shortlist as a whole.
+
+For one country and technology, with the nominal shortlist
+$S^{\mathrm{nom}}_k$ of Section~\ref{sec:h3}, the tolerance $m=k$, and
+$r_{i,f}^{\mathrm{rank}}$ the rank of cell $i$ in future $f$ by relative regret,
+the displaced share of the nominal shortlist in future $f$ is
+\begin{equation}
+    V_f=\frac{\sum_{i\in S^{\mathrm{nom}}_k}q_i\,
+    \mathbb{1}\!\left[r^{\mathrm{rank}}_{i,f}>k+m\right]}
+    {\sum_{i\in S^{\mathrm{nom}}_k}q_i}.
+    \label{eq:prim_outcome}
+\end{equation}
+A future is a case of interest when
+\begin{equation}
+    y_f=\mathbb{1}\!\left[V_f\geq\theta\right],\qquad\theta=0.20,
+    \label{eq:prim_case}
+\end{equation}
+that is, when at least one in five present-optimal megawatts falls beyond the
+tolerance. The threshold and the tolerance are those of H1b and H3.
+
+The futures are all combinations of the climate members of the core window and
+the parameter samples, with the sample size adopted by the convergence protocol
+of the techno-economic phase.
+
+\subsection{Descriptors}
+\label{subsec:prim_descriptors}
+
+Each future is described by the values of the sampled techno-economic parameters
+in its sample, its climate model and emission scenario as categorical variables,
+and the capacity-weighted means over $S^{\mathrm{nom}}_k$ of its change factors
+of irradiance, temperature and wind. Land parameters are not descriptors, since
+land does not vary across futures.
+
+\subsection{Algorithm Settings}
+\label{subsec:prim_settings}
+
+The box is found by peeling: at each step, the slice of a descriptor that most
+increases the share of cases of interest inside the box is removed. Peeling
+removes a fraction $\alpha=0.05$ of the futures in the box at each step, the
+customary value. The box must contain at least $5\%$ of all futures (minimum
+support), and at most three descriptors may be restricted, so that the box
+remains interpretable. Each box of the peeling trajectory is characterised by
+\begin{equation}
+    \mathrm{density}=\frac{\#\{f\in\mathrm{box}:y_f=1\}}{\#\{f\in\mathrm{box}\}},
+    \qquad
+    \mathrm{coverage}=\frac{\#\{f\in\mathrm{box}:y_f=1\}}{\#\{f:y_f=1\}}.
+    \label{eq:prim_density_coverage}
+\end{equation}
+Density measures how reliably the box predicts the undesirable outcome; coverage
+measures how much of it the box explains.
+
+\subsection{Box Selection Rule}
+\label{subsec:prim_selection}
+
+The trajectory trades density against coverage. Choosing a box after inspecting
+the trajectory would make the result an adjustment to the data; the selection is
+therefore fixed in advance:
+\begin{equation}
+    \mathrm{box}^{*}=\arg\max\left\{\,\mathrm{density}:\ \mathrm{coverage}\geq0.50,\
+    \text{at most three restricted descriptors}\,\right\}.
+    \label{eq:prim_selection}
+\end{equation}
+The selected box explains at least half of the cases of interest and, among the
+boxes that do, is the one in which the undesirable outcome is most concentrated.
+
+Special cases are reported as such: if no future is a case of interest, no
+vulnerability is found under the futures evaluated; if every future is, the
+outcome is not a vulnerability of particular conditions but a general property
+of the shortlist; if no box meets the coverage requirement, no simple
+explanation is found.
+
+\subsection{Robustness of the Discovered Box}
+\label{subsec:prim_robustness}
+
+A box found once is a point estimate. Its stability is assessed by resampling the
+futures with replacement $B=200$ times and repeating the search with the same
+settings and selection rule. The results report, for the primary box:
+\begin{itemize}
+    \item the range (5th to 95th percentile over replicates) of each bound, of
+    density and of coverage;
+    \item the share of replicates in which each descriptor is restricted, which
+    shows whether a descriptor is a stable driver or an artefact of the sample.
+\end{itemize}
+In addition, the search is repeated with the outcome threshold
+$\theta\in\{0.10,0.30\}$, the minimum coverage of the selection rule in
+$\{0.40,0.60\}$ and the minimum support in $\{0.02,0.10\}$. Boxes are thus reported
+as ranges, consistent with the treatment of every other result of the thesis.
+
+\subsection{Limitations}
+\label{subsec:prim_limitations}
+
+The box describes the futures evaluated, not the full space of possible futures;
+regions outside the parameter ranges and the climate ensemble are not explored.
+Boxes are axis-aligned and may describe poorly a vulnerability that depends on a
+combination of variables, such as a ratio of two costs. The climate descriptors
+are summaries over the shortlist and do not represent the spatial pattern of
+change. With six climate models, the climate dimension is coarse, and a climate
+model restricted in a box may reflect the behaviour of one model rather than a
+physical condition. The PRIM implementation of GeoFREA is checked against a
+reference implementation on stored cases and differs from it in documented
+details.

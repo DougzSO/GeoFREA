@@ -229,14 +229,67 @@ class HazardThreshold(BaseModel):
     tier: int | None
 
 
-class PrimConfig(BaseModel):
-    """PRIM peeling settings (M-F7-08, D-F7-023); null until the author records them with their source."""
+class PrimSensitivity(BaseModel):
+    """The other values of the PRIM settings that are reported beside the primary result (M-F7-08)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    peel_alpha: float | None = Field(gt=0, lt=1)
-    mass_min: float | None = Field(gt=0, lt=1)
-    source: str | None
+    outcome_threshold: list[float] = Field(min_length=1)
+    min_coverage: list[float] = Field(min_length=1)
+    mass_min: list[float] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _values_are_shares(self) -> PrimSensitivity:
+        for name in ("outcome_threshold", "min_coverage", "mass_min"):
+            if any(not 0 < v <= 1 for v in getattr(self, name)):
+                raise ValueError(f"prim.sensitivity.{name} must be shares in (0, 1]")
+        return self
+
+
+class PrimConfig(BaseModel):
+    """The pre-registered PRIM settings (M-F7-08, OQ-056): outcome, peeling, box choice, bootstrap and sensitivities.
+
+    A future is a case of interest when the capacity share `V_f` of the nominal shortlist beyond the tolerance `m = tolerance_multiple_of_k * k`
+    is at least `outcome_threshold`. The box is the densest one with coverage of at least `min_coverage` and at most
+    `max_restricted_descriptors` restricted descriptors (`box_choice`). `source` is the citation of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    outcome_threshold: float = Field(gt=0, le=1)
+    tolerance_multiple_of_k: float = Field(gt=0)
+    peel_alpha: float = Field(gt=0, lt=0.5)
+    mass_min: float = Field(gt=0, lt=1)
+    max_restricted_descriptors: int = Field(ge=1)
+    box_choice: Literal["max_density_given_min_coverage"]
+    min_coverage: float = Field(gt=0, le=1)
+    bootstrap_replicates: int = Field(ge=1)
+    percentile_low: float = Field(ge=0, lt=50)
+    percentile_high: float = Field(gt=50, le=100)
+    sensitivity: PrimSensitivity
+    source: str = Field(min_length=1)
+
+
+class SynthesisLabels(BaseModel):
+    """The three labels of the pattern of a hypothesis across countries (T-R8)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    consistent: str = Field(min_length=1)
+    context_dependent: str = Field(min_length=1)
+    not_assessable: str = Field(min_length=1)
+
+
+class SynthesisConfig(BaseModel):
+    """The pre-registered rule of the cross-country synthesis (M-F8-03, OQ-050): labels, the minimum number of testable cases, no aggregate verdict."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    labels: SynthesisLabels
+    min_testable_cases: int = Field(ge=2)
+    rule: Literal["all_testable_same_verdict"]
+    partial_classes_separate: list[Literal["H1", "H5"]]
+    source: str = Field(min_length=1)
 
 
 class ExternalValidationConfig(BaseModel):
@@ -280,6 +333,7 @@ class ExperimentsFile(BaseModel):
     national_targets: dict[str, dict[str, NationalTarget]] = Field(default_factory=dict)
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
+    synthesis: SynthesisConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")

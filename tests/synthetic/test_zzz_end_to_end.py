@@ -77,7 +77,6 @@ def zzz(tmp_path_factory):
         ("initial_size: 500", f"initial_size: {INITIAL_SIZE}"),
         ("max_size_for_convergence: null", f"max_size_for_convergence: {CEILING}"),
         # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
-        ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
         ("tx40_days: {threshold: null,", "tx40_days: {threshold: 1.0,"),
         ("rx5day_mm: {threshold: null,", "rx5day_mm: {threshold: 1.0,"),

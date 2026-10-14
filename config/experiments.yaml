@@ -337,12 +337,41 @@ hazard_thresholds:
   wet_p95_exceed_freq: {threshold: null, unit: fraction, source: null, tier: null}
   gust_mean_annual_max_ms: {threshold: null, unit: m/s, source: null, tier: null}
 
-# PRIM scenario discovery (M-F7-08, D-F7-023). Peeling fraction and minimum support (mass_min) follow Bryant and Lempert (2010); the
-# values and the source are the author's, null until recorded (the threshold theta of the outcome is `prim_outcome_share`, OQ-056).
+# PRIM scenario discovery (M-F7-08; docs/thesis/methods/synthesis_and_scenario_discovery.tex). The unit is the future of the core window; a
+# future is a case of interest when the capacity share V_f of the nominal shortlist whose rank by relative regret exceeds k + m is at least
+# `outcome_threshold` (theta); m = tolerance_multiple_of_k * k. Peeling and pasting fraction and minimum support follow Bryant and Lempert (2010).
+# The box is the one of highest density among those with coverage of at least `min_coverage` and at most `max_restricted_descriptors` restricted
+# descriptors. The bootstrap resamples the futures `bootstrap_replicates` times (seed derived from the sampler seed) and reports the percentiles
+# `percentile_low` to `percentile_high`. `sensitivity` lists the other values of theta, of the minimum coverage and of the minimum support.
 prim:
-  peel_alpha: null
-  mass_min: null
-  source: null
+  outcome_threshold: 0.20
+  tolerance_multiple_of_k: 1.0
+  peel_alpha: 0.05
+  mass_min: 0.05
+  max_restricted_descriptors: 3
+  box_choice: max_density_given_min_coverage
+  min_coverage: 0.50
+  bootstrap_replicates: 200
+  percentile_low: 5
+  percentile_high: 95
+  sensitivity:
+    outcome_threshold: [0.10, 0.30]
+    min_coverage: [0.40, 0.60]
+    mass_min: [0.02, 0.10]
+  source: "OQ-056, pre-registered 2026-10-14"
+
+# Cross-country synthesis (T-R8, M-F8-03). It issues no aggregate verdict: per hypothesis and technology it counts the countries by verdict class and
+# labels the pattern `consistent` (every testable case has the same verdict), `context_dependent` (the testable cases differ) or `not_assessable`
+# (fewer than `min_testable_cases` testable cases). The partial classes of H1 and H5 stay apart; a case without a verdict is not testable.
+synthesis:
+  labels:
+    consistent: consistent
+    context_dependent: context-dependent
+    not_assessable: not assessable
+  min_testable_cases: 2
+  rule: all_testable_same_verdict
+  partial_classes_separate: [H1, H5]
+  source: "OQ-050 (T-R8), pre-registered 2026-10-14"
 
 # F7b external validation settings (M-F7b-01 to M-F7b-03, D-F7b-004). The deciles are the lowest eligible-area deciles of the nominal
 # LCOE at m0 whose enrichment ratio is reported. The vintage and location-accuracy filters are sensitivity rows: null reports only the

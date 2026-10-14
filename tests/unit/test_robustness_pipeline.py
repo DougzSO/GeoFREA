@@ -335,7 +335,7 @@ def test_a_null_tau_skips_sr_and_a_null_p_k_skips_the_top_k_flags_and_both_are_l
         assert table[column].isna().all(), column
     assert entry.windows["core"].k is None
     skipped = {(s["open_question"]) for s in entry.skipped}
-    assert {"OQ-008", "OQ-021", "OQ-010", "OQ-056"} <= skipped
+    assert {"OQ-008", "OQ-021", "OQ-010"} <= skipped
     assert all(s["reason"] for s in entry.skipped)
     assert any("skipped" in r.message and "OQ-021" in r.message for r in caplog.records)
     assert _meta(entry.windows["core"].tables["robustness"])["skipped_outputs"]
@@ -594,8 +594,8 @@ def test_prim_boxes_are_written_from_the_futures_with_the_share_threshold(tmp_pa
 
 
 @pytest.mark.unit
-def test_prim_is_skipped_and_flagged_with_oq_056_while_its_settings_are_null(tmp_path):
-    entry, _, _ = _run(tmp_path)
+def test_prim_is_skipped_and_flagged_with_oq_056_while_the_outcome_threshold_is_null(tmp_path):
+    entry, _, _ = _run(tmp_path, country=_country(prim_outcome_share=None))
     path = entry.windows["core"].tables["prim_boxes"]
     assert len(pd.read_parquet(path)) == 0
     assert (
