@@ -44,7 +44,7 @@ from geofrea.robustness_analysis.cell_set import build_cell_set
 from geofrea.robustness_analysis.decision import TechDecision, check_ranges, decision_values
 from geofrea.robustness_analysis.evaluator import evaluate
 
-logger = logging.getLogger("geofrea.lcoe_modeling.convergence")
+logger = logging.getLogger("geofrea.robustness_analysis.convergence")
 
 PROVENANCE_KEY = "geofrea_convergence_provenance"
 MR_FUNCTION = "f7"

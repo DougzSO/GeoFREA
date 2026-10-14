@@ -42,6 +42,12 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from geofrea.config_models.audit import AuditConfig, AuditInputs, AuditLayerConfig
+from geofrea.config_models.land_availability import (
+    default_experiments_yaml,
+    load_land_availability,
+    strictest_slope_max_deg,
+)
 from geofrea.core.geo_utils import detect_island_nation
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.raster_inspection import (
@@ -51,9 +57,6 @@ from geofrea.data_quality_audit.raster_inspection import (
     timer,
 )
 from geofrea.data_quality_audit.schemas import (
-    AuditConfig,
-    AuditInputs,
-    AuditLayerConfig,
     AuditResult,
     AuditSummary,
     LandCoverInspection,
@@ -64,11 +67,6 @@ from geofrea.data_quality_audit.schemas import (
     VectorLayerSummary,
 )
 from geofrea.data_quality_audit.vector_inspection import inspect_vector_layer
-from geofrea.land_eligibility.parameters import (
-    default_experiments_yaml,
-    load_land_availability,
-    strictest_slope_max_deg,
-)
 
 logger = logging.getLogger("geofrea.data_quality_audit.audit")
 

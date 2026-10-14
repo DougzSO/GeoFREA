@@ -113,7 +113,7 @@ def test_the_prt_serra_da_estrela_pixel_passes_by_the_rule():
 def test_a_tolerance_needs_its_justification_and_only_the_iso_derivation():
     from pydantic import ValidationError
 
-    from geofrea.data_quality_audit.schemas import DerivedRangeConfig
+    from geofrea.config_models.audit import DerivedRangeConfig
 
     ok = {"derivation": "iso2533_envelope", "source": "s", "tolerance_rel": 0.05}
     with pytest.raises(ValidationError, match="both set or both null"):

@@ -27,17 +27,17 @@ from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.forcing import assert_forcing_usable
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, load_ensemble, required_channels
+from geofrea.config_models.audit import AuditConfig
+from geofrea.config_models.land_availability import (
+    ELEVATION_COLUMN,
+    elevation_sensitivity_m,
+    load_land_availability,
+)
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
-from geofrea.data_quality_audit.schemas import AuditConfig
-from geofrea.land_eligibility.parameters import (
-    ELEVATION_COLUMN,
-    elevation_sensitivity_m,
-    load_land_availability,
-)
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
 from geofrea.technical_potential.aggregates import aggregate_scenario

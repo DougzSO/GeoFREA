@@ -13,12 +13,12 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, box
 
+from geofrea.config_models.land_availability import ParameterSet
 from geofrea.land_eligibility.eligibility import (
     EligibilityLayers,
     MissingExclusionLayerError,
     eligible_fraction,
 )
-from geofrea.land_eligibility.parameters import ParameterSet
 from geofrea.land_eligibility.pipeline import (
     LandEligibilityError,
     MissingRequiredLayerError,

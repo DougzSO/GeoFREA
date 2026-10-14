@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.patches import Patch
 
+from geofrea.config_models.land_availability import elevation_role, elevation_sensitivity_m
 from geofrea.core.config_schemas import H4Rule
 from geofrea.external_validation.table_schemas import VALIDATION_TABLE_SCHEMA_VERSION
-from geofrea.land_eligibility.parameters import elevation_role, elevation_sensitivity_m
 from geofrea.results_synthesis import style
 from geofrea.results_synthesis.inputs import ArtifactReader, MissingArtifactError
 from geofrea.results_synthesis.members import members_table

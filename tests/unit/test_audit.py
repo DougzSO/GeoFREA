@@ -24,10 +24,10 @@ import rasterio
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
+from geofrea.config_models.audit import AuditConfig, AuditInputs
 from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.audit import run_audit_phase
-from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"

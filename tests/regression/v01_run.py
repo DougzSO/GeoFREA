@@ -20,11 +20,11 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from geofrea.config_models.land_availability import load_land_availability, nominal_set
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_audit_config
 from geofrea.core.geo_utils import load_mainland_boundary, read_clipped_to_country
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
-from geofrea.land_eligibility.parameters import load_land_availability, nominal_set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

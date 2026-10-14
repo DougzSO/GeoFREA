@@ -27,6 +27,16 @@ import pandas as pd
 import rasterio
 from pydantic import BaseModel, ConfigDict
 
+from geofrea.config_models.land_availability import (
+    ELEVATION_COLUMN,
+    LandAvailability,
+    ParameterSet,
+    elevation_sensitivity_m,
+    load_land_availability,
+    nominal_set,
+    riparian_discharges_m3s,
+    riparian_thresholds_km,
+)
 from geofrea.core import paths as core_paths
 from geofrea.core.constants import (
     CELL_ORIGIN_LAT,
@@ -57,16 +67,6 @@ from geofrea.land_eligibility.eligibility import (
     valid_pixels,
 )
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
-from geofrea.land_eligibility.parameters import (
-    ELEVATION_COLUMN,
-    LandAvailability,
-    ParameterSet,
-    elevation_sensitivity_m,
-    load_land_availability,
-    nominal_set,
-    riparian_discharges_m3s,
-    riparian_thresholds_km,
-)
 from geofrea.land_eligibility.scenarios import (
     candidate_stability,
     check_scenario_order,

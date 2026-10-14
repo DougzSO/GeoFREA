@@ -1,6 +1,6 @@
 """Inputs of the LCOE kernel: the resolution of parameters, ranges and price years, and the readers of the F3, F4 and F5 tables.
 
-Shared by F6 (`pipeline.py`, `convergence.py`) and F7: neither phase imports the other's pipeline (D-F7-026). Nothing here writes a table.
+Shared by F6 (`pipeline.py`) and F7 (`pipeline.py`, `convergence.py`): neither phase imports the other's pipeline (D-F7-026). Nothing here writes a table.
 
 Implements: M-F6-01, M-F6-02, A-09, A-10. See docs/phases/F6_lcoe_modeling.md D-F6-005, D-F6-008, D-F6-010, D-F6-016.
 """

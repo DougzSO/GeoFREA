@@ -13,7 +13,12 @@ from typing import NamedTuple
 
 import pandas as pd
 
-from geofrea.land_eligibility.parameters import ParameterSet, Ranged, TechParameters, nominal_set
+from geofrea.config_models.land_availability import (
+    ParameterSet,
+    Ranged,
+    TechParameters,
+    nominal_set,
+)
 
 LAND_SCENARIOS = ("central", "restrictive", "permissive")
 

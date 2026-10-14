@@ -21,6 +21,7 @@ import pytest
 from shapely.geometry import Polygon
 
 import main
+from geofrea.config_models.audit import AuditConfig, AuditInputs
 from geofrea.core.config_loader import load_audit_config, load_parameters
 from geofrea.core.orchestrator import (
     Orchestrator,
@@ -30,7 +31,7 @@ from geofrea.core.orchestrator import (
 )
 from geofrea.core.schemas import ResolutionsConfig
 from geofrea.data_acquisition.schemas import AcquiredLayer, AcquisitionResult, AcquisitionSummary
-from geofrea.data_quality_audit.schemas import AuditConfig, AuditInputs, AuditResult
+from geofrea.data_quality_audit.schemas import AuditResult
 from geofrea.grid_alignment.adapter import GridAlignmentRequiresBordersError
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS

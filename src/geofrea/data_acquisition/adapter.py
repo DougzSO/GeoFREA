@@ -53,6 +53,7 @@ from pathlib import Path
 
 import geopandas as gpd
 
+from geofrea.config_models.audit import AuditInputs
 from geofrea.core import paths as core_paths
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
@@ -64,7 +65,6 @@ from geofrea.data_acquisition.schemas import (
     resolved_path,
     resolved_paths,
 )
-from geofrea.data_quality_audit.schemas import AuditInputs
 
 # Representative (model, experiment, variable) inspected per model — same
 # "one file inspected" precedent as wind_paths/weibull_a_path.

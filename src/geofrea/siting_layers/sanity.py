@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from geofrea.config_models.audit import AuditConfig, AuditLayerConfig
 from geofrea.core import paths as core_paths
 from geofrea.core.constants import (
     ISA_G_M_S2,
@@ -37,7 +38,6 @@ from geofrea.core.constants import (
     ISA_T0_K,
 )
 from geofrea.core.geodesy import wgs84_km_per_degree
-from geofrea.data_quality_audit.schemas import AuditConfig, AuditLayerConfig
 
 logger = logging.getLogger("geofrea.siting_layers.sanity")
 

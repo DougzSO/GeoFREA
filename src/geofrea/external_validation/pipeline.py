@@ -26,6 +26,7 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.config_models.land_availability import load_land_availability
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_experiments
 from geofrea.core.config_schemas import TechnologiesFile
@@ -51,7 +52,6 @@ from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.cells import cell_id as make_cell_id
 from geofrea.land_eligibility.cells import cell_row_col
 from geofrea.land_eligibility.eligibility import eligible_fraction, valid_pixels
-from geofrea.land_eligibility.parameters import load_land_availability
 from geofrea.land_eligibility.pipeline import prepare_shared_layers, technology_layers
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS, scenario_sets
 from geofrea.siting_layers.physical_layers import SitingLayersResult

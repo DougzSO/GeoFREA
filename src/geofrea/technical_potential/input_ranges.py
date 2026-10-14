@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from geofrea.data_quality_audit.schemas import AuditConfig
+from geofrea.config_models.audit import AuditConfig
 from geofrea.siting_layers.sanity import CountryGeometry, SanityError, derived_range, pvout_range
 
 logger = logging.getLogger("geofrea.technical_potential.input_ranges")

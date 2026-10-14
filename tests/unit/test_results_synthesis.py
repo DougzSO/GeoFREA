@@ -38,7 +38,7 @@ ALLOWED_IMPORTS = (
     "geofrea.core",
     "geofrea.results_synthesis",
     "geofrea.overview.style",
-    "geofrea.land_eligibility.parameters",
+    "geofrea.config_models.land_availability",
     "geofrea.external_validation.table_schemas",
     "geofrea.lcoe_modeling.table_schemas",
     "geofrea.technical_potential.table_schemas",

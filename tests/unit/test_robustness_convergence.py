@@ -19,19 +19,19 @@ from test_robustness_pipeline import _run as _run_robustness
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
 from geofrea.core.config_loader import load_experiments, load_parameters, load_technologies
-from geofrea.lcoe_modeling import convergence
-from geofrea.lcoe_modeling.convergence import (
-    PROVENANCE_KEY,
-    ConvergenceConfigError,
-    build_convergence,
-    jaccard,
-    run_protocol,
-)
 from geofrea.lcoe_modeling.inputs import (
     LcoeInputError,
     LcoeMissingInputError,
     read_member_inputs,
     resolve_technology_costs,
+)
+from geofrea.robustness_analysis import convergence
+from geofrea.robustness_analysis.convergence import (
+    PROVENANCE_KEY,
+    ConvergenceConfigError,
+    build_convergence,
+    jaccard,
+    run_protocol,
 )
 from geofrea.robustness_analysis.decision import decision_values
 

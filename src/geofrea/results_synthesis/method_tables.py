@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from geofrea.config_models.land_availability import Levels, Ranged
 from geofrea.core.schemas import VerifiedValue
-from geofrea.land_eligibility.parameters import Levels, Ranged
 from geofrea.results_synthesis.members import members_table
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_table
 

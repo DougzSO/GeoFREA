@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from pyogrio.errors import DataSourceError
 from shapely.geometry import Polygon
 
+from geofrea.config_models.audit import AuditInputs
 from geofrea.data_acquisition.adapter import acquisition_result_to_audit_inputs
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -27,7 +28,6 @@ from geofrea.data_acquisition.schemas import (
     AcquisitionSummary,
     LayerAcquisitionFailedError,
 )
-from geofrea.data_quality_audit.schemas import AuditInputs
 
 
 def _empty_summary(n: int = 0) -> AcquisitionSummary:

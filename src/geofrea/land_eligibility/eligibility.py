@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from geofrea.land_eligibility.parameters import ParameterSet
+from geofrea.config_models.land_availability import ParameterSet
 
 EXCLUSION_NAMES = ("E1", "E2", "E3", "E4", "E5", "E6")
 

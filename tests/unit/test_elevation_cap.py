@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from geofrea.land_eligibility.parameters import (
+from geofrea.config_models.land_availability import (
     ElevationCap,
     elevation_role,
     elevation_sensitivity_m,

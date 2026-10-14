@@ -11,9 +11,9 @@ from pathlib import Path
 
 import yaml
 
+from geofrea.config_models.audit import AuditConfig
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.schemas import ParametersFile, SettingsFile
-from geofrea.data_quality_audit.schemas import AuditConfig
 
 
 class CountryMappingError(KeyError):

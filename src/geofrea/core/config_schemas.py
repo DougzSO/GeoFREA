@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, model_validator
 
-from geofrea.land_eligibility.parameters import LandAvailability
+from geofrea.config_models.land_availability import LandAvailability
 
 
 class IecClassBound(BaseModel):

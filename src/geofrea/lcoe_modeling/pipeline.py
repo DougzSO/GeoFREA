@@ -28,13 +28,13 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
+from geofrea.config_models.land_availability import ELEVATION_COLUMN
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile
 from geofrea.core.constants import LCOE_QUANTILES, PRICE_BASE_YEAR_USD
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import TableWriter, write_table
-from geofrea.land_eligibility.parameters import ELEVATION_COLUMN
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.design import build_design, samples_from_design
 from geofrea.lcoe_modeling.inputs import (
