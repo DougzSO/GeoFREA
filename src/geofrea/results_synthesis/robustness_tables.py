@@ -37,7 +37,8 @@ def _readers(ctx: BuildContext) -> list[ArtifactReader]:
 
 
 # What T-R6 shows of each hypothesis: the F7 summary table, the columns of its primary statistic, its reference value and its threshold, and
-# the rule as F7 applies it (M-F7-07). H1 has two primary statistics (H1a and H1b), the second one in the `*_2` columns.
+# the rule as F7 applies it (M-F7-07). H1 and H5 have two primary statistics (H1a and H1b; the resource and the exposure ratio of H5), the
+# second one in the `*_2` columns.
 VERDICT_COLUMNS = [
     "scale",
     "role",
@@ -54,7 +55,7 @@ VERDICT_COLUMNS = [
     "reference_2",
     "threshold_2",
 ]
-_SUMMARIES = ("h1", "h2", "h3")
+_SUMMARIES = ("h1", "h2", "h3", "h5")
 
 
 def _window_of(ctx: BuildContext, role: str) -> str:
@@ -98,6 +99,13 @@ def _h4_verdict_row(total: pd.Series) -> dict:
     }
 
 
+def _h5_verdict(row: pd.Series) -> str:
+    """The verdict of H5, or why there is none: its status (not testable, target not met at reference) or the unavailable exposure."""
+    if pd.notna(row["verdict"]):
+        return row["verdict"]
+    return row["status"] if row["status"] != "tested" else "exposure_not_available"
+
+
 def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
     """The one row of a hypothesis in the verdict table, from the primary row of its F7 summary."""
     common = {
@@ -130,6 +138,18 @@ def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
             "threshold": row["gamma"],
             "rule": "supported if O < gamma; not testable if O_ref >= gamma",
         }
+    if hypothesis == "H5":
+        return common | {
+            "verdict": _h5_verdict(row),
+            "statistic": "h5a_resource_loss_ratio",
+            "value": row["r_loss"],
+            "reference": None,
+            "threshold": row["lam"],
+            "rule": "supported if R_loss >= lambda and R_exp >= lambda; partially supported (resource) or (exposure) if only one holds; not testable without a target; target not met at reference if H_0 <= 0",
+            "statistic_2": "h5b_exposure_ratio",
+            "value_2": row["r_exp"],
+            "threshold_2": row["lam"],
+        }
     return common | {
         "statistic": "h3_beyond_reach_share",
         "value": row["d"],
@@ -140,9 +160,10 @@ def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
 
 
 def t_r6(ctx: BuildContext) -> None:
-    """T-R6, per technology: the H1, H2 and H3 statistics for the core window, the 2071-2100 window and the other cell scale, each with its
+    """T-R6, per technology: the H1 to H5 statistics for the core window, the 2071-2100 window and the other cell scale, each with its
     pre-registered rule and verdict; the verdict table (one row per hypothesis: primary statistic, reference, threshold, verdict); and the
-    F7 summaries of H1 (C_k, V_k), H2 (O) and H3 (D, the price and the benefit of robustness) with their sensitivities."""
+    F7 summaries of H1 (C_k, V_k), H2 (O), H3 (D, the price and the benefit of robustness) and H5 (R_loss, R_exp, the target and the slack)
+    with their sensitivities."""
     for technology in ctx.technologies:
         ctx.begin()
         statistics: list[pd.DataFrame] = []
@@ -155,7 +176,7 @@ def t_r6(ctx: BuildContext) -> None:
                 except MissingArtifactError as exc:
                     ctx.skip(T_R6, f"{technology} {reader.scale_id} {role}", str(exc))
                     continue
-                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4"])]
+                part = hypothesis[hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4", "H5"])]
                 statistics.append(part.assign(scale=reader.scale_id, role=role))
                 for name in _SUMMARIES:
                     key = f"{name}_summary_{technology}__{role}"
@@ -207,7 +228,7 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_statistics",
                 frame,
-                f"H1 to H4 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
+                f"H1 to H5 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
                 technology=technology,
             )
         else:
@@ -232,7 +253,7 @@ def t_r6(ctx: BuildContext) -> None:
             )
         if verdicts:
             frame = pd.DataFrame(verdicts, columns=VERDICT_COLUMNS)
-            frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3, "H4": 4})
+            frame["_order"] = frame["hypothesis"].map({"H1": 1, "H2": 2, "H3": 3, "H4": 4, "H5": 5})
             frame["_role"] = frame["role"].map({role: at for at, role in enumerate(ROLES)})
             frame = (
                 frame.sort_values(["scale", "_role", "_order"])
@@ -244,12 +265,13 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_verdicts",
                 frame,
-                f"Verdict of H1 to H4 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2). H4 is a statement about the countries together: its row counts the pairs of a Climate-Dominated and a Techno-Economic-Dominated country (threshold 1) and the countries with a profile (at least 2), and is read from the support phase cross_country_h4. A sensitivity never revises a verdict.",
+                f"Verdict of H1 to H5 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2) and so has H5 (the resource ratio R_loss and the exposure ratio R_exp, both compared with lambda; a status such as not_testable, target_not_met_at_reference or exposure_not_available stands for a verdict that does not exist). H4 is a statement about the countries together: its row counts the pairs of a Climate-Dominated and a Techno-Economic-Dominated country (threshold 1) and the countries with a profile (at least 2), and is read from the support phase cross_country_h4. A sensitivity never revises a verdict.",
                 technology=technology,
             )
         captions = {
             "h1": f"H1 for {technology}: core share C_k (H1a), vulnerable share V_k (H1b), the chance-level reference (k/n)^2 and the verdict, with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
             "h2": f"H2 for {technology}: the Capacity Overlap Index O of the cell and the Admin1 selections, the reference T/Q_max, the verdict, the robustness penalty and the total variation distance, with the decision profile over gamma and the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
+            "h5": f"H5 for {technology}: the baseline economic potential E_0 of the fixed domain, the national target G in TWh/year with its original unit, horizon and conversion, the slack H_0, the largest loss of energy over the members (R_loss, H5a) and the largest exposed energy over the hazard members (R_exp, H5b) as shares of the slack, the same exposure with the reference indicators, the status and the verdict, with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
             "h3": f"H3 for {technology}: the share D of the robust capacity beyond the reach of the nominal plan, the reference 1 - (k + m)/|I|, the verdict, the price of robustness (relative increase of the present LCOE) and the benefit of robustness (reduction of the capacity-weighted maximum regret, no verdict), with the sensitivities (variant column) beside the primary result. A sensitivity never revises the verdict.",
         }
         for name in _SUMMARIES:
@@ -476,7 +498,8 @@ def t_r10(ctx: BuildContext) -> None:
             "hazard_exposure",
             table,
             f"Potential of {technology} in cells above the hazard exposure thresholds, by SSP and window, for the cells of the F7 set and the nominal and robust top-k. "
-            "Cells are called exposed, not lost: no loss function has been admitted. A member without the hazard channel has no row (not zero)."
+            "Cells are called exposed, not lost: no loss function has been admitted. A member without the hazard channel has no row (not zero). "
+            "The rows of hazard any_channel over the group economic_domain are the exposed energy of H5b (a cell counted once over the channels)."
             + note,
             technology=technology,
         )
@@ -510,7 +533,8 @@ def t_r12(ctx: BuildContext) -> None:
             "potential_below_tau",
             table,
             f"Potential of {technology} (GW, TWh/yr) below the cost threshold tau per member, against the national target. The central land set carries the draws (basis p10, p50, p90); "
-            "the restrictive and permissive scenarios give the land range beside it at the nominal parameters (U-08)."
+            "the restrictive and permissive scenarios give the land range beside it at the nominal parameters (U-08). "
+            "The series fixed_domain is the energy of the economic domain of H5 in each member."
             + note,
             technology=technology,
         )

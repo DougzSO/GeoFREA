@@ -1527,6 +1527,7 @@ THESIS_TABLES = {
         "h2_summary_ZZZ_{t}",
         "h3_summary_ZZZ_{t}",
         "h4_country_ZZZ_{t}",
+        "h5_summary_ZZZ_{t}",
     ],
     "T-R10": ["hazard_exposure_ZZZ_{t}"],
     "T-R12": ["potential_below_tau_ZZZ_{t}"],
@@ -1639,7 +1640,7 @@ def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
         hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet")
         statistics = pd.read_csv(thesis / f"T-R6_hypothesis_statistics_ZZZ_{tech}.csv")
         core = statistics[(statistics["scale"] == "0p05deg") & (statistics["role"] == "core")]
-        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4"]).sum())
+        assert len(core) == int(hypothesis["hypothesis"].isin(["H1", "H2", "H3", "H4", "H5"]).sum())
         stored = hypothesis.set_index("statistic")
         for stat in ("h1a_core_share", "h1b_vulnerable_share"):
             shown = core.set_index("statistic").loc[stat]
@@ -1673,22 +1674,22 @@ def test_f8_numbers_equal_the_rows_they_were_read_from(zzz):
 
 
 @pytest.mark.synthetic
-def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_summaries(zzz):
+def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_summaries_of_f7(zzz):
     thesis = _thesis(zzz)
     base = _phase(zzz, "robustness_analysis")
     for tech in ("solar", "wind"):
         table = pd.read_csv(thesis / f"T-R6_hypothesis_verdicts_ZZZ_{tech}.csv")
         for role in ("core", "sensitivity"):
             rows = table[(table["scale"] == "0p05deg") & (table["role"] == role)]
-            assert list(rows["hypothesis"]) == ["H1", "H2", "H3", "H4"], (tech, role)
+            assert list(rows["hypothesis"]) == ["H1", "H2", "H3", "H4", "H5"], (tech, role)
             stored = {
                 name: pd.read_parquet(base / f"{name}_summary_{tech}__{role}.parquet")
                 .query("primary")
                 .iloc[0]
-                for name in ("h1", "h2", "h3")
+                for name in ("h1", "h2", "h3", "h5")
             }
             by = rows.set_index("hypothesis")
-            h1, h2, h3 = stored["h1"], stored["h2"], stored["h3"]
+            h1, h2, h3, h5 = stored["h1"], stored["h2"], stored["h3"], stored["h5"]
             assert by.loc["H1", "statistic"] == "h1a_core_share"
             assert by.loc["H1", "value"] == pytest.approx(float(h1["c_k"]))
             assert by.loc["H1", "reference"] == pytest.approx(float(h1["reference"]))
@@ -1707,6 +1708,20 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_s
             for name, row in (("H1", h1), ("H2", h2), ("H3", h3)):
                 assert by.loc[name, "verdict"] == row["verdict"]
                 assert by.loc[name, "rule"]
+            # H5 has two primary statistics, as H1: the resource ratio and the exposure ratio, both against lambda
+            assert by.loc["H5", "statistic"] == "h5a_resource_loss_ratio"
+            assert by.loc["H5", "value"] == pytest.approx(float(h5["r_loss"]))
+            assert by.loc["H5", "threshold"] == pytest.approx(0.20)
+            assert by.loc["H5", "statistic_2"] == "h5b_exposure_ratio"
+            assert by.loc["H5", "threshold_2"] == pytest.approx(0.20)
+            if (
+                role == "core"
+            ):  # the window 2071-2100 has no hazard data: H5b and the verdict are not available
+                assert by.loc["H5", "value_2"] == pytest.approx(float(h5["r_exp"]))
+                assert by.loc["H5", "verdict"] == h5["verdict"] and by.loc["H5", "rule"]
+            else:
+                assert pd.isna(by.loc["H5", "value_2"])
+                assert by.loc["H5", "verdict"] == "exposure_not_available"
             # H4 is read from the support phase: ZZZ alone has one country with a profile, so the rule cannot be tested
             assert by.loc["H4", "statistic"] == "h4_strict_pair_count"
             assert by.loc["H4", "verdict"] == "not_testable"
@@ -1718,6 +1733,58 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_h1_h2_and_h3_s
         h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
         assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
         assert set(h3_shown["role"]) == {"core", "sensitivity"}
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f8_t_r10_and_t_r12_agree_with_the_numbers_of_h5_in_t_r6(zzz, tech):
+    thesis = _thesis(zzz)
+    verdicts = pd.read_csv(thesis / f"T-R6_hypothesis_verdicts_ZZZ_{tech}.csv")
+    shown = verdicts[(verdicts["scale"] == "0p05deg") & (verdicts["role"] == "core")]
+    r_loss = float(shown.set_index("hypothesis").loc["H5", "value"])
+    r_exp = float(shown.set_index("hypothesis").loc["H5", "value_2"])
+    summary = pd.read_csv(thesis / f"T-R6_h5_summary_ZZZ_{tech}.csv")
+    primary = summary[
+        summary["primary"] & (summary["role"] == "core") & (summary["scale"] == "0p05deg")
+    ].iloc[0]
+    assert r_loss == pytest.approx(primary["r_loss"]) and r_exp == pytest.approx(primary["r_exp"])
+    # T-R12: the energy of the fixed economic domain of the reference member and of each core member is the one of H5
+    below = pd.read_csv(thesis / f"T-R12_potential_below_tau_ZZZ_{tech}.csv")
+    fixed = below[
+        (below["series"] == "fixed_domain")
+        & (below["land_scenario"] == "central")
+        & (below["basis"] == "nominal")
+    ].set_index("member")
+    assert fixed.loc["m0", "potential_twh"] == pytest.approx(primary["e0_twh"])
+    core_energy = fixed.drop(index="m0").query("potential_twh == potential_twh")
+    core_energy = core_energy[core_energy.index.isin(_core_members(zzz))]["potential_twh"]
+    loss = max(0.0, primary["e0_twh"] - core_energy.min())
+    assert loss == pytest.approx(primary["delta_e_twh"])
+    assert loss / primary["h0_twh"] == pytest.approx(r_loss)
+    # T-R10: the exposed energy of the union of the channels over the economic domain, largest over the hazard members
+    exposure = pd.read_csv(thesis / f"T-R10_hazard_exposure_ZZZ_{tech}.csv")
+    union = exposure[
+        (exposure["hazard"] == "any_channel")
+        & (exposure["group"] == "economic_domain")
+        & (exposure["basis"] == "absolute")
+    ]
+    assert len(union) == 9  # the nine members that carry the hazard channel
+    assert union["potential_twh"].max() == pytest.approx(primary["e_exp_twh"])
+    assert union["potential_twh"].max() / primary["h0_twh"] == pytest.approx(r_exp)
+    reference = exposure[
+        (exposure["hazard"] == "any_channel")
+        & (exposure["group"] == "economic_domain")
+        & (exposure["basis"] == "reference")
+    ]
+    assert reference["potential_twh"].max() == pytest.approx(primary["e_exp_reference_twh"])
+
+
+def _core_members(zzz):
+    """The members of the core window, from `members.yaml` of the climate phase."""
+    entries = yaml.safe_load(
+        (_phase(zzz, "climate_forcing") / "members.yaml").read_text(encoding="utf-8")
+    )["members"]
+    return {e["member"] for e in entries if str(e["window"]) == "2041-2070"}
 
 
 @pytest.mark.synthetic

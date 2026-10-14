@@ -334,3 +334,39 @@ def test_the_t_r6_verdict_row_takes_the_primary_statistic_reference_threshold_an
         0.2,
     )
     assert third["verdict"] == "supported" and second["statistic_2"] is None
+
+
+@pytest.mark.unit
+def test_the_t_r6_verdict_row_of_h5_has_the_two_ratios_and_a_status_when_there_is_no_verdict():
+    from geofrea.results_synthesis.robustness_tables import VERDICT_COLUMNS, _verdict_row
+
+    base = {
+        "scale": "0p05deg",
+        "role": "core",
+        "window": "2041-2070",
+        "lam": 0.20,
+        "r_loss": 0.25,
+        "r_exp": 0.30,
+    }
+    supported = _verdict_row(
+        "H5", pd.Series(base | {"status": "tested", "verdict": "partially_supported_exposure"})
+    )
+    assert set(supported) == set(VERDICT_COLUMNS)
+    assert (supported["statistic"], supported["value"], supported["threshold"]) == (
+        "h5a_resource_loss_ratio",
+        0.25,
+        0.20,
+    )
+    assert (supported["statistic_2"], supported["value_2"], supported["threshold_2"]) == (
+        "h5b_exposure_ratio",
+        0.30,
+        0.20,
+    )
+    assert supported["verdict"] == "partially_supported_exposure" and supported["reference"] is None
+    for status, verdict, shown in (
+        ("tested", None, "exposure_not_available"),
+        ("not_testable", None, "not_testable"),
+        ("target_not_met_at_reference", None, "target_not_met_at_reference"),
+    ):
+        row = _verdict_row("H5", pd.Series(base | {"status": status, "verdict": verdict}))
+        assert row["verdict"] == shown
