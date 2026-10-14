@@ -11,6 +11,7 @@ import yaml
 
 from geofrea.core.config_schemas import SynthesisConfig
 from geofrea.results_synthesis.output import NotBuilt
+from geofrea.results_synthesis.profile_registry import register_profile, registered_profiles
 from geofrea.results_synthesis.synthesis import (
     PROFILES_SCHEMA_VERSION,
     label_of,
@@ -196,21 +197,53 @@ def test_the_summary_has_one_row_per_technology_and_hypothesis_and_no_score():
 
 
 @pytest.mark.unit
-def test_profile_files_are_read_by_country_and_an_unknown_schema_version_is_refused(tmp_path):
+def test_only_registered_profiles_are_read_by_country_and_an_unknown_schema_version_is_refused(
+    tmp_path,
+):
     for iso in ("BBB", "AAA"):
         payload = {"schema_version": PROFILES_SCHEMA_VERSION, "country": iso, "records": []}
-        (tmp_path / f"T-R8_hypothesis_profiles_{iso}.json").write_text(
-            json.dumps(payload), encoding="utf-8"
-        )
+        path = tmp_path / f"T-R8_hypothesis_profiles_{iso}.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        register_profile(tmp_path, iso, path)
         (tmp_path / f"T-R8_hypothesis_profiles_{iso}.provenance.json").write_text(
             "{}", encoding="utf-8"
         )
+    stray = tmp_path / "T-R8_hypothesis_profiles_CCC.json"
+    stray.write_text(
+        json.dumps({"schema_version": PROFILES_SCHEMA_VERSION, "country": "CCC", "records": []}),
+        encoding="utf-8",
+    )
     assert [p["country"] for p in read_profiles(tmp_path)] == [
         "AAA",
         "BBB",
-    ]  # the provenance files are not profiles
-    (tmp_path / "T-R8_hypothesis_profiles_CCC.json").write_text(
-        json.dumps({"schema_version": "9.9", "country": "CCC", "records": []}), encoding="utf-8"
+    ]  # CCC is not registered
+    assert set(registered_profiles(tmp_path)) == {"AAA", "BBB"}
+    bad = tmp_path / "T-R8_hypothesis_profiles_DDD.json"
+    bad.write_text(
+        json.dumps({"schema_version": "9.9", "country": "DDD", "records": []}), encoding="utf-8"
     )
+    register_profile(tmp_path, "DDD", bad)
     with pytest.raises(NotBuilt, match="schema version"):
+        read_profiles(tmp_path)
+
+
+@pytest.mark.unit
+def test_a_profile_changed_or_deleted_after_its_registration_is_refused(tmp_path):
+    from geofrea.core.artifact_reader import ThesisInputError
+
+    path = tmp_path / "T-R8_hypothesis_profiles_AAA.json"
+    path.write_text(
+        json.dumps({"schema_version": PROFILES_SCHEMA_VERSION, "country": "AAA", "records": []}),
+        encoding="utf-8",
+    )
+    digest = register_profile(tmp_path, "AAA", path)
+    assert registered_profiles(tmp_path)["AAA"][1] == digest
+    path.write_text(
+        json.dumps({"schema_version": PROFILES_SCHEMA_VERSION, "country": "AAA", "records": [1]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ThesisInputError, match="changed since it was registered"):
+        read_profiles(tmp_path)
+    path.unlink()
+    with pytest.raises(ThesisInputError, match="absent"):
         read_profiles(tmp_path)

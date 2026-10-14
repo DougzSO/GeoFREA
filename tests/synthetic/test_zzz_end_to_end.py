@@ -14,6 +14,7 @@ river's setback trim them; wind has candidates in the cropland and grassland ban
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import socket
@@ -2108,7 +2109,7 @@ def test_f8_t_r8_with_one_country_is_not_assessable_and_gives_no_aggregate_verdi
 
 
 @pytest.mark.synthetic
-def test_f8_t_r8_reads_the_profiles_of_the_other_countries_of_the_thesis_directory(
+def test_f8_t_r8_reads_the_registered_profiles_of_the_other_countries_and_records_their_hashes(
     zzz, tmp_path, monkeypatch
 ):
     import copy
@@ -2125,6 +2126,9 @@ def test_f8_t_r8_reads_the_profiles_of_the_other_countries_of_the_thesis_directo
     for record in other["records"]:
         record["country"] = "ZZB"
     (out / "T-R8_hypothesis_profiles_ZZB.json").write_text(json.dumps(other), encoding="utf-8")
+    from geofrea.results_synthesis.profile_registry import register_profile
+
+    register_profile(out, "ZZB", out / "T-R8_hypothesis_profiles_ZZB.json")
     build_thesis(
         "ZZZ",
         ("solar", "wind"),
@@ -2140,6 +2144,14 @@ def test_f8_t_r8_reads_the_profiles_of_the_other_countries_of_the_thesis_directo
     profiles = pd.read_csv(out / "T-R8_country_profiles.csv")
     assert set(profiles["country"]) == {"ZZB", "ZZZ"} and len(profiles) == 20
     assert (out / "T-R8_hypothesis_profiles_ZZZ.json").is_file()
+    provenance = json.loads(
+        (out / "T-R8_country_profiles.provenance.json").read_text(encoding="utf-8")
+    )
+    assert set(provenance["profiles_read"]) == {"ZZB", "ZZZ"}  # the hash of each profile read (B-4)
+    assert (
+        provenance["profiles_read"]["ZZZ"]
+        == hashlib.sha256((out / "T-R8_hypothesis_profiles_ZZZ.json").read_bytes()).hexdigest()
+    )
 
 
 @pytest.mark.synthetic

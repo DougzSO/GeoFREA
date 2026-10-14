@@ -26,6 +26,7 @@ from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
 from geofrea.results_synthesis.potential_and_cost import t_o3, t_r1, t_r2, t_r11
+from geofrea.results_synthesis.profile_registry import MANIFEST_NAME, write_manifest
 from geofrea.results_synthesis.ranking_figures import t_r4, t_r5
 from geofrea.results_synthesis.robustness_tables import (
     t_o1,
@@ -58,7 +59,6 @@ SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-O2": t_o2,
     "T-O3": t_o3,
 }
-MANIFEST_NAME = "thesis_manifest.json"
 
 
 class ThesisBuildError(RuntimeError):
@@ -130,8 +130,12 @@ def _cross_country_readers() -> tuple[ArtifactReader, ...]:
 def _update_manifest(out_dir: Path, summary: ThesisSummary) -> None:
     path = out_dir / MANIFEST_NAME
     current = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"countries": {}}
-    current["countries"][summary.country_code] = summary.model_dump(mode="json")
-    path.write_text(json.dumps(current, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    registered = current["countries"].get(summary.country_code, {}).get("artifacts")
+    entry = summary.model_dump(mode="json")
+    if registered:  # the registered artifacts (the hypothesis profiles, B-4) stay
+        entry["artifacts"] = registered
+    current["countries"][summary.country_code] = entry
+    write_manifest(out_dir, current)
 
 
 def build_thesis(

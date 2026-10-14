@@ -25,7 +25,6 @@ import numpy as np
 import pandas as pd
 
 from geofrea.core.config_schemas import SynthesisConfig
-from geofrea.results_synthesis import names
 from geofrea.results_synthesis.inputs import MissingArtifactError
 from geofrea.results_synthesis.output import (
     BuildContext,
@@ -34,6 +33,7 @@ from geofrea.results_synthesis.output import (
     write_table,
     write_text_output,
 )
+from geofrea.results_synthesis.profile_registry import register_profile, registered_profiles
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 
 T_R8 = "T-R8"
@@ -363,15 +363,16 @@ def build_profiles(ctx: BuildContext) -> dict:
 
 
 def read_profiles(directory: Path) -> list[dict]:
-    """The profile files of every country in `directory`, sorted by country; a file with another schema version is refused.
+    """The registered profiles of every country (`profile_registry`), sorted by country; a file with another schema version is refused.
+
+    A profile file that is in the directory but not registered is not read (B-4).
 
     Raises:
         NotBuilt: a profile file has an unknown schema version.
+        ThesisInputError: a registered profile is absent or changed since it was registered.
     """
     out = []
-    for path in sorted(directory.glob(f"{names.stem(T_R8, PROFILES_STEM)}_*.json")):
-        if path.name.endswith(".provenance.json"):
-            continue
+    for path, _ in registered_profiles(directory).values():
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.get("schema_version") != PROFILES_SCHEMA_VERSION:
             raise NotBuilt(
@@ -595,8 +596,8 @@ def country_latex(payload: dict) -> str:
 def t_r8(ctx: BuildContext) -> None:
     """T-R8: the structured profiles of the country, the profiles and the summary of all the countries built so far, and the readable summary.
 
-    The profiles of the other countries are read from the thesis directory (`hypothesis_profiles_<ISO3>.json`): the directory is shared by the
-    countries, so a build run after every country has been built shows all of them.
+    The profiles of the other countries are the ones registered in `thesis_manifest.json` (B-4): the directory is shared by the countries, so a
+    build run after every country has been built shows all of them, and the hash of every profile read goes into the provenance of the tables.
     """
     synthesis = ctx.experiments.synthesis
     ctx.begin()
@@ -604,7 +605,7 @@ def t_r8(ctx: BuildContext) -> None:
     if not payload["records"]:
         raise NotBuilt("no technology has the tables a profile needs")
     ctx.out_dir.mkdir(parents=True, exist_ok=True)
-    write_text_output(
+    written = write_text_output(
         ctx,
         T_R8,
         PROFILES_STEM,
@@ -620,7 +621,13 @@ def t_r8(ctx: BuildContext) -> None:
         "Readable summary of the hypothesis profiles of the country: the numbers of H1 to H5 and their ranges over the sensitivity variants.",
         per_country=True,
     )
+    register_profile(
+        ctx.out_dir,
+        ctx.iso,
+        next(p for p in written if p.suffix == ".json" and "provenance" not in p.name),
+    )
     profiles = read_profiles(ctx.out_dir)
+    read = {iso: digest for iso, (_, digest) in registered_profiles(ctx.out_dir).items()}
     countries = ", ".join(p["country"] for p in profiles)
     write_table(
         ctx,
@@ -629,6 +636,7 @@ def t_r8(ctx: BuildContext) -> None:
         profiles_frame(profiles),
         f"Profile of each country and technology ({countries}): the class of each hypothesis, its two key statistics with the range over the sensitivity variants, and the number of variants that change the verdict. No score and no aggregate verdict.",
         per_country=False,
+        extra={"profiles_read": read},
     )
     write_table(
         ctx,
@@ -637,4 +645,5 @@ def t_r8(ctx: BuildContext) -> None:
         summary_frame(profiles, ctx.technologies, synthesis),
         f"Cross-country summary by hypothesis and technology ({countries}): the number of countries in each verdict class and the pattern, labelled {synthesis.labels.consistent} (every testable case has the same verdict), {synthesis.labels.context_dependent} (the testable cases differ) or {synthesis.labels.not_assessable} (fewer than {synthesis.min_testable_cases} testable cases). The partial classes of H1 and of H5 are kept apart, a case without a verdict is not testable and is no disagreement, and H4 shows the verdict of the technology with the profiles of the countries.",
         per_country=False,
+        extra={"profiles_read": read},
     )
