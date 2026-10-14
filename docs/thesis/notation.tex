@@ -1,0 +1,93 @@
+% ============================================================================
+% Notation common to Hypotheses H1 to H5, the cross-country synthesis and PRIM
+% scenario discovery. One table: symbol, meaning, where it is defined.
+% Requires amsmath, booktabs and longtable. It restates no definition and changes no
+% hypothesis text: each row points to the section that defines the symbol, and
+% the "METHODOLOGY / code" column gives the ASCII name used in docs/METHODOLOGY.md
+% and in the column names of the F7 tables (the two notations name the same
+% quantity; pre-research audit 2026-10, item 2.3).
+% ============================================================================
+
+\section*{Notation}
+\label{sec:notation}
+
+The symbols below are used from Section~\ref{sec:h1} (H1) to the scenario
+discovery of the synthesis chapter. A symbol keeps its meaning in every section;
+where a section adds a subscript or a superscript, the base symbol is the one
+listed. ``Defined'' names the subsection where the definition and its equation
+are given. The last column is the name of the same quantity in
+\texttt{docs/METHODOLOGY.md} and in the tables of GeoFREA.
+
+\begin{longtable}{@{}p{0.17\textwidth}p{0.45\textwidth}p{0.14\textwidth}p{0.2\textwidth}@{}}
+\caption{Notation of H1 to H5, the synthesis and PRIM.}\label{tab:notation}\\
+\toprule
+Symbol & Meaning & Defined & METHODOLOGY / code \\
+\midrule
+\endfirsthead
+\toprule
+Symbol & Meaning & Defined & METHODOLOGY / code \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+\multicolumn{4}{@{}l}{\textit{Cells, shortlists and sizes}}\\
+$\mathcal{I}$, $\mathcal{I}_0$ & Cells of one country and technology that enter the robustness analysis; $\mathcal{I}_0$ adds the climate-fragile cells (the cells feasible in the nominal future) & \ref{subsec:h1_notation} & F7 set; ranked cells \\
+$N$ & Number of cells of $\mathcal{I}_0$ & \ref{subsec:h1_notation} & \texttt{n\_f7\_set} plus fragile \\
+$q_i$ & Installable capacity of cell $i$ in the central land scenario (MW) & \ref{subsec:h2_notation} & \texttt{P\_MW} \\
+$p_k$, $k$ & Top-$k$ share ($p_k$, OQ-021) and shortlist size $k=\lceil p_k N\rceil$ & \ref{subsec:h1_notation} & \texttt{top\_k\_percent}, \texttt{k} \\
+$m$ (tolerance) & Rank tolerance beyond the top-$k$ boundary, $m=k$ in the primary rule; not the climate member & \ref{subsec:h1b} & \texttt{tolerance\_multiple\_of\_k} \\
+$S^{\mathrm{nom}}_k$, $S_k$ & The $k$ cells with the lowest nominal LCOE; the $k$ cells with the lowest $\mathrm{MR}_i$ (robust shortlist) & \ref{subsec:h1_notation}, \ref{subsec:h3_notation} & nominal and robust top-$k$ sets \\
+$S^{\sigma}_k$, $S^{a}_k$ & Top-$k$ set under SSP $\sigma$; under axis $a\in\{\mathrm{clim},\mathrm{tec}\}$ & \ref{subsec:h1_notation}, \ref{subsec:h4_notation} & top-$k$ sets of the SSPs and of the axes \\
+$r^{\mathrm{nom}}_i$, $r^{\mathrm{clim}}_{i,\sigma}$ & Rank of cell $i$ by nominal LCOE; by the climate-only score under SSP $\sigma$ & \ref{subsec:h1_notation}, \ref{subsec:h3_notation} & nominal rank; climate-only rank \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{Climate members, futures and regret}}\\
+$g$, $\sigma$, $w$, $m=(g,\sigma,w)$ & General circulation model, SSP and time window of a climate member; $m_0$ is the reference climate & \ref{subsec:h1_notation} & \texttt{member}, \texttt{m0} \\
+$s$, $s_0$ & Techno-economic parameter vector (draw $s\geq1$) and the nominal vector & \ref{subsec:h1_notation} & \texttt{sample}, \texttt{s0} \\
+$f=(m,s)$, $f_0$ & A future; the nominal present future $f_0=(m_0,s_0)$ & \ref{subsec:h1_notation} & future; \texttt{f0} \\
+$r_{i,f}$ & Relative regret of cell $i$ in future $f$ & \ref{subsec:h1_notation} & \texttt{r} \\
+$L^{*}_{f}$ & Reference LCOE of future $f$ over $\mathcal{I}$ (minimum, or the quantile $q_{\mathrm{ref}}$ of OQ-020) & \ref{subsec:h1_notation} & \texttt{L*}, \texttt{q\_ref} \\
+$\mathrm{MR}_i$, $z_i$ & Primary robustness score: maximum over members of the 90th percentile over draws $s\geq1$ of $r$; $z_i=\mathrm{MR}_i$ in H2 to H4 & \ref{subsec:h1_notation}, \ref{subsec:h2_notation} & \texttt{mr} \\
+$\mathrm{MR}_{i,\sigma}$ & The same, restricted to SSP $\sigma$ & \ref{subsec:h1_notation} & \texttt{mr\_ssp} \\
+$R^{\mathrm{clim}}_{i,\sigma}$ & Climate-only score under SSP $\sigma$: worst case over models with the nominal parameters & \ref{subsec:h1_notation} & climate-only score per SSP \\
+$Z^{\mathrm{clim}}_i$, $Z^{\mathrm{tec}}_i$ & Axis-isolated scores of H4: climate varies at $s_0$; parameters vary at $m_0$ & \ref{subsec:h4_notation} & \texttt{mr\_clim}, \texttt{mr\_tech} \\
+$\mathrm{SR}_i$ & Satisficing robustness: share of the draws $s\geq1$ with $\mathrm{LCOE}\leq\tau$ and feasible & M-F7-04 of METHODOLOGY; $\tau$ in \ref{subsec:h5_slack} & \texttt{sr} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{H1}}\\
+$C_k$ & Core share: fraction of the top-$k$ set common to the three SSPs; $\alpha$ is its threshold & \ref{subsec:h1a} & \texttt{h1a\_core\_share} \\
+$V_k$, $I^{\mathrm{vuln}}_i$ & Vulnerable share of the nominal top-$k$ set and its indicator; $\beta$ is its threshold & \ref{subsec:h1b} & \texttt{h1b\_vulnerable\_share} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{H2}}\\
+$\mathcal{A}=\{A_1,\dots,A_M\}$, $Q_m$, $Q_{\max}$ & Partition into first-level administrative units; capacity of region $A_m$ (``region $m$'' in METHODOLOGY); total candidate capacity & \ref{subsec:h2_notation} & Admin1 region \\
+$T$ & Capacity target of H2: capacity of the robust top-$k$ set & \ref{subsec:h2_notation} & \texttt{top\_k\_capacity} \\
+$O$, $O_{\mathrm{ref}}$ & Capacity Overlap Index and its reference value $T/Q_{\max}$; $\gamma$ is the threshold & \ref{subsec:h2_overlap} & \texttt{h2\_overlap\_index} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{H3}}\\
+$D$, $D_{\mathrm{ref}}$ & Share of the robust capacity whose nominal rank exceeds $k+m$; reference value $1-(k+m)/|\mathcal{I}|$; $\delta$ is the threshold & \ref{subsec:h3_statistic} & \texttt{d}, \texttt{D\_ref} \\
+$\Pi$, $B$ & Price of robustness (relative increase of the nominal LCOE) and benefit (reduction of the mean $\mathrm{MR}$) & \ref{subsec:h3_magnitude} & price, benefit \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{H4}}\\
+$D_a$ ($D_{\mathrm{clim}}$, $D_{\mathrm{tec}}$) & Displacement produced by axis $a$: the H3 statistic on the shortlist $S^a_k$ & \ref{subsec:h4_displacement} & \texttt{d\_clim}, \texttt{d\_tec} \\
+$D_{\mathrm{sum}}$, $\rho$ & Sum of the displacements; dominance ratio $D_{\mathrm{clim}}/D_{\mathrm{sum}}$, with the boundaries $0.40$ and $0.60$ & \ref{subsec:h4_profile} & \texttt{d\_sum}, \texttt{rho}, profile \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{H5}}\\
+$\Omega$, $\Omega_{\mathrm{econ}}$ & Like-for-like candidate set; the reference economic domain $\{i:\mathrm{LCOE}_{i,f_0}\leq\tau\}$ & \ref{subsec:h5_slack} & fixed economic domain \\
+$\tau$ & Levelised-cost threshold of OQ-008 (defines $\Omega_{\mathrm{econ}}$ and satisficing) & \ref{subsec:h5_slack} & \texttt{tau} \\
+$E_{i,m}$, $E_0$, $E_m$ & Annual energy of cell $i$ under member $m$ (TWh/year); baseline economic potential $\sum_{\Omega_{\mathrm{econ}}}E_{i,m_0}$; yield of member $m$ & \ref{subsec:h5_slack}, \ref{subsec:h5a} & \texttt{e0\_twh}, \texttt{energy\_twh} \\
+$G$, $H_0$ & National target (TWh/year) and the slack $E_0-G$ & \ref{subsec:h5_slack} & \texttt{g\_twh}, \texttt{h0\_twh} \\
+$\Delta E$, $R_{\mathrm{loss}}$ & Largest yield loss over members and its ratio to $H_0$ & \ref{subsec:h5a} & \texttt{delta\_e\_twh}, \texttt{r\_loss} \\
+$Z_{i,h,m}$, $\theta_h$, $X_{i,m}$ & Hazard indicator, its exposure threshold (OQ-051) and the exposure indicator of cell $i$ & \ref{subsec:h5b} & \texttt{hazard\_thresholds} \\
+$E^{\mathrm{exp}}$, $R_{\mathrm{exp}}$ & Exposed economic energy (maximum over members with the hazard channel) and its ratio to $H_0$; $\lambda$ is the threshold of H5a and H5b & \ref{subsec:h5b}, \ref{subsec:h5_rule} & \texttt{e\_exp\_twh}, \texttt{r\_exp} \\
+\addlinespace
+\multicolumn{4}{@{}l}{\textit{Synthesis and PRIM}}\\
+$V_f$, $y_f$, $\theta$ & Displaced share of the nominal shortlist in future $f$; indicator that $f$ is a case of interest; its threshold ($0.20$, not the hazard threshold $\theta_h$) & \ref{subsec:prim_outcome} & PRIM outcome per future \\
+$\alpha$ (PRIM), density, coverage & Peeling fraction ($0.05$) of the box search (not the threshold $\alpha$ of H1a); density and coverage of a box & \ref{subsec:prim_settings} & \texttt{peel\_alpha}, \texttt{density}, \texttt{coverage} \\
+$\mathrm{box}^{*}$ & Selected box: highest density with coverage $\geq0.50$ and one to three restricted descriptors & \ref{subsec:prim_selection} & \texttt{prim\_box} \\
+Profile, label & The record of verdicts and numbers per country and technology; the pattern label (consistent, context-dependent, not assessable) & \ref{subsec:synthesis_profiles} & \texttt{hypothesis\_profiles} \\
+\end{longtable}
+
+Three symbols are reused with another meaning in a different part of the text and
+are therefore marked in the table: $m$ is the rank tolerance in H1b, H3, H4 and
+PRIM and the climate member in the definition of a future; $\alpha$ is the core
+threshold of H1a and the peeling fraction of PRIM; $\theta$ is the case-of-interest
+threshold of PRIM and $\theta_h$ the exposure threshold of a hazard channel in H5b.
