@@ -84,11 +84,17 @@ def zzz(tmp_path_factory):
         ("gust_mean_annual_max_ms: {threshold: null,", "gust_mean_annual_max_ms: {threshold: 1.0,"),
         (
             "national_targets:\n",
-            "national_targets:\n"
-            "  ZZZ:\n"
-            '    solar: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
-            '    wind: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n',
+            (
+                "national_targets:\n"
+                "  ZZZ:\n"
+                '    solar: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+                '    wind: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+            ),
         ),
+        (
+            "bootstrap_replicates: 200",
+            "bootstrap_replicates: 10",
+        ),  # the pre-registered 200 are tested apart
         (
             'source: "OQ-050 (H5), pre-registered 2026-10-14"\n',
             (
@@ -852,8 +858,19 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
         .all()
     )
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
+    box = pd.read_parquet(base / f"prim_box_{tech}__core.parquet")
+    primary = box[box["primary"]].iloc[0]
+    assert primary["status"] in {"box_found", "no_cases", "all_cases", "no_eligible_box"}
+    assert primary["outcome_threshold"] == 0.20 and primary["n_futures"] > 0
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
-    assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
+    if primary["status"] in ("box_found", "no_eligible_box"):
+        assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
+    else:
+        assert len(prim) == 0  # no search without a case of interest, or with every future one
+    boot = pd.read_parquet(base / f"prim_bootstrap_{tech}__core.parquet")
+    assert boot[boot["kind"] == "status"]["frequency"].sum() == pytest.approx(1.0)
+    late = pd.read_parquet(base / f"prim_box_{tech}__sensitivity.parquet")
+    assert len(late) == 0  # scenario discovery runs on the core window only
     below = pd.read_parquet(base / f"potential_below_tau_{tech}__core.parquet")
     assert set(below["land_scenario"]) == {"central", "restrictive", "permissive"}
     futures = pd.read_parquet(base / f"futures_{tech}__core.parquet")

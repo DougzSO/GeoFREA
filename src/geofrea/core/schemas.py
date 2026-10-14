@@ -295,7 +295,6 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
     capacity_target_gw: VerifiedValue[NonNegativeFloat | None]  # M-F7-05 (OQ-010), GW
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
-    prim_outcome_share: VerifiedValue[UnitInterval | None]  # M-F7-08 (OQ-056), fraction
 
 
 class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
@@ -324,7 +323,6 @@ class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
     capacity_target_gw: VerifiedValue[NonNegativeFloat | None]  # M-F7-05 (OQ-010), GW
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
-    prim_outcome_share: VerifiedValue[UnitInterval | None]  # M-F7-08 (OQ-056), fraction
 
 
 class TechnologyParams(BaseModel):

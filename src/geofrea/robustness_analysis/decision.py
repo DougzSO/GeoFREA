@@ -52,7 +52,6 @@ class TechDecision:
     tau: float | None
     capacity_target_gw: float | None
     top_k_percent: float | None
-    prim_outcome_share: float | None
     tau_range: tuple[float, float] | None = None
 
 
@@ -96,14 +95,13 @@ def _range(entry: object) -> tuple[float, float] | None:
 
 
 def decision_values(tech_params: object, technology: str) -> TechDecision:
-    """Read the five decision parameters from a country's technology block of `parameters.json`, and the sourced range of `tau` (H5)."""
+    """Read the four decision parameters from a country's technology block of `parameters.json`, and the sourced range of `tau` (H5)."""
     return TechDecision(
         technology=technology,
         cf_min=_value(getattr(tech_params, "cf_min", None)),
         tau=_value(getattr(tech_params, "tau_lcoe_usd_per_mwh", None)),
         capacity_target_gw=_value(getattr(tech_params, "capacity_target_gw", None)),
         top_k_percent=_value(getattr(tech_params, "top_k_percent", None)),
-        prim_outcome_share=_value(getattr(tech_params, "prim_outcome_share", None)),
         tau_range=_range(getattr(tech_params, "tau_lcoe_usd_per_mwh", None)),
     )
 
@@ -133,8 +131,6 @@ def check_ranges(decision: TechDecision) -> list[str]:
         items.append(f"tau {decision.tau} is not positive")
     if decision.top_k_percent is not None and not 0 < decision.top_k_percent <= 100:
         items.append(f"top_k_percent {decision.top_k_percent} outside (0, 100]")
-    if decision.prim_outcome_share is not None and not 0 < decision.prim_outcome_share <= 1:
-        items.append(f"prim_outcome_share {decision.prim_outcome_share} outside (0, 1]")
     if decision.capacity_target_gw is not None and decision.capacity_target_gw < 0:
         items.append(f"capacity_target_gw {decision.capacity_target_gw} is negative")
     return items
@@ -209,20 +205,6 @@ def skipped_outputs(
                 "hypothesis_rules.H5 is null",
                 "OQ-050",
             )
-        )
-    prim = experiments.prim
-    if decision.prim_outcome_share is None or prim.peel_alpha is None or prim.mass_min is None:
-        reasons = [
-            name
-            for name, missing in (
-                ("prim_outcome_share", decision.prim_outcome_share is None),
-                ("prim.peel_alpha", prim.peel_alpha is None),
-                ("prim.mass_min", prim.mass_min is None),
-            )
-            if missing
-        ]
-        skipped.append(
-            SkippedOutput("PRIM boxes (M-F7-08)", f"{', '.join(reasons)} is null", "OQ-056")
         )
     if has_hazard_members:
         for indicator, threshold in experiments.hazard_thresholds.items():

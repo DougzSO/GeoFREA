@@ -70,6 +70,7 @@ class FutureRow(BaseModel):
     delta_wind_mean: float
     lowest_lcoe: float
     share_nominal_top_k_leaving: float | None
+    displaced_capacity_share: float | None
     jaccard_with_nominal_top_k: float | None
     potential_below_tau_gw: float | None
     potential_below_tau_twh: float | None
@@ -152,11 +153,12 @@ class PotentialBelowTauRow(BaseModel):
 
 
 class PrimBoxRow(BaseModel):
-    """One box of the peeling and pasting trajectory of the first PRIM box (M-F7-08, D-F7-021): its statistics and its limits.
+    """One box of the peeling and pasting trajectory of the primary PRIM search (M-F7-08, D-F7-021, D-F7-054): its statistics and its limits.
 
     Step 0 is the box with every future. The limits are extra columns: `<descriptor>__min` and `<descriptor>__max` for a real descriptor,
-    `<descriptor>__in` for a categorical one (the categories the box keeps, joined by `|`). `theta` is the share of the nominal top-k that
-    leaves, at which a future counts as of interest. Choosing a box on the trajectory is the author's.
+    `<descriptor>__in` for a categorical one (the categories the box keeps, joined by `|`). `theta` is the capacity share of the nominal shortlist
+    beyond the tolerance at which a future counts as of interest. `selected` marks the box the pre-registered rule chooses (null of the
+    special cases: no box is marked).
     """
 
     model_config = ConfigDict(extra="allow")
@@ -169,6 +171,7 @@ class PrimBoxRow(BaseModel):
     k: int
     n_restricted: int
     theta: float
+    selected: bool
 
 
 class SspScoreRow(BaseModel):
@@ -508,3 +511,53 @@ class H5MemberRow(BaseModel):
     exposed_twh: float | None
     exposed_reference_twh: float | None
     attains_exposure_max: bool
+
+
+class PrimVariantRow(BaseModel):
+    """The PRIM result of one setting of the core window: `variant` `primary` is the pre-registered one (M-F7-08, D-F7-055).
+
+    `status` is `box_found`, `no_cases` (no future is of interest), `all_cases` (every future is) or `no_eligible_box` (no box meets the coverage
+    requirement); the box columns are null unless a box was found. The limits of the box are extra columns (`<descriptor>__min` and `__max` for a
+    real descriptor, `__in` for a categorical one) and `restricted` lists the descriptors it restricts, joined by `|`. `base_rate` is the share of the
+    futures that are of interest.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    variant: str
+    primary: bool
+    status: str
+    outcome_threshold: float
+    min_coverage: float
+    mass_min: float
+    n_futures: int
+    n_cases: int
+    base_rate: float
+    density: float | None
+    coverage: float | None
+    mass: float | None
+    n: int | None
+    k: int | None
+    n_restricted: int | None
+    restricted: str
+
+
+class PrimBootstrapRow(BaseModel):
+    """The stability of the primary box over the bootstrap replicates (M-F7-08, D-F7-056).
+
+    `kind` is `density`, `coverage` or `mass` (percentiles over the replicates that found a box), `lower` or `upper` (the percentiles of the bound of a
+    real descriptor over the replicates that restrict it), `restriction` (`frequency`: the share of those replicates that restrict the descriptor),
+    `category` (`frequency`: the share of the replicates that restrict the descriptor that keep the category in `level`) or `status` (`frequency`: the
+    share of all replicates with that status). `n_used` is the number of replicates behind the row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    name: str
+    level: str
+    p_low: float | None
+    p50: float | None
+    p_high: float | None
+    frequency: float | None
+    n_used: int

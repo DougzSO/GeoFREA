@@ -19,7 +19,6 @@ DECISION_KEYS = {
     "tau_lcoe_usd_per_mwh": "USD/MWh",
     "capacity_target_gw": "GW",
     "top_k_percent": "percent",
-    "prim_outcome_share": "fraction",
 }
 
 
@@ -53,7 +52,7 @@ def test_the_synthetic_country_carries_test_values_flagged_synthetic(parameters)
             assert entry.unit == unit and entry.tier is None
         assert params.tau_lcoe_usd_per_mwh.price_year == 2024  # S-07
         assert 0 < params.top_k_percent.value <= 100
-        assert 0 < params.cf_min.value < 1 and 0 < params.prim_outcome_share.value <= 1
+        assert 0 < params.cf_min.value < 1
 
 
 @pytest.mark.unit

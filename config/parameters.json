@@ -232,21 +232,6 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
           }
         },
         "wind": {
@@ -494,21 +479,6 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
           }
         }
       }
@@ -741,21 +711,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Share of the F7 set, by count, that forms the top-k (M-F7-05), 0 < p_k <= 100. No value yet: pending OQ-021.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -1007,21 +962,6 @@
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
           }
         }
       }
@@ -1256,21 +1196,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Share of the F7 set, by count, that forms the top-k (M-F7-05), 0 < p_k <= 100. No value yet: pending OQ-021.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -1520,21 +1445,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Share of the F7 set, by count, that forms the top-k (M-F7-05), 0 < p_k <= 100. No value yet: pending OQ-021.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "prim_outcome_share": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Share theta of the nominal top-k cells that leave the top-k of a future at which the PRIM outcome is true (M-F7-08). No value yet: pending OQ-056.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -1840,20 +1750,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Test value: small enough for the six synthetic solar cells to give a top-k of two.",
-            "status": null,
-            "synthetic": true
-          },
-          "prim_outcome_share": {
-            "value": 0.5,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: half of the nominal top-k cells.",
             "status": null,
             "synthetic": true
           }
@@ -2168,20 +2064,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Test value: small enough for the seventeen synthetic wind cells to give a top-k of five.",
-            "status": null,
-            "synthetic": true
-          },
-          "prim_outcome_share": {
-            "value": 0.2,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: one in five nominal top-k cells.",
             "status": null,
             "synthetic": true
           }

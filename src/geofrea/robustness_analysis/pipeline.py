@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +62,7 @@ from geofrea.robustness_analysis.assemble import (
     h5_summary_frame,
     hypothesis_frame,
     nominal_by_member_frame,
+    prim_box_frame,
     prim_frame,
     prim_input,
     robustness_frame,
@@ -86,7 +87,7 @@ from geofrea.robustness_analysis.decision import (
     skipped_outputs,
 )
 from geofrea.robustness_analysis.evaluator import evaluate
-from geofrea.robustness_analysis.futures import MemberLabel, futures_pass
+from geofrea.robustness_analysis.futures import MemberLabel, OutcomeShortlist, futures_pass
 from geofrea.robustness_analysis.h1_rank_robustness import (
     PRIMARY,
     H1Error,
@@ -95,6 +96,7 @@ from geofrea.robustness_analysis.h1_rank_robustness import (
     descriptive,
     evaluate_variant,
     sensitivity_variants,
+    tolerance_size,
 )
 from geofrea.robustness_analysis.h2_aggregation import (
     PRIMARY as H2_PRIMARY_VARIANT,
@@ -164,7 +166,16 @@ from geofrea.robustness_analysis.hypotheses import (
     h5_primary,
     h5_verdict_entries,
 )
-from geofrea.robustness_analysis.prim import run_prim
+from geofrea.robustness_analysis.rankings import order_by, take_top_k
+from geofrea.robustness_analysis.scenario_discovery import (
+    BOX_FOUND,
+    Discovery,
+    DiscoverySettings,
+    bootstrap,
+    derive_seed,
+    discover,
+    select_box,
+)
 from geofrea.robustness_analysis.table_schemas import (
     ROBUSTNESS_TABLE_SCHEMA_VERSION,
     DrawStatisticRow,
@@ -182,7 +193,9 @@ from geofrea.robustness_analysis.table_schemas import (
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
+    PrimBootstrapRow,
     PrimBoxRow,
+    PrimVariantRow,
     RobustnessRow,
     SspScoreRow,
 )
@@ -210,6 +223,8 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "potential_below_tau": PotentialBelowTauRow,
     "hazard_exposure": ExposureRow,
     "prim_boxes": PrimBoxRow,
+    "prim_box": PrimVariantRow,
+    "prim_bootstrap": PrimBootstrapRow,
     "ssp_scores": SspScoreRow,
     "h1_sites": H1SiteRow,
     "h1_summary": H1SummaryRow,
@@ -226,6 +241,7 @@ H2_TABLES = ("h2_summary", "h2_regions")
 H3_TABLES = ("h3_summary", "h3_sites")
 H4_TABLES = ("h4_country",)
 H5_TABLES = ("h5_summary", "h5_members")
+PRIM_TABLES = ("prim_boxes", "prim_box", "prim_bootstrap")
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -350,9 +366,15 @@ def _read_candidates(path: Path) -> pd.DataFrame:
 
 
 def member_factor_means(
-    forcing_path: Path, cell_ids: np.ndarray, members: Sequence[str]
+    forcing_path: Path,
+    cell_ids: np.ndarray,
+    members: Sequence[str],
+    weights: np.ndarray | None = None,
 ) -> pd.DataFrame:
-    """The country-mean change factors of each member over the cells of the F7 set (descriptors of the futures, M-F7-08)."""
+    """The mean change factors of each member over `cell_ids`, weighted by `weights` (default equal), the descriptors of the futures (M-F7-08).
+
+    The PRIM descriptors are the capacity-weighted means over the nominal shortlist: `cell_ids` are the cells of the shortlist and `weights` their capacity.
+    """
     forcing = pd.read_parquet(
         forcing_path,
         columns=["cell_id", "member", "delta_rsds", "dT", "delta_wind"],
@@ -360,7 +382,19 @@ def member_factor_means(
     )
     forcing = forcing[forcing["cell_id"].isin(cell_ids)]
     forcing = forcing.assign(member=forcing["member"].astype(str))
-    means = forcing.groupby("member")[["delta_rsds", "dT", "delta_wind"]].mean()
+    weight_of = pd.Series(
+        np.ones(len(cell_ids)) if weights is None else np.asarray(weights, dtype="float64"),
+        index=np.asarray(cell_ids),
+    )
+    forcing = forcing.assign(weight=forcing["cell_id"].map(weight_of).to_numpy(dtype="float64"))
+    columns = ["delta_rsds", "dT", "delta_wind"]
+    weighted = (
+        forcing[columns]
+        .mul(forcing["weight"], axis=0)
+        .assign(member=forcing["member"], weight=forcing["weight"])
+    )
+    totals = weighted.groupby("member")[[*columns, "weight"]].sum()
+    means = totals[columns].div(totals["weight"], axis=0)
     missing = sorted(set(members) - set(means.index))
     if missing:
         raise RobustnessInputError(f"forcing.parquet has no rows of the F7 set for {missing}")
@@ -405,8 +439,12 @@ def _provenance(
             "tau_lcoe_usd_per_mwh": decision.tau,
             "capacity_target_gw": decision.capacity_target_gw,
             "top_k_percent": decision.top_k_percent,
-            "prim_outcome_share": decision.prim_outcome_share,
             "q_ref": regret_quantile(experiments),
+        },
+        "prim": {
+            "bootstrap_seed": derive_seed(experiments.sampler.seed),
+            "bootstrap_replicates": experiments.prim.bootstrap_replicates,
+            "source": experiments.prim.source,
         },
         "feasibility": "CF(m, s0) stored by F5 against cf_min, handed to the kernel as an energy floor (D-F7-007)",
         "statistics_over": "draws s >= 1 of the core members; the nominal vector s0 is f0 and the central value",
@@ -672,7 +710,20 @@ def run_window(
     lat = candidates["lat_c"].to_numpy()[np.isin(cell_set.candidate_ids, cell_set.f7_ids)]
     lon = candidates["lon_c"].to_numpy()[np.isin(cell_set.candidate_ids, cell_set.f7_ids)]
 
-    # the sample-major pass (H1, H3, the PRIM input, the ranges over the draws)
+    # the nominal shortlist over the ranked set (as in H3) and the capacity-weighted descriptors of the PRIM outcome (core window only)
+    prim_cfg = experiments.prim
+    shortlist = None
+    if role == "core" and ranking.k is not None and cell_set.ranked.any():
+        nominal_order = order_by(evaluation.nominal_lcoe[:, 0], candidates=cell_set.ranked)
+        shortlist = OutcomeShortlist(
+            ranked=cell_set.ranked,
+            shortlist=take_top_k(nominal_order, ranking.k, cell_set.n_f7).mask,
+            capacity=cell_set.p_mw,
+            k=ranking.k,
+            m=tolerance_size(prim_cfg.tolerance_multiple_of_k, ranking.k),
+        )
+
+    # the sample-major pass (H1, H3, the PRIM outcome, the ranges over the draws)
     futures = None
     if ranking.top_nominal is not None and ranking.k is not None:
         labels = [
@@ -688,7 +739,9 @@ def run_window(
             progress=PeriodicProgress(
                 logger, 1, f"{iso} {tech} {role} sample-major pass", every=1
             ).step,
+            outcome=shortlist,
         )
+        in_shortlist = None if shortlist is None else shortlist.shortlist
         frames["futures"] = futures_frame(
             cell_set,
             evaluation,
@@ -696,28 +749,102 @@ def run_window(
             labels,
             design,
             [s.name for s in resolved.specs],
-            member_factor_means(paths.climate_dir / "forcing.parquet", cell_set.f7_ids, member_ids),
+            member_factor_means(
+                paths.climate_dir / "forcing.parquet",
+                cell_set.f7_ids if in_shortlist is None else cell_set.f7_ids[in_shortlist],
+                member_ids,
+                None if in_shortlist is None else cell_set.p_mw[in_shortlist],
+            ),
         )
         frames["draw_statistics"] = draw_statistics_frame(futures)
-        prim_settings = experiments.prim
-        if (
-            decision.prim_outcome_share is None
-            or prim_settings.peel_alpha is None
-            or prim_settings.mass_min is None
-        ):
-            skips["prim_boxes"] = SkippedOutput(
-                "PRIM boxes (M-F7-08)",
-                "prim_outcome_share, prim.peel_alpha or prim.mass_min is null",
-                "OQ-056",
-            )
+        if role != "core":
+            for kind in PRIM_TABLES:
+                skips[kind] = SkippedOutput(
+                    "PRIM scenario discovery (M-F7-08)",
+                    "scenario discovery runs on the futures of the core window only",
+                    "M-F7-08",
+                )
+        elif shortlist is None:
+            for kind in PRIM_TABLES:
+                skips[kind] = SkippedOutput(
+                    "PRIM scenario discovery (M-F7-08)",
+                    "every cell of the F7 set is climate-fragile, there is no ranked cell",
+                    "OQ-008",
+                )
         else:
-            x, y = prim_input(
-                frames["futures"], [s.name for s in resolved.specs], decision.prim_outcome_share
+            x, shares = prim_input(frames["futures"], [s.name for s in resolved.specs])
+            base = DiscoverySettings(
+                prim_cfg.outcome_threshold,
+                prim_cfg.peel_alpha,
+                prim_cfg.mass_min,
+                prim_cfg.min_coverage,
+                prim_cfg.max_restricted_descriptors,
             )
-            outcome = run_prim(
-                x, y, alpha=prim_settings.peel_alpha, mass_min=prim_settings.mass_min
+            primary = discover(x, shares, base)
+            searches: list[tuple[str, Discovery]] = [("primary", primary)]
+            for theta in prim_cfg.sensitivity.outcome_threshold:
+                searches.append(
+                    (
+                        f"theta_{theta:.2f}",
+                        discover(x, shares, replace(base, outcome_threshold=theta)),
+                    )
+                )
+            for (
+                coverage
+            ) in prim_cfg.sensitivity.min_coverage:  # the same trajectory, another requirement
+                settings = replace(base, min_coverage=coverage)
+                chosen = (
+                    None
+                    if primary.result is None
+                    else select_box(primary.result, coverage, base.max_restricted)
+                )
+                status = (
+                    primary.status
+                    if primary.result is None
+                    else (BOX_FOUND if chosen is not None else "no_eligible_box")
+                )
+                searches.append(
+                    (
+                        f"coverage_{coverage:.2f}",
+                        Discovery(
+                            settings,
+                            status,
+                            primary.n_futures,
+                            primary.n_cases,
+                            primary.result,
+                            chosen,
+                        ),
+                    )
+                )
+            for support in prim_cfg.sensitivity.mass_min:
+                searches.append(
+                    (f"support_{support:.2f}", discover(x, shares, replace(base, mass_min=support)))
+                )
+            frames["prim_box"] = prim_box_frame(searches)
+            frames["prim_boxes"] = (
+                prim_frame(primary.result, base.outcome_threshold, primary.chosen)
+                if primary.result is not None
+                else _empty_frame(ROW_MODELS["prim_boxes"])
             )
-            frames["prim_boxes"] = prim_frame(outcome, decision.prim_outcome_share)
+            frames["prim_bootstrap"] = pd.DataFrame(
+                bootstrap(
+                    x,
+                    shares,
+                    base,
+                    replicates=prim_cfg.bootstrap_replicates,
+                    seed=derive_seed(experiments.sampler.seed),
+                    percentiles=(prim_cfg.percentile_low, prim_cfg.percentile_high),
+                )
+            )
+            logger.info(
+                "%s %s [%s]: PRIM %s (%d of %d futures of interest)",
+                iso,
+                tech,
+                role,
+                primary.status,
+                primary.n_cases,
+                primary.n_futures,
+            )
     else:
         why = SkippedOutput(
             "futures and per-draw statistics (H1, H3, PRIM input)",
@@ -749,9 +876,10 @@ def run_window(
                 "top_k_percent is null",
                 "OQ-021",
             )
-        skips["prim_boxes"] = SkippedOutput(
-            "PRIM boxes (M-F7-08)", "top_k_percent is null", "OQ-021"
-        )
+        for kind in PRIM_TABLES:
+            skips[kind] = SkippedOutput(
+                "PRIM scenario discovery (M-F7-08)", "top_k_percent is null", "OQ-021"
+            )
 
     # H1: the scores per SSP, C_k, V_k, the verdict and the sensitivities (the rule is read from configuration)
     h1_statistics: list = []

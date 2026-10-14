@@ -18,7 +18,7 @@ from geofrea.robustness_analysis.h3_robust_vs_nominal import H3Detail, H3Inputs,
 from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
 from geofrea.robustness_analysis.h5_climate_pressure import H5Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
-from geofrea.robustness_analysis.prim import PrimResult
+from geofrea.robustness_analysis.prim import PrimResult, PrimStep
 from geofrea.robustness_analysis.rankings import (
     TopK,
     capacity_target_set,
@@ -27,6 +27,7 @@ from geofrea.robustness_analysis.rankings import (
     take_top_k,
     top_k_size,
 )
+from geofrea.robustness_analysis.scenario_discovery import Discovery, restricted_descriptors
 
 
 @dataclass(frozen=True)
@@ -292,16 +293,17 @@ def futures_frame(
         frame.insert(6, "delta_wind_mean", float(means["delta_wind"]))
         frame.insert(7, "lowest_lcoe", evaluation.lowest[1 + j])
         frame.insert(8, "share_nominal_top_k_leaving", futures.share_leaving[j])
-        frame.insert(9, "jaccard_with_nominal_top_k", futures.jaccard_nominal[j])
+        frame.insert(9, "displaced_capacity_share", futures.displaced_capacity_share[j])
+        frame.insert(10, "jaccard_with_nominal_top_k", futures.jaccard_nominal[j])
         frame.insert(
-            10,
+            11,
             "potential_below_tau_gw",
             evaluation.potential_gw[1 + j]
             if evaluation.potential_gw is not None
             else pd.Series([pd.NA] * n_samples, dtype="Float64"),
         )
         frame.insert(
-            11,
+            12,
             "potential_below_tau_twh",
             evaluation.potential_twh[1 + j]
             if evaluation.potential_twh is not None
@@ -358,25 +360,40 @@ def hypothesis_frame(
 
 
 def prim_input(
-    futures: pd.DataFrame, parameter_names: Sequence[str], theta: float
+    futures: pd.DataFrame, parameter_names: Sequence[str]
 ) -> tuple[pd.DataFrame, np.ndarray]:
-    """The descriptors and the binary outcome of PRIM: the draws `s >= 1`, outcome "the share of the nominal top-k that leaves is at least `theta`".
+    """The descriptors of PRIM and the outcome `V_f` of the futures: the draws `s >= 1` of the core window.
 
-    Implements: M-F7-08, D-F7-021.
+    Implements: M-F7-08, D-F7-054.
 
-    Integer-valued parameters are cast to real (the own PRIM supports real and categorical descriptors).
+    Integer-valued parameters are cast to real (the own PRIM supports real and categorical descriptors). The outcome is the capacity share of the
+    nominal shortlist beyond the tolerance; the case of interest is decided by the threshold of each search.
     """
     draws = futures[futures["sample"] >= 1].reset_index(drop=True)
     real = [*parameter_names, "delta_rsds_mean", "dT_mean", "delta_wind_mean"]
     x = draws[real].astype("float64")
     x["gcm"] = draws["gcm"].astype(str)
     x["ssp"] = draws["ssp"].astype(str)
-    share = draws["share_nominal_top_k_leaving"].to_numpy(dtype="float64")
-    return x, (share >= theta).astype(int)
+    return x, draws["displaced_capacity_share"].to_numpy(dtype="float64")
 
 
-def prim_frame(result: PrimResult, theta: float) -> pd.DataFrame:
-    """The trajectory of the first PRIM box, one row per box, with the limits of every descriptor."""
+def _box_limits(discovery: Discovery) -> dict[str, object]:
+    """The limits of the box chosen, in the columns `<descriptor>__min`, `__max` and `__in` (all null without a box)."""
+    out: dict[str, object] = {}
+    if discovery.result is None:
+        return out
+    for name in discovery.result.real_descriptors:
+        out[f"{name}__min"] = None if discovery.chosen is None else discovery.chosen.lower[name]
+        out[f"{name}__max"] = None if discovery.chosen is None else discovery.chosen.upper[name]
+    for name in discovery.result.categorical_descriptors:
+        out[f"{name}__in"] = (
+            None if discovery.chosen is None else "|".join(discovery.chosen.categories[name])
+        )
+    return out
+
+
+def prim_frame(result: PrimResult, theta: float, chosen: PrimStep | None = None) -> pd.DataFrame:
+    """The trajectory of the primary PRIM search, one row per box, with the limits of every descriptor and the box chosen marked."""
     rows = []
     for step in result.steps:
         row: dict[str, object] = {
@@ -388,6 +405,7 @@ def prim_frame(result: PrimResult, theta: float) -> pd.DataFrame:
             "k": step.k,
             "n_restricted": step.n_restricted,
             "theta": theta,
+            "selected": chosen is not None and step.step == chosen.step,
         }
         for name in result.real_descriptors:
             row[f"{name}__min"] = step.lower[name]
@@ -396,6 +414,49 @@ def prim_frame(result: PrimResult, theta: float) -> pd.DataFrame:
             row[f"{name}__in"] = "|".join(step.categories[name])
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def prim_box_frame(variants: Sequence[tuple[str, Discovery]]) -> pd.DataFrame:
+    """The result of each PRIM setting, one row each: the status, the box chosen with its density, coverage and support, and its limits (D-F7-055).
+
+    The first variant is the primary one.
+    """
+    rows = []
+    for at, (name, discovery) in enumerate(variants):
+        box = discovery.chosen
+        settings = discovery.settings
+        rows.append(
+            {
+                "variant": name,
+                "primary": at == 0,
+                "status": discovery.status,
+                "outcome_threshold": settings.outcome_threshold,
+                "min_coverage": settings.min_coverage,
+                "mass_min": settings.mass_min,
+                "n_futures": discovery.n_futures,
+                "n_cases": discovery.n_cases,
+                "base_rate": discovery.n_cases / max(discovery.n_futures, 1),
+                "density": None if box is None else box.density,
+                "coverage": None if box is None else box.coverage,
+                "mass": None if box is None else box.mass,
+                "n": None if box is None else box.n,
+                "k": None if box is None else box.k,
+                "n_restricted": None if box is None else box.n_restricted,
+                "restricted": "|".join(restricted_descriptors(discovery)),
+                **_box_limits(discovery),
+            }
+        )
+    frame = pd.DataFrame(rows)
+    return frame.astype(
+        {
+            "density": "float64",
+            "coverage": "float64",
+            "mass": "float64",
+            "n": "Int64",
+            "k": "Int64",
+            "n_restricted": "Int64",
+        }
+    )
 
 
 def ssp_scores_frame(cell_set: CellSet, detail: H1Detail) -> pd.DataFrame:

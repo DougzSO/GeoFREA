@@ -4,7 +4,8 @@ Passes 1 and 2 go member by member and cannot say how the rankings of two member
 sample-major: for a batch of draws it evaluates the LCOE of every core member over the F7 set, ranks the cells of each member (positions of
 the ranking of M-F7-05: ascending LCOE, ties by index, an infeasible cell last), and reduces to a few numbers per future and per draw:
 
-  - the share of the nominal top-k cells that are outside the top-k of the future, and the Jaccard of the two sets (PRIM outcome, H3);
+  - the share of the nominal top-k cells that are outside the top-k of the future, and the Jaccard of the two sets (H3);
+  - the capacity share `V_f` of the nominal shortlist (over the ranked set) whose rank by relative regret in the future is beyond `k + m` (PRIM outcome);
   - Spearman correlation of the rankings, and Jaccard of the top-k sets, between SSPs of the same GCM and between the per-SSP medians over
     the GCMs (H1), and the share of the nominal top-k cells that leave the top-k under at least one member (H1).
 
@@ -46,6 +47,25 @@ class MemberLabel:
 
 
 @dataclass(frozen=True)
+class OutcomeShortlist:
+    """What the PRIM outcome `V_f` needs (M-F7-08): the ranked set `I`, the nominal shortlist drawn from it, the capacity and `k`, `m`.
+
+    Attributes:
+        ranked: Boolean over the F7 set: the cell is in `I`.
+        shortlist: Boolean over the F7 set: the `k` cells of `I` with the lowest `LCOE_i,f0` (`S^nom_k` of H3).
+        capacity: Capacity of each cell of the F7 set, MW.
+        k: The size of the shortlist (M-F7-05).
+        m: The tolerance (`m = k` in the pre-registered setting).
+    """
+
+    ranked: np.ndarray
+    shortlist: np.ndarray
+    capacity: np.ndarray
+    k: int
+    m: int
+
+
+@dataclass(frozen=True)
 class FuturesResult:
     """Per future `(m, s)` and per draw `s` reductions; sample 0 is the nominal vector.
 
@@ -53,12 +73,14 @@ class FuturesResult:
         members: The core members, in order.
         share_leaving: `(M, N + 1)` share of the nominal top-k cells that are outside the top-k of the future.
         jaccard_nominal: `(M, N + 1)` Jaccard of the nominal top-k and the top-k of the future.
+        displaced_capacity_share: `(M, N + 1)` `V_f`, the capacity share of the nominal shortlist beyond the tolerance (NaN without a shortlist).
         draw_statistics: statistic identifier -> `(N + 1,)` value for each draw (H1 and the any-member share).
     """
 
     members: tuple[str, ...]
     share_leaving: np.ndarray
     jaccard_nominal: np.ndarray
+    displaced_capacity_share: np.ndarray
     draw_statistics: dict[str, np.ndarray]
 
 
@@ -101,6 +123,7 @@ def futures_pass(
     *,
     max_batch_gb: float,
     progress: Callable[[], None] | None = None,
+    outcome: OutcomeShortlist | None = None,
 ) -> FuturesResult:
     """Evaluate every core member for every draw and reduce to the statistics of H1, H3 and the PRIM outcome.
 
@@ -114,6 +137,7 @@ def futures_pass(
         k: The size of the top-k (M-F7-05).
         max_batch_gb: The memory budget.
         progress: Called once per batch.
+        outcome: The nominal shortlist of the PRIM outcome (None leaves `displaced_capacity_share` NaN).
 
     Raises:
         FuturesError: the members and labels disagree, or the nominal top-k is empty.
@@ -134,6 +158,14 @@ def futures_pass(
     ssp_pairs = list(itertools.combinations(ssps, 2))
     share = np.empty((n_members, n_samples))
     jaccard_nominal = np.empty((n_members, n_samples))
+    displaced = np.full((n_members, n_samples), np.nan)
+    if outcome is not None:
+        ranked_at = np.flatnonzero(outcome.ranked)
+        short_local = np.asarray(outcome.shortlist, dtype=bool)[ranked_at]
+        q_local = np.asarray(outcome.capacity, dtype="float64")[ranked_at]
+        short_capacity = float(q_local[short_local].sum())
+        if short_capacity <= 0:
+            raise FuturesError("the nominal shortlist of the PRIM outcome has no capacity")
     stats: dict[str, np.ndarray] = {"h1_leaving_any_member_share": np.empty(n_samples)}
     for gcm in sorted(by_gcm):
         for a, b in ssp_pairs:
@@ -161,6 +193,11 @@ def futures_pass(
             share[:, s] = leaving.sum(axis=1) / nominal_size
             for j in range(n_members):
                 jaccard_nominal[j, s] = _jaccard(nominal_top_k, top[j])
+            if outcome is not None:
+                for j in range(n_members):
+                    rank_in_ranked, _ = _positions(stack[j, ranked_at, column], 0)
+                    beyond = short_local & (rank_in_ranked >= outcome.k + outcome.m)
+                    displaced[j, s] = float(q_local[beyond].sum()) / short_capacity
             stats["h1_leaving_any_member_share"][s] = leaving.any(axis=0).sum() / nominal_size
             for gcm, members in by_gcm.items():
                 for a, b in ssp_pairs:
@@ -191,5 +228,6 @@ def futures_pass(
         members=tuple(w.member for w in worlds),
         share_leaving=share,
         jaccard_nominal=jaccard_nominal,
+        displaced_capacity_share=displaced,
         draw_statistics=stats,
     )

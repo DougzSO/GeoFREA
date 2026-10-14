@@ -8,7 +8,13 @@ import pytest
 from test_robustness_evaluator import _samples, _world
 
 from geofrea.lcoe_modeling.kernel import lcoe_block
-from geofrea.robustness_analysis.futures import FuturesError, MemberLabel, futures_pass, slug
+from geofrea.robustness_analysis.futures import (
+    FuturesError,
+    MemberLabel,
+    OutcomeShortlist,
+    futures_pass,
+    slug,
+)
 from geofrea.robustness_analysis.thesis_tables import (
     UNION,
     HazardMember,
@@ -65,6 +71,47 @@ def test_the_sample_major_pass_equals_the_brute_force_definition():
         rho = np.corrcoef(_ranks(block[0][:, s]), _ranks(block[1][:, s]))[0, 1]
         key = f"h1_spearman_gcm__{slug('GCM-A')}__{slug('SSP1-2.6')}_vs_{slug('SSP3-7.0')}"
         assert result.draw_statistics[key][s] == pytest.approx(rho)
+
+
+@pytest.mark.unit
+def test_the_displaced_capacity_share_equals_the_brute_force_definition_over_the_ranked_cells():
+    worlds, samples, nominal_top, k = _setup()
+    n_cells, m = (
+        40,
+        0,
+    )  # the tolerance of the function is free; 0 makes the shortlist leave its own top-k
+    rng = np.random.default_rng(11)
+    ranked = np.ones(n_cells, dtype=bool)
+    ranked[[3, 17, 29]] = False  # climate-fragile cells are not in the ranked set
+    capacity = rng.uniform(10.0, 100.0, n_cells)
+    nominal = lcoe_block(worlds[0].cells, samples.take(slice(0, 1)))[:, 0]
+    index = np.flatnonzero(ranked)
+    shortlist = np.zeros(n_cells, dtype=bool)
+    shortlist[index[np.argsort(nominal[index], kind="stable")[:k]]] = True
+    outcome = OutcomeShortlist(ranked, shortlist, capacity, k, m)
+    result = futures_pass(
+        worlds, LABELS, samples, nominal_top, k, max_batch_gb=1.0, outcome=outcome
+    )
+    block = [lcoe_block(w.cells, samples, min_energy_mwh=w.floor) for w in worlds]
+    seen = []
+    for s in (0, 1, 9, 30):
+        for j in range(3):
+            values = block[j][index, s]
+            position = np.empty(index.size)
+            position[np.argsort(values, kind="stable")] = np.arange(index.size)
+            short = shortlist[index]
+            beyond = short & (position >= k + m)  # rank k + m + 1 or worse
+            expected = capacity[index][beyond].sum() / capacity[index][short].sum()
+            assert result.displaced_capacity_share[j, s] == pytest.approx(expected)
+            seen.append(expected)
+    assert 0.0 < max(seen) <= 1.0 and min(seen) >= 0.0
+    assert len(set(np.round(seen, 6))) > 1  # the rankings change from one future to another
+    none = futures_pass(worlds, LABELS, samples, nominal_top, k, max_batch_gb=1.0)
+    assert np.isnan(none.displaced_capacity_share).all()  # without a shortlist there is no outcome
+    small = futures_pass(
+        worlds, LABELS, samples, nominal_top, k, max_batch_gb=1e-5, outcome=outcome
+    )
+    np.testing.assert_array_equal(result.displaced_capacity_share, small.displaced_capacity_share)
 
 
 @pytest.mark.unit

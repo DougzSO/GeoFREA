@@ -49,6 +49,9 @@ IDS = np.arange(500, 500 + N_CELLS)
 def _experiments(**sampler) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"].update({"initial_size": 24, **sampler})
+    raw["prim"]["bootstrap_replicates"] = (
+        6  # the bootstrap of the pre-registered 200 replicates is tested apart
+    )
     return ExperimentsFile.model_validate(raw)
 
 
@@ -492,6 +495,7 @@ def test_robustness_dir_is_under_the_phase_outputs(tmp_path, monkeypatch):
 def _with_rules(**rules) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"]["initial_size"] = 24
+    raw["prim"]["bootstrap_replicates"] = 6
     raw["hypothesis_rules"] = {f"H{i}": rules.get(f"H{i}") for i in range(1, 6)} | {
         name: rule for name, rule in rules.items() if not re.fullmatch(r"H\d", name)
     }  # a test rule goes under another key, because every hypothesis has its own rule
@@ -573,35 +577,12 @@ def test_exposure_is_written_empty_and_flagged_when_no_member_carries_the_hazard
 # -- PRIM and the agreement of MR and SR (F7-C) -------------------------------------------------------------
 
 
-def _with_prim(alpha=0.1, mass_min=0.1) -> ExperimentsFile:
+def _with_prim(**prim) -> ExperimentsFile:
+    """The shipped configuration with a bigger sample and the replicates of the bootstrap reduced (the pre-registered value is tested apart)."""
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"]["initial_size"] = 60
-    raw["prim"].update({"peel_alpha": alpha, "mass_min": mass_min, "source": "test value"})
+    raw["prim"].update({"bootstrap_replicates": 6, **prim})
     return ExperimentsFile.model_validate(raw)
-
-
-@pytest.mark.unit
-def test_prim_boxes_are_written_from_the_futures_with_the_share_threshold(tmp_path):
-    entry, _, _ = _run(tmp_path, experiments=_with_prim())
-    boxes = pd.read_parquet(entry.windows["core"].tables["prim_boxes"])
-    futures = pd.read_parquet(entry.windows["core"].tables["futures"])
-    draws = futures[futures["sample"] >= 1]
-    theta = float(boxes["theta"].iloc[0])
-    assert boxes["step"].iloc[0] == 0 and boxes["n"].iloc[0] == len(draws)
-    assert boxes["k"].iloc[0] == int((draws["share_nominal_top_k_leaving"] >= theta).sum())
-    assert {"gcm__in", "ssp__in", "dT_mean__min", "dT_mean__max"} <= set(boxes.columns)
-    assert (boxes["mass"] >= 0.1).all()
-
-
-@pytest.mark.unit
-def test_prim_is_skipped_and_flagged_with_oq_056_while_the_outcome_threshold_is_null(tmp_path):
-    entry, _, _ = _run(tmp_path, country=_country(prim_outcome_share=None))
-    path = entry.windows["core"].tables["prim_boxes"]
-    assert len(pd.read_parquet(path)) == 0
-    assert (
-        json.loads(pq.read_schema(path).metadata[b"geofrea_robustness_skipped"])["open_question"]
-        == "OQ-056"
-    )
 
 
 @pytest.mark.unit
