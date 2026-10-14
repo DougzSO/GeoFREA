@@ -18,6 +18,7 @@ from geofrea.core.config_schemas import (
     H2Rule,
     H3Rule,
     H4Rule,
+    H5Rule,
     HypothesisRule,
 )
 from geofrea.core.constants import PRICE_BASE_YEAR_USD
@@ -251,6 +252,12 @@ def h4_rule(experiments: ExperimentsFile) -> H4Rule | None:
     return rule if isinstance(rule, H4Rule) else None
 
 
+def h5_rule(experiments: ExperimentsFile) -> H5Rule | None:
+    """The pre-registered rule of H5 (OQ-050), or None while it is null."""
+    rule = experiments.hypothesis_rules.get("H5")
+    return rule if isinstance(rule, H5Rule) else None
+
+
 def expanded_rules(experiments: ExperimentsFile) -> dict[str, list[HypothesisRule] | None]:
     """The rules as lists of (statistic, comparison, threshold): the H1 rule becomes `C_k >= alpha` and `V_k >= beta` (OQ-050)."""
     out: dict[str, list[HypothesisRule] | None] = {}
@@ -264,7 +271,7 @@ def expanded_rules(experiments: ExperimentsFile) -> dict[str, list[HypothesisRul
                     statistic=H1_PRIMARY_STATISTICS[1], comparison="ge", threshold=rule.beta
                 ),
             ]
-        elif isinstance(rule, H2Rule | H3Rule | H4Rule):
+        elif isinstance(rule, H2Rule | H3Rule | H4Rule | H5Rule):
             out[hypothesis] = (
                 None  # the verdict depends on testability, so the module of the hypothesis gives it (h2_aggregation, h3_robust_vs_nominal)
             )
@@ -279,7 +286,7 @@ def rules_for(experiments: ExperimentsFile) -> tuple[Mapping[str, list], list[st
     own_form = {
         h
         for h, r in experiments.hypothesis_rules.items()
-        if isinstance(r, H2Rule | H3Rule | H4Rule)
+        if isinstance(r, H2Rule | H3Rule | H4Rule | H5Rule)
     }
     rules = {h: r for h, r in expanded.items() if r}
     missing = [h for h, r in expanded.items() if not r and h not in own_form]

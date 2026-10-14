@@ -262,8 +262,8 @@ thresholds:
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when
-# `value <comparison> threshold`. H1 to H4 are pre-registered; H5 is null until the author pre-registers them (before F7 runs on real data); F7 then writes
-# `verdict = null` and a warning, and never invents a rule.
+# `value <comparison> threshold`. H1 to H5 are pre-registered, each in its own form; a hypothesis whose rule is null gets `verdict = null` and a
+# warning from F7, which never invents a rule.
 hypothesis_rules:
   # H1 (docs/thesis/hypotheses/H1_climate_rank_robustness.tex): H1a holds when C_k >= alpha, H1b when V_k >= beta, with the tolerance
   # m = tolerance_multiple_of_k * k beyond the top-k boundary; rbo_p is the persistence of the descriptive rank-biased overlap.
@@ -301,7 +301,32 @@ hypothesis_rules:
     rule: strict_per_technology
     tolerance_multiple_of_k: 1.0
     source: "OQ-050 (H4), pre-registered 2026-10-13"
-  H5: null
+  # H5 (docs/thesis/hypotheses/H5_climate_threat_to_targets.tex): H5a (resource) holds when R_loss = Delta E / H_0 reaches `lambda`, H5b
+  # (exposure) when R_exp = E_exp / H_0 reaches it, with H_0 the margin of the baseline economic potential over the national target. The
+  # economic domain is fixed at f0 (LCOE <= tau, OQ-008), the members are those of the core window and the exposure is the maximum over the members
+  # that carry the hazard channel. `sensitivity_lambda` is the second threshold reported beside the primary one.
+  H5:
+    lambda: 0.20
+    sensitivity_lambda: 0.10
+    domain: fixed_at_f0
+    members: core_window
+    hazard_members: hazard_channel
+    source: "OQ-050 (H5), pre-registered 2026-10-14"
+
+# National expansion targets of H5 (M-F7-07, OQ-010): per country and technology the value, its unit (GW or TWh/year), the source and the horizon
+# year. Null until the author sources them from the official planning documents, horizon-matched to the core window; a value needs its unit,
+# source and horizon. `alternatives` lists other official targets or horizons for the sensitivity of H5. The target of the top-k sensitivity
+# (`capacity_target_gw`) stays in `parameters.json`.
+national_targets:
+  BRA:
+    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+  PRT:
+    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+  IND:
+    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
 
 # Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
 # Source and tier are the author's; the wording is "exposed". All null until OQ-051 closes. The indicators are those of hazard_context.

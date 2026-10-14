@@ -1,0 +1,315 @@
+% ============================================================================
+% Hypothesis H5: climate-induced pressure on economic renewable potential
+% relative to national expansion targets.
+% H5a: resource-yield loss within the reference economic domain.
+% H5b: exposure of the reference economic potential to climate hazards.
+% Pre-registered decision rule (OQ-050, H5), fixed 2026-10-14, before any
+% real-country result was produced. Materiality threshold lambda = 0.20.
+% Notation follows docs/METHODOLOGY.md and the H1 to H4 sections.
+% Citation keys marked "verify" must be checked before submission.
+% ============================================================================
+
+\section{Hypothesis H5: Climate-Induced Pressure on Economic Potential and
+National Expansion Targets}
+\label{sec:h5}
+
+\subsection{Purpose and Position in the Research Design}
+\label{subsec:h5_purpose}
+
+Hypothesis H5 asks whether climate change puts material pressure on the
+renewable potential that a country can use to meet its expansion target. H1 to
+H4 concern which sites are best; H5 concerns how much economically viable
+generation is at stake. It carries the link between climate risk and the energy
+transition that motivates the thesis, and it is formulated so that a negative
+answer is as informative as a positive one: if the pressure is small, climate
+change does not threaten the feasibility of the target through the channels
+represented.
+
+Two mechanisms are tested separately.
+\begin{itemize}
+    \item H5a, resource. Climate change reduces the annual energy yield of the
+    economically viable sites, through changes in irradiance, temperature and
+    wind.
+    \item H5b, exposure. A material part of the economically viable generation
+    lies in cells where climate hazards exceed pre-specified physical
+    thresholds.
+\end{itemize}
+A site may keep its yield and still be exposed to damaging conditions, and yield
+may decline without hazard thresholds being exceeded; the two sub-hypotheses are
+therefore evaluated independently before being combined.
+
+Climate change affects energy systems both through gradual changes of the
+resource and through changing extremes \cite{iaea2019}, and climate risk results
+from the interaction of hazard, exposure and vulnerability
+\cite{ipcc2022wgii}. H5b addresses exposure only. The temperature dependence of
+photovoltaic performance \cite{skoplaki2009} and the projected changes of solar
+and wind resources \cite{jerez2015,pryorbarthelmie2010} motivate H5a.
+% verify jerez2015, pryorbarthelmie2010
+
+\subsection{Economic Potential and Target Slack}
+\label{subsec:h5_slack}
+
+Renewable potential is defined at successive levels: technical potential is the
+resource restricted by technology and land constraints, and economic potential
+restricts it further by a cost criterion \cite{mercure2012,brown2015}. H5 uses
+economic potential because a national target is met with competitive capacity,
+not with every technically possible site. The levelised cost is a site-level
+screening criterion; it does not represent system integration costs
+\cite{ueckerdt2013}, and the economic potential of H5 is a screening volume, not
+a deployment forecast.
+
+\subsubsection{Reference economic domain}
+
+For one country and one technology, let $\Omega$ be the set of candidate cells of
+the central land scenario that have a valid climate forcing in every member of
+the core window (the like-for-like set of the technical-potential phase). Cells
+that become infeasible under some member are kept, since a loss of yield there is
+part of what H5a measures. The reference economic domain is
+\begin{equation}
+    \Omega_{\mathrm{econ}}=\left\{\,i\in\Omega:\ \mathrm{LCOE}_{i,f_0}\leq\tau\,\right\},
+    \label{eq:h5_domain}
+\end{equation}
+where $f_0=(m_0,s_0)$ is the nominal present future and $\tau$ is the levelised
+cost threshold fixed in OQ-008, the same threshold that defines satisficing
+robustness. The domain is defined once, at $f_0$, and held fixed across climate
+members in the primary analysis.
+
+\subsubsection{Energy and slack}
+
+Let $E_{i,m}$ be the annual energy of cell $i$ under climate member $m$ in
+TWh/year, computed by GeoFREA from the installable capacity of the central land
+scenario and the capacity factor of the member; $E_{i,m_0}$ is the reference
+value. The baseline economic potential is
+\begin{equation}
+    E_{0}=\sum_{i\in\Omega_{\mathrm{econ}}}E_{i,m_0}.
+    \label{eq:h5_baseline}
+\end{equation}
+Let $G$ be the national target for the technology, in TWh/year, taken from the
+official planning source fixed in OQ-010 and matched to the time horizon of the
+core window. A target stated in installed capacity $G_{\mathrm{cap}}$ (GW) is
+converted as
+\begin{equation}
+    G=8.76\,G_{\mathrm{cap}}\,\overline{\mathrm{CF}},
+    \label{eq:h5_conversion}
+\end{equation}
+where $\overline{\mathrm{CF}}$ is the capacity-weighted reference capacity factor
+of the cells of $\Omega_{\mathrm{econ}}$ taken in ascending order of
+$\mathrm{LCOE}_{i,f_0}$ until their capacity reaches $G_{\mathrm{cap}}$. The
+original unit and the conversion are reported with every result.
+
+The target slack is the margin of the baseline economic potential over the
+target:
+\begin{equation}
+    H_0=E_0-G .
+    \label{eq:h5_slack}
+\end{equation}
+Both sub-hypotheses measure climate pressure relative to $H_0$. Normalising by
+the total potential would make every effect negligible in countries whose
+potential is many times their target; normalising by the slack asks how much of
+the margin that supports the target is consumed or exposed. The ratios that
+follow are measures of materiality, not probabilities of missing the target.
+
+\subsection{H5a: Resource-Yield Loss}
+\label{subsec:h5a}
+
+For each member $m$ of the core window, the yield of the fixed domain is
+$E_m=\sum_{i\in\Omega_{\mathrm{econ}}}E_{i,m}$. The loss statistic is the largest
+reduction over members, truncated at zero:
+\begin{equation}
+    \Delta E=\max\!\left[\,0,\;E_0-\min_{m}E_m\,\right],
+    \qquad
+    R_{\mathrm{loss}}=\frac{\Delta E}{H_0}.
+    \label{eq:h5a_statistic}
+\end{equation}
+The maximum over members follows the treatment of climate members throughout the
+thesis: they are unweighted plausible futures, and a material adverse outcome in
+any of them is relevant to planning. The truncation makes the test one-sided:
+gains in some members do not offset losses in others. Gains, the ensemble median
+and the member-specific values are reported as descriptive results.
+
+Because the domain is fixed, $\Delta E$ measures the change in yield of the sites
+that are economically viable today. It does not include sites that would enter or
+leave the domain if the cost threshold were re-applied in each member; that
+broader quantity is computed as a sensitivity.
+
+\subsection{H5b: Exposure to Climate Hazards}
+\label{subsec:h5b}
+
+For each hazard channel $h$ with an indicator $Z_{i,h,m}$ and a threshold
+$\theta_h$ fixed in OQ-051 (indicator, unit, temporal aggregation and comparison
+rule), a cell is exposed under member $m$ when at least one channel reaches its
+threshold:
+\begin{equation}
+    X_{i,m}=\mathbb{1}\!\left[\exists\,h:\ Z_{i,h,m}\geq\theta_h\right].
+    \label{eq:h5_exposed_indicator}
+\end{equation}
+A cell exceeding several thresholds is counted once. The exposed economic energy
+and the exposure ratio are
+\begin{equation}
+    E^{\mathrm{exp}}=\max_{m\in\mathcal{M}_{h}}
+    \sum_{i\in\Omega_{\mathrm{econ}}}E_{i,m}\,X_{i,m},
+    \qquad
+    R_{\mathrm{exp}}=\frac{E^{\mathrm{exp}}}{H_0},
+    \label{eq:h5b_statistic}
+\end{equation}
+where $\mathcal{M}_h$ is the set of members that carry the hazard channel: the
+three climate models with a bias-adjusted hazard counterpart, in the core window.
+The extreme-gust indicator is derived from historical reanalysis and does not
+vary between members; it contributes identically to every member and to the
+reference.
+
+Exposure is not damage. A cell above a threshold is not assumed to fail or to
+lose generation; that would require loss functions, which enter GeoFREA only when
+supported by sufficient evidence. $R_{\mathrm{exp}}$ is a screening of how much of
+the margin lies where hazards are severe. The same statistic evaluated with the
+reference values of the indicators, and the difference between the two, are
+reported to separate present exposure from the part added by climate change.
+
+\subsection{Decision Rule and Verdict}
+\label{subsec:h5_rule}
+
+For each country and technology, with $\lambda=0.20$:
+\begin{itemize}
+    \item if no target $G$ is available, H5 is not testable; $E_0$, $\Delta E$ and
+    $E^{\mathrm{exp}}$ are reported without ratios;
+    \item if $H_0\leq0$, the status is target not met at reference; $\Delta E/G$
+    and $E^{\mathrm{exp}}/G$ are reported as descriptive ratios, without a
+    verdict;
+    \item otherwise, H5a holds if $R_{\mathrm{loss}}\geq\lambda$ and H5b holds if
+    $R_{\mathrm{exp}}\geq\lambda$, and the verdict is
+\end{itemize}
+\begin{equation}
+    \text{H5 is}\;
+    \begin{cases}
+        \text{supported}, & \text{H5a and H5b hold},\\
+        \text{partially supported (resource)}, & \text{only H5a holds},\\
+        \text{partially supported (exposure)}, & \text{only H5b holds},\\
+        \text{not supported}, & \text{neither holds}.
+    \end{cases}
+    \label{eq:h5_verdict}
+\end{equation}
+The two partial verdicts are kept distinct because they point to different
+responses: a resource result to the margin over the target and the choice of
+sites, an exposure result to design, adaptation and siting constraints.
+
+The threshold $\lambda=0.20$ reads as one-fifth of the margin consumed or exposed,
+the same proportion used for H1b and H3. It is a decision threshold of this
+thesis; the literature motivates the comparison of climate pressure with planning
+margins but provides no universal materiality cut-off. The defence rests on
+pre-registration, on its reading and on the sensitivity reported below. The
+inputs $\tau$, $G$ and $\theta_h$ come from sourced research and are fixed before
+the results are produced; they are not adjusted to the outcome.
+
+\subsection{Sensitivity Analyses}
+\label{subsec:h5_sensitivity}
+
+The verdict is issued from the primary configuration only; a change of verdict in
+a variant is reported as a dependence on that choice.
+\begin{enumerate}
+    \item Materiality threshold $\lambda=0.10$, with the continuous ratios reported.
+    \item Cost threshold at the ends of the sourced range of $\tau$.
+    \item Dynamic economic domain: $\Omega_{\mathrm{econ},m}=\{i\in\Omega:
+    \mathrm{LCOE}_{i,(m,s_0)}\leq\tau\}$, so that sites entering or leaving the
+    domain under each member are included; reported separately from the
+    fixed-domain loss.
+    \item Land scenarios restrictive and permissive, which change the capacity of
+    every cell and therefore $E_0$ and $H_0$.
+    \item Climate: without IPSL-CM6A-LR; the 2071--2100 window for H5a (hazard
+    indicators are not available for that window, and H5b is reported as not
+    available); member-specific values and the identity of the members attaining
+    the maxima.
+    \item Hazard channels reported one by one, without summing overlapping cells.
+    \item Target: alternative official targets or horizons where they exist, and
+    alternative capacity-factor conversions for capacity targets.
+    \item The 0.1-degree cell scale.
+\end{enumerate}
+
+\subsection{Worked Example}
+\label{subsec:h5_example}
+
+A country has $E_0=500$~TWh/year of economic potential and a target of
+$G=300$~TWh/year, so $H_0=200$~TWh/year. The values are illustrative and are not
+GeoFREA results.
+
+H5a. The members give 480, 450 and 470~TWh/year over the fixed domain. Then
+$\Delta E=50$~TWh/year and $R_{\mathrm{loss}}=0.25\geq0.20$: H5a holds. The most
+adverse climate member consumes a quarter of the margin over the target.
+
+H5b. The largest exposed economic energy among the hazard members is
+60~TWh/year, so $R_{\mathrm{exp}}=0.30\geq0.20$: H5b holds. If the same statistic
+with reference indicators is 40~TWh/year, climate change adds 20~TWh/year of
+exposed potential.
+
+Both hold, so H5 is supported for this country and technology. The verdict does
+not mean that the target will be missed or that the exposed 60~TWh/year will be
+lost: it means that, under the members and thresholds evaluated, both the yield
+loss and the exposure reach one-fifth of the margin that supports the target.
+
+\subsection{Parameters}
+\label{subsec:h5_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Pre-registered parameters of H5.}
+    \label{tab:h5_parameters}
+    \small
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabularx}{\textwidth}{
+        @{}
+        >{\raggedright\arraybackslash}p{2.4cm}
+        >{\raggedright\arraybackslash}p{3.2cm}
+        >{\raggedright\arraybackslash}X
+        @{}
+    }
+        \toprule
+        \textbf{Parameter} & \textbf{Value} & \textbf{Role} \\
+        \midrule
+        $\lambda$ & 0.20 & Materiality threshold for H5a and H5b. \\
+        \addlinespace
+        $\tau$ & OQ-008 & Cost threshold of the economic domain; the same as
+        satisficing robustness. \\
+        \addlinespace
+        $G$ & OQ-010 & National target in TWh/year, horizon-matched; capacity
+        targets converted by Equation~\ref{eq:h5_conversion}. \\
+        \addlinespace
+        $\theta_h$ & OQ-051 & Hazard thresholds and indicator definitions. \\
+        \addlinespace
+        Domain & $\Omega_{\mathrm{econ}}$ at $f_0$ & Fixed across members in the
+        primary analysis. \\
+        \addlinespace
+        Members & Core window; hazard members for H5b & Maximum over members,
+        one-sided for losses. \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:h5_limitations}
+
+Fixed domain. The primary loss concerns the sites that are economically viable
+today; changes of eligibility under future members are covered only by the
+dynamic-domain sensitivity.
+
+Screening, not system adequacy. Annual energy does not represent seasonal
+mismatch, multi-day low-production events, coincidence with peak demand or
+network constraints. H5 is a national screening of yield and exposure, not a
+reliability assessment.
+
+Exposure, not risk. H5b measures exposure; vulnerability and consequences are not
+modelled, and an exposed cell is not assumed to lose generation.
+
+Hazard coverage. Exposure rests on three climate models in the core window and on
+a historical gust indicator; hazards for the later window are not available.
+
+Target definition. National targets usually refer to total installed capacity,
+including existing plants, while the potential of GeoFREA does not remove the
+cells already occupied by plants. The slack is therefore a screening margin, and
+its value depends on the target source, horizon and unit conversion.
+
+Climate representation. Climate enters through annual-mean change factors of the
+resource, which may understate changes in yield; a not-supported H5a verdict is
+conditional on this representation.
+
+Generalisation. Results are conditional on the country, technology, cost
+threshold, target, climate ensemble and hazard thresholds, and are reported per
+country and technology.

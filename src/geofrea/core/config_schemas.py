@@ -176,6 +176,48 @@ class H4Rule(BaseModel):
         return self
 
 
+class H5Rule(BaseModel):
+    """The pre-registered decision rule of H5 (M-F7-07, OQ-050): the pressure of climate change on the margin of the economic potential over the target.
+
+    H5a (resource) holds when `R_loss >= lambda` and H5b (exposure) when `R_exp >= lambda`, with `lambda` in the YAML key `lambda`.
+    `sensitivity_lambda` is the second materiality threshold that is reported beside the primary one. `domain` (the economic domain is
+    fixed at `f0`), `members` (the core window) and `hazard_members` (the members that carry the hazard channel) are named so that no other
+    form is read by accident. `source` is the citation of the pre-registration.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    lambda_: float = Field(alias="lambda", gt=0, le=1)
+    sensitivity_lambda: float = Field(gt=0, le=1)
+    domain: Literal["fixed_at_f0"]
+    members: Literal["core_window"]
+    hazard_members: Literal["hazard_channel"]
+    source: str = Field(min_length=1)
+
+
+class TargetValue(BaseModel):
+    """One national target of a technology: a value, its unit, its source and the year it refers to (OQ-010)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: float | None = Field(ge=0)
+    unit: Literal["GW", "TWh/year"] | None
+    source: str | None
+    horizon: int | None = Field(ge=1900, le=2200)
+
+    @model_validator(mode="after")
+    def _a_value_has_unit_source_and_horizon(self) -> TargetValue:
+        if self.value is not None and (not self.unit or not self.source or self.horizon is None):
+            raise ValueError("a national target value needs its unit, source and horizon (OQ-010)")
+        return self
+
+
+class NationalTarget(TargetValue):
+    """The national target of one country and technology for H5, and the alternative official targets or horizons for the sensitivity."""
+
+    alternatives: list[TargetValue] = Field(default_factory=list)
+
+
 class HazardThreshold(BaseModel):
     """The exposure threshold of one hazard indicator (T-R10, OQ-051); `threshold` is null until the author sources it."""
 
@@ -232,15 +274,18 @@ class ExperimentsFile(BaseModel):
     sampler: SamplerConfig
     land_availability: LandAvailability
     thresholds: dict[str, Any]
-    hypothesis_rules: dict[str, list[HypothesisRule] | H1Rule | H2Rule | H3Rule | H4Rule | None]
+    hypothesis_rules: dict[
+        str, list[HypothesisRule] | H1Rule | H2Rule | H3Rule | H4Rule | H5Rule | None
+    ]
+    national_targets: dict[str, dict[str, NationalTarget]] = Field(default_factory=dict)
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")
-    def _h1_to_h4_have_their_own_form(self) -> ExperimentsFile:
-        """H1 to H4 are pre-registered `H1Rule` to `H4Rule` (or null); the other hypotheses are lists of rules (or null)."""
-        own = {"H1": H1Rule, "H2": H2Rule, "H3": H3Rule, "H4": H4Rule}
+    def _h1_to_h5_have_their_own_form(self) -> ExperimentsFile:
+        """H1 to H5 are pre-registered `H1Rule` to `H5Rule` (or null); the other hypotheses are lists of rules (or null)."""
+        own = {"H1": H1Rule, "H2": H2Rule, "H3": H3Rule, "H4": H4Rule, "H5": H5Rule}
         owner = {form: name for name, form in own.items()}
         for name, rule in self.hypothesis_rules.items():
             form = own.get(name)
@@ -248,7 +293,7 @@ class ExperimentsFile(BaseModel):
                 raise ValueError(
                     f"hypothesis_rules.{name} is a {form.__name__} mapping, not a list or another form"
                 )
-            if form is None and isinstance(rule, H1Rule | H2Rule | H3Rule | H4Rule):
+            if form is None and isinstance(rule, H1Rule | H2Rule | H3Rule | H4Rule | H5Rule):
                 raise ValueError(
                     f"hypothesis_rules.{name}: the {type(rule).__name__} form belongs to {owner[type(rule)]}"
                 )

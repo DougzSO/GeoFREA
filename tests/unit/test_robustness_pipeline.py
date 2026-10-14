@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -461,7 +462,9 @@ def test_robustness_dir_is_under_the_phase_outputs(tmp_path, monkeypatch):
 def _with_rules(**rules) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"]["initial_size"] = 24
-    raw["hypothesis_rules"] = {f"H{i}": rules.get(f"H{i}") for i in range(1, 6)}
+    raw["hypothesis_rules"] = {f"H{i}": rules.get(f"H{i}") for i in range(1, 6)} | {
+        name: rule for name, rule in rules.items() if not re.fullmatch(r"H\d", name)
+    }  # a test rule goes under another key, because every hypothesis has its own rule
     return ExperimentsFile.model_validate(raw)
 
 
@@ -487,25 +490,21 @@ def test_without_a_pre_registered_rule_every_statistic_has_no_verdict_and_a_warn
 
 @pytest.mark.unit
 def test_a_pre_registered_rule_gives_met_or_not_met_and_never_for_the_other_statistics(tmp_path):
-    rule = {"statistic": "h5_potential_below_tau_gw_m0", "comparison": "ge", "threshold": -1.0}
-    entry, _, _ = _run(tmp_path, experiments=_with_rules(H5=[rule]))
+    rule = {"statistic": "mr_sr_kendall_tau_b", "comparison": "ge", "threshold": -2.0}
+    entry, _, _ = _run(tmp_path, experiments=_with_rules(RQ4=[rule]))
     table = pd.read_parquet(entry.windows["core"].tables["hypothesis"])
-    named = table[table["statistic"] == "h5_potential_below_tau_gw_m0"].iloc[0]
+    named = table[table["statistic"] == "mr_sr_kendall_tau_b"].iloc[0]
     assert named["verdict"] == "met" and named["rule"]
     assert (
-        table[table["statistic"] != "h5_potential_below_tau_gw_m0"]
-        .query("hypothesis == 'H5'")["verdict"]
+        table[table["statistic"] != "mr_sr_kendall_tau_b"]
+        .query("hypothesis == 'RQ4'")["verdict"]
         .isna()
         .all()
     )
-    impossible = {
-        "statistic": "h5_potential_below_tau_gw_m0",
-        "comparison": "lt",
-        "threshold": -1.0,
-    }
-    other, _, _ = _run(tmp_path / "b", experiments=_with_rules(H5=[impossible]))
+    impossible = {"statistic": "mr_sr_kendall_tau_b", "comparison": "lt", "threshold": -2.0}
+    other, _, _ = _run(tmp_path / "b", experiments=_with_rules(RQ4=[impossible]))
     again = pd.read_parquet(other.windows["core"].tables["hypothesis"])
-    assert again.set_index("statistic").loc["h5_potential_below_tau_gw_m0", "verdict"] == "not_met"
+    assert again.set_index("statistic").loc["mr_sr_kendall_tau_b", "verdict"] == "not_met"
 
 
 @pytest.mark.unit
@@ -514,7 +513,7 @@ def test_a_rule_that_names_an_unknown_statistic_fails_loudly(tmp_path):
 
     rule = {"statistic": "h9_nothing", "comparison": "ge", "threshold": 0.0}
     with pytest.raises(HypothesisRuleError):
-        _run(tmp_path, experiments=_with_rules(H5=[rule]))
+        _run(tmp_path, experiments=_with_rules(RQ4=[rule]))
 
 
 @pytest.mark.unit

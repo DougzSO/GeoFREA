@@ -97,11 +97,26 @@ def test_the_experiment_blocks_of_f7_are_null_in_the_shipped_file():
         1.0,
     )
     assert h4.source == "OQ-050 (H4), pre-registered 2026-10-13"
-    assert all(
-        rules is None
-        for name, rules in experiments.hypothesis_rules.items()
-        if name not in ("H1", "H2", "H3", "H4")
+    h5 = experiments.hypothesis_rules["H5"]  # pre-registered 2026-10-14 (OQ-050, H5)
+    assert (h5.lambda_, h5.sensitivity_lambda, h5.domain, h5.members, h5.hazard_members) == (
+        0.20,
+        0.10,
+        "fixed_at_f0",
+        "core_window",
+        "hazard_channel",
     )
+    assert h5.source == "OQ-050 (H5), pre-registered 2026-10-14"
+    assert set(experiments.national_targets) == {"BRA", "PRT", "IND"}  # OQ-010: no value yet
+    for by_tech in experiments.national_targets.values():
+        assert set(by_tech) == {"solar", "wind"}
+        assert all(
+            t.value is None
+            and t.unit is None
+            and t.source is None
+            and t.horizon is None
+            and t.alternatives == []
+            for t in by_tech.values()
+        )
     assert set(experiments.hazard_thresholds) == {
         "tx35_days",
         "tx40_days",
@@ -123,12 +138,12 @@ def test_a_vintage_filter_needs_its_reason_and_a_rule_needs_a_known_comparison()
     with pytest.raises(ValueError, match="vintage_reason"):
         ExperimentsFile.model_validate(bad)
     bad = json.loads(json.dumps(raw))
-    bad["hypothesis_rules"]["H5"] = [{"statistic": "x", "comparison": "approx", "threshold": 1}]
+    bad["hypothesis_rules"]["RQ4"] = [{"statistic": "x", "comparison": "approx", "threshold": 1}]
     with pytest.raises(ValueError):
         ExperimentsFile.model_validate(bad)
     ok = json.loads(json.dumps(raw))
-    ok["hypothesis_rules"]["H5"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
-    assert ExperimentsFile.model_validate(ok).hypothesis_rules["H5"][0].threshold == 0.5
+    ok["hypothesis_rules"]["RQ4"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
+    assert ExperimentsFile.model_validate(ok).hypothesis_rules["RQ4"][0].threshold == 0.5
 
 
 @pytest.mark.unit
@@ -139,7 +154,7 @@ def test_h1_has_its_own_form_and_no_other_form_is_accepted():
     with pytest.raises(ValueError, match="H1Rule"):
         ExperimentsFile.model_validate(as_list)
     on_h2 = json.loads(json.dumps(raw))
-    on_h2["hypothesis_rules"]["H5"] = raw["hypothesis_rules"]["H1"]
+    on_h2["hypothesis_rules"]["RQ4"] = raw["hypothesis_rules"]["H1"]
     with pytest.raises(ValueError, match="belongs to H1"):
         ExperimentsFile.model_validate(on_h2)
     other_rbo = json.loads(json.dumps(raw))
@@ -160,7 +175,7 @@ def test_h2_has_its_own_form_and_no_other_form_is_accepted():
     with pytest.raises(ValueError, match="H2Rule"):
         ExperimentsFile.model_validate(as_list)
     on_h5 = json.loads(json.dumps(raw))
-    on_h5["hypothesis_rules"]["H5"] = raw["hypothesis_rules"]["H2"]
+    on_h5["hypothesis_rules"]["RQ4"] = raw["hypothesis_rules"]["H2"]
     with pytest.raises(ValueError, match="belongs to H2"):
         ExperimentsFile.model_validate(on_h5)
     for key, value in (
@@ -186,7 +201,7 @@ def test_h3_has_its_own_form_and_no_other_form_is_accepted():
     with pytest.raises(ValueError, match="H3Rule"):
         ExperimentsFile.model_validate(as_list)
     on_h5 = json.loads(json.dumps(raw))
-    on_h5["hypothesis_rules"]["H5"] = raw["hypothesis_rules"]["H3"]
+    on_h5["hypothesis_rules"]["RQ4"] = raw["hypothesis_rules"]["H3"]
     with pytest.raises(ValueError, match="belongs to H3"):
         ExperimentsFile.model_validate(on_h5)
     on_h3 = json.loads(json.dumps(raw))
@@ -213,7 +228,7 @@ def test_h4_has_its_own_form_and_no_other_form_is_accepted():
     with pytest.raises(ValueError, match="H4Rule"):
         ExperimentsFile.model_validate(as_list)
     on_h5 = json.loads(json.dumps(raw))
-    on_h5["hypothesis_rules"]["H5"] = raw["hypothesis_rules"]["H4"]
+    on_h5["hypothesis_rules"]["RQ4"] = raw["hypothesis_rules"]["H4"]
     with pytest.raises(ValueError, match="belongs to H4"):
         ExperimentsFile.model_validate(on_h5)
     other_rule = json.loads(json.dumps(raw))
@@ -229,3 +244,62 @@ def test_h4_has_its_own_form_and_no_other_form_is_accepted():
         del missing["hypothesis_rules"]["H4"][key]
         with pytest.raises(ValueError):
             ExperimentsFile.model_validate(missing)
+
+
+@pytest.mark.unit
+def test_h5_has_its_own_form_and_no_other_form_is_accepted():
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    as_list = json.loads(json.dumps(raw))
+    as_list["hypothesis_rules"]["H5"] = [{"statistic": "x", "comparison": "ge", "threshold": 0.5}]
+    with pytest.raises(ValueError, match="H5Rule"):
+        ExperimentsFile.model_validate(as_list)
+    on_other = json.loads(json.dumps(raw))
+    on_other["hypothesis_rules"]["RQ4"] = raw["hypothesis_rules"]["H5"]
+    with pytest.raises(ValueError, match="belongs to H5"):
+        ExperimentsFile.model_validate(on_other)
+    for key, value in (
+        ("domain", "dynamic"),
+        ("members", "all_members"),
+        ("hazard_members", "every_member"),
+        ("lambda", 0.0),
+        ("lambda", 1.5),
+        ("unknown_key", 1),
+    ):
+        other = json.loads(json.dumps(raw))
+        other["hypothesis_rules"]["H5"][key] = value
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(other)
+    for key in ("lambda", "sensitivity_lambda", "domain", "members", "hazard_members", "source"):
+        missing = json.loads(json.dumps(raw))
+        del missing["hypothesis_rules"]["H5"][key]
+        with pytest.raises(ValueError):
+            ExperimentsFile.model_validate(missing)
+
+
+@pytest.mark.unit
+def test_a_national_target_value_needs_its_unit_source_and_horizon():
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    ok = json.loads(json.dumps(raw))
+    ok["national_targets"]["PRT"]["solar"] = {
+        "value": 8.0,
+        "unit": "GW",
+        "source": "test source",
+        "horizon": 2030,
+        "alternatives": [{"value": 2.5, "unit": "TWh/year", "source": "test", "horizon": 2035}],
+    }
+    target = ExperimentsFile.model_validate(ok).national_targets["PRT"]["solar"]
+    assert (target.value, target.unit, target.horizon) == (8.0, "GW", 2030)
+    assert target.alternatives[0].unit == "TWh/year"
+    for missing in ("unit", "source", "horizon"):
+        bad = json.loads(json.dumps(ok))
+        bad["national_targets"]["PRT"]["solar"][missing] = None
+        with pytest.raises(ValueError, match="unit, source and horizon"):
+            ExperimentsFile.model_validate(bad)
+    wrong_unit = json.loads(json.dumps(ok))
+    wrong_unit["national_targets"]["PRT"]["solar"]["unit"] = "MW"
+    with pytest.raises(ValueError):
+        ExperimentsFile.model_validate(wrong_unit)
+    negative = json.loads(json.dumps(ok))
+    negative["national_targets"]["PRT"]["solar"]["value"] = -1.0
+    with pytest.raises(ValueError):
+        ExperimentsFile.model_validate(negative)
