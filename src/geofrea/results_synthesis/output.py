@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from geofrea.core.artifact_reader import stale_cross_country_inputs
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.schemas import CountryParams
 from geofrea.results_synthesis import names
@@ -40,6 +41,10 @@ _LATEX_SPECIAL = {
 
 class NotBuilt(Exception):
     """An output cannot be built for this country, with the reason (D7: reported, never hidden)."""
+
+
+class StaleCrossCountry(NotBuilt):
+    """The verdict of H4 was computed from an `h4_country` table that a country's F7 has since replaced (B-5): the output waits for `cross_country_h4`."""
 
 
 @dataclass
@@ -95,6 +100,23 @@ class BuildContext:
 
     def caption(self, text: str) -> str:
         return (TEST_VALUES_STAMP if self.test_values else "") + text
+
+
+def require_current_cross_country(ctx: BuildContext) -> None:
+    """Refuse to build an output that reads the support phase `cross_country_h4` while one of its inputs is stale (B-5).
+
+    Raises:
+        StaleCrossCountry: a country's `h4_country` hash differs from the one the verdict was computed from.
+    """
+    stale = [
+        text
+        for reader in ctx.cross_country
+        for text in stale_cross_country_inputs(reader.manifest_file, reader.scale_id)
+    ]
+    if stale:
+        raise StaleCrossCountry(
+            "the H4 verdict of cross_country_h4 is stale, run it again: " + "; ".join(stale)
+        )
 
 
 def latex_escape(text: str) -> str:

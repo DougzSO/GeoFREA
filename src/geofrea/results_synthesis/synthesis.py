@@ -30,6 +30,7 @@ from geofrea.results_synthesis.output import (
     BuildContext,
     NotBuilt,
     latex_escape,
+    require_current_cross_country,
     write_table,
     write_text_output,
 )
@@ -599,6 +600,7 @@ def t_r8(ctx: BuildContext) -> None:
     The profiles of the other countries are the ones registered in `thesis_manifest.json` (B-4): the directory is shared by the countries, so a
     build run after every country has been built shows all of them, and the hash of every profile read goes into the provenance of the tables.
     """
+    require_current_cross_country(ctx)
     synthesis = ctx.experiments.synthesis
     ctx.begin()
     payload = build_profiles(ctx)

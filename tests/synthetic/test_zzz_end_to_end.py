@@ -2006,6 +2006,64 @@ def test_f8_refuses_an_artifact_that_changed_after_it_was_registered(zzz, tmp_pa
 
 
 @pytest.mark.synthetic
+def test_a_rerun_of_the_f7_of_a_country_makes_f8_refuse_t_r6_t_r7_and_t_r8_until_cross_country_h4_runs_again(
+    zzz, tmp_path, monkeypatch
+):
+    """B-5: the H4 verdict names the `h4_country` tables it read; when F7 registers another one, F8 builds no output that reads the verdict."""
+    import hashlib
+    import shutil
+
+    from geofrea.robustness_analysis.cross_country import build_h4_verdict
+
+    copied = tmp_path / "copy"
+    shutil.copytree(zzz[0] / "outputs" / "ZZZ", copied / "outputs" / "ZZZ")
+    shutil.copytree(zzz[0] / "outputs" / "cross_country", copied / "outputs" / "cross_country")
+    (copied / "outputs" / "ZZZ" / "manifest__0p1deg.json").unlink(missing_ok=True)
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(copied))
+    current = _build_thesis(tmp_path / "current")
+    assert not [n for n in current.not_built if "stale" in n.reason]
+    # the F7 of ZZZ runs again: the table is replaced and registered with its new hash
+    manifest_path = copied / "outputs" / "ZZZ" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entry = manifest["artifacts"]["h4_country_solar__core"]
+    table = pd.read_parquet(
+        copied
+        / "outputs"
+        / "ZZZ"
+        / "robustness_analysis"
+        / "artifacts"
+        / "h4_country_solar__core.parquet"
+    )
+    from geofrea.core.tables import write_table
+    from geofrea.robustness_analysis.table_schemas import (
+        ROBUSTNESS_TABLE_SCHEMA_VERSION,
+        H4CountryRow,
+    )
+
+    path = (
+        copied
+        / "outputs"
+        / "ZZZ"
+        / "robustness_analysis"
+        / "artifacts"
+        / "h4_country_solar__core.parquet"
+    )
+    table.loc[table["primary"], "d_clim"] += 0.01
+    write_table(table, path, schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION, row_model=H4CountryRow)
+    entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    stale = _build_thesis(tmp_path / "stale")
+    refused = {n.t_id for n in stale.not_built if "stale" in n.reason}
+    assert refused == {"T-R6", "T-R7", "T-R8"}
+    assert not any(t in stale.built for t in refused)
+    assert "T-R2" in stale.built  # the outputs that do not read the verdict are built
+    build_h4_verdict(["ZZZ"], ("solar", "wind"))
+    fresh = _build_thesis(tmp_path / "fresh")
+    assert not [n for n in fresh.not_built if "stale" in n.reason]
+    assert {"T-R6", "T-R7", "T-R8"} <= set(fresh.built)
+
+
+@pytest.mark.synthetic
 def test_the_scale_check_writes_its_thesis_outputs_apart(zzz, zzz_fine):
     fine_dir = zzz[0] / "outputs" / "thesis__0p1deg"
     assert (fine_dir / "T-R2_potential_ZZZ_solar.csv").is_file()

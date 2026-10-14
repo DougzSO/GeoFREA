@@ -24,7 +24,12 @@ from geofrea.results_synthesis.climate_change import t_r3
 from geofrea.results_synthesis.dag import t_m1
 from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
-from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
+from geofrea.results_synthesis.output import (
+    BuildContext,
+    NotBuilt,
+    StaleCrossCountry,
+    methodology_version,
+)
 from geofrea.results_synthesis.potential_and_cost import t_o3, t_r1, t_r2, t_r11
 from geofrea.results_synthesis.profile_registry import MANIFEST_NAME, write_manifest
 from geofrea.results_synthesis.ranking_figures import t_r4, t_r5
@@ -191,9 +196,15 @@ def build_thesis(
         country_params=parameters,
         test_values=is_test_build(parameters, technologies),
     )
+    deferred: set[str] = (
+        set()
+    )  # waiting for cross_country_h4 to run again (B-5); the second build of main.py builds them
     for t_id in chosen:
         try:
             SCRIPTS[t_id](ctx)
+        except StaleCrossCountry as exc:
+            ctx.skip(t_id, "all", str(exc))
+            deferred.add(t_id)
         except (ThesisValueError, NotBuilt) as exc:
             ctx.skip(t_id, "all", str(exc))
     summary = ThesisSummary(
@@ -208,7 +219,9 @@ def build_thesis(
     )
     ctx.out_dir.mkdir(parents=True, exist_ok=True)
     _update_manifest(ctx.out_dir, summary)
-    empty = [t for t in chosen if t not in names.OPTIONAL and t not in ctx.written]
+    empty = [
+        t for t in chosen if t not in names.OPTIONAL and t not in ctx.written and t not in deferred
+    ]
     if empty:
         reasons = "; ".join(f"{t}: {i}: {r}" for t, i, r in ctx.not_built if t in empty)
         raise ThesisBuildError(f"{iso}: Essential outputs with nothing built: {empty}. {reasons}")

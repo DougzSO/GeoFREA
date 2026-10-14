@@ -10,10 +10,15 @@ import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 
-from geofrea.core.artifact_reader import ArtifactReader, ThesisInputError
+from geofrea.core.artifact_reader import (
+    ArtifactReader,
+    ThesisInputError,
+    stale_cross_country_inputs,
+)
+from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.robustness_analysis.assemble import h4_country_frame
-from geofrea.robustness_analysis.cross_country import build_h4_verdict, manifest_file
+from geofrea.robustness_analysis.cross_country import ROLES, build_h4_verdict, manifest_file
 from geofrea.robustness_analysis.h4_axis_dominance import H4Variant, profile_of
 from geofrea.robustness_analysis.table_schemas import (
     ROBUSTNESS_TABLE_SCHEMA_VERSION,
@@ -197,3 +202,48 @@ def test_a_changed_country_table_is_refused_and_the_phase_writes_apart_for_anoth
     with use_scale(other.scale_id):
         assert manifest_file().name == f"manifest__{other.scale_id}.json"
         assert manifest_file().parent == tmp_path / "outputs" / "cross_country"
+
+
+@pytest.mark.unit
+def test_the_manifest_records_the_hash_of_every_h4_country_table_it_read(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    _all_roles(tmp_path, "AAA", (0.12, 0.38))
+    build_h4_verdict(["AAA", "NOP"], ("solar",))
+    recorded = json.loads(manifest_file().read_text(encoding="utf-8"))["inputs"]
+    assert set(recorded) == {f"{c}:h4_country_solar__{r}" for c in ("AAA", "NOP") for r in ROLES}
+    assert (
+        recorded["NOP:h4_country_solar__core"] is None
+    )  # a country without a manifest registers none
+    manifest = json.loads((tmp_path / "outputs" / "AAA" / "manifest.json").read_text("utf-8"))
+    assert (
+        recorded["AAA:h4_country_solar__core"]
+        == manifest["artifacts"]["h4_country_solar__core"]["sha256"]
+    )
+    assert stale_cross_country_inputs(manifest_file(), active_scale().scale_id) == []
+
+
+@pytest.mark.unit
+def test_a_rerun_of_the_f7_of_one_country_makes_the_h4_verdict_stale_until_it_runs_again(
+    tmp_path, monkeypatch
+):
+    """B-5: the verdict names the tables it read; a country whose table was replaced, added or lost makes it stale."""
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    _all_roles(tmp_path, "AAA", (0.12, 0.38))
+    _all_roles(tmp_path, "BBB", (0.42, 0.08))
+    build_h4_verdict(["AAA", "BBB", "CCC"], ("solar",))  # CCC has no F7 yet
+    scale = active_scale().scale_id
+    assert stale_cross_country_inputs(manifest_file(), scale) == []
+    _country(tmp_path, "BBB", "solar", "core", (0.10, 0.30))  # the F7 of BBB runs again
+    stale = stale_cross_country_inputs(manifest_file(), scale)
+    assert len(stale) == 1 and stale[0].startswith("BBB:h4_country_solar__core")
+    _country(tmp_path, "CCC", "solar", "sensitivity", (0.25, 0.25))  # CCC registers a table
+    assert {s.split(":")[0] for s in stale_cross_country_inputs(manifest_file(), scale)} == {
+        "BBB",
+        "CCC",
+    }
+    build_h4_verdict(["AAA", "BBB", "CCC"], ("solar",))
+    assert stale_cross_country_inputs(manifest_file(), scale) == []
+    manifest = json.loads(manifest_file().read_text(encoding="utf-8"))
+    del manifest["inputs"]  # a manifest written before the inputs were recorded
+    manifest_file().write_text(json.dumps(manifest), encoding="utf-8")
+    assert "records no inputs" in stale_cross_country_inputs(manifest_file(), scale)[0]

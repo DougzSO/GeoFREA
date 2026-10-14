@@ -124,3 +124,34 @@ class ArtifactReader:
             if name.decode().endswith("_skipped"):
                 return json.loads(value.decode())
         return None
+
+
+def stale_cross_country_inputs(manifest_file: Path, scale_id: str) -> list[str]:
+    """The `h4_country` inputs of the support phase `cross_country_h4` that no longer match the manifests of the countries (B-5).
+
+    The manifest of the support phase records, for every country and window, the hash of the `h4_country` table it read (or none, where the
+    country registered none). An input is stale when the country's manifest now registers another hash (its F7 ran again), registers one where
+    there was none, or registers none where there was one. A manifest that records no inputs is stale as a whole.
+
+    Args:
+        manifest_file: `outputs/cross_country/manifest.json` (or the manifest of another scale).
+        scale_id: The scale of that manifest, whose country manifests are compared.
+
+    Returns:
+        One text per stale input, naming the country, the table and the two hashes; empty when the verdict is current.
+    """
+    recorded = json.loads(Path(manifest_file).read_text(encoding="utf-8")).get("inputs")
+    if recorded is None:
+        return [f"{Path(manifest_file).name} records no inputs; run cross_country_h4 again"]
+    stale = []
+    readers: dict[str, ArtifactReader] = {}
+    for name, digest in sorted(recorded.items()):
+        country, key = name.split(":", 1)
+        reader = readers.setdefault(country, ArtifactReader(country, scale_id))
+        entry = reader._artifacts.get(key)
+        current = entry["sha256"] if entry else None
+        if current != digest:
+            stale.append(
+                f"{name}: the verdict read {(digest or 'none')[:12]}, the manifest of {country} registers {(current or 'none')[:12]}"
+            )
+    return stale

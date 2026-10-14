@@ -16,7 +16,13 @@ from geofrea.land_eligibility.parameters import elevation_role, elevation_sensit
 from geofrea.results_synthesis import style
 from geofrea.results_synthesis.inputs import ArtifactReader, MissingArtifactError
 from geofrea.results_synthesis.members import members_table
-from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_figure, write_table
+from geofrea.results_synthesis.output import (
+    BuildContext,
+    NotBuilt,
+    require_current_cross_country,
+    write_figure,
+    write_table,
+)
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 
 T_O1 = "T-O1"
@@ -172,6 +178,7 @@ def t_r6(ctx: BuildContext) -> None:
     pre-registered rule and verdict; the verdict table (one row per hypothesis: primary statistic, reference, threshold, verdict); and the
     F7 summaries of H1 (C_k, V_k), H2 (O), H3 (D, the price and the benefit of robustness) and H5 (R_loss, R_exp, the target and the slack)
     with their sensitivities."""
+    require_current_cross_country(ctx)
     for technology in ctx.technologies:
         ctx.begin()
         statistics: list[pd.DataFrame] = []
@@ -322,6 +329,7 @@ def t_r7(ctx: BuildContext) -> None:
     """T-R7, per technology: the climate and techno-economic displacement (D_clim, D_tec) and the dominance ratio rho by country, with the
     profile boundaries marked. The countries are those of the support phase cross_country_h4; without it the country alone is shown from its
     own h4_country table, and the caption says so."""
+    require_current_cross_country(ctx)
     rule = ctx.experiments.hypothesis_rules.get("H4")
     if not isinstance(rule, H4Rule):
         raise NotBuilt("hypothesis_rules.H4 is null (OQ-050)")

@@ -37,7 +37,7 @@ logger = logging.getLogger("geofrea.robustness_analysis.cross_country")
 
 ROLES = ("core", "sensitivity")
 PHASE_NAME = "cross_country_h4"
-_MANIFEST_SCHEMA_VERSION = "1.0"
+_MANIFEST_SCHEMA_VERSION = "1.1"
 
 
 class VerdictEntry(BaseModel):
@@ -208,6 +208,9 @@ def build_h4_verdict(
     artifacts: dict[str, dict] = {}
     tables: dict[str, str] = {}
     verdicts: list[VerdictEntry] = []
+    inputs: dict[
+        str, str | None
+    ] = {}  # "<ISO3>:<h4_country key>" -> the hash read, None where the country registers none
     readers = {c: ArtifactReader(c) for c in countries}
     for technology in technologies:
         for role in ROLES:
@@ -217,6 +220,7 @@ def build_h4_verdict(
             for country in countries:
                 profile, digest = country_profile(country, technology, role, readers[country])
                 profiles.append(profile)
+                inputs[f"{country}:h4_country_{technology}__{role}"] = digest
                 if digest:
                     read[f"{country}:h4_country_{technology}__{role}"] = digest
             frame, verdict, reason, counts = verdict_frame(profiles, window)
@@ -274,6 +278,7 @@ def build_h4_verdict(
                 "phase": PHASE_NAME,
                 "countries": countries,
                 "scale": active_scale().scale_id,
+                "inputs": inputs,
                 "artifacts": artifacts,
             },
             indent=2,
