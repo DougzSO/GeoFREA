@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from geofrea.core.constants import SENSITIVITY_TOP_K_PERCENT
 from geofrea.robustness_analysis.evaluator import Evaluation
 from geofrea.robustness_analysis.rankings import (
     jaccard_masks,
@@ -39,7 +40,6 @@ PARTIALLY_SUPPORTED = "partially_supported"
 NOT_SUPPORTED = "not_supported"
 
 PRIMARY = "primary"
-SENSITIVITY_TOP_K_PERCENT = (5.0, 10.0, 20.0)  # p_k of the sensitivity (METHODOLOGY M-F7-07, H1)
 SENSITIVITY_TOLERANCE_MULTIPLES = (0.5, 1.0, 2.0)  # m / k of the sensitivity
 
 

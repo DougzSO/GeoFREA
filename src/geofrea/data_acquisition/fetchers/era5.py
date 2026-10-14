@@ -139,10 +139,6 @@ ERA5_DATASET = "reanalysis-era5-single-levels"
 # of requesting the CDS's own daily maximum of it.
 ERA5_VARIABLES: dict[str, str] = {"fg10": "10m_wind_gust_since_previous_post_processing"}
 
-# S-05 reference period (D-F4-008), coherent with M-F4-03's own
-# historical reference (cmip6.py::YEAR_RANGES["historical"]).
-REFERENCE_PERIOD: tuple[int, int] = (1995, 2014)
-
 _ALL_MONTHS = [f"{m:02d}" for m in range(1, 13)]
 _ALL_DAYS = [f"{d:02d}" for d in range(1, 32)]
 _ALL_HOURS = [f"{h:02d}:00" for h in range(24)]

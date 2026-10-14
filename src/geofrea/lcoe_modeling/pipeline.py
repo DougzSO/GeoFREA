@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile
-from geofrea.core.constants import PRICE_BASE_YEAR_USD
+from geofrea.core.constants import LCOE_QUANTILES, PRICE_BASE_YEAR_USD
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import TableWriter, write_table
@@ -51,7 +51,7 @@ from geofrea.lcoe_modeling.kernel import (
     SampleInputs,
     lcoe_block,
 )
-from geofrea.lcoe_modeling.summary import QUANTILES, BlockSummary, summarize_draws
+from geofrea.lcoe_modeling.summary import BlockSummary, summarize_draws
 from geofrea.lcoe_modeling.supply_curve import supply_curve
 from geofrea.lcoe_modeling.table_schemas import (
     LCOE_TABLE_SCHEMA_VERSION,
@@ -156,7 +156,7 @@ def _provenance(
         "kernel_version": KERNEL_VERSION,
         "price_base_year_usd": PRICE_BASE_YEAR_USD,
         "summary_samples": "draws s >= 1; the nominal vector s0 is lcoe_nominal and enters no statistic",
-        "quantiles": list(QUANTILES),
+        "quantiles": list(LCOE_QUANTILES),
         "quantile_method": "linear interpolation (Hyndman-Fan type 7)",
         "variance_ddof": 1,
         "cells_per_block": block_cells,

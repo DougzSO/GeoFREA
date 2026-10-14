@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_countries, load_parameters
+from geofrea.core.constants import REFERENCE_PERIOD
 from geofrea.data_acquisition.era5_registry import (
     Era5NativeGrid,
     Era5Registry,
@@ -349,7 +350,7 @@ def main() -> None:
             continue
 
         bbox = era5.bbox_from_polygon(border_path)
-        start_year, end_year = era5.REFERENCE_PERIOD
+        start_year, end_year = REFERENCE_PERIOD
         expected_year_count = end_year - start_year + 1
 
         # Per-year idempotency (task F4-2 dataset-switch verdict, point
@@ -530,7 +531,7 @@ def main() -> None:
             registry.save(registry_path)
             continue
 
-        start_year, end_year = era5.REFERENCE_PERIOD
+        start_year, end_year = REFERENCE_PERIOD
         registry.entries[job.key] = Era5RegistryEntry(
             country_code=country,
             status="registered",

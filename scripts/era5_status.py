@@ -25,7 +25,7 @@ from geofrea.data_acquisition.era5_registry import Era5Registry
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(REPO_ROOT / ".env", override=False)
-REFERENCE_YEARS = 20  # era5.REFERENCE_PERIOD span; avoids importing cdsapi-dependent module here
+REFERENCE_YEARS = 20  # the span of core.constants.REFERENCE_PERIOD
 
 STEP_RE = re.compile(r"\[(merge-start|merge|crop-start|crop|reduce-start)\]\s+era5/(\w+)/")
 

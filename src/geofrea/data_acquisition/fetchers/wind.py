@@ -50,6 +50,7 @@ import logging
 from pathlib import Path
 
 from geofrea.core import paths
+from geofrea.core.constants import WIND_HEIGHTS_M
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.wind")
@@ -70,7 +71,7 @@ GWA_PRODUCTS: dict[str, str] = {
 }
 
 # M-F1-03's three hub-relevant heights.
-GWA_HEIGHTS_M: tuple[int, ...] = (100, 150, 200)
+GWA_HEIGHTS_M = WIND_HEIGHTS_M  # the heights of the products, one definition in core/constants.py
 
 
 class GwaProductNotFoundError(RuntimeError):

@@ -70,3 +70,22 @@ ISA_P0_PA: float = 101325.0  # pressure at mean sea level
 ISA_LAPSE_K_PER_M: float = 0.0065  # temperature lapse rate in the troposphere
 ISA_G_M_S2: float = 9.80665  # standard gravity
 ISA_R_J_KG_K: float = 287.05287  # specific gas constant of dry air
+
+# Reference period of the climate change factors and the hazard indicators (S-05, M-F4-03, M-F1-05): the CMIP6 `historical` years every window is
+# compared with. `config/experiments.yaml` `windows.reference` states the same years (a test keeps them equal); the modules read this one.
+REFERENCE_PERIOD: tuple[int, int] = (1995, 2014)
+
+# Heights of the Global Wind Atlas products, metres above ground (M-F2b-04): the layers `weibull_a_<h>m`, `weibull_k_<h>m`, `air_density_<h>m`.
+WIND_HEIGHTS_M: tuple[int, ...] = (100, 150, 200)
+
+# Sensitivity grids of the hypotheses (METHODOLOGY M-F7-07), one definition for H1 to H4.
+# p_k, the top-k percentages of the sensitivity rows (the primary p_k is `top_k_percent` in parameters.json).
+SENSITIVITY_TOP_K_PERCENT: tuple[float, ...] = (5.0, 10.0, 20.0)
+# The profile of the H2 threshold gamma, 0.10 to 0.70 in steps of 0.05 (descriptive: where the verdict changes).
+GAMMA_PROFILE: tuple[float, ...] = tuple(round(0.10 + 0.05 * i, 2) for i in range(13))
+# The (lower, upper) boundaries of the H4 profiles of the sensitivity rows (descriptive variants only; the primary pair is `hypothesis_rules.H4`).
+H4_SENSITIVITY_BOUNDARIES: tuple[tuple[float, float], ...] = ((0.30, 0.70), (0.45, 0.55))
+
+# Quantiles. The quantile over the parameter samples that defines MR (M-F7-03) and the quantiles that F6 summarises per cell (M-F6-04).
+MR_QUANTILE: float = 0.9
+LCOE_QUANTILES: tuple[float, ...] = (0.1, 0.5, 0.9)

@@ -29,12 +29,12 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from geofrea.core.constants import MR_QUANTILE
 from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_block
 from geofrea.lcoe_modeling.summary import quantiles_of_rows
 
 logger = logging.getLogger("geofrea.robustness_analysis.evaluator")
 
-P90 = 0.9  # the quantile over parameter samples of M-F7-03
 _SLABS = 8  # column slabs of the reductions, so their temporaries are an eighth of a block
 
 
@@ -232,7 +232,7 @@ def _member_pass_two(
             acc.mr_clim[window] = np.maximum(acc.mr_clim[window], nominal_regret)
         np.copyto(regret, np.broadcast_to(draw_worst, regret.shape), where=~finite)
         del finite
-        p90 = quantiles_of_rows(regret, (P90,))[0]
+        p90 = quantiles_of_rows(regret, (MR_QUANTILE,))[0]
         del regret
         if core:
             acc.mr[window] = np.maximum(acc.mr[window], p90)

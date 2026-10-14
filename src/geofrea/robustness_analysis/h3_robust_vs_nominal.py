@@ -25,6 +25,7 @@ import numpy as np
 from pyproj import Geod
 from scipy.stats import rankdata
 
+from geofrea.core.constants import SENSITIVITY_TOP_K_PERCENT
 from geofrea.robustness_analysis.h1_rank_robustness import tolerance_size
 from geofrea.robustness_analysis.h2_aggregation import NOT_SUPPORTED, NOT_TESTABLE, SUPPORTED
 from geofrea.robustness_analysis.rankings import (
@@ -51,7 +52,6 @@ __all__ = [
 ]
 
 PRIMARY = "primary"
-SENSITIVITY_TOP_K_PERCENT = (5.0, 10.0, 20.0)  # p_k of the sensitivity (METHODOLOGY M-F7-07, H3)
 SENSITIVITY_TOLERANCE_MULTIPLES = (0.5, 2.0)  # m in {k/2, 2k} (the primary one is m = k)
 _GEOD = Geod(ellps="WGS84")
 

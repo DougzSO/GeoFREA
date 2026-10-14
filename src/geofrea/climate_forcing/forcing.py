@@ -26,13 +26,13 @@ from geofrea.climate_forcing.change_factors import (
     compute_change_factor,
 )
 from geofrea.climate_forcing.members import (
-    REFERENCE_WINDOW,
     VARIABLES,
     Gcm,
     Member,
     MemberResolutionError,
 )
 from geofrea.climate_forcing.table_schemas import CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow
+from geofrea.core.constants import REFERENCE_PERIOD
 from geofrea.core.tables import table_metadata, validate_columns
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 from geofrea.land_eligibility.cells import cell_center, cell_id, lattice_window, pad_to_window
@@ -162,7 +162,7 @@ def member_factor_fields(
             variable,
             _load_variable(hist, variable, lat_range, lon_range),
             _load_variable(scen, variable, lat_range, lon_range),
-            REFERENCE_WINDOW,
+            REFERENCE_PERIOD,
             window,
             neighbourhood=wind_neighbourhood if variable == "sfcWind" else None,
         )

@@ -29,6 +29,8 @@ import numpy as np
 import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 
+from geofrea.core.constants import REFERENCE_PERIOD
+
 CDS_DATASET = "projections-cmip6"
 
 # Approved model set: S-04 minimum only. See module docstring.
@@ -48,7 +50,7 @@ CMIP6_EXPERIMENTS: tuple[str, ...] = ("historical", "ssp126", "ssp370", "ssp585"
 # experiment — M-F7-07's H1 needs the resource channel for both windows,
 # and F3-1 confirmed a multi-year request is accepted in one call.
 YEAR_RANGES: dict[str, tuple[int, int]] = {
-    "historical": (1995, 2014),
+    "historical": REFERENCE_PERIOD,
     "ssp126": (2041, 2100),
     "ssp370": (2041, 2100),
     "ssp585": (2041, 2100),

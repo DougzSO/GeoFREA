@@ -12,7 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-QUANTILES = (0.1, 0.5, 0.9)
+from geofrea.core.constants import LCOE_QUANTILES
+
 _SLABS = 8  # the mean and the variance read the block in this many column slabs, so their temporaries are an eighth of a block
 
 
@@ -97,7 +98,7 @@ def summarize_draws(draws: np.ndarray) -> BlockSummary:
     with np.errstate(invalid="ignore", divide="ignore"):
         var = np.where(finite_count >= 2, squares / (finite_count - 1), np.nan)
 
-    out = quantiles_of_rows(draws, QUANTILES)
+    out = quantiles_of_rows(draws, LCOE_QUANTILES)
     return BlockSummary(
         mean=mean,
         var=var,

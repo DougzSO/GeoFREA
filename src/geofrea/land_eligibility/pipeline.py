@@ -28,7 +28,12 @@ import rasterio
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
+from geofrea.core.constants import (
+    CELL_ORIGIN_LAT,
+    CELL_ORIGIN_LON,
+    NODATA_FLOAT,
+    WIND_HEIGHTS_M,
+)
 from geofrea.core.geo_utils import (
     clip_cache_is_current,
     clip_cache_key,
@@ -79,7 +84,6 @@ from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 logger = logging.getLogger("geofrea.land_eligibility.pipeline")
 
-WIND_HEIGHTS_M = (100, 150, 200)
 DOMINANT_CODES = {
     name: i + 1 for i, name in enumerate(EXCLUSION_NAMES)
 }  # 0 = nothing excluded in the cell

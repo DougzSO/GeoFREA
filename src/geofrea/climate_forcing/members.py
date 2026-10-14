@@ -13,6 +13,7 @@ from pathlib import Path
 
 import yaml
 
+from geofrea.core.constants import REFERENCE_PERIOD
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
 
 SSP_EXPERIMENT = {"SSP1-2.6": "ssp126", "SSP3-7.0": "ssp370", "SSP5-8.5": "ssp585"}
@@ -37,7 +38,6 @@ def required_channels(cf_model: str) -> tuple[str, ...]:
 
 
 REFERENCE_MEMBER_ID = "m0"
-REFERENCE_WINDOW = (1995, 2014)
 
 
 class MemberResolutionError(ValueError):
@@ -184,7 +184,7 @@ def members_manifest(
                 {
                     "member": m.member_id,
                     "description": "reference climatology, no change (delta_rsds = delta_wind = 1, dT = 0)",
-                    "window": "1995-2014",
+                    "window": f"{REFERENCE_PERIOD[0]}-{REFERENCE_PERIOD[1]}",
                     "channels": member_channels(m, hazard_windows),
                 }
             )
@@ -222,4 +222,8 @@ def members_manifest(
         if not m.gcm.wind_channel:
             entry["wind_channel_exception"] = True
         out.append(entry)
-    return {"reference_period": "1995-2014", "n_members": len(out), "members": out}
+    return {
+        "reference_period": f"{REFERENCE_PERIOD[0]}-{REFERENCE_PERIOD[1]}",
+        "n_members": len(out),
+        "members": out,
+    }

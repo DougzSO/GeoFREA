@@ -23,6 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from geofrea.core.constants import GAMMA_PROFILE, SENSITIVITY_TOP_K_PERCENT
 from geofrea.robustness_analysis.rankings import order_by, take_top_k, top_k_size
 
 NOT_TESTABLE = "not_testable"
@@ -32,8 +33,6 @@ NOT_SUPPORTED = "not_supported"
 PRIMARY = "primary"
 MEAN = "capacity_weighted_mean"
 MEDIAN = "capacity_weighted_median"
-GAMMA_PROFILE = tuple(round(0.10 + 0.05 * i, 2) for i in range(13))  # 0.10 to 0.70 in steps of 0.05
-SENSITIVITY_TOP_K_PERCENT = (5.0, 10.0, 20.0)  # p_k of the sensitivity (METHODOLOGY M-F7-07, H2)
 _TOLERANCE = 1.0e-12
 
 

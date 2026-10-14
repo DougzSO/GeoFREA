@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from geofrea.core.constants import H4_SENSITIVITY_BOUNDARIES, SENSITIVITY_TOP_K_PERCENT
 from geofrea.robustness_analysis.h1_rank_robustness import tolerance_size
 from geofrea.robustness_analysis.h3_robust_vs_nominal import capacity_share_beyond
 from geofrea.robustness_analysis.rankings import order_by, ranks_from_order, take_top_k, top_k_size
@@ -38,9 +39,7 @@ PROFILES = (CLIMATE_DOMINATED, TECHNO_ECONOMIC_DOMINATED, MIXED, NO_DISPLACEMENT
 SUPPORTED = "supported"
 NOT_SUPPORTED = "not_supported"
 NOT_TESTABLE = "not_testable"
-SENSITIVITY_TOP_K_PERCENT = (5.0, 10.0, 20.0)  # p_k of the sensitivity (METHODOLOGY M-F7-07, H4)
 SENSITIVITY_TOLERANCE_MULTIPLES = (0.5, 2.0)  # m in {k/2, 2k}
-SENSITIVITY_BOUNDARIES = ((0.30, 0.70), (0.45, 0.55))  # descriptive variants only
 _TOLERANCE = 1.0e-12  # a ratio within this of a boundary is at the boundary, which is Mixed
 
 
@@ -234,7 +233,7 @@ def sensitivity_variants(
                 **{**common, "tolerance_multiple": multiple},
             )
         )
-    for lower, upper in SENSITIVITY_BOUNDARIES:
+    for lower, upper in H4_SENSITIVITY_BOUNDARIES:
         rho, profile = profile_of(primary.d_clim, primary.d_tec, lower, upper)
         out.append(
             dataclasses.replace(

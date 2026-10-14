@@ -23,6 +23,8 @@ import pandas as pd
 import xarray as xr
 from scipy.spatial import cKDTree
 
+from geofrea.core.constants import REFERENCE_PERIOD
+
 logger = logging.getLogger(__name__)
 
 KELVIN_OFFSET_C = 273.15  # CRAEI hazards/pet.py KELVIN_OFFSET_C
@@ -33,7 +35,6 @@ HEAT_THRESHOLDS_C = (
     40.0,
 )  # CRAEI config/params.yaml heat_tx35/tx40_threshold_c (tier 1, IPCC AR6 Atlas)
 WET_DAY_PERCENTILE = 95.0
-REFERENCE_YEARS = (1995, 2014)  # S-05
 
 INDICATOR_COLUMNS = (
     "tx35_days",
@@ -188,7 +189,7 @@ def hazard_fields(
     window: tuple[int, int],
 ) -> dict[str, xr.DataArray]:
     """Native-grid indicator fields (window and reference) for one GCM and scenario."""
-    ref0, ref1 = REFERENCE_YEARS
+    ref0, ref1 = REFERENCE_PERIOD
     tx_ref = to_celsius(load_daily(historical_tasmax, "tasmax", ref0, ref1))
     tx_win = to_celsius(load_daily(scenario_tasmax, "tasmax", *window))
     pr_ref = to_mm_per_day(load_daily(historical_pr, "pr", ref0, ref1))
