@@ -568,7 +568,22 @@ def test_real_countries_fail_loud_listing_the_missing_parameters_and_write_nothi
     ):
         assert item in message, item
     assert "pending_research" in message
+    assert "power curve directory config/power_curves/" in message  # B-2: the folder is named too
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.unit
+def test_an_existing_power_curve_directory_is_not_reported_missing(tmp_path):
+    technologies = load_technologies(TECHNOLOGIES)
+    params = load_parameters(PARAMETERS).countries["PRT"]
+    (tmp_path / "curves").mkdir()
+    with pytest.raises(MissingParameterError) as caught:
+        build_potential(
+            "PRT", technologies, params, ["wind"], EXPERIMENTS, tmp_path / "curves",
+            out_dir=tmp_path / "out", **RANGE_ARGS,
+        )  # fmt: skip
+    assert "power curve directory" not in str(caught.value)
+    assert "power curve" in str(caught.value)  # the null mapping is still reported
 
 
 @pytest.mark.unit

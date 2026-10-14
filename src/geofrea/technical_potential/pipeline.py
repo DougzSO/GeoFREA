@@ -182,6 +182,10 @@ def resolve_technology(
     curves: dict[str, PowerCurve] = {}
     hashes: dict[str, str] = {}
     if model.needs_curves:
+        if not Path(curves_dir).is_dir():
+            missing.append(
+                f"power curve directory config/power_curves/ ({Path(curves_dir)}) does not exist"
+            )
         if tech_cfg.power_curves is None:
             missing.append(
                 "power curve (technologies.yaml power_curves maps no IEC class to a curve)"
