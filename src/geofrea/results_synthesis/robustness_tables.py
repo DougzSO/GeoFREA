@@ -593,7 +593,7 @@ def t_o2(ctx: BuildContext) -> None:
                     rasterized=True,
                 )
                 ax.set_xlabel("Max regret MR (relative)")
-                ax.set_ylabel("Satisficing robustness SR (share of futures)")
+                ax.set_ylabel("Satisficing robustness SR (share of the draws s >= 1)")
                 ax.annotate(
                     f"Kendall tau-b (MR, -SR) = {tau_value:.3f}",
                     xy=(0.03, 0.04),
