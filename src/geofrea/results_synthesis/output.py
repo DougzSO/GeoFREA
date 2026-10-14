@@ -61,6 +61,8 @@ class BuildContext:
         test_values: The country is a synthetic fixture: its values are test values (D9).
         written: Files written so far, by T-ID.
         not_built: `(T-ID, item, reason)` of what could not be built.
+        cross_country: Readers of the manifests of the support phase.
+        phase_graph: Phase -> the phases it depends on, from the orchestrator (T-M1); None when the build was not started by it.
     """
 
     iso: str
@@ -77,6 +79,7 @@ class BuildContext:
     written: dict[str, list[Path]] = field(default_factory=dict)
     not_built: list[tuple[str, str, str]] = field(default_factory=list)
     cross_country: tuple[ArtifactReader, ...] = ()
+    phase_graph: Mapping[str, tuple[str, ...]] | None = None
 
     def begin(self) -> None:
         """Start a group of outputs: from here on, the provenance lists only the artifacts read after this call."""

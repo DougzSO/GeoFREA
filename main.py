@@ -97,6 +97,7 @@ from geofrea.core.orchestrator import (
     compute_dirty,
     compute_git_commit,
     compute_run_id,
+    phase_graph,
 )
 from geofrea.core.paths import log_path, outputs_dir, phase_dir
 from geofrea.core.production import (
@@ -680,6 +681,7 @@ def _build_phase_specs(
             experiments_yaml=EXPERIMENTS_YAML,
             parameters_json=PARAMETERS_JSON,
             methodology_md=METHODOLOGY_MD,
+            phase_graph=graph,
         )
         _register_json_artifact(context, "results_synthesis", result)
         return result
@@ -690,7 +692,11 @@ def _build_phase_specs(
         _register_json_artifact(context, "overview", result)
         return result
 
-    return [
+    graph: dict[
+        str, tuple[str, ...]
+    ] = {}  # filled below from the specs, read by results_synthesis_run (T-M1)
+
+    specs = [
         PhaseSpec(
             name="data_acquisition",
             output_model=AcquisitionResult,
@@ -976,7 +982,11 @@ def _build_phase_specs(
                 )
             }
             | {f"potential_aggregates_{tech}" for tech in technologies}
-            | {f"supply_curve_{tech}" for tech in technologies},
+            | {f"supply_curve_{tech}" for tech in technologies}
+            | {f"potential_{tech}__central" for tech in technologies}
+            | {f"potential_density_{tech}" for tech in technologies}
+            | {f"lcoe_nominal_{tech}" for tech in technologies}
+            | {f"max_regret_{tech}__core" for tech in technologies},
             produces=frozenset({"results_synthesis"}),
             summarize=lambda out: (
                 f"{sum(len(f) for f in out.built.values())} files for {len(out.built)} outputs"
@@ -1017,6 +1027,19 @@ def _build_phase_specs(
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),
     ]
+    graph.update(phase_graph(specs))
+    return specs
+
+
+def thesis_phase_graph(technologies: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    """The phase graph the orchestrator derives from the phase specifications, for T-M1 (the edges do not depend on the values of the arguments)."""
+    specs = _build_phase_specs(
+        ResolutionsConfig(suitability=0.01),
+        100.0,
+        load_audit_config(AUDIT_YAML),
+        technologies,
+    )
+    return phase_graph(specs)
 
 
 def _resolved_config_json(
@@ -1364,6 +1387,7 @@ def main(argv: list[str] | None = None) -> int:
                         experiments_yaml=EXPERIMENTS_YAML,
                         parameters_json=PARAMETERS_JSON,
                         methodology_md=METHODOLOGY_MD,
+                        phase_graph=thesis_phase_graph(tuple(settings.run.technologies)),
                     )
         except Exception:
             logger.exception("cross_country_h4 failed for %s", countries)

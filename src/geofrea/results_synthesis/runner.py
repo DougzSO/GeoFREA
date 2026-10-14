@@ -4,14 +4,13 @@ One script per T-ID (`SCRIPTS`); `only` runs a subset. Each script reads artifac
 data and never a kernel. A script that cannot build an item says why (`BuildContext.skip`); the runner lists it in
 `outputs/thesis/thesis_manifest.json` and fails only when an Essential T-ID has no output at all for the country.
 
-Outputs not built yet and the open decision that blocks each: T-R3 (D2, the GCM-agreement convention); T-M1, T-R1, T-R4, T-R5 and T-R11
-follow in later commits.
+Every T-ID of METHODOLOGY Section 10 has a script. T-M1 draws the graph of the orchestrator, which only the thesis build of `main.py` gives it.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -21,10 +20,13 @@ from geofrea.core.config_loader import load_experiments, load_parameters, load_t
 from geofrea.core.scale import active_scale, other_scales, use_scale
 from geofrea.core.schemas import CountryParams, VerifiedValue
 from geofrea.results_synthesis import names
+from geofrea.results_synthesis.climate_change import t_r3
+from geofrea.results_synthesis.dag import t_m1
 from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
-from geofrea.results_synthesis.potential_and_cost import t_o3, t_r2
+from geofrea.results_synthesis.potential_and_cost import t_o3, t_r1, t_r2, t_r11
+from geofrea.results_synthesis.ranking_figures import t_r4, t_r5
 from geofrea.results_synthesis.robustness_tables import (
     t_o1,
     t_o2,
@@ -37,14 +39,20 @@ from geofrea.results_synthesis.robustness_tables import (
 from geofrea.results_synthesis.synthesis import t_r8
 
 SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
+    "T-M1": t_m1,
     "T-M2": t_m2,
     "T-M3": t_m3,
+    "T-R1": t_r1,
     "T-R2": t_r2,
+    "T-R3": t_r3,
+    "T-R4": t_r4,
+    "T-R5": t_r5,
     "T-R6": t_r6,
     "T-R7": t_r7,
     "T-R8": t_r8,
     "T-R9": t_r9,
     "T-R10": t_r10,
+    "T-R11": t_r11,
     "T-R12": t_r12,
     "T-O1": t_o1,
     "T-O2": t_o2,
@@ -136,6 +144,7 @@ def build_thesis(
     methodology_md: Path,
     only: Sequence[str] | None = None,
     out_dir: Path | None = None,
+    phase_graph: Mapping[str, Sequence[str]] | None = None,
 ) -> ThesisSummary:
     """Build the implemented thesis outputs of `iso`.
 
@@ -144,6 +153,7 @@ def build_thesis(
     Args:
         only: T-IDs to build (default: all implemented).
         out_dir: Default `outputs/thesis`.
+        phase_graph: The graph of the orchestrator (phase -> phases it depends on), drawn by T-M1; without it T-M1 is not built.
 
     Raises:
         ThesisBuildError: an Essential T-ID has no output for the country.
@@ -164,6 +174,7 @@ def build_thesis(
         reader=ArtifactReader(iso),
         other_scale=_other_scale(iso),
         cross_country=_cross_country_readers(),
+        phase_graph={p: tuple(n) for p, n in phase_graph.items()} if phase_graph else None,
         out_dir=Path(out_dir) if out_dir else thesis_output_dir(),
         config_files={
             "technologies.yaml": technologies_yaml,

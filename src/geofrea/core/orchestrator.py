@@ -502,6 +502,20 @@ def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
     return [by_name[name] for name in order]
 
 
+def phase_graph(phase_specs: Sequence[PhaseSpec]) -> dict[str, tuple[str, ...]]:
+    """The phases and, for each, the phases that produce what it requires (sorted), after the same validation as a run (T-M1).
+
+    Raises:
+        DuplicateProducerError, MissingProducerError, DependencyCycleError: as `_validate_and_order`.
+    """
+    ordered = _validate_and_order(phase_specs)
+    producer_of = {key: spec.name for spec in ordered for key in spec.produces}
+    return {
+        spec.name: tuple(sorted({producer_of[key] for key in spec.requires} - {spec.name}))
+        for spec in ordered
+    }
+
+
 def _transitive_closure(start: set[str], edges: Mapping[str, set[str]]) -> set[str]:
     """Follow `edges` (name -> set of related names) from `start`, including it."""
     seen = set(start)

@@ -8,6 +8,7 @@ mandatory in a production run so research gaps (MS-6) do not block development.
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -292,6 +293,46 @@ class SynthesisConfig(BaseModel):
     source: str = Field(min_length=1)
 
 
+class GcmAgreementConfig(BaseModel):
+    """The marking of T-R3: a cell is marked when at least `min_share` of the GCMs of an SSP agree on the sign of the change (D2, D-F8-018)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule: Literal["sign_of_change"]
+    min_share: str = Field(
+        pattern=r"^[1-9][0-9]*/[1-9][0-9]*$"
+    )  # a fraction, so two thirds is exact
+    source: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _share_is_a_majority(self) -> GcmAgreementConfig:
+        if not Fraction(1, 2) < self.share <= 1:
+            raise ValueError(f"min_share {self.min_share} must be above 1/2 and at most 1")
+        return self
+
+    @property
+    def share(self) -> Fraction:
+        return Fraction(self.min_share)
+
+
+class DagAxes(BaseModel):
+    """The phases drawn on the member axis and on the sample axis of the T-M1 graph."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    member: list[str]
+    sample: list[str]
+
+
+class ThesisFiguresConfig(BaseModel):
+    """Presentation choices of the thesis figures (M-F8-02)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gcm_agreement: GcmAgreementConfig
+    dag_axes: DagAxes
+
+
 class ExternalValidationConfig(BaseModel):
     """F7b settings (M-F7b-01 to M-F7b-03, D-F7b-004)."""
 
@@ -334,6 +375,7 @@ class ExperimentsFile(BaseModel):
     hazard_thresholds: dict[str, HazardThreshold]
     prim: PrimConfig
     synthesis: SynthesisConfig
+    thesis_figures: ThesisFiguresConfig
     external_validation: ExternalValidationConfig
 
     @model_validator(mode="after")

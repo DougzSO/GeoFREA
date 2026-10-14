@@ -374,6 +374,18 @@ synthesis:
   partial_classes_separate: [H1, H5]
   source: "OQ-050 (T-R8), pre-registered 2026-10-14"
 
+# Settings of the thesis figures that are choices of presentation (M-F8-02, D-F8-018 to D-F8-019). `gcm_agreement` is the marking of T-R3: a cell is
+# marked when at least `min_share` of the GCMs of an SSP agree on the sign of the change of the capacity factor (two thirds, the convention of the
+# IPCC AR6 WGI Atlas; Tier 3, verify). `dag_axes` lists the phases that run along the member axis and along the sample axis, drawn on the T-M1 graph.
+thesis_figures:
+  gcm_agreement:
+    rule: sign_of_change
+    min_share: "2/3"
+    source: "D2 of docs/_audit/2026-10_F8_design.md; IPCC AR6 WGI Atlas (verify)"
+  dag_axes:
+    member: [climate_forcing, technical_potential, lcoe_modeling, robustness_analysis]
+    sample: [lcoe_modeling, robustness_analysis]
+
 # F7b external validation settings (M-F7b-01 to M-F7b-03, D-F7b-004). The deciles are the lowest eligible-area deciles of the nominal
 # LCOE at m0 whose enrichment ratio is reported. The vintage and location-accuracy filters are sensitivity rows: null reports only the
 # row for all operating units; a value needs its reason.

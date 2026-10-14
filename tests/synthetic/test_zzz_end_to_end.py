@@ -177,6 +177,7 @@ def zzz(tmp_path_factory):
             experiments_yaml=main.EXPERIMENTS_YAML,
             parameters_json=main.PARAMETERS_JSON,
             methodology_md=main.METHODOLOGY_MD,
+            phase_graph=main.thesis_phase_graph(tuple(settings.run.technologies)),
         )
         yield data, results
     finally:
@@ -1181,6 +1182,7 @@ def test_cross_country_h4_gives_not_testable_for_one_country_and_a_verdict_for_t
         parameters_json=main.PARAMETERS_JSON,
         methodology_md=main.METHODOLOGY_MD,
         out_dir=out,
+        phase_graph=main.thesis_phase_graph(("solar", "wind")),
     )
     verdicts = pd.read_csv(out / "T-R6_hypothesis_verdicts_ZZZ_wind.csv")
     h4 = verdicts[(verdicts["hypothesis"] == "H4") & (verdicts["role"] == "core")].iloc[0]
@@ -1567,6 +1569,7 @@ def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch
 # -- F8: the thesis outputs, read from the registered artifacts (M-F8-01, M-F8-02) ----------------------------------
 
 THESIS_TABLES = {
+    "T-R3": ["cf_agreement_ZZZ_{t}"],
     "T-M2": ["methods_ZZZ_{t}"],
     "T-M3": ["uncertain_parameters_ZZZ_{t}"],
     "T-R2": ["potential_ZZZ_{t}", "land_interval_ZZZ_{t}"],
@@ -1584,6 +1587,11 @@ THESIS_TABLES = {
     "T-O1": ["prim_box_ZZZ_{t}"],
 }
 THESIS_FIGURES = {
+    "T-R1": "potential_density_ZZZ_{t}",
+    "T-R3": "cf_change_ZZZ_{t}",
+    "T-R4": "max_regret_ZZZ_{t}",
+    "T-R5": "rank_stability_ZZZ_{t}",
+    "T-R11": "lcoe_map_ZZZ_{t}",
     "T-O1": "prim_box_ZZZ_{t}",
     "T-O2": "mr_sr_agreement_ZZZ_{t}",
     "T-O3": "supply_curves_ZZZ_{t}",
@@ -1604,6 +1612,13 @@ def _thesis(zzz):
     return zzz[0] / "outputs" / "thesis"
 
 
+def _graph_of_the_orchestrator(technologies):
+    """The phase graph the orchestrator derives from the phase specifications (T-M1 draws it)."""
+    import main
+
+    return main.thesis_phase_graph(tuple(technologies))
+
+
 def _build_thesis(out_dir, technologies=("solar", "wind")):
     import main
     from geofrea.results_synthesis.runner import build_thesis
@@ -1616,6 +1631,7 @@ def _build_thesis(out_dir, technologies=("solar", "wind")):
         parameters_json=main.PARAMETERS_JSON,
         methodology_md=main.METHODOLOGY_MD,
         out_dir=out_dir,
+        phase_graph=_graph_of_the_orchestrator(technologies),
     )
 
 
@@ -1647,6 +1663,8 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
             for suffix in (".png", ".pdf", ".provenance.json"):
                 assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
     assert (thesis / "T-M3_members_ZZZ.csv").is_file()
+    for suffix in (".png", ".pdf", ".provenance.json"):
+        assert (thesis / f"T-M1_framework_dag{suffix}").stat().st_size > 0
     for suffix in (".json", ".provenance.json"):
         assert (thesis / f"T-R8_hypothesis_profiles_ZZZ{suffix}").stat().st_size > 0
     for suffix in (".md", ".tex", ".provenance.json"):
@@ -1658,6 +1676,12 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
     manifest = json.loads((thesis / "thesis_manifest.json").read_text(encoding="utf-8"))
     built = manifest["countries"]["ZZZ"]["built"]
     assert set(built) >= {
+        "T-M1",
+        "T-R1",
+        "T-R3",
+        "T-R4",
+        "T-R5",
+        "T-R11",
         "T-M2",
         "T-M3",
         "T-R2",
@@ -2074,3 +2098,48 @@ def test_f8_t_r8_reads_the_profiles_of_the_other_countries_of_the_thesis_directo
     profiles = pd.read_csv(out / "T-R8_country_profiles.csv")
     assert set(profiles["country"]) == {"ZZB", "ZZZ"} and len(profiles) == 20
     assert (out / "T-R8_hypothesis_profiles_ZZZ.json").is_file()
+
+
+@pytest.mark.synthetic
+def test_f8_t_m1_draws_the_graph_of_the_orchestrator_and_marks_the_axes_of_the_configuration(zzz):
+    provenance = json.loads(
+        (_thesis(zzz) / "T-M1_framework_dag.provenance.json").read_text(encoding="utf-8")
+    )
+    graph = _graph_of_the_orchestrator(("solar", "wind"))
+    assert provenance["edges"] == [
+        [a, b] for a, b in sorted((n, p) for p, needs in graph.items() for n in needs)
+    ]
+    assert provenance["member_axis"] == sorted(
+        ["climate_forcing", "technical_potential", "lcoe_modeling", "robustness_analysis"]
+    )
+    assert set(provenance["sample_axis"]) <= set(graph)
+    assert "Framework of GeoFREA as the directed acyclic graph" in provenance["caption"]
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f8_t_r3_share_in_agreement_equals_the_share_recomputed_from_the_potential_table(zzz, tech):
+    from fractions import Fraction
+
+    members = pd.DataFrame(
+        yaml.safe_load(
+            (_phase(zzz, "climate_forcing") / "members.yaml").read_text(encoding="utf-8")
+        )["members"]
+    )
+    potential = pd.read_parquet(
+        _phase(zzz, "technical_potential") / f"potential_{tech}__central.parquet"
+    )
+    wide = potential.pivot(index="cell_id", columns="member", values="CF")
+    core = members[members["window"].astype(str) == "2041-2070"]
+    table = pd.read_csv(_thesis(zzz) / f"T-R3_cf_agreement_ZZZ_{tech}.csv").set_index("ssp")
+    assert sorted(table.index) == sorted(core["ssp"].unique())
+    for ssp, part in core.groupby("ssp"):
+        change = wide[part["member"].tolist()].sub(wide["m0"], axis=0)
+        signs = np.sign(change.to_numpy())
+        agree = np.maximum((signs > 0).sum(axis=1), (signs < 0).sum(axis=1))
+        marked = agree * 3 >= 2 * len(part)
+        valid = change.notna().any(axis=1).to_numpy()
+        assert table.loc[ssp, "n_gcms"] == len(part)
+        assert table.loc[ssp, "n_cells_in_agreement"] == int(marked[valid].sum())
+        assert table.loc[ssp, "share_in_agreement"] == pytest.approx(float(marked[valid].mean()))
+        assert Fraction(table.loc[ssp, "min_share"]) == Fraction(2, 3)

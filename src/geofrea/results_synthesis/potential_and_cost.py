@@ -1,18 +1,20 @@
-"""T-R2 (potential table, from F5) and T-O3 (supply curves, from F6): reads of persisted tables, no new quantity (M-F8-01)."""
+"""T-R1 and T-R2 (potential map and table, from F5), T-R11 and T-O3 (LCOE map and supply curves, from F6): reads of persisted artifacts, no new quantity (M-F8-01)."""
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 
 from geofrea.lcoe_modeling.table_schemas import LCOE_TABLE_SCHEMA_VERSION
 from geofrea.results_synthesis import style
 from geofrea.results_synthesis.inputs import MissingArtifactError
+from geofrea.results_synthesis.maps import draw_grid, map_aspect, read_grid
 from geofrea.results_synthesis.members import REFERENCE, members_table
 from geofrea.results_synthesis.output import BuildContext, write_figure, write_table
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
 
-T_R2, T_O3 = "T-R2", "T-O3"
+T_R1, T_R2, T_R11, T_O3 = "T-R1", "T-R2", "T-R11", "T-O3"
 REFERENCE_MEMBER_ROLE = "m0"
 _CORE, _SENSITIVITY = "core", "sensitivity"
 # (series, quantity column, unit): the "all present cells" series and the like-for-like series of F5 (M-F5-06)
@@ -38,6 +40,67 @@ def _window_roles(ctx: BuildContext) -> dict[str, str]:
         row.member: REFERENCE if row.window == REFERENCE else by_window.get(row.window, row.window)
         for row in members.itertuples()
     }
+
+
+def _map_of_a_raster(
+    ctx: BuildContext,
+    t_id: str,
+    what: str,
+    key_of,
+    cmap: str,
+    label: str,
+    caption_of,
+) -> None:
+    """One map per technology from the raster artifact `key_of(technology)` (a diagnostic COG of F5 or F6), in the thesis style."""
+    for technology in ctx.technologies:
+        ctx.begin()
+        key = key_of(technology)
+        try:
+            grid, extent = read_grid(ctx.reader.path(key))
+        except MissingArtifactError as exc:
+            ctx.skip(t_id, technology, str(exc))
+            continue
+        if not np.isfinite(grid).any():
+            ctx.skip(t_id, technology, f"{key} has no value (no candidate cell)")
+            continue
+
+        def draw(grid=grid, extent=extent):
+            with style.thesis_style():
+                fig, ax = style.new_figure(1.0, map_aspect(grid))
+                draw_grid(fig, ax, grid, extent, cmap=cmap, label=label)
+                return fig
+
+        write_figure(ctx, t_id, what, draw, caption_of(technology), technology=technology)
+
+
+def t_r1(ctx: BuildContext) -> None:
+    """T-R1, per technology: the technical potential density (MW per km2 of cell) at the reference climate, central land scenario."""
+    _map_of_a_raster(
+        ctx,
+        T_R1,
+        "potential_density",
+        lambda technology: f"potential_density_{technology}",
+        "viridis",
+        "MW per km2 of cell",
+        lambda technology: (
+            f"Technical potential density of {technology} at the reference climate (member m0), central land scenario, in MW per km2 of cell. Cells that are not candidates are blank."
+        ),
+    )
+
+
+def t_r11(ctx: BuildContext) -> None:
+    """T-R11, per technology: the nominal LCOE (constant 2024 USD per MWh) at the reference climate, central land scenario."""
+    _map_of_a_raster(
+        ctx,
+        T_R11,
+        "lcoe_map",
+        lambda technology: f"lcoe_nominal_{technology}",
+        "viridis_r",
+        "nominal LCOE (2024 USD/MWh)",
+        lambda technology: (
+            f"Nominal levelised cost of electricity of {technology} at the reference climate (member m0), central land scenario, in constant 2024 USD per MWh. Cells that are not candidates are blank."
+        ),
+    )
 
 
 def t_r2(ctx: BuildContext) -> None:
