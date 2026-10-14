@@ -158,10 +158,13 @@ The trajectory trades density against coverage. Choosing a box after inspecting
 the trajectory would make the result an adjustment to the data; the selection is
 therefore fixed in advance:
 \begin{equation}
-    \mathrm{box}^{*}=\arg\max\left\{\,\mathrm{density}:\ \mathrm{coverage}\geq0.50,\
-    \text{at most three restricted descriptors}\,\right\}.
+    \begin{aligned}
+        \mathrm{box}^{*}=\arg\max\;\{\,\mathrm{density}:\ & \mathrm{coverage}\geq0.50,\\
+        & 1\leq\text{restricted descriptors}\leq3\,\}.
+    \end{aligned}
     \label{eq:prim_selection}
 \end{equation}
+The unrestricted box, which has coverage one by construction, is not eligible.
 The selected box explains at least half of the cases of interest and, among the
 boxes that do, is the one in which the undesirable outcome is most concentrated.
 
