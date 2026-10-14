@@ -74,7 +74,7 @@ windows:
 
 # Uncertain parameters (U-03: default set)
 # Each entry is a parameter key that exists in config/parameters.json and
-# has a non-null range (U-05). No loader enforces this yet; it is to be enforced at load once the loader exists.
+# has a non-null range (U-05); `core/production.py` checks both (audit_parameters, validate_registry).
 # Parameters marked as non-uncertain (range=null in parameters.json) must NOT appear here.
 uncertain_parameters:
   capex_usd_per_kw:

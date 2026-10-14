@@ -35,7 +35,7 @@ jobs:
       - name: Install GeoFREA (editable, dev extras)
         run: pip install -e ".[dev]"
 
-      - name: Run ZZZ end to end (F1 to F5, no network)
+      - name: Run ZZZ end to end (F1 to F8, no network)
         # tests/synthetic generates the fixture and its miniature CMIP6, ISIMIP3b and ERA5 inputs (D13b) into a scratch
         # data directory, refuses every socket connection, and runs data_acquisition through potential_maps (A-06, V-08).
         run: pytest tests/synthetic -m synthetic -v
