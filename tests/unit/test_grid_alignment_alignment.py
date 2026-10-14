@@ -546,11 +546,18 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() was called — cache was NOT reused!")
 
+    cache_bytes = cache_path.read_bytes()
+    cache_mtime = cache_path.stat().st_mtime_ns
     with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
         result = run_grid_alignment_phase(context, inputs)
 
     assert result.roads is not None
     assert result.roads.exists()
+    assert cache_path.read_bytes() == cache_bytes  # the cache was read, not rewritten
+    assert cache_path.stat().st_mtime_ns == cache_mtime
+    with rasterio.open(result.roads) as src:  # the distance raster comes from the cached line
+        data = src.read(1)
+    assert (data[data != -9999.0] == 0).any() or data[data != -9999.0].min() < 5.0
 
 
 @pytest.mark.unit

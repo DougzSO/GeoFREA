@@ -138,8 +138,12 @@ def test_an_aligned_layer_without_a_key_sidecar_is_recomputed(tmp_path):
     inputs = _inputs(elevation_path=elev, country_gdf=_country_gdf())
     context = _context(tmp_path)
     result = run_grid_alignment_phase(context, inputs)
-    key_path(result.elevation).unlink()
-    assert _calls_of_reproject(inputs, context) >= 1
+    aligned = result.elevation
+    before = aligned.stat().st_mtime_ns
+    key_path(aligned).unlink()
+    assert _calls_of_reproject(inputs, context) == 1  # exactly one recomputation of the layer
+    assert key_path(aligned).is_file()  # the key sidecar is written again
+    assert aligned.stat().st_mtime_ns > before  # the raster itself was rewritten
 
 
 def test_the_distance_cap_is_a_config_component_of_the_distance_layers(tmp_path):
