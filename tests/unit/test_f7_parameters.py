@@ -17,7 +17,6 @@ REAL_COUNTRIES = ("BRA", "PRT", "IND")
 DECISION_KEYS = {
     "cf_min": "fraction",
     "tau_lcoe_usd_per_mwh": "USD/MWh",
-    "capacity_target_gw": "GW",
     "top_k_percent": "percent",
 }
 

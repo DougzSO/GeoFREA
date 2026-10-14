@@ -191,3 +191,37 @@ def test_the_bootstrap_reports_the_ranges_of_the_bounds_and_the_frequency_of_eac
     assert coverage["p_low"] >= 0.5 - 1e-12  # every replicate respects the rule
     categories = table[table["kind"] == "category"]
     assert set(categories["name"]) == {"gcm"} and set(categories["level"]) == {"G1", "G2", "G3"}
+
+
+@pytest.mark.unit
+def test_the_outcome_of_a_future_is_never_replaced_in_src_the_gcm_rule_lives_in_tests_only():
+    """The ZZZ run sets the outcome of the scenario discovery by a rule on the GCM (tests/synthetic); src/ must hold no such substitution (D-F7-057)."""
+    import re
+    from pathlib import Path
+
+    from geofrea.robustness_analysis import futures, pipeline
+
+    src = Path(futures.__file__).resolve().parent  # robustness_analysis, where the outcome is made
+    scanned = [*src.rglob("*.py"), *(src.parent / "results_synthesis").rglob("*.py")]
+    assert pipeline.futures_pass is futures.futures_pass  # nothing wraps the pass in src
+    assigners = {
+        "futures.py",  # computes it from the shortlist
+        "assemble.py",  # writes and reads the column
+        "table_schemas.py",  # declares the column
+    }
+    for path in scanned:
+        text = path.read_text(encoding="utf-8")
+        if "displaced_capacity_share" in text:
+            assert path.name in assigners, f"{path} touches the outcome of a future"
+        assert not re.search(r"ipsl|gfdl|miroc|mri-esm|cnrm", text, flags=re.IGNORECASE), path
+        assert "monkeypatch" not in text, path
+        assert not re.search(
+            r"replace\(\s*result\b.*displaced_capacity_share", text, flags=re.DOTALL
+        ), path
+    # the only line of src that gives the column a value is the one that computes it from the shortlist
+    computed = [
+        line
+        for line in (src / "futures.py").read_text(encoding="utf-8").splitlines()
+        if re.search(r"displaced_capacity_share\s*=", line)
+    ]
+    assert len(computed) <= 2, computed

@@ -71,6 +71,7 @@ class Exposure:
         reference: Same shape, for the reference values of the indicators; False where the channel has no reference.
         has_reference: Per channel, whether it has a reference value of the same quantity.
         reason: Why H5b is not available, or None when it is.
+        excluded: The hazard channels left out because their threshold is null (OQ-051); the others are the `channels` used.
     """
 
     slots: tuple[int, ...]
@@ -79,16 +80,17 @@ class Exposure:
     reference: np.ndarray
     has_reference: tuple[bool, ...]
     reason: str | None = None
+    excluded: tuple[str, ...] = ()
 
     @property
     def available(self) -> bool:
         return self.reason is None and len(self.slots) > 0
 
 
-def unavailable(reason: str) -> Exposure:
-    """An exposure that H5b cannot use, with the reason."""
+def unavailable(reason: str, excluded: Sequence[str] = ()) -> Exposure:
+    """An exposure that H5b cannot use, with the reason and the channels left out for want of a threshold."""
     empty = np.zeros((0, 0, 0), dtype=bool)
-    return Exposure((), (), empty, empty, (), reason)
+    return Exposure((), (), empty, empty, (), reason, tuple(excluded))
 
 
 @dataclass(frozen=True)
@@ -149,6 +151,7 @@ class H5Variant:
     conversion: str
     excluded_gcms: tuple[str, ...]
     channels: tuple[str, ...]
+    excluded_channels: tuple[str, ...]
     status: str
     verdict: str | None
     verdict_reason: str | None
@@ -418,6 +421,7 @@ def evaluate_h5(
         conversion=ENERGY_TARGET if target.unit != "GW" else conversion,
         excluded_gcms=tuple(excluded_gcms),
         channels=tuple(all_channels[c] for c in chosen) if available else (),
+        excluded_channels=exposure.excluded,
         status=status,
         verdict=verdict,
         verdict_reason=reason,
@@ -525,7 +529,8 @@ def build_exposure(
     """The exposure of the hazard members over `cell_ids` from the rows of `hazard_context` and the thresholds of OQ-051.
 
     Implements: M-F7-07 (H5b), T-R10. A cell is exposed in a channel when the indicator is at least the threshold (`exposed_flags`, the
-    calculation T-R10 uses). H5b is not available when a channel has a null threshold or there is no hazard member.
+    calculation T-R10 uses). A channel with a null threshold is excluded and listed in `Exposure.excluded`; the others are used. H5b is not
+    available when no channel has a threshold or there is no hazard member.
 
     Args:
         hazard: `hazard_context` rows (`cell_id`, `member`, the indicators and their `*_ref` values).
@@ -536,12 +541,14 @@ def build_exposure(
     Raises:
         ThesisTableError: a hazard member lacks hazard rows for cells of `cell_ids`.
     """
-    nulls = [name for name, value in thresholds.items() if value is None]
+    nulls = tuple(name for name, value in thresholds.items() if value is None)
     if not hazard_members:
-        return unavailable("no member of the window carries the hazard channel (L-021)")
-    if nulls:
-        return unavailable(f"the hazard thresholds {nulls} are null (OQ-051)")
-    channels = tuple(thresholds)
+        return unavailable("no member of the window carries the hazard channel (L-021)", nulls)
+    channels = tuple(name for name, value in thresholds.items() if value is not None)
+    if not channels:
+        return unavailable(
+            f"no hazard channel has a threshold: {list(nulls)} are null (OQ-051)", nulls
+        )
     has_reference = tuple(c in REFERENCE_COLUMNS for c in channels)
     haz = hazard.assign(member=hazard["member"].astype(str))
     absolute = np.zeros((len(hazard_members), len(channels), cell_ids.size), dtype=bool)
@@ -556,7 +563,12 @@ def build_exposure(
                     rows, cell_ids, channel, threshold, "reference", member
                 )
     return Exposure(
-        tuple(s for s, _ in hazard_members), channels, absolute, reference, has_reference
+        tuple(s for s, _ in hazard_members),
+        channels,
+        absolute,
+        reference,
+        has_reference,
+        excluded=nulls,
     )
 
 

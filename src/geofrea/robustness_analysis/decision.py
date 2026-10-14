@@ -53,6 +53,7 @@ class TechDecision:
     capacity_target_gw: float | None
     top_k_percent: float | None
     tau_range: tuple[float, float] | None = None
+    capacity_target_note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -94,13 +95,36 @@ def _range(entry: object) -> tuple[float, float] | None:
     return float(bounds.min), float(bounds.max)
 
 
-def decision_values(tech_params: object, technology: str) -> TechDecision:
-    """Read the four decision parameters from a country's technology block of `parameters.json`, and the sourced range of `tau` (H5)."""
+def capacity_target_gw(target: object | None) -> tuple[float | None, str | None]:
+    """The target of the top-k sensitivity in GW, derived from the national target of `experiments.yaml` (the one source of the target).
+
+    Implements: M-F7-05, M-F7-07 (OQ-010). A target in GW is used as it is; one in TWh/year has no registered conversion to capacity and
+    the capacity-target top-k is then not testable, with the reason.
+
+    Returns:
+        `(value in GW or None, why there is none or None)`.
+    """
+    value = getattr(target, "value", None)
+    if value is None:
+        return None, "national_targets has no value"
+    unit = getattr(target, "unit", None)
+    if unit == "GW":
+        return float(value), None
+    return None, f"the national target is in {unit}, with no registered conversion to GW"
+
+
+def decision_values(
+    tech_params: object, technology: str, national_target: object | None = None
+) -> TechDecision:
+    """Read the decision parameters from a country's technology block of `parameters.json`, the sourced range of `tau` (H5) and the capacity target
+    derived from the national target (`national_targets` of `experiments.yaml`, the only definition of the target)."""
+    target_gw, note = capacity_target_gw(national_target)
     return TechDecision(
         technology=technology,
         cf_min=_value(getattr(tech_params, "cf_min", None)),
         tau=_value(getattr(tech_params, "tau_lcoe_usd_per_mwh", None)),
-        capacity_target_gw=_value(getattr(tech_params, "capacity_target_gw", None)),
+        capacity_target_gw=target_gw,
+        capacity_target_note=note,
         top_k_percent=_value(getattr(tech_params, "top_k_percent", None)),
         tau_range=_range(getattr(tech_params, "tau_lcoe_usd_per_mwh", None)),
     )
@@ -162,7 +186,7 @@ def skipped_outputs(
         skipped.append(
             SkippedOutput(
                 "capacity-target top-k and the gap to the target (M-F7-05, H5)",
-                "capacity_target_gw is null",
+                decision.capacity_target_note or "national_targets has no value",
                 "OQ-010",
             )
         )

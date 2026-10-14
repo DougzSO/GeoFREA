@@ -347,7 +347,9 @@ def check_start(
     for tech in run_technologies:
         params = getattr(country_params.technologies, tech)
         failures.extend(f"{tech}: {item}" for item in refusals(params))
-        decision = decision_values(params, tech)
+        decision = decision_values(
+            params, tech, experiments.national_targets.get(iso, {}).get(tech)
+        )
         failures.extend(f"{tech}: {item}" for item in check_ranges(decision))
         decisions[tech] = decision
     if failures:
@@ -1159,7 +1161,7 @@ def run_window(
     ]
     hazard_table = (
         pd.read_parquet(hazard_path)
-        if hazard_slots and all(v is not None for v in thresholds.values())
+        if hazard_slots and any(v is not None for v in thresholds.values())
         else pd.DataFrame(
             {"cell_id": pd.Series(dtype="int64"), "member": pd.Series(dtype="object")}
         )

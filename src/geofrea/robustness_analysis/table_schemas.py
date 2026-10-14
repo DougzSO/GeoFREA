@@ -439,7 +439,7 @@ class H5SummaryRow(BaseModel):
     `e_exp_twh` (the largest exposed energy over the hazard members) and `r_exp = e_exp_twh / h0_twh`, with the same statistic for the reference
     indicators (`e_exp_reference_twh`, over the `reference_channels`) and the increment against the absolute one on the same channels. `status`
     is `tested`, `not_testable` (no target) or `target_not_met_at_reference` (`h0_twh <= 0`, ratios on `g_twh` only); the verdict is null unless
-    the status is `tested` and H5b is available. `excluded_gcms` and `channels` are joined by `|`.
+    the status is `tested` and H5b is available. `excluded_gcms`, `channels` (the hazard channels used) and `excluded_channels` (those left out because their threshold is null, OQ-051) are joined by `|`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -454,6 +454,7 @@ class H5SummaryRow(BaseModel):
     conversion: str
     excluded_gcms: str
     channels: str
+    excluded_channels: str
     status: str
     verdict: str | None
     verdict_reason: str | None

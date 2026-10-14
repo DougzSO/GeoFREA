@@ -742,6 +742,7 @@ def h5_summary_frame(
                 "conversion": v.conversion,
                 "excluded_gcms": "|".join(v.excluded_gcms),
                 "channels": "|".join(v.channels),
+                "excluded_channels": "|".join(v.excluded_channels),
                 "status": v.status,
                 "verdict": v.verdict,
                 "verdict_reason": v.verdict_reason,

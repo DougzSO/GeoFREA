@@ -112,8 +112,8 @@ def zzz(tmp_path_factory):
             (
                 "national_targets:\n"
                 "  ZZZ:\n"
-                '    solar: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
-                '    wind: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+                '    solar: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+                '    wind: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
             ),
         ),
         (
@@ -1019,7 +1019,7 @@ def test_f7_writes_h5_with_the_target_the_exposure_the_verdict_and_the_sensitivi
     assert primary["status"] == "tested" and primary["lam"] == 0.20
     assert (primary["target_value"], primary["target_unit"], primary["target_horizon"]) == (
         0.0001,
-        "TWh/year",
+        "GW",
         2040,
     )
     assert primary["h0_twh"] == pytest.approx(primary["e0_twh"] - primary["g_twh"])

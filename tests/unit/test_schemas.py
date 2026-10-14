@@ -77,7 +77,6 @@ VALID_SOLAR = {
     "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
     "cf_min": dict(VALID_PENDING_VALUE),
     "tau_lcoe_usd_per_mwh": dict(VALID_PENDING_VALUE),
-    "capacity_target_gw": dict(VALID_PENDING_VALUE),
     "top_k_percent": dict(VALID_PENDING_VALUE),
 }
 
@@ -98,7 +97,6 @@ VALID_WIND = {
     "road_cost_usd_per_km": dict(VALID_PENDING_VALUE),
     "cf_min": dict(VALID_PENDING_VALUE),
     "tau_lcoe_usd_per_mwh": dict(VALID_PENDING_VALUE),
-    "capacity_target_gw": dict(VALID_PENDING_VALUE),
     "top_k_percent": dict(VALID_PENDING_VALUE),
 }
 

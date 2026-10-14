@@ -42,7 +42,6 @@ solar:
     - opex_var_usd_per_mwh      # M-F6-01 (OQ-016), not uncertain; F5 does not read it
     - cf_min                    # M-F7-01 (OQ-008)
     - tau_lcoe_usd_per_mwh      # M-F7-04, T-R12, H5 (OQ-008)
-    - capacity_target_gw        # M-F7-05, H5 (OQ-010)
     - top_k_percent             # M-F7-05 (OQ-021)
 
   # Uncertain parameters (U-03, U-04)
@@ -115,7 +114,6 @@ wind:
     - opex_var_usd_per_mwh      # M-F6-01 (OQ-016), not uncertain; F5 does not read it
     - cf_min                    # M-F7-01 (OQ-008)
     - tau_lcoe_usd_per_mwh      # M-F7-04, T-R12, H5 (OQ-008)
-    - capacity_target_gw        # M-F7-05, H5 (OQ-010)
     - top_k_percent             # M-F7-05 (OQ-021)
 
   # Reference power curves (M-F5-03, D-F5-003, D-F5-004): IEC class -> curve id. The table and its

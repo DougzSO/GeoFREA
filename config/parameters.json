@@ -203,21 +203,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "top_k_percent": {
             "value": null,
             "unit": "percent",
@@ -450,21 +435,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "top_k_percent": {
             "value": null,
             "unit": "percent",
@@ -681,21 +651,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Satisficing LCOE threshold, also the cost threshold of the economic potential (M-F7-04, T-R12, H5), constant 2024 USD (S-07). No value yet: pending OQ-008.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -933,21 +888,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "top_k_percent": {
             "value": null,
             "unit": "percent",
@@ -1166,21 +1106,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Satisficing LCOE threshold, also the cost threshold of the economic potential (M-F7-04, T-R12, H5), constant 2024 USD (S-07). No value yet: pending OQ-008.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -1415,21 +1340,6 @@
             "verified_date": null,
             "verification_method": "unverified",
             "note": "Satisficing LCOE threshold, also the cost threshold of the economic potential (M-F7-04, T-R12, H5), constant 2024 USD (S-07). No value yet: pending OQ-008.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "capacity_target_gw": {
-            "value": null,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "National capacity target of the technology for the top-k reading of M-F7-05 and for H5. No value yet: pending OQ-010.",
             "status": "pending_research",
             "synthetic": false,
             "proxy": false
@@ -1724,20 +1634,6 @@
             "status": null,
             "synthetic": true,
             "price_year": 2024
-          },
-          "capacity_target_gw": {
-            "value": 0.25,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: about 60 percent of the synthetic solar potential.",
-            "status": null,
-            "synthetic": true
           },
           "top_k_percent": {
             "value": 25.0,
@@ -2038,20 +1934,6 @@
             "status": null,
             "synthetic": true,
             "price_year": 2024
-          },
-          "capacity_target_gw": {
-            "value": 0.8,
-            "unit": "GW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: about half of the synthetic wind potential.",
-            "status": null,
-            "synthetic": true
           },
           "top_k_percent": {
             "value": 25.0,

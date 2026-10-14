@@ -245,8 +245,8 @@ thresholds:
     #   solar: 50  # USD/MWh
     #   wind: 60
 
-  # The top-k share p_k (M-F7-05, OQ-021) and the capacity target (OQ-010) are per country and technology, in
-  # parameters.json (top_k_percent, capacity_target_gw); read by F7 and by sample_size_convergence.
+  # The top-k share p_k (M-F7-05, OQ-021) is per country and technology, in parameters.json (top_k_percent); read by F7 and by
+  # sample_size_convergence. The capacity target (OQ-010) has one source, `national_targets` below.
 
   # Feasibility threshold (M-F7-01)
   # Capacity factor minimum for a cell to be feasible
@@ -315,8 +315,8 @@ hypothesis_rules:
 
 # National expansion targets of H5 (M-F7-07, OQ-010): per country and technology the value, its unit (GW or TWh/year), the source and the horizon
 # year. Null until the author sources them from the official planning documents, horizon-matched to the core window; a value needs its unit,
-# source and horizon. `alternatives` lists other official targets or horizons for the sensitivity of H5. The target of the top-k sensitivity
-# (`capacity_target_gw`) stays in `parameters.json`.
+# source and horizon. `alternatives` lists other official targets or horizons for the sensitivity of H5. This is the only definition of the
+# target: the capacity target of the top-k sensitivity is derived from it when the unit is GW and is not testable when it is TWh/year.
 national_targets:
   BRA:
     solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
@@ -330,6 +330,7 @@ national_targets:
 
 # Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
 # Source and tier are the author's; the wording is "exposed". All null until OQ-051 closes. The indicators are those of hazard_context.
+# H5b uses the channels that have a threshold; a channel left null is excluded and declared in the output, and the set is fixed when OQ-051 closes.
 hazard_thresholds:
   tx35_days: {threshold: null, unit: days, source: null, tier: null}
   tx40_days: {threshold: null, unit: days, source: null, tier: null}

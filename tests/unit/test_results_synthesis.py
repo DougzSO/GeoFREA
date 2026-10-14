@@ -252,7 +252,7 @@ def test_f8_imports_no_kernel_evaluator_or_pipeline():
 
 
 @pytest.mark.unit
-def test_loading_the_f8_runner_loads_no_module_that_recomputes_a_scientific_quantity():
+def test_loading_the_f8_runner_loads_no_module_that_recomputes_a_scientific_quantity(tmp_path):
     code = (
         "import sys, json; import geofrea.results_synthesis.runner; "
         f"bad = [m for m in {list(FORBIDDEN_MODULES)!r} if m in sys.modules]; print(json.dumps(bad))"
@@ -267,6 +267,9 @@ def test_loading_the_f8_runner_loads_no_module_that_recomputes_a_scientific_quan
             "PYTHONPATH": str(REPO / "src"),
             "PATH": "",
             "SYSTEMROOT": __import__("os").environ.get("SYSTEMROOT", ""),
+            "MPLCONFIGDIR": str(
+                tmp_path
+            ),  # matplotlib needs a home or a config directory, and the environment here is bare
         },
     )
     assert json.loads(result.stdout.strip().splitlines()[-1]) == []

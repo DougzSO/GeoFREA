@@ -293,7 +293,6 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
     cf_min: VerifiedValue[UnitInterval | None]  # M-F7-01 (OQ-008), fraction
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
-    capacity_target_gw: VerifiedValue[NonNegativeFloat | None]  # M-F7-05 (OQ-010), GW
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
 
 
@@ -321,7 +320,6 @@ class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
     cf_min: VerifiedValue[UnitInterval | None]  # M-F7-01 (OQ-008), fraction
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
-    capacity_target_gw: VerifiedValue[NonNegativeFloat | None]  # M-F7-05 (OQ-010), GW
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
 
 

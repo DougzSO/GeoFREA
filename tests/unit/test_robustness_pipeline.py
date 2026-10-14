@@ -55,6 +55,26 @@ def _experiments(**sampler) -> ExperimentsFile:
     return ExperimentsFile.model_validate(raw)
 
 
+def _target_of(experiments: ExperimentsFile, value, unit="GW", tech="wind") -> ExperimentsFile:
+    """`experiments` with the national target of ZZZ (the one definition of the target, OQ-010) set for `tech`."""
+    raw = experiments.model_dump(by_alias=True)
+    empty = {"value": None, "unit": None, "source": None, "horizon": None, "alternatives": []}
+    raw["national_targets"] = {
+        "ZZZ": {
+            "solar": empty,
+            "wind": empty,
+            tech: {
+                "value": value,
+                "unit": unit,
+                "source": "test plan",
+                "horizon": 2040,
+                "alternatives": [],
+            },
+        }
+    }
+    return ExperimentsFile.model_validate(raw)
+
+
 def _country(**decision):
     """The ZZZ parameters with the decision values replaced (None clears one)."""
     country = load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"]
@@ -301,8 +321,7 @@ def test_a_top_k_larger_than_the_ranked_set_takes_the_whole_set_and_says_so(tmp_
 
 @pytest.mark.unit
 def test_the_capacity_target_takes_cells_along_the_robust_rank_until_it_is_met(tmp_path):
-    country = _country(capacity_target_gw=0.8)
-    entry, _, _ = _run(tmp_path, country=country)
+    entry, _, _ = _run(tmp_path, experiments=_target_of(_experiments(), 0.8))
     table = _table(entry)
     taken = table[table["topk_capacity_target"].fillna(False).astype(bool)].sort_values(
         "robust_rank"
@@ -311,9 +330,39 @@ def test_the_capacity_target_takes_cells_along_the_robust_rank_until_it_is_met(t
     assert taken["p_mw"].sum() / 1000.0 >= 0.8
     assert taken["p_mw"].iloc[:-1].sum() / 1000.0 < 0.8  # the fewest cells
     assert entry.windows["core"].target_unreachable is False
-    huge = _run(tmp_path / "b", country=_country(capacity_target_gw=1e6))[0]
+    huge = _run(tmp_path / "b", experiments=_target_of(_experiments(), 1e6))[0]
     assert huge.windows["core"].target_unreachable is True
     assert _table(huge)["topk_capacity_target"].sum() == 20  # all ranked cells
+
+
+@pytest.mark.unit
+def test_a_target_in_twh_per_year_has_no_capacity_target_top_k_and_says_why(tmp_path):
+    entry, _, _ = _run(tmp_path, experiments=_target_of(_experiments(), 5.0, unit="TWh/year"))
+    assert _table(entry)["topk_capacity_target"].isna().all()
+    reasons = [s["reason"] for s in entry.skipped if s["open_question"] == "OQ-010"]
+    assert any("TWh/year" in reason and "no registered conversion" in reason for reason in reasons)
+
+
+@pytest.mark.unit
+def test_the_target_has_one_definition_the_national_targets_of_experiments_yaml():
+    """No parameter block of `parameters.json` carries `capacity_target_gw`, and `decision_values` derives it from `national_targets` only."""
+    from geofrea.core.schemas import SolarParams, WindParams
+    from geofrea.robustness_analysis.decision import capacity_target_gw
+
+    raw = (REPO / "config" / "parameters.json").read_text(encoding="utf-8")
+    assert "capacity_target_gw" not in raw
+    assert "capacity_target_gw" not in SolarParams.model_fields  # nor does the schema admit it
+    assert "capacity_target_gw" not in WindParams.model_fields
+    for path in (REPO / "src").rglob("*.py"):
+        if path.name == "decision.py":
+            continue
+        assert "tech_params.capacity_target_gw" not in path.read_text(encoding="utf-8"), path
+    assert capacity_target_gw(None)[0] is None
+    gw = _target_of(_experiments(), 0.8).national_targets["ZZZ"]["wind"]
+    tw = _target_of(_experiments(), 3.0, unit="TWh/year").national_targets["ZZZ"]["wind"]
+    assert capacity_target_gw(gw) == (0.8, None)
+    value, why = capacity_target_gw(tw)
+    assert value is None and "TWh/year" in why
 
 
 # -- null decision parameters (D-F7-023) ------------------------------------------------------------------------
@@ -323,7 +372,7 @@ def test_the_capacity_target_takes_cells_along_the_robust_rank_until_it_is_met(t
 def test_a_null_tau_skips_sr_and_a_null_p_k_skips_the_top_k_flags_and_both_are_listed(
     tmp_path, caplog
 ):
-    country = _country(tau_lcoe_usd_per_mwh=None, top_k_percent=None, capacity_target_gw=None)
+    country = _country(tau_lcoe_usd_per_mwh=None, top_k_percent=None)
     with caplog.at_level("WARNING"):
         entry, _, _ = _run(tmp_path, country=country)
     table = _table(entry)

@@ -251,11 +251,22 @@ def test_with_hazard_members_and_thresholds_h5b_is_the_largest_exposed_energy_of
 
 
 @pytest.mark.unit
-def test_a_null_threshold_makes_h5b_not_available_and_names_the_open_question(tmp_path):
+def test_a_channel_without_a_threshold_is_excluded_and_declared_and_the_others_are_used(tmp_path):
     partial = {k: v for k, v in THRESHOLDS.items() if k != "wet_p95_exceed_freq"}
     entry, _, _ = _run(tmp_path, experiments=_experiments(_target(1.0), partial), hazard=True)
     primary = _primary(entry)
+    assert primary["exposure_available"] and primary["verdict"] is not None
+    assert primary["excluded_channels"] == "wet_p95_exceed_freq"
+    assert primary["channels"].split("|") == [k for k in THRESHOLDS if k != "wet_p95_exceed_freq"]
+    assert pd.notna(primary["r_exp"])
+
+
+@pytest.mark.unit
+def test_h5b_is_not_testable_only_when_no_channel_has_a_threshold(tmp_path):
+    entry, _, _ = _run(tmp_path, experiments=_experiments(_target(1.0), {}), hazard=True)
+    primary = _primary(entry)
     assert not primary["exposure_available"] and "OQ-051" in primary["exposure_reason"]
+    assert primary["channels"] == "" and primary["excluded_channels"].split("|") == list(THRESHOLDS)
     assert primary["verdict"] is None and pd.notna(primary["r_loss"])
 
 
