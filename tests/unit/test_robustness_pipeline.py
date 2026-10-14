@@ -68,7 +68,13 @@ def _country(**decision):
     )
 
 
-def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENARIOS):
+HAZARD_MEMBERS = (
+    CORE[0],
+    CORE[2],
+)  # the members that carry the hazard channel when `hazard` is set
+
+
+def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENARIOS, hazard=False):
     """F5-, F3- and F4-like inputs for 20 cells: `cf[(cell index, member)]` overrides a capacity factor, `absent` lists (cell index, member)."""
     cf = cf or {}
     rng = np.random.default_rng(21)
@@ -140,11 +146,35 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
             }
         ).to_parquet(cdir / f"candidates_{tech}__{scenario}.parquet")
     pd.concat(forcing, ignore_index=True).to_parquet(kdir / "forcing.parquet")
-    pd.DataFrame(
-        {"cell_id": pd.Series(dtype="int64"), "member": pd.Series(dtype="object")}
-    ).to_parquet(
-        kdir / "hazard_context.parquet"
-    )  # no member of these tests carries the hazard channel
+    if hazard:  # two members carry the hazard channel; the heat and rain indicators grow with the cell index, the gust is constant
+        n = np.arange(N_CELLS, dtype="float64")
+        pieces = []
+        for member in HAZARD_MEMBERS:
+            bump = 3.0 if member == CORE[2] else 0.0
+            pieces.append(
+                pd.DataFrame(
+                    {
+                        "cell_id": IDS.astype("int64"),
+                        "member": member,
+                        "tx35_days": 10.0 + n + bump,
+                        "tx35_days_ref": 2.0 + n,
+                        "tx40_days": np.zeros(N_CELLS),
+                        "tx40_days_ref": np.zeros(N_CELLS),
+                        "rx5day_mm": np.full(N_CELLS, 10.0),
+                        "rx5day_mm_ref": np.full(N_CELLS, 10.0),
+                        "wet_p95_exceed_freq": np.full(N_CELLS, 0.05),
+                        "wet_days_per_year_ref": np.full(N_CELLS, 100.0),
+                        "gust_mean_annual_max_ms": np.full(N_CELLS, 10.0),
+                    }
+                )
+            )
+        pd.concat(pieces, ignore_index=True).to_parquet(kdir / "hazard_context.parquet")
+    else:
+        pd.DataFrame(
+            {"cell_id": pd.Series(dtype="int64"), "member": pd.Series(dtype="object")}
+        ).to_parquet(
+            kdir / "hazard_context.parquet"
+        )  # no member of these tests carries the hazard channel
     members = [
         {"member": "m0", "window": "1995-2014", "channels": {"resource": True, "hazard": False}}
     ]
@@ -155,7 +185,7 @@ def _stage(tmp_path: Path, tech="wind", cf=None, absent=(), scenarios=LAND_SCENA
                 "gcm": gcm,
                 "ssp": ssp,
                 "window": window,
-                "channels": {"resource": True, "hazard": False},
+                "channels": {"resource": True, "hazard": hazard and name in HAZARD_MEMBERS},
             }
         )
     (kdir / "members.yaml").write_text(yaml.safe_dump({"members": members}), encoding="utf-8")

@@ -79,6 +79,17 @@ def zzz(tmp_path_factory):
         # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
         ("peel_alpha: null\n  mass_min: null", "peel_alpha: 0.1\n  mass_min: 0.1"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
+        ("tx40_days: {threshold: null,", "tx40_days: {threshold: 1.0,"),
+        ("rx5day_mm: {threshold: null,", "rx5day_mm: {threshold: 1.0,"),
+        ("wet_p95_exceed_freq: {threshold: null,", "wet_p95_exceed_freq: {threshold: 0.0,"),
+        ("gust_mean_annual_max_ms: {threshold: null,", "gust_mean_annual_max_ms: {threshold: 1.0,"),
+        (
+            "national_targets:\n",
+            "national_targets:\n"
+            "  ZZZ:\n"
+            '    solar: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+            '    wind: {value: 0.0001, unit: TWh/year, source: "ZZZ test value", horizon: 2040, alternatives: []}\n',
+        ),
         (
             'source: "OQ-050 (H5), pre-registered 2026-10-14"\n',
             (
@@ -829,7 +840,14 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert verdicts[h1_rules].isin(["met", "not_met"]).all()
     assert (
         verdicts.drop(
-            ["mr_sr_kendall_tau_b", "h2_overlap_index", "h3_beyond_reach_share", *h1_rules]
+            [
+                "mr_sr_kendall_tau_b",
+                "h2_overlap_index",
+                "h3_beyond_reach_share",
+                "h5a_resource_loss_ratio",
+                "h5b_exposure_ratio",
+                *h1_rules,
+            ]
         )
         .isna()
         .all()
@@ -843,8 +861,13 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert set(futures["sample"]) >= {0, 1}
     exposure = pd.read_parquet(base / f"hazard_exposure_{tech}__core.parquet")
     assert set(exposure["hazard"]) == {
-        "tx35_days"
-    }  # the only indicator with a threshold in this run
+        "tx35_days",
+        "tx40_days",
+        "rx5day_mm",
+        "wet_p95_exceed_freq",
+        "gust_mean_annual_max_ms",
+        "any_channel",
+    }  # every indicator has a (test) threshold in this run, and the union of the channels is H5b's
     assert (exposure["potential_gw"] >= 0).all() and set(exposure["group"]) >= {"f7_set"}
 
 
@@ -935,6 +958,67 @@ def test_f7_writes_the_h3_table_with_d_the_reference_the_verdict_and_the_sensiti
         primary["verdict"]
     ]
     assert (verdict == expected) or (expected is None and pd.isna(verdict))
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_f7_writes_h5_with_the_target_the_exposure_the_verdict_and_the_sensitivities(zzz, tech):
+    base = _phase(zzz, "robustness_analysis")
+    summary = pd.read_parquet(base / f"h5_summary_{tech}__core.parquet")
+    primary = summary[summary["primary"]].iloc[0]
+    assert primary["status"] == "tested" and primary["lam"] == 0.20
+    assert (primary["target_value"], primary["target_unit"], primary["target_horizon"]) == (
+        0.0001,
+        "TWh/year",
+        2040,
+    )
+    assert primary["h0_twh"] == pytest.approx(primary["e0_twh"] - primary["g_twh"])
+    members = pd.read_parquet(base / f"h5_members_{tech}__core.parquet").set_index("member")
+    assert primary["delta_e_twh"] == pytest.approx(
+        max(0.0, (members["energy_twh"] - primary["e0_twh"]).min() * -1.0)
+    )
+    assert primary["r_loss"] == pytest.approx(primary["delta_e_twh"] / primary["h0_twh"])
+    assert primary["exposure_available"]
+    hazard_members = members[members["carries_hazard_channel"]]
+    assert len(hazard_members) == 9 and members["exposed_twh"].notna().sum() == 9
+    assert primary["e_exp_twh"] == pytest.approx(hazard_members["exposed_twh"].max())
+    assert primary["r_exp"] == pytest.approx(primary["e_exp_twh"] / primary["h0_twh"])
+    assert (
+        primary["verdict"]
+        == {
+            (True, True): "supported",
+            (True, False): "partially_supported_resource",
+            (False, True): "partially_supported_exposure",
+            (False, False): "not_supported",
+        }[(bool(primary["h5a_holds"]), bool(primary["h5b_holds"]))]
+    )
+    hypothesis = pd.read_parquet(base / f"hypothesis_{tech}__core.parquet").set_index("statistic")
+    for name, holds in (
+        ("h5a_resource_loss_ratio", primary["h5a_holds"]),
+        ("h5b_exposure_ratio", primary["h5b_holds"]),
+    ):
+        assert hypothesis.loc[name, "verdict"] == ("met" if holds else "not_met")
+    assert hypothesis.loc["h5a_resource_loss_ratio", "value"] == pytest.approx(primary["r_loss"])
+    variants = set(summary["variant"])
+    assert {
+        "lambda_0.10",
+        "dynamic_domain",
+        "land_restrictive",
+        "land_permissive",
+        "channel_tx35_days",
+        "channel_gust_mean_annual_max_ms",
+    } <= variants
+    late = (
+        pd.read_parquet(base / f"h5_summary_{tech}__sensitivity.parquet").query("primary").iloc[0]
+    )
+    assert (
+        late["window"] == "2071-2100" and not late["exposure_available"]
+    )  # no hazard data there (L-021)
+    assert late["verdict"] is None and pd.notna(late["r_loss"])
+    fixed = pd.read_parquet(base / f"potential_below_tau_{tech}__core.parquet").query(
+        "series == 'fixed_domain' and land_scenario == 'central' and basis == 'nominal'"
+    )
+    assert fixed.set_index("member").loc["m0", "potential_twh"] == pytest.approx(primary["e0_twh"])
 
 
 @pytest.mark.synthetic

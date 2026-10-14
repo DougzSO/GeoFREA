@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -16,6 +16,7 @@ from geofrea.robustness_analysis.h1_rank_robustness import H1Detail, H1Inputs, H
 from geofrea.robustness_analysis.h2_aggregation import H2Detail, H2Variant
 from geofrea.robustness_analysis.h3_robust_vs_nominal import H3Detail, H3Inputs, H3Variant
 from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
+from geofrea.robustness_analysis.h5_climate_pressure import H5Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult
 from geofrea.robustness_analysis.rankings import (
@@ -656,3 +657,130 @@ def h4_country_frame(variants: Sequence[H4Variant], window: str) -> pd.DataFrame
             "ssp": "object",
         }
     )
+
+
+def _scenario_of(variant: H5Variant, default: str) -> str:
+    """The land scenario of a row: the `land_<scenario>` rows are the other scenarios, every other row keeps the one of the primary result."""
+    return variant.variant.removeprefix("land_") if variant.variant.startswith("land_") else default
+
+
+def h5_summary_frame(
+    variants: Sequence[H5Variant], window: str, land_scenario: str = "central"
+) -> pd.DataFrame:
+    """The primary result of H5 and its sensitivities, one row each (D-F7-051); the first variant is the primary one."""
+    return pd.DataFrame(
+        [
+            {
+                "variant": v.variant,
+                "primary": i == 0,
+                "window": window,
+                "land_scenario": _scenario_of(v, land_scenario),
+                "lam": v.lam,
+                "tau_usd_per_mwh": v.tau,
+                "domain": v.domain,
+                "conversion": v.conversion,
+                "excluded_gcms": "|".join(v.excluded_gcms),
+                "channels": "|".join(v.channels),
+                "status": v.status,
+                "verdict": v.verdict,
+                "verdict_reason": v.verdict_reason,
+                "n_domain_cells": v.n_domain_cells,
+                "domain_capacity_gw": v.domain_capacity_gw,
+                "e0_twh": v.e0_twh,
+                "target_value": v.target_value,
+                "target_unit": v.target_unit,
+                "target_horizon": v.target_horizon,
+                "target_source": v.target_source,
+                "g_twh": v.g_twh,
+                "cf_bar": v.cf_bar,
+                "target_exceeds_domain": v.target_exceeds_domain,
+                "h0_twh": v.h0_twh,
+                "delta_e_twh": v.delta_e_twh,
+                "member_min": v.member_min,
+                "r_loss": v.r_loss,
+                "h5a_holds": v.h5a_holds,
+                "max_gain_twh": v.max_gain_twh,
+                "median_change_twh": v.median_change_twh,
+                "exposure_available": v.exposure_available,
+                "exposure_reason": v.exposure_reason,
+                "e_exp_twh": v.e_exp_twh,
+                "member_exp_max": v.member_exp_max,
+                "r_exp": v.r_exp,
+                "h5b_holds": v.h5b_holds,
+                "e_exp_comparable_twh": v.e_exp_comparable_twh,
+                "e_exp_reference_twh": v.e_exp_reference_twh,
+                "exposure_increment_twh": v.exposure_increment_twh,
+                "reference_channels": "|".join(v.reference_channels),
+                "delta_e_over_g": v.delta_e_over_g,
+                "e_exp_over_g": v.e_exp_over_g,
+            }
+            for i, v in enumerate(variants)
+        ]
+    ).astype(
+        {
+            "verdict": "object",
+            "verdict_reason": "object",
+            "target_value": "float64",
+            "target_unit": "object",
+            "target_horizon": "Int64",
+            "target_source": "object",
+            "g_twh": "float64",
+            "cf_bar": "float64",
+            "h0_twh": "float64",
+            "r_loss": "float64",
+            "h5a_holds": "object",
+            "exposure_reason": "object",
+            "e_exp_twh": "float64",
+            "member_exp_max": "object",
+            "r_exp": "float64",
+            "h5b_holds": "object",
+            "e_exp_comparable_twh": "float64",
+            "e_exp_reference_twh": "float64",
+            "exposure_increment_twh": "float64",
+            "delta_e_over_g": "float64",
+            "e_exp_over_g": "float64",
+        }
+    )
+
+
+def h5_members_frame(
+    variant: H5Variant,
+    window: str,
+    labels: Mapping[str, tuple[str, str]],
+    land_scenario: str = "central",
+) -> pd.DataFrame:
+    """H5 per member in the primary setting: the energy of the fixed domain, its change against `E_0` and the exposed energy (D-F7-051).
+
+    Args:
+        variant: The primary result.
+        window: The window name.
+        labels: Member -> (GCM, SSP).
+        land_scenario: The land scenario of the result.
+    """
+    hazard = dict(zip(variant.hazard_members, variant.exposed_by_member_twh, strict=True))
+    reference = (
+        dict(zip(variant.hazard_members, variant.exposed_reference_by_member_twh, strict=True))
+        if variant.exposed_reference_by_member_twh
+        else {}
+    )
+    rows = []
+    for member, energy in zip(variant.members, variant.member_energy_twh, strict=True):
+        gcm, ssp = labels[member]
+        rows.append(
+            {
+                "member": member,
+                "gcm": gcm,
+                "ssp": ssp,
+                "window": window,
+                "land_scenario": land_scenario,
+                "e0_twh": variant.e0_twh,
+                "energy_twh": energy,
+                "change_twh": energy - variant.e0_twh,
+                "attains_min": member == variant.member_min,
+                "carries_hazard_channel": member in hazard,
+                "exposed_twh": hazard.get(member),
+                "exposed_reference_twh": reference.get(member),
+                "attains_exposure_max": member == variant.member_exp_max,
+            }
+        )
+    return pd.DataFrame(rows).astype({"exposed_twh": "float64", "exposed_reference_twh": "float64"})

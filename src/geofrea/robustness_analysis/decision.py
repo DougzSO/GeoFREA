@@ -53,6 +53,7 @@ class TechDecision:
     capacity_target_gw: float | None
     top_k_percent: float | None
     prim_outcome_share: float | None
+    tau_range: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -83,8 +84,19 @@ def _value(entry: object) -> float | None:
     return None if value is None else float(value)
 
 
+def _range(entry: object) -> tuple[float, float] | None:
+    bounds = getattr(entry, "range", None)
+    if (
+        bounds is None
+        or getattr(bounds, "min", None) is None
+        or getattr(bounds, "max", None) is None
+    ):
+        return None
+    return float(bounds.min), float(bounds.max)
+
+
 def decision_values(tech_params: object, technology: str) -> TechDecision:
-    """Read the five decision parameters from a country's technology block of `parameters.json`."""
+    """Read the five decision parameters from a country's technology block of `parameters.json`, and the sourced range of `tau` (H5)."""
     return TechDecision(
         technology=technology,
         cf_min=_value(getattr(tech_params, "cf_min", None)),
@@ -92,6 +104,7 @@ def decision_values(tech_params: object, technology: str) -> TechDecision:
         capacity_target_gw=_value(getattr(tech_params, "capacity_target_gw", None)),
         top_k_percent=_value(getattr(tech_params, "top_k_percent", None)),
         prim_outcome_share=_value(getattr(tech_params, "prim_outcome_share", None)),
+        tau_range=_range(getattr(tech_params, "tau_lcoe_usd_per_mwh", None)),
     )
 
 
@@ -186,6 +199,14 @@ def skipped_outputs(
             SkippedOutput(
                 "H4 axis displacements, the dominance ratio, the profile and the sensitivities (M-F7-06, M-F7-07)",
                 "hypothesis_rules.H4 is null",
+                "OQ-050",
+            )
+        )
+    if h5_rule(experiments) is None:
+        skipped.append(
+            SkippedOutput(
+                "H5 energy loss, exposure, the verdict and the sensitivities (M-F7-07)",
+                "hypothesis_rules.H5 is null",
                 "OQ-050",
             )
         )

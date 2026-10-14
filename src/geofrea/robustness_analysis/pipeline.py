@@ -58,6 +58,8 @@ from geofrea.robustness_analysis.assemble import (
     h3_sites_frame,
     h3_summary_frame,
     h4_country_frame,
+    h5_members_frame,
+    h5_summary_frame,
     hypothesis_frame,
     nominal_by_member_frame,
     prim_frame,
@@ -77,6 +79,7 @@ from geofrea.robustness_analysis.decision import (
     h2_rule,
     h3_rule,
     h4_rule,
+    h5_rule,
     refusals,
     regret_quantile,
     rules_for,
@@ -132,7 +135,19 @@ from geofrea.robustness_analysis.h4_axis_dominance import (
 from geofrea.robustness_analysis.h4_axis_dominance import (
     sensitivity_variants as h4_sensitivity_variants,
 )
+from geofrea.robustness_analysis.h5_climate_pressure import (
+    H5Error,
+    H5Inputs,
+    H5Variant,
+    Target,
+    evaluate_h5,
+    inputs_from_tables,
+)
+from geofrea.robustness_analysis.h5_climate_pressure import (
+    sensitivity_variants as h5_sensitivity_variants,
+)
 from geofrea.robustness_analysis.hypotheses import (
+    H5_DESCRIPTIVE,
     agreement,
     evaluate_rules,
     h1,
@@ -146,6 +161,8 @@ from geofrea.robustness_analysis.hypotheses import (
     h4,
     h4_primary,
     h5,
+    h5_primary,
+    h5_verdict_entries,
 )
 from geofrea.robustness_analysis.prim import run_prim
 from geofrea.robustness_analysis.table_schemas import (
@@ -160,6 +177,8 @@ from geofrea.robustness_analysis.table_schemas import (
     H3SiteRow,
     H3SummaryRow,
     H4CountryRow,
+    H5MemberRow,
+    H5SummaryRow,
     HypothesisRow,
     NominalByMemberRow,
     PotentialBelowTauRow,
@@ -168,6 +187,7 @@ from geofrea.robustness_analysis.table_schemas import (
     SspScoreRow,
 )
 from geofrea.robustness_analysis.thesis_tables import (
+    UNION,
     HazardMember,
     exposure_rows,
     potential_below_tau_draws,
@@ -198,11 +218,14 @@ ROW_MODELS: dict[str, type[BaseModel]] = {
     "h3_summary": H3SummaryRow,
     "h3_sites": H3SiteRow,
     "h4_country": H4CountryRow,
+    "h5_summary": H5SummaryRow,
+    "h5_members": H5MemberRow,
 }
 H1_TABLES = ("ssp_scores", "h1_sites", "h1_summary")
 H2_TABLES = ("h2_summary", "h2_regions")
 H3_TABLES = ("h3_summary", "h3_sites")
 H4_TABLES = ("h4_country",)
+H5_TABLES = ("h5_summary", "h5_members")
 WINDOW_TABLES = tuple(ROW_MODELS)  # the files written per technology and window role
 
 
@@ -463,6 +486,71 @@ def _scenario_tables(
     else:
         lcoe = pd.read_parquet(paths.lcoe_dir / f"lcoe_nominal_{tech}__{scenario}.parquet")
     return potential, lcoe
+
+
+def _national_target(
+    experiments: ExperimentsFile, iso: str, technology: str
+) -> tuple[Target, list[Target]]:
+    """The national target of H5 for a country and technology and its alternatives (OQ-010); null while `experiments.yaml` has no value."""
+    config = experiments.national_targets.get(iso, {}).get(technology)
+    if config is None:
+        return Target(None), []
+    alternatives = [
+        Target(a.value, a.unit, a.horizon, a.source)
+        for a in config.alternatives
+        if a.value is not None
+    ]
+    return Target(config.value, config.unit, config.horizon, config.source), alternatives
+
+
+def _check_h5_inputs(inputs: H5Inputs, cell_set: CellSet, evaluation, rows: Sequence[dict]) -> None:
+    """The cells, energies and nominal LCOE that H5 reads from the tables are those of the F7 set and the evaluation (V-03)."""
+    if not np.array_equal(inputs.cell_id, cell_set.f7_ids):
+        raise RobustnessInputError(
+            "H5: the like-for-like cells of the tables are not the F7 set (V-03)"
+        )
+    worlds = [cell_set.reference, *cell_set.core]
+    for column, world in enumerate(worlds):
+        if not np.allclose(
+            inputs.energy_twh[:, column] * 1.0e6, world.cells.energy_mwh, rtol=1e-9, atol=0.0
+        ):
+            raise RobustnessInputError(
+                f"H5: the energy of {world.member} differs between the tables and the F7 set (V-03)"
+            )
+    if not np.allclose(inputs.lcoe, evaluation.nominal_lcoe, rtol=1e-9, atol=0.0, equal_nan=True):
+        raise RobustnessInputError(
+            "H5: the nominal LCOE of the tables and of the evaluation differ (V-03)"
+        )
+
+
+def _check_h5_against_t_r12(variant: H5Variant, rows: Sequence[dict]) -> None:
+    """The energy of the fixed domain per member is the `fixed_domain` series of T-R12 (D-F7-052)."""
+    fixed = {
+        r["member"]: r["potential_twh"]
+        for r in rows
+        if r["land_scenario"] == CENTRAL_SCENARIO
+        and r["series"] == "fixed_domain"
+        and r["basis"] == "nominal"
+    }
+    for member, energy in zip(variant.members, variant.member_energy_twh, strict=True):
+        if abs(fixed[member] - energy) > 1e-9 * max(1.0, abs(energy)):
+            raise RobustnessInputError(
+                f"{member}: the energy of H5 and the fixed_domain series of T-R12 differ (V-03)"
+            )
+
+
+def _check_h5_against_t_r10(variant: H5Variant, exposure: pd.DataFrame) -> None:
+    """The exposed energy per hazard member is the `any_channel` rows of T-R10 over the economic domain (D-F7-052)."""
+    union = exposure[
+        (exposure["hazard"] == UNION)
+        & (exposure["group"] == "economic_domain")
+        & (exposure["basis"] == "absolute")
+    ].set_index("member")["potential_twh"]
+    for member, energy in zip(variant.hazard_members, variant.exposed_by_member_twh, strict=True):
+        if abs(float(union[member]) - energy) > 1e-9 * max(1.0, abs(energy)):
+            raise RobustnessInputError(
+                f"{member}: the exposed energy of H5 and of T-R10 differ (V-03)"
+            )
 
 
 def run_window(
@@ -934,10 +1022,45 @@ def run_window(
                 "n/a" if h4_primary_variant.rho is None else f"{h4_primary_variant.rho:.3f}",
             )
 
-    # T-R12: the potential below tau in the three land scenarios, and the draws of the central one
+    # the hazard channel: members that carry it, thresholds (OQ-051) and the rows of `hazard_context` (T-R10 and H5b read the same ones)
+    hazard_members = [e for e in entries if e.window == window and e.hazard]
+    thresholds = {k: v.threshold for k, v in experiments.hazard_thresholds.items()}
+    hazard_path = paths.climate_dir / "hazard_context.parquet"
+    hazard_slots = [
+        (member_ids.index(e.member), e.member) for e in hazard_members if e.member in member_ids
+    ]
+    hazard_table = (
+        pd.read_parquet(hazard_path)
+        if hazard_slots and all(v is not None for v in thresholds.values())
+        else pd.DataFrame(
+            {"cell_id": pd.Series(dtype="int64"), "member": pd.Series(dtype="object")}
+        )
+    )  # not read when H5b cannot use it: `build_exposure` then gives the reason
+    gcm_of = {m: by_member[m].gcm or "" for m in member_ids}
+
+    # T-R12 and H5: the potential below tau in the three land scenarios, the draws of the central one, and the fixed economic domain of H5
     land_range: dict[str, tuple[float, float]] = {}
+    rule5 = h5_rule(experiments)
+    h5_variants: list[H5Variant] = []
+    h5_statistics: list = []
+    h5_primary_variant: H5Variant | None = None
+    if rule5 is None:
+        for kind in H5_TABLES:
+            skips[kind] = SkippedOutput(
+                "H5 energy loss, exposure, the verdict and the sensitivities (M-F7-07)",
+                "hypothesis_rules.H5 is null",
+                "OQ-050",
+            )
+    elif decision.tau is None:
+        for kind in H5_TABLES:
+            skips[kind] = SkippedOutput(
+                "H5 energy loss, exposure, the verdict and the sensitivities (M-F7-07)",
+                "tau_lcoe_usd_per_mwh is null",
+                "OQ-008",
+            )
     if decision.tau is not None and evaluation.potential_gw is not None:
         assert evaluation.potential_twh is not None
+        target, alternatives = _national_target(experiments, iso, tech)
         rows: list[dict] = []
         for scenario in LAND_SCENARIOS:
             potential, lcoe = _scenario_tables(scenario, tech, paths)
@@ -964,6 +1087,52 @@ def run_window(
                     )
                 ),
             )
+            if rule5 is not None:
+                inputs5 = inputs_from_tables(
+                    potential,
+                    lcoe,
+                    member_ids,
+                    [gcm_of[m] for m in member_ids],
+                    REFERENCE_MEMBER_ID,
+                    decision.cf_min,
+                    scenario,
+                    hazard=hazard_table,
+                    hazard_members=hazard_slots,
+                    thresholds=thresholds,
+                )
+                try:
+                    if scenario == CENTRAL_SCENARIO:
+                        _check_h5_inputs(inputs5, cell_set, evaluation, rows)
+                        h5_primary_variant = evaluate_h5(
+                            inputs5, target, lam=rule5.lambda_, tau=decision.tau
+                        )
+                        h5_variants += [
+                            h5_primary_variant,
+                            *h5_sensitivity_variants(
+                                inputs5,
+                                target,
+                                h5_primary_variant,
+                                lam_sensitivity=rule5.sensitivity_lambda,
+                                tau_range=decision.tau_range,
+                                tcr_exception_gcms=sorted(
+                                    {e.gcm or "" for e in entries if e.tcr_exception}
+                                ),
+                                alternative_targets=alternatives,
+                            ),
+                        ]
+                    else:
+                        h5_variants.append(
+                            evaluate_h5(
+                                inputs5,
+                                target,
+                                lam=rule5.lambda_,
+                                tau=decision.tau,
+                                variant=f"land_{scenario}",
+                            )
+                        )
+                except H5Error as exc:
+                    raise RobustnessInputError(f"H5 cannot be computed: {exc}") from exc
+            del potential, lcoe
         rows += potential_below_tau_draws(
             member_ids,
             REFERENCE_MEMBER_ID,
@@ -986,6 +1155,23 @@ def run_window(
                     f"{member}: the potential below tau of the tables and of the evaluation differ (V-03)"
                 )
         frames["potential_below_tau"] = pd.DataFrame(rows)
+        if h5_primary_variant is not None:
+            _check_h5_against_t_r12(h5_primary_variant, rows)
+            labels = {m: (gcm_of[m], by_member[m].ssp or "") for m in member_ids}
+            frames["h5_summary"] = h5_summary_frame(h5_variants, window)
+            frames["h5_members"] = h5_members_frame(h5_primary_variant, window, labels)
+            h5_statistics = h5_primary(h5_primary_variant, cell_set.n_f7)
+            logger.info(
+                "%s %s [%s]: H5 %s (status %s, R_loss %s, R_exp %s, lambda %.2f)",
+                iso,
+                tech,
+                role,
+                h5_primary_variant.verdict,
+                h5_primary_variant.status,
+                "n/a" if h5_primary_variant.r_loss is None else f"{h5_primary_variant.r_loss:.3f}",
+                "n/a" if h5_primary_variant.r_exp is None else f"{h5_primary_variant.r_exp:.3f}",
+                rule5.lambda_ if rule5 is not None else float("nan"),
+            )
     else:
         skips["potential_below_tau"] = SkippedOutput(
             "potential below tau per member (T-R12)", "tau_lcoe_usd_per_mwh is null", "OQ-008"
@@ -993,11 +1179,11 @@ def run_window(
 
     # T-R10: exposure of potential to the hazard indicators, members with the hazard channel only
     exposure_shares: dict[str, float] = {}
-    hazard_members = [e for e in entries if e.window == window and e.hazard]
-    thresholds = {k: v.threshold for k, v in experiments.hazard_thresholds.items()}
-    hazard_path = paths.climate_dir / "hazard_context.parquet"
     if hazard_members and any(v is not None for v in thresholds.values()):
         groups = {"f7_set": np.ones(cell_set.n_f7, dtype=bool)}
+        if decision.tau is not None:
+            nominal = evaluation.nominal_lcoe[:, 0]
+            groups["economic_domain"] = np.isfinite(nominal) & (nominal <= decision.tau)
         if ranking.top_nominal is not None and ranking.top_robust is not None:
             groups["nominal_top_k"] = ranking.top_nominal.mask
             groups["robust_top_k"] = ranking.top_robust.mask
@@ -1018,6 +1204,8 @@ def run_window(
             pd.read_parquet(hazard_path), members, thresholds, cell_set.f7_ids, groups
         )
         frames["hazard_exposure"] = pd.DataFrame(rows)
+        if h5_primary_variant is not None and h5_primary_variant.exposure_available:
+            _check_h5_against_t_r10(h5_primary_variant, frames["hazard_exposure"])
     elif not hazard_members:
         skips["hazard_exposure"] = SkippedOutput(
             "hazard exposure (T-R10)",
@@ -1042,6 +1230,7 @@ def run_window(
         statistics += h5(
             evaluation, cell_set.n_f7, decision.capacity_target_gw, exposure_shares, land_range
         )
+    statistics += h5_statistics
     _, without_rule = rules_for(experiments)
     for hypothesis in without_rule:
         logger.warning(
@@ -1065,6 +1254,14 @@ def run_window(
         for at, stat in enumerate(statistics):
             if stat.statistic == "h3_beyond_reach_share":
                 verdicts[at] = h3_verdict_entry(h3_variant)
+    h5_entries = {} if h5_primary_variant is None else h5_verdict_entries(h5_primary_variant)
+    for at, stat in enumerate(
+        statistics
+    ):  # H5: its rule names two ratios; the other rows are descriptive
+        if stat.statistic in h5_entries:
+            verdicts[at] = h5_entries[stat.statistic]
+        elif stat.hypothesis == "H5" and rule5 is not None and verdicts[at]["verdict"] is None:
+            verdicts[at] = {"rule": None, "verdict": None, "verdict_reason": H5_DESCRIPTIVE}
     frames["hypothesis"] = hypothesis_frame(statistics, verdicts, window)
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
     return _window_result(role, window, cell_set, ranking, tables)

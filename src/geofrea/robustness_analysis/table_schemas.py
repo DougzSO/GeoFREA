@@ -425,3 +425,86 @@ class H4VerdictRow(BaseModel):
     n_no_displacement: int | None
     verdict: str | None
     reason: str | None
+
+
+class H5SummaryRow(BaseModel):
+    """H5 for one country, technology, window, land scenario and setting: `variant` `primary` carries the verdict (D-F7-051).
+
+    `e0_twh` is the baseline economic potential of the fixed domain, `g_twh` the target in TWh/year (the original value, unit, horizon and
+    source beside it, and `cf_bar` the capacity factor of the conversion of a target in GW), `h0_twh = e0_twh - g_twh` the slack. H5a is
+    `delta_e_twh` (the largest reduction of the domain energy over the members, at least 0) and `r_loss = delta_e_twh / h0_twh`; H5b is
+    `e_exp_twh` (the largest exposed energy over the hazard members) and `r_exp = e_exp_twh / h0_twh`, with the same statistic for the reference
+    indicators (`e_exp_reference_twh`, over the `reference_channels`) and the increment against the absolute one on the same channels. `status`
+    is `tested`, `not_testable` (no target) or `target_not_met_at_reference` (`h0_twh <= 0`, ratios on `g_twh` only); the verdict is null unless
+    the status is `tested` and H5b is available. `excluded_gcms` and `channels` are joined by `|`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant: str
+    primary: bool
+    window: str
+    land_scenario: str
+    lam: float
+    tau_usd_per_mwh: float
+    domain: str
+    conversion: str
+    excluded_gcms: str
+    channels: str
+    status: str
+    verdict: str | None
+    verdict_reason: str | None
+    n_domain_cells: int
+    domain_capacity_gw: float
+    e0_twh: float
+    target_value: float | None
+    target_unit: str | None
+    target_horizon: int | None
+    target_source: str | None
+    g_twh: float | None
+    cf_bar: float | None
+    target_exceeds_domain: bool
+    h0_twh: float | None
+    delta_e_twh: float
+    member_min: str
+    r_loss: float | None
+    h5a_holds: bool | None
+    max_gain_twh: float
+    median_change_twh: float
+    exposure_available: bool
+    exposure_reason: str | None
+    e_exp_twh: float | None
+    member_exp_max: str | None
+    r_exp: float | None
+    h5b_holds: bool | None
+    e_exp_comparable_twh: float | None
+    e_exp_reference_twh: float | None
+    exposure_increment_twh: float | None
+    reference_channels: str
+    delta_e_over_g: float | None
+    e_exp_over_g: float | None
+
+
+class H5MemberRow(BaseModel):
+    """H5 for one member of the window, in the primary setting (D-F7-051): the energy of the fixed domain and the exposed energy.
+
+    `change_twh` is `energy_twh - e0_twh` (negative: a loss); `attains_min` marks the member that sets `Delta E`. The exposed energy is null
+    for a member without the hazard channel, never zero (L-021); `exposed_reference_twh` is null where there is no channel with a reference value;
+    `attains_exposure_max` marks the member that sets `E_exp`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    member: str
+    gcm: str
+    ssp: str
+    window: str
+    land_scenario: str
+    e0_twh: float
+    energy_twh: float
+    change_twh: float
+    attains_min: bool
+    carries_hazard_channel: bool
+    exposed_twh: float | None
+    exposed_reference_twh: float | None
+    attains_exposure_max: bool

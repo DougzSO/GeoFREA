@@ -10,8 +10,10 @@ from test_robustness_evaluator import _samples, _world
 from geofrea.lcoe_modeling.kernel import lcoe_block
 from geofrea.robustness_analysis.futures import FuturesError, MemberLabel, futures_pass, slug
 from geofrea.robustness_analysis.thesis_tables import (
+    UNION,
     HazardMember,
     ThesisTableError,
+    exposed_flags,
     exposure_rows,
     potential_below_tau_nominal,
 )
@@ -151,7 +153,11 @@ def test_exposure_sums_the_potential_above_the_threshold_by_group_and_skips_null
         hazard, [member], {"tx35_days": 30.0, "rx5day_mm": None}, ids, groups
     )
     got = {(r["group"], r["basis"]): r for r in rows}
-    assert {r["hazard"] for r in rows} == {"tx35_days"}  # the null threshold is skipped
+    assert {r["hazard"] for r in rows} == {
+        "tx35_days",
+        "any_channel",
+    }  # the null threshold is skipped; the union of one channel is that channel
+    assert got[("f7_set", "absolute")]["potential_gw"] == pytest.approx(0.5)  # cells 11, 12
     assert got[("f7_set", "absolute")]["potential_gw"] == pytest.approx(0.5)  # cells 11, 12
     assert got[("robust_top_k", "absolute")]["n_cells"] == 2
     assert got[("f7_set", "reference")]["potential_gw"] == pytest.approx(
@@ -166,3 +172,92 @@ def test_exposure_refuses_a_hazard_member_without_rows_for_the_f7_set():
     member = HazardMember("h1", "G", "S", np.array([1.0, 1.0]), np.array([1.0, 1.0]))
     with pytest.raises(ThesisTableError):
         exposure_rows(hazard, [member], {"tx35_days": 0.0}, np.array([10, 11]), {})
+
+
+@pytest.mark.unit
+def test_a_cell_exactly_at_the_threshold_is_exposed_because_the_comparison_is_at_least():
+    ids = np.array([10, 11, 12])
+    rows = pd.DataFrame({"tx35_days": [29.9, 30.0, 30.1]}, index=pd.Index(ids, name="cell_id"))
+    flags = exposed_flags(rows, ids, "tx35_days", 30.0, "absolute", "h1")
+    assert flags.tolist() == [False, True, True]
+    nan = pd.DataFrame({"tx35_days": [np.nan, 31.0, 2.0]}, index=pd.Index(ids, name="cell_id"))
+    assert exposed_flags(nan, ids, "tx35_days", 30.0, "absolute", "h1").tolist() == [
+        False,
+        True,
+        False,
+    ]
+    with pytest.raises(ThesisTableError, match="reference value of the same quantity"):
+        exposed_flags(rows, ids, "wet_p95_exceed_freq", 0.1, "reference", "h1")
+    with pytest.raises(ThesisTableError, match="lack cells"):
+        exposed_flags(rows, np.array([10, 99]), "tx35_days", 30.0, "absolute", "h1")
+
+
+@pytest.mark.unit
+def test_the_any_channel_rows_count_a_cell_once_and_the_gust_is_its_own_reference():
+    ids = np.array([10, 11, 12, 13])
+    hazard = pd.DataFrame(
+        {
+            "cell_id": ids,
+            "member": "h1",
+            "tx35_days": [40.0, 40.0, 1.0, 1.0],  # cells 10 and 11
+            "tx35_days_ref": [1.0, 1.0, 1.0, 1.0],
+            "rx5day_mm": [90.0, 1.0, 90.0, 1.0],  # cells 10 and 12
+            "rx5day_mm_ref": [1.0, 1.0, 1.0, 1.0],
+            "gust_mean_annual_max_ms": [1.0, 1.0, 1.0, 50.0],  # cell 13
+        }
+    )
+    member = HazardMember(
+        "h1",
+        "GCM-A",
+        "SSP3-7.0",
+        np.array([100.0, 200.0, 300.0, 400.0]),
+        np.array([1e6, 2e6, 3e6, 4e6]),
+    )
+    thresholds = {"tx35_days": 30.0, "rx5day_mm": 50.0, "gust_mean_annual_max_ms": 30.0}
+    rows, _ = exposure_rows(hazard, [member], thresholds, ids, {"f7_set": np.ones(4, dtype=bool)})
+    got = {(r["hazard"], r["basis"]): r for r in rows}
+    union = got[(UNION, "absolute")]
+    assert (
+        union["n_cells"] == 4
+    )  # cells 10, 11, 12 and 13, cell 10 counted once although it is in two channels
+    assert union["potential_twh"] == pytest.approx(10.0)
+    assert (
+        got[("tx35_days", "absolute")]["n_cells"] == 2
+        and got[("rx5day_mm", "absolute")]["n_cells"] == 2
+    )
+    # the reference values: none of the heat or rain cells reach the thresholds; the gust is its own reference
+    assert got[(UNION, "reference")]["n_cells"] == 1 and got[(UNION, "reference")][
+        "potential_twh"
+    ] == pytest.approx(4.0)
+    assert got[("gust_mean_annual_max_ms", "reference")]["n_cells"] == 1
+
+
+@pytest.mark.unit
+def test_the_fixed_domain_series_is_the_energy_of_the_cells_below_tau_at_the_reference_in_every_member():
+    # cell 1 is cheap at m0 and dear in mA; cell 2 is dear at m0 and cheap in mA; cell 3 is below cf_min at m0
+    potential = _potential(
+        [
+            (1, "m0", 100.0, 0.40, 350400.0),
+            (2, "m0", 200.0, 0.35, 613200.0),
+            (3, "m0", 300.0, 0.20, 525600.0),
+            (1, "mA", 100.0, 0.30, 262800.0),
+            (2, "mA", 200.0, 0.34, 595680.0),
+            (3, "mA", 300.0, 0.20, 525600.0),
+        ]
+    )
+    lcoe = pd.DataFrame(
+        {
+            "cell_id": [1, 2, 3, 1, 2, 3],
+            "member": ["m0", "m0", "m0", "mA", "mA", "mA"],
+            "lcoe_nominal": [40.0, 60.0, 30.0, 70.0, 45.0, 30.0],
+        }
+    )
+    rows = potential_below_tau_nominal(potential, lcoe, ["mA"], "m0", 0.3, 50.0, None, "central")
+    got = {(r["member"], r["series"]): r for r in rows}
+    # the domain is cell 1 only (cheap at the reference, feasible there), kept in mA although dearer than tau there
+    assert got[("m0", "fixed_domain")]["potential_twh"] == pytest.approx(350400.0 / 1e6)
+    assert got[("mA", "fixed_domain")]["potential_twh"] == pytest.approx(262800.0 / 1e6)
+    assert got[("mA", "fixed_domain")]["potential_gw"] == pytest.approx(0.1)
+    assert got[("mA", "like_for_like")]["potential_gw"] == pytest.approx(
+        0.2
+    )  # the dynamic domain of mA is cell 2 alone, not cell 1

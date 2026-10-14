@@ -30,6 +30,7 @@ from geofrea.robustness_analysis.h3_robust_vs_nominal import (
     centroid_distance_km,
 )
 from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
+from geofrea.robustness_analysis.h5_climate_pressure import TESTED, H5Variant
 from geofrea.robustness_analysis.rankings import jaccard_masks
 
 if TYPE_CHECKING:
@@ -568,6 +569,112 @@ def h4(cell_set: CellSet, evaluation: Evaluation, ranking: Rankings | None) -> l
     return rows
 
 
+H5_DESCRIPTIVE = "descriptive evidence, no verdict (the primary statistics of H5 are h5a_resource_loss_ratio and h5b_exposure_ratio)"
+H5A_PRIMARY = "h5a_resource_loss_ratio"
+H5B_PRIMARY = "h5b_exposure_ratio"
+
+
+def h5_primary(variant: H5Variant, n_cells: int) -> list[Statistic]:
+    """H5: the two ratios `R_loss` and `R_exp` (the statistics the pre-registered rule names), the energies behind them and the target slack.
+
+    Implements: M-F7-07 (H5). The verdict is given by `h5_verdict_entries`; the full result is in the `h5_summary` table.
+    """
+
+    def row(name: str, value: float | None, note: str) -> Statistic:
+        return Statistic("H5", name, _clean(value), n_cells=n_cells, note=note)
+
+    return [
+        row(
+            H5A_PRIMARY,
+            variant.r_loss,
+            "H5a: R_loss = Delta E / H_0, the largest reduction of the energy of the fixed economic domain over the members, relative to the slack",
+        ),
+        row(
+            H5B_PRIMARY,
+            variant.r_exp,
+            "H5b: R_exp = E_exp / H_0, the largest exposed energy of the fixed economic domain over the members with the hazard channel, relative to the slack",
+        ),
+        row(
+            "h5_baseline_energy_twh",
+            variant.e0_twh,
+            f"{H5_DESCRIPTIVE}; E_0, the energy of the fixed economic domain at the reference member",
+        ),
+        row(
+            "h5_target_twh",
+            variant.g_twh,
+            f"{H5_DESCRIPTIVE}; G, the national target in TWh/year (conversion: {variant.conversion})",
+        ),
+        row("h5_slack_twh", variant.h0_twh, f"{H5_DESCRIPTIVE}; H_0 = E_0 - G"),
+        row(
+            "h5_energy_loss_twh",
+            variant.delta_e_twh,
+            f"{H5_DESCRIPTIVE}; Delta E, the largest reduction over the members, at least 0",
+        ),
+        row(
+            "h5_exposed_energy_twh",
+            variant.e_exp_twh,
+            f"{H5_DESCRIPTIVE}; E_exp, the largest exposed energy over the hazard members",
+        ),
+        row(
+            "h5_exposed_energy_reference_twh",
+            variant.e_exp_reference_twh,
+            f"{H5_DESCRIPTIVE}; the same statistic with the reference values of the indicators (channels: {'|'.join(variant.reference_channels) or 'none'})",
+        ),
+        row(
+            "h5_exposure_increment_twh",
+            variant.exposure_increment_twh,
+            f"{H5_DESCRIPTIVE}; the exposed energy that climate change adds to the reference one, on the channels that have a reference value",
+        ),
+        row(
+            "h5_loss_over_target",
+            variant.delta_e_over_g,
+            f"{H5_DESCRIPTIVE}; Delta E / G, reported when the target is not met at reference",
+        ),
+        row(
+            "h5_exposed_over_target",
+            variant.e_exp_over_g,
+            f"{H5_DESCRIPTIVE}; E_exp / G, reported when the target is not met at reference",
+        ),
+        row(
+            "h5_subhypotheses_holding",
+            None
+            if variant.h5a_holds is None or variant.h5b_holds is None
+            else float(variant.h5a_holds) + float(variant.h5b_holds),
+            f"status: {variant.status}; verdict: {variant.verdict}",
+        ),
+    ]
+
+
+def h5_verdict_entries(variant: H5Variant) -> dict[str, dict[str, str | None]]:
+    """The rule, the result (`met` is that the sub-hypothesis holds) and the reason of the two primary statistics of H5.
+
+    A target that is missing or not met at reference, and an exposure that is not available, give no result for the statistics they affect.
+    """
+    out: dict[str, dict[str, str | None]] = {}
+    for name, holds, available in (
+        (H5A_PRIMARY, variant.h5a_holds, True),
+        (H5B_PRIMARY, variant.h5b_holds, variant.exposure_available),
+    ):
+        text = (
+            f"{name} ge {variant.lam} (testable with a target and a positive slack H_0 = E_0 - G)"
+        )
+        if variant.status != TESTED:
+            out[name] = {"rule": text, "verdict": None, "verdict_reason": variant.verdict_reason}
+        elif not available or holds is None:
+            out[name] = {
+                "rule": text,
+                "verdict": None,
+                "verdict_reason": f"not available: {variant.exposure_reason}",
+            }
+        else:
+            out[name] = {
+                "rule": text,
+                "verdict": "met" if holds else "not_met",
+                "verdict_reason": None,
+            }
+    return out
+
+
 def h5(
     evaluation: Evaluation,
     n_cells: int,
@@ -583,6 +690,7 @@ def h5(
     rows: list[Statistic] = []
     if evaluation.potential_gw is None or evaluation.potential_twh is None:
         return rows
+    note = f"{H5_DESCRIPTIVE}; potential below tau of the dynamic domain (T-R12), the domain of each member"
     for unit, array in (("gw", evaluation.potential_gw), ("twh", evaluation.potential_twh)):
         reference, members = array[0], array[1:]
         change = members - reference[None, :]  # (M, N + 1)
@@ -594,6 +702,7 @@ def h5(
                 n_cells=n_cells,
                 k=None,
                 truncated=False,
+                note=note,
             )
         )
         for label, fn in (("min", np.min), ("median", np.median), ("max", np.max)):
@@ -605,6 +714,7 @@ def h5(
                     n_cells=n_cells,
                     k=None,
                     truncated=False,
+                    note=note,
                 )
             )
     if target_gw is not None:
@@ -617,11 +727,18 @@ def h5(
                 n_cells=n_cells,
                 k=None,
                 truncated=False,
+                note=note,
             )
         )
     for name, share in exposure_shares.items():
         rows.append(
-            Statistic("H5", f"h5_exposed_potential_share__{name}", _clean(share), n_cells=n_cells)
+            Statistic(
+                "H5",
+                f"h5_exposed_potential_share__{name}",
+                _clean(share),
+                n_cells=n_cells,
+                note=H5_DESCRIPTIVE,
+            )
         )
     for scenario, (reference_gw, median_gw) in land_range.items():
         rows.append(
@@ -630,6 +747,7 @@ def h5(
                 f"h5_land_{scenario}_potential_below_tau_gw_m0",
                 _clean(reference_gw),
                 n_cells=n_cells,
+                note=H5_DESCRIPTIVE,
             )
         )
         rows.append(
@@ -638,6 +756,7 @@ def h5(
                 f"h5_land_{scenario}_potential_below_tau_gw_median_over_members",
                 _clean(median_gw),
                 n_cells=n_cells,
+                note=H5_DESCRIPTIVE,
             )
         )
     return rows
