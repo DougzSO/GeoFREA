@@ -399,6 +399,8 @@ def fetch_borders(outputs_dir: Path, country_code: str) -> Path | None:
     Resolution (local database, cache, network, NaturalEarth) is
     `_resolve_level0()`. With `mainland_only: true` the returned path is
     the derived mainland-only file instead of the raw GADM one.
+
+    Implements: M-F1-07.
     """
     raw = _resolve_level0(outputs_dir, country_code)
     if raw is None or not _mainland_only(country_code):

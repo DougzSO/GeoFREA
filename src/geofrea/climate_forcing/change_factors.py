@@ -97,6 +97,8 @@ def compute_change_factor(
         neighbourhood: For a ratio factor only: size n of the n x n native-cell neighbourhood over which the
             window and reference annual means are averaged before the ratio is taken (OQ-042, option A). None keeps
             the per-cell ratio. A difference factor (tas) ignores it.
+
+    Implements: M-F4-03.
     """
     _, kind = FACTOR_DEFINITIONS[variable]
     ref = annual_mean_of_climatology(historical, reference_years)
@@ -130,6 +132,8 @@ def bilinear_to_points(field: xr.DataArray, lat: np.ndarray, lon: np.ndarray) ->
     `lon` may be given in -180..180; it is wrapped to the field's convention (0..360 or
     -180..180). Points outside the field's latitude range, or next to NaN native cells, give NaN
     (never extrapolated or filled).
+
+    Implements: M-F4-04.
     """
     lat = np.asarray(lat, dtype=float)
     lon = np.asarray(lon, dtype=float)

@@ -90,7 +90,10 @@ def _parse_window(text: str) -> tuple[int, int]:
 
 
 def load_ensemble(experiments_yaml: Path) -> Ensemble:
-    """Read `gcm_ensemble` from experiments.yaml; fail loud if it is absent or names an unknown SSP."""
+    """Read `gcm_ensemble` from experiments.yaml; fail loud if it is absent or names an unknown SSP.
+
+    Implements: M-F4-02.
+    """
     cfg = yaml.safe_load(Path(experiments_yaml).read_text(encoding="utf-8")).get("gcm_ensemble")
     if not cfg:
         raise MemberResolutionError(
@@ -131,7 +134,10 @@ def member_id(cds_name: str, ssp: str, window: tuple[int, int]) -> str:
 
 
 def resolve_members(ensemble: Ensemble) -> list[Member]:
-    """The reference member first, then the full factorial gcm x ssp x window."""
+    """The reference member first, then the full factorial gcm x ssp x window.
+
+    Implements: M-F4-01.
+    """
     members = [Member(REFERENCE_MEMBER_ID, None, None, None)]
     for gcm in ensemble.gcms:
         for ssp in ensemble.ssps:

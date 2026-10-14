@@ -103,6 +103,8 @@ def build_reference_grid(
 
     Returns:
         GridContext with aligned transform, dimensions, and country mask.
+
+    Implements: M-F2a-01.
     """
     minx, miny, maxx, maxy = country_gdf.total_bounds
 

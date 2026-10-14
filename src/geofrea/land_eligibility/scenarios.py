@@ -66,7 +66,10 @@ def scenario_composition(params: TechParameters) -> ScenarioComposition:
 
 
 def scenario_sets(params: TechParameters) -> dict[str, ParameterSet]:
-    """The `central`, `restrictive` and `permissive` parameter sets of one technology (V2)."""
+    """The `central`, `restrictive` and `permissive` parameter sets of one technology (V2).
+
+    Implements: M-F3-02, U-06.
+    """
     central = nominal_set(params)
     composition = scenario_composition(params)
     sets = {"central": dataclasses.replace(central, label="central")}

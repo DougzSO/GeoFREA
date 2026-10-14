@@ -105,7 +105,10 @@ def t_r11(ctx: BuildContext) -> None:
 
 def t_r2(ctx: BuildContext) -> None:
     """T-R2, per technology: eligible area, GW and TWh/yr at the reference member, the range across the members of each window and the
-    interval across the three land-availability scenarios."""
+    interval across the three land-availability scenarios.
+
+    Implements: T-R2.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         roles = _window_roles(ctx)
@@ -168,7 +171,10 @@ def t_r2(ctx: BuildContext) -> None:
 
 def t_o3(ctx: BuildContext) -> None:
     """T-O3, per technology: nominal supply curves (cumulative energy against LCOE) of the reference member and of each projection member,
-    one panel per window, projection members coloured by SSP."""
+    one panel per window, projection members coloured by SSP.
+
+    Implements: T-O3.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         roles = _window_roles(ctx)

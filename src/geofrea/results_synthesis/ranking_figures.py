@@ -103,7 +103,10 @@ def t_r4(ctx: BuildContext) -> None:
 
 def t_r5(ctx: BuildContext) -> None:
     """T-R5, per technology: the nominal rank against the robust rank of the ranked cells (the nominal and robust top-k marked) and the stability of
-    the top-k across the SSPs, drawn from the Jaccard of every pair of SSP shortlists and the core share C_k that F7 stored (H1)."""
+    the top-k across the SSPs, drawn from the Jaccard of every pair of SSP shortlists and the core share C_k that F7 stored (H1).
+
+    Implements: T-R5.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         try:

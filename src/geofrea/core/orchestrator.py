@@ -456,6 +456,8 @@ def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
         MissingProducerError: A requires key has no producer among
             phase_specs.
         DependencyCycleError: The dependency graph has a cycle.
+
+    Implements: A-01.
     """
     by_name = {spec.name: spec for spec in phase_specs}
 
@@ -850,6 +852,8 @@ class Orchestrator:
             was attempted, resumed, or skipped due to an upstream
             failure. Phases outside the transitive closure of
             target_phases are absent.
+
+        Implements: A-03.
         """
         ordered = _validate_and_order(phase_specs)
         by_name = {spec.name: spec for spec in ordered}

@@ -86,7 +86,10 @@ def stipple_points(marked: np.ndarray, extent: Extent) -> tuple[np.ndarray, np.n
 
 def t_r3(ctx: BuildContext) -> None:
     """T-R3, per technology: the change of the capacity factor of the core window by SSP, one panel per SSP, marked where the GCMs agree on the sign,
-    and the table of the share of cells in agreement."""
+    and the table of the share of cells in agreement.
+
+    Implements: T-R3.
+    """
     rule = ctx.experiments.thesis_figures.gcm_agreement
     window = ctx.experiments.windows["core"]
     core_window = f"{window['start_year']}-{window['end_year']}"

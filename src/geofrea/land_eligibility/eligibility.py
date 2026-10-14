@@ -128,7 +128,10 @@ def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np
 
 
 def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict[str, np.ndarray]:
-    """E1-E6 excluded shares (float32 in [0, 1]) for one parameter set."""
+    """E1-E6 excluded shares (float32 in [0, 1]) for one parameter set.
+
+    Implements: M-F2b-01.
+    """
     key = tuple(sorted(params.iucn_categories))
     if key not in layers.protected_fraction:
         raise MissingExclusionLayerError(
@@ -163,7 +166,10 @@ def valid_pixels(layers: EligibilityLayers) -> np.ndarray:
 def eligible_fraction(
     layers: EligibilityLayers, params: ParameterSet
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """(eligible share of each pixel in [0, 1], the six excluded shares); zero outside the valid pixels."""
+    """(eligible share of each pixel in [0, 1], the six excluded shares); zero outside the valid pixels.
+
+    Implements: M-F3-01.
+    """
     excl = exclusion_fractions(layers, params)
     eligible = np.ones(layers.country_mask.shape, dtype=np.float32)
     for share in excl.values():

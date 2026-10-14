@@ -63,7 +63,10 @@ def edges(graph: Mapping[str, Sequence[str]]) -> list[tuple[str, str]]:
 
 
 def t_m1(ctx: BuildContext) -> None:
-    """T-M1: the phases of the pipeline as a DAG with the member and sample axes."""
+    """T-M1: the phases of the pipeline as a DAG with the member and sample axes.
+
+    Implements: T-M1.
+    """
     graph = ctx.phase_graph
     if not graph:
         raise NotBuilt(

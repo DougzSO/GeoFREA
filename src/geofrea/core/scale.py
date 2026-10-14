@@ -111,7 +111,10 @@ def active_scale() -> CellScale:
 
 @contextmanager
 def use_scale(scale: str | CellScale) -> Iterator[CellScale]:
-    """Run the body at `scale`; the previous scale is restored on exit."""
+    """Run the body at `scale`; the previous scale is restored on exit.
+
+    Implements: M-F3-06, V-07.
+    """
     global _active
     chosen = get_scale(scale) if isinstance(scale, str) else scale
     previous, _active = _active, chosen

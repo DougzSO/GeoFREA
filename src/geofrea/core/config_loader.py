@@ -80,6 +80,8 @@ def load_technologies(path: Path) -> TechnologiesFile:
 
     Raises:
         pydantic.ValidationError: If the file's content doesn't match the schema.
+
+    Implements: A-04.
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     return TechnologiesFile.model_validate({"technologies": raw})
@@ -93,6 +95,8 @@ def load_experiments(path: Path) -> ExperimentsFile:
 
     Raises:
         pydantic.ValidationError: If the file's content doesn't match the schema.
+
+    Implements: U-03.
     """
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     return ExperimentsFile.model_validate(raw)

@@ -98,7 +98,10 @@ def _land_rows(ctx: BuildContext, technology: str) -> list[dict]:
 
 def t_m2(ctx: BuildContext) -> None:
     """T-M2, one table per technology: the land-availability parameters (E1 to E6 and the candidate filter), the structural choices of the
-    registry (resource layers, capacity-factor model, exclusion and cost-driver lists) and every parameter with its source and tier."""
+    registry (resource layers, capacity-factor model, exclusion and cost-driver lists) and every parameter with its source and tier.
+
+    Implements: T-M2.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         try:
@@ -156,7 +159,10 @@ def t_m2(ctx: BuildContext) -> None:
 
 
 def t_m3(ctx: BuildContext) -> None:
-    """T-M3: the uncertain parameters per technology with nominal value, range, distribution, source and tier, and the members of the futures design."""
+    """T-M3: the uncertain parameters per technology with nominal value, range, distribution, source and tier, and the members of the futures design.
+
+    Implements: T-M3.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         try:

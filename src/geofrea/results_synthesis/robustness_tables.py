@@ -177,7 +177,10 @@ def t_r6(ctx: BuildContext) -> None:
     """T-R6, per technology: the H1 to H5 statistics for the core window, the 2071-2100 window and the other cell scale, each with its
     pre-registered rule and verdict; the verdict table (one row per hypothesis: primary statistic, reference, threshold, verdict); and the
     F7 summaries of H1 (C_k, V_k), H2 (O), H3 (D, the price and the benefit of robustness) and H5 (R_loss, R_exp, the target and the slack)
-    with their sensitivities."""
+    with their sensitivities.
+
+    Implements: T-R6.
+    """
     require_current_cross_country(ctx)
     for technology in ctx.technologies:
         ctx.begin()
@@ -328,7 +331,10 @@ def t_r6(ctx: BuildContext) -> None:
 def t_r7(ctx: BuildContext) -> None:
     """T-R7, per technology: the climate and techno-economic displacement (D_clim, D_tec) and the dominance ratio rho by country, with the
     profile boundaries marked. The countries are those of the support phase cross_country_h4; without it the country alone is shown from its
-    own h4_country table, and the caption says so."""
+    own h4_country table, and the caption says so.
+
+    Implements: T-R7.
+    """
     require_current_cross_country(ctx)
     rule = ctx.experiments.hypothesis_rules.get("H4")
     if not isinstance(rule, H4Rule):
@@ -562,7 +568,10 @@ def t_r12(ctx: BuildContext) -> None:
 
 
 def t_o2(ctx: BuildContext) -> None:
-    """T-O2, per technology: MR against SR for the ranked cells, with the Kendall tau-b F7 wrote (agreement of the two rankings)."""
+    """T-O2, per technology: MR against SR for the ranked cells, with the Kendall tau-b F7 wrote (agreement of the two rankings).
+
+    Implements: T-O2.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         try:
@@ -614,7 +623,10 @@ def t_o2(ctx: BuildContext) -> None:
 
 def t_r9(ctx: BuildContext) -> None:
     """T-R9: external validation (F7b): excluded share under existing plants, enrichment in the lowest-LCOE deciles, comparison with published
-    potentials and the units behind them."""
+    potentials and the units behind them.
+
+    Implements: T-R9.
+    """
     caption_tail = " Existing plants reflect past auctions, policy and grid access: the table is plausibility evidence, not accuracy (M-F7b-04)."
     tables = {
         "exclusion_shares": (
@@ -653,7 +665,10 @@ def t_r9(ctx: BuildContext) -> None:
 
 def t_o1(ctx: BuildContext) -> None:
     """T-O1, per technology: the PRIM box chosen for the core window (M-F7-08), its limits on the share of the range of each restricted descriptor, the
-    5th to 95th percentile of each bound over the bootstrap replicates and the share of replicates that restrict the descriptor."""
+    5th to 95th percentile of each bound over the bootstrap replicates and the share of replicates that restrict the descriptor.
+
+    Implements: T-O1.
+    """
     for technology in ctx.technologies:
         ctx.begin()
         try:
