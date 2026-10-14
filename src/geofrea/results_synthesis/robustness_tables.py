@@ -18,6 +18,7 @@ from geofrea.results_synthesis.members import members_table
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_figure, write_table
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 
+T_O1 = "T-O1"
 T_R6, T_R7, T_R9, T_R10, T_R12, T_O2 = "T-R6", "T-R7", "T-R9", "T-R10", "T-R12", "T-O2"
 ROLES = ("core", "sensitivity")
 _VERSIONS = {ROBUSTNESS_TABLE_SCHEMA_VERSION}
@@ -628,3 +629,144 @@ def t_r9(ctx: BuildContext) -> None:
             text + caption_tail + note,
             latex=key != "validation_units",
         )
+
+
+def t_o1(ctx: BuildContext) -> None:
+    """T-O1, per technology: the PRIM box chosen for the core window (M-F7-08), its limits on the share of the range of each restricted descriptor, the
+    5th to 95th percentile of each bound over the bootstrap replicates and the share of replicates that restrict the descriptor."""
+    for technology in ctx.technologies:
+        ctx.begin()
+        try:
+            box = ctx.reader.table(f"prim_box_{technology}__core", _VERSIONS)
+            boot = ctx.reader.table(f"prim_bootstrap_{technology}__core", _VERSIONS)
+            trajectory = ctx.reader.table(f"prim_boxes_{technology}__core", _VERSIONS)
+        except MissingArtifactError as exc:
+            ctx.skip(T_O1, technology, str(exc))
+            continue
+        if box.empty:
+            ctx.skip(T_O1, technology, _reason(ctx.reader, f"prim_box_{technology}__core"))
+            continue
+        primary = box[box["primary"]].iloc[0]
+        if primary["status"] != "box_found":
+            ctx.skip(
+                T_O1, technology, f"no box to draw: the primary search ended as {primary['status']}"
+            )
+            continue
+        restricted = [d for d in str(primary["restricted"]).split("|") if d]
+        first = trajectory[trajectory["step"] == 0].iloc[0]
+        real = [d for d in restricted if f"{d}__min" in box.columns]
+        categorical = [d for d in restricted if d not in real]
+
+        def share(value: float, name: str, first=first) -> float:
+            low, high = float(first[f"{name}__min"]), float(first[f"{name}__max"])
+            return 0.0 if high == low else (float(value) - low) / (high - low)
+
+        def bounds(kind: str, name: str, boot=boot) -> tuple[float, float, float] | None:
+            row = boot[(boot["kind"] == kind) & (boot["name"] == name)]
+            if row.empty or pd.isna(row.iloc[0]["p50"]):
+                return None
+            r = row.iloc[0]
+            return float(r["p_low"]), float(r["p50"]), float(r["p_high"])
+
+        frequency = boot[boot["kind"] == "restriction"].set_index("name")["frequency"]
+        density = boot[boot["kind"] == "density"].iloc[0]
+        coverage = boot[boot["kind"] == "coverage"].iloc[0]
+        rows = []
+        for name in real:
+            rows.append(
+                {
+                    "descriptor": name,
+                    "lower": primary[f"{name}__min"],
+                    "upper": primary[f"{name}__max"],
+                    "lower_p_low": (bounds("lower", name) or (None,) * 3)[0],
+                    "lower_p_high": (bounds("lower", name) or (None,) * 3)[2],
+                    "upper_p_low": (bounds("upper", name) or (None,) * 3)[0],
+                    "upper_p_high": (bounds("upper", name) or (None,) * 3)[2],
+                    "restricted_in_share_of_replicates": frequency.get(name),
+                }
+            )
+        for name in categorical:
+            rows.append(
+                {
+                    "descriptor": name,
+                    "lower": primary[f"{name}__in"],
+                    "upper": None,
+                    "restricted_in_share_of_replicates": frequency.get(name),
+                }
+            )
+        write_table(
+            ctx,
+            T_O1,
+            "prim_box",
+            pd.DataFrame(rows),
+            f"PRIM box chosen for {technology}: the limits of the restricted descriptors with the 5th to 95th percentile of each bound over the bootstrap replicates and the share of replicates that restrict the descriptor.",
+            technology=technology,
+        )
+
+        def draw(
+            technology=technology,
+            real=real,
+            categorical=categorical,
+            primary=primary,
+            frequency=frequency,
+            density=density,
+            coverage=coverage,
+            share=share,
+            bounds=bounds,
+        ):
+            with style.thesis_style():
+                n = max(len(real) + len(categorical), 1)
+                fig, ax = style.new_figure(0.8, 0.25 + 0.12 * n)
+                color = style.technology_color(ctx.technologies, technology)
+                labels = []
+                for at, name in enumerate(real):
+                    low, high = (
+                        share(primary[f"{name}__min"], name),
+                        share(primary[f"{name}__max"], name),
+                    )
+                    ax.barh(at, high - low, left=low, height=0.45, color=color, alpha=0.8)
+                    for kind, edge in (("lower", low), ("upper", high)):
+                        spread = bounds(kind, name)
+                        if spread is not None:
+                            ax.plot(
+                                [share(spread[0], name), share(spread[2], name)],
+                                [at, at],
+                                color="black",
+                                linewidth=1.0,
+                            )
+                    labels.append(f"{name}\n({_pct(frequency.get(name))} of replicates)")
+                for offset, name in enumerate(categorical):
+                    at = len(real) + offset
+                    ax.text(
+                        0.5,
+                        at,
+                        f"keeps: {primary[f'{name}__in'].replace('|', ', ')}",
+                        ha="center",
+                        va="center",
+                    )
+                    labels.append(f"{name}\n({_pct(frequency.get(name))} of replicates)")
+                ax.set_yticks(range(len(labels)), labels)
+                ax.set_xlim(-0.02, 1.02)
+                ax.invert_yaxis()
+                ax.set_xlabel(
+                    "Position within the range of the descriptor (0 = lowest, 1 = highest value)"
+                )
+                ax.set_title(
+                    f"density {primary['density']:.2f} (P5 to P95 {density['p_low']:.2f} to {density['p_high']:.2f}), "
+                    f"coverage {primary['coverage']:.2f} (P5 to P95 {coverage['p_low']:.2f} to {coverage['p_high']:.2f})",
+                    fontsize=style.FONT_SIZE - 1,
+                )
+                return fig
+
+        write_figure(
+            ctx,
+            T_O1,
+            "prim_box",
+            draw,
+            f"PRIM box under which the present-optimal shortlist of {technology} stops being a good choice: bars are the limits of the box chosen, lines the 5th to 95th percentile of each bound over the bootstrap replicates.",
+            technology=technology,
+        )
+
+
+def _pct(value: object) -> str:
+    return "n/a" if value is None or pd.isna(value) else f"{100 * float(value):.0f}%"

@@ -60,6 +60,31 @@ def _no_network(*_args, **_kwargs):
     raise NetworkUsedError("the ZZZ pipeline tried to open a network connection")
 
 
+IPSL = "IPSL-CM6A-LR"  # the GCM that carries the TCR exception
+
+
+def _the_ipsl_futures_displace_the_shortlist(patch):
+    """The synthetic world keeps the order of its cells in every future, so the real outcome of the scenario discovery (the capacity share of the
+    nominal shortlist that falls beyond the tolerance) is 0 everywhere and PRIM has nothing to find. In this run the outcome of a future is set by a
+    rule on the climate model (half the shortlist when the GCM is IPSL, a twentieth otherwise), so that the box, its bootstrap and T-O1 are exercised end
+    to end; the outcome itself is checked against its definition in `test_robustness_futures.py`."""
+    from dataclasses import replace
+
+    import numpy as np
+
+    from geofrea.robustness_analysis import pipeline
+
+    real = pipeline.futures_pass
+
+    def rule(worlds, labels, samples, top, k, **kwargs):
+        result = real(worlds, labels, samples, top, k, **kwargs)
+        shares = np.array([[0.5 if label.gcm == IPSL else 0.05] for label in labels])
+        shape = result.share_leaving.shape
+        return replace(result, displaced_capacity_share=np.broadcast_to(shares, shape).copy())
+
+    patch.setattr(pipeline, "futures_pass", rule)
+
+
 @pytest.fixture(scope="module")
 def zzz(tmp_path_factory):
     import main  # repo-root script
@@ -113,6 +138,7 @@ def zzz(tmp_path_factory):
     patch.setattr(main, "TECHNOLOGIES_YAML", technologies)
     patch.setattr(main, "EXPERIMENTS_YAML", experiments)
     patch.setattr(main, "POWER_CURVES_DIR", CURVES)
+    _the_ipsl_futures_displace_the_shortlist(patch)
     try:
         subprocess.run(
             [sys.executable, str(REPO / "scripts" / "generate_zzz_fixture.py")],
@@ -860,13 +886,21 @@ def test_f7_writes_h1_to_h5_without_verdict_and_t_r12_with_the_three_land_scenar
     assert "mr_sr_kendall_tau_b" in set(hypothesis["statistic"])
     box = pd.read_parquet(base / f"prim_box_{tech}__core.parquet")
     primary = box[box["primary"]].iloc[0]
-    assert primary["status"] in {"box_found", "no_cases", "all_cases", "no_eligible_box"}
     assert primary["outcome_threshold"] == 0.20 and primary["n_futures"] > 0
+    assert (
+        primary["status"] == "box_found"
+    )  # the GCM rule of this run makes the IPSL futures the cases of interest
+    assert primary["n_cases"] == int(
+        (
+            pd.read_parquet(base / f"futures_{tech}__core.parquet").query("sample >= 1")["gcm"]
+            == IPSL
+        ).sum()
+    )
+    # the box isolates the IPSL futures; the descriptors that are constant within a member may stand in for the category, so it need not be alone
+    assert IPSL in primary["gcm__in"].split("|") and primary["n_restricted"] <= 3
+    assert primary["density"] == pytest.approx(1.0) and primary["coverage"] == pytest.approx(1.0)
     prim = pd.read_parquet(base / f"prim_boxes_{tech}__core.parquet")
-    if primary["status"] in ("box_found", "no_eligible_box"):
-        assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0
-    else:
-        assert len(prim) == 0  # no search without a case of interest, or with every future one
+    assert prim["step"].iloc[0] == 0 and prim["mass"].iloc[0] == 1.0 and prim["selected"].sum() == 1
     boot = pd.read_parquet(base / f"prim_bootstrap_{tech}__core.parquet")
     assert boot[boot["kind"] == "status"]["frequency"].sum() == pytest.approx(1.0)
     late = pd.read_parquet(base / f"prim_box_{tech}__sensitivity.parquet")
@@ -1547,10 +1581,22 @@ THESIS_TABLES = {
     ],
     "T-R10": ["hazard_exposure_ZZZ_{t}"],
     "T-R12": ["potential_below_tau_ZZZ_{t}"],
+    "T-O1": ["prim_box_ZZZ_{t}"],
 }
-THESIS_FIGURES = {"T-O2": "mr_sr_agreement_ZZZ_{t}", "T-O3": "supply_curves_ZZZ_{t}"}
+THESIS_FIGURES = {
+    "T-O1": "prim_box_ZZZ_{t}",
+    "T-O2": "mr_sr_agreement_ZZZ_{t}",
+    "T-O3": "supply_curves_ZZZ_{t}",
+}
 # the outputs that are about the countries together carry no ISO3 (names.stem)
-THESIS_CROSS_TABLES = {"T-R6": ["h4_verdict_{t}"], "T-R7": ["axis_displacement_{t}"]}
+THESIS_CROSS_TABLES = {
+    "T-R6": ["h4_verdict_{t}"],
+    "T-R7": ["axis_displacement_{t}"],
+    "T-R8": [
+        "country_profiles",
+        "hypothesis_summary",
+    ],  # about the countries and technologies together
+}
 THESIS_CROSS_FIGURES = {"T-R7": "axis_displacement_{t}"}
 
 
@@ -1601,6 +1647,10 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
             for suffix in (".png", ".pdf", ".provenance.json"):
                 assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
     assert (thesis / "T-M3_members_ZZZ.csv").is_file()
+    for suffix in (".json", ".provenance.json"):
+        assert (thesis / f"T-R8_hypothesis_profiles_ZZZ{suffix}").stat().st_size > 0
+    for suffix in (".md", ".tex", ".provenance.json"):
+        assert (thesis / f"T-R8_country_summary_ZZZ{suffix}").stat().st_size > 0
     for what in ("exclusion_shares", "enrichment", "published_comparison"):
         assert (thesis / f"T-R9_{what}_ZZZ.csv").is_file()
         assert (thesis / f"T-R9_{what}_ZZZ.tex").is_file()
@@ -1613,9 +1663,11 @@ def test_f8_writes_every_implemented_output_with_its_thesis_name_and_a_provenanc
         "T-R2",
         "T-R6",
         "T-R7",
+        "T-R8",
         "T-R9",
         "T-R10",
         "T-R12",
+        "T-O1",
         "T-O2",
         "T-O3",
     }
@@ -1893,3 +1945,132 @@ def test_the_scale_check_writes_its_thesis_outputs_apart(zzz, zzz_fine):
     default = pd.read_csv(_thesis(zzz) / "T-R2_potential_ZZZ_solar.csv")
     fine = pd.read_csv(fine_dir / "T-R2_potential_ZZZ_solar.csv")
     assert len(default) == len(fine)
+
+
+def _profiles(zzz) -> dict:
+    return json.loads(
+        (_thesis(zzz) / "T-R8_hypothesis_profiles_ZZZ.json").read_text(encoding="utf-8")
+    )
+
+
+@pytest.mark.synthetic
+def test_f8_hypothesis_profiles_hold_the_verdicts_the_numbers_the_ranges_and_the_changing_variants(
+    zzz,
+):
+    base = _phase(zzz, "robustness_analysis")
+    payload = _profiles(zzz)
+    assert payload["schema_version"] == "1.0" and payload["country"] == "ZZZ"
+    assert payload["test_values"] is True and payload["methodology_version"]
+    assert [r["technology"] for r in payload["records"]] == ["solar", "wind"]
+    for record in payload["records"]:
+        tech = record["technology"]
+        assert set(record["hypotheses"]) == {"H1", "H2", "H3", "H4", "H5"}
+        robustness = pd.read_parquet(base / f"robustness_{tech}__core.parquet")
+        assert record["n_candidates"] == len(robustness)
+        assert record["n_f7_set"] == int(
+            robustness["cell_class"].isin(["ranked", "climate_fragile"]).sum()
+        )
+        h1 = record["hypotheses"]["H1"]
+        table = pd.read_parquet(base / f"h1_summary_{tech}__core.parquet")
+        late = pd.read_parquet(base / f"h1_summary_{tech}__sensitivity.parquet").query("primary")
+        primary = table[table["primary"]].iloc[0]
+        c_k = h1["statistics"]["c_k"]
+        assert c_k["value"] == pytest.approx(float(primary["c_k"]))
+        assert c_k["reference"] == pytest.approx(float(primary["reference"]))
+        assert c_k["threshold"] == pytest.approx(0.60)
+        every = list(table["c_k"]) + list(
+            late["c_k"]
+        )  # the variants of the core window and the 2071-2100 window
+        assert c_k["range"]["min"] == pytest.approx(min(every))
+        assert c_k["range"]["max"] == pytest.approx(max(every))
+        assert c_k["range"]["min"] <= c_k["value"] <= c_k["range"]["max"]
+
+        # the variants whose class differs from the primary one, recomputed from the F7 tables (the partial class is split by what holds)
+        def cls(row):
+            if row["verdict"] == "partially_supported":
+                return "core_stable" if row["h1a_holds"] else "vulnerable"
+            return row["verdict"]
+
+        differing = [
+            row["variant"]
+            for _, row in table.iterrows()
+            if not row["primary"] and cls(row) != cls(primary)
+        ]
+        differing += ["window_2071-2100"] if cls(late.iloc[0]) != cls(primary) else []
+        assert h1["n_variants_changing_verdict"] == len(differing)
+        assert h1["n_variants"] == len(
+            table
+        )  # the sensitivities of the core window and the 2071-2100 window
+        h5 = record["hypotheses"]["H5"]
+        row = pd.read_parquet(base / f"h5_summary_{tech}__core.parquet").query("primary").iloc[0]
+        assert h5["statistics"]["r_loss"]["value"] == pytest.approx(float(row["r_loss"]))
+        assert h5["statistics"]["e0_twh"]["value"] == pytest.approx(float(row["e0_twh"]))
+        assert h5["class"] == row["verdict"]
+        h4 = record["hypotheses"]["H4"]
+        assert h4["profile"] in {
+            "climate_dominated",
+            "techno_economic_dominated",
+            "mixed",
+            "no_displacement",
+        }
+        assert h4["technology_verdict"]["verdict"] == "not_testable"  # one country alone
+        assert h4["technology_verdict"]["profiles"] == {"ZZZ": h4["profile"]}
+
+
+@pytest.mark.synthetic
+def test_f8_t_r8_with_one_country_is_not_assessable_and_gives_no_aggregate_verdict(zzz):
+    thesis = _thesis(zzz)
+    summary = pd.read_csv(thesis / "T-R8_hypothesis_summary.csv")
+    assert set(summary["hypothesis"]) == {"H1", "H2", "H3", "H4", "H5"}
+    assert len(summary) == 10  # five hypotheses and two technologies, one row each
+    assert not any("aggregate" in c.lower() or "score" in c.lower() for c in summary.columns)
+    for _, row in summary.iterrows():
+        assert row["n_countries"] == 1
+        if row["hypothesis"] == "H4":
+            assert row["label"] == "comparative (verdict per technology)"
+            assert row["verdict"] == "not_testable"
+        else:
+            assert (
+                row["label"] == "not assessable"
+            )  # one country gives fewer than two testable cases
+            assert row["n_testable"] <= 1
+    profiles = pd.read_csv(thesis / "T-R8_country_profiles.csv")
+    assert set(profiles["country"]) == {"ZZZ"} and len(profiles) == 10
+    assert {"value_1", "min_1", "max_1", "n_variants_changing_verdict"} <= set(profiles.columns)
+    text = (thesis / "T-R8_country_summary_ZZZ.md").read_text(encoding="utf-8")
+    assert "TEST VALUES" in text and all(f"**H{i}**" in text for i in range(1, 6))
+
+
+@pytest.mark.synthetic
+def test_f8_t_r8_reads_the_profiles_of_the_other_countries_of_the_thesis_directory(
+    zzz, tmp_path, monkeypatch
+):
+    import copy
+
+    import main
+    from geofrea.results_synthesis.runner import build_thesis
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(zzz[0]))
+    own = _profiles(zzz)
+    out = tmp_path / "thesis"
+    out.mkdir()
+    other = copy.deepcopy(own)
+    other["country"] = "ZZB"
+    for record in other["records"]:
+        record["country"] = "ZZB"
+    (out / "T-R8_hypothesis_profiles_ZZB.json").write_text(json.dumps(other), encoding="utf-8")
+    build_thesis(
+        "ZZZ",
+        ("solar", "wind"),
+        technologies_yaml=main.TECHNOLOGIES_YAML,
+        experiments_yaml=main.EXPERIMENTS_YAML,
+        parameters_json=main.PARAMETERS_JSON,
+        methodology_md=main.METHODOLOGY_MD,
+        only=["T-R8"],
+        out_dir=out,
+    )
+    summary = pd.read_csv(out / "T-R8_hypothesis_summary.csv")
+    assert (summary["n_countries"] == 2).all()  # ZZZ, built now, and ZZB, read from its file
+    profiles = pd.read_csv(out / "T-R8_country_profiles.csv")
+    assert set(profiles["country"]) == {"ZZB", "ZZZ"} and len(profiles) == 20
+    assert (out / "T-R8_hypothesis_profiles_ZZZ.json").is_file()

@@ -4,8 +4,8 @@ One script per T-ID (`SCRIPTS`); `only` runs a subset. Each script reads artifac
 data and never a kernel. A script that cannot build an item says why (`BuildContext.skip`); the runner lists it in
 `outputs/thesis/thesis_manifest.json` and fails only when an Essential T-ID has no output at all for the country.
 
-Outputs not built yet and the open decision that blocks each: T-R3 (D2, the GCM-agreement convention), T-R8 (D6, the combination rule of
-the cross-country synthesis); T-M1, T-R1, T-R4, T-R5, T-R7, T-R11 and T-O1 follow in later commits.
+Outputs not built yet and the open decision that blocks each: T-R3 (D2, the GCM-agreement convention); T-M1, T-R1, T-R4, T-R5 and T-R11
+follow in later commits.
 """
 
 from __future__ import annotations
@@ -25,7 +25,16 @@ from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, methodology_version
 from geofrea.results_synthesis.potential_and_cost import t_o3, t_r2
-from geofrea.results_synthesis.robustness_tables import t_o2, t_r6, t_r7, t_r9, t_r10, t_r12
+from geofrea.results_synthesis.robustness_tables import (
+    t_o1,
+    t_o2,
+    t_r6,
+    t_r7,
+    t_r9,
+    t_r10,
+    t_r12,
+)
+from geofrea.results_synthesis.synthesis import t_r8
 
 SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-M2": t_m2,
@@ -33,9 +42,11 @@ SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-R2": t_r2,
     "T-R6": t_r6,
     "T-R7": t_r7,
+    "T-R8": t_r8,
     "T-R9": t_r9,
     "T-R10": t_r10,
     "T-R12": t_r12,
+    "T-O1": t_o1,
     "T-O2": t_o2,
     "T-O3": t_o3,
 }

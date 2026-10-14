@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -228,3 +228,29 @@ def methodology_version(methodology_md: Path) -> str:
     if match is None:
         raise ValueError(f"{methodology_md} has no version row")
     return match.group(1)
+
+
+def write_text_output(
+    ctx: BuildContext,
+    t_id: str,
+    what: str,
+    texts: Mapping[str, str],
+    caption: str,
+    *,
+    technology: str | None = None,
+    per_country: bool = True,
+    extra: dict | None = None,
+) -> list[Path]:
+    """Write text files `<stem>.<ext>` (a JSON artifact, Markdown, LaTeX) with a provenance file; the same inputs give the same bytes (A-02)."""
+    ctx.out_dir.mkdir(parents=True, exist_ok=True)
+    stem = names.stem(t_id, what, ctx.iso if per_country else None, technology)
+    files = []
+    for extension, text in texts.items():
+        path = ctx.out_dir / f"{stem}.{extension}"
+        path.write_text(text, encoding="utf-8", newline="\n")
+        files.append(path)
+    files.append(
+        _write_provenance(ctx, stem, _provenance(ctx, t_id, files, ctx.caption(caption), extra))
+    )
+    ctx.written.setdefault(t_id, []).extend(files)
+    return files

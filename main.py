@@ -965,7 +965,15 @@ def _build_phase_specs(
             | {
                 f"{kind}_{tech}__core"
                 for tech in technologies
-                for kind in ("robustness", "hazard_exposure", "potential_below_tau")
+                for kind in (
+                    "robustness",
+                    "hazard_exposure",
+                    "potential_below_tau",
+                    "h5_summary",
+                    "prim_boxes",
+                    "prim_box",
+                    "prim_bootstrap",
+                )
             }
             | {f"potential_aggregates_{tech}" for tech in technologies}
             | {f"supply_curve_{tech}" for tech in technologies},

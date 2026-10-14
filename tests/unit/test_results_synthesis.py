@@ -55,6 +55,7 @@ FORBIDDEN_MODULES = (
     "geofrea.robustness_analysis.rankings",
     "geofrea.robustness_analysis.pipeline",
     "geofrea.robustness_analysis.prim",
+    "geofrea.robustness_analysis.scenario_discovery",
     "geofrea.technical_potential.pipeline",
     "geofrea.land_eligibility.pipeline",
     "geofrea.climate_forcing.pipeline",
