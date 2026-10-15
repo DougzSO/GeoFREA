@@ -48,6 +48,7 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
     strictest_slope_max_deg,
 )
+from geofrea.core import paths as core_paths
 from geofrea.core.geo_utils import detect_island_nation
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.raster_inspection import (
@@ -260,7 +261,7 @@ def run_audit_phase(
         # module docstring, "cache_path". clip=False layers pass
         # cache_path=None, which inspect_vector_layer() simply ignores.
         cache_path = (
-            context.outputs_dir / context.country_code / "processed" / f"{vname}_clipped.gpkg"
+            core_paths.interim(context.country_code, "data_quality_audit") / f"{vname}_clipped.gpkg"
             if clip
             else None
         )
@@ -283,10 +284,7 @@ def run_audit_phase(
         logger.info("  [land_cover] SKIP enabled.")
     elif inputs.land_cover_tiles:
         land_cover_cache_dir = (
-            context.outputs_dir
-            / context.country_code
-            / "data_quality_audit"
-            / "land_cover_tile_cache"
+            core_paths.interim(context.country_code, "data_quality_audit") / "land_cover_tile_cache"
         )
         with timer("land_cover", timings):
             land_cover = inspect_land_cover_tiles(

@@ -3,7 +3,6 @@ r"""Central path resolution module for GeoFREA pipeline.
 All path construction outside this module should use helpers from this module.
 Environment variables define the data layout:
   - GEOFREA_DATA_DIR: external data directory (e.g. D:\Douglas\DOUTORADO\GeoFREA_data); the pipeline reads and writes nothing outside it
-  - GEOFREA_LEGACY_BASELINE_DIR: legacy baseline outputs (read-only reference)
   - GEOWORLD_BASELINE_DIR: legacy geoworld framework (logic reference only)
   - CRAEI_BASELINE_DIR: CRAEI climate-risk framework (primary reference, copy and adapt)
 
@@ -42,12 +41,11 @@ class StoredPath(BaseModel):
     read time only via StoredPath.resolve().
 
     Args:
-        root: One of "data" (GEOFREA_DATA_DIR) or "legacy_baseline"
-            (GEOFREA_LEGACY_BASELINE_DIR).
+        root: "data" (GEOFREA_DATA_DIR), the only root.
         rel: Relative path (posix-style, forward slashes only).
     """
 
-    root: Literal["data", "legacy_baseline"]
+    root: Literal["data"]
     rel: str
 
     def resolve(self) -> Path:
@@ -61,8 +59,6 @@ class StoredPath(BaseModel):
         """
         if self.root == "data":
             base = _ensure_env("GEOFREA_DATA_DIR")
-        elif self.root == "legacy_baseline":
-            base = _ensure_env("GEOFREA_LEGACY_BASELINE_DIR")
         else:
             raise ValueError(f"Unknown root: {self.root}")
         return (Path(base) / self.rel).resolve()
@@ -248,7 +244,7 @@ def outputs_dir() -> Path:
 def to_stored_path(path: Path) -> StoredPath:
     """Convert an absolute filesystem path to a StoredPath.
 
-    Checks roots in order of specificity: legacy_baseline, data.
+    The only root is GEOFREA_DATA_DIR.
 
     Args:
         path: An absolute Path to convert.
@@ -265,15 +261,6 @@ def to_stored_path(path: Path) -> StoredPath:
 
     # Check in order of specificity (most specific first)
     try:
-        legacy_base = Path(_ensure_env("GEOFREA_LEGACY_BASELINE_DIR")).resolve()
-        legacy_base_str = str(legacy_base)
-        if path_str.startswith(legacy_base_str):
-            rel = path.relative_to(legacy_base)
-            return StoredPath(root="legacy_baseline", rel=rel.as_posix())
-    except (MissingPathEnvironmentError, ValueError):
-        pass
-
-    try:
         data_base = _ensure_data_env().resolve()
         data_base_str = str(data_base)
         if path_str.startswith(data_base_str):
@@ -282,6 +269,4 @@ def to_stored_path(path: Path) -> StoredPath:
     except (MissingPathEnvironmentError, ValueError):
         pass
 
-    raise ValueError(
-        f"Path {path} is not under any known root (GEOFREA_DATA_DIR or GEOFREA_LEGACY_BASELINE_DIR)"
-    )
+    raise ValueError(f"Path {path} is not under any known root (GEOFREA_DATA_DIR)")

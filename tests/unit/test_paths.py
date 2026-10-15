@@ -35,15 +35,10 @@ class TestStoredPath:
         with pytest.raises(ValueError):
             StoredPath(root="shared_raw", rel="gadm/BRA/gadm41_BRA_0.shp")
 
-    def test_resolve_legacy_baseline_root(self):
-        """StoredPath with root='legacy_baseline' resolves to GEOFREA_LEGACY_BASELINE_DIR."""
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            mock.patch.dict(os.environ, {"GEOFREA_LEGACY_BASELINE_DIR": tmpdir}),
-        ):
-            sp = StoredPath(root="legacy_baseline", rel="BRA/results/abatement.tif")
-            resolved = sp.resolve()
-            assert resolved == Path(tmpdir) / "BRA" / "results" / "abatement.tif"
+    def test_the_legacy_baseline_root_no_longer_exists(self):
+        """COMMAND 37: the legacy baseline moved to the archive and is not a root."""
+        with pytest.raises(ValueError):
+            StoredPath(root="legacy_baseline", rel="BRA/results/abatement.tif")
 
     def test_resolve_missing_env_raises(self):
         """StoredPath.resolve() raises if required env var is not set."""

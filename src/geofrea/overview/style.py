@@ -48,7 +48,7 @@ def country_outline(iso: str) -> gpd.GeoDataFrame | None:
 
 def major_rivers(iso: str) -> gpd.GeoDataFrame | None:
     """The country's largest streams (HydroRIVERS `DIS_AV_CMS` above RIVER_QUANTILE), or None if no clipped river file exists."""
-    path = core_paths.outputs_dir() / iso / "processed" / "rivers_clipped.gpkg"
+    path = core_paths.interim(iso, "data_quality_audit") / "rivers_clipped.gpkg"
     if not path.exists():
         return None
     rivers = gpd.read_file(path)
