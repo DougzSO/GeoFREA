@@ -11,12 +11,16 @@ What is known beforehand about the world, from its construction:
 
 - the change factors of a cell centre are the closed forms of `zzz2_world` (linear fields, so the 3 x 3 mean and the bilinear interpolation are exact);
 - GFDL-ESM4 and IPSL-CM6A-LR take wind from the east (the cells the nominal ranking favours) and CNRM-CM6-1 takes it from the north, so the nominal shortlist is displaced in their futures;
-- ACCESS-CM2 and MRI-ESM2-0 leave the shortlist almost where it is, so the box of PRIM restricts the climate model;
-- the distance costs reorder the cells between draws, so `D_tec` is positive in both technologies.
+- wind is Climate-Dominated (`D_clim` > 0, `D_tec` = 0, `rho` = 1): the draws of the costs do not take a cell of the techno-only shortlist beyond k + m, the climate does, and the box of PRIM
+  restricts the climate model;
+- solar is Techno-Economic-Dominated (`D_clim` = 0, `D_tec` > 0, `rho` = 0): the distance costs reorder the cells between draws, the climate does not displace the shortlist, and the box of PRIM
+  restricts cost parameters, not the climate model;
+- H4 compares countries (strict rule per technology), so one run cannot have a verdict; beside its mirror (a country whose two profiles are the other technology's) ZZZ2 is `supported` in both.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -45,35 +49,35 @@ TECHS = ("wind", "solar")
 EXPECTED = {
     "wind": {
         "c_k": 1.0,
-        "v_k": 0.6,
-        "overlap": 0.7604003039769672,
-        "overlap_ref": 0.35522992510054363,
-        "d": 0.386543325578465,
-        "d_clim": 0.386543325578465,
-        "d_tec": 0.386543325578465,
-        "rho": 0.5,
-        "profile": "mixed",
-        "r_loss": 0.056642199984308333,
-        "cases": 139,
+        "v_k": 0.8,
+        "overlap": 0.6134364728419008,
+        "overlap_ref": 0.361205191909124,
+        "d": 0.396691483432451,
+        "d_clim": 0.396691483432451,
+        "d_tec": 0.0,
+        "rho": 1.0,
+        "profile": "climate_dominated",
+        "r_loss": 0.0521657052686253,
+        "cases": 134,
         "futures": 240,
-        "box_density": 0.9841269841269841,
-        "box_coverage": 0.8920863309352518,
+        "box_density": 1.0,
+        "box_coverage": 0.7164179104477612,
     },
     "solar": {
         "c_k": 1.0,
-        "v_k": 0.6,
-        "overlap": 0.6134364728419008,
+        "v_k": 0.4,
+        "overlap": 0.7604003039769672,
         "overlap_ref": 0.35522992510054363,
         "d": 0.1932716627892325,
-        "d_clim": 0.1932716627892325,
-        "d_tec": 0.19007445029735284,
-        "rho": 0.5041701381372263,
-        "profile": "mixed",
+        "d_clim": 0.0,
+        "d_tec": 0.1932716627892325,
+        "rho": 0.0,
+        "profile": "techno_economic_dominated",
         "r_loss": 0.07072541219935047,
-        "cases": 134,
+        "cases": 220,
         "futures": 288,
-        "box_density": 0.5857142857142857,
-        "box_coverage": 0.917910447761194,
+        "box_density": 0.9444444444444444,
+        "box_coverage": 0.7727272727272727,
     },
 }
 
@@ -202,7 +206,7 @@ def test_the_cells_change_order_between_members_and_between_draws(zzz2, tech):
     assert 0.0 < float((share >= 0.2).mean()) < 1.0
     # the nominal shortlist is displaced in some climate models and in none of some others (wind: ACCESS-CM2 and MRI-ESM2-0 barely move it)
     by_gcm = futures.groupby("gcm")["displaced_capacity_share"].max()
-    assert by_gcm.max() >= 0.2 > by_gcm.min() or tech == "solar"
+    assert by_gcm.max() >= 0.2
 
 
 @pytest.mark.synthetic
@@ -221,18 +225,33 @@ def test_the_non_trivial_statistics_have_the_values_known_beforehand(zzz2, tech)
     assert h4["rho"] == pytest.approx(expected["rho"], abs=1e-9)
     assert h4["profile"] == expected["profile"]
     assert h5["r_loss"] == pytest.approx(expected["r_loss"], abs=1e-9)
-    # none of them is the trivial value of ZZZ
-    for value in (h1["v_k"], h3["d"], h4["d_clim"], h4["d_tec"]):
+    # none of them is the trivial value of ZZZ: V_k and D are strictly between 0 and 1, and the profile is decided by one displacement being positive (the other one is zero by construction)
+    for value in (h1["v_k"], h3["d"]):
         assert 0.0 < value < 1.0
+    assert h4["d_clim"] + h4["d_tec"] > 0.0
+    assert (h4["d_tec"] == 0.0) == (tech == "wind") and (h4["d_clim"] == 0.0) == (tech == "solar")
 
 
 @pytest.mark.synthetic
 @pytest.mark.parametrize("tech", TECHS)
-def test_prim_finds_a_box_that_restricts_the_climate_model_on_the_real_outcome(zzz2, tech):
+def test_prim_finds_a_box_on_the_real_outcome_that_restricts_what_decides_it(zzz2, tech):
     expected = EXPECTED[tech]
     box = _primary(zzz2, "prim_box", tech)
     assert box["status"] == "box_found"
-    assert "gcm" in str(box["restricted"]).split("|")
+    restricted = str(box["restricted"]).split("|")
+    if tech == "wind":  # climate-dominated: the climate model decides the outcome
+        assert "gcm" in restricted
+    else:  # techno-economic-dominated: cost parameters decide it, not the climate model
+        assert "gcm" not in restricted
+        assert set(restricted) <= set(world.PARAMETER_OVERRIDES[tech]) | {
+            "capex_usd_per_kw",
+            "opex_fixed_frac",
+            "discount_rate",
+            "lifetime_years",
+            "degradation_rate",
+            "substation_cost_usd_per_mw",
+            "gamma",
+        }
     assert box["n_cases"] == expected["cases"]
     assert box["n_futures"] == expected["futures"]
     assert box["density"] == pytest.approx(expected["box_density"], abs=1e-9)
@@ -256,3 +275,55 @@ def test_the_hand_validation_agrees_with_every_phase_of_the_run(zzz2, tech):
     assert match, done.stdout[-1500:]
     passed, total = int(match.group(1)), int(match.group(2))
     assert passed == total >= 38
+
+
+@pytest.mark.synthetic
+def test_h4_is_supported_in_both_technologies_beside_the_mirror_of_zzz2(
+    zzz2, tmp_path, monkeypatch
+):
+    """H4 compares countries, so one run has no verdict ('not testable'). The mirror country has the profile tables of the other technology
+    (wind gets the solar table, solar the wind table): beside it ZZZ2 has a Climate-Dominated and a Techno-Economic-Dominated country in each
+    technology, and the strict rule gives `supported`. Nothing is set by hand: both tables are the ones F7 wrote."""
+    import hashlib
+    import shutil
+
+    from geofrea.core.tables import write_table
+    from geofrea.robustness_analysis.cross_country import build_h4_verdict
+    from geofrea.robustness_analysis.table_schemas import (
+        ROBUSTNESS_TABLE_SCHEMA_VERSION,
+        H4CountryRow,
+    )
+
+    data = tmp_path / "data"
+    shutil.copytree(zzz2[0] / "outputs" / "ZZZ", data / "outputs" / "ZZZ")
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(data))
+    alone = build_h4_verdict(["ZZZ"], ("solar", "wind"))
+    assert {v.verdict for v in alone.verdicts} == {"not_testable"}
+
+    manifest = {"artifacts": {}}
+    other = {"wind": "solar", "solar": "wind"}
+    for tech in ("solar", "wind"):
+        for role in ("core", "sensitivity"):
+            frame = pd.read_parquet(
+                _art(zzz2, "robustness_analysis") / f"h4_country_{other[tech]}__{role}.parquet"
+            )
+            rel = f"outputs/ZZM/h4_country_{tech}__{role}.parquet"
+            path = write_table(
+                frame,
+                data / rel,
+                schema_version=ROBUSTNESS_TABLE_SCHEMA_VERSION,
+                row_model=H4CountryRow,
+            )
+            manifest["artifacts"][f"h4_country_{tech}__{role}"] = {
+                "path": {"root": "data", "rel": rel},
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+    (data / "outputs" / "ZZM" / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    pair = build_h4_verdict(["ZZZ", "ZZM"], ("solar", "wind"))
+    core = {v.technology: v for v in pair.verdicts if v.role == "core"}
+    assert core["wind"].verdict == "supported" and core["solar"].verdict == "supported"
+    for tech in ("wind", "solar"):
+        assert core[tech].counts["climate_dominated"] == 1
+        assert core[tech].counts["techno_economic_dominated"] == 1
+        assert core[tech].n_available == 2

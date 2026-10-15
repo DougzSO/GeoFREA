@@ -76,14 +76,14 @@ TAS_PATTERN = {
 # road: grid cost in USD/(MW km), road cost in USD/km of the whole plant. `cf_min` is below every member of the world (no climate-fragile cell) and `tau` inside the spread of the LCOE.
 PARAMETER_OVERRIDES = {
     "wind": {
-        "grid_cost_usd_per_mw_km": {"value": 14500.0, "min": 6300.0, "max": 35000.0},
-        "road_cost_usd_per_km": {"value": 1.7e6, "min": 1.15e6, "max": 2.0e6},
+        "grid_cost_usd_per_mw_km": {"value": 9660.0, "min": 5730.0, "max": 28650.0},
+        "road_cost_usd_per_km": {"value": 1.75e6, "min": 1.56e6, "max": 2.51e6},
         "cf_min": {"value": 0.2},
         "tau_lcoe_usd_per_mwh": {"value": 55.0},
     },
     "solar": {
-        "grid_cost_usd_per_mw_km": {"value": 9050.0, "min": 6730.0, "max": 22740.0},
-        "road_cost_usd_per_km": {"value": 1.42e6, "min": 1.41e6, "max": 2.2e6},
+        "grid_cost_usd_per_mw_km": {"value": 9720.0, "min": 7800.0, "max": 29200.0},
+        "road_cost_usd_per_km": {"value": 1.43e6, "min": 1.24e6, "max": 2.06e6},
         "cf_min": {"value": 0.1},
         "tau_lcoe_usd_per_mwh": {"value": 105.0},
     },

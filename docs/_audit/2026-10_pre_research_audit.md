@@ -533,3 +533,4 @@ The numeric validation covers wind through F7 and solar through F6 (the regret r
 | **F5 to F8** | **58 min / 2.8 GB / +1.38 GB** | **44 min / 2.7 GB / +1.33 GB** |
 
   The estimate of section 5.4 ("tens of minutes to a few hours per technology and window") is at its low end: F7 is 41 min (wind) and 30 min (solar), about two thirds of the chain. The highest peak is F7b (2.8 GB), not F7. The inputs copied from F3 and F4 are 3.2 GB. Conditions that make the numbers an upper bound for the same size: `cf_min` 0.01, so every candidate is in the F7 set.
+- **Update (COMMAND 40).** The ZZZ2 parameters were set again so that H4 gives distinct dominant profiles (wind Climate-Dominated, `rho` 1; solar Techno-Economic-Dominated, `rho` 0) and the H4 verdict is `supported` beside the mirror country; the values quoted for M-1 above are those of the first version (D-core-038), replaced by D-core-039 in `docs/phases/core.md`.
