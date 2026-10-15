@@ -512,3 +512,24 @@ Effort: S under an hour, M half a day, L several days. "Result" means it changes
 ## 10. What was not done
 
 The numeric validation covers wind through F7 and solar through F6 (the regret recomputation needs the energy to scale with `eta_loss`; for solar it scales with `gamma` and the hand code is not written). The real F5 to F8 were not run. The plausibility of hazard indicators was judged against general knowledge of the regions, not against an external dataset. The shared database directory was inventoried by folder, not file by file. Nothing was deleted.
+
+## 11. Follow-up of the improvements M-1, M-2 and M-4 (COMMAND 39, 2026-10-15)
+
+- **M-1, done.** The second synthetic world ZZZ2 (`scripts/zzz2_world.py`, `scripts/generate_zzz2_fixture.py`, `tests/synthetic/test_zzz2_end_to_end.py`) reorders the cells between members and between draws. Its end-to-end values are non-trivial and were known before the run, from the closed-form fields and the plain-numpy hand validation: wind `V_k` 0.6, `D` = `D_clim` = `D_tec` = 0.387 (`rho` 0.5, mixed); solar `V_k` 0.6, `D` 0.193, `D_clim` 0.193, `D_tec` 0.190; the PRIM outcome is the real one (no rule replaces it) and the box restricts the climate model in both technologies (density 0.984 and 0.586, coverage 0.892 and 0.918). The gap of section 7.3 (a function that returns zero would also pass) is closed for these quantities.
+- **M-4, done.** The hand validation is a CI job (`hand-validation` in `.github/workflows/synthetic_fixture.yml`) on ZZZ and ZZZ2, wind and solar. The part that was missing, the regret recomputation of F7 for solar (energy scaled by `(1 + gamma dT)`), is written: 40 checks (wind) and 38 (solar) pass on both worlds.
+- **M-2, done.** F5 to F8 at the size of BRA (181,277 wind and 180,041 solar candidates, 36 members, 500 draws), test parameters, synthetic curve, a scratch data directory that held a copy of the real F3 and F4 outputs and was removed; the 178 files of the real `outputs/BRA` kept their hashes. Wall clock, peak working set and disk growth per phase (not a result; `scripts/size_f5_to_f8.py`):
+
+| Phase | Wind: time / peak / disk | Solar: time / peak / disk |
+|---|---|---|
+| F5 technical potential | 228 s / 1.6 GB / +396 MB | 85 s / 1.7 GB / +465 MB |
+| F5 maps | 32 s / 1.4 GB / +3 MB | 22 s / 1.5 GB / +3 MB |
+| F6 LCOE | 259 s / 1.5 GB / +791 MB | 260 s / 1.5 GB / +720 MB |
+| F6 sample-size convergence | 172 s / 1.5 GB / 0 | 200 s / 1.6 GB / 0 |
+| F6 maps | 50 s / 1.7 GB / +9 MB | 39 s / 2.2 GB / +9 MB |
+| F7 robustness (core and sensitivities) | 2,477 s / 2.2 GB / +169 MB | 1,780 s / 2.4 GB / +121 MB |
+| F7 maps | 43 s / 0.5 GB / +11 MB | 43 s / 0.5 GB / +13 MB |
+| F7b external validation | 163 s / 2.8 GB / +0.1 MB | 113 s / 2.7 GB / +0.1 MB |
+| F8 results synthesis (one technology) | 79 s / 1.9 GB / 0 | 65 s / 2.4 GB / 0 |
+| **F5 to F8** | **58 min / 2.8 GB / +1.38 GB** | **44 min / 2.7 GB / +1.33 GB** |
+
+  The estimate of section 5.4 ("tens of minutes to a few hours per technology and window") is at its low end: F7 is 41 min (wind) and 30 min (solar), about two thirds of the chain. The highest peak is F7b (2.8 GB), not F7. The inputs copied from F3 and F4 are 3.2 GB. Conditions that make the numbers an upper bound for the same size: `cf_min` 0.01, so every candidate is in the F7 set.
