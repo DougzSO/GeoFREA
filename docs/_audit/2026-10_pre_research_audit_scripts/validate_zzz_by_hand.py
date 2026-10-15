@@ -5,7 +5,11 @@ Every expected value is computed here from the inputs of the phase with plain nu
 anything from `geofrea` (the point is an independent implementation). The obtained value is read from the artifact the phase wrote. The script
 prints a Markdown table (what, expected, obtained, difference, tolerance, result) and exits 1 if any row fails.
 
-Usage: python validate_zzz_by_hand.py <data dir of a finished ZZZ run, e.g. pytest --basetemp=... zzz_data0> [technology]
+Usage: python validate_zzz_by_hand.py <data dir of a finished ZZZ or ZZZ2 run, e.g. pytest --basetemp=... zzz_data0> [technology] [world]
+
+`world` is `zzz` (default) or `zzz2` (COMMAND 39, M-1/M-4). ZZZ keeps the order of its cells in every future, so there the PRIM outcome by hand is zero and the stored one is the test
+rule of `tests/synthetic` (D-F7-057); in ZZZ2 the outcome is not replaced and must equal the one recomputed by hand for every future. The parameters are read from the run's own
+`parameters_synthetic.json` when it has one (ZZZ2 raises the distance costs in that copy), else from `config/parameters.json`.
 """
 
 from __future__ import annotations
@@ -25,9 +29,16 @@ from scipy.interpolate import RegularGridInterpolator
 
 DATA = Path(sys.argv[1])
 TECH = sys.argv[2] if len(sys.argv) > 2 else "wind"
+WORLD = sys.argv[3] if len(sys.argv) > 3 else "zzz"
 REPO = Path(__file__).resolve().parents[3]
 OUT = DATA / "outputs" / "ZZZ"
-PARAMS = json.loads((REPO / "config" / "parameters.json").read_text(encoding="utf-8"))["countries"][
+PARAMS = json.loads(
+    (
+        DATA / "parameters_synthetic.json"
+        if (DATA / "parameters_synthetic.json").is_file()
+        else REPO / "config" / "parameters.json"
+    ).read_text(encoding="utf-8")
+)["countries"][
     "ZZZ"
 ]["technologies"]
 EXPERIMENTS = yaml.safe_load((DATA / "experiments_zzz.yaml").read_text(encoding="utf-8"))
@@ -35,6 +46,7 @@ CELL_DEG, PIXEL_DEG = 0.05, 0.01
 HOURS = 8760.0
 RHO0 = 1.225
 ROWS: list[tuple[str, str, float, float, float, bool]] = []
+EXPECT: dict[str, float] = {}  # values recomputed by hand that a test may pin (printed as JSON after the table)
 
 
 def val(tech: str, key: str) -> float:
@@ -175,7 +187,7 @@ def validate_f4(cell: pd.Series) -> None:
         "F4 same: delta_wind (3x3 neighbourhood ratio, bilinear)",
         wv,
         float(row["delta_wind"]),
-        1e-9,
+        1e-7,  # float32 inputs
     )
 
 
@@ -396,9 +408,18 @@ class Robust:
         self.members = {
             m["member"]: (m.get("gcm"), m.get("ssp"), str(m["window"])) for m in members
         }
+        in_table = set(self.pot["member"].astype(str))  # a member without the channel of the technology has no row (M-F4-06)
         self.core = [
-            m for m, (g, s, w) in self.members.items() if w == "2041-2070" and g is not None
+            m
+            for m, (g, s, w) in self.members.items()
+            if w == "2041-2070" and g is not None and m in in_table
         ]
+        forcing = table("climate_forcing/artifacts/forcing.parquet")
+        self.d_t = {
+            (int(r.cell_id), str(r.member)): float(r.dT)
+            for r in forcing.itertuples()
+            if r.member in ("m0", *self.core)
+        }
         self.cf_min = val(TECH, "cf_min")
         self.tau = val(TECH, "tau_lcoe_usd_per_mwh")
         self.opex_var = val(TECH, "opex_var_usd_per_mwh")
@@ -423,10 +444,9 @@ class Robust:
         e0 = float(self.e.loc[c, member])
         if TECH == "wind":
             e_s = e0 * s["eta_loss"] / val("wind", "eta_loss")
-        else:
-            raise NotImplementedError(
-                "the regret recomputation is built for the technology whose energy scales with eta_loss"
-            )
+        else:  # solar: the energy scales with the temperature term (1 + gamma dT) of the member
+            d_t = self.d_t.get((c, member), 0.0)
+            e_s = e0 * (1 + s["gamma"] * d_t) / (1 + val("solar", "gamma") * d_t)
         return lcoe_textbook(
             float(self.p_mw[c]),
             e_s,
@@ -734,25 +754,44 @@ def validate_f7() -> None:
     )
     # the outcome V_f by hand: the share of the capacity of the nominal shortlist whose rank by relative regret exceeds k + m in the future
     short = [c for c in rank_order(nominal_ranked)][: R.k]
-    vf = []
+    vf = {}
     for m in R.core:
         for s in samples:
             r = {c: reg[(m, s)][c] for c in R.ranked}
             rank_f = {c: i + 1 for i, c in enumerate(rank_order(r))}
-            vf.append(sum(q[c] for c in short if rank_f[c] > R.k + R.k) / sum(q[c] for c in short))
-    check(
-        "PRIM outcome V_f by hand: the largest value over the 288 futures (ZZZ keeps the order of its cells)",
-        0.0,
-        max(vf),
-        1e-12,
-        relative=False,
-    )
+            vf[(m, s)] = sum(q[c] for c in short if rank_f[c] > R.k + R.k) / sum(q[c] for c in short)
     stored = futures_t["displaced_capacity_share"]
-    check_text(
-        "PRIM stored outcome in this run (test rule on the GCM, tests/synthetic only)",
-        "[0.05, 0.5]",
-        str([float(x) for x in sorted(set(np.round(stored, 4)))]),
-    )
+    if WORLD == "zzz":
+        check(
+            f"PRIM outcome V_f by hand: the largest value over the {len(vf)} futures (ZZZ keeps the order of its cells)",
+            0.0,
+            max(vf.values()),
+            1e-12,
+            relative=False,
+        )
+        check_text(
+            "PRIM stored outcome in this run (test rule on the GCM, tests/synthetic only)",
+            "[0.05, 0.5]",
+            str([float(x) for x in sorted(set(np.round(stored, 4)))]),
+        )
+    else:  # ZZZ2: the stored outcome is the real one and must equal the hand value in every future
+        by_hand = np.array([vf[(m, int(s_))] for m, s_ in zip(futures_t["member"], futures_t["sample"], strict=True)])
+        check(
+            f"PRIM outcome V_f of all {len(by_hand)} futures: largest absolute difference between the stored and the hand value",
+            0.0,
+            float(np.max(np.abs(by_hand - stored.to_numpy()))),
+            1e-12,
+            relative=False,
+        )
+        check(
+            "PRIM outcome V_f is non-trivial: the share of futures at or above the threshold is strictly between 0 and 1",
+            1.0,
+            float(0.0 < float((by_hand >= theta - 1e-12).mean()) < 1.0),
+            0.0,
+            relative=False,
+        )
+        EXPECT["v_f_cases"] = int((by_hand >= theta - 1e-12).sum())
+        EXPECT["v_f_futures"] = len(by_hand)
 
 
 def main() -> int:
@@ -760,8 +799,7 @@ def main() -> int:
     validate_f4(cell)
     f5 = validate_f5(cell)
     validate_f6(cell, f5)
-    if TECH == "wind":
-        validate_f7()
+    validate_f7()
     print(f"# Hand validation of ZZZ ({TECH}), data dir {DATA}\n")
     print("| Check | Expected (by hand) | Obtained (artifact) | Difference | Tolerance | Result |")
     print("|---|---|---|---|---|---|")
@@ -770,6 +808,7 @@ def main() -> int:
         print(f"| {label} | {exp} | {got_s} | {diff:.3g} | {tol:g} | {'PASS' if ok else 'FAIL'} |")
     failed = [r for r in ROWS if not r[5]]
     print(f"\n{len(ROWS) - len(failed)} of {len(ROWS)} checks pass.")
+    print("EXPECTED " + json.dumps(EXPECT, sort_keys=True))
     return 1 if failed else 0
 
 

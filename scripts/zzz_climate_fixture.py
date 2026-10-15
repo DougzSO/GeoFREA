@@ -142,13 +142,35 @@ def _is_foreign(path: Path) -> bool:
     return path.exists() and not _marker(path).exists()
 
 
-def write_climate_fixture(experiments_yaml: Path, data_dir: Path | None = None) -> dict[str, int]:
+def _zzz_cmip6_field(variable: str, experiment: str, g: int, s: int, gcm_name: str) -> xr.Dataset:
+    """The ZZZ monthly field of one (GCM, experiment, variable) on the native grid `CLIMATE_LAT` x `CLIMATE_LON`."""
+    if experiment == "historical":
+        return _monthly_field(variable, (1995, 2014), 1.0 if variable != "tas" else 0.0, False)
+    spike = gcm_name == MASKED_GCM and experiment == MASKED_EXPERIMENT
+    first = _monthly_field(variable, (2041, 2070), _effect(variable, g, s, 0), False)
+    second = _monthly_field(variable, (2071, 2100), _effect(variable, g, s, 1), spike)
+    return xr.concat([first, second], dim="time")
+
+
+def write_climate_fixture(
+    experiments_yaml: Path,
+    data_dir: Path | None = None,
+    cmip6_field=None,
+    native_lat: np.ndarray | None = None,
+    native_lon: np.ndarray | None = None,
+) -> dict[str, int]:
     """Write the miniature climate inputs and their registries; return the file counts.
+
+    `cmip6_field(variable, experiment, g, s, gcm_cds_name)` returns the monthly field of one CMIP6 file. A second synthetic world (ZZZ2) passes its
+    own, with its native grid `native_lat` x `native_lon`; by default the field is the ZZZ one on `CLIMATE_LAT` x `CLIMATE_LON`.
 
     Raises:
         SystemExit: a registry already exists and is not a synthetic-fixture registry.
     """
     ensemble = load_ensemble(experiments_yaml)
+    field = cmip6_field or _zzz_cmip6_field
+    lat_axis = CLIMATE_LAT if native_lat is None else native_lat
+    lon_axis = CLIMATE_LON if native_lon is None else native_lon
     raw = Path(data_dir or os.environ["GEOFREA_DATA_DIR"]) / "raw"
     cmip6_dir, isimip_dir, era5_dir = (
         raw / "cmip6" / "_global",
@@ -166,14 +188,14 @@ def write_climate_fixture(experiments_yaml: Path, data_dir: Path | None = None) 
                 f"{path} exists and is not a synthetic-fixture registry: use a scratch GEOFREA_DATA_DIR"
             )
     grid = Cmip6NativeGrid(
-        lat_resolution_deg=2.0,
-        lon_resolution_deg=2.0,
-        lat_min=float(CLIMATE_LAT.min()),
-        lat_max=float(CLIMATE_LAT.max()),
-        lon_min=float(CLIMATE_LON.min()),
-        lon_max=float(CLIMATE_LON.max()),
-        n_lat=len(CLIMATE_LAT),
-        n_lon=len(CLIMATE_LON),
+        lat_resolution_deg=float(lat_axis[1] - lat_axis[0]),
+        lon_resolution_deg=float(lon_axis[1] - lon_axis[0]),
+        lat_min=float(lat_axis.min()),
+        lat_max=float(lat_axis.max()),
+        lon_min=float(lon_axis.min()),
+        lon_max=float(lon_axis.max()),
+        n_lat=len(lat_axis),
+        n_lon=len(lon_axis),
     )
     experiments = [SSP_EXPERIMENT[s] for s in ensemble.ssps]
     entries: dict[str, Cmip6RegistryEntry] = {}
@@ -182,17 +204,7 @@ def write_climate_fixture(experiments_yaml: Path, data_dir: Path | None = None) 
             s = experiments.index(experiment) if experiment != "historical" else 0
             years = (1995, 2014) if experiment == "historical" else (2041, 2100)
             for variable in VARIABLES:
-                if experiment == "historical":
-                    ds = _monthly_field(variable, years, 1.0 if variable != "tas" else 0.0, False)
-                else:
-                    spike = gcm.cds_name == MASKED_GCM and experiment == MASKED_EXPERIMENT
-                    first = _monthly_field(
-                        variable, (2041, 2070), _effect(variable, g, s, 0), False
-                    )
-                    second = _monthly_field(
-                        variable, (2071, 2100), _effect(variable, g, s, 1), spike
-                    )
-                    ds = xr.concat([first, second], dim="time")
+                ds = field(variable, experiment, g, s, gcm.cds_name)
                 ds.attrs["title"] = SYNTHETIC_MARK
                 path = cmip6_dir / gcm.cds_name / f"{gcm.cds_name}_{experiment}_{variable}.nc"
                 path.parent.mkdir(parents=True, exist_ok=True)

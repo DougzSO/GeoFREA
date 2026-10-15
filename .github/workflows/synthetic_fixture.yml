@@ -42,3 +42,51 @@ jobs:
 
       - name: Run the synthetic-value separation tests
         run: pytest tests/unit/test_synthetic_value_separation.py tests/unit/test_iso3_literals.py -v
+
+  # M-4 of the audit 2026-10 (COMMAND 39): the hand validation recomputes F3 to F7 of a finished run with numpy and scipy, importing nothing from geofrea,
+  # and fails on any difference. It runs on both synthetic worlds and both technologies: ZZZ (whose cells keep their order in every future) and ZZZ2
+  # (whose cells do not), wind and solar, the regret recomputation of F7 included for solar.
+  hand-validation:
+    runs-on: ubuntu-latest
+    env:
+      GEOFREA_DATA_DIR: ${{ github.workspace }}/.geofrea_data
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GeoFREA (editable, dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Run F1 to F8 on ZZZ and ZZZ2 (the data directories are kept for the validation)
+        # --basetemp keeps the module fixtures' directories: zzz_data0 (ZZZ) and zzz2_data0 (ZZZ2)
+        run: >
+          pytest -m synthetic -p no:cacheprovider --basetemp="$RUNNER_TEMP/runs"
+          "tests/synthetic/test_zzz_end_to_end.py::test_every_phase_from_f1_to_f6_runs_and_succeeds"
+          "tests/synthetic/test_zzz2_end_to_end.py::test_every_phase_from_f1_to_f8_runs_and_succeeds"
+
+      - name: Hand validation of ZZZ and ZZZ2, wind and solar
+        run: |
+          mkdir -p "$RUNNER_TEMP/validation"
+          status=0
+          for world in "zzz:zzz_data0" "zzz2:zzz2_data0"; do
+            name="${world%%:*}"; dir="${world##*:}"
+            for tech in wind solar; do
+              python docs/_audit/2026-10_pre_research_audit_scripts/validate_zzz_by_hand.py \
+                "$RUNNER_TEMP/runs/$dir" "$tech" "$name" > "$RUNNER_TEMP/validation/${name}_${tech}.md" || status=1
+              tail -n 3 "$RUNNER_TEMP/validation/${name}_${tech}.md"
+            done
+          done
+          exit $status
+
+      - name: Keep the validation tables
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hand-validation
+          path: ${{ runner.temp }}/validation
