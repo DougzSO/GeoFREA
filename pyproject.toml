@@ -46,7 +46,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+addopts = "--strict-markers --durations=20 --durations-min=5"
 markers = [
     "unit: fast tests with no external data dependency",
     "regression: V-01 frozen regression on the synthetic ZZZ country (tests/fixtures/v01)",
