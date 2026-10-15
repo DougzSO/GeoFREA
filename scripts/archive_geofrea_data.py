@@ -13,9 +13,11 @@ Items (all selected by name, never by a glob that could reach a file the pipelin
   L-5  The old slope and the duplicate clips of `outputs/<ISO3>/processed` (the F1b caches themselves move to `interim`, see below).
   L-6  `reference/legacy_baseline_fc7b43d`.
   L-7  `outputs/<ISO3>/suitability_criteria` (a retired phase) and the empty `outputs/_global`.
+  L-8  (`--era5-tmax`, COMMAND 40) the ERA5 daily maximum temperature files of the stopped V-83 acquisition (`*_t2m_*`, finished years and `.part.nc`), whose
+       reference was replaced by W5E5 v2.0; their entries leave `era5_registry.json`.
 
 Run: `python scripts/archive_geofrea_data.py` prints the plan and the code search; `--apply` moves (the ERA5 Tmax files `*_t2m_*` are refused by
-name, so a live acquisition is never disturbed).
+name, so a live acquisition is never disturbed, unless `--era5-tmax` says the acquisition was stopped).
 """
 
 from __future__ import annotations
@@ -65,9 +67,19 @@ def selected_cmip6_stems(data: Path) -> set[str]:
     return {g["cds_name"] for g in experiments["gcm_ensemble"]["gcms"]}
 
 
-def plan(data: Path) -> list[Item]:
+def plan(data: Path, era5_tmax: bool = False) -> list[Item]:
     items: list[Item] = []
     raw = data / "raw"
+    if era5_tmax:  # L-8
+        for p in sorted(raw.joinpath("era5").rglob("*_t2m_*")):
+            items.append(
+                Item(
+                    p,
+                    "ERA5 daily maximum 2 m temperature of the V-83 acquisition, stopped; the reference of the heat days is W5E5 v2.0 (the bias-adjustment reference of ISIMIP3b)",
+                    "L-8",
+                )
+            )
+        return items
     # L-1
     for p in sorted(raw.joinpath("era5").rglob("*_fg10_hourly*.nc")):
         if "t2m" in p.name:
@@ -132,8 +144,8 @@ def plan(data: Path) -> list[Item]:
     return items
 
 
-def refuse(item: Item) -> None:
-    if any("t2m" in part for part in item.path.parts):
+def refuse(item: Item, allow_tmax: bool = False) -> None:
+    if not allow_tmax and any("t2m" in part for part in item.path.parts):
         raise SystemExit(f"refusing to move an ERA5 Tmax path: {item.path}")
 
 
@@ -160,7 +172,9 @@ def code_search(patterns: list[str]) -> dict[str, list[str]]:
     return hits
 
 
-def prune_registries(data: Path, items: list[Item], manifest: dict) -> None:
+def prune_registries(
+    data: Path, items: list[Item], manifest: dict, era5_tmax: bool = False
+) -> None:
     """Drop from `cmip6_registry.json` and `isimip3b_registry.json` the entries of archived files; the registries as they were are kept in the archive."""
     archived = {Path(m["origin"]) for m in manifest["items"]}
     selected = selected_cmip6_stems(data)
@@ -172,6 +186,10 @@ def prune_registries(data: Path, items: list[Item], manifest: dict) -> None:
             Path(entry["path"]) in archived
         ),
     }
+    if era5_tmax:
+        targets[data / "raw" / "era5" / "_global" / "era5_registry.json"] = lambda key, entry: (
+            "t2m_daily_max" in key
+        )
     for registry, drop in targets.items():
         if not registry.is_file():
             continue
@@ -197,7 +215,8 @@ def main(argv: list[str]) -> int:
     load_dotenv(REPO / ".env", override=False)
     data = Path(os.environ["GEOFREA_DATA_DIR"])
     apply = "--apply" in argv
-    items = plan(data)
+    era5_tmax = "--era5-tmax" in argv
+    items = plan(data, era5_tmax)
     total = 0
     by_item: dict[str, list[int]] = {}
     for item in items:
@@ -227,7 +246,7 @@ def main(argv: list[str]) -> int:
     )
     done = {m["origin"] for m in manifest["items"]}
     for item in items:
-        refuse(item)
+        refuse(item, era5_tmax)
         for f in files_of(item.path):
             if str(f) in done:
                 continue
@@ -258,7 +277,7 @@ def main(argv: list[str]) -> int:
                     folder.rmdir()
             if not any(item.path.iterdir()):
                 item.path.rmdir()
-    prune_registries(data, items, manifest)
+    prune_registries(data, items, manifest, era5_tmax)
     manifest_path.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     print("archived", len(manifest["items"]), "files; manifest", manifest_path)
     return 0

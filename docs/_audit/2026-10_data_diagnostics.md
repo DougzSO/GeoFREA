@@ -345,3 +345,30 @@ Decisions asked:
 ## 8. Reproduction
 
 All scripts are in `2026-10_data_diagnostics_scripts/`; they read `GeoFREA_data` and write only to a scratch directory (`DIAG_SCRATCH`, default `D:\tmp_diag`) and to the figures folder. Order: `b1_compute.py BRA` (native fields and change factors of 36 members, about 90 s), `b1_options.py BRA` (reproduction of the mask and the option counts), `era5_gust_mean.py BRA` (about 6 minutes), `b1_reference.py`, `b1_miroc6_accepted.py`, `dT_negative.py`, `dT_isolated_cells.py`, `heat_days.py`, `altitude_k.py`. Each prints the Markdown tables used above.
+
+## 9. Addendum (V-83, 2026-10-15): reference heat days against W5E5 v2.0, which replaces ERA5
+
+**The reference changed from ERA5 to W5E5 v2.0.** Section 4 recommended acquiring ERA5 daily `Tmax`. The documentation of ISIMIP3b states what its climate input was bias-adjusted to: "ISIMIP3BASD v2.5.0 and W5E5 v2.0" ([ISIMIP3b bias adjustment](https://www.isimip.org/gettingstarted/isimip3b-bias-adjustment/); the data set is [W5E5 v2.0, DOI 10.48364/ISIMIP.342217](https://data.isimip.org/10.48364/ISIMIP.342217), and the [replacement notice](https://www.isimip.org/gettingstarted/input-data-changelog/isimip3-replaced-bias-adjusted-climate-input-data) says the observational reference dataset moved from W5E5 v1.0 to v2.0). That is also what the `title` attribute of the `raw/isimip3b` files says. The hazard channel's reference heat days (`tx35_days_ref`, `tx40_days_ref`) are therefore compared with the data set they were adjusted to, on the same grid, not with a product of another resolution, another day definition (UTC day of ERA5 against the W5E5 day) and a regridding step.
+
+**ERA5 acquisition stopped.** The CDS acquisition (`scripts/acquire_era5_tmax_daily.py`, PID 4048) had finished 4 of the 60 country-years (BRA 1995 and 1996, IND 1995, PRT 1995) in two days and was retrying against the CDS queue limit ("Number queued requests for this dataset is temporarily limited"). It was stopped (the process ended; the incomplete `.part.nc` files of three further years were left behind and are not data). All 7 files (0.08 GB) were moved to `database\archive\geofrea_2026-10\` (manifest, item L-8, sha256 each) and the three `era5/<ISO3>/t2m_daily_max` entries left `era5_registry.json` (a copy as it was is in the archive); nothing else read them. The script stays in `scripts/` as it was.
+
+**W5E5 v2.0 `tasmax`, 1995-2014.** The regional files of the ISIMIP repository were already on disk (`D:\Douglas\OUTROS\CRAEI_raw_data\raw\climate\w5e5v2.0\tasmax`, `ncks` boxes downloaded 2026-09-30), so nothing was downloaded. `scripts/place_w5e5_tasmax.py` cuts them to the cells of `raw/isimip3b/<ISO3>/` (BRA 81 x 81, PRT 20 x 51, IND 63 x 60 cells, 7,305 days) into `raw/w5e5/<ISO3>/`, and `raw/w5e5/w5e5_registry.json` holds the sha256 of every file read and written. The 0.5 degree grid and the proleptic Gregorian daily calendar are the same as those of the ISIMIP3b files, so a cell is compared with itself.
+
+**Result.** Days a year at or above the threshold, over the 0.5 degree cells whose centre is inside the mainland polygon (`2026-10_data_diagnostics_scripts/w5e5_heat_days.py`; the three hazard GCMs and their mean):
+
+| Country | Threshold | Cells | W5E5 median days | ISIMIP3b median days (mean of 3) | Median bias (days) | Median abs. difference (days) | p95 abs. difference (days) | Pearson r | Spearman rho |
+|---|---|---|---|---|---|---|---|---|---|
+| BRA | 35 C | 2,845 | 37.9 | 30.1 | -3.2 | 4.7 | 21.8 | 0.979 | 0.974 |
+| BRA | 40 C | 2,845 | 0 | 0.03 | 0.02 | 0.03 | 0.75 | 0.77 | 0.67 |
+| PRT | 35 C | 40 | 5.35 | 4.77 | -0.16 | 1.2 | 3.1 | 0.985 | 0.962 |
+| PRT | 40 C | 40 | 0.05 | 0.02 | -0.01 | 0.05 | 0.41 | 0.90 | 0.87 |
+| IND | 35 C | 1,049 | 108 | 111 | +1.2 | 2.6 | 8.2 | 0.997 | 0.996 |
+| IND | 40 C | 1,049 | 30 | 29.1 | -0.13 | 0.85 | 4.1 | 0.997 | 0.997 |
+
+(The per-GCM rows are in the output of the script; the largest median difference of any single GCM is 5.3 days, MRI-ESM2-0 over BRA at 35 C, and MRI-ESM2-0 over IND at 40 C has a median bias of -2.0 days.)
+
+![ISIMIP3b against W5E5 v2.0 heat days](2026-10_data_diagnostics_figures/w5e5_vs_isimip3b_heat_days.png)
+
+**Reading.** The spatial pattern of the reference heat days is the one of the data set the GCMs were adjusted to (r of 0.96 to 0.997 at 35 C in every country and GCM). The level agrees within a few days in Portugal and India. Brazil is the one with a bias: at 35 C the GCMs have fewer hot days than W5E5 (median cell difference -3.2 days, mean -6.0; 52 % of the cells within 5 days, p95 of the absolute difference 22 days), the same sign for each of the three GCMs. A bias adjustment fits the distribution of the daily series, not the count of days above a threshold in the tail, and Brazil's median cell sits near the threshold (about 38 days at or above 35 C), where a small shift of the distribution moves many days. At 40 C the counts are zero or near zero in Brazil and Portugal, so the correlation there is not informative; India's 40 C count agrees (median 30 against 29). This closes V-83: the reference level of the hazard channel is consistent with its own reference data set, with one documented bias (BRA, 35 C, about -3 days in the median cell) that does not change the ranking of the cells. Nothing in the pipeline was changed.
+
+**What this does not show.** W5E5 is itself a reanalysis-based product (WFDE5 over land is built on ERA5), so agreement with it is a check of the processing and the bias adjustment, not of the level of the true maximum temperature; an observation-based check (station data) would be the independent one, and no such source is cited in the repository.
