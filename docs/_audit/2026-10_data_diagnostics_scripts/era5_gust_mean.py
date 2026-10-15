@@ -16,7 +16,9 @@ from common import *  # noqa
 country = sys.argv[1]
 tot, n, lat, lon = None, 0, None, None
 for y in range(1995, 2015):
-    with xr.open_dataset(DATA / "raw" / "era5" / "_global" / f"{country}_fg10_hourly_bbox_{y}.nc") as ds:
+    with xr.open_dataset(
+        DATA / "raw" / "era5" / "_global" / f"{country}_fg10_hourly_bbox_{y}.nc"
+    ) as ds:
         da = ds["fg10"]
         lat, lon = da["latitude"].values, da["longitude"].values
         for i in range(0, da.sizes["valid_time"], 1000):
@@ -25,5 +27,11 @@ for y in range(1995, 2015):
             tot = s if tot is None else tot + s
             n += blk.shape[0]
     print(y, n, flush=True)
-np.savez(SCRATCH / f"era5_gust_mean_{country}.npz", mean=(tot / n).astype("float32"), lat=lat, lon=lon, hours=n)
+np.savez(
+    SCRATCH / f"era5_gust_mean_{country}.npz",
+    mean=(tot / n).astype("float32"),
+    lat=lat,
+    lon=lon,
+    hours=n,
+)
 print("hours", n)

@@ -20,7 +20,34 @@ for g in GCMS:
     for s in SSPS:
         for w in WINDOWS:
             a = Z[f"native_dT|{g}|{s}|{w}"].astype(float)
-            dev = generic_filter(a, lambda x: x[4] - np.nanmedian(np.delete(x, 4)), size=3, mode="nearest")[land]
-            rows.append((g, s, w, int(land.sum()), int((np.abs(dev) > 1).sum()), float(np.abs(dev).max())))
-df = pd.DataFrame(rows, columns=["GCM", "SSP", "window", "native land cells", "isolated cells (|dev| > 1 K)", "max |deviation| (K)"])
-print(md(df.groupby("GCM", sort=False).agg(**{"native land cells": ("native land cells", "first"), "members": ("SSP", "size"), "isolated cells, all members": ("isolated cells (|dev| > 1 K)", "sum"), "max |deviation| (K)": ("max |deviation| (K)", "max")}).reset_index()))
+            dev = generic_filter(
+                a, lambda x: x[4] - np.nanmedian(np.delete(x, 4)), size=3, mode="nearest"
+            )[land]
+            rows.append(
+                (g, s, w, int(land.sum()), int((np.abs(dev) > 1).sum()), float(np.abs(dev).max()))
+            )
+df = pd.DataFrame(
+    rows,
+    columns=[
+        "GCM",
+        "SSP",
+        "window",
+        "native land cells",
+        "isolated cells (|dev| > 1 K)",
+        "max |deviation| (K)",
+    ],
+)
+print(
+    md(
+        df.groupby("GCM", sort=False)
+        .agg(
+            **{
+                "native land cells": ("native land cells", "first"),
+                "members": ("SSP", "size"),
+                "isolated cells, all members": ("isolated cells (|dev| > 1 K)", "sum"),
+                "max |deviation| (K)": ("max |deviation| (K)", "max"),
+            }
+        )
+        .reset_index()
+    )
+)

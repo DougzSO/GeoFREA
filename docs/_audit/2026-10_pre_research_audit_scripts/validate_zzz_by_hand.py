@@ -38,15 +38,15 @@ PARAMS = json.loads(
         if (DATA / "parameters_synthetic.json").is_file()
         else REPO / "config" / "parameters.json"
     ).read_text(encoding="utf-8")
-)["countries"][
-    "ZZZ"
-]["technologies"]
+)["countries"]["ZZZ"]["technologies"]
 EXPERIMENTS = yaml.safe_load((DATA / "experiments_zzz.yaml").read_text(encoding="utf-8"))
 CELL_DEG, PIXEL_DEG = 0.05, 0.01
 HOURS = 8760.0
 RHO0 = 1.225
 ROWS: list[tuple[str, str, float, float, float, bool]] = []
-EXPECT: dict[str, float] = {}  # values recomputed by hand that a test may pin (printed as JSON after the table)
+EXPECT: dict[
+    str, float
+] = {}  # values recomputed by hand that a test may pin (printed as JSON after the table)
 
 
 def val(tech: str, key: str) -> float:
@@ -408,7 +408,9 @@ class Robust:
         self.members = {
             m["member"]: (m.get("gcm"), m.get("ssp"), str(m["window"])) for m in members
         }
-        in_table = set(self.pot["member"].astype(str))  # a member without the channel of the technology has no row (M-F4-06)
+        in_table = set(
+            self.pot["member"].astype(str)
+        )  # a member without the channel of the technology has no row (M-F4-06)
         self.core = [
             m
             for m, (g, s, w) in self.members.items()
@@ -759,7 +761,9 @@ def validate_f7() -> None:
         for s in samples:
             r = {c: reg[(m, s)][c] for c in R.ranked}
             rank_f = {c: i + 1 for i, c in enumerate(rank_order(r))}
-            vf[(m, s)] = sum(q[c] for c in short if rank_f[c] > R.k + R.k) / sum(q[c] for c in short)
+            vf[(m, s)] = sum(q[c] for c in short if rank_f[c] > R.k + R.k) / sum(
+                q[c] for c in short
+            )
     stored = futures_t["displaced_capacity_share"]
     if WORLD == "zzz":
         check(
@@ -775,7 +779,12 @@ def validate_f7() -> None:
             str([float(x) for x in sorted(set(np.round(stored, 4)))]),
         )
     else:  # ZZZ2: the stored outcome is the real one and must equal the hand value in every future
-        by_hand = np.array([vf[(m, int(s_))] for m, s_ in zip(futures_t["member"], futures_t["sample"], strict=True)])
+        by_hand = np.array(
+            [
+                vf[(m, int(s_))]
+                for m, s_ in zip(futures_t["member"], futures_t["sample"], strict=True)
+            ]
+        )
         check(
             f"PRIM outcome V_f of all {len(by_hand)} futures: largest absolute difference between the stored and the hand value",
             0.0,

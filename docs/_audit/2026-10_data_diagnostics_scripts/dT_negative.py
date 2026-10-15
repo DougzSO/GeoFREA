@@ -32,32 +32,70 @@ for g in gc:
             land = Z[f"native_land|{g}"]
             nl = nat[land]
             rows.append(
-                {"GCM": g, "SSP": s, "window": w, "cells dT<0": int((d < 0).sum()), "share of cells": (d < 0).mean(),
-                 "min dT cell (K)": float(d.min()), "median dT cell (K)": float(np.median(d)),
-                 "native land cells": int(land.sum()), "native land cells dT<0": int((nl < 0).sum()), "min native dT (K)": float(nl.min())}
+                {
+                    "GCM": g,
+                    "SSP": s,
+                    "window": w,
+                    "cells dT<0": int((d < 0).sum()),
+                    "share of cells": (d < 0).mean(),
+                    "min dT cell (K)": float(d.min()),
+                    "median dT cell (K)": float(np.median(d)),
+                    "native land cells": int(land.sum()),
+                    "native land cells dT<0": int((nl < 0).sum()),
+                    "min native dT (K)": float(nl.min()),
+                }
             )
 T = pd.DataFrame(rows)
 print("\n## Cells with dT < 0, by member (0.05 degree cells of Brazil, 285,999)\n")
 print(md(T[T["cells dT<0"] > 0]))
-print(f"\ntotal negative cell-members {int(T['cells dT<0'].sum())} of {len(cid) * 36}; members with at least one: {int((T['cells dT<0'] > 0).sum())} of 36")
+print(
+    f"\ntotal negative cell-members {int(T['cells dT<0'].sum())} of {len(cid) * 36}; members with at least one: {int((T['cells dT<0'] > 0).sum())} of 36"
+)
 print("members with a negative native land cell (even when no 0.05 degree cell is negative):")
-print(md(T[(T["native land cells dT<0"] > 0)][["GCM", "SSP", "window", "native land cells", "native land cells dT<0", "min native dT (K)"]]))
+print(
+    md(
+        T[(T["native land cells dT<0"] > 0)][
+            [
+                "GCM",
+                "SSP",
+                "window",
+                "native land cells",
+                "native land cells dT<0",
+                "min native dT (K)",
+            ]
+        ]
+    )
+)
+
 
 # 2. global-mean warming of the same members, to separate model cooling from a field-wide offset -----------------------------
 def gmean(gcm, exp, years):
     ds = xr.open_dataset(cmip_path(gcm, exp, "tas"))
     da = ds["tas"].sel(time=slice(f"{years[0]}-01-01", f"{years[1]}-12-31"))
     wgt = np.cos(np.deg2rad(da["lat"]))
-    return float(da.groupby("time.month").mean("time").mean("month").weighted(wgt).mean(("lat", "lon")))
+    return float(
+        da.groupby("time.month").mean("time").mean("month").weighted(wgt).mean(("lat", "lon"))
+    )
 
 
-print("\n## Global-mean tas change of the members that have negative cells (annual mean of the monthly climatology)\n")
+print(
+    "\n## Global-mean tas change of the members that have negative cells (annual mean of the monthly climatology)\n"
+)
 out = []
 seen = T[T["cells dT<0"] > 0]
 for _, r in seen.iterrows():
     h = gmean(r["GCM"], "historical", REF)
     f = gmean(r["GCM"], SSPS[r["SSP"]], WINDOWS[r["window"]])
-    out.append({"GCM": r["GCM"], "SSP": r["SSP"], "window": r["window"], "global dT (K)": f - h, "Brazil median dT (K)": r["median dT cell (K)"], "Brazil min dT (K)": r["min dT cell (K)"]})
+    out.append(
+        {
+            "GCM": r["GCM"],
+            "SSP": r["SSP"],
+            "window": r["window"],
+            "global dT (K)": f - h,
+            "Brazil median dT (K)": r["median dT cell (K)"],
+            "Brazil min dT (K)": r["min dT cell (K)"],
+        }
+    )
 print(md(pd.DataFrame(out)))
 
 # 3. edge effect or cooling region? ---------------------------------------------------------------------------------------------
@@ -76,9 +114,19 @@ for _, r in seen.iterrows():
     dist_lat = np.abs(la[ii] - lat[neg]) / (abs(la[1] - la[0]) / 2)
     dist_lon = np.abs(lo[jj] - lon[neg]) / (abs(lo[1] - lo[0]) / 2)
     # bilinear interpolation cannot go below the lowest of its four corners: report that corner count
-    chk.append({"member": f"{g} {s} {w}", "negative cells": int(neg.sum()), "share whose nearest native centre is negative": float(centre_neg.mean()),
-                "lowest native dT among these cells' centres (K)": float(nat[ii, jj].min()), "median distance to centre (1 = cell edge)": float(np.median(np.maximum(dist_lat, dist_lon))),
-                "native cells negative in the Brazil window": int((nat < 0).sum()), "native cells in the window": int(nat.size)})
+    chk.append(
+        {
+            "member": f"{g} {s} {w}",
+            "negative cells": int(neg.sum()),
+            "share whose nearest native centre is negative": float(centre_neg.mean()),
+            "lowest native dT among these cells' centres (K)": float(nat[ii, jj].min()),
+            "median distance to centre (1 = cell edge)": float(
+                np.median(np.maximum(dist_lat, dist_lon))
+            ),
+            "native cells negative in the Brazil window": int((nat < 0).sum()),
+            "native cells in the window": int(nat.size),
+        }
+    )
 print(md(pd.DataFrame(chk)))
 
 # 4. figure ----------------------------------------------------------------------------------------------------------------------
@@ -101,7 +149,9 @@ for k, (_, r) in enumerate(top.iterrows()):
     bra.boundary.plot(ax=ax, color="k", lw=0.5)
     d = Z[f"dT|{g}|{s}|{w}"]
     ax.scatter(lon[d < 0], lat[d < 0], s=0.3, c="k")
-    ax.set_xlim(-74.5, -33.5); ax.set_ylim(-34.5, 6); ax.set_aspect("equal")
+    ax.set_xlim(-74.5, -33.5)
+    ax.set_ylim(-34.5, 6)
+    ax.set_aspect("equal")
     ax.set_title(f"{g} {s} {w}\nnative dT (K); black = 0.05 degree cells with dT < 0", fontsize=9)
     ax = axs[1, k]
     ax.hist(d, bins=80, color="#2c7fb8")

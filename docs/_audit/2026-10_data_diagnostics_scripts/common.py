@@ -27,7 +27,11 @@ GCMS = {  # label -> file stem in raw/cmip6/_global
 SSPS = {"SSP1-2.6": "ssp126", "SSP3-7.0": "ssp370", "SSP5-8.5": "ssp585"}
 WINDOWS = {"2041-2070": (2041, 2070), "2071-2100": (2071, 2100)}
 REF = (1995, 2014)
-BBOX = {"BRA": (-34.5, 6.0, -74.5, -28.0), "PRT": (36.5, 42.5, -10.0, -6.0), "IND": (6.0, 37.5, 67.5, 98.0)}  # lat0, lat1, lon0, lon1
+BBOX = {
+    "BRA": (-34.5, 6.0, -74.5, -28.0),
+    "PRT": (36.5, 42.5, -10.0, -6.0),
+    "IND": (6.0, 37.5, 67.5, 98.0),
+}  # lat0, lat1, lon0, lon1
 
 
 def cmip_path(gcm: str, exp: str, var: str) -> Path:
@@ -43,7 +47,9 @@ def load_native(gcm: str, exp: str, var: str, country: str, margin: float = 6.0)
     if lon.max() > 180:
         da = da.assign_coords(lon=((lon + 180) % 360) - 180)
     da = da.sortby("lon").sortby("lat")
-    return da.sel(lat=slice(lat0 - margin, lat1 + margin), lon=slice(lon0 - margin, lon1 + margin)).load()
+    return da.sel(
+        lat=slice(lat0 - margin, lat1 + margin), lon=slice(lon0 - margin, lon1 + margin)
+    ).load()
 
 
 def annual_clim(da: xr.DataArray, years: tuple[int, int]) -> xr.DataArray:
@@ -69,14 +75,23 @@ def native_land_mask(da: xr.DataArray, country: str) -> np.ndarray:
 
 
 def candidates(country: str, tech: str) -> pd.DataFrame:
-    return pd.read_parquet(DATA / "outputs" / country / "land_eligibility" / "artifacts" / f"candidates_{tech}__central.parquet")
+    return pd.read_parquet(
+        DATA
+        / "outputs"
+        / country
+        / "land_eligibility"
+        / "artifacts"
+        / f"candidates_{tech}__central.parquet"
+    )
 
 
 def forcing_cells(country: str) -> pd.DataFrame:
     """Cells of the forcing (country_cells of F4), recomputed from the F2a grid exactly as F4 does."""
     from geofrea.climate_forcing.forcing import country_cells
 
-    return country_cells(DATA / "outputs" / country / "grid_alignment" / "artifacts" / f"{country}_grid_aligned.tif")
+    return country_cells(
+        DATA / "outputs" / country / "grid_alignment" / "artifacts" / f"{country}_grid_aligned.tif"
+    )
 
 
 def md(df: pd.DataFrame, floatfmt: str = ".4g") -> str:
@@ -84,5 +99,11 @@ def md(df: pd.DataFrame, floatfmt: str = ".4g") -> str:
     cols = [str(c) for c in df.columns]
     out = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for row in df.itertuples(index=False):
-        out.append("| " + " | ".join(format(v, floatfmt) if isinstance(v, (float, np.floating)) else str(v) for v in row) + " |")
+        out.append(
+            "| "
+            + " | ".join(
+                format(v, floatfmt) if isinstance(v, (float, np.floating)) else str(v) for v in row
+            )
+            + " |"
+        )
     return "\n".join(out)

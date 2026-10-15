@@ -57,7 +57,11 @@ elat, elon = E["lat"], E["lon"]
 with rasterio.open(DATA / "raw" / "gwa" / country / f"{country}_wind_speed_100m.tif") as src:
     f = 16
     h, w = src.height // f, src.width // f
-    arr = src.read(1, out_shape=(h, w), resampling=Resampling.average, masked=True).astype("float64").filled(np.nan)
+    arr = (
+        src.read(1, out_shape=(h, w), resampling=Resampling.average, masked=True)
+        .astype("float64")
+        .filled(np.nan)
+    )
     tr = src.transform * src.transform.scale(src.width / w, src.height / h)
 glat = tr.f + tr.e * (np.arange(h) + 0.5)
 glon = tr.c + tr.a * (np.arange(w) + 0.5)
@@ -71,10 +75,22 @@ for g in gc:
     w_g, nw = block_mean(arr, glat, glon, la, lo)
     ref_fields[g] = (la, lo, ref, land, e_g, w_g)
     v = ref[land]
-    r = {"GCM": g, "grid (lat x lon deg)": f"{abs(la[1] - la[0]):.2f} x {abs(lo[1] - lo[0]):.2f}", "native land cells": int(land.sum())}
+    r = {
+        "GCM": g,
+        "grid (lat x lon deg)": f"{abs(la[1] - la[0]):.2f} x {abs(lo[1] - lo[0]):.2f}",
+        "native land cells": int(land.sum()),
+    }
     for t in (0.5, 1.0, 2.0):
         r[f"< {t} m/s"] = f"{(v < t).sum()} ({(v < t).mean():.1%})"
-    r.update({"min": v.min(), "p5": np.percentile(v, 5), "median": np.median(v), "p95": np.percentile(v, 95), "max": v.max()})
+    r.update(
+        {
+            "min": v.min(),
+            "p5": np.percentile(v, 5),
+            "median": np.median(v),
+            "p95": np.percentile(v, 95),
+            "max": v.max(),
+        }
+    )
     ok = land & np.isfinite(e_g) & np.isfinite(w_g)
     r["r vs ERA5 gust"] = pearsonr(ref[ok], e_g[ok])[0]
     r["r vs GWA 100 m"] = pearsonr(ref[ok], w_g[ok])[0]
@@ -82,17 +98,30 @@ for g in gc:
     r["median GCM / GWA100"] = float(np.median(ref[ok] / w_g[ok]))
     r["median GCM / ERA5 gust"] = float(np.median(ref[ok] / e_g[ok]))
     rows.append(r)
-print("\n## Reference mean sfcWind on the native grids, land cells (centre inside the mainland polygon)\n")
+print(
+    "\n## Reference mean sfcWind on the native grids, land cells (centre inside the mainland polygon)\n"
+)
 print(md(pd.DataFrame(rows)))
 
 # --- what ERA5 and GWA say where MIROC6 is calm --------------------------------------------------------------------------
 la, lo, ref, land, e_g, w_g = ref_fields["MIROC6"]
-print("\n## Where MIROC6 reference wind is below 0.5, 1 and 2 m/s: the independent fields in the same native cells\n")
+print(
+    "\n## Where MIROC6 reference wind is below 0.5, 1 and 2 m/s: the independent fields in the same native cells\n"
+)
 out = []
 for t in (0.5, 1.0, 2.0):
     m = land & (ref < t) & np.isfinite(e_g) & np.isfinite(w_g)
-    out.append({"MIROC6 ref <": f"{t} m/s", "native cells": int(m.sum()), "MIROC6 mean": ref[m].mean(), "ERA5 mean gust (median)": np.median(e_g[m]), "GWA 100 m (median)": np.median(w_g[m]),
-                "GWA 100 m (min)": w_g[m].min(), "other five GCMs (median of the five)": np.nan})
+    out.append(
+        {
+            "MIROC6 ref <": f"{t} m/s",
+            "native cells": int(m.sum()),
+            "MIROC6 mean": ref[m].mean(),
+            "ERA5 mean gust (median)": np.median(e_g[m]),
+            "GWA 100 m (median)": np.median(w_g[m]),
+            "GWA 100 m (min)": w_g[m].min(),
+            "other five GCMs (median of the five)": np.nan,
+        }
+    )
 # the other five GCMs interpolated to the MIROC6 land cells
 mi = xr.DataArray(ref, coords={"lat": la, "lon": lo}, dims=("lat", "lon"))
 LA2, LO2 = np.meshgrid(la, lo, indexing="ij")
@@ -102,38 +131,63 @@ for g in gc:
         continue
     a, b, r2, *_ = ref_fields[g]
     da = xr.DataArray(r2, coords={"lat": a, "lon": b}, dims=("lat", "lon"))
-    others.append(da.interp(lat=xr.DataArray(la, dims="lat"), lon=xr.DataArray(lo, dims="lon")).values)
+    others.append(
+        da.interp(lat=xr.DataArray(la, dims="lat"), lon=xr.DataArray(lo, dims="lon")).values
+    )
 med5 = np.nanmedian(np.array(others), axis=0)
 for i, t in enumerate((0.5, 1.0, 2.0)):
     m = land & (ref < t) & np.isfinite(med5)
     out[i]["other five GCMs (median of the five)"] = np.median(med5[m])
 print(md(pd.DataFrame(out)))
 ratio = ref / med5
-print(f"\nMIROC6 / median of the other five, land cells: p5 {np.nanpercentile(ratio[land], 5):.2f}, median {np.nanmedian(ratio[land]):.2f}, p95 {np.nanpercentile(ratio[land], 95):.2f}, min {np.nanmin(ratio[land]):.2f}")
-print("Pairwise Pearson correlation of the reference fields (land cells of MIROC6's grid, other GCMs interpolated):")
+print(
+    f"\nMIROC6 / median of the other five, land cells: p5 {np.nanpercentile(ratio[land], 5):.2f}, median {np.nanmedian(ratio[land]):.2f}, p95 {np.nanpercentile(ratio[land], 95):.2f}, min {np.nanmin(ratio[land]):.2f}"
+)
+print(
+    "Pairwise Pearson correlation of the reference fields (land cells of MIROC6's grid, other GCMs interpolated):"
+)
 allf = {"MIROC6": ref, **{g: o for g, o in zip([x for x in gc if x != "MIROC6"], others)}}
 D = pd.DataFrame({k: v[land] for k, v in allf.items()}).dropna()
 print(D.corr().round(2).to_string())
 
 # --- masked cells ------------------------------------------------------------------------------------------------------------
-masked = pd.read_parquet(DATA / "outputs" / country / "climate_forcing" / "artifacts" / "forcing_masked.parquet")
+masked = pd.read_parquet(
+    DATA / "outputs" / country / "climate_forcing" / "artifacts" / "forcing_masked.parquet"
+)
 core_ids = [f"m_{GCMS[g]}_{s}_2041_2070" for g in gc for s in SSPS.values()]
 mk = masked.assign(core=masked["member"].isin(core_ids))
 cid, lat, lon = Z["cell_id"], Z["lat"], Z["lon"]
 per_cell = mk.groupby("cell_id").agg(n_all=("member", "size"), n_core=("core", "sum"))
-pc = pd.DataFrame({"cell_id": cid, "lat": lat, "lon": lon}).merge(per_cell, on="cell_id", how="left").fillna({"n_all": 0, "n_core": 0})
+pc = (
+    pd.DataFrame({"cell_id": cid, "lat": lat, "lon": lon})
+    .merge(per_cell, on="cell_id", how="left")
+    .fillna({"n_all": 0, "n_core": 0})
+)
 cw = candidates(country, "wind")["cell_id"].to_numpy()
 cs = candidates(country, "solar")["cell_id"].to_numpy()
 pc["wind_cand"], pc["solar_cand"] = pc.cell_id.isin(cw), pc.cell_id.isin(cs)
 sel = pc[pc.n_all > 0]
 print("\n## Masked cells (any member, both windows)\n")
-print(f"cells with a masked member: {len(sel)} of {len(pc)}; wind candidates {int(sel.wind_cand.sum())}, solar candidates {int(sel.solar_cand.sum())}, neither {int((~sel.wind_cand & ~sel.solar_cand).sum())}")
-print(f"masked in the core window: {int((pc.n_core > 0).sum())} cells; wind candidates {int(((pc.n_core > 0) & pc.wind_cand).sum())}, solar candidates {int(((pc.n_core > 0) & pc.solar_cand).sum())}")
-print("members masked per cell (core window, cells with at least one): " + pc.loc[pc.n_core > 0, "n_core"].describe().round(1).to_dict().__repr__())
-by_state = pd.read_parquet(DATA / "outputs" / country / "land_eligibility" / "artifacts" / "admin1_units.parquet")
+print(
+    f"cells with a masked member: {len(sel)} of {len(pc)}; wind candidates {int(sel.wind_cand.sum())}, solar candidates {int(sel.solar_cand.sum())}, neither {int((~sel.wind_cand & ~sel.solar_cand).sum())}"
+)
+print(
+    f"masked in the core window: {int((pc.n_core > 0).sum())} cells; wind candidates {int(((pc.n_core > 0) & pc.wind_cand).sum())}, solar candidates {int(((pc.n_core > 0) & pc.solar_cand).sum())}"
+)
+print(
+    "members masked per cell (core window, cells with at least one): "
+    + pc.loc[pc.n_core > 0, "n_core"].describe().round(1).to_dict().__repr__()
+)
+by_state = pd.read_parquet(
+    DATA / "outputs" / country / "land_eligibility" / "artifacts" / "admin1_units.parquet"
+)
 print("admin1 columns", list(by_state.columns)[:6])
-cwd = candidates(country, "wind")[["cell_id", "admin1_id"]].merge(pc[["cell_id", "n_core"]], on="cell_id")
-st = cwd.groupby("admin1_id").agg(wind_candidates=("cell_id", "size"), invalid_core=("n_core", lambda s: int((s > 0).sum())))
+cwd = candidates(country, "wind")[["cell_id", "admin1_id"]].merge(
+    pc[["cell_id", "n_core"]], on="cell_id"
+)
+st = cwd.groupby("admin1_id").agg(
+    wind_candidates=("cell_id", "size"), invalid_core=("n_core", lambda s: int((s > 0).sum()))
+)
 st["share"] = st.invalid_core / st.wind_candidates
 print("\nWind candidates invalid in the core window, by admin 1 unit (top 10 by count):\n")
 print(md(st.sort_values("invalid_core", ascending=False).head(10).reset_index()))
@@ -141,7 +195,9 @@ print(md(st.sort_values("invalid_core", ascending=False).head(10).reset_index())
 # --- figures -----------------------------------------------------------------------------------------------------------------
 import geopandas as gpd
 
-bra = gpd.read_file(DATA / "raw" / "gadm" / country / f"gadm41_{country}_0_mainland.shp").to_crs(4326)
+bra = gpd.read_file(DATA / "raw" / "gadm" / country / f"gadm41_{country}_0_mainland.shp").to_crs(
+    4326
+)
 ext = (-74.5, -33.5, -34.5, 6.0)
 
 
@@ -162,7 +218,13 @@ for ax, g in zip(axs.ravel()[:6], gc):
     ax.set_title(f"{g}: sfcWind 1995-2014 (m/s)", fontsize=9)
 la_, lo_, *_ = ref_fields["ACCESS-CM2"]
 ax = axs.ravel()[6]
-ax.imshow(era, extent=(elon[0] - 0.125, elon[-1] + 0.125, elat[-1] - 0.125, elat[0] + 0.125), vmin=0, vmax=7, cmap="viridis")
+ax.imshow(
+    era,
+    extent=(elon[0] - 0.125, elon[-1] + 0.125, elat[-1] - 0.125, elat[0] + 0.125),
+    vmin=0,
+    vmax=7,
+    cmap="viridis",
+)
 outline(ax)
 ax.set_title("ERA5 mean 10 m gust fg10 (m/s)\n(not mean wind)", fontsize=9)
 ax = axs.ravel()[7]
@@ -205,11 +267,22 @@ plt.close(fig)
 
 fig, axs = plt.subplots(1, 3, figsize=(15, 5), constrained_layout=True)
 cm_ = lambda v: np.where(v, 1.0, np.nan)
-for ax, (title, cond) in zip(axs, (("Masked in the core window, any cell", pc.n_core > 0), ("... of which wind candidates", (pc.n_core > 0) & pc.wind_cand), ("... of which solar candidates", (pc.n_core > 0) & pc.solar_cand))):
+for ax, (title, cond) in zip(
+    axs,
+    (
+        ("Masked in the core window, any cell", pc.n_core > 0),
+        ("... of which wind candidates", (pc.n_core > 0) & pc.wind_cand),
+        ("... of which solar candidates", (pc.n_core > 0) & pc.solar_cand),
+    ),
+):
     ax.scatter(pc.lon[~pc.n_core.gt(0)], pc.lat[~pc.n_core.gt(0)], s=0.15, c="#dddddd")
     ax.scatter(pc.lon[cond], pc.lat[cond], s=0.8, c="#c0392b")
     bra.boundary.plot(ax=ax, color="k", lw=0.5)
-    ax.set_xlim(ext[0], ext[1]); ax.set_ylim(ext[2], ext[3]); ax.set_aspect("equal"); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xlim(ext[0], ext[1])
+    ax.set_ylim(ext[2], ext[3])
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
     ax.set_title(f"{title}: {int(cond.sum())} cells", fontsize=10)
 fig.savefig(FIG / "b1_masked_cells_candidates.png", dpi=130)
 plt.close(fig)

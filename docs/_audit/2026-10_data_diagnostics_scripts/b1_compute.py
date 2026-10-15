@@ -37,9 +37,15 @@ for g in GCMS:
         for wn, years in WINDOWS.items():
             win_w = annual_clim(scen_w, years)
             for n in NS:
-                a, b = (ref_w, win_w) if n == 1 else (neighbourhood_mean(ref_w, n), neighbourhood_mean(win_w, n))
+                a, b = (
+                    (ref_w, win_w)
+                    if n == 1
+                    else (neighbourhood_mean(ref_w, n), neighbourhood_mean(win_w, n))
+                )
                 ratio = (b / a).where(a > 0)
-                out[f"dw|{g}|{ssp}|{wn}|{n}"] = bilinear_to_points(ratio, lat, lon).astype("float32")
+                out[f"dw|{g}|{ssp}|{wn}|{n}"] = bilinear_to_points(ratio, lat, lon).astype(
+                    "float32"
+                )
                 if n == 3:
                     out[f"native_dw3|{g}|{ssp}|{wn}"] = ratio.values.astype("float32")
             dT = annual_clim(scen_t, years) - ref_t
