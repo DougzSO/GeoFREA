@@ -587,17 +587,45 @@ def read_clipped_to_country(
     return clip_vector_to_country(gdf, country_gdf)
 
 
-def clip_cache_key(path: str | Path, country_gdf: gpd.GeoDataFrame) -> str:
-    """Identity of a clip: the source file (path, size, mtime) and the country polygon it is clipped to.
+CLIP_ALGORITHM_VERSION = 1  # bumped by hand when the clip (simplify, repair, bbox filter, intersection) changes its result
+_SHAPEFILE_SIDECARS = (".shx", ".dbf", ".prj", ".cpg")
 
-    A clip cache is reusable only while its stored key equals this one; a cache clipped from another source
-    (IND roads from the wrong GRIP4 region, 2026-10-06) or another polygon is rebuilt, never reused.
+
+def clip_source_files(path: str | Path) -> list[Path]:
+    """The file of a clip source and, for a shapefile, the sidecars that carry its geometry index, attributes and CRS."""
+    path = Path(path)
+    files = [path]
+    if path.suffix.lower() == ".shp":
+        files += [path.with_suffix(e) for e in _SHAPEFILE_SIDECARS if path.with_suffix(e).is_file()]
+    return files
+
+
+def _clip_hash_memo():
+    from geofrea.core import paths as core_paths
+    from geofrea.core.cache_key import FileHashMemo
+    from geofrea.core.paths import MissingPathEnvironmentError
+
+    try:
+        return FileHashMemo(core_paths.data_root() / "interim" / "_clip_source_sha256.json")
+    except MissingPathEnvironmentError:  # no data directory configured: hash without a memo
+        return None
+
+
+def clip_cache_key(path: str | Path, country_gdf: gpd.GeoDataFrame) -> str:
+    """Identity of a clip by content (OQ-026): the SHA-256 of the source file, the country polygon and the version of the algorithm.
+
+    A clip cache is reusable only while its stored key equals this one. The key holds no path, size or mtime, so moving the source to another
+    folder or copying it keeps the cache valid, and a cache clipped from other content (IND roads from the wrong GRIP4 region, 2026-10-06)
+    or another polygon is rebuilt, never reused.
     """
     import hashlib
 
-    st = Path(path).stat()
+    from geofrea.core.cache_key import cache_key
+
     geom = hashlib.sha256(b"".join(g.wkb for g in country_gdf.geometry)).hexdigest()
-    return f"{Path(path).resolve()}|{st.st_size}|{st.st_mtime_ns}|{geom}"
+    return cache_key(
+        CLIP_ALGORITHM_VERSION, clip_source_files(path), {"polygon": geom}, memo=_clip_hash_memo()
+    )
 
 
 def clip_cache_is_current(cache_path: str | Path, key: str) -> bool:

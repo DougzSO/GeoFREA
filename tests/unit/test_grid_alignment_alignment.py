@@ -780,3 +780,74 @@ def test_run_grid_alignment_phase_aligns_each_wind_height_on_its_own_without_com
     )  # not blended with the 200 m layer
     assert means["wind_speed_200m"] == pytest.approx(7.0, abs=1e-3)
     assert means["weibull_k_150m"] == pytest.approx(2.0, abs=1e-3)
+
+
+@pytest.mark.unit
+def test_the_clip_key_is_by_content_so_moving_or_touching_the_source_keeps_the_cache(tmp_path):
+    """OQ-026: the key holds the SHA-256 of the source, not its path, size or mtime."""
+    import os
+    import shutil
+
+    from geofrea.core.geo_utils import clip_cache_key
+
+    country_gdf = _country_gdf()
+    a = tmp_path / "a" / "src.geojson"
+    a.parent.mkdir()
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])],
+        crs="EPSG:4326",
+    ).to_file(a, driver="GeoJSON")
+    key = clip_cache_key(a, country_gdf)
+    b = tmp_path / "elsewhere" / "src.geojson"
+    b.parent.mkdir()
+    shutil.copyfile(a, b)
+    os.utime(b, (1_000_000_000, 1_000_000_000))  # another mtime
+    assert clip_cache_key(b, country_gdf) == key
+    b.write_bytes(b.read_bytes() + b" ")  # another content
+    assert clip_cache_key(b, country_gdf) != key
+    other = gpd.GeoDataFrame(
+        geometry=[_square(_ORIGIN_LON, _ORIGIN_LAT - 0.1, 0.05)], crs="EPSG:4326"
+    )
+    assert clip_cache_key(a, other) != key  # another polygon
+
+
+@pytest.mark.unit
+def test_the_clip_key_of_a_shapefile_includes_its_sidecars(tmp_path):
+    from geofrea.core.geo_utils import clip_cache_key
+
+    country_gdf = _country_gdf()
+    shp = tmp_path / "roads.shp"
+    gpd.GeoDataFrame(
+        {"gp_rtp": [1]},
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])],
+        crs="EPSG:4326",
+    ).to_file(shp)
+    key = clip_cache_key(shp, country_gdf)
+    dbf = shp.with_suffix(".dbf")
+    dbf.write_bytes(dbf.read_bytes() + b"\0")
+    assert clip_cache_key(shp, country_gdf) != key
+
+
+@pytest.mark.unit
+def test_a_clip_cache_survives_the_move_of_its_source_without_being_recomputed(tmp_path):
+    import shutil
+
+    country_gdf = _country_gdf()
+    old = tmp_path / "shared" / "src.geojson"
+    old.parent.mkdir()
+    gpd.GeoDataFrame(
+        geometry=[LineString([(_ORIGIN_LON, _ORIGIN_LAT - 0.4), (_ORIGIN_LON + 0.4, _ORIGIN_LAT)])],
+        crs="EPSG:4326",
+    ).to_file(old, driver="GeoJSON")
+    cache_path = tmp_path / "cache" / "roads_clipped.gpkg"
+    first = _read_clipped_with_cache(old, country_gdf, cache_path)
+    new = tmp_path / "data" / "raw" / "src.geojson"
+    new.parent.mkdir(parents=True)
+    shutil.move(str(old), str(new))
+
+    def fail_if_called(*a, **k):
+        raise AssertionError("the clip was recomputed after the source moved")
+
+    with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
+        again = _read_clipped_with_cache(new, country_gdf, cache_path)
+    assert len(again) == len(first)
