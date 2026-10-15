@@ -30,15 +30,10 @@ class TestStoredPath:
             resolved = sp.resolve()
             assert resolved == Path(tmpdir) / "outputs" / "BRA" / "manifest.json"
 
-    def test_resolve_shared_raw_root(self):
-        """StoredPath with root='shared_raw' resolves to GEOFREA_SHARED_RAW_DIR."""
-        with (
-            tempfile.TemporaryDirectory() as tmpdir,
-            mock.patch.dict(os.environ, {"GEOFREA_SHARED_RAW_DIR": tmpdir}),
-        ):
-            sp = StoredPath(root="shared_raw", rel="gadm/BRA/gadm41_BRA_0.shp")
-            resolved = sp.resolve()
-            assert resolved == Path(tmpdir) / "gadm" / "BRA" / "gadm41_BRA_0.shp"
+    def test_the_shared_raw_root_no_longer_exists(self):
+        """COMMAND 37: nothing is read outside GEOFREA_DATA_DIR, so a stored path cannot name the shared raw directory."""
+        with pytest.raises(ValueError):
+            StoredPath(root="shared_raw", rel="gadm/BRA/gadm41_BRA_0.shp")
 
     def test_resolve_legacy_baseline_root(self):
         """StoredPath with root='legacy_baseline' resolves to GEOFREA_LEGACY_BASELINE_DIR."""
@@ -89,22 +84,20 @@ class TestToStoredPath:
                 assert sp.root == "data"
                 assert sp.rel == "outputs/BRA/test.json"
 
-    def test_convert_path_under_shared_raw_dir(self):
-        """to_stored_path() detects paths under GEOFREA_SHARED_RAW_DIR."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            shared_raw = Path(tmpdir) / "shared_raw"
-            shared_raw.mkdir()
-            test_file = shared_raw / "gadm" / "BRA" / "file.shp"
+    def test_a_path_under_the_former_shared_raw_dir_is_not_convertible(self):
+        """to_stored_path() has no root for GEOFREA_SHARED_RAW_DIR any more, even when the variable is still set."""
+        with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as other:
+            test_file = Path(other) / "gadm" / "BRA" / "file.shp"
             test_file.parent.mkdir(parents=True)
             test_file.touch()
-
-            with mock.patch.dict(
-                os.environ,
-                {"GEOFREA_DATA_DIR": str(Path(tmpdir)), "GEOFREA_SHARED_RAW_DIR": str(shared_raw)},
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"GEOFREA_DATA_DIR": str(Path(tmpdir)), "GEOFREA_SHARED_RAW_DIR": other},
+                ),
+                pytest.raises(ValueError, match="not under any known root"),
             ):
-                sp = to_stored_path(test_file)
-                assert sp.root == "shared_raw"
-                assert sp.rel == "gadm/BRA/file.shp"
+                to_stored_path(test_file)
 
     def test_convert_path_not_under_any_root_raises(self):
         """to_stored_path() raises if path is not under any known root."""

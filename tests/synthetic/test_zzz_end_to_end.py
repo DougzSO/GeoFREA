@@ -1258,6 +1258,39 @@ def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_remo
 
 
 @pytest.mark.synthetic
+def test_no_path_the_pipeline_read_is_outside_the_data_directory(zzz):
+    """COMMAND 37: every layer of the registry and every input hashed by grid_alignment is inside GEOFREA_DATA_DIR; the manifest uses the `data` root only."""
+    data = zzz[0].resolve()
+    registry = json.loads(
+        (zzz[0] / "outputs" / "ZZZ" / "artifacts" / "layer_registry.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    outside = []
+    for layer in registry["layers"]:
+        for path in ([layer["path"]] if layer.get("path") else []) + list(layer.get("paths") or []):
+            if ":" in path and not path.startswith(("data:", "repo:")):  # an absolute path
+                candidate = Path(path).resolve()
+            elif path.startswith("data:"):
+                candidate = data / path.split(":", 1)[1]
+            else:
+                continue
+            if data not in (candidate, *candidate.parents):
+                outside.append(path)
+    assert outside == []
+    hashed = json.loads(
+        (zzz[0] / "interim" / "ZZZ" / "grid_alignment" / "input_sha256.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert all(data in Path(k.split("|")[0]).resolve().parents for k in hashed)
+    manifest = json.loads(
+        (zzz[0] / "outputs" / "ZZZ" / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert {a["path"]["root"] for a in manifest["artifacts"].values()} == {"data"}
+
+
+@pytest.mark.synthetic
 def test_the_run_used_no_network(zzz):
     """The fixture refused every socket connection while the phases ran; the run succeeded, so none was attempted."""
     assert socket.socket.connect is _no_network

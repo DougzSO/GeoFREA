@@ -99,23 +99,20 @@ def _sha256_file(path: Path) -> str:
 
 
 def _local_database_dir(country_code: str) -> Path | None:
-    """Resolve GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>, if configured.
+    """The pre-placed GADM 4.1 shapefile set of the country, `GEOFREA_DATA_DIR/raw/gadm/<ISO3>/gadm41_<ISO3>_shp`, if configured.
 
-    Returns None (not raised) when GEOFREA_SHARED_RAW_DIR is unset or
-    countries.yaml has no gadm_dir mapping for this country — both mean
-    "skip the local database, fall through to the existing cache/network
-    chain", not a configuration error, since GADM already has a working
-    fallback for countries the local database doesn't cover.
+    Returns None (not raised) when countries.yaml has no `gadm_dir` for this country (the value only switches the pre-placed set on; the
+    folder is the one the download would extract to) or GEOFREA_DATA_DIR is unset: both mean "skip the pre-placed set, fall through to
+    the cache/network chain", not a configuration error. Nothing outside GEOFREA_DATA_DIR is read (COMMAND 37).
     """
     config = _load_countries_config()
     gadm_dir = config.get(country_code, {}).get("gadm_dir")
     if gadm_dir is None:
         return None
     try:
-        shared_raw = paths.shared_raw()
+        return paths.fetched_raw("gadm", country_code) / f"gadm41_{country_code}_shp"
     except MissingPathEnvironmentError:
         return None
-    return shared_raw / "countries_borders" / gadm_dir
 
 
 def _local_database_level0(country_code: str) -> Path | None:
@@ -283,7 +280,7 @@ def _resolve_level0(outputs_dir: Path, country_code: str) -> Path | None:
     """Resolve GADM 4.1 boundaries and return the raw level-0 (country) shapefile.
 
     METHODOLOGY M-F1-07: checks the local database
-    (GEOFREA_SHARED_RAW_DIR/countries_borders/<gadm_dir>, countries.yaml)
+    (GEOFREA_DATA_DIR/raw/gadm/<ISO3>/gadm41_<ISO3>_shp, countries.yaml)
     first, verifying the recorded sha256 — a match performs no network
     call at all. Only when the local database has no entry for this
     country (or no file at the expected path) does this fall through to

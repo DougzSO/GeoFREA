@@ -3,7 +3,7 @@
 The content of a registered artifact holds no timestamp, no run time and no absolute machine path: the same inputs give the same bytes, so
 the artifact hash changes only when the result changes and a consumer is not invalidated by a rerun that reproduces its inputs (A-02).
 The volatile fields stay in the phase output that the manifest entry records; absolute paths become `<root>:<relative path>`
-(`data`, `shared_raw`, `legacy_baseline`, or `repo` for a path inside the repository).
+(`data`, `legacy_baseline`, or `repo` for a path inside the repository).
 """
 
 from __future__ import annotations

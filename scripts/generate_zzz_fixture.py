@@ -2,7 +2,7 @@
 
 Writes every raw layer the data_acquisition registry (_LAYER_REGISTRY,
 src/geofrea/data_acquisition/phase.py) declares, as small hand-computable
-files, under a fixture root that is neither GEOFREA_SHARED_RAW_DIR nor the
+files, under a fixture root that is not the
 repository -- GEOFREA_DATA_DIR/fixtures/synthetic_zzz/raw/.
 
 Extent (see chat report / core.md for the rationale): lon [20.00, 20.30],
@@ -102,9 +102,7 @@ def gen_elevation() -> None:
     """
     row = np.arange(N_COLS, dtype="float32") * 10.0
     arr = np.tile(row, (N_ROWS, 1))
-    _write_raster(
-        RAW / "elevation" / "Synthetica" / "ZZZ_elevation.tif", arr, "float32", nodata=-9999.0
-    )
+    _write_raster(RAW / "elevation" / "ZZZ" / "ZZZ_elevation.tif", arr, "float32", nodata=-9999.0)
 
 
 def gen_dem30() -> None:
@@ -146,7 +144,7 @@ def gen_population() -> None:
     """
     col = np.arange(N_ROWS, dtype="float32").reshape(-1, 1) * 20.0
     arr = np.tile(col, (1, N_COLS))
-    _write_raster(RAW / "population" / "zzz_pop_2020.tif", arr, "float32", nodata=-1.0)
+    _write_raster(RAW / "population" / "ZZZ" / "zzz_pop_2020.tif", arr, "float32", nodata=-1.0)
 
 
 def gen_land_cover() -> None:
@@ -163,7 +161,7 @@ def gen_land_cover() -> None:
     arr[:10, :] = 40  # northern half (lower row index = north)
     arr[10:15, :] = 30
     tile_name = "ESA_WorldCover_10m_2020_v100_S05E020_Map.tif"
-    _write_raster(RAW / "land_cover" / "Synthetica" / tile_name, arr, "uint8", nodata=0)
+    _write_raster(RAW / "land_cover" / "ZZZ" / tile_name, arr, "uint8", nodata=0)
 
 
 def gen_protected() -> None:
@@ -224,7 +222,7 @@ def gen_roads() -> None:
         geometry=[LineString([(mid_lon, SOUTH), (mid_lon, NORTH)])],
         crs=CRS,
     )
-    out = RAW / "infrastructure" / "roads" / "Region_9_Synthetic" / "GRIP4_region9.shp"
+    out = RAW / "infrastructure_roads" / "_global" / "Region_9_Synthetic" / "GRIP4_region9.shp"
     out.parent.mkdir(parents=True, exist_ok=True)
     gdf.to_file(out)
 
@@ -237,7 +235,7 @@ def gen_grid() -> None:
         geometry=[LineString([(mid_lon, SOUTH), (mid_lon, NORTH)])],
         crs=CRS,
     )
-    out = RAW / "infrastructure" / "grid" / "ZZZ_grid_osm.geojson"
+    out = RAW / "infrastructure_grid" / "ZZZ" / "ZZZ_grid_osm.geojson"
     out.parent.mkdir(parents=True, exist_ok=True)
     gdf.to_file(out, driver="GeoJSON")
 
@@ -248,6 +246,7 @@ def gen_solar() -> None:
     out = (
         RAW
         / "solar_potential"
+        / "_global"
         / "World_PVOUT_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF"
         / "PVOUT.tif"
     )

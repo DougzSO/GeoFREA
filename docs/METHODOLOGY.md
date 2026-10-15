@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 14.1.0 |
+| Version | 14.1.1 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-10-14 |
 | Owner | Douglas |
@@ -172,7 +172,7 @@ Critical transitions:
 
 ### F1 data_acquisition
 
-- **M-F1-01.** Layer registry with provenance per layer: `provenance` in {`fetched`, `local_only`} and computed `fetch_status`. Layers without automated fetch resolve from the local database (`GEOFREA_SHARED_RAW_DIR`, resolved through `paths.py`).
+- **M-F1-01.** Layer registry with provenance per layer: `provenance` in {`fetched`, `local_only`} and computed `fetch_status`. Layers without automated fetch resolve from `GEOFREA_DATA_DIR/raw/<source>/<ISO3|_global>/` (A-08), resolved through `paths.py`; the files were copied there from the author's local database, and `raw/_shared_origin/manifest.json` records the origin, size and SHA-256 of each. The pipeline reads nothing outside `GEOFREA_DATA_DIR`.
 - **M-F1-02.** Active layers: country borders and admin1 (GADM 4.1), protected areas (WDPA via Protected Planet API v4), lakes and rivers (HydroSHEDS), land cover, elevation, population, transmission grid, roads (GRIP4), solar PVOUT (Global Solar Atlas, long-term average daily totals, kWh/kWp/day), wind (M-F1-03), CMIP6 (M-F1-04), ERA5 gust (M-F1-05), existing plants (M-F1-06). The seismic layer is not part of GeoFREA.
 - **M-F1-03.** Global Wind Atlas products at hub-relevant heights 100, 150, 200 m: `combined-Weibull-A`, `combined-Weibull-k`, `air-density`, and `wind-speed` (quality check only). Product existence is confirmed on the CDN response after redirect, never on the API redirect alone.
 - **M-F1-04.** CMIP6 from Copernicus CDS: monthly `rsds`, `tas`, `sfcWind` for `historical` and the three SSPs; daily `tasmax` and `pr` for the historical reference and the core window (hazard indicators); the daily data of the 2071-2100 window are acquired only when OQ-007 says a hazard enters LCOE (M-F4-05). One realization per model, identical across variables and experiments (default `r1i1p1f1`, verified at download). Acquisition and processing adapted from CRAEI per A-11.
@@ -398,19 +398,18 @@ Definitions for one country and technology. `C` = candidate cells of the central
 - **A-06. Synthetic country.** A small synthetic country fixture runs every built phase in CI and is extended in the same change that builds a phase; a phase does not close its milestone (Section 12) until it runs on the fixture. The fixture provides the protected-area, lake and river layers (M-F2b-05).
 - **A-07. Formats.** Rasters are Cloud Optimized GeoTIFF, EPSG:4326. Tables are parquet with a Pydantic schema and a `schema_version`. Run ID = hash of configuration, methodology version, and code commit.
 - **A-08. Outputs layout.** All data stored in GEOFREA_DATA_DIR (environment variable, never under repository root). Structure:
-  - `raw/<source>/<ISO3|_global>/`: fetched raw data (GADM, HydroSHEDS, GEM trackers, WDPA, GWA)
+  - `raw/<source>/<ISO3|_global>/`: raw data, fetched (GADM, HydroSHEDS, GEM trackers, WDPA, GWA) or placed from the local database (`elevation/<ISO3>`, `population/<ISO3>`, `infrastructure_grid/<ISO3>`, `infrastructure_roads/_global`, `land_cover/<ISO3>`, `solar_potential/_global`); the pipeline reads and writes nothing outside GEOFREA_DATA_DIR
   - `interim/<ISO3>/<layer>/`: intermediate processing caches
   - `outputs/<ISO3>/manifest.json`: run manifest per country
   - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports); a run at a scale other than 0.05 degree (M-F3-06) writes the phases that depend on the cell size (F3 onward, `overview`) under `<phase>__<scale>` (for example `land_eligibility__0p1deg`) and its manifest as `manifest__<scale>.json`
   - `outputs/thesis/`: F8 only
-  - `reference/legacy_baseline_fc7b43d/`: frozen legacy results (read-only)
   - `logs/<ISO3>/`: per-country run logs
 
   One map per file. `settings.yaml` `figures: all | summary | none`. Member-level maps exist only for F4 and F5; F6 and F7 maps show summaries (nominal, median, p10, p90, MR, SR).
 - **A-09. Failure policy.** Fail-loud; no silent fallback. A failure stops the phases that depend on it; independent branches may complete.
 - **A-10. Memory.** F6 and F7 process in batches under `settings.yaml` `memory.max_batch_gb`.
 - **A-11. Reuse from reference repositories.** CRAEI (primary climate-risk codebase, source for climate data acquisition and hazard processing) is the only reuse source under the copy-and-adapt rule: code may be copied into GeoFREA and adapted with a provenance header (repository, commit SHA, original path, adaptation summary). No imports from reference repositories, no shared package, no edits to CRAEI. `CRAEI_BASELINE_DIR` is read-only. geoworld_framework is consulted for logic only, never ported line by line.
-- **A-12. Determinism.** Seeds are recorded in the manifest; reruns with identical run ID reproduce identical artifacts on the same platform. The run environment (`GEOFREA_DATA_DIR`, `GEOFREA_SHARED_RAW_DIR`, and the other location variables) is declared in `.env.example` and loaded at startup, not assumed from an undocumented shell state.
+- **A-12. Determinism.** Seeds are recorded in the manifest; reruns with identical run ID reproduce identical artifacts on the same platform. The run environment (`GEOFREA_DATA_DIR` and the other location variables) is declared in `.env.example` and loaded at startup, not assumed from an undocumented shell state.
 - **A-13. Traceability.** Functions implementing a method item cite it in the docstring (`Implements: M-F5-03.`).
 
 ---
@@ -560,6 +559,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 14.1.1 | 2026-10-14 | PATCH (no result changes; COMMAND 37): the data directory is self-contained. M-F1-01 and A-08 say that the local-only layers live in `GEOFREA_DATA_DIR/raw/<source>/<ISO3\|_global>/` and that the pipeline reads nothing outside `GEOFREA_DATA_DIR`; A-08 drops the legacy baseline folder, which moved to the archive; A-12 no longer names `GEOFREA_SHARED_RAW_DIR`. |
 | 14.1.0 | 2026-10-14 | MINOR (no result changes; wording, definitions and configuration of values that were already used; verdicts of the audit `docs/_audit/2026-10_pre_research_audit.md`): M-F7-04 says "the draws `s >= 1`" where the code and D-F7-010 always counted them (I-1); M-F2a-06 checked against the code, the centre-count mode no longer exists and the text stands (I-3); the reference period, the sensitivity grids, the Global Wind Atlas heights and the quantiles have one definition each in `core/constants.py`, with no change of value (I-4); M-F4-05 names the heat thresholds (35 and 40 C), the wet-day threshold and the 95th percentile as `hazard_indicators` of `config/experiments.yaml` (M-8); M-F4-03 computes the change factors in float64 (M-3); A-01 states the import order of the packages and the test that enforces it (L-9). |
 | 14.0.0 | 2026-10-14 | MAJOR (changes the wind ensemble and the forcing; verdicts V-B1, V-82, V-B3 and V-T of 2026-10-14 on `docs/_audit/2026-10_data_diagnostics.md`): (1) the wind channel of MIROC6 is excluded in every country as a recorded exception (M-F4-02 item 6); irradiance and temperature are kept, so solar has six GCMs and wind five (S-04); `members.yaml` declares the channels of each member and a technology uses the members that carry the channels its model reads (M-F4-06). (2) A cell-member masked by the wind-ratio range keeps its row with a NaN `delta_wind` and is declared in `forcing_masked.parquet`; solar never loses a cell-member for a wind reason (M-F4-07); the safeguard and OQ-043 stay. (3) `forcing.parquet` flags the cells interpolated from an isolated native `dT` cell, counted in `members.yaml`, nothing corrected (M-F4-06). (4) Wind gets `elevation_max_m` (central null, sensitivity 3000 m, Tier 3, OQ-058): F3 counts candidates above it and with Weibull `k` below 1, and F5 to F8 report the results also without the cells above it (M-F2b-06, M-F5-06, M-F6-06, T-R6). (5) PRIM drops the wind descriptor for a technology that has a member without a wind channel (M-F7-08). (6) The manifest records wall and CPU time per phase (schema 2.4) and `main.py` blocks suspension of the computer (A-02). IDs altered: S-04, M-F4-02, M-F4-06, M-F4-07, M-F2b-06, M-F5-06, M-F6-06, M-F7-08, T-R6, A-02. |
 | 13.0.1 | 2026-10-14 | PATCH (closes the open points of 13.0.0 and of the H5 rule; no pre-registered threshold changes): (1) H5b uses the hazard channels that have a threshold sourced in OQ-051; a channel without a threshold is excluded and declared in the output (channels used and excluded) and does not block the others; H5b is not available only when no channel has a threshold or no member carries the hazard channel; the set of channels is fixed when OQ-051 is resolved, before the results (M-F7-07, H5 block). (2) The national target has one source, `national_targets` of `experiments.yaml`; the target of the top-k sensitivity is derived from it when its unit is GW and is not testable when it is in TWh/year; `capacity_target_gw` leaves `parameters.json` (M-F7-05). (3) The roadmap line MS-6 no longer cites OQ-050, which is closed. (4) T-R3 fixes its agreement marking: a cell is marked when at least two thirds of the GCMs agree on the sign of the change of the capacity factor (D2 of the F8 design report); Section 13 gains the IPCC AR6 WGI Atlas, marked verify. IDs altered: M-F7-05, M-F7-07, MS-6, T-R3. |

@@ -2,8 +2,7 @@ r"""Central path resolution module for GeoFREA pipeline.
 
 All path construction outside this module should use helpers from this module.
 Environment variables define the data layout:
-  - GEOFREA_SHARED_RAW_DIR: read-only shared raw data (e.g. D:\Douglas\DOUTORADO\database\raw)
-  - GEOFREA_DATA_DIR: external data directory (e.g. D:\Douglas\DOUTORADO\GeoFREA_data)
+  - GEOFREA_DATA_DIR: external data directory (e.g. D:\Douglas\DOUTORADO\GeoFREA_data); the pipeline reads and writes nothing outside it
   - GEOFREA_LEGACY_BASELINE_DIR: legacy baseline outputs (read-only reference)
   - GEOWORLD_BASELINE_DIR: legacy geoworld framework (logic reference only)
   - CRAEI_BASELINE_DIR: CRAEI climate-risk framework (primary reference, copy and adapt)
@@ -43,13 +42,12 @@ class StoredPath(BaseModel):
     read time only via StoredPath.resolve().
 
     Args:
-        root: One of "data" (GEOFREA_DATA_DIR), "shared_raw"
-            (GEOFREA_SHARED_RAW_DIR), or "legacy_baseline"
+        root: One of "data" (GEOFREA_DATA_DIR) or "legacy_baseline"
             (GEOFREA_LEGACY_BASELINE_DIR).
         rel: Relative path (posix-style, forward slashes only).
     """
 
-    root: Literal["data", "shared_raw", "legacy_baseline"]
+    root: Literal["data", "legacy_baseline"]
     rel: str
 
     def resolve(self) -> Path:
@@ -63,8 +61,6 @@ class StoredPath(BaseModel):
         """
         if self.root == "data":
             base = _ensure_env("GEOFREA_DATA_DIR")
-        elif self.root == "shared_raw":
-            base = _ensure_env("GEOFREA_SHARED_RAW_DIR")
         elif self.root == "legacy_baseline":
             base = _ensure_env("GEOFREA_LEGACY_BASELINE_DIR")
         else:
@@ -97,23 +93,6 @@ def _ensure_env(var_name: str) -> str:
 def _ensure_data_env() -> Path:
     """Ensure GEOFREA_DATA_DIR is set and return it as a Path."""
     return Path(_ensure_env("GEOFREA_DATA_DIR"))
-
-
-def _ensure_shared_raw_env() -> Path:
-    """Ensure GEOFREA_SHARED_RAW_DIR is set and return it as a Path."""
-    return Path(_ensure_env("GEOFREA_SHARED_RAW_DIR"))
-
-
-def shared_raw() -> Path:
-    """Get the root shared raw data directory (read-only).
-
-    Returns:
-        GEOFREA_SHARED_RAW_DIR as an absolute Path.
-
-    Raises:
-        MissingPathEnvironmentError: If GEOFREA_SHARED_RAW_DIR is not set.
-    """
-    return _ensure_shared_raw_env()
 
 
 def data_root() -> Path:
@@ -269,8 +248,7 @@ def outputs_dir() -> Path:
 def to_stored_path(path: Path) -> StoredPath:
     """Convert an absolute filesystem path to a StoredPath.
 
-    Checks roots in order of specificity: legacy_baseline, shared_raw, data.
-    This handles nested directories correctly (e.g., shared_raw under data).
+    Checks roots in order of specificity: legacy_baseline, data.
 
     Args:
         path: An absolute Path to convert.
@@ -296,15 +274,6 @@ def to_stored_path(path: Path) -> StoredPath:
         pass
 
     try:
-        shared_base = _ensure_shared_raw_env().resolve()
-        shared_base_str = str(shared_base)
-        if path_str.startswith(shared_base_str):
-            rel = path.relative_to(shared_base)
-            return StoredPath(root="shared_raw", rel=rel.as_posix())
-    except (MissingPathEnvironmentError, ValueError):
-        pass
-
-    try:
         data_base = _ensure_data_env().resolve()
         data_base_str = str(data_base)
         if path_str.startswith(data_base_str):
@@ -314,6 +283,5 @@ def to_stored_path(path: Path) -> StoredPath:
         pass
 
     raise ValueError(
-        f"Path {path} is not under any known root "
-        "(GEOFREA_DATA_DIR, GEOFREA_SHARED_RAW_DIR, or GEOFREA_LEGACY_BASELINE_DIR)"
+        f"Path {path} is not under any known root (GEOFREA_DATA_DIR or GEOFREA_LEGACY_BASELINE_DIR)"
     )
