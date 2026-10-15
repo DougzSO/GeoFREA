@@ -1,0 +1,593 @@
+{
+ "PRT": {
+  "layer_registry": {
+   "sha256": "9d82801f75505108569d4f953315e80d2bb91b06f4c5e9cd3662f465f9da7a7d",
+   "phase": "data_acquisition",
+   "size_bytes": 20938
+  },
+  "audit_report": {
+   "sha256": "29316de90259dce9d45ab116b7fd43aca2fe59f31bd34d909aa3e4f568871261",
+   "phase": "data_quality_audit",
+   "size_bytes": 16983
+  },
+  "aligned_rasters": {
+   "sha256": "b5fc47693a5dfaffabcb544c600fbaea9786ee050cfcafbf7c01ea51b3e73de2",
+   "phase": "grid_alignment",
+   "size_bytes": 3830
+  },
+  "aligned/elevation": {
+   "sha256": "05128dd2c256fc0fd7c7020961005c19c791540a5d84bdd8ef63819e278058f6",
+   "phase": "grid_alignment",
+   "size_bytes": 597298
+  },
+  "aligned/slope": {
+   "sha256": "40beb20c92cae9f50c60eae57c85f92b255069a67847b41fc341600b7d41d16e",
+   "phase": "grid_alignment",
+   "size_bytes": 597066
+  },
+  "aligned/solar": {
+   "sha256": "aa755063dc92755ee5886f95d6222140ca6c214c07bd9a6cab75d35b52abe48b",
+   "phase": "grid_alignment",
+   "size_bytes": 503671
+  },
+  "aligned/land_cover": {
+   "sha256": "679ff1ecea525f28b06df27ccf700d8b4d3672f1ce048711cedb206e31039d5a",
+   "phase": "grid_alignment",
+   "size_bytes": 42984
+  },
+  "aligned/population": {
+   "sha256": "2676b44e77258a97e61e7b61fec74dd7d22848251c3729df6f3c932c85086642",
+   "phase": "grid_alignment",
+   "size_bytes": 603283
+  },
+  "aligned/roads": {
+   "sha256": "983d229a9a81e517cc01f128d94ae9e50e70b95be37bedf0304f9593fc449925",
+   "phase": "grid_alignment",
+   "size_bytes": 91735
+  },
+  "aligned/grid": {
+   "sha256": "1010f021fdba886778e0dd3a33a00619b6e3c09a197fb322606138f46c0bf9f6",
+   "phase": "grid_alignment",
+   "size_bytes": 164685
+  },
+  "aligned/lakes": {
+   "sha256": "1cd9f374a6b9b75f05f7e3f22350d35cf1b73ba087995cd3a85956fc358cc863",
+   "phase": "grid_alignment",
+   "size_bytes": 12262
+  },
+  "aligned/rivers": {
+   "sha256": "459757bc7034b901aed22805d66d12a30f9bc576c590be13fd0d209265ad77b5",
+   "phase": "grid_alignment",
+   "size_bytes": 91899
+  },
+  "aligned/roads_distance_capped": {
+   "sha256": "de6ebbde66b7a0656b22d8df82ae2893fcc3d8c8a30a96d8ebe077a6d90b6fc7",
+   "phase": "grid_alignment",
+   "size_bytes": 9930
+  },
+  "aligned/grid_distance_capped": {
+   "sha256": "de6ebbde66b7a0656b22d8df82ae2893fcc3d8c8a30a96d8ebe077a6d90b6fc7",
+   "phase": "grid_alignment",
+   "size_bytes": 9930
+  },
+  "aligned/rivers_distance_capped": {
+   "sha256": "de6ebbde66b7a0656b22d8df82ae2893fcc3d8c8a30a96d8ebe077a6d90b6fc7",
+   "phase": "grid_alignment",
+   "size_bytes": 9930
+  },
+  "aligned/wind_wind_speed_100m": {
+   "sha256": "337bc7d83e62b563d6b1b1e31cf611b9b35523bdcd9525cac3e98ea1c46f9113",
+   "phase": "grid_alignment",
+   "size_bytes": 557182
+  },
+  "aligned/wind_wind_speed_150m": {
+   "sha256": "97d2bf1c994e03eb7fc48468a3d64c97cec8b355e4a8104c327cc6a3ae1c5f52",
+   "phase": "grid_alignment",
+   "size_bytes": 556944
+  },
+  "aligned/wind_wind_speed_200m": {
+   "sha256": "a14dbdd4ff0cd5086edc20c1ff7b6965b40270088a08ebb78ac7035e40bd71ef",
+   "phase": "grid_alignment",
+   "size_bytes": 557020
+  },
+  "aligned/wind_weibull_a_100m": {
+   "sha256": "31ce15f35bcda41ffdb35e13baf11eca39e3e308b0e2796710a081d95ec81cbb",
+   "phase": "grid_alignment",
+   "size_bytes": 558997
+  },
+  "aligned/wind_weibull_a_150m": {
+   "sha256": "1292e8ade8228c12fd502b26f523f9936f43fe7c31989596e1c69d1cbccfdaf8",
+   "phase": "grid_alignment",
+   "size_bytes": 558347
+  },
+  "aligned/wind_weibull_a_200m": {
+   "sha256": "27a42bc77b74621c4036be0c2b18e6e446a2cbab57cef86428846500a8c5c8b5",
+   "phase": "grid_alignment",
+   "size_bytes": 556498
+  },
+  "aligned/wind_weibull_k_100m": {
+   "sha256": "9d603c73ed29a6a35b676483eecefe77df378522cd541270ca5766fe435a4075",
+   "phase": "grid_alignment",
+   "size_bytes": 552417
+  },
+  "aligned/wind_weibull_k_150m": {
+   "sha256": "cbe06f3df731c90c1f28dc427bb913d3768f17c4d753695afc26811f6845b1b3",
+   "phase": "grid_alignment",
+   "size_bytes": 552267
+  },
+  "aligned/wind_weibull_k_200m": {
+   "sha256": "df3fdceeadd83883b48d90a240b98b040f13684d6d229465bd21e8b429944c58",
+   "phase": "grid_alignment",
+   "size_bytes": 551999
+  },
+  "aligned/wind_air_density_100m": {
+   "sha256": "babb8c4b68ad92ddcef5ac81b8ae8a70bedcc1eb4ecb35c53325626d3bf6683c",
+   "phase": "grid_alignment",
+   "size_bytes": 500069
+  },
+  "aligned/wind_air_density_150m": {
+   "sha256": "addd8ccd21c7f0ccbfd3c0994d6d70dde6815715b333b7c9ed79ef0ea84d9833",
+   "phase": "grid_alignment",
+   "size_bytes": 499953
+  },
+  "aligned/wind_air_density_200m": {
+   "sha256": "1820f741f75fd287f9f5015701a143786799670143dde5190e491a6f523d48d8",
+   "phase": "grid_alignment",
+   "size_bytes": 499434
+  },
+  "forcing": {
+   "sha256": "01bfd91f36b0b446c158e92a183d20c3c4707178035ba0c9fb8a3db71c9e055f",
+   "phase": "climate_forcing",
+   "size_bytes": 2294807
+  },
+  "forcing_masked": {
+   "sha256": "19a3476f13af5e73f9ce1b437386d8a8063eaab9251f59471098e4683911046d",
+   "phase": "climate_forcing",
+   "size_bytes": 2517
+  },
+  "members": {
+   "sha256": "9bb540cd8f02383ce66ab225a3f5d373e9dcc47e44a889f0a4b92705f3359da4",
+   "phase": "climate_forcing",
+   "size_bytes": 58321
+  },
+  "climate_maps": {
+   "sha256": "e0ea1d0d36688facbc814b331d0f4ca995053218ae98376a2d507ee2b11e0c19",
+   "phase": "climate_maps",
+   "size_bytes": 3186
+  },
+  "hazard_context": {
+   "sha256": "05e9ee277125e9346e403e789c0378789cb6ad0af83d6913895f97e9f81c7bb7",
+   "phase": "hazard_context",
+   "size_bytes": 91620
+  },
+  "siting_layers": {
+   "sha256": "6c2f031b22cd4ef32e9b2c2e20fdfb34a369e6c1d778bdbe60e4c8870f2825df",
+   "phase": "siting_layers",
+   "size_bytes": 1535
+  },
+  "external_inputs": {
+   "sha256": "70d82b52ac2d74ca243c13f02ec93a640e35b90b698d175f84cca729c6b569e4",
+   "phase": "external_inputs",
+   "size_bytes": 119
+  },
+  "overview": {
+   "sha256": "c05566b6ff19398370667bed871151e6e8af13ac499472b9dbc2a466806819e9",
+   "phase": "overview",
+   "size_bytes": 1803
+  },
+  "land_eligibility": {
+   "sha256": "5650ff0a6d0f5db72d43864dc9bea24e15768ea4660abed41366465aa76ce4d1",
+   "phase": "land_eligibility",
+   "size_bytes": 14326
+  },
+  "aligned/land_cover_counts": {
+   "sha256": "e747af798595e6505e8e00ec6a506423dabdad8ee37ee8f630f24e90added04b",
+   "phase": "grid_alignment",
+   "size_bytes": 1538131
+  },
+  "aligned/slope_counts": {
+   "sha256": "1d79dbbd2ea022e3f1c84295255aad414b9ef63151f35640af23c89c30c51cfc",
+   "phase": "grid_alignment",
+   "size_bytes": 3963283
+  },
+  "reference_grid": {
+   "sha256": "8033df99735baea50baa551a3d38fee06498c4acfb2b36ce8afd99e1b3c4b332",
+   "phase": "grid_alignment",
+   "size_bytes": 297
+  }
+ },
+ "IND": {
+  "layer_registry": {
+   "sha256": "edf1f1c17aacf678d7dd4bf6f73109b968634ddfbef88b932638f5f0a7927ba3",
+   "phase": "data_acquisition",
+   "size_bytes": 35238
+  },
+  "audit_report": {
+   "sha256": "e54c91ae45704383ecf2322579ddab283920c848781eef920093f877b0c80994",
+   "phase": "data_quality_audit",
+   "size_bytes": 16839
+  },
+  "aligned_rasters": {
+   "sha256": "ce1ac15b6e90d9baa338c2662d159999a76d106b0bf96914e67498048f1c8638",
+   "phase": "grid_alignment",
+   "size_bytes": 3864
+  },
+  "aligned/elevation": {
+   "sha256": "cdbc000f15ea8af3d53501d466e8d418b0fceed570866e858c17ff4f4381c798",
+   "phase": "grid_alignment",
+   "size_bytes": 15990322
+  },
+  "aligned/slope": {
+   "sha256": "2f410ecb8b7f241f6ed08f554f177a24af114c48bac0c5f2f1f42a9d197d36b7",
+   "phase": "grid_alignment",
+   "size_bytes": 16415123
+  },
+  "aligned/solar": {
+   "sha256": "4623dc95141ecd5a4a2fcd0e951e03d78eed9debc8026c95cb2e1055d93b8202",
+   "phase": "grid_alignment",
+   "size_bytes": 12983366
+  },
+  "aligned/land_cover": {
+   "sha256": "e29571aae69822487a8f154955932d0f1ad63d60b9b5f7626e449ac3d7504b5e",
+   "phase": "grid_alignment",
+   "size_bytes": 859953
+  },
+  "aligned/population": {
+   "sha256": "eb5d3f4129593bb024c20dd6394c8f3b10274cd51c335fc722b1630ad43082f5",
+   "phase": "grid_alignment",
+   "size_bytes": 16422816
+  },
+  "aligned/grid": {
+   "sha256": "04e3bf22232208d59dd0051d0e37d015e92a409b5002ae7980592a7faa791e3f",
+   "phase": "grid_alignment",
+   "size_bytes": 7857588
+  },
+  "aligned/lakes": {
+   "sha256": "9960a949339fe98ac9b5fce926a612d4b65733d0abb940f9906b3c0054daecf8",
+   "phase": "grid_alignment",
+   "size_bytes": 179567
+  },
+  "aligned/rivers": {
+   "sha256": "7169b65e4487b57db66c5900eb28cc2c29ab1bcca200f22f5df5c2acea508ff9",
+   "phase": "grid_alignment",
+   "size_bytes": 2021897
+  },
+  "aligned/grid_distance_capped": {
+   "sha256": "dca4c7a1e11a9fb996d720ff9e0030993af14b9c3e006eadacd341549793593a",
+   "phase": "grid_alignment",
+   "size_bytes": 133521
+  },
+  "aligned/rivers_distance_capped": {
+   "sha256": "2ab7aa34b303f1e4387b8cf2a1ce4083332e854cd71be3a551bcc9b7e402514d",
+   "phase": "grid_alignment",
+   "size_bytes": 123653
+  },
+  "aligned/wind_wind_speed_100m": {
+   "sha256": "aba15c7c01d40b0bed7b0fa6f24f0071a923c13c4c08cee310ecde59c3fc7c0e",
+   "phase": "grid_alignment",
+   "size_bytes": 14984030
+  },
+  "aligned/wind_wind_speed_150m": {
+   "sha256": "2da48a99c84531e3127b2550a9d1a3ca7d57252926f52398faea7f91d31dc626",
+   "phase": "grid_alignment",
+   "size_bytes": 14956378
+  },
+  "aligned/wind_wind_speed_200m": {
+   "sha256": "374a821b50d7a283094416d6e8d07205f2cef7ee3b3761ef4457e1b406d12d41",
+   "phase": "grid_alignment",
+   "size_bytes": 14964942
+  },
+  "aligned/wind_weibull_a_100m": {
+   "sha256": "df5217753189c0edfa895e930d335be5e3576decca540c295645a7e7aadb0852",
+   "phase": "grid_alignment",
+   "size_bytes": 15007321
+  },
+  "aligned/wind_weibull_a_150m": {
+   "sha256": "00e76c39fae47230d4c38b6e33be8fcfeb3f5eb9c5206da4f0a0935da898bf49",
+   "phase": "grid_alignment",
+   "size_bytes": 15003238
+  },
+  "aligned/wind_weibull_a_200m": {
+   "sha256": "af858cdb34e55807567dadd41bb60e126de2c10a78b7db5c01a117e1bdc9805b",
+   "phase": "grid_alignment",
+   "size_bytes": 15009003
+  },
+  "aligned/wind_weibull_k_100m": {
+   "sha256": "a0ccedb9d5dec7df39ccc6b4a7a72b9b4c0727e2757a5c73ec663e71a233c4b3",
+   "phase": "grid_alignment",
+   "size_bytes": 14904516
+  },
+  "aligned/wind_weibull_k_150m": {
+   "sha256": "727c7f25f4342170d34603753d0dc008c4a5475f5688298f1ef7a0a3573d1578",
+   "phase": "grid_alignment",
+   "size_bytes": 14898216
+  },
+  "aligned/wind_weibull_k_200m": {
+   "sha256": "3b8d63c852862858fd52794995b68b054bee6e084c5fa84008597e198927b4a6",
+   "phase": "grid_alignment",
+   "size_bytes": 14898704
+  },
+  "aligned/wind_air_density_100m": {
+   "sha256": "707e4b1b0bb4b8e720c062b0334abc7351f6b9fb0104ea10dc43785df4a08524",
+   "phase": "grid_alignment",
+   "size_bytes": 12550191
+  },
+  "aligned/wind_air_density_150m": {
+   "sha256": "c821df0ee99af421ff43f2652fc482a4e3fa28569bb91223fc119e3e6b9ba865",
+   "phase": "grid_alignment",
+   "size_bytes": 12546626
+  },
+  "aligned/wind_air_density_200m": {
+   "sha256": "7dfa97afa148f586227df48f510c781ee341fb45ae87fd5d5e777692aef0b5a9",
+   "phase": "grid_alignment",
+   "size_bytes": 12540672
+  },
+  "aligned/roads": {
+   "sha256": "13f1bedd59a4a1702e50dc186956a769b35780b8252a158fbccfcdb6f66dcffe",
+   "phase": "grid_alignment",
+   "size_bytes": 2256778
+  },
+  "aligned/roads_distance_capped": {
+   "sha256": "2ab7aa34b303f1e4387b8cf2a1ce4083332e854cd71be3a551bcc9b7e402514d",
+   "phase": "grid_alignment",
+   "size_bytes": 123653
+  },
+  "forcing": {
+   "sha256": "63a944d63793f53b51e6e9eda21009c26d45555f3b220fbcb6228d21fa96f2f6",
+   "phase": "climate_forcing",
+   "size_bytes": 65416007
+  },
+  "forcing_masked": {
+   "sha256": "19a3476f13af5e73f9ce1b437386d8a8063eaab9251f59471098e4683911046d",
+   "phase": "climate_forcing",
+   "size_bytes": 2517
+  },
+  "members": {
+   "sha256": "949b07c12434c8030dfdb9c1c7ee59e80f8e76764f5b466fd65aee40605d7118",
+   "phase": "climate_forcing",
+   "size_bytes": 58484
+  },
+  "climate_maps": {
+   "sha256": "7f45ee585f78d1e3435a64054ad63a5af277e73ac3dea36e52ce41aea1eec2d5",
+   "phase": "climate_maps",
+   "size_bytes": 3186
+  },
+  "siting_layers": {
+   "sha256": "2272559de6502965cf8ac8873acb73de875201248915a954374ca1841456ea35",
+   "phase": "siting_layers",
+   "size_bytes": 1535
+  },
+  "hazard_context": {
+   "sha256": "dd61f05a98adadc0f406311fc06f244877e4025368137548da5e85fdb11130b7",
+   "phase": "hazard_context",
+   "size_bytes": 3648824
+  },
+  "external_inputs": {
+   "sha256": "24f167471345eb8e413fa452385d96f0b2d5336566bbac73c074f87b373a8a57",
+   "phase": "external_inputs",
+   "size_bytes": 119
+  },
+  "overview": {
+   "sha256": "9edcaff17b025ab3f3ed7ad3bfc5ad07536fa6ec54d641a5b646cab90b909b62",
+   "phase": "overview",
+   "size_bytes": 1803
+  },
+  "land_eligibility": {
+   "sha256": "41f861b016b894df4b8a2097c7b02400e81fcc802f7f279a8b8a4ba6d6686c21",
+   "phase": "land_eligibility",
+   "size_bytes": 14338
+  },
+  "aligned/land_cover_counts": {
+   "sha256": "4b0b5ee5af59ca89c4c6ad017280857c15f6aec4f14a13bb2dac5e88b0239233",
+   "phase": "grid_alignment",
+   "size_bytes": 40394915
+  },
+  "aligned/slope_counts": {
+   "sha256": "bd0d5ba0f102f91e122cb1b5f4eaa19e535ef2d59d0890b665a77f8601afe58c",
+   "phase": "grid_alignment",
+   "size_bytes": 78838406
+  },
+  "reference_grid": {
+   "sha256": "4dfa0f549e0e93f98a24cd26c7763ce924ed0190647ec956996a8bbaec0d9aa2",
+   "phase": "grid_alignment",
+   "size_bytes": 331
+  }
+ },
+ "BRA": {
+  "layer_registry": {
+   "sha256": "dd271a077cae9a9a545c43b6523aaf0325d96862031e3b0d9b7501d0261eb151",
+   "phase": "data_acquisition",
+   "size_bytes": 32433
+  },
+  "audit_report": {
+   "sha256": "62cbffb067e81eda93d495cac4aa55de69cbbef0c52baacd3d060f2557bb9d84",
+   "phase": "data_quality_audit",
+   "size_bytes": 17567
+  },
+  "aligned_rasters": {
+   "sha256": "71875b742dd0dc3b81a1958c30a4171e8c36267844345e9c411dc3e79f5482dd",
+   "phase": "grid_alignment",
+   "size_bytes": 3863
+  },
+  "aligned/elevation": {
+   "sha256": "210b8b0a403efd63249b61c9413f8146accfe92842ed132606eb2aacb6ebba8b",
+   "phase": "grid_alignment",
+   "size_bytes": 42087975
+  },
+  "aligned/slope": {
+   "sha256": "6455eae0c05cdbfb4fcf6e17039bf607dc4557ac7c3e9aba21902c79ac7d8b12",
+   "phase": "grid_alignment",
+   "size_bytes": 43819586
+  },
+  "aligned/solar": {
+   "sha256": "dffaea59d998b073e18e7d680c8f9624b703058d7a974693086736d3f0ab703a",
+   "phase": "grid_alignment",
+   "size_bytes": 35376662
+  },
+  "aligned/land_cover": {
+   "sha256": "3649bc4b752e43c35fc0ce656ba8e99f50ed41e94de42c1afef207bbb1ab78c0",
+   "phase": "grid_alignment",
+   "size_bytes": 1730164
+  },
+  "aligned/population": {
+   "sha256": "66d894d1bcc974021d68cf3474a2fbab3054877eca1252a0fd890c36ee618f23",
+   "phase": "grid_alignment",
+   "size_bytes": 42380075
+  },
+  "aligned/roads": {
+   "sha256": "bedc7ca610c6402ad149e028198e3a308e349ae0eb66d6cdc0f2eb0913b7dda3",
+   "phase": "grid_alignment",
+   "size_bytes": 17304684
+  },
+  "aligned/grid": {
+   "sha256": "de614a3ce786de6244b74add0db85584cf71ad0f5ed75099e2864c1228479512",
+   "phase": "grid_alignment",
+   "size_bytes": 26739508
+  },
+  "aligned/lakes": {
+   "sha256": "eb6b1704ceb1bf34a942859d61dc9da66feeece550b5fef8d3b4189e01bc7fa4",
+   "phase": "grid_alignment",
+   "size_bytes": 331609
+  },
+  "aligned/rivers": {
+   "sha256": "44f77cd9c1296c20687bfd2b183cc0bcc6855b866275e6ea5cd5dfaa1d6d7baa",
+   "phase": "grid_alignment",
+   "size_bytes": 4826158
+  },
+  "aligned/roads_distance_capped": {
+   "sha256": "c8ca681b109c3cca753075468575e1f20b4e2b5a5f5c49e84e875e2129643e03",
+   "phase": "grid_alignment",
+   "size_bytes": 242092
+  },
+  "aligned/grid_distance_capped": {
+   "sha256": "df5e8d870ca6d50ad37241f37b61aed19fee837b9dd03415f5c2a635b9e549b1",
+   "phase": "grid_alignment",
+   "size_bytes": 253595
+  },
+  "aligned/rivers_distance_capped": {
+   "sha256": "aab1d02df54d53e92da80f9b645c6b5fa5619bc74c0691104f819409693b16e2",
+   "phase": "grid_alignment",
+   "size_bytes": 222683
+  },
+  "aligned/wind_wind_speed_100m": {
+   "sha256": "b5c7d441774faacb62789965f143dbe3852542926e5079661e224c453dab31c6",
+   "phase": "grid_alignment",
+   "size_bytes": 40550339
+  },
+  "aligned/wind_wind_speed_150m": {
+   "sha256": "77830f686d8c5d97a386671d63879b2ad9fe6c0b8654f86068c4c692b71f32ff",
+   "phase": "grid_alignment",
+   "size_bytes": 40424003
+  },
+  "aligned/wind_wind_speed_200m": {
+   "sha256": "a99e47171c179759a00bf11a724d2d8dffaa37e685e6e0bbc6eb42da920c8482",
+   "phase": "grid_alignment",
+   "size_bytes": 40394604
+  },
+  "aligned/wind_weibull_a_100m": {
+   "sha256": "45e5e8fa6b46aea616b8936f8ebf64278fb3a7d20c6c8dcd7cbe38db17107552",
+   "phase": "grid_alignment",
+   "size_bytes": 40559057
+  },
+  "aligned/wind_weibull_a_150m": {
+   "sha256": "fe08783f65516c39a0b56ed519559ff79085ad8eb07107a67d1c182bf7d955f7",
+   "phase": "grid_alignment",
+   "size_bytes": 40482136
+  },
+  "aligned/wind_weibull_a_200m": {
+   "sha256": "abebf5a2eea64021cb064e9f274e984461ce45b0d1d6f4bce8ae68c395751061",
+   "phase": "grid_alignment",
+   "size_bytes": 40461058
+  },
+  "aligned/wind_weibull_k_100m": {
+   "sha256": "713f89806df4d72d5ac1cce78c9b42db109784ccb171f734ab777a845411089a",
+   "phase": "grid_alignment",
+   "size_bytes": 40152921
+  },
+  "aligned/wind_weibull_k_150m": {
+   "sha256": "6b450787dde0e4e9d019b04b98371ac055489e007f2a113a1ff204579fd4cae5",
+   "phase": "grid_alignment",
+   "size_bytes": 40143141
+  },
+  "aligned/wind_weibull_k_200m": {
+   "sha256": "1e411b56da54bc583dc1a46477aea298e97b67d40f451740b7711488b559db6c",
+   "phase": "grid_alignment",
+   "size_bytes": 40145408
+  },
+  "aligned/wind_air_density_100m": {
+   "sha256": "0213fcf95175e133362a4f75d0a60bac6277a4f08fac10bc621397329a6dd0b3",
+   "phase": "grid_alignment",
+   "size_bytes": 33002207
+  },
+  "aligned/wind_air_density_150m": {
+   "sha256": "6c3ea13e98dfbb1fd941e6ad619e9fe58f580f0e48126551984edceb866f3bb2",
+   "phase": "grid_alignment",
+   "size_bytes": 32989738
+  },
+  "aligned/wind_air_density_200m": {
+   "sha256": "d880d6344e9c7ef512754e36be064a8032a1520c216e3f6850bb8294778f9ebd",
+   "phase": "grid_alignment",
+   "size_bytes": 32989449
+  },
+  "forcing": {
+   "sha256": "156377c08f5020a6e9b859a8af1eacbeee00aeafa6d6057bb8978a22d3d8f6e5",
+   "phase": "climate_forcing",
+   "size_bytes": 160246819
+  },
+  "forcing_masked": {
+   "sha256": "a7c023b2319c50d2a2bcd47eb054811cde1281de4393f2752b6576f6646c0536",
+   "phase": "climate_forcing",
+   "size_bytes": 453227
+  },
+  "members": {
+   "sha256": "0c3edd7aad1e1f20e8ded25e98703bf857fe2a3668401e21a9440704cbed9e6c",
+   "phase": "climate_forcing",
+   "size_bytes": 58745
+  },
+  "climate_maps": {
+   "sha256": "5b8e96ab7c1141c5b984f617adab4303aa2c2a1cd4a2721e999da6ec6085c349",
+   "phase": "climate_maps",
+   "size_bytes": 3186
+  },
+  "hazard_context": {
+   "sha256": "769e4c6a9bfa1c883d8f97a85262419c2a7be36d20926763ba01084582ced286",
+   "phase": "hazard_context",
+   "size_bytes": 6719750
+  },
+  "siting_layers": {
+   "sha256": "1d72ede762eb6fad37604a8a82267d1da2840f876b9decb862d74516a8082f8f",
+   "phase": "siting_layers",
+   "size_bytes": 1535
+  },
+  "external_inputs": {
+   "sha256": "6331ddff2328ce35aee71a995e24a005f7d01885b5f636419fdbc91b6eafcd1d",
+   "phase": "external_inputs",
+   "size_bytes": 119
+  },
+  "overview": {
+   "sha256": "2fb390b1c5f600fbb873cc20bda0151700821c8cd01d2c047b9b465c2e124e1d",
+   "phase": "overview",
+   "size_bytes": 1803
+  },
+  "land_eligibility": {
+   "sha256": "f7c83c06f34c658721195ca0c417afeee56213e05dd26939fe5938f958894dfd",
+   "phase": "land_eligibility",
+   "size_bytes": 14344
+  },
+  "aligned/land_cover_counts": {
+   "sha256": "bbd90019fdb32eb6b189dc55316c9a5724b93017112e8cc132a951801b0ef19a",
+   "phase": "grid_alignment",
+   "size_bytes": 74861187
+  },
+  "aligned/slope_counts": {
+   "sha256": "0bf1d87ed18b1f5d7bb9f373a3cc71f6cef4a3b84c430a96b5a2e449bf87e599",
+   "phase": "grid_alignment",
+   "size_bytes": 247177993
+  },
+  "reference_grid": {
+   "sha256": "f2dd2365f7e4b037c250a1671446d54cde8baf5a0f00c87f9bea26153ad05a0c",
+   "phase": "grid_alignment",
+   "size_bytes": 330
+  }
+ }
+}
