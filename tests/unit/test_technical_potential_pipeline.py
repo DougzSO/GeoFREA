@@ -36,11 +36,10 @@ from geofrea.technical_potential.cf_models import (
 from geofrea.technical_potential.iec_class import IecClassError, exceeds_class
 from geofrea.technical_potential.input_ranges import (
     InputRangeError,
-    count_outside_flag_range,
     resolve_input_ranges,
     validate_candidates,
 )
-from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential, resolve_technology
+from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential
 from geofrea.technical_potential.power_curve import SyntheticCurveError, load_power_curve
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
 from geofrea.technical_potential.weibull_cf import weibull_mean_speed, wind_cf_member
@@ -706,7 +705,6 @@ def test_the_flag_is_written_per_cell_fixed_across_members_and_changes_no_capaci
         "cell_id",
         "v_ave_ms",
         "exceeds_class",
-        "weibull_outside_flag_range",
         "density_ratio_isa",
         "density_outside_isa_check",
     ]
@@ -849,54 +847,104 @@ def test_every_layer_outside_its_range_is_listed_in_one_error(tmp_path, registry
     assert "air_density_100m" in str(caught.value) and "dist_grid_km" in str(caught.value)
 
 
-@pytest.mark.unit
-def test_weibull_layers_have_a_tier_3_flag_range_that_marks_and_counts_and_never_removes_or_raises(
-    tmp_path, registry, synthetic_params, caplog
-):
-    """OQ-053: A in [1, 15] m/s and k in [1, 4] are a data-quality flag (Tier 3). A cell outside is marked and counted, kept in the
-    potential, logged as information (not a warning), and the layers at the hub height are the ones tested."""
+def _run_wind_with(tmp_path, registry, synthetic_params, caplog, column, value, rows=(0,)):
     land, climate = _write_inputs(tmp_path / "in")
-    _corrupt(land, "wind", "weibull_a_100m", 5000.0)  # a wild value: no checked range, so no error
+    _corrupt(land, "wind", column, value, rows=rows)
     with caplog.at_level("INFO", logger="geofrea.technical_potential"):
-        summary = build_potential(
+        return build_potential(
             "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
             candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
-    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
-    assert not warnings, [r.getMessage() for r in warnings]
-    central = summary.technologies["wind"].scenarios["central"]
-    assert central.n_weibull_outside_flag_range == 1
-    table = pd.read_parquet(tmp_path / "out" / "potential_wind__central.parquet")
-    assert table["cell_id"].nunique() == central.n_candidate_cells  # nothing removed
-    flag = pd.read_parquet(tmp_path / "out" / "class_flag_wind__central.parquet")
-    assert int(flag["weibull_outside_flag_range"].sum()) == 1
-    assert any("outside the Tier 3 Weibull flag range" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.unit
-def test_the_weibull_flag_ranges_are_those_of_the_verdict_and_apply_to_every_height():
+def test_a_cell_with_k_above_10_stops_the_phase_with_the_count_and_the_coordinates(
+    tmp_path, registry, synthetic_params, caplog
+):
+    """OQ-053 closed: k is valid on (0, 10]; k = 10.5 is an error that names the layer, the count of cells and where they are."""
+    with pytest.raises(InputRangeError) as caught:
+        _run_wind_with(tmp_path, registry, synthetic_params, caplog, "weibull_k_100m", 10.5, rows=(0, 2))
+    text = str(caught.value)
+    assert "weibull_k_100m" in text and "2 of" in text and "(0, 10]" in text
+    assert "(lat, lon)" in text and "(40.0000, 10.0000)" in text  # the fixture cells are at 40 N, 10 E
+    assert "nothing was computed" in text
+    assert not (tmp_path / "out").exists() or not list((tmp_path / "out").glob("potential_*"))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("weibull_k_100m", 0.0),
+        ("weibull_k_150m", -1.0),
+        ("weibull_a_200m", 0.0),
+        ("weibull_a_100m", 25.5),
+        ("weibull_a_150m", float("nan")),
+    ],
+)
+def test_the_weibull_limits_exclude_zero_and_negative_values_and_a_above_25_and_non_finite(
+    tmp_path, registry, synthetic_params, caplog, column, value
+):
+    with pytest.raises(InputRangeError, match=column):
+        _run_wind_with(tmp_path, registry, synthetic_params, caplog, column, value)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("column", "value"),
+    [
+        ("weibull_k_100m", 4.5),
+        ("weibull_k_100m", 0.8),
+        ("weibull_k_150m", 10.0),
+        ("weibull_a_100m", 25.0),
+        ("weibull_a_200m", 0.5),
+    ],
+)
+def test_values_inside_the_limits_stop_nothing_and_generate_no_warning_even_when_unusual(
+    tmp_path, registry, synthetic_params, caplog, column, value
+):
+    """k = 4.5 and k = 0.8 are valid (they are only reported in the distribution); the limits include 10 and 25 themselves."""
+    summary = _run_wind_with(tmp_path, registry, synthetic_params, caplog, column, value)
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert not warnings, [r.getMessage() for r in warnings]
+    assert summary.technologies["wind"].scenarios["central"].n_candidate_cells > 0
+
+
+@pytest.mark.unit
+def test_the_distribution_report_is_written_with_the_percentiles_and_the_k_counts_without_a_warning(
+    tmp_path, registry, synthetic_params, caplog
+):
+    summary = _run_wind_with(
+        tmp_path, registry, synthetic_params, caplog, "weibull_k_100m", 4.5, rows=(0,)
+    )
+    path = summary.technologies["wind"].weibull_distribution
+    assert path is not None and path.name == "weibull_distribution_wind.csv" and path.is_file()
+    table = pd.read_csv(path)
+    assert list(table.columns) == [
+        "variable", "height_m", "n_cells", "p1", "p50", "p99", "min", "max", "n_k_below_1", "n_k_above_4",
+    ]  # fmt: skip
+    assert set(zip(table["variable"], table["height_m"], strict=True)) == {
+        (v, h) for v in ("A", "k") for h in (100, 150, 200)
+    }
+    k100 = table[(table["variable"] == "k") & (table["height_m"] == 100)].iloc[0]
+    assert k100["n_k_above_4"] == 1 and k100["max"] == pytest.approx(4.5)
+    assert k100["p1"] <= k100["p50"] <= k100["p99"]
+    a100 = table[(table["variable"] == "A") & (table["height_m"] == 100)].iloc[0]
+    assert pd.isna(a100["n_k_below_1"]) and pd.isna(a100["n_k_above_4"])
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+    assert any("Weibull distribution" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.unit
+def test_the_weibull_limits_are_those_of_the_verdict_at_every_height_and_the_layers_are_no_longer_open():
     ranges = resolve_input_ranges(
         "ZZZ", AUDIT, GEOMETRY, [f"weibull_{v}_{h}m" for v in "ak" for h in (100, 150, 200)]
     )
     for h in (100, 150, 200):
         a, k = ranges[f"weibull_a_{h}m"], ranges[f"weibull_k_{h}m"]
-        assert (a.flag_low, a.flag_high, a.flag_tier) == (1.0, 15.0, 3)
-        assert (k.flag_low, k.flag_high, k.flag_tier) == (1.0, 4.0, 3)
-        assert a.is_open and a.open_question == "OQ-053"  # still no checked range
-
-
-@pytest.mark.unit
-def test_count_outside_flag_range_counts_each_side_and_non_finite_values():
-    ranges = resolve_input_ranges("ZZZ", AUDIT, GEOMETRY, ["weibull_a_100m", "weibull_k_100m"])
-    frame = pd.DataFrame(
-        {
-            "weibull_a_100m": [0.99, 1.0, 8.0, 15.0, 15.01, np.nan],
-            "weibull_k_100m": [2.0, 2.0, 0.5, 2.0, 2.0, 4.01],
-        }
-    )
-    outside, counts = count_outside_flag_range(frame, ranges, ["weibull_a_100m", "weibull_k_100m"])
-    assert counts == {"weibull_a_100m": 3, "weibull_k_100m": 2}
-    assert outside.tolist() == [True, False, True, False, True, True]
+        assert (a.low, a.high, a.low_exclusive, a.tier) == (0.0, 25.0, True, 3)
+        assert (k.low, k.high, k.low_exclusive, k.tier) == (0.0, 10.0, True, 3)
+        assert not a.is_open and not k.is_open
 
 
 @pytest.mark.unit

@@ -106,8 +106,10 @@ layers:
 #                         DEM elevation and h the layer height above ground (ISO 2533 troposphere; constants in core/constants.py),
 #                         widened by `tolerance_rel` on each side: [(1 - t) * lower, (1 + t) * upper]
 #   country_bbox_diagonal distance to the grid or to the roads: [0, diagonal of the country's bounding box]
-# Weibull A and k have no derivation: a checked range needs a sourced reading of the Global Wind Atlas documentation (OQ-053). Until then
-# F5 marks and counts the cells outside a Tier 3 `flag_range` (data-quality control; no cell is removed, clipped or rejected).
+# Weibull A and k have no derivation: they carry a `validity_range` (low, high], that is, `low` excluded and `high` included, the same at every
+# height (OQ-053 closed, 2026-10-16). It is a physical validity limit (a scale and a shape are positive) with an upper bound far above any
+# observed value, Tier 3, not a plausibility range: a cell outside is an error with its count and coordinates, and F5 stops. Plausible-looking
+# values such as k above 4 are not errors; F5 reports their distribution as information (weibull_distribution_<tech>.csv).
 # PVOUT keeps the range under `layers.solar.sanity_range` above.
 derived_ranges:
   air_density:
@@ -122,15 +124,13 @@ derived_ranges:
     derivation: country_bbox_diagonal
     source: "geometry of the F2a aligned grid of the country (no external source)"
   weibull_a:
-    open_question: "OQ-053"
-    flag_range: [1.0, 15.0]  # m/s
-    flag_tier: 3
-    flag_source: "Douglas, verdict of 2026-10-16 (COMMAND 46): data-quality control for the 100 m layer, extended to the other heights of the layer by the same numbers; no source."
+    validity_range: [0.0, 25.0]  # m/s, (0, 25]
+    validity_tier: 3
+    validity_source: "Douglas, verdict of 2026-10-16 (COMMAND 48, OQ-053): validity limit at 100, 150 and 200 m, no source."
   weibull_k:
-    open_question: "OQ-053"
-    flag_range: [1.0, 4.0]  # dimensionless
-    flag_tier: 3
-    flag_source: "Douglas, verdict of 2026-10-16 (COMMAND 46): data-quality control for the 100 m layer, extended to the other heights of the layer by the same numbers; no source."
+    validity_range: [0.0, 10.0]  # dimensionless, (0, 10]
+    validity_tier: 3
+    validity_source: "Douglas, verdict of 2026-10-16 (COMMAND 48, OQ-053): validity limit at 100, 150 and 200 m, no source."
 
 # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
 # ZZZ's fixture rasters are generated at whatever resolution

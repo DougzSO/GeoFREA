@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,7 +60,6 @@ from geofrea.technical_potential.density_check import (
 from geofrea.technical_potential.input_ranges import (
     DISTANCE_COLUMNS,
     InputRange,
-    count_outside_flag_range,
     resolve_input_ranges,
     validate_candidates,
     warn_unranged,
@@ -80,6 +78,7 @@ from geofrea.technical_potential.table_schemas import (
     PotentialAggregateRow,
     PotentialRow,
 )
+from geofrea.technical_potential.weibull_report import weibull_distribution_report
 
 logger = logging.getLogger("geofrea.technical_potential.pipeline")
 
@@ -109,9 +108,6 @@ class ScenarioPotential(BaseModel):
     p_gw_class_flag: float | None = (
         None  # capacity in the flagged cells (potential beyond the design class of the turbine)
     )
-    n_weibull_outside_flag_range: int | None = (
-        None  # candidate cells with Weibull A or k at the hub height outside the flag range (OQ-053)
-    )
     n_density_outside_isa_check: int | None = (
         None  # candidate cells with rho_ref / rho_ISA(z + h) outside [0.90, 1.10] (reported only)
     )
@@ -128,6 +124,9 @@ class TechPotential(BaseModel):
     curve_sha256: dict[str, str]
     scenarios: dict[str, ScenarioPotential]
     aggregates: Path
+    weibull_distribution: Path | None = (
+        None  # information: P1, P50, P99, counts of k below 1 and above 4 (OQ-053 closed)
+    )
 
 
 class PotentialSummary(BaseModel):
@@ -159,27 +158,8 @@ CENTRAL_SCENARIO = LAND_SCENARIOS[0]
 class WindInputFlags:
     """Per candidate cell, the data-quality marks of the wind inputs (report only: nothing is removed or changed)."""
 
-    weibull_outside: (
-        np.ndarray
-    )  # Weibull A or k at the hub height outside the Tier 3 flag range (OQ-053)
     density_ratio: np.ndarray  # rho_ref / rho_ISA(z + h) (M-F5-03)
     density_outside: np.ndarray  # that ratio outside [0.90, 1.10]
-
-
-def _weibull_layers_at_hub(columns: Sequence[str], hub_height_m: float) -> list[str]:
-    """The Weibull layers the model reads for the hub height: the layer at that height, or the two that bracket it."""
-    heights: dict[float, list[str]] = {}
-    for column in columns:
-        match = re.match(r"^weibull_[ak]_(\d+)m$", column)
-        if match:
-            heights.setdefault(float(match.group(1)), []).append(column)
-    if hub_height_m in heights:
-        return heights[hub_height_m]
-    below = [h for h in heights if h < hub_height_m]
-    above = [h for h in heights if h > hub_height_m]
-    if not below or not above:
-        return []
-    return heights[max(below)] + heights[min(above)]
 
 
 def _wind_input_flags(
@@ -195,8 +175,6 @@ def _wind_input_flags(
     if hub_height_m is None or prepared.rho_ref is None:
         return None
     hub = float(hub_height_m)
-    weibull_columns = _weibull_layers_at_hub(list(input_ranges), hub)
-    weibull_outside, counts = count_outside_flag_range(frame, input_ranges, weibull_columns)
     if ELEVATION_COLUMN not in frame.columns:
         raise CfModelError(
             f"{tech}: the density consistency check needs {ELEVATION_COLUMN} in the candidate table"
@@ -206,13 +184,11 @@ def _wind_input_flags(
     )
     outside = outside_isa_check(ratio)
     logger.info(
-        "%s %s [%s]: of %d candidate cells, %d outside the Tier 3 Weibull flag range (%s; marked, not removed; OQ-053) and %d with rho_ref / rho_ISA(z + %g m) outside [%.2f, %.2f] (range %.3f to %.3f; reported only)",
+        "%s %s [%s]: of %d candidate cells, %d with rho_ref / rho_ISA(z + %g m) outside [%.2f, %.2f] (range %.3f to %.3f; reported only)",
         iso,
         tech,
         scenario,
         len(frame),
-        int(weibull_outside.sum()),
-        ", ".join(f"{c} {n}" for c, n in counts.items()) or "no flag range",
         int(outside.sum()),
         float(hub),
         RATIO_LOW,
@@ -220,7 +196,7 @@ def _wind_input_flags(
         float(np.nanmin(ratio)),
         float(np.nanmax(ratio)),
     )
-    return WindInputFlags(weibull_outside, ratio, outside)
+    return WindInputFlags(ratio, outside)
 
 
 def elevation_sensitivity_scenario(elevation_m: float) -> str:
@@ -527,7 +503,6 @@ def build_technology_potential(
                         "cell_id": cell_ids.astype("int64"),
                         "v_ave_ms": prepared.v_ave_ms,
                         "exceeds_class": prepared.class_flag,
-                        "weibull_outside_flag_range": qc.weibull_outside,
                         "density_ratio_isa": qc.density_ratio,
                         "density_outside_isa_check": qc.density_outside,
                     }
@@ -579,7 +554,6 @@ def build_technology_potential(
             power_density_mw_per_km2=power_density,
             class_flag_path=flag_path,
             p_gw_class_flag=p_gw_flag,
-            n_weibull_outside_flag_range=None if qc is None else int(qc.weibull_outside.sum()),
             n_density_outside_isa_check=None if qc is None else int(qc.density_outside.sum()),
             density_ratio_isa_min=None if qc is None else float(np.nanmin(qc.density_ratio)),
             density_ratio_isa_max=None if qc is None else float(np.nanmax(qc.density_ratio)),
@@ -596,6 +570,22 @@ def build_technology_potential(
             ref["P_GW"],
             ref["E_TWh"],
         )
+    weibull_path: Path | None = None
+    report = weibull_distribution_report(candidates[CENTRAL_SCENARIO])
+    if len(report):
+        weibull_path = Path(out_dir) / f"weibull_distribution_{tech}.csv"
+        report.to_csv(weibull_path, index=False)
+        logger.info(
+            "%s %s: Weibull distribution of the central candidates written to %s (information): %s",
+            iso,
+            tech,
+            weibull_path.name,
+            "; ".join(
+                f"{r.variable} {r.height_m} m: P1 {r.p1:.2f}, P50 {r.p50:.2f}, P99 {r.p99:.2f}"
+                + (f", k<1 {r.n_k_below_1}, k>4 {r.n_k_above_4}" if r.variable == "k" else "")
+                for r in report.itertuples()
+            ),
+        )
     aggregates_path = Path(out_dir) / f"potential_aggregates_{tech}.parquet"
     write_table(
         pd.concat(aggregate_frames, ignore_index=True),
@@ -610,6 +600,7 @@ def build_technology_potential(
         curve_sha256=dict(resolved.curve_sha256),
         scenarios=scenario_results,
         aggregates=aggregates_path,
+        weibull_distribution=weibull_path,
     )
 
 

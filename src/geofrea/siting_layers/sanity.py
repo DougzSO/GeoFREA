@@ -13,7 +13,7 @@ Two ranges are derived, so nothing is looked up or judged:
   country's bounding box, and cannot be negative. The bound is loose by construction (a country's bounding box is larger than the
   country) and sound: the layer, which is uncapped (OQ-040), cannot break it unless the layer is wrong.
 
-Weibull A and k have no derivation of this kind; their ranges need a sourced reading of the Global Wind Atlas documentation (OQ-053).
+Weibull A and k have no derivation of this kind; they carry a Tier 3 validity limit in `audit.yaml` (A in (0, 25], k in (0, 10], OQ-053 closed), checked by F5.
 PVOUT keeps the range of `config/audit.yaml`, read from the product's own statistics.
 """
 

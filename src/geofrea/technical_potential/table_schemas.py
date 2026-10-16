@@ -5,9 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 POTENTIAL_TABLE_SCHEMA_VERSION = "1.0"
-CLASS_FLAG_TABLE_SCHEMA_VERSION = (
-    "1.1"  # 1.1: the Weibull flag-range and ISA density-ratio columns (OQ-053, M-F5-03)
-)
+CLASS_FLAG_TABLE_SCHEMA_VERSION = "1.2"  # 1.1: the ISA density-ratio columns (M-F5-03); 1.2: the Weibull flag column of 1.1 is gone (OQ-053 closed)
 
 
 class PotentialRow(BaseModel):
@@ -57,6 +55,5 @@ class ClassFlagRow(BaseModel):
     cell_id: int
     v_ave_ms: float
     exceeds_class: bool
-    weibull_outside_flag_range: bool  # Weibull A or k at the hub height outside the Tier 3 flag range (OQ-053): marked, not removed
     density_ratio_isa: float  # rho_ref / rho_ISA(z + hub height), reported only (M-F5-03)
     density_outside_isa_check: bool  # that ratio outside [0.90, 1.10]

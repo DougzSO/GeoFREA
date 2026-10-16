@@ -192,7 +192,7 @@ def country_geometry_stub():
 
 
 @pytest.mark.unit
-def test_audit_yaml_declares_the_derivations_and_leaves_only_weibull_to_oq_053():
+def test_audit_yaml_declares_the_derivations_and_gives_weibull_a_tier_3_validity_limit():
     cfg = load_audit_config(REPO / "config" / "audit.yaml")
     assert {k for k, v in cfg.derived_ranges.items() if v.derivation} == {
         "air_density",
@@ -203,11 +203,13 @@ def test_audit_yaml_declares_the_derivations_and_leaves_only_weibull_to_oq_053()
         "weibull_a",
         "weibull_k",
     }
+    assert cfg.derived_ranges["weibull_a"].validity_range == (0.0, 25.0)
+    assert cfg.derived_ranges["weibull_k"].validity_range == (0.0, 10.0)
     assert all(
-        v.open_question == "OQ-053"
+        v.open_question is None and v.validity_tier == 3
         for k, v in cfg.derived_ranges.items()
         if k.startswith("weibull")
-    )
+    )  # OQ-053 is closed
     assert all(
         v.source for v in cfg.derived_ranges.values() if v.derivation
     )  # a derivation names its source
