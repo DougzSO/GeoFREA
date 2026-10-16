@@ -446,7 +446,9 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
             )  # fmt: skip
         text = str(info.value)
         assert text.count("cf_min") == 2 and "OQ-008" in text
-        assert "capex_usd_per_kw" in text and len(info.value.missing) >= 34
+        # Groups 1 and 2 are recorded: what stays open is the discount rate, the Group 3 costs and the F7 thresholds
+        assert "discount_rate" in text and "grid_cost_usd_per_mw_km" in text
+        assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 18
 
 
 # -- the s0 invariant, determinism, memory, windows ---------------------------------------------------------

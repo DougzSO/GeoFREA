@@ -63,8 +63,15 @@ def test_every_value_of_the_real_parameters_file_is_within_its_range():
                     assert vv.range.min <= vv.value <= vv.range.max, (iso, tech, key)
 
 
+def _patched(parameters, iso, tech, key, **changes):
+    data = parameters.model_dump(mode="json")
+    data["countries"][iso]["technologies"][tech][key].update(changes)
+    return type(parameters).model_validate(data)
+
+
 @pytest.mark.unit
-def test_proxy_flag_is_true_only_for_bra_and_ind_wind_fixed_om_and_defaults_to_false():
+def test_no_real_parameter_is_a_proxy_and_the_flag_defaults_to_false():
+    """Group 2 replaced the two proxies (BRA and IND wind fixed O&M taken from solar, L-203) with sourced values."""
     parameters = load_parameters(PARAMETERS)
     proxies = {
         (iso, tech, key)
@@ -73,7 +80,7 @@ def test_proxy_flag_is_true_only_for_bra_and_ind_wind_fixed_om_and_defaults_to_f
         for key, vv in getattr(country.technologies, tech).__dict__.items()
         if vv is not None and vv.proxy
     }
-    assert proxies == {("BRA", "wind", "opex_fixed_frac"), ("IND", "wind", "opex_fixed_frac")}
+    assert proxies == set()
     assert _vv(1.0).proxy is False
 
 
@@ -81,16 +88,17 @@ def test_proxy_flag_is_true_only_for_bra_and_ind_wind_fixed_om_and_defaults_to_f
 def test_proxy_blocks_production_run():
     """V6: a production run fails when a consumed parameter is a proxy; a development run only warns."""
     parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
-    audit = audit_parameters(parameters, technologies, ["BRA"], ["wind"])
+    patched = _patched(parameters, "BRA", "wind", "opex_fixed_frac", proxy=True)
+    audit = audit_parameters(patched, technologies, ["BRA"], ["wind"])
     assert any("BRA wind opex_fixed_frac: proxy value consumed" in e for e in audit.errors)
     with pytest.raises(ProductionRunError, match="proxy value consumed"):
         enforce_production(audit)
-    # PRT wind O&M is a Tier 2 transfer of the same quantity and technology: not a proxy
+    # the recorded values are not proxies
     prt = audit_parameters(parameters, technologies, ["PRT"], ["wind"])
     assert not any("proxy" in e for e in prt.errors)
     # a run that does not consume wind does not consume the proxy
     assert not any(
-        "proxy" in e for e in audit_parameters(parameters, technologies, ["BRA"], ["solar"]).errors
+        "proxy" in e for e in audit_parameters(patched, technologies, ["BRA"], ["solar"]).errors
     )
 
 
@@ -98,27 +106,20 @@ def test_proxy_blocks_production_run():
 def test_uncertain_parameter_requires_range_in_production():
     """U-05: every uncertain parameter needs a value and a range, enforced only in a production run (MS-6 is not finished)."""
     parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
-    audit = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
+    broken = _patched(parameters, "PRT", "solar", "capex_usd_per_kw", range=None)
+    broken = _patched(broken, "PRT", "solar", "gamma", value=None, range=None)
+    audit = audit_parameters(broken, technologies, ["PRT"], ["solar"])
     assert any(
         "PRT solar capex_usd_per_kw: uncertain parameter has no range" in e for e in audit.errors
     )
     assert any("PRT solar gamma: uncertain parameter has no value" in e for e in audit.errors)
     with pytest.raises(ProductionRunError, match="no range"):
         enforce_production(audit)
-    # a parameter with a range passes: give capex a range and its finding disappears
-    data = parameters.model_dump(mode="json")
-    capex = data["countries"]["PRT"]["technologies"]["solar"]["capex_usd_per_kw"]
-    capex["range"] = {
-        "min": capex["value"] * 0.5,
-        "max": capex["value"] * 2,
-        "distribution": "uniform",
-        "source": "test",
-    }
-    patched = type(parameters).model_validate(data)
-    assert not any(
-        "PRT solar capex_usd_per_kw" in e
-        for e in audit_parameters(patched, technologies, ["PRT"], ["solar"]).errors
-    )
+    # the recorded parameters carry a value and a range for what Group 1 and 2 set
+    ok = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
+    assert not any("capex_usd_per_kw" in e or "gamma" in e for e in ok.errors)
+    # the discount rate is not recorded yet (OQ-022): a production run refuses it
+    assert "PRT solar discount_rate: uncertain parameter has no value" in ok.errors
 
 
 @pytest.mark.unit
@@ -126,17 +127,26 @@ def test_required_f5_parameters_block_production_while_null():
     """D-F5-011: `luf`, `power_density_mw_per_km2` and `hub_height_m` are not uncertain, yet a production run refuses them null."""
     parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
     for iso in ("BRA", "PRT", "IND"):
-        wind = audit_parameters(parameters, technologies, [iso], ["wind"])
-        for key in technologies.technologies["wind"].required_parameters:
-            assert f"{iso} wind {key}: required parameter has no value" in wind.errors
-        solar = audit_parameters(parameters, technologies, [iso], ["solar"])
-        assert f"{iso} solar luf: required parameter has no value" in solar.errors
+        # Group 1 is recorded: no F5 input is missing
+        for tech in ("solar", "wind"):
+            audit = audit_parameters(parameters, technologies, [iso], [tech])
+            for key in ("luf", "power_density_mw_per_km2", "gamma", "eta_loss", "hub_height_m"):
+                assert not any(f"{iso} {tech} {key}:" in e for e in audit.errors), (iso, tech, key)
+        wind = _patched(parameters, iso, "wind", "hub_height_m", value=None)
+        assert f"{iso} wind hub_height_m: required parameter has no value" in audit_parameters(
+            wind, technologies, [iso], ["wind"]
+        ).errors
+        solar = _patched(parameters, iso, "solar", "luf", value=None, scenario_values=None)
+        assert f"{iso} solar luf: required parameter has no value" in audit_parameters(
+            solar, technologies, [iso], ["solar"]
+        ).errors
     assert "hub_height_m" in technologies.technologies["wind"].required_parameters
     # the synthetic country carries test values for every required parameter
     zzz = audit_parameters(parameters, technologies, ["ZZZ"], ["solar", "wind"])
     assert not any("required parameter" in e for e in zzz.errors)
+    broken = _patched(parameters, "PRT", "wind", "luf", value=None, scenario_values=None)
     with pytest.raises(ProductionRunError, match="required parameter has no value"):
-        enforce_production(audit_parameters(parameters, technologies, ["PRT"], ["wind"]))
+        enforce_production(audit_parameters(broken, technologies, ["PRT"], ["wind"]))
 
 
 @pytest.mark.unit

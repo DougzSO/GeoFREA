@@ -594,10 +594,10 @@ def test_supply_curve_function_ties_by_cell_id_and_puts_infinite_last():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
-def test_real_countries_fail_loud_listing_the_missing_parameters_ranges_and_price_years(
+def test_real_countries_fail_loud_listing_the_discount_rate_and_the_group_3_costs(
     iso, registry, parameters, tmp_path
 ):
-    """The parameters and ranges of the real countries are not entered yet; F6 says exactly which, before reading any input."""
+    """Groups 1 and 2 are recorded; F6 still lists exactly what is open (the discount rate and the Group 3 costs), before reading any input."""
     with pytest.raises(LcoeMissingInputError) as caught:
         build_lcoe(
             iso, registry, parameters.countries[iso], TECHS,
@@ -612,15 +612,12 @@ def test_real_countries_fail_loud_listing_the_missing_parameters_ranges_and_pric
             f"{tech}: grid_cost_usd_per_mw_km (pending_research)",
             f"{tech}: substation_cost_usd_per_mw (pending_research)",
             f"{tech}: road_cost_usd_per_km (pending_research)",
-            f"{tech}: opex_var_usd_per_mwh (pending_research)",
-            f"{tech}: capex_usd_per_kw range (no range in parameters.json",
-            f"{tech}: opex_fixed_frac range",
-            f"{tech}: discount_rate range",
-            f"{tech}: lifetime_years range",
-            f"{tech}: capex_usd_per_kw price_year (is None, S-07 needs 2024)",
+            f"{tech}: discount_rate (pending_research)",
         ):
             assert item in message, item
-    assert "gamma" in message and "eta_loss" in message
+        for recorded in ("capex_usd_per_kw", "opex_fixed_frac", "opex_var_usd_per_mwh", "lifetime_years"):
+            assert f"{tech}: {recorded}" not in message, recorded
+    assert "gamma" not in message and "eta_loss" not in message
     assert not (tmp_path / "out").exists()
     assert caught.value.missing and all(m.split(":")[0] in TECHS for m in caught.value.missing)
 

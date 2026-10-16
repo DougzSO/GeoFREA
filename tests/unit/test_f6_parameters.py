@@ -62,7 +62,7 @@ def test_real_countries_carry_the_new_keys_pending_with_no_value(parameters):
             entry = getattr(params, key)
             assert entry.value is None and entry.status == "pending_research", f"{iso} {tech} {key}"
             assert entry.unit == unit and not entry.synthetic and entry.range is None
-        assert params.opex_var_usd_per_mwh.value is None
+        assert params.opex_var_usd_per_mwh.value == 0.0  # Group 2: variable O&M is zero (M-F6-07)
 
 
 @pytest.mark.unit
@@ -95,13 +95,17 @@ def test_zzz_has_a_value_and_a_range_for_every_uncertain_parameter_all_synthetic
 
 
 @pytest.mark.unit
-def test_zzz_cost_parameters_carry_the_2024_price_year_and_real_ones_none_yet(parameters):
+def test_zzz_cost_parameters_carry_the_2024_price_year_and_real_ones_only_where_recorded(parameters):
     for _iso, _tech, params in _entries(parameters, ("ZZZ",)):
         for key in COST_KEYS:
             assert getattr(params, key).price_year == 2024
     for _iso, _tech, params in _entries(parameters, REAL_COUNTRIES):
         for key in COST_KEYS:
-            assert getattr(params, key).price_year is None  # to be audited by the author (OQ-054)
+            entry = getattr(params, key)
+            if entry.value is None:  # Group 3 costs stay pending, without a year
+                assert entry.price_year is None, key
+            else:  # Group 2 costs of the IRENA 2024 cohort (M-F6-07)
+                assert entry.price_year == 2024, key
 
 
 @pytest.mark.unit
