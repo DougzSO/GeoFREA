@@ -1,0 +1,448 @@
+% ============================================================================
+% CHAPTER 2 - THEORETICAL FOUNDATION
+% File: docs/thesis/theory/ch2_renewable_potential_foundations.tex
+% Sections: (1) potential definitions and capacity accounting,
+%           (2) wind resource and turbine performance,
+%           (3) PV thermal performance,
+%           (4) levelized cost and cost-basis consistency.
+% Operational values live in docs/thesis/methods/parameters/group1_technical_potential.tex
+% and docs/thesis/methods/parameters/group2_core_costs.tex
+% ============================================================================
+
+% ----------------------------------------------------------------------------
+\section{Spatially Explicit Renewable-Energy Potential}
+\label{sec:renewable_potential_foundations}
+% ----------------------------------------------------------------------------
+
+\subsection{Definitions of Potential}
+\label{subsec:potential_definitions}
+
+Renewable-energy assessments distinguish the physical resource, the
+geographical potential, the technical potential, the economic potential
+and feasible deployment. The physical resource is the energy carried by
+the natural flux. The geographical potential is the share of that
+resource located on land that is physically and legally available.
+The technical potential converts the geographical potential into
+electricity using a specified technology, its performance and its
+land requirements. The economic potential is the share of the technical
+potential that satisfies an economic criterion, such as a maximum
+levelized cost of electricity (LCOE). Feasible deployment adds
+institutional, social and market constraints that are rarely mappable
+\cite{heinrichs2026,mckenna2022,turkovska2024}.
+
+These categories are not interchangeable, and published estimates for
+the same country can differ by large factors because studies combine
+different exclusion criteria, technology assumptions, land-use factors
+and economic thresholds. Reviews of solar and onshore wind assessments
+attribute much of this spread to definitions and reporting rather than
+to the resource itself \cite{mckenna2022,turkovska2024}. Any comparison
+of a modeled potential with a published figure is therefore meaningful
+only when both use the same definition and unit.
+
+\subsection{Capacity and Energy Accounting}
+\label{subsec:capacity_accounting}
+
+Let $i$ index a grid cell and $j$ a technology. The eligible area
+$A^{\mathrm{elig}}_{i,j}$ (km$^2$) is the area that remains after the
+mapped exclusions. Installable capacity follows from two factors: a
+power density $\mathrm{PD}_j$ (MW/km$^2$), which states how much
+capacity fits on one square kilometre of project area, and a
+land-utilization factor $\mathrm{LUF}_j\in[0,1]$, which states the share
+of the eligible area that is expected to host projects:
+\begin{equation}
+    C_{i,j} = A^{\mathrm{elig}}_{i,j}\,\mathrm{LUF}_j\,\mathrm{PD}_j .
+    \label{eq:theory_capacity}
+\end{equation}
+Annual energy follows from the capacity factor:
+\begin{equation}
+    E_{i,j} = 8760\,C_{i,j}\,\mathrm{CF}_{i,j}
+    \quad [\mathrm{MWh/yr}] .
+    \label{eq:theory_energy}
+\end{equation}
+
+Two properties of Equation~\ref{eq:theory_capacity} matter for the
+interpretation of results. First, only the product
+$\mathrm{LUF}_j\,\mathrm{PD}_j$ affects capacity, so the two factors
+cannot be identified separately from capacity outcomes alone. Second,
+because both factors are uniform within a country and technology, they
+scale the potential of every cell by the same amount and leave cost per
+unit of energy, and therefore the ranking of cells by LCOE, unchanged.
+They govern quantities expressed in GW or TWh/yr, not the relative
+merit of locations.
+
+Capacity must be expressed on one electrical basis throughout. For PV,
+land requirements are set by the direct-current (DC) array, so power
+density is naturally expressed in MW$_{\mathrm{dc}}$/km$^2$
+\cite{bolinger2022}. The cost per unit of capacity must then refer to the
+same basis; the inverter loading ratio
+$\mathrm{ILR}=C_{\mathrm{dc}}/C_{\mathrm{ac}}$ links the two bases when a
+source reports alternating-current (AC) ratings.
+
+\subsection{The Residual Land-Utilization Factor}
+\label{subsec:luf_theory}
+
+In the literature, land-use, suitability or availability factors often
+bundle together several reasons why eligible land is not built on:
+protected areas, slope, land cover, distance to settlements, land tenure,
+competing uses and social acceptance. When some of these constraints are
+already removed by explicit spatial exclusions, applying a bundled
+factor afterwards removes the same land twice and biases the potential
+downwards.
+
+GeoFREA therefore defines the LUF as a residual factor. It represents
+only constraints that the exclusion layers do not encode: land-tenure
+fragmentation, competing uses not mapped as exclusions, micro-siting
+losses inside otherwise eligible land, permitting and social acceptance.
+A literature value is admissible as a LUF only if its definition allows
+the mapped constraints to be separated out. Because few sources satisfy
+this condition, residual LUF values are typically judgment-based and
+must be reported as such.
+
+\subsection{Power Density and Footprint Definitions}
+\label{subsec:power_density_theory}
+
+Power density depends on the denominator. For utility-scale PV, the
+direct array area includes module rows and inverter pads, whereas the
+fenced or leased site also includes internal roads, setbacks and
+undevelopable patches. In a large empirical sample of United States
+plants built through 2019, Bolinger and Bolinger measured density on the
+direct array area and expressed it in DC terms, found fixed-tilt plants
+to be denser than single-axis trackers because of their higher ground
+coverage ratio, and showed that density rose markedly over the decade as
+module efficiency improved \cite{bolinger2022}. Earlier benchmarks were
+measured on total project area, in AC terms and on an older fleet
+\cite{ong2013}, and national technical-potential studies adopt a single
+assumed density \cite{lopez2012}. Densities from older studies or from a
+different footprint definition are therefore not transferable without
+conversion \cite{turkovska2024}.
+
+For onshore wind, the relevant denominator is the spacing envelope of
+the turbine array, not the much smaller area directly disturbed by
+foundations, roads and substations
+\cite{harrisonatlas2022,mckenna2022}. Most of the envelope remains
+available for agriculture or grazing. With turbines spaced $s_x D$
+across and $s_y D$ along the prevailing wind, where $D$ is the rotor
+diameter, the geometric density is
+\begin{equation}
+    \mathrm{PD}_{\mathrm{wind}}
+    = \frac{P_{\mathrm{rated}}}{s_x s_y D^2}
+    = \frac{\pi}{4\,s_x s_y}\,\mathrm{SP},
+    \label{eq:theory_wind_pd}
+\end{equation}
+where $\mathrm{SP}=P_{\mathrm{rated}}/(\pi D^2/4)$ is the specific power
+of the turbine. In consistent units, SP in W/m$^2$ equals MW/km$^2$, so
+the geometric density depends only on the specific power and on the
+spacing product $s_x s_y$. Low-specific-power turbines, typical of
+low-wind sites, yield lower capacity per unit area for the same spacing.
+Empirical densities of real wind farms vary widely with terrain, layout
+and the footprint definition adopted: convex hulls, Voronoi cells and
+buffers around turbines give different areas for the same plant
+\cite{harrisonatlas2022,turkovska2021,turkovska2024}. Geometric and
+empirical densities are therefore alternative parameterizations, useful
+as mutual checks, not repeated observations of one constant.
+
+\subsection{Technology Vintage and Climate Period}
+\label{subsec:technology_vintage}
+
+Land requirements, performance and costs change with technology
+generation. Combining a power density of one generation with costs of
+another produces an inconsistent plant. A technology reference year
+$t_{\mathrm{ref}}$ is therefore used to fix the vintage of every
+technology parameter (module type, turbine, hub height, densities and
+costs).
+
+The technology vintage and the climate period are distinct. A
+climate-robustness assessment can hold the technology fixed and expose
+it to the reference and projected climates, so that differences across
+climate members reflect climate alone and not undocumented changes in
+equipment. The price of this design is that the evaluated plant is a
+fixed-vintage counterfactual: its technology does not evolve with the
+projected climate window, and a plant commissioned at
+$t_{\mathrm{ref}}$ would only partly operate within a mid-century
+window. Both points must be stated when results are interpreted.
+
+\subsection{Evidence Quality and Transferability}
+\label{subsec:evidence_quality}
+
+A framework meant to be transferable across countries must separate the
+equations, which are general, from the parameter values, which are
+calibrated per country and technology. Transferability of the equations
+does not imply transferability of the values. Whether a value measured
+in one market can represent another depends on whether the technology,
+the footprint or cost definition, the vintage and the units match.
+Parameter provenance must therefore be recorded together with the value,
+and values derived from judgment must remain distinguishable from those
+measured locally \cite{heinrichs2026,mckenna2022}.
+
+Parameter estimation must also stay independent of validation. Plant
+inventories used to derive a density or a cost should not be reused as
+independent evidence that the same workflow places plants correctly.
+
+% ----------------------------------------------------------------------------
+\section{Wind Resource and Turbine Performance}
+\label{sec:wind_performance_theory}
+% ----------------------------------------------------------------------------
+
+\subsection{Weibull Representation of the Wind Resource}
+\label{subsec:wind_weibull}
+
+When long hourly series are not used, the wind-speed distribution at a
+site is commonly represented by a two-parameter Weibull density
+\begin{equation}
+    f(u;A,k_{\mathrm{W}})
+    = \frac{k_{\mathrm{W}}}{A}\left(\frac{u}{A}\right)^{k_{\mathrm{W}}-1}
+      \exp\!\left[-\left(\frac{u}{A}\right)^{k_{\mathrm{W}}}\right],
+    \qquad u\ge 0,
+    \label{eq:wind_weibull_pdf}
+\end{equation}
+with scale $A$ (m/s) and dimensionless shape $k_{\mathrm{W}}$. The mean
+wind speed is
+\begin{equation}
+    \bar{u} = A\,\Gamma\!\left(1+\frac{1}{k_{\mathrm{W}}}\right).
+    \label{eq:wind_weibull_mean}
+\end{equation}
+The Weibull form describes the marginal distribution only. It carries
+no information on temporal sequence, seasonality or co-occurrence with
+other variables, which limits its use in chronological system models
+but not in annual yield estimation. The Global Wind Atlas version 3
+provides mean wind speed and Weibull parameters at 10, 50, 100, 150 and
+200~m for the period 2008--2017, obtained by downscaling ERA5 with a
+mesoscale model at about 3~km and a microscale flow model to about 250~m
+\cite{davis2023globalwindatlas,dtuwind2019gwa3release,gwaV3dataset}. It
+also provides an air-density layer derived from a different reanalysis
+(CFSR) interpolated to the atlas elevation \cite{gwaV3dataset}. Its
+capacity-factor layers are gross values computed at 100~m for three
+commercial turbines representing IEC classes I to III, without wake or
+other losses \cite{davis2023globalwindatlas}.
+
+\subsection{Hub Height}
+\label{subsec:wind_hub_height_theory}
+
+Wind speed increases with height in a way that depends on surface
+roughness, stability and terrain. Extrapolation with a power law
+$u(h_2)=u(h_1)(h_2/h_1)^{\alpha}$ requires a shear exponent $\alpha$
+that is neither constant in space nor well constrained over large
+domains. Taking the resource directly from a dataset layer at or near
+the hub height avoids this extra parameter, at the cost of a small,
+documented mismatch when the turbine hub does not coincide with an
+available layer.
+
+\subsection{Design Classes and Power Curves}
+\label{subsec:wind_classes_curves}
+
+IEC 61400-1 assigns turbines to design classes defined by a 50-year
+reference wind speed $V_{\mathrm{ref}}$ and an associated annual mean
+wind speed $V_{\mathrm{ave}}$ at hub height, together with turbulence
+categories \cite{iec6140012025,larsen2022}. Table~\ref{tab:wind_iec_classes}
+lists the reference values. The current edition also defines a class
+for tropical-cyclone regions and site-specific class S designs.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Reference wind speeds of the IEC 61400-1 design classes.}
+    \label{tab:wind_iec_classes}
+    \small
+    \begin{tabular}{lcc}
+        \toprule
+        Class & $V_{\mathrm{ref}}$ (m/s) & $V_{\mathrm{ave}}$ (m/s) \\
+        \midrule
+        I   & 50.0 & 10.0 \\
+        II  & 42.5 & 8.5  \\
+        III & 37.5 & 7.5  \\
+        S   & site-specific & site-specific \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+% verify: values of the tropical-cyclone class (T) in the edition cited; not tabulated here until checked
+
+Design classes are structural: they certify that a turbine survives the
+loads of a wind climate. They do not, by themselves, determine energy
+yield. Yield is set by the power curve, which in turn is shaped mainly by
+specific power. The market pairs low-wind sites with large rotors and
+low specific power, so annual mean speed is only a screening indicator
+of the turbine that would actually be installed. Formal class assignment
+also requires extreme-wind and turbulence information that spatial
+atlases do not provide.
+
+For reproducibility, power curves should come from openly documented
+reference turbines whose provenance and licence are known, such as the
+IEA Wind Task 37 land-based reference turbine \cite{bortolotti2019}.
+Software libraries that distribute manufacturer curves do not, by being
+open source, make those curves open data.
+
+\subsection{Gross Capacity Factor}
+\label{subsec:wind_gross_cf}
+
+For a power curve $P(u)$ evaluated at the site air density, the gross
+capacity factor over a Weibull distribution is
+\begin{equation}
+    \mathrm{CF}_{\mathrm{gross}}
+    = \frac{1}{P_{\mathrm{rated}}}
+      \int_{u_{\mathrm{in}}}^{u_{\mathrm{out}}} P(u)\,f(u;A,k_{\mathrm{W}})\,du ,
+    \label{eq:wind_gross_cf}
+\end{equation}
+where $u_{\mathrm{in}}$ and $u_{\mathrm{out}}$ are the cut-in and
+cut-out speeds.
+
+\subsection{Air Density}
+\label{subsec:wind_air_density}
+
+The kinetic power flux through a rotor is proportional to
+$\tfrac{1}{2}\rho u^3$. Reference power curves are stated at a reference
+density $\rho_0$, usually $1.225$~kg/m$^3$. Warm and elevated sites have
+lower density and, below rated speed, produce less power at the same
+wind speed. For dry air,
+\begin{equation}
+    \rho = \frac{p}{R_d\,T},
+    \label{eq:wind_density_dry}
+\end{equation}
+with $p$ in Pa, $T$ in K and $R_d=287.05$~J\,kg$^{-1}$\,K$^{-1}$. Humidity
+lowers density slightly further; the effect is small relative to that of
+temperature and elevation.
+
+For pitch-regulated turbines, IEC 61400-12-1 normalizes power curves to a
+reference density by rescaling wind speed \cite{iec61400122022}. The
+inverse operation gives the power at site density from a reference curve
+$P_0$:
+\begin{equation}
+    P(u,\rho) = P_0\!\left(u\left(\frac{\rho}{\rho_0}\right)^{1/3}\right).
+    \label{eq:wind_density_correction}
+\end{equation}
+This rescaling already accounts for density; multiplying the output by
+$\rho/\rho_0$ as well would count the effect twice.
+
+\subsection{Gross-to-Net Losses}
+\label{subsec:wind_losses_theory}
+
+Net output is lower than gross output because of wake interaction inside
+the array, turbine unavailability, electrical losses in the collection
+system and degradation of blade performance by soiling, erosion or
+icing \cite{leefields2021}. When component losses $\ell_m$ act as
+successive reductions, the retained fraction of gross energy is
+\begin{equation}
+    \eta = \prod_{m}(1-\ell_m),
+    \qquad
+    \mathrm{CF}_{\mathrm{net}} = \eta\,\mathrm{CF}_{\mathrm{gross}},
+    \label{eq:wind_net_cf}
+\end{equation}
+and the combined loss is $1-\eta$. Effects already represented in the
+power curve or in the density correction must not be included again in
+$\eta$.
+Curtailment is a property of the power system, not of the plant, and
+long-term degradation is a separate time-dependent process.
+
+% ----------------------------------------------------------------------------
+\section{Thermal Performance of Photovoltaic Modules}
+\label{sec:pv_thermal_theory}
+% ----------------------------------------------------------------------------
+
+\subsection{Temperature Dependence of Module Power}
+\label{subsec:pv_temperature}
+
+PV nameplate power is rated at standard test conditions: 1000~W/m$^2$,
+AM1.5 spectrum and 25\,$^\circ$C cell temperature. In operation, cells
+run well above ambient temperature under strong irradiance, and power
+falls almost linearly with temperature:
+\begin{equation}
+    f_T = 1+\gamma\,(T_{\mathrm{cell}}-25\,^\circ\mathrm{C}),
+    \label{eq:pv_thermal_factor}
+\end{equation}
+where $\gamma$ is the temperature coefficient of maximum power, in
+K$^{-1}$; datasheets report it in \%/K, so $-0.30$\,\%/K corresponds to
+$\gamma=-0.0030$~K$^{-1}$. It must not be confused with the coefficients
+for open-circuit voltage or short-circuit current. For crystalline
+silicon, $\gamma$ is negative and its magnitude decreases from p-type
+PERC to n-type TOPCon and heterojunction cells
+\cite{bamisile2025,itrpv2025}.
+
+Cell temperature models express $T_{\mathrm{cell}}$ as ambient
+temperature plus a heating term that grows with irradiance and falls with
+wind speed, as in the model of Faiman,
+$T_{\mathrm{mod}} = T_{\mathrm{amb}} + G_{\mathrm{POA}}/(U_0+U_1 w)$
+\cite{faiman2008}. At equal irradiance and wind, a change in ambient
+temperature therefore shifts cell temperature by the same amount.
+
+\subsection{Climate Perturbation of a Baseline Yield}
+\label{subsec:pv_climate_perturbation}
+
+Gridded specific-yield datasets give the long-term energy output per
+unit of DC capacity of a reference PV configuration, already net of
+thermal and system losses under the reference climate. A projected
+climate can be represented as a perturbation of that baseline. With an
+irradiance ratio $\delta_G$ and an ambient warming $\Delta T$,
+\begin{equation}
+    Y_c = Y_{\mathrm{ref}}\,\delta_G\,
+      \frac{1+\gamma\,(\bar{T}_{\mathrm{cell,ref}}+\Delta T-25)}
+           {1+\gamma\,(\bar{T}_{\mathrm{cell,ref}}-25)}
+    \approx Y_{\mathrm{ref}}\,\delta_G\,(1+\gamma\,\Delta T),
+    \label{eq:pv_perturbation}
+\end{equation}
+where the approximation drops terms of order $\gamma^2$ and equates the
+change in cell temperature with the change in ambient temperature. It
+assumes that warming is spread evenly over productive hours, ignores the
+effect of irradiance and wind changes on cell temperature and uses annual
+means. Its error is small relative to the irradiance term, but it does
+not capture changes in the diurnal or seasonal timing of warming.
+
+Technology evolution, such as a smaller $|\gamma|$, also changes the
+thermal response but is not a climate effect. Keeping the module type
+fixed across climate members attributes differences between members to
+climate only.
+
+% ----------------------------------------------------------------------------
+\section{Levelized Cost and Cost-Basis Consistency}
+\label{sec:lcoe_theory}
+% ----------------------------------------------------------------------------
+
+\subsection{Levelized Cost of Electricity}
+\label{subsec:lcoe_definition}
+
+For a plant with overnight capital cost $I$ per unit of capacity, fixed
+operating cost $F$ per unit of capacity and year, real discount rate $r$,
+lifetime $n$ and annual energy $E$ per unit of capacity, the levelized
+cost under constant real annual costs is
+\begin{equation}
+    \mathrm{LCOE} = \frac{I\,\mathrm{CRF}(r,n) + F}{E},
+    \qquad
+    \mathrm{CRF}(r,n) = \frac{r(1+r)^n}{(1+r)^n-1}.
+    \label{eq:theory_lcoe}
+\end{equation}
+The expression is consistent only if costs, discount rate and energy
+share one convention: costs in constant currency with a real rate, or
+nominal costs with a nominal rate. A nominal rate $i$ is converted to a
+real rate with the Fisher relation
+\begin{equation}
+    1+r = \frac{1+i}{1+\pi},
+    \label{eq:theory_fisher}
+\end{equation}
+where $\pi$ is the expected inflation over the asset life. Because
+renewable plants are capital-intensive, the LCOE is more sensitive to
+$r$ than to most technical parameters, and international differences in
+financing costs explain a large share of observed differences in LCOE
+\cite{irena2023financing}.
+
+\subsection{Cost Basis and Scope}
+\label{subsec:cost_basis}
+
+A unit cost is meaningful only with its denominator and scope. For PV,
+cost per kW$_{\mathrm{ac}}$ and per kW$_{\mathrm{dc}}$ differ by the
+inverter loading ratio: for the same total plant cost,
+\begin{equation}
+    c_{\mathrm{dc}} = \frac{c_{\mathrm{ac}}}{\mathrm{ILR}} .
+    \label{eq:theory_capex_basis}
+\end{equation}
+The ILR depends on plant design and should be documented rather than
+assumed universal \cite{nrelATB2024PV}. The scope matters equally:
+reported total installed costs may include grid connection, land and
+development costs, and operating costs may be reported as full-service
+contract prices or as all-in expenditure. Combining a cost that already
+includes grid connection with an explicit connection cost counts that
+cost twice.
+
+Capacity factors also have more than one definition. The capacity factor
+of plants commissioned in a given year is not the same quantity as the
+fleet capacity factor $E_{\mathrm{annual}}/(8760\,\bar{P})$ computed
+from national generation and average installed capacity, which mixes
+vintages and includes curtailment and outages. Neither is a long-term
+climatological capacity factor of a candidate site; both are useful only
+as plausibility references.

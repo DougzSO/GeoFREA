@@ -1,0 +1,396 @@
+% ============================================================================
+% CHAPTER 3 - METHODS / PARAMETERS
+% File: docs/thesis/methods/parameters/group1_technical_potential.tex
+% Group 1: technical potential (Stage F5). OQ-004, OQ-005, OQ-006, OQ-023.
+% Theory: docs/thesis/theory/ch2_renewable_potential_foundations.tex
+% Values must match config/parameters.json. References marked % verify are unchecked.
+% ============================================================================
+
+\section{Technical-Potential Parameters (Stage F5)}
+\label{sec:params_group1}
+
+\subsection{Scope and Cross-Cutting Decisions}
+\label{subsec:g1_scope}
+
+This section fixes the parameters that convert eligible land (Stage F3)
+and the resource fields (Stages F2b and F4) into installable capacity and
+capacity factor (Stage F5): land-utilization factor and power density
+(OQ-004), wind turbine representation and losses (OQ-005), the Global
+Wind Atlas inputs (OQ-006) and the PV temperature coefficient (OQ-023).
+Costs are treated in Section~\ref{sec:params_group2}. Four decisions
+apply to every parameter below.
+
+Technology vintage. All technology parameters represent plants
+commissioned in $t_{\mathrm{ref}}=2026$. The same plant is evaluated
+under the reference climate and under every projected climate member,
+so that differences between members are attributable to climate. The
+plant is therefore a fixed-vintage counterfactual
+(Section~\ref{subsec:technology_vintage}).
+
+Residual LUF. The LUF represents only constraints not encoded in the
+Stage F3 exclusions (Section~\ref{subsec:luf_theory}). A justification
+that refers to a constraint already mapped in F3 is not admissible. In
+F3, cropland is excluded for PV in all three land scenarios and allowed
+for wind; population density, protected areas and slope are excluded for
+both.
+
+Coupling to the land scenarios. LUF and power density are not sampled in
+Stage F6. Their minimum, central and maximum values are paired with the
+restrictive, central and permissive land-eligibility scenarios of
+Stage F3. The three land configurations bound the joint effect of mapped
+exclusions, residual utilization and density, without identifying the
+contribution of each factor. Because LUF and PD scale all cells of a
+country and technology uniformly, they affect quantities in GW and
+TWh/yr (H5 and the comparison with national targets) but not the LCOE
+of a cell or the regret ranking.
+
+Electrical basis. PV capacity, PV power density, PV yield and PV unit
+costs are in DC terms (MW$_{\mathrm{dc}}$, kWh/kW$_{\mathrm{dc}}$,
+USD/kW$_{\mathrm{dc}}$). Wind capacity is the turbine nameplate rating.
+
+\subsection{Land-Utilization Factor (OQ-004)}
+\label{subsec:g1_luf}
+
+Definition: dimensionless share of the Stage F3 eligible area expected
+to host projects after residual, unmapped constraints. Enters:
+Equation~\ref{eq:theory_capacity}. Scenario-coupled, not sampled.
+
+The literature distinguishes total from available land and documents how
+strongly assumed availability shifts potential estimates
+\cite{lopez2012,ong2013,turkovska2021,turkovska2024}, but no source
+reports a residual factor compatible with the F3 definition for Brazil,
+India or Portugal. The values below are therefore author judgment
+informed by that literature. Under U-07 this is Tier 3, and each value is
+recorded in docs/LIMITATIONS.md.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Residual land-utilization factor (restrictive / central /
+    permissive).}
+    \label{tab:g1_luf}
+    \small
+    \begin{tabular}{lcc}
+        \toprule
+        Country & Solar PV & Onshore wind \\
+        \midrule
+        Brazil   & 0.10 / 0.25 / 0.35 & 0.05 / 0.15 / 0.30 \\
+        Portugal & 0.10 / 0.25 / 0.35 & 0.05 / 0.15 / 0.30 \\
+        India    & 0.05 / 0.10 / 0.25 & 0.05 / 0.075 / 0.15 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The lower Indian values have different justifications for each
+technology, because F3 treats cropland differently. For PV, cropland is
+already excluded, so the Indian adjustment rests only on land-tenure
+fragmentation and the difficulty of assembling large contiguous parcels
+with clear title on the remaining land. For wind, cropland is eligible
+in F3, and the adjustment also represents competition with agricultural
+use on that land. Population density is not part of either
+justification, since it is an F3 exclusion.
+
+Source: author judgment informed by \cite{lopez2012,ong2013,turkovska2024}.
+Tier 3 (value and range). Proxy: no. Price year: not applicable.
+
+\subsection{Power Density (OQ-004)}
+\label{subsec:g1_pd}
+
+\subsubsection{Utility-Scale PV}
+
+Definition: DC capacity per unit of fenced plant area. Unit:
+MW$_{\mathrm{dc}}$/km$^2$. Enters: Equation~\ref{eq:theory_capacity}.
+Scenario-coupled.
+
+The PV baseline yield used by Stage F5 refers to fixed-tilt systems
+(Section~\ref{subsec:g1_pv_thermal}), so only the fixed-tilt density is
+used. Bolinger and Bolinger report a 2019 median of
+0.87~MW$_{\mathrm{dc}}$/ha for fixed-tilt plants on the direct array
+area, from more than 90\% of United States utility-scale plants, and
+found plants checked in Chile, Australia and Europe within the same range
+\cite{bolinger2022}. On total project area and an older fleet, Ong et
+al.\ report lower densities \cite{ong2013}. The adopted values, 45, 50
+and 75~MW$_{\mathrm{dc}}$/km$^2$, lie between these references; the
+central value implies an array-to-site ratio of 0.57 relative to the
+2019 array median of 87~MW$_{\mathrm{dc}}$/km$^2$. Modules of the 2026
+vintage are more powerful than those of 2019, so the values are
+conservative. The tracking densities (30, 40 and
+50~MW$_{\mathrm{dc}}$/km$^2$) are documented but not used, since no
+tracking yield is modeled.
+% verify: that the PV baseline yield layer is fixed-tilt at optimum angle (Global Solar Atlas PVOUT definition)
+
+Source: \cite{bolinger2022,ong2013}, transferred from the United States
+with the international check of \cite{bolinger2022} as rationale. Tier 2
+(value and range). Proxy: no.
+
+\subsubsection{Onshore Wind}
+
+Definition: turbine nameplate capacity per unit of array spacing
+envelope. Unit: MW/km$^2$. Enters: Equation~\ref{eq:theory_capacity}.
+Scenario-coupled.
+
+Density is geometric (Equation~\ref{eq:theory_wind_pd}) with the
+reference turbine of Section~\ref{subsec:g1_turbine}
+($P_{\mathrm{rated}}=3.37$~MW, $D=130$~m) and three spacing scenarios:
+$6D\times10D$ (restrictive), $5D\times8D$ (central) and $4D\times7D$
+(permissive), giving 3.32, 4.99 and 7.12~MW/km$^2$. Spacing scenarios
+follow technical-potential and wind land-use studies
+\cite{lopez2012,harrisonatlas2022,turkovska2024}. The density is the
+same in the three countries because the turbine is the same.
+% verify: that the cited studies use these spacing multiples
+
+Empirical footprints of operating farms (Voronoi, convex hull) are used
+only as a cross-check of the geometric values, since they depend on the
+delineation method \cite{harrisonatlas2022,turkovska2021,turkovska2024}.
+
+Source: geometric derivation from \cite{bortolotti2019} with spacing from
+\cite{lopez2012,harrisonatlas2022}. Tier 2 (value and range). Proxy: no.
+
+\subsection{Global Wind Atlas Inputs (OQ-006)}
+\label{subsec:g1_gwa}
+
+Stage F1 uses Global Wind Atlas version 3 (ERA5 2008--2017, WRF at about
+3~km and WAsP to about 250~m) and extracts mean wind speed, Weibull $A$
+and $k$ and air density at 100, 150 and 200~m
+\cite{dtuwind2019gwa3release,gwaV3dataset}. The density layer derives
+from CFSR interpolated to the atlas elevation, not from ERA5
+\cite{gwaV3dataset}. The atlas capacity-factor layers are gross, computed
+at 100~m for three Vestas 3.45~MW turbines (rotors 112, 126 and 136~m,
+specific power about 350, 277 and 237~W/m$^2$) representing classes I,
+II and III \cite{davis2023globalwindatlas}. Stage F1 does not download
+them, and Stage F5 computes capacity factor independently. If the class
+III layer is added as a check layer, it is compared with the gross
+Stage F5 capacity factor at 100~m in the reference climate, since its
+specific power is close to that of the GeoFREA turbine.
+% verify: exact GWA release recorded in the F1 manifest (3.x)
+
+Tier 1. OQ-006 is closed.
+
+\subsection{Wind Turbine Representation (OQ-005)}
+\label{subsec:g1_turbine}
+
+\subsubsection{Reference Turbine and Power Curve}
+
+A single open reference turbine is used in every cell, country and
+climate member: the IEA Wind Task 37 land-based reference turbine
+(3.37~MW, rotor 130~m, hub 110~m, class IIIA, specific power about
+254~W/m$^2$) \cite{bortolotti2019}. Its power curve is the tabulated
+steady-state output of the published model (CCBlade), distributed under
+the Apache-2.0 licence and archived with its version. The curve starts at
+the cut-in speed of 3~m/s with a non-zero output; output is zero below
+cut-in and above cut-out, and values are interpolated linearly between
+tabulated points within that interval, with no extrapolation. The curve
+is taken to refer to the air density of the model inputs.
+% verify: reference air density in the turbine model inputs (expected 1.225 kg/m3)
+
+The turbine is rated below the machines installed in 2026, but its
+specific power is in the range of current low-wind rotors, and specific
+power, not rating, sets the shape of the power curve and the density
+(Equation~\ref{eq:theory_wind_pd}). A single curve keeps the turbine
+identical across cells, countries and members. The per-cell IEC class
+rule therefore does not select a curve; it is kept as a screening flag
+(Section~\ref{subsec:g1_class}). This method change is recorded in the
+METHODOLOGY changelog.
+
+Tier 2. Proxy: no.
+
+\subsubsection{Hub Height}
+
+The Weibull parameters and air density are read from the 100~m layer in
+the three countries, the layer nearest to the 110~m reference hub. The
+10~m difference is not corrected with a shear exponent. The 150~m layer
+is run once per country, in the reference climate, as a sensitivity case
+for the taller towers of recent installations.
+
+Tier 2. Proxy: no.
+
+\subsubsection{Design-Class Screening Flag}
+\label{subsec:g1_class}
+
+For each cell, the reference mean speed at 100~m
+(Equation~\ref{eq:wind_weibull_mean}) is compared with the class III
+limit $V_{\mathrm{ave}}=7.5$~m/s (Table~\ref{tab:wind_iec_classes}).
+Cells above it are flagged as exceeding the design envelope of the
+reference turbine. The flag is computed once from the reference climate,
+does not change across members and does not alter capacity factor or
+eligibility. It reports the share of potential located where a real
+project would use a stronger turbine. Extreme wind, turbulence and
+tropical-cyclone exposure are not assessed \cite{larsen2022}.
+
+Tier 1 (standard \cite{iec6140012025}). Proxy: no.
+
+\subsubsection{Air-Density Correction}
+
+The reference curve is stated at $\rho_0=1.225$~kg/m$^3$. The reference
+density of cell $i$ is the GWA layer at 100~m, $\rho^{\mathrm{ref}}_i$.
+For climate member $c$, density changes with temperature at constant
+pressure:
+\begin{equation}
+    \rho_{i,c} = \rho^{\mathrm{ref}}_i\,
+      \frac{T^{*}}{T^{*}+\Delta T_{i,c}},
+    \qquad T^{*}=288.15~\mathrm{K},
+    \label{eq:g1_density_member}
+\end{equation}
+where $\Delta T_{i,c}$ is the Stage F4 temperature change ($\Delta T=0$
+in the reference). Using the standard-atmosphere temperature $T^{*}$ in
+place of the local annual mean changes the density ratio by about 0.1\%
+for local means between 0 and 30\,$^\circ$C and warming up to 6~K, which
+is negligible against the other terms. The power curve is evaluated with
+Equation~\ref{eq:wind_density_correction}; the output is not rescaled
+again. One annual mean density per cell ignores the covariance between
+density and wind speed, and the GWA density and wind fields come from
+different reanalyses; both are limitations.
+
+Tier 1 (ideal-gas law and IEC 61400-12-1 convention
+\cite{iec61400122022}). Proxy: no.
+
+\subsubsection{Climate Forcing of the Resource}
+
+The Stage F4 wind-speed factor modifies the reference distribution as
+specified in METHODOLOGY (F4). Turbine, hub layer, density convention and
+losses are identical across members. The wind ensemble uses the five
+retained GCMs.
+
+\subsubsection{Technical Losses}
+
+Definition: retained fraction of gross energy after array wake,
+unavailability, internal electrical losses and blade soiling and erosion,
+$\eta$ in Equation~\ref{eq:wind_net_cf} (parameter eta\_loss in the
+code, a retention factor). Curtailment is not modeled in GeoFREA;
+long-term degradation is a Group 3 parameter. Enters: Stage F5 (central)
+and Stage F6 (sampled, U-03).
+
+\begin{table}[htbp]
+    \centering
+    \caption{Component losses of onshore wind and resulting retention.}
+    \label{tab:g1_wind_losses}
+    \small
+    \begin{tabular}{lccc}
+        \toprule
+        Component loss & Minimum & Central & Maximum \\
+        \midrule
+        Array wake                & 3.0\% & 7.5\% & 12.0\% \\
+        Availability              & 2.0\% & 3.0\% & 4.0\%  \\
+        Electrical collection     & 1.0\% & 2.0\% & 3.0\%  \\
+        Blade soiling and erosion & 1.0\% & 1.5\% & 2.0\%  \\
+        \midrule
+        Retention, $\eta$ & 0.932 & 0.866 & 0.803 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The component intervals are author judgment organized by the taxonomy of
+\cite{leefields2021}; no cited source reports these numbers for the three
+countries. Stage F6 samples $\eta$ uniformly on $[0.803,\,0.932]$; Stage
+F5 uses 0.866. The value is the same in the three countries.
+
+Tier 3. Proxy: no.
+% verify: compare component intervals with Lee and Fields (2021) before upgrading the tier
+
+\subsection{PV Yield and Temperature Coefficient (OQ-023)}
+\label{subsec:g1_pv_thermal}
+
+\subsubsection{Yield Model}
+
+Stage F5 takes the long-term specific yield of the Global Solar Atlas
+(PVOUT, kWh/kW$_{\mathrm{dc}}$ per day) as the reference, which already
+includes thermal and system losses of a fixed-tilt system under the
+reference climate. The capacity factor of cell $i$ in climate member $c$
+follows Equation~\ref{eq:pv_perturbation}:
+\begin{equation}
+    \mathrm{CF}_{i,c} = \frac{\mathrm{PVOUT}_i}{24}\,
+      \delta_{G,i,c}\,(1+\gamma\,\Delta T_{i,c}),
+    \label{eq:g1_pv_cf}
+\end{equation}
+where $\delta_{G,i,c}$ is the Stage F4 ratio of surface irradiance and
+$\Delta T_{i,c}$ the Stage F4 warming, both annual means
+($\delta_G=1$, $\Delta T=0$ in the reference). The model uses no wind
+input, so all six GCMs enter the solar ensemble.
+% verify: PVOUT layer definition and its loss assumptions in the Global Solar Atlas documentation (bib key to be added)
+
+\subsubsection{Temperature Coefficient of Maximum Power}
+
+Definition: $\gamma$ in Equations~\ref{eq:pv_thermal_factor} and
+\ref{eq:g1_pv_cf}. Unit: K$^{-1}$. Enters: Stage F5 (central) and Stage
+F6 (sampled, U-03).
+
+For the 2026 vintage the module class is n-type TOPCon, with
+$\gamma=-0.0030$~K$^{-1}$ and a uniform range $[-0.0032,\,-0.0028]$
+\cite{bamisile2025,itrpv2025}. PERC ($-0.0035$) and heterojunction
+($-0.0026$) are documented as alternative technology cases and are not
+run. The value is the same in the three countries. Because
+Equation~\ref{eq:g1_pv_cf} is linear in $\gamma$, Stage F6 samples it
+exactly from the stored terms $\mathrm{PVOUT}_i\,\delta_{G,i,c}/24$ and
+$\Delta T_{i,c}$. In the reference climate $\gamma$ has no effect, since
+the baseline yield already includes the thermal loss.
+
+Tier 2. Proxy: no.
+% verify: that bamisile2025 / itrpv2025 support the TOPCon interval
+
+\subsection{Plausibility References for Stage F5}
+\label{subsec:g1_plausibility}
+
+Modeled capacity factors are compared, never calibrated, against two
+kinds of reference. The first is the IRENA weighted average for plants
+commissioned in 2024: 17.4\% for utility-scale PV and 34\% for onshore
+wind worldwide, with country values where reported
+\cite{irena2025costs2024}. The second is the national fleet capacity
+factor computed from generation and average installed capacity of a
+defined year \cite{epeAnuario2025,ceaGeneration,dgegRenewables}.
+Both mix vintages, sites and curtailment
+(Section~\ref{subsec:cost_basis}); a cell-level distribution is expected
+to straddle them, not reproduce them. High values reported for recent
+Brazilian wind projects represent the best sites, not the fleet.
+
+\subsection{Summary}
+\label{subsec:g1_summary}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Group 1 parameters. Scenario values are restrictive /
+    central / permissive.}
+    \label{tab:g1_summary}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.4cm}
+        >{\raggedright\arraybackslash}p{1.7cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{1.2cm}
+        >{\centering\arraybackslash}p{0.7cm}@{}}
+        \toprule
+        Parameter & Unit & Value & Use & Tier \\
+        \midrule
+        LUF, PV, BRA and PRT & -- & 0.10 / 0.25 / 0.35 & scen. & 3 \\
+        LUF, PV, IND & -- & 0.05 / 0.10 / 0.25 & scen. & 3 \\
+        LUF, wind, BRA and PRT & -- & 0.05 / 0.15 / 0.30 & scen. & 3 \\
+        LUF, wind, IND & -- & 0.05 / 0.075 / 0.15 & scen. & 3 \\
+        PD, PV fixed-tilt & MW$_{\mathrm{dc}}$/km$^2$ & 45 / 50 / 75 & scen. & 2 \\
+        PD, wind & MW/km$^2$ & 3.32 / 4.99 / 7.12 & scen. & 2 \\
+        Reference turbine & -- & IEA 3.4-130 (3.37 MW, 130 m) & fixed & 2 \\
+        Resource layer & m & 100 (150 sensitivity) & fixed & 2 \\
+        Class flag threshold & m/s & 7.5 & flag & 1 \\
+        $\rho_0$; $\rho^{\mathrm{ref}}$; $T^{*}$ & kg/m$^3$; K & 1.225; GWA layer; 288.15 & fixed & 1 \\
+        $\eta$ (retention) & -- & 0.866, U[0.803, 0.932] & F6 & 3 \\
+        $\gamma$ (TOPCon) & K$^{-1}$ & $-0.0030$, U[$-0.0032$, $-0.0028$] & F6 & 2 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+No parameter in this group is a proxy, and none carries a price year.
+
+\subsection{Limitations}
+\label{subsec:g1_limitations}
+
+The residual LUF has no primary source in any country and dominates the
+spread of potential in GW and TWh/yr; results for H5 and for the
+comparison with national targets are conditional on it. PV density is
+transferred from United States plants of 2019 and is likely
+conservative for 2026 modules. The PV yield is a fixed-tilt baseline
+perturbed with annual means, so changes in the timing of warming and the
+effect of wind and irradiance on cell temperature are not represented,
+and tracking systems are not modeled. Wind losses rest on judgment. A
+single class III turbine is applied everywhere, rated below 2026
+machines; the class flag quantifies the share of potential where a
+stronger turbine would be chosen. The 100~m layer represents a 110~m
+hub. Air density uses annual means and a reanalysis different from the
+wind field. Inverter clipping and curtailment are not modeled. The plant
+is a 2026-vintage counterfactual evaluated under mid-century climate.
