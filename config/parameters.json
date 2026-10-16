@@ -19,7 +19,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 524/1312. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 524/1312. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -68,41 +68,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.042,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: Europe",
+            "tier": 2,
+            "range": {
+              "min": 0.032,
+              "max": 0.052,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "discount_rate above is already the final technology-specific value produced by IRENA's benchmark tool, not a base+premium construction. Kept at 0.0 for schema symmetry with biomass/future technologies, not because a premium was computed and found to be zero.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -271,7 +277,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -280,7 +286,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }
@@ -302,7 +308,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 1211/2232. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 1211/2232. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -351,41 +357,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.037,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: Europe",
+            "tier": 2,
+            "range": {
+              "min": 0.027,
+              "max": 0.047,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as solar: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -568,7 +580,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -577,7 +589,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }
@@ -603,7 +615,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 503/1152. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 503/1152. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -652,41 +664,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.077,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: South America",
+            "tier": 2,
+            "range": {
+              "min": 0.067,
+              "max": 0.087,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same as PRT: discount_rate above is already the final technology-specific benchmark-tool value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -855,7 +873,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -864,7 +882,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }
@@ -886,7 +904,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 1015/1628. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 1015/1628. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -935,41 +953,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.077,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: South America",
+            "tier": 2,
+            "range": {
+              "min": 0.067,
+              "max": 0.087,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-08-20",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as PRT/solar: discount_rate above is already the final technology-specific benchmark-tool value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -1152,7 +1176,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -1161,7 +1185,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }
@@ -1187,7 +1211,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 415/831. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 415/831. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -1236,41 +1260,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.04,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: Asia",
+            "tier": 2,
+            "range": {
+              "min": 0.03,
+              "max": 0.05,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054). The Asian regional value is dominated by China and likely understates the cost of capital in India (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-09-23",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as PRT/BRA: discount_rate above is already the final technology-specific value, not a base+premium construction. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -1439,7 +1469,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -1448,7 +1478,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }
@@ -1470,7 +1500,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 984/1270. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. 2024 cohort stands for the 2026 vintage.",
+            "note": "IRENA weighted average; sampling interval [P5, 2 x mean - P5] so the mean of the draws equals the IRENA mean (docs/thesis/methods/group2_core_costs.tex eq:g2_capex_interval). IRENA P5/P95: 984/1270. PV is per kW DC (IRENA p.92 note 27), no ILR conversion. The 2024 cohort is the technology vintage (t_ref = 2024).",
             "synthetic": false,
             "proxy": false,
             "price_year": 2024
@@ -1519,41 +1549,47 @@
             "range": {
               "min": 25.0,
               "max": 30.0,
+              "distribution": "discrete_uniform",
+              "source": "IRENA (2025), Renewable Power Generation Costs in 2024: economic life of the standardized LCOE (25 years) as the lower bound; NREL ATB 2024 technical lifetime (30 years) as the upper bound; docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Integer years 25 to 30, each with probability 1/6 (discrete uniform); the central value 30 sits at the upper end, so the uncertainty is one-sided by design. IRENA uses 25 years, so the central LCOE is lower than IRENA's for identical inputs.",
+            "synthetic": false,
+            "proxy": false
+          },
+          "discount_rate": {
+            "value": 0.038,
+            "unit": "fraction",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: Asia",
+            "tier": 2,
+            "range": {
+              "min": 0.028,
+              "max": 0.048,
               "distribution": "uniform",
-              "source": "Author judgment, docs/thesis/methods/group2_core_costs.tex subsec:g2_lifetime",
+              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
               "tier": 3
             },
             "verified": false,
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Range 25 to 30 is author judgment (contract tenor, repowering); the central value is at the upper end.",
+            "note": "Real after-tax discount rate, regional value of IRENA 2024 (conditions of 2023), constant over the plant life; real rates in constant 2024 USD need no nominal conversion (OQ-054). The Asian regional value is dominated by China and likely understates the cost of capital in India (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc).",
             "synthetic": false,
-            "proxy": false
-          },
-          "discount_rate": {
-            "value": null,
-            "unit": "fraction",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Removed 2026-10-16: the earlier IRENA benchmark-tool entry is not the nominal post-tax value of IRENA (2023) nor the real rate of the .tex; the author fixes the rate (OQ-022, docs/phases/F5/groups1-2_implementation_report.md).",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
+            "proxy": false,
+            "price_year": 2024
           },
           "discount_rate_increment": {
             "value": 0.0,
-            "source": "IRENA 2024, cost-of-capital benchmark tool methodology",
+            "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort)",
             "verified": true,
             "verified_by": "Douglas",
             "verified_date": "2026-09-23",
             "verification_method": "manual_cross_check",
-            "note": "Same reasoning as PRT/BRA/solar: discount_rate above is already the final technology-specific value. Kept at 0.0 for schema symmetry, not a computed zero premium.",
+            "note": "discount_rate above is already the final regional real after-tax WACC of IRENA 2024, not a base plus premium construction. Kept at 0.0 for schema symmetry, not because a premium was computed and found to be zero.",
             "unit": "fraction",
             "tier": 2,
             "proxy": false
@@ -1736,7 +1772,7 @@
             "proxy": false
           },
           "commissioning_year": {
-            "value": 2026,
+            "value": 2024,
             "unit": "year",
             "source": "docs/thesis/methods/group2_core_costs.tex subsec:g2_scope (t_ref, OQ-018)",
             "tier": 2,
@@ -1745,7 +1781,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Technology vintage. Costs of the 2024 IRENA cohort stand for it (no 2026 cohort exists). Documentation only: the kernel reads no year.",
+            "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
           }

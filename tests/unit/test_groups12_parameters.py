@@ -49,6 +49,15 @@ OPEX = {  # central, min, max of tab:g2_opex; PRT wind from the European rows of
     ("wind", "PRT"): (41 / 1659, 29 / 1659, 53 / 1659),
 }
 
+DISCOUNT = {  # central, min, max of tab:g2_wacc (IRENA 2024 regional real after-tax WACC)
+    ("solar", "BRA"): (0.077, 0.067, 0.087),
+    ("wind", "BRA"): (0.077, 0.067, 0.087),
+    ("solar", "IND"): (0.040, 0.030, 0.050),
+    ("wind", "IND"): (0.038, 0.028, 0.048),
+    ("solar", "PRT"): (0.042, 0.032, 0.052),
+    ("wind", "PRT"): (0.037, 0.027, 0.047),
+}
+
 
 def _tech(iso: str, tech: str):
     return getattr(PARAMS.countries[iso].technologies, tech)
@@ -108,15 +117,22 @@ def test_fixed_om_fraction_variable_om_zero_lifetime_and_year(tech, iso):
     assert t.opex_var_usd_per_mwh.value == 0.0 and t.opex_var_usd_per_mwh.price_year == 2024
     assert t.lifetime_years.value == 30
     assert (t.lifetime_years.range.min, t.lifetime_years.range.max) == (25.0, 30.0)
-    assert t.commissioning_year.value == 2026
+    assert t.lifetime_years.range.distribution == "discrete_uniform" and t.lifetime_years.range.tier == 2
+    assert t.commissioning_year.value == 2024
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("tech", ["solar", "wind"])
 @pytest.mark.parametrize("iso", COUNTRIES)
-def test_no_discount_rate_is_recorded_and_nothing_is_a_proxy(tech, iso):
+def test_the_discount_rate_is_the_regional_irena_2024_value_and_nothing_is_a_proxy(tech, iso):
     t = _tech(iso, tech)
-    assert t.discount_rate.value is None and t.discount_rate.range is None
+    value, low, high = DISCOUNT[(tech, iso)]
+    r = t.discount_rate
+    assert r.value == pytest.approx(value, abs=1e-9)
+    assert (r.range.min, r.range.max) == (pytest.approx(low, abs=1e-9), pytest.approx(high, abs=1e-9))
+    assert r.range.distribution == "uniform" and (r.tier, r.range.tier) == (2, 3)
+    assert "Figure 1.13" in r.source and r.price_year == 2024
+    assert r.verified is False and r.proxy is False
     for key, entry in t.__dict__.items():
         if hasattr(entry, "proxy"):
             assert entry.proxy is False, key
@@ -132,12 +148,11 @@ def test_the_design_rounds_the_lifetime_to_whole_years_so_the_crf_never_sees_a_f
 
 
 @pytest.mark.unit
-def test_the_loader_audit_leaves_no_f5_gap_and_only_discount_rate_and_group_3_for_f6():
+def test_the_loader_audit_leaves_no_f5_gap_and_only_degradation_and_group_3_for_f6():
     technologies = load_technologies(REPO / "config" / "technologies.yaml")
     audit = audit_parameters(PARAMS, technologies, list(COUNTRIES), ["solar", "wind"])
     f5 = {"luf", "power_density_mw_per_km2", "gamma", "eta_loss", "hub_height_m"}
     f6_open = {
-        "discount_rate",
         "degradation_rate",
         "grid_cost_usd_per_mw_km",
         "substation_cost_usd_per_mw",
@@ -147,7 +162,9 @@ def test_the_loader_audit_leaves_no_f5_gap_and_only_discount_rate_and_group_3_fo
     keys = {e.split(":")[0].split()[-1] for e in audit.errors}
     assert not keys & f5
     assert keys <= f6_open | f7
-    assert {"discount_rate", "degradation_rate", "grid_cost_usd_per_mw_km"} <= keys
+    assert "discount_rate" not in keys  # recorded: the validator sees it filled
+    assert not [e for e in audit.errors if "discount_rate" in e]
+    assert {"degradation_rate", "grid_cost_usd_per_mw_km"} <= keys
 
 
 REAL_CURVE_PATH = REPO / "config" / "turbines" / "iea_3.4_130.csv"
@@ -190,3 +207,27 @@ def test_the_real_countries_have_every_f5_input_and_the_real_curve_is_usable(iso
         assert set(resolved.scenario_parameters) == {"luf", "power_density_mw_per_km2"}
 
 
+@pytest.mark.unit
+def test_the_discrete_uniform_lifetime_gives_each_whole_year_from_25_to_30_a_frequency_of_one_sixth():
+    """10,000 draws of the recorded lifetime: every integer 25..30 has frequency 1/6 within 1 percentage point, and nothing else is drawn."""
+    t = _tech("BRA", "solar")
+    spec = UncertainSpec(
+        "lifetime_years",
+        t.lifetime_years.value,
+        t.lifetime_years.range.min,
+        t.lifetime_years.range.max,
+        t.lifetime_years.range.distribution,
+    )
+    draws = draw_lhs([spec], 10_000, seed=7)["lifetime_years"].iloc[1:]  # row 0 is the nominal vector
+    assert set(draws.unique()) == {25.0, 26.0, 27.0, 28.0, 29.0, 30.0}
+    frequency = draws.value_counts(normalize=True)
+    for year in range(25, 31):
+        assert frequency[float(year)] == pytest.approx(1 / 6, abs=0.01), year
+    design = build_design([spec], 200, seed=1)
+    assert (design["lifetime_years"] == np.round(design["lifetime_years"])).all()
+
+
+@pytest.mark.unit
+def test_a_discrete_uniform_range_needs_integer_bounds():
+    with pytest.raises(Exception, match="integer"):
+        UncertainSpec("lifetime_years", 30.0, 25.5, 30.0, "discrete_uniform")
