@@ -1,0 +1,61 @@
+{
+ "note": "SHA-256 of the F5 artifacts of the real run of 2026-10-16 (docs/phases/F5/run_report_real.md). Only PRT and IND were run; BRA was not (OQ-059).",
+ "methodology_version": "14.2.0",
+ "git_commit": "5f624d1fd3c61b4566f9f525df821b90a17112ea",
+ "countries": {
+  "PRT": {
+   "dir": "GEOFREA_DATA_DIR/outputs/PRT/technical_potential",
+   "files": {
+    "artifacts/capacity_factor_solar.tif": "67fc44bfa409f7a4cebb04cd28a959cc4b54659ec163ee0a6a346df11c2febc5",
+    "artifacts/capacity_factor_wind.tif": "2c7e826cf9ea9cc8b5dccdf2e9bcf62546d726de3dcc17c477374400b5c1403f",
+    "artifacts/class_flag_wind__central.parquet": "f346d8c9012d1442e4086c4a6b626ed98d46a80552919bfb80ae46715e61c950",
+    "artifacts/class_flag_wind__permissive.parquet": "a38d2f394c0f60ceab06b3fd4873bf37084b51e0cd26b114e11844b2ef51a559",
+    "artifacts/class_flag_wind__restrictive.parquet": "7d19d2068c08c30bdef78656b3fd2cc0e57afc4425bd15f6e17ea8c9722147dc",
+    "artifacts/potential_aggregates_solar.parquet": "c621f0ae2e92fb6f9f99279d64b0d48eec99a5e014fdc40187a9c14a59cd0455",
+    "artifacts/potential_aggregates_wind.parquet": "4e1d875902ebe1fc1e6512072bc7f3e8a82af6d2027bf3479e896cfd66f1f602",
+    "artifacts/potential_density_solar.tif": "ec90b827b7919f20d4b7d025fa574526ada97b24a9e8cdd89a10e50d73133cef",
+    "artifacts/potential_density_wind.tif": "500714f9b2630b839ad335f67ce887b95afecd228a24a59422cc721523e78fb6",
+    "artifacts/potential_solar__central.parquet": "842afb10777395e38e4b130992bd3ae6429d9cbfd56d95dc020ca0fda0832b1f",
+    "artifacts/potential_solar__permissive.parquet": "988f8b384dd9e551de3a72f3d5e347dbba1e2d3e67bdbcfbc8e40c265a625c5a",
+    "artifacts/potential_solar__restrictive.parquet": "22a130238fdcb011a6a123a645d2d303527f3bbca65afc853d6a823a81e20836",
+    "artifacts/potential_wind__central.parquet": "6cf41959a674f1190cc083b8d9d354d160424e8c87608c60c7ea21d10145ea70",
+    "artifacts/potential_wind__permissive.parquet": "a1ac5c19858dcd193871718d63619fadd59744e06c3332f72a7866ad22d6bbb7",
+    "artifacts/potential_wind__restrictive.parquet": "c4f9b81f7b215a9eb7d4c7fdd390fb30edec53e43ba11e69d5e78c7dd8ec6c0a",
+    "sensitivity_150m/class_flag_wind__central.parquet": "f346d8c9012d1442e4086c4a6b626ed98d46a80552919bfb80ae46715e61c950",
+    "sensitivity_150m/class_flag_wind__permissive.parquet": "a38d2f394c0f60ceab06b3fd4873bf37084b51e0cd26b114e11844b2ef51a559",
+    "sensitivity_150m/class_flag_wind__restrictive.parquet": "7d19d2068c08c30bdef78656b3fd2cc0e57afc4425bd15f6e17ea8c9722147dc",
+    "sensitivity_150m/potential_aggregates_wind.parquet": "2ef12ff8d35d67e3e4f6fef41613d717804805fa0fd5deabf0bdf2cb9e9d996f",
+    "sensitivity_150m/potential_wind__central.parquet": "61b9a0f379336834b0870eecc1fa382814ead9a26fb3560e4f65dfdc8d0c1aec",
+    "sensitivity_150m/potential_wind__permissive.parquet": "625971702a9350c90909abdb28e4a8aee25923822e08886d87c1bb4672ff0069",
+    "sensitivity_150m/potential_wind__restrictive.parquet": "477effc1a306b06247371a5518d98f6b79e54cf712e7ad8cabd8841d1cd322ec"
+   }
+  },
+  "IND": {
+   "dir": "GEOFREA_DATA_DIR/outputs/IND/technical_potential",
+   "files": {
+    "artifacts/capacity_factor_solar.tif": "6b2f10e477ffa92c872b393645b8415d574790f222846b9711024720246c1bfc",
+    "artifacts/capacity_factor_wind.tif": "d8efaa8afa4539129d08dc0a9e0affe426a90f40d6a567759a41fc063e0afe94",
+    "artifacts/class_flag_wind__central.parquet": "e90a5d3e619f0bfdc8d181f374ae0972fccc2763207c6a4ee2643f7a46081cb8",
+    "artifacts/class_flag_wind__permissive.parquet": "784570231381f5b31d48e8bad22c96933c00aefe987a2941ba4c24b04f71dff6",
+    "artifacts/class_flag_wind__restrictive.parquet": "8dadbc962f18961483a6f86b81e4c2b930744b3cbac60b5a96e96088882c8a2d",
+    "artifacts/potential_aggregates_solar.parquet": "e209b2c0e6cda58c711dfa96af16c2a53001c953c6aa611576238e6917a39155",
+    "artifacts/potential_aggregates_wind.parquet": "079cd07f17f545f5ec709928b7f9777d5a5bd3a73bf48391681c396460247f3e",
+    "artifacts/potential_density_solar.tif": "c90ca080b6079821851da4fc930c68a4e51f83dbac0b7a885f3caf9da04d7e3c",
+    "artifacts/potential_density_wind.tif": "a9ea7a9dc49848a09282a73cce30bc9f7eba3b1365eb2a1988dfa9f4172e3094",
+    "artifacts/potential_solar__central.parquet": "aedf95df2375e337afca5f6bf42d9510159803e18ccef75571c4d76b3b518e7e",
+    "artifacts/potential_solar__permissive.parquet": "91f3fe78055b449cc2d0ab90c5d288a67168b7df1a252bd7a5a27a54e59ed1b9",
+    "artifacts/potential_solar__restrictive.parquet": "33bb40c369a649712d2fe71a347785554e000a8f0fa7da369cb1128a67a8a62b",
+    "artifacts/potential_wind__central.parquet": "8dc29edb0671fa11e07d0753c92500fecf76d1f4cb0a021d5df1fffed9a4c1e1",
+    "artifacts/potential_wind__permissive.parquet": "7ef032ba49e312b1fa4efc07e4cc41d97d6258afa0f1dce5ad41eec80fd2d1bb",
+    "artifacts/potential_wind__restrictive.parquet": "b95a693e62424fa329eec029d3cd8c8a350024acbbaab37647314867519bbd22",
+    "sensitivity_150m/class_flag_wind__central.parquet": "e90a5d3e619f0bfdc8d181f374ae0972fccc2763207c6a4ee2643f7a46081cb8",
+    "sensitivity_150m/class_flag_wind__permissive.parquet": "784570231381f5b31d48e8bad22c96933c00aefe987a2941ba4c24b04f71dff6",
+    "sensitivity_150m/class_flag_wind__restrictive.parquet": "8dadbc962f18961483a6f86b81e4c2b930744b3cbac60b5a96e96088882c8a2d",
+    "sensitivity_150m/potential_aggregates_wind.parquet": "8526e8c87486adc3190542792fb61422b6d247b7fdc4f6215128a77c3e7a1e64",
+    "sensitivity_150m/potential_wind__central.parquet": "493cbc52c6f8b12a6b750001d63c25e644cba73f456c031d80648eebe3244ca4",
+    "sensitivity_150m/potential_wind__permissive.parquet": "8e2eb26d85f4a1d57cf57368206de257af60aef5a3e2209b012db31aa85d3d71",
+    "sensitivity_150m/potential_wind__restrictive.parquet": "a5eecd0755effbf1f66aea3592cf5814c4806475ceb7b83ae5b25304d0103aae"
+   }
+  }
+ }
+}
