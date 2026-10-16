@@ -49,6 +49,11 @@ IDS = np.arange(500, 500 + N_CELLS)
 def _experiments(**sampler) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"].update({"initial_size": 24, **sampler})
+    # the real configuration excludes wind above 3000 m in F3 (OQ-058, COMMAND 46); these tests exercise the altitude-window machinery,
+    # which a technology with a reporting sensitivity still has, so wind reports 3000 m as a sensitivity here
+    raw["land_availability"]["technologies"]["wind"]["elevation_max_m"].update(
+        {"nominal": None, "sensitivity": 3000.0}
+    )
     raw["prim"]["bootstrap_replicates"] = (
         6  # the bootstrap of the pre-registered 200 replicates is tested apart
     )
@@ -446,8 +451,8 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
             )  # fmt: skip
         text = str(info.value)
         assert text.count("cf_min") == 2 and "OQ-008" in text
-        # Groups 1 and 2 are recorded: what stays open is the discount rate, the Group 3 costs and the F7 thresholds
-        assert "discount_rate" in text and "grid_cost_usd_per_mw_km" in text
+        # Groups 1 and 2 are recorded: what stays open is the Group 3 costs and the F7 thresholds (the discount rate is recorded)
+        assert "grid_cost_usd_per_mw_km" in text
         assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 18
 
 

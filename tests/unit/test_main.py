@@ -149,9 +149,7 @@ def test_lcoe_modeling_reads_the_potential_of_every_land_scenario_forcing_and_me
             for tech in ("solar", "wind")
             for scenario in ("restrictive", "permissive")
         }
-        | {
-            "supply_curve_wind__below_elevation"
-        }  # OQ-058: the supply curve without the cells above 3000 m
+        # no altitude sensitivity: the cells above 3000 m are not candidates (OQ-058, COMMAND 46), so there is no `__below` curve
     )
     assert f6.requires <= specs["technical_potential"].produces | specs[
         "climate_forcing"
@@ -846,8 +844,7 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
             for role in ("core", "sensitivity")
             for kind in ROW_MODELS
         }
-        # the altitude sensitivity of wind (OQ-058): the core window again without the cells above 3000 m
-        | {f"{kind}_wind__core_below_3000m" for kind in ROW_MODELS}
+        # no altitude sensitivity window: the cells above 3000 m are not candidates (OQ-058, COMMAND 46)
     )
 
 

@@ -57,7 +57,8 @@ class ParameterRange(BaseModel):
     Args:
         min: Minimum value in the range.
         max: Maximum value in the range. Must be >= min.
-        distribution: Distribution type ('uniform' or 'triangular').
+        distribution: Distribution type: 'uniform', 'triangular', or 'discrete_uniform' (the integers from min to max with equal
+            probability, for a count of whole years such as the lifetime; min and max are integers).
         source: Citation for where the range comes from.
         tier: Evidence tier (1, 2, 3, or null) for the range itself
             (may differ from the nominal value's tier).
@@ -67,7 +68,7 @@ class ParameterRange(BaseModel):
 
     min: float
     max: float
-    distribution: Literal["uniform", "triangular"]
+    distribution: Literal["uniform", "triangular", "discrete_uniform"]
     source: str
     tier: Literal[1, 2, 3] | None = None
 
@@ -75,6 +76,10 @@ class ParameterRange(BaseModel):
     def _min_max_ordered(self) -> ParameterRange:
         if self.min > self.max:
             raise ValueError(f"min ({self.min}) must be <= max ({self.max}).")
+        if self.distribution == "discrete_uniform" and (
+            self.min != int(self.min) or self.max != int(self.max)
+        ):
+            raise ValueError("a discrete_uniform range has integer min and max.")
         return self
 
 

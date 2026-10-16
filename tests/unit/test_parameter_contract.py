@@ -118,8 +118,8 @@ def test_uncertain_parameter_requires_range_in_production():
     # the recorded parameters carry a value and a range for what Group 1 and 2 set
     ok = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
     assert not any("capex_usd_per_kw" in e or "gamma" in e for e in ok.errors)
-    # the discount rate is not recorded yet (OQ-022): a production run refuses it
-    assert "PRT solar discount_rate: uncertain parameter has no value" in ok.errors
+    # the discount rate is recorded (OQ-022 closed); the degradation is not, and a production run refuses it
+    assert "PRT solar degradation_rate: uncertain parameter has no value" in ok.errors
 
 
 @pytest.mark.unit

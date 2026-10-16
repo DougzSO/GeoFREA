@@ -217,15 +217,17 @@ land_availability:
         unit: km2
         source: "ENSPRESO 2 (JRC144438): 10 ha suitable land for one 3 MW turbine"
         status: range_pending
-      # OQ-058 (Douglas, 2026-10-14): no altitude limit in the central case (null). `sensitivity` is the value of the reported sensitivity
-      # (F5 to F8 also report the result without the cells above it); it has no source (Tier 3, LIMITATIONS) and never enters a scenario.
+      # OQ-058 (Douglas, 2026-10-16, COMMAND 46): wind cells whose elevation is above `nominal` are not candidates in any land scenario
+      # (F3 excludes them, so F4 to F8 never see them). In practice only India has any (PRT and BRA stay below 2,000 m). The limit has no
+      # source (Tier 3, LIMITATIONS); the sourced criterion stays OQ-058. `sensitivity` is null: the result with the cells is the
+      # sensitivity, recorded in docs/phases/F5/fix_round_46.md from the F5 run that did not exclude them.
       elevation_max_m:
-        nominal: null
-        sensitivity: 3000.0
+        nominal: 3000.0
+        sensitivity: null
         unit: m
         source: null
         tier: 3
-        status: sensitivity_unsourced
+        status: excluded_unsourced
         note: "Cell elevation is the eligible-area-weighted mean of the aligned 30 m DEM. A sourced limit (IEC site conditions, turbine datasheets, density derating) is OQ-058."
       excluded_classes:
         nominal: forest_excluded

@@ -138,6 +138,10 @@ class TechSummary(BaseModel):
     # Weibull shape is below 1 at each data height (an empty mapping for a technology without Weibull layers); counted, never excluded
     elevation_sensitivity_m: float | None = None
     n_candidates_above_elevation_sensitivity: int | None = None
+    # OQ-058, COMMAND 46: the altitude limit in force (cells above it are not candidates in any scenario) and the cells of the central
+    # scenario it removed, that is, the ones that would have been candidates by area (None: the technology has no limit)
+    elevation_max_m: float | None = None
+    n_cells_excluded_by_elevation: int | None = None
     n_candidates_weibull_k_below_1: dict[str, int] = {}
 
 
@@ -618,6 +622,25 @@ def build_eligibility(
         valid = valid_pixels(layers)
         total_area = float(cells["cell_area_km2"].sum())
         sensitivity_m = elevation_sensitivity_m(la, tech)
+        limit_m = params.elevation_max_m
+        n_excluded_by_elevation = (
+            None
+            if limit_m is None
+            else int(
+                (
+                    (central["cells"]["eligible_area_km2"] >= params.min_eligible_area_km2)
+                    & (central["cells"][ELEVATION_COLUMN] > limit_m)
+                ).sum()
+            )
+        )
+        if limit_m is not None:
+            logger.info(
+                "%s %s: %d central cells with enough eligible area lie above %.0f m and are not candidates (OQ-058)",
+                iso,
+                tech,
+                n_excluded_by_elevation,
+                limit_m,
+            )
         k_below_1 = {
             col: int((candidates[col] < 1.0).sum())
             for col in sorted(candidates.columns)
@@ -668,6 +691,8 @@ def build_eligibility(
             if sensitivity_m is None
             else int((candidates[ELEVATION_COLUMN] > sensitivity_m).sum()),
             n_candidates_weibull_k_below_1=k_below_1,
+            elevation_max_m=limit_m,
+            n_cells_excluded_by_elevation=n_excluded_by_elevation,
         )
     return EligibilitySummary(country_code=iso, technologies=summaries)
 

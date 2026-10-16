@@ -106,7 +106,8 @@ layers:
 #                         DEM elevation and h the layer height above ground (ISO 2533 troposphere; constants in core/constants.py),
 #                         widened by `tolerance_rel` on each side: [(1 - t) * lower, (1 + t) * upper]
 #   country_bbox_diagonal distance to the grid or to the roads: [0, diagonal of the country's bounding box]
-# Weibull A and k have no derivation: a range needs a sourced reading of the Global Wind Atlas documentation (OQ-053).
+# Weibull A and k have no derivation: a checked range needs a sourced reading of the Global Wind Atlas documentation (OQ-053). Until then
+# F5 marks and counts the cells outside a Tier 3 `flag_range` (data-quality control; no cell is removed, clipped or rejected).
 # PVOUT keeps the range under `layers.solar.sanity_range` above.
 derived_ranges:
   air_density:
@@ -122,8 +123,14 @@ derived_ranges:
     source: "geometry of the F2a aligned grid of the country (no external source)"
   weibull_a:
     open_question: "OQ-053"
+    flag_range: [1.0, 15.0]  # m/s
+    flag_tier: 3
+    flag_source: "Douglas, verdict of 2026-10-16 (COMMAND 46): data-quality control for the 100 m layer, extended to the other heights of the layer by the same numbers; no source."
   weibull_k:
     open_question: "OQ-053"
+    flag_range: [1.0, 4.0]  # dimensionless
+    flag_tier: 3
+    flag_source: "Douglas, verdict of 2026-10-16 (COMMAND 46): data-quality control for the 100 m layer, extended to the other heights of the layer by the same numbers; no source."
 
 # Per-country override (AuditConfig.country_overrides, A-06/D-core-018):
 # ZZZ's fixture rasters are generated at whatever resolution

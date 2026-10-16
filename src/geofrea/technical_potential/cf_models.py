@@ -59,6 +59,8 @@ class PreparedCf(Protocol):
     # Per candidate cell: True where the reference mean speed exceeds the class limit (fixed across members); `None` without a flag.
     class_flag: np.ndarray | None
     v_ave_ms: np.ndarray | None
+    # Per candidate cell: the reference air density at the hub height, kg/m3; `None` for a model without a density input.
+    rho_ref: np.ndarray | None
 
     def member(
         self, rows: np.ndarray, delta_rsds: np.ndarray, d_t: np.ndarray, delta_wind: np.ndarray
@@ -98,6 +100,7 @@ class _PvoutPrepared:
     gamma: float
     class_flag: np.ndarray | None = None
     v_ave_ms: np.ndarray | None = None
+    rho_ref: np.ndarray | None = None
 
     def member(self, rows, delta_rsds, d_t, delta_wind):
         return solar_cf_member(self.cf0[rows], delta_rsds, d_t, self.gamma)

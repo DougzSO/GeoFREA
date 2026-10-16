@@ -594,10 +594,10 @@ def test_supply_curve_function_ties_by_cell_id_and_puts_infinite_last():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
-def test_real_countries_fail_loud_listing_the_discount_rate_and_the_group_3_costs(
+def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_the_degradation(
     iso, registry, parameters, tmp_path
 ):
-    """Groups 1 and 2 are recorded; F6 still lists exactly what is open (the discount rate and the Group 3 costs), before reading any input."""
+    """Groups 1 and 2 are recorded; F6 still lists exactly what is open (the degradation and the Group 3 costs; the discount rate is recorded), before reading any input."""
     with pytest.raises(LcoeMissingInputError) as caught:
         build_lcoe(
             iso, registry, parameters.countries[iso], TECHS,
@@ -612,7 +612,6 @@ def test_real_countries_fail_loud_listing_the_discount_rate_and_the_group_3_cost
             f"{tech}: grid_cost_usd_per_mw_km (pending_research)",
             f"{tech}: substation_cost_usd_per_mw (pending_research)",
             f"{tech}: road_cost_usd_per_km (pending_research)",
-            f"{tech}: discount_rate (pending_research)",
         ):
             assert item in message, item
         for recorded in ("capex_usd_per_kw", "opex_fixed_frac", "opex_var_usd_per_mwh", "lifetime_years"):

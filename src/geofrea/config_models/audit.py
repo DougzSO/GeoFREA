@@ -49,6 +49,11 @@ class DerivedRangeConfig(BaseModel):
     open_question: str | None = None
     tolerance_rel: float | None = Field(default=None, gt=0.0, lt=1.0)
     tolerance_justification: str | None = None
+    # A data-quality flag range (OQ-053): cells outside are marked and counted, never removed or clipped, and no error is raised.
+    # It is a Tier 3 control with no derivation, so the layer still has no checked range and the open question stays.
+    flag_range: tuple[float, float] | None = None
+    flag_tier: int | None = None
+    flag_source: str | None = None
 
     @model_validator(mode="after")
     def _derivation_with_source_or_an_open_question(self) -> DerivedRangeConfig:
@@ -60,6 +65,13 @@ class DerivedRangeConfig(BaseModel):
             )
         if (self.tolerance_rel is None) != (self.tolerance_justification is None):
             raise ValueError("tolerance_rel and tolerance_justification are both set or both null")
+        if self.flag_range is not None:
+            if self.flag_range[0] >= self.flag_range[1]:
+                raise ValueError("flag_range is (low, high) with low below high")
+            if self.flag_tier is None or self.flag_source is None:
+                raise ValueError("a flag range declares its tier and its source")
+            if self.derivation is not None:
+                raise ValueError("a layer with a derivation does not also declare a flag range")
         if self.tolerance_rel is not None and self.derivation != "iso2533_envelope":
             raise ValueError(
                 "a relative tolerance is declared only on the iso2533_envelope derivation"

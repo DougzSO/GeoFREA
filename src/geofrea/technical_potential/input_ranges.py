@@ -7,8 +7,9 @@ k, air density, PVOUT) and the two distances. Each column is checked against:
 - air density at height `h`: the ISO 2533 envelope of the country's elevation span at `h`, widened by the declared relative
   quality-control tolerance (`derived_ranges.air_density`, `siting_layers/sanity.py`);
 - distance to the grid and to the roads: `[0, diagonal of the country's bounding box]`;
-- Weibull A and k: no range exists yet (OQ-053). A layer without a range is reported as a **warning**, never an error, and its values
-  are not checked here.
+- Weibull A and k: no checked range exists yet (OQ-053). They carry a Tier 3 **flag range** (`audit.yaml`): the cells outside it are
+  marked and counted (`count_outside_flag_range`), never removed, clipped or rejected, and the log line is information, not a warning. A
+  layer with neither a range nor a flag range is reported as a **warning**, never an error, and its values are not checked here.
 
 A value outside a range, or not finite, raises `InputRangeError`, naming the technology, scenario, layer, how many candidate cells,
 the extreme values, the range and where it comes from. Nothing is clipped or corrected (A-09).
@@ -50,10 +51,17 @@ class InputRange:
     high: float | None
     source: str
     open_question: str | None = None
+    flag_low: float | None = None
+    flag_high: float | None = None
+    flag_tier: int | None = None
 
     @property
     def is_open(self) -> bool:
         return self.low is None
+
+    @property
+    def has_flag_range(self) -> bool:
+        return self.flag_low is not None
 
 
 def resolve_input_ranges(
@@ -94,8 +102,16 @@ def resolve_input_ranges(
         if config is None:
             raise InputRangeError(f"audit.yaml derived_ranges has no entry for {kind!r} ({column})")
         if config.derivation is None:
+            flag = config.flag_range
             ranges[column] = InputRange(
-                column, None, None, "no range declared", open_question=config.open_question
+                column,
+                None,
+                None,
+                "no range declared" if flag is None else f"flag range only: {config.flag_source}",
+                open_question=config.open_question,
+                flag_low=None if flag is None else float(flag[0]),
+                flag_high=None if flag is None else float(flag[1]),
+                flag_tier=config.flag_tier,
             )
             continue
         derived = derived_range(kind, geometry, height, config.tolerance_rel or 0.0)
@@ -117,7 +133,7 @@ def resolve_input_ranges(
 def warn_unranged(iso: str, technology: str, ranges: Mapping[str, InputRange]) -> None:
     """One warning per layer that has no range yet; its values are not checked."""
     for column, rng in ranges.items():
-        if rng.is_open:
+        if rng.is_open and not rng.has_flag_range:
             logger.warning(
                 "%s %s: %s has no sanity range (%s); its values are not range-checked",
                 iso,
@@ -125,6 +141,35 @@ def warn_unranged(iso: str, technology: str, ranges: Mapping[str, InputRange]) -
                 column,
                 rng.open_question,
             )
+
+
+def count_outside_flag_range(
+    frame: pd.DataFrame, ranges: Mapping[str, InputRange], columns: list[str]
+) -> tuple[np.ndarray, dict[str, int]]:
+    """The cells of `frame` outside the Tier 3 flag range of any of `columns`, and the count per column (OQ-053).
+
+    Nothing is removed or changed: the caller marks the cells and reports the counts. A value that is not finite is outside.
+
+    Args:
+        frame: Candidate table.
+        ranges: Result of `resolve_input_ranges`.
+        columns: The columns to test (the Weibull layers at the hub height); those without a flag range are skipped.
+
+    Returns:
+        Boolean array (n_cells,) that is true where any tested column is outside, and `{column: n cells outside}`.
+    """
+    outside = np.zeros(len(frame), dtype=bool)
+    counts: dict[str, int] = {}
+    for column in columns:
+        rng = ranges.get(column)
+        if rng is None or not rng.has_flag_range or column not in frame.columns:
+            continue
+        assert rng.flag_low is not None and rng.flag_high is not None
+        values = frame[column].to_numpy(dtype="float64")
+        bad = ~np.isfinite(values) | (values < rng.flag_low) | (values > rng.flag_high)
+        counts[column] = int(bad.sum())
+        outside |= bad
+    return outside, counts
 
 
 def validate_candidates(

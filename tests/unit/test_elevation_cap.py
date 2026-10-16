@@ -19,19 +19,15 @@ EXPERIMENTS = Path(__file__).resolve().parents[2] / "config" / "experiments.yaml
 
 
 @pytest.mark.unit
-def test_the_real_configuration_has_no_central_limit_and_a_unsourced_tier_3_sensitivity_for_wind_only():
+def test_the_real_configuration_excludes_wind_above_3000_m_as_an_unsourced_tier_3_limit_and_solar_has_none():
     la = load_land_availability(EXPERIMENTS)
     cap = la.technologies["wind"].elevation_max_m
-    assert cap is not None and cap.nominal is None and cap.sensitivity == 3000.0
-    assert cap.tier == 3 and cap.source is None and cap.status == "sensitivity_unsourced"
+    assert cap is not None and cap.nominal == 3000.0 and cap.sensitivity is None
+    assert cap.tier == 3 and cap.source is None and cap.status == "excluded_unsourced"
     assert la.technologies["solar"].elevation_max_m is None
-    assert (
-        nominal_set(la.technologies["wind"]).elevation_max_m is None
-    )  # no exclusion in the central case
-    assert (
-        elevation_sensitivity_m(la, "wind") == 3000.0
-        and elevation_sensitivity_m(la, "solar") is None
-    )
+    assert nominal_set(la.technologies["wind"]).elevation_max_m == 3000.0  # excluded in the central case
+    assert nominal_set(la.technologies["solar"]).elevation_max_m is None
+    assert elevation_sensitivity_m(la, "wind") is None and elevation_sensitivity_m(la, "solar") is None
 
 
 @pytest.mark.unit

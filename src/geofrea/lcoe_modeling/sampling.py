@@ -28,15 +28,19 @@ class UncertainSpec:
     nominal: float
     low: float
     high: float
-    distribution: str  # "uniform" | "triangular" (mode at the nominal value)
+    distribution: str  # "uniform" | "triangular" (mode at the nominal value) | "discrete_uniform" (the integers low..high, equal probability)
 
     def __post_init__(self) -> None:
         if not self.low <= self.nominal <= self.high:
             raise SamplingError(
                 f"{self.name}: nominal {self.nominal} lies outside [{self.low}, {self.high}]"
             )
-        if self.distribution not in ("uniform", "triangular"):
+        if self.distribution not in ("uniform", "triangular", "discrete_uniform"):
             raise SamplingError(f"{self.name}: unknown distribution {self.distribution!r}")
+        if self.distribution == "discrete_uniform" and (
+            self.low != int(self.low) or self.high != int(self.high)
+        ):
+            raise SamplingError(f"{self.name}: a discrete_uniform range has integer bounds")
 
 
 def _transform(u: np.ndarray, spec: UncertainSpec) -> np.ndarray:
@@ -45,6 +49,9 @@ def _transform(u: np.ndarray, spec: UncertainSpec) -> np.ndarray:
         return np.full_like(u, spec.low)
     if spec.distribution == "uniform":
         return spec.low + u * width
+    if spec.distribution == "discrete_uniform":  # the integers low..high with equal probability (u is in [0, 1))
+        n_values = int(width) + 1
+        return spec.low + np.minimum(np.floor(u * n_values), n_values - 1)
     return triang.ppf(u, c=(spec.nominal - spec.low) / width, loc=spec.low, scale=width)
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import json
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,7 @@ from geofrea.technical_potential.cf_models import (
 from geofrea.technical_potential.iec_class import IecClassError, exceeds_class
 from geofrea.technical_potential.input_ranges import (
     InputRangeError,
+    count_outside_flag_range,
     resolve_input_ranges,
     validate_candidates,
 )
@@ -47,7 +49,19 @@ from geofrea.technical_potential.wind_profile import HubHeightError, resource_at
 REPO = Path(__file__).resolve().parents[2]
 PARAMETERS = REPO / "config" / "parameters.json"
 TECHNOLOGIES = REPO / "config" / "technologies.yaml"
-EXPERIMENTS = REPO / "config" / "experiments.yaml"
+_REAL_EXPERIMENTS = REPO / "config" / "experiments.yaml"
+# The real configuration excludes the wind cells above 3,000 m in F3 (OQ-058), so F5 has no altitude-sensitivity rows. The machinery that writes
+# those rows (`central__below_<m>m`) is still part of F5 and is exercised on a copy of the configuration that reports the sensitivity instead.
+_SENSITIVITY_TEXT = (
+    _REAL_EXPERIMENTS.read_text(encoding="utf-8")
+    .replace("\r\n", "\n")
+    .replace(
+        "nominal: 3000.0\n        sensitivity: null", "nominal: null\n        sensitivity: 3000.0"
+    )
+)
+assert "sensitivity: 3000.0" in _SENSITIVITY_TEXT
+EXPERIMENTS = Path(tempfile.mkdtemp(prefix="geofrea_f5_exp_")) / "experiments.yaml"
+EXPERIMENTS.write_text(_SENSITIVITY_TEXT, encoding="utf-8")
 REAL_CURVES_DIR = REPO / "config" / "turbines"
 FIXTURE_CURVES = REPO / "tests" / "fixtures" / "power_curves"
 # V-04: F5 validates the candidate tables against audit.yaml. The ZZZ override of PVOUT (a constant 4.5) is dropped because these
@@ -688,7 +702,14 @@ def test_the_flag_is_written_per_cell_fixed_across_members_and_changes_no_capaci
     """The flag reads the 100 m layer in the reference climate; the cells and the capacity factor are those of a run without it."""
     summary, out = run_ok
     flag = pd.read_parquet(out / "class_flag_wind__central.parquet").sort_values("cell_id")
-    assert list(flag.columns) == ["cell_id", "v_ave_ms", "exceeds_class"]
+    assert list(flag.columns) == [
+        "cell_id",
+        "v_ave_ms",
+        "exceeds_class",
+        "weibull_outside_flag_range",
+        "density_ratio_isa",
+        "density_outside_isa_check",
+    ]
     expected = weibull_mean_speed(A100, K100)
     np.testing.assert_allclose(flag["v_ave_ms"], expected, rtol=1e-14)
     assert flag["exceeds_class"].tolist() == (expected > FLAG_THRESHOLD_MS).tolist()
@@ -829,26 +850,53 @@ def test_every_layer_outside_its_range_is_listed_in_one_error(tmp_path, registry
 
 
 @pytest.mark.unit
-def test_weibull_layers_without_a_range_warn_and_do_not_raise(
+def test_weibull_layers_have_a_tier_3_flag_range_that_marks_and_counts_and_never_removes_or_raises(
     tmp_path, registry, synthetic_params, caplog
 ):
-    """Weibull A and k have no range yet (OQ-053): F5 does not range-check them and warns, naming the open question."""
+    """OQ-053: A in [1, 15] m/s and k in [1, 4] are a data-quality flag (Tier 3). A cell outside is marked and counted, kept in the
+    potential, logged as information (not a warning), and the layers at the hub height are the ones tested."""
     land, climate = _write_inputs(tmp_path / "in")
-    _corrupt(
-        land, "wind", "weibull_a_100m", 5000.0
-    )  # a wild value: no range, so no error from the range check
-    with caplog.at_level("WARNING", logger="geofrea.technical_potential.input_ranges"):
-        build_potential(
+    _corrupt(land, "wind", "weibull_a_100m", 5000.0)  # a wild value: no checked range, so no error
+    with caplog.at_level("INFO", logger="geofrea.technical_potential"):
+        summary = build_potential(
             "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
             candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
-    text = caplog.text
-    for column in ("weibull_a_100m", "weibull_k_150m", "weibull_a_200m"):
-        assert column in text
-    assert (
-        text.count("weibull_a_100m has no sanity range") == 1
-    )  # once per technology, not once per scenario
-    assert "OQ-053" in text and "air_density_100m has no" not in text
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert not warnings, [r.getMessage() for r in warnings]
+    central = summary.technologies["wind"].scenarios["central"]
+    assert central.n_weibull_outside_flag_range == 1
+    table = pd.read_parquet(tmp_path / "out" / "potential_wind__central.parquet")
+    assert table["cell_id"].nunique() == central.n_candidate_cells  # nothing removed
+    flag = pd.read_parquet(tmp_path / "out" / "class_flag_wind__central.parquet")
+    assert int(flag["weibull_outside_flag_range"].sum()) == 1
+    assert any("outside the Tier 3 Weibull flag range" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.unit
+def test_the_weibull_flag_ranges_are_those_of_the_verdict_and_apply_to_every_height():
+    ranges = resolve_input_ranges(
+        "ZZZ", AUDIT, GEOMETRY, [f"weibull_{v}_{h}m" for v in "ak" for h in (100, 150, 200)]
+    )
+    for h in (100, 150, 200):
+        a, k = ranges[f"weibull_a_{h}m"], ranges[f"weibull_k_{h}m"]
+        assert (a.flag_low, a.flag_high, a.flag_tier) == (1.0, 15.0, 3)
+        assert (k.flag_low, k.flag_high, k.flag_tier) == (1.0, 4.0, 3)
+        assert a.is_open and a.open_question == "OQ-053"  # still no checked range
+
+
+@pytest.mark.unit
+def test_count_outside_flag_range_counts_each_side_and_non_finite_values():
+    ranges = resolve_input_ranges("ZZZ", AUDIT, GEOMETRY, ["weibull_a_100m", "weibull_k_100m"])
+    frame = pd.DataFrame(
+        {
+            "weibull_a_100m": [0.99, 1.0, 8.0, 15.0, 15.01, np.nan],
+            "weibull_k_100m": [2.0, 2.0, 0.5, 2.0, 2.0, 4.01],
+        }
+    )
+    outside, counts = count_outside_flag_range(frame, ranges, ["weibull_a_100m", "weibull_k_100m"])
+    assert counts == {"weibull_a_100m": 3, "weibull_k_100m": 2}
+    assert outside.tolist() == [True, False, True, False, True, True]
 
 
 @pytest.mark.unit

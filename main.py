@@ -158,7 +158,10 @@ from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VE
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
-from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
+from geofrea.technical_potential.table_schemas import (
+    CLASS_FLAG_TABLE_SCHEMA_VERSION,
+    POTENTIAL_TABLE_SCHEMA_VERSION,
+)
 
 logger = logging.getLogger("geofrea.main")
 
@@ -441,6 +444,11 @@ def _build_phase_specs(
     Returns:
         The registered PhaseSpecs.
     """
+    # a technology with a design-class flag writes class_flag_<tech>__<scenario> (wind), so only it has the artifact in `produces`
+    flagged_technologies = {
+        tech: cfg.class_flag is not None
+        for tech, cfg in load_technologies(TECHNOLOGIES_YAML).technologies.items()
+    }
 
     def data_quality_audit_run(context: PhaseContext) -> AuditResult:
         return _audit_run(context, audit_config)
@@ -532,6 +540,15 @@ def _build_phase_specs(
             context.register_artifact(
                 f"potential_aggregates_{tech}", potential.aggregates, POTENTIAL_TABLE_SCHEMA_VERSION
             )
+            for scenario, entry in potential.scenarios.items():
+                if (
+                    entry.class_flag_path is not None
+                ):  # only a technology with a class flag writes one (wind)
+                    context.register_artifact(
+                        f"class_flag_{tech}__{scenario}",
+                        entry.class_flag_path,
+                        CLASS_FLAG_TABLE_SCHEMA_VERSION,
+                    )
         _register_json_artifact(context, "technical_potential", result)
         return result
 
@@ -809,7 +826,13 @@ def _build_phase_specs(
                 for tech in technologies
                 for scenario in LAND_SCENARIOS
             }
-            | {f"potential_aggregates_{tech}" for tech in technologies},
+            | {f"potential_aggregates_{tech}" for tech in technologies}
+            | {
+                f"class_flag_{tech}__{scenario}"
+                for tech in technologies
+                if flagged_technologies.get(tech, False)
+                for scenario in LAND_SCENARIOS
+            },
             summarize=lambda out: "; ".join(
                 f"{t}: "
                 + ", ".join(f"{s} {e.p_gw_reference:.3g} GW" for s, e in p.scenarios.items())

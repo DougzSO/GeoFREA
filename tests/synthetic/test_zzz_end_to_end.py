@@ -358,8 +358,8 @@ def test_f5_writes_the_tables_for_three_scenarios_and_the_aggregates_with_both_s
         for scenario in SCENARIOS:
             assert (art / f"potential_{tech}__{scenario}.parquet").is_file()
         agg = pd.read_parquet(art / f"potential_aggregates_{tech}.parquet")
-        # wind: no MIROC6 member, and the rows without the cells above its altitude sensitivity (OQ-058)
-        assert len(agg) == (4 * (N_MEMBERS - N_NO_WIND) if tech == "wind" else 3 * N_MEMBERS)
+        # wind: no MIROC6 member (no altitude-sensitivity rows: the cells above 3000 m are not candidates, OQ-058)
+        assert len(agg) == (3 * (N_MEMBERS - N_NO_WIND) if tech == "wind" else 3 * N_MEMBERS)
         assert {"P_GW", "P_GW_like_for_like", "E_TWh", "E_TWh_like_for_like"} <= set(agg.columns)
 
 
@@ -879,7 +879,7 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
     )
     for tech in ("solar", "wind"):
         entry = summary["technologies"][tech]
-        roles = {"core", "sensitivity"} | ({"core_below_3000m"} if tech == "wind" else set())
+        roles = {"core", "sensitivity"}  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
         assert entry["provisional"] is False and set(entry["windows"]) == roles
         assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
 
@@ -1896,7 +1896,7 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_summaries_of_f
         assert {"top_k_percent_5", "tolerance_2k"} <= set(h3_shown["variant"])
         h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
         assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
-        roles = {"core", "sensitivity"} | ({"core_below_3000m"} if tech == "wind" else set())
+        roles = {"core", "sensitivity"}  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
         assert set(h3_shown["role"]) == roles
 
 
