@@ -21,7 +21,8 @@ Costs are treated in Section~\ref{sec:params_group2}. Four decisions
 apply to every parameter below.
 
 Technology vintage. All technology parameters represent plants
-commissioned in $t_{\mathrm{ref}}=2026$. The same plant is evaluated
+commissioned in $t_{\mathrm{ref}}=2024$, the cohort of the cost data
+(Section~\ref{sec:params_group2}). The same plant is evaluated
 under the reference climate and under every projected climate member,
 so that differences between members are attributable to climate. The
 plant is therefore a fixed-vintage counterfactual
@@ -111,9 +112,8 @@ found plants checked in Chile, Australia and Europe within the same range
 al.\ report lower densities \cite{ong2013}. The adopted values, 45, 50
 and 75~MW$_{\mathrm{dc}}$/km$^2$, lie between these references; the
 central value implies an array-to-site ratio of 0.57 relative to the
-2019 array median of 87~MW$_{\mathrm{dc}}$/km$^2$. Modules of the 2026
-vintage are more powerful than those of 2019, so the values are
-conservative. The tracking densities (30, 40 and
+2019 array median of 87~MW$_{\mathrm{dc}}$/km$^2$. Modules installed in 2024
+are more powerful than those of 2019, so the values are conservative. The tracking densities (30, 40 and
 50~MW$_{\mathrm{dc}}$/km$^2$) are documented but not used, since no
 tracking yield is modeled.
 % verify: that the PV baseline yield layer is fixed-tilt at optimum angle (Global Solar Atlas PVOUT definition)
@@ -182,7 +182,7 @@ tabulated points within that interval, with no extrapolation. The curve
 is taken to refer to the air density of the model inputs.
 % verify: reference air density in the turbine model inputs (expected 1.225 kg/m3)
 
-The turbine is rated below the machines installed in 2026, but its
+The turbine is rated below the machines installed in 2024, but its
 specific power is in the range of current low-wind rotors, and specific
 power, not rating, sets the shape of the power curve and the density
 (Equation~\ref{eq:theory_wind_pd}). A single curve keeps the turbine
@@ -240,6 +240,15 @@ again. One annual mean density per cell ignores the covariance between
 density and wind speed, and the GWA density and wind fields come from
 different reanalyses; both are limitations.
 
+The correction is applied at every elevation; low densities on high
+plateaus are physical and are not truncated. As a consistency check,
+$\rho^{\mathrm{ref}}_i$ is compared with the International Standard
+Atmosphere density at the cell elevation plus hub height, and cells
+whose ratio falls outside 0.90--1.10 are reported. Whether very high
+terrain is suitable for large turbines is a siting question (OQ-058):
+until it is closed, Indian cells above 3,000~m are excluded from the
+central wind results and reported only as a sensitivity case.
+
 Tier 1 (ideal-gas law and IEC 61400-12-1 convention
 \cite{iec61400122022}). Proxy: no.
 
@@ -292,7 +301,7 @@ Tier 3. Proxy: no.
 \subsubsection{Yield Model}
 
 Stage F5 takes the long-term specific yield of the Global Solar Atlas
-(PVOUT, kWh/kW$_{\mathrm{dc}}$ per day) as the reference, which already
+(PVOUT, kWh/kW$_{\mathrm{dc}}$ per day) \cite{esmap2019gsa} as the reference, which already
 includes thermal and system losses of a fixed-tilt system under the
 reference climate. The capacity factor of cell $i$ in climate member $c$
 follows Equation~\ref{eq:pv_perturbation}:
@@ -305,7 +314,7 @@ where $\delta_{G,i,c}$ is the Stage F4 ratio of surface irradiance and
 $\Delta T_{i,c}$ the Stage F4 warming, both annual means
 ($\delta_G=1$, $\Delta T=0$ in the reference). The model uses no wind
 input, so all six GCMs enter the solar ensemble.
-% verify: PVOUT layer definition and its loss assumptions in the Global Solar Atlas documentation (bib key to be added)
+% verify: PVOUT layer definition (fixed-tilt, optimum angle) and its loss assumptions in esmap2019gsa
 
 \subsubsection{Temperature Coefficient of Maximum Power}
 
@@ -313,7 +322,7 @@ Definition: $\gamma$ in Equations~\ref{eq:pv_thermal_factor} and
 \ref{eq:g1_pv_cf}. Unit: K$^{-1}$. Enters: Stage F5 (central) and Stage
 F6 (sampled, U-03).
 
-For the 2026 vintage the module class is n-type TOPCon, with
+For the 2024 vintage the module class is n-type TOPCon, with
 $\gamma=-0.0030$~K$^{-1}$ and a uniform range $[-0.0032,\,-0.0028]$
 \cite{bamisile2025,itrpv2025}. PERC ($-0.0035$) and heterojunction
 ($-0.0026$) are documented as alternative technology cases and are not
@@ -384,13 +393,14 @@ The residual LUF has no primary source in any country and dominates the
 spread of potential in GW and TWh/yr; results for H5 and for the
 comparison with national targets are conditional on it. PV density is
 transferred from United States plants of 2019 and is likely
-conservative for 2026 modules. The PV yield is a fixed-tilt baseline
+conservative for 2024 modules. The PV yield is a fixed-tilt baseline
 perturbed with annual means, so changes in the timing of warming and the
 effect of wind and irradiance on cell temperature are not represented,
 and tracking systems are not modeled. Wind losses rest on judgment. A
-single class III turbine is applied everywhere, rated below 2026
+single class III turbine is applied everywhere, rated below 2024
 machines; the class flag quantifies the share of potential where a
 stronger turbine would be chosen. The 100~m layer represents a 110~m
 hub. Air density uses annual means and a reanalysis different from the
-wind field. Inverter clipping and curtailment are not modeled. The plant
-is a 2026-vintage counterfactual evaluated under mid-century climate.
+wind field. Indian wind potential above 3,000~m is excluded from the central
+results pending OQ-058. Inverter clipping and curtailment are not modeled. The plant
+is a 2024-vintage counterfactual evaluated under mid-century climate.
