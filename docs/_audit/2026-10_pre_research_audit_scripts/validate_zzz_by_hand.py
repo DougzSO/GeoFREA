@@ -222,7 +222,7 @@ def weibull_integral(a_eq: float, k: float, curve: dict) -> float:
     return total
 
 
-def wind_cf(cell: pd.Series, delta_wind: float, curve: dict) -> float:
+def wind_cf(cell: pd.Series, delta_wind: float, curve: dict, d_t: float = 0.0) -> float:
     h = val("wind", "hub_height_m")
     z1, z2 = (100.0, 150.0) if h <= 150 else (150.0, 200.0)
     a1, a2 = float(cell[f"weibull_a_{int(z1)}m"]), float(cell[f"weibull_a_{int(z2)}m"])
@@ -232,7 +232,8 @@ def wind_cf(cell: pd.Series, delta_wind: float, curve: dict) -> float:
     a_h = a1 * (h / z1) ** alpha
     w = (h - z1) / (z2 - z1)
     k_h, rho_h = k1 + w * (k2 - k1), r1 + w * (r2 - r1)
-    a_eq = a_h * (rho_h / RHO0) ** (1 / 3)
+    rho_c = rho_h * 288.15 / (288.15 + d_t)  # METHODOLOGY 14.2.0: the density of the member follows its warming
+    a_eq = a_h * (rho_c / RHO0) ** (1 / 3)
     return val("wind", "eta_loss") * weibull_integral(delta_wind * a_eq, k_h, curve)
 
 
@@ -256,7 +257,10 @@ def validate_f5(cell: pd.Series) -> dict:
                     0
                 ]
             )
-            cf = wind_cf(cell, dw, curve)
+            d_t = float(
+                forcing[(forcing["cell_id"] == cid) & (forcing["member"] == m)]["dT"].iloc[0]
+            )
+            cf = wind_cf(cell, dw, curve, d_t)
             row = pot[(pot["cell_id"] == cid) & (pot["member"] == m)].iloc[0]
             check(
                 f"F5 wind cell {cid} {m}: CF (Weibull x power curve, numerical quadrature)",

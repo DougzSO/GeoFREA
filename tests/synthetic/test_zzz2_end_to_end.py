@@ -57,7 +57,7 @@ EXPECTED = {
         "d_tec": 0.0,
         "rho": 1.0,
         "profile": "climate_dominated",
-        "r_loss": 0.0521657052686253,
+        "r_loss": 0.055151402881962984,  # METHODOLOGY 14.2.0: the member density follows dT; confirmed by the hand validation (was 0.0521657052686253)
         "cases": 134,
         "futures": 240,
         "box_density": 1.0,

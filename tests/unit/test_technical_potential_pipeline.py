@@ -18,8 +18,8 @@ import yaml
 
 from geofrea.climate_forcing.forcing import ForcingContractError
 from geofrea.core.config_loader import load_audit_config, load_parameters, load_technologies
-from geofrea.core.config_schemas import IecClassBound, TechnologyConfig
-from geofrea.core.constants import HOURS_PER_YEAR, RHO0_KG_M3
+from geofrea.core.config_schemas import ClassFlagRule, TechnologyConfig
+from geofrea.core.constants import HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import read_schema_version
 from geofrea.land_eligibility.cells import cell_id
@@ -32,23 +32,23 @@ from geofrea.technical_potential.cf_models import (
     MissingParameterError,
     get_cf_model,
 )
-from geofrea.technical_potential.iec_class import IecClassError, assign_by_mean_speed
+from geofrea.technical_potential.iec_class import IecClassError, exceeds_class
 from geofrea.technical_potential.input_ranges import (
     InputRangeError,
     resolve_input_ranges,
     validate_candidates,
 )
-from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential
+from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential, resolve_technology
 from geofrea.technical_potential.power_curve import SyntheticCurveError, load_power_curve
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
-from geofrea.technical_potential.weibull_cf import equivalent_scale, wind_cf_member
+from geofrea.technical_potential.weibull_cf import weibull_mean_speed, wind_cf_member
 from geofrea.technical_potential.wind_profile import HubHeightError, resource_at_hub_height
 
 REPO = Path(__file__).resolve().parents[2]
 PARAMETERS = REPO / "config" / "parameters.json"
 TECHNOLOGIES = REPO / "config" / "technologies.yaml"
 EXPERIMENTS = REPO / "config" / "experiments.yaml"
-REAL_CURVES_DIR = REPO / "config" / "power_curves"
+REAL_CURVES_DIR = REPO / "config" / "turbines"
 FIXTURE_CURVES = REPO / "tests" / "fixtures" / "power_curves"
 # V-04: F5 validates the candidate tables against audit.yaml. The ZZZ override of PVOUT (a constant 4.5) is dropped because these
 # tables carry a spread of PVOUT; the geometry is an elevation span of 0 to 1000 m inside a 10 degree box.
@@ -73,6 +73,7 @@ SCENARIO_AREAS = {  # eligible area of each of the 8 cells, km2
     "permissive": [15.0, 12.0, 9.0, 6.0, 18.0, 13.5, 10.5, 7.5],
 }
 N_CELLS = 8
+FLAG_THRESHOLD_MS = 7.0  # class limit of the synthetic registry: the windiest cells of the test world exceed it
 CELL_IDS = cell_id(np.full(N_CELLS, 1000), 2000 + np.arange(N_CELLS))
 PVOUT = np.array([4.0, 4.5, 5.0, 5.5, 6.0, 5.2, 4.8, 5.8])  # kWh/kWp/day, test values
 A100 = np.array([6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5])
@@ -198,10 +199,13 @@ def registry():
     base = load_technologies(TECHNOLOGIES)
     wind = base.technologies["wind"].model_copy(
         update={
-            "power_curves": {"synthetic": "synthetic_curve"},
-            "iec_class_rule": [
-                IecClassBound(iec_class="synthetic", mean_speed_upper_ms=None, source=None)
-            ],
+            "power_curve": "synthetic_curve",
+            "class_flag": ClassFlagRule(
+                iec_class="synthetic",
+                mean_speed_threshold_ms=FLAG_THRESHOLD_MS,
+                layer_height_m=100.0,
+                source=None,
+            ),
         }
     )
     return base.model_copy(update={"technologies": {**base.technologies, "wind": wind}})
@@ -299,11 +303,15 @@ def test_wind_values_follow_the_method(run_ok, synthetic_params):
         {100: RHO100, 150: RHO150, 200: RHO200},
         hub,
     )
-    a_eq = equivalent_scale(a_h, rho_h, RHO0_KG_M3)
-    for member, (_r, _t, wind) in FACTORS.items():
+    for member, (_r, d_t, wind) in FACTORS.items():
         part = table[table["member"].astype(str) == member].sort_values("cell_id")
         keep = [i for i in range(N_CELLS) if not (member == MEMBERS[2] and i == MASKED_CELL_INDEX)]
-        expected = wind_cf_member(a_eq[keep], k_h[keep], np.full(len(keep), wind), curve, eta)
+        n = len(keep)
+        # the density of the member follows the warming: rho = rho_ref T* / (T* + dT); the output is not rescaled again
+        expected = wind_cf_member(
+            a_h[keep], k_h[keep], rho_h[keep], np.full(n, d_t), np.full(n, wind), curve, eta,
+            RHO0_KG_M3, ISA_T0_K,
+        )  # fmt: skip
         np.testing.assert_allclose(part["CF"], expected, rtol=1e-13)
     assert hub == 125.0
 
@@ -540,19 +548,36 @@ def test_table_metadata_records_the_parameters_curve_hash_and_that_c2_is_not_app
 # -- fail loud (A-09) -----------------------------------------------------------------------------
 
 
+def _without_f5_values(iso: str) -> CountryParams:
+    """A real country's parameters with the F5 values removed, as before the Group 1 values were recorded."""
+    data = load_parameters(PARAMETERS).countries[iso].model_dump(mode="json")
+    for tech, keys in (
+        ("solar", ("luf", "power_density_mw_per_km2", "gamma")),
+        ("wind", ("luf", "power_density_mw_per_km2", "eta_loss", "hub_height_m")),
+    ):
+        for key in keys:
+            data["technologies"][tech][key].update(
+                value=None, range=None, scenario_values=None, status="pending_research"
+            )
+    return CountryParams.model_validate(data)
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
-def test_real_countries_fail_loud_listing_the_missing_parameters_and_write_nothing(iso, tmp_path):
+def test_missing_parameters_fail_loud_listing_every_item_and_write_nothing(iso, tmp_path):
     technologies = load_technologies(TECHNOLOGIES)
-    params = load_parameters(PARAMETERS).countries[iso]
+    wind = technologies.technologies["wind"].model_copy(update={"power_curve": None})
+    technologies = technologies.model_copy(
+        update={"technologies": {**technologies.technologies, "wind": wind}}
+    )
     with pytest.raises(MissingParameterError) as caught:
         build_potential(
             iso,
             technologies,
-            params,
+            _without_f5_values(iso),
             ["solar", "wind"],
             EXPERIMENTS,
-            REAL_CURVES_DIR,
+            tmp_path / "no_such_dir",
             out_dir=tmp_path / "out",
             **RANGE_ARGS,
         )
@@ -563,34 +588,32 @@ def test_real_countries_fail_loud_listing_the_missing_parameters_and_write_nothi
         "gamma",
         "eta_loss",
         "hub_height_m",
-        "power curve",
-        "iec_class_rule",
+        "power_curve",
     ):
         assert item in message, item
     assert "pending_research" in message
-    assert "power curve directory config/power_curves/" in message  # B-2: the folder is named too
+    assert "turbine curve directory config/turbines/" in message  # B-2: the folder is named too
     assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.unit
 def test_an_existing_power_curve_directory_is_not_reported_missing(tmp_path):
     technologies = load_technologies(TECHNOLOGIES)
-    params = load_parameters(PARAMETERS).countries["PRT"]
+    params = _without_f5_values("PRT")
     (tmp_path / "curves").mkdir()
     with pytest.raises(MissingParameterError) as caught:
         build_potential(
             "PRT", technologies, params, ["wind"], EXPERIMENTS, tmp_path / "curves",
             out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
-    assert "power curve directory" not in str(caught.value)
-    assert "power curve" in str(caught.value)  # the null mapping is still reported
+    assert "turbine curve directory" not in str(caught.value)
 
 
 @pytest.mark.unit
 def test_missing_parameter_error_is_raised_before_inputs_are_read(tmp_path):
     """No candidate, forcing or members file exists here, and the error is still the parameter one."""
     technologies = load_technologies(TECHNOLOGIES)
-    params = load_parameters(PARAMETERS).countries["PRT"]
+    params = _without_f5_values("PRT")
     with pytest.raises(MissingParameterError):
         build_potential(
             "PRT", technologies, params, ["wind"], EXPERIMENTS, REAL_CURVES_DIR,
@@ -608,11 +631,11 @@ def test_a_synthetic_curve_is_refused_in_a_production_run(tmp_path, registry, sy
 @pytest.mark.unit
 def test_a_missing_curve_file_is_reported_as_missing(tmp_path, registry, synthetic_params):
     wind = registry.technologies["wind"].model_copy(
-        update={"power_curves": {"synthetic": "absent_curve"}}
+        update={"power_curve": "absent_curve"}
     )
     reg = registry.model_copy(update={"technologies": {**registry.technologies, "wind": wind}})
     land, climate = _write_inputs(tmp_path / "in")
-    with pytest.raises(MissingParameterError, match="absent_curve.yaml"):
+    with pytest.raises(MissingParameterError, match="absent_curve.csv"):
         build_potential(
             "ZZZ", reg, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
             candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
@@ -643,77 +666,57 @@ def test_registry_resource_layers_are_the_columns_f3_writes():
     assert set(CF_MODELS) == {technologies[t].cf_model for t in technologies}
 
 
-# -- IEC class rule (D-F5-004) -----------------------------------------------------------------------
-
-
-def _rule(*bounds: float | None) -> list[IecClassBound]:
-    return [
-        IecClassBound(iec_class=f"c{i}", mean_speed_upper_ms=b, source=None)
-        for i, b in enumerate(bounds)
-    ]
+# -- design-class flag (M-F5-03) ---------------------------------------------------------------------
 
 
 @pytest.mark.unit
-def test_class_follows_the_mean_speed_with_the_last_class_unbounded():
-    rule = _rule(6.0, 8.0, None)  # c0 up to 6 m/s, c1 up to 8 m/s, c2 above
-    speeds = np.array([5.0, 6.0, 6.1, 8.0, 8.1, 12.0])
-    assert assign_by_mean_speed(speeds, rule).tolist() == [0, 0, 1, 1, 2, 2]
-    assert (
-        assign_by_mean_speed(speeds, _rule(None)).tolist() == [0] * 6
-    )  # one class takes every cell
+def test_the_flag_is_strictly_above_the_class_limit():
+    speeds = np.array([5.0, 7.4, 7.5, 7.51, 12.0])
+    assert exceeds_class(speeds, 7.5).tolist() == [False, False, False, True, True]
 
 
 @pytest.mark.unit
-def test_class_rule_rejects_malformed_rules():
-    with pytest.raises(IecClassError, match="empty"):
-        assign_by_mean_speed(np.array([5.0]), [])
-    with pytest.raises(IecClassError, match="only the last class"):
-        assign_by_mean_speed(np.array([5.0]), _rule(6.0, 8.0))  # no unbounded class
-    with pytest.raises(IecClassError, match="only the last class"):
-        assign_by_mean_speed(np.array([5.0]), _rule(None, 8.0, None))
-    with pytest.raises(IecClassError, match="strictly increasing"):
-        assign_by_mean_speed(np.array([5.0]), _rule(8.0, 6.0, None))
+def test_the_flag_rejects_a_mean_speed_that_is_not_finite():
     with pytest.raises(IecClassError, match="not finite"):
-        assign_by_mean_speed(np.array([np.nan]), _rule(None))
+        exceeds_class(np.array([np.nan]), 7.5)
 
 
 @pytest.mark.unit
-def test_registry_rule_and_curves_must_name_the_same_classes():
-    base = {
-        "resource_layers": [],
-        "cf_model": "m",
-        "exclusions": [],
-        "cost_drivers": [],
-        "uncertain_parameters": [],
-    }
-    ok = TechnologyConfig.model_validate(
-        {
-            **base,
-            "power_curves": {"c0": "x"},
-            "iec_class_rule": [{"iec_class": "c0", "mean_speed_upper_ms": None, "source": None}],
-        }
-    )
-    assert ok.iec_class_rule[0].iec_class == "c0"
-    with pytest.raises(ValueError, match="same distinct classes"):
-        TechnologyConfig.model_validate(
-            {
-                **base,
-                "power_curves": {"c9": "x"},
-                "iec_class_rule": [
-                    {"iec_class": "c0", "mean_speed_upper_ms": None, "source": None}
-                ],
-            }
-        )
+def test_the_flag_is_written_per_cell_fixed_across_members_and_changes_no_capacity_factor(
+    run_ok, tmp_path_factory, registry, synthetic_params
+):
+    """The flag reads the 100 m layer in the reference climate; the cells and the capacity factor are those of a run without it."""
+    summary, out = run_ok
+    flag = pd.read_parquet(out / "class_flag_wind__central.parquet").sort_values("cell_id")
+    assert list(flag.columns) == ["cell_id", "v_ave_ms", "exceeds_class"]
+    expected = weibull_mean_speed(A100, K100)
+    np.testing.assert_allclose(flag["v_ave_ms"], expected, rtol=1e-14)
+    assert flag["exceeds_class"].tolist() == (expected > FLAG_THRESHOLD_MS).tolist()
+    assert 0 < flag["exceeds_class"].sum() < len(flag), "the synthetic world must have flagged and unflagged cells"
+    entry = summary.technologies["wind"].scenarios["central"]
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    p_by_cell = table[table["member"].astype(str) == "m0"].set_index("cell_id")["P_MW"]
+    flagged = flag.loc[flag["exceeds_class"], "cell_id"]
+    assert entry.p_gw_class_flag == pytest.approx(p_by_cell.loc[flagged].sum() / 1e3, rel=1e-13)
+    # no flag in the registry: the same capacity factors (the flag has no effect on CF or eligibility)
+    wind = registry.technologies["wind"].model_copy(update={"class_flag": None})
+    reg = registry.model_copy(update={"technologies": {**registry.technologies, "wind": wind}})
+    _, out2 = _run(tmp_path_factory.mktemp("noflag"), reg, synthetic_params, techs=("wind",))
+    assert not (out2 / "class_flag_wind__central.parquet").exists()
+    other = pd.read_parquet(out2 / "potential_wind__central.parquet")
+    pd.testing.assert_frame_equal(table, other)
 
 
 @pytest.mark.unit
-def test_the_real_registry_holds_no_threshold_until_oq_005_closes():
-    """D-F5-017: the thresholds are the author's to source; no number is in `technologies.yaml` and none in a curve file."""
+def test_the_registry_names_one_turbine_and_one_flag_and_the_old_class_rule_is_gone():
+    """M-F5-03: one reference turbine for every cell; the class rule is a flag. The real registry names both."""
     wind = load_technologies(TECHNOLOGIES).technologies["wind"]
-    assert wind.iec_class_rule is None and wind.power_curves is None
-    assert "mean_speed_upper_ms" not in FIXTURE_CURVES.joinpath("synthetic_curve.yaml").read_text(
-        encoding="utf-8"
-    )
+    assert wind.power_curve == "iea_3.4_130"
+    assert wind.class_flag is not None
+    assert (wind.class_flag.iec_class, wind.class_flag.mean_speed_threshold_ms) == ("III", 7.5)
+    assert wind.class_flag.layer_height_m == 100.0
+    assert "power_curves" not in TechnologyConfig.model_fields
+    assert "iec_class_rule" not in TechnologyConfig.model_fields
 
 
 # -- A-04: no technology name in the package -------------------------------------------------------
@@ -872,3 +875,63 @@ def test_a_mean_equal_to_a_bound_up_to_floating_point_rounding_passes_and_a_real
     frame["pvout_kwh_kwp_day"] = [4.5, 4.5001]
     with pytest.raises(InputRangeError, match="1 of 2 candidate cells"):
         validate_candidates("ZZZ", "solar", "central", frame, ranges)
+
+
+# -- scenario-coupled LUF and power density, eta_loss applied once (M-F5-01, M-F5-03) ----------------------------
+
+
+def _with_scenarios(params: CountryParams, tech: str, key: str, triple) -> CountryParams:
+    data = params.model_dump(mode="json")
+    entry = data["technologies"][tech][key]
+    entry["scenario_values"] = dict(
+        zip(("restrictive", "central", "permissive"), triple, strict=True)
+    )
+    entry["value"] = triple[1]
+    return CountryParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_luf_and_power_density_take_the_value_of_each_land_scenario(
+    tmp_path, registry, synthetic_params
+):
+    params = _with_scenarios(synthetic_params, "solar", "luf", (0.2, 0.4, 0.6))
+    params = _with_scenarios(params, "solar", "power_density_mw_per_km2", (45.0, 50.0, 75.0))
+    summary, out = _run(tmp_path, registry, params, techs=("solar",))
+    expected = {"restrictive": (0.2, 45.0), "central": (0.4, 50.0), "permissive": (0.6, 75.0)}
+    for scenario, (luf, density) in expected.items():
+        table = pd.read_parquet(out / f"potential_solar__{scenario}.parquet")
+        m0 = table[table["member"].astype(str) == "m0"].sort_values("cell_id")
+        np.testing.assert_allclose(
+            m0["P_MW"], np.array(SCENARIO_AREAS[scenario]) * luf * density, rtol=1e-14
+        )
+        entry = summary.technologies["solar"].scenarios[scenario]
+        assert (entry.luf, entry.power_density_mw_per_km2) == (luf, density)
+        meta = json.loads(
+            pq.read_schema(out / f"potential_solar__{scenario}.parquet").metadata[
+                PROVENANCE_KEY.encode()
+            ]
+        )
+        assert meta["scenario_parameters"] == {"luf": luf, "power_density_mw_per_km2": density}
+
+
+@pytest.mark.unit
+def test_scenario_values_must_have_the_value_as_their_central_one(synthetic_params):
+    data = synthetic_params.model_dump(mode="json")
+    data["technologies"]["solar"]["luf"]["scenario_values"] = {
+        "restrictive": 0.1,
+        "central": 0.3,  # the value is 0.5
+        "permissive": 0.7,
+    }
+    with pytest.raises(ValueError, match="central"):
+        CountryParams.model_validate(data)
+
+
+@pytest.mark.unit
+def test_eta_loss_multiplies_the_wind_capacity_factor_once(tmp_path, registry, synthetic_params):
+    _, out_a = _run(tmp_path / "a", registry, synthetic_params, techs=("wind",))
+    other = _with(synthetic_params, "wind", "eta_loss", 0.85)
+    _, out_b = _run(tmp_path / "b", registry, other, techs=("wind",))
+    a = pd.read_parquet(out_a / "potential_wind__central.parquet")
+    b = pd.read_parquet(out_b / "potential_wind__central.parquet")
+    eta_a = synthetic_params.technologies.wind.eta_loss.value
+    np.testing.assert_allclose(b["CF"].to_numpy() / a["CF"].to_numpy(), 0.85 / eta_a, rtol=1e-13)

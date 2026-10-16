@@ -10,7 +10,7 @@ import pytest
 from scipy.integrate import quad
 from scipy.special import gamma as gamma_fn
 
-from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, RHO0_KG_M3
+from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.technical_potential.capacity import annual_energy_mwh, capacity_mw
 from geofrea.technical_potential.power_curve import (
     PowerCurve,
@@ -23,6 +23,7 @@ from geofrea.technical_potential.power_curve import (
 from geofrea.technical_potential.solar import solar_cf_member, solar_cf_reference
 from geofrea.technical_potential.weibull_cf import (
     equivalent_scale,
+    member_air_density,
     weibull_capacity_factor,
     weibull_mean_speed,
     wind_cf_member,
@@ -42,6 +43,14 @@ CURVE_PATH = (
 )
 V02_RELATIVE_TOLERANCE = 1e-6  # D-F5-002
 QUAD_EPSREL = 1e-10  # D-F5-002
+
+
+def _member(a_eq, k, dw, curve, eta):
+    """Member capacity factor of a given equivalent scale: the density of the curve and no warming, so the correction is the identity."""
+    a_eq = np.asarray(a_eq, dtype="float64")
+    return wind_cf_member(
+        a_eq, k, np.full_like(a_eq, RHO0_KG_M3), np.zeros_like(a_eq), dw, curve, eta, RHO0_KG_M3, ISA_T0_K
+    )
 
 
 @pytest.fixture(scope="module")
@@ -121,7 +130,7 @@ def test_ratio_form_equals_direct_form(curve):
     cf0 = wind_cf_reference(a, k, rho, curve, RHO0_KG_M3, eta)
     ratio_form = cf0 * member_cf_ratio(a, k, rho, dw, curve, RHO0_KG_M3)
     a_eq = equivalent_scale(a, rho, RHO0_KG_M3)
-    direct_form = wind_cf_member(a_eq, k, dw, curve, eta)
+    direct_form = _member(a_eq, k, dw, curve, eta)
     np.testing.assert_allclose(ratio_form, direct_form, rtol=1e-12)
 
 
@@ -129,7 +138,7 @@ def test_ratio_form_equals_direct_form(curve):
 def test_reference_member_returns_cf0_exactly(curve):
     a, k, rho = np.array([7.0, 9.5]), np.array([2.0, 2.5]), np.array([1.2, 1.1])
     cf0 = wind_cf_reference(a, k, rho, curve, RHO0_KG_M3, 0.85)
-    member = wind_cf_member(equivalent_scale(a, rho, RHO0_KG_M3), k, np.ones(2), curve, 0.85)
+    member = _member(equivalent_scale(a, rho, RHO0_KG_M3), k, np.ones(2), curve, 0.85)
     np.testing.assert_array_equal(cf0, member)
 
 
@@ -302,9 +311,9 @@ def test_capacity_rejects_out_of_domain_inputs(luf, pd_, area):
 @pytest.mark.unit
 def test_rescale_wind_equals_recomputing_with_the_new_eta(curve):
     a_eq, k, dw = np.array([8.0, 9.5]), np.array([2.0, 2.6]), np.array([0.95, 1.05])
-    nominal = wind_cf_member(a_eq, k, dw, curve, 0.9)
+    nominal = _member(a_eq, k, dw, curve, 0.9)
     np.testing.assert_allclose(
-        rescale_cf_wind(nominal, 0.9, 0.8), wind_cf_member(a_eq, k, dw, curve, 0.8), rtol=1e-13
+        rescale_cf_wind(nominal, 0.9, 0.8), _member(a_eq, k, dw, curve, 0.8), rtol=1e-13
     )
 
 
@@ -350,7 +359,8 @@ def _curve_dict(**changes):
         ({"v_ms": [3.0, 3.0, 10.0]}, "strictly increasing"),
         ({"v_ms": [3.0, 5.0, 8.0]}, "cut-out must be declared"),
         ({"p_kw": [0.0, 50.0, 120.0], "rated_power_kw": 100.0}, "must lie in"),
-        ({"p_kw": [10.0, 50.0, 100.0]}, "zero power"),
+        ({"cut_in_ms": 4.0}, "first node speed"),
+        ({"reference_density_kg_m3": 0.0}, "must be positive"),
         ({"p_kw": [0.0, 50.0, 90.0]}, "largest node power"),
         ({"p_kw": [0.0, 50.0]}, "same length"),
         ({"tier": 2}, "no evidence tier"),
@@ -379,3 +389,98 @@ def test_synthetic_curve_is_refused_in_production_only(curve):
     assert_curve_usable(curve, production=False)
     with pytest.raises(SyntheticCurveError, match="production"):
         assert_curve_usable(curve, production=True)
+
+
+# -- member density, the real turbine and the cut-in rule (M-F5-03) ----------------------------------------------
+
+@pytest.mark.unit
+def test_member_density_at_zero_and_three_kelvin_by_hand():
+    """rho = rho_ref T* / (T* + dT): equal to rho_ref at dT = 0, and 288.15 / 291.15 of it at dT = 3 K."""
+    rho_ref = np.array([1.10, 1.225, 1.30])
+    np.testing.assert_array_equal(member_air_density(rho_ref, np.zeros(3), ISA_T0_K), rho_ref)
+    warm = member_air_density(rho_ref, np.full(3, 3.0), ISA_T0_K)
+    np.testing.assert_allclose(warm, rho_ref * 288.15 / 291.15, rtol=1e-15)
+    np.testing.assert_allclose(warm[1], 1.212378, rtol=1e-6)  # 1.225 x 288.15 / 291.15, computed by hand
+    with pytest.raises(ValueError, match="positive"):
+        member_air_density(rho_ref, np.full(3, -300.0), ISA_T0_K)
+
+
+@pytest.mark.unit
+def test_wind_cf_with_and_without_the_density_correction_against_a_direct_integral(curve):
+    """With the correction the curve sees `u (rho / rho0)^(1/3)`; at rho = rho0 the correction is the identity."""
+    a, k = np.array([7.0, 9.0]), np.array([2.0, 2.4])
+    rho_ref = np.array([1.15, 1.225])
+    ones = np.ones(2)
+    # without correction (rho = rho0 and no warming): the plain integral times eta
+    plain = wind_cf_member(a, k, np.full(2, RHO0_KG_M3), np.zeros(2), ones, curve, 1.0, RHO0_KG_M3, ISA_T0_K)
+    np.testing.assert_allclose(plain, weibull_capacity_factor(a, k, curve), rtol=1e-14)
+    # with the correction at dT = 0 and at dT = 3 K, against the independent quadrature of P(c u) f(u)
+    for d_t in (0.0, 3.0):
+        rho = rho_ref * ISA_T0_K / (ISA_T0_K + d_t)
+        got = wind_cf_member(a, k, rho_ref, np.full(2, d_t), ones, curve, 1.0, RHO0_KG_M3, ISA_T0_K)
+        direct = np.array(
+            [
+                _reference_cf(ai, ki, curve, speed_factor=(ri / RHO0_KG_M3) ** (1 / 3))
+                for ai, ki, ri in zip(a, k, rho, strict=True)
+            ]
+        )
+        np.testing.assert_allclose(got, direct, rtol=V02_RELATIVE_TOLERANCE)
+    # a thinner air lowers the capacity factor; warming thins it further (the first cell has rho_ref < rho0)
+    cold = wind_cf_member(a, k, rho_ref, np.zeros(2), ones, curve, 1.0, RHO0_KG_M3, ISA_T0_K)
+    warm = wind_cf_member(a, k, rho_ref, np.full(2, 3.0), ones, curve, 1.0, RHO0_KG_M3, ISA_T0_K)
+    assert (cold < plain)[0] and (warm < cold).all()
+
+
+@pytest.mark.unit
+def test_eta_loss_multiplies_the_integral_once(curve):
+    """The retention factor enters once: CF(eta) = eta * CF(1); the output of the curve is not rescaled by density again."""
+    a, k, rho = np.array([8.0, 6.5]), np.array([2.2, 1.9]), np.array([1.2, 1.1])
+    args = (a, k, rho, np.full(2, 3.0), np.array([1.03, 0.97]), curve)
+    one = wind_cf_member(*args, 1.0, RHO0_KG_M3, ISA_T0_K)
+    np.testing.assert_allclose(wind_cf_member(*args, 0.866, RHO0_KG_M3, ISA_T0_K), 0.866 * one, rtol=1e-15)
+
+
+@pytest.mark.unit
+def test_curve_with_a_non_zero_first_node_is_zero_below_the_cut_in_with_no_ramp():
+    """The first node (cut-in, 3 m/s) carries 50 kW of 100: a jump, not a ramp from zero; zero above the cut-out (10 m/s)."""
+    c = PowerCurve.model_validate(
+        {
+            "curve_id": "c", "iec_class": "synthetic", "rated_power_kw": 100.0,
+            "v_ms": [3.0, 10.0], "p_kw": [50.0, 100.0], "cut_in_ms": 3.0, "cut_out_ms": 10.0, "synthetic": True,
+        }
+    )  # fmt: skip
+    # all the mass below the cut-in: zero. all the mass in [3, 10]: the linear table value; above the cut-out: zero.
+    assert weibull_capacity_factor(np.array([2.0]), np.array([60.0]), c)[0] == pytest.approx(0.0, abs=1e-12)
+    assert weibull_capacity_factor(np.array([15.0]), np.array([60.0]), c)[0] == pytest.approx(0.0, abs=1e-8)
+    # mass at 6.5 m/s (k large): P = 50 + (6.5 - 3) / 7 * 50 = 75 kW -> 0.75; a ramp from zero at the cut-in would give 0.5 * ...
+    inside = weibull_capacity_factor(np.array([6.5]), np.array([200.0]), c)[0]
+    assert inside == pytest.approx(0.75, abs=2e-3)
+    # exact integral against the independent quadrature, with a Weibull straddling the cut-in
+    for a, k in ((3.5, 2.0), (5.0, 2.5), (8.0, 3.0)):
+        assert weibull_capacity_factor(np.array([a]), np.array([k]), c)[0] == pytest.approx(
+            _reference_cf(a, k, c), rel=V02_RELATIVE_TOLERANCE
+        )
+
+
+@pytest.mark.unit
+def test_csv_curve_loader_checks_columns_and_the_cut_in(tmp_path):
+    header = (
+        "# curve_id: t" + chr(10) + "# iec_class: III" + chr(10) + "# rated_power_kw: 100.0" + chr(10) + "# cut_in_ms: 3.0" + chr(10)
+        + "# cut_out_ms: 10.0" + chr(10) + "# synthetic: false" + chr(10) + "# source: s" + chr(10) + "# tier: 2" + chr(10)
+    )
+    good = tmp_path / "t.csv"
+    good.write_text(header + "wind_speed_ms,power_kw" + chr(10) + "3.0,50.0" + chr(10) + "10.0,100.0" + chr(10), encoding="utf-8")
+    c = load_power_curve(good)
+    assert (c.v_ms, c.p_kw, c.tier, c.synthetic) == ([3.0, 10.0], [50.0, 100.0], 2, False)
+    bad_columns = tmp_path / "u.csv"
+    bad_columns.write_text(header.replace("curve_id: t", "curve_id: u") + "v,p" + chr(10) + "3.0,50.0" + chr(10), encoding="utf-8")
+    with pytest.raises(PowerCurveError, match="columns must be"):
+        load_power_curve(bad_columns)
+    wrong_cut_in = tmp_path / "w.csv"
+    wrong_cut_in.write_text(
+        header.replace("curve_id: t", "curve_id: w").replace("cut_in_ms: 3.0", "cut_in_ms: 4.0")
+        + "wind_speed_ms,power_kw" + chr(10) + "3.0,50.0" + chr(10) + "10.0,100.0" + chr(10),
+        encoding="utf-8",
+    )  # fmt: skip
+    with pytest.raises(PowerCurveError, match="first node speed"):
+        load_power_curve(wrong_cut_in)

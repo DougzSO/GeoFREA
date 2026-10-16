@@ -5,8 +5,8 @@ data_quality_audit, grid_alignment, siting_layers, land_eligibility (F3), extern
 potential_maps (F5), lcoe_modeling and sample_size_convergence (F6) on them. The experiments file is copied with small sizes for
 the sample-size protocol (initial size 16, ceiling 64, top-k 25 percent): the real values are the author's and are null there. Every socket connection is refused while the pipeline runs, so a hidden download fails the test.
 
-F5 needs a power curve and an IEC class rule, which the real registry leaves null until OQ-005 closes (D-F5-003): this test copies the
-registry with the synthetic rule (one class, no bound) and points the phase at the synthetic curve of `tests/fixtures/power_curves/`.
+The synthetic world must not depend on the real turbine file: this test copies the
+registry and points the phase at the synthetic curve of `tests/fixtures/power_curves/`; the design-class flag of the real registry is kept.
 The ZZZ land cover has three bands of whole decision cells: cropland (north, excluded for solar), grassland (middle, allowed for both) and
 tree cover (south, excluded for both). Solar therefore has candidates only in the grassland band, where the population gradient and the
 river's setback trim them; wind has candidates in the cropland and grassland bands. Both technologies run through every phase.
@@ -93,10 +93,7 @@ def zzz(tmp_path_factory):
 
     data = tmp_path_factory.mktemp("zzz_data")
     registry = yaml.safe_load((REPO / "config" / "technologies.yaml").read_text(encoding="utf-8"))
-    registry["wind"]["power_curves"] = {"synthetic": "synthetic_curve"}
-    registry["wind"]["iec_class_rule"] = [
-        {"iec_class": "synthetic", "mean_speed_upper_ms": None, "source": None}
-    ]
+    registry["wind"]["power_curve"] = "synthetic_curve"
     technologies = data / "technologies_with_synthetic_rule.yaml"
     technologies.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
     experiments_text = (REPO / "config" / "experiments.yaml").read_text(encoding="utf-8")

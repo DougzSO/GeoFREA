@@ -97,10 +97,7 @@ def prepare_configuration(
     `parameter_changes`: `{technology: {parameter: {"value": v, "min": a, "max": b}}}` applied to that block (min and max only when the parameter has a range).
     """
     registry = yaml.safe_load((REPO / "config" / "technologies.yaml").read_text(encoding="utf-8"))
-    registry["wind"]["power_curves"] = {"synthetic": "synthetic_curve"}
-    registry["wind"]["iec_class_rule"] = [
-        {"iec_class": "synthetic", "mean_speed_upper_ms": None, "source": None}
-    ]
+    registry["wind"]["power_curve"] = "synthetic_curve"
     technologies = data / "technologies_with_synthetic_rule.yaml"
     technologies.write_text(yaml.safe_dump(registry, sort_keys=False), encoding="utf-8")
     experiments = data / "experiments_zzz.yaml"

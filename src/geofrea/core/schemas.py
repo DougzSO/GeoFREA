@@ -78,6 +78,31 @@ class ParameterRange(BaseModel):
         return self
 
 
+class ScenarioValues(BaseModel):
+    """The three values of a parameter that is paired with the F3 land-availability scenarios and is not sampled (U-06, M-F5-01).
+
+    Args:
+        restrictive: Value in the restrictive scenario.
+        central: Value in the central scenario; it equals the parameter's `value` (the one deterministic runs use).
+        permissive: Value in the permissive scenario.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    restrictive: float
+    central: float
+    permissive: float
+
+    def for_scenario(self, scenario: str) -> float:
+        """The value of the named land scenario; an unknown name raises."""
+        try:
+            return float(getattr(self, scenario))
+        except AttributeError:
+            raise ValueError(
+                f"unknown land scenario {scenario!r} (known: restrictive, central, permissive)"
+            ) from None
+
+
 class VerifiedValue(BaseModel, Generic[T]):
     """A parameter value with verification provenance metadata and uncertainty range.
 
@@ -137,6 +162,9 @@ class VerifiedValue(BaseModel, Generic[T]):
             O&M). Regional or global transfers of the same quantity and technology are
             Tier 2 (U-07), not proxies. A production run fails if a consumed parameter
             has proxy=True (`geofrea.core.production`).
+        scenario_values: The restrictive, central and permissive values of a parameter paired with the F3 land scenarios instead of
+            sampled (LUF and power density, U-06); `value` equals the central one. Null for every other parameter, whose value
+            then applies in all three scenarios.
         price_year: Price base year of a cost value in USD (S-07: constant 2024 USD).
             Null where the value is not a cost in USD or the year is not yet audited;
             F6 refuses a cost parameter whose year is null or not 2024 (D-F6-008).
@@ -157,7 +185,21 @@ class VerifiedValue(BaseModel, Generic[T]):
     status: str | None = None
     synthetic: bool = False
     proxy: bool = False
+    scenario_values: ScenarioValues | None = None
     price_year: int | None = None
+
+    @model_validator(mode="after")
+    def _scenario_values_central_is_the_value(self) -> VerifiedValue:
+        """The central scenario value is the parameter value, so a deterministic run and the central scenario agree."""
+        if (
+            self.scenario_values is not None
+            and self.value is not None
+            and self.scenario_values.central != self.value
+        ):
+            raise ValueError(
+                f"scenario_values.central ({self.scenario_values.central}) must equal value ({self.value})."
+            )
+        return self
 
     @model_validator(mode="after")
     def _value_within_range_when_set(self) -> VerifiedValue:
@@ -223,8 +265,9 @@ class _TechnologyEconomicParams(BaseModel):
     opex_fixed_frac: VerifiedValue[UnitInterval]
     opex_var_usd_per_mwh: VerifiedValue[float]
     lifetime_years: VerifiedValue[PositiveInt]
-    discount_rate: VerifiedValue[NonNegativeFloat]
+    discount_rate: VerifiedValue[NonNegativeFloat | None]  # null until the author fixes the rate (OQ-022)
     discount_rate_increment: VerifiedValue[float | None]
+    commissioning_year: VerifiedValue[PositiveInt] | None = None  # t_ref of the technology vintage (OQ-018); not read by the kernel
 
 
 class _TechnologySitingParams(BaseModel):

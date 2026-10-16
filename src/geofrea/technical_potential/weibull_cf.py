@@ -3,7 +3,7 @@
 A Weibull speed is a scale family: if `v ~ Weibull(A, k)` then `c * v ~ Weibull(c * A, k)`. The air-density correction
 `v_eq = v * (rho / rho0)^(1/3)` and the climate factor `delta_wind` both multiply the speed, so both fold into the scale,
 
-    A_eq = A_H * (rho_H / rho0)^(1/3),      A_eq,m = delta_wind_m * A_eq,
+    A_eq,m = delta_wind_m * A_H * (rho_m / rho0)^(1/3),      rho_m = rho_ref * T* / (T* + dT_m),
 
 and the capacity factor is one function `I(A, k)` of two numbers and a fixed curve. `I` is evaluated in closed form per curve
 segment: with the curve read as piecewise linear, `P(u) / P_rated = p_i + m_i * (u - v_i)` on `[v_i, v_{i+1}]`, and
@@ -46,6 +46,29 @@ def equivalent_scale(a: np.ndarray, rho: np.ndarray, rho0: float) -> np.ndarray:
     if rho0 <= 0 or (rho <= 0).any():
         raise ValueError("air density must be positive (M-F5-03)")
     return np.asarray(a, dtype="float64") * (rho / rho0) ** (1.0 / 3.0)
+
+
+def member_air_density(rho_ref: np.ndarray, d_t: np.ndarray, t_star_k: float) -> np.ndarray:
+    """Air density of a climate member, `rho = rho_ref * T* / (T* + dT)`: constant pressure, ideal gas, warming `dT` from F4.
+
+    Implements: M-F5-03.
+
+    Args:
+        rho_ref: Air density of the reference climate (the GWA layer), kg/m3, shape (n_cells,).
+        d_t: Warming of the member against the reference, K, shape (n_cells,); 0 in the reference member.
+        t_star_k: Reference temperature `T*`, K (`geofrea.core.constants.ISA_T0_K`).
+
+    Returns:
+        Density of the member, kg/m3, shape (n_cells,).
+
+    Raises:
+        ValueError: `T* + dT` is not positive in some cell.
+    """
+    d_t = np.asarray(d_t, dtype="float64")
+    denominator = t_star_k + d_t
+    if (denominator <= 0).any():
+        raise ValueError("T* + dT must be positive (M-F5-03)")
+    return np.asarray(rho_ref, dtype="float64") * t_star_k / denominator
 
 
 def weibull_mean_speed(a: np.ndarray, k: np.ndarray) -> np.ndarray:
@@ -114,20 +137,33 @@ def weibull_capacity_factor(a: np.ndarray, k: np.ndarray, curve: PowerCurve) -> 
 
 
 def wind_cf_member(
-    a_eq: np.ndarray, k_h: np.ndarray, delta_wind: np.ndarray, curve: PowerCurve, eta_loss: float
+    a_h: np.ndarray,
+    k_h: np.ndarray,
+    rho_ref: np.ndarray,
+    d_t: np.ndarray,
+    delta_wind: np.ndarray,
+    curve: PowerCurve,
+    eta_loss: float,
+    rho0: float,
+    t_star_k: float,
 ) -> np.ndarray:
-    """Member capacity factor, `CF_m = eta_loss * I(delta_wind_m * A_eq, k_H)`.
+    """Member capacity factor, `CF_m = eta_loss * I(delta_wind_m * A_H * (rho_m / rho0)^(1/3), k_H)`, `rho_m = rho_ref T* / (T* + dT_m)`.
 
-    This equals the ratio form of M-F5-03, `CF0 * I(delta_wind * A_eq) / I(A_eq)`, because `eta_loss` cancels, and it does not
-    divide by `I(A_eq)`, which is zero for a cell without usable wind.
+    The power curve is evaluated at the equivalent speed `u (rho_m / rho0)^(1/3)` and the output is not rescaled again. `eta_loss`
+    multiplies the integral once (it is a retention factor) and F6 rescales it exactly (D-F5-008).
 
     Implements: M-F5-03.
 
     Args:
-        a_eq: Equivalent scale of the reference climate, m/s, shape (n_cells,).
+        a_h: Weibull scale at hub height in the reference climate, m/s, shape (n_cells,).
         k_h: Weibull shape at hub height (unchanged by climate, L-003), shape (n_cells,).
+        rho_ref: Air density of the reference climate at hub height, kg/m3, shape (n_cells,).
+        d_t: Warming of the member, K, shape (n_cells,).
         delta_wind: Wind-speed ratio of the member, shape (n_cells,).
         curve: Reference power curve.
-        eta_loss: Wake and availability loss factor.
+        eta_loss: Retention factor (wake, availability, electrical, soiling).
+        rho0: Air density the curve refers to, kg/m3.
+        t_star_k: Reference temperature of the density change, K.
     """
-    return eta_loss * weibull_capacity_factor(np.asarray(a_eq) * np.asarray(delta_wind), k_h, curve)
+    a_eq = equivalent_scale(a_h, member_air_density(rho_ref, d_t, t_star_k), rho0)
+    return eta_loss * weibull_capacity_factor(a_eq * np.asarray(delta_wind), k_h, curve)

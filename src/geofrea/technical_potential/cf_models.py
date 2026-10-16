@@ -16,16 +16,12 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
-from geofrea.core.config_schemas import IecClassBound
-from geofrea.technical_potential.iec_class import assign_by_mean_speed
+from geofrea.core.config_schemas import ClassFlagRule
+from geofrea.technical_potential.iec_class import exceeds_class
 from geofrea.technical_potential.power_curve import PowerCurve
 from geofrea.technical_potential.rescale import solar_rescale_terms, wind_rescale_terms
 from geofrea.technical_potential.solar import solar_cf_member, solar_cf_reference
-from geofrea.technical_potential.weibull_cf import (
-    equivalent_scale,
-    weibull_mean_speed,
-    wind_cf_member,
-)
+from geofrea.technical_potential.weibull_cf import weibull_mean_speed, wind_cf_member
 from geofrea.technical_potential.wind_profile import resource_at_hub_height
 
 
@@ -48,17 +44,22 @@ class MissingParameterError(RuntimeError):
 
 @dataclass(frozen=True)
 class CfSettings:
-    """Resolved inputs of a model: nominal parameters by key, curves, class rule, resource layers, constants."""
+    """Resolved inputs of a model: nominal parameters by key, the reference turbine curve, class flag rule, resource layers, constants."""
 
     parameters: Mapping[str, float]
-    curves: Mapping[str, PowerCurve]  # IEC class -> curve
-    iec_class_rule: Sequence[IecClassBound] | None
+    curve: PowerCurve | None  # the single reference turbine (wind)
+    class_flag: ClassFlagRule | None
     resource_layers: Sequence[str]
-    rho0: float
+    rho0: float  # density of the standard atmosphere, used when the curve does not state its own
+    t_star_k: float
     hours_per_day: float
 
 
 class PreparedCf(Protocol):
+    # Per candidate cell: True where the reference mean speed exceeds the class limit (fixed across members); `None` without a flag.
+    class_flag: np.ndarray | None
+    v_ave_ms: np.ndarray | None
+
     def member(
         self, rows: np.ndarray, delta_rsds: np.ndarray, d_t: np.ndarray, delta_wind: np.ndarray
     ) -> np.ndarray:
@@ -95,6 +96,8 @@ def _column(candidates: pd.DataFrame, name: str) -> np.ndarray:
 class _PvoutPrepared:
     cf0: np.ndarray
     gamma: float
+    class_flag: np.ndarray | None = None
+    v_ave_ms: np.ndarray | None = None
 
     def member(self, rows, delta_rsds, d_t, delta_wind):
         return solar_cf_member(self.cf0[rows], delta_rsds, d_t, self.gamma)
@@ -123,29 +126,35 @@ class PvoutWithTemperature:
 
 @dataclass(frozen=True)
 class _WeibullPrepared:
-    a_eq: np.ndarray
+    a_h: np.ndarray
     k_h: np.ndarray
-    class_of_cell: np.ndarray
-    curves: Sequence[PowerCurve]  # in the order of the class rule
+    rho_ref: np.ndarray
+    curve: PowerCurve
+    rho0: float
+    t_star_k: float
     eta_loss: float
+    class_flag: np.ndarray | None
+    v_ave_ms: np.ndarray | None = None
 
     def member(self, rows, delta_rsds, d_t, delta_wind):
-        out = np.empty(len(rows), dtype="float64")
-        cls = self.class_of_cell[rows]
-        for index, curve in enumerate(self.curves):
-            sel = cls == index
-            if sel.any():
-                out[sel] = wind_cf_member(
-                    self.a_eq[rows][sel], self.k_h[rows][sel], delta_wind[sel], curve, self.eta_loss
-                )
-        return out
+        return wind_cf_member(
+            self.a_h[rows],
+            self.k_h[rows],
+            self.rho_ref[rows],
+            d_t,
+            delta_wind,
+            self.curve,
+            self.eta_loss,
+            self.rho0,
+            self.t_star_k,
+        )
 
 
 _LAYER = re.compile(r"^(weibull_a|weibull_k|air_density)_(\d+)m$")
 
 
 class WeibullWithAirDensity:
-    """M-F5-03: Weibull speed distribution at hub height, density folded into the scale, IEC class per cell."""
+    """M-F5-03: Weibull speed distribution at hub height, one reference turbine, density of the member folded into the scale."""
 
     parameter_keys = ("eta_loss", "hub_height_m")
     needs_curves = True
@@ -173,16 +182,30 @@ class WeibullWithAirDensity:
             by_product["air_density"],
             float(settings.parameters["hub_height_m"]),
         )
-        rule = settings.iec_class_rule
-        if rule is None:
-            raise CfModelError("the wind model needs the iec_class_rule of the registry")
-        class_of_cell = assign_by_mean_speed(weibull_mean_speed(a_h, k_h), rule)
+        if settings.curve is None:
+            raise CfModelError("the wind model needs the reference turbine curve of the registry")
+        flag = None
+        v_ave = None
+        rule = settings.class_flag
+        if rule is not None:
+            height = float(rule.layer_height_m)
+            if height not in by_product["weibull_a"]:
+                raise CfModelError(
+                    f"the class flag reads the {height:g} m layer, which the registry does not list"
+                )
+            v_ave = weibull_mean_speed(by_product["weibull_a"][height], by_product["weibull_k"][height])
+            flag = exceeds_class(v_ave, rule.mean_speed_threshold_ms)
+        curve_rho0 = settings.curve.reference_density_kg_m3
         return _WeibullPrepared(
-            a_eq=equivalent_scale(a_h, rho_h, settings.rho0),
+            a_h=a_h,
             k_h=k_h,
-            class_of_cell=class_of_cell,
-            curves=tuple(settings.curves[b.iec_class] for b in rule),
+            rho_ref=rho_h,
+            curve=settings.curve,
+            rho0=settings.rho0 if curve_rho0 is None else float(curve_rho0),
+            t_star_k=settings.t_star_k,
             eta_loss=float(settings.parameters["eta_loss"]),
+            class_flag=flag,
+            v_ave_ms=v_ave,
         )
 
 

@@ -5,7 +5,8 @@ Reads, per technology and land scenario, `candidates_<tech>__<scenario>.parquet`
 
   - `potential_<tech>__<scenario>.parquet`: `cell_id`, `member`, `P_MW`, `CF`, `E_MWh` (M-F5-06); a cell-member declared
     masked (M-F4-07) has no row;
-  - `potential_aggregates_<tech>.parquet`: one row per scenario and member, all-present and like-for-like series (D-F5-006).
+  - `potential_aggregates_<tech>.parquet`: one row per scenario and member, all-present and like-for-like series (D-F5-006);
+  - `class_flag_<tech>__<scenario>.parquet` (a technology with a design-class flag): `cell_id`, `v_ave_ms`, `exceeds_class`.
 
 Nothing is computed before every input is checked: the parameters, curves and registry rules the technologies need (a missing
 one raises `MissingParameterError` listing all of them), and for each scenario the forcing contract
@@ -35,7 +36,7 @@ from geofrea.config_models.land_availability import (
 )
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
-from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, RHO0_KG_M3
+from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
@@ -58,13 +59,15 @@ from geofrea.technical_potential.input_ranges import (
 )
 from geofrea.technical_potential.power_curve import (
     PowerCurve,
-    PowerCurveError,
     assert_curve_usable,
     curve_file_sha256,
+    curve_path,
     load_power_curve,
 )
 from geofrea.technical_potential.table_schemas import (
+    CLASS_FLAG_TABLE_SCHEMA_VERSION,
     POTENTIAL_TABLE_SCHEMA_VERSION,
+    ClassFlagRow,
     PotentialAggregateRow,
     PotentialRow,
 )
@@ -75,6 +78,8 @@ INTEGRATION_METHOD = "exact_piecewise_linear_regularized_incomplete_gamma"  # D-
 PROVENANCE_KEY = "geofrea_potential_provenance"
 # parameters every technology needs (M-F5-01), on top of the ones its CF model reads
 CAPACITY_PARAMETER_KEYS = ("luf", "power_density_mw_per_km2")
+# the capacity parameters that are paired with the land scenarios and not sampled (U-06): their value per scenario is `scenario_values`
+SCENARIO_PARAMETER_KEYS = CAPACITY_PARAMETER_KEYS
 
 
 class ScenarioPotential(BaseModel):
@@ -89,6 +94,10 @@ class ScenarioPotential(BaseModel):
     n_absent_cell_members: int
     p_gw_reference: float
     e_twh_reference: float
+    luf: float
+    power_density_mw_per_km2: float
+    class_flag_path: Path | None = None
+    p_gw_class_flag: float | None = None  # capacity in the flagged cells (potential beyond the design class of the turbine)
 
 
 class TechPotential(BaseModel):
@@ -118,6 +127,7 @@ class ResolvedTechnology:
     model: CfModel
     settings: CfSettings
     parameters: Mapping[str, float]
+    scenario_parameters: Mapping[str, Mapping[str, float]]  # key -> land scenario -> value (LUF, power density)
     curve_sha256: Mapping[str, str]
 
 
@@ -170,6 +180,7 @@ def resolve_technology(
         )
     missing: list[str] = []
     values: dict[str, float] = {}
+    by_scenario: dict[str, dict[str, float]] = {}
     for key in dict.fromkeys(needed):  # the registry also lists F6 inputs, which F5 does not read
         entry = getattr(tech_params, key, None)
         if entry is None:
@@ -178,34 +189,33 @@ def resolve_technology(
             missing.append(f"{key} ({entry.status or 'no value'})")
         else:
             values[key] = float(entry.value)
+            if key in SCENARIO_PARAMETER_KEYS:
+                by_scenario[key] = {
+                    scenario: (
+                        float(entry.value)
+                        if entry.scenario_values is None
+                        else entry.scenario_values.for_scenario(scenario)
+                    )
+                    for scenario in LAND_SCENARIOS
+                }
 
-    curves: dict[str, PowerCurve] = {}
+    curve: PowerCurve | None = None
     hashes: dict[str, str] = {}
     if model.needs_curves:
         if not Path(curves_dir).is_dir():
             missing.append(
-                f"power curve directory config/power_curves/ ({Path(curves_dir)}) does not exist"
+                f"turbine curve directory config/turbines/ ({Path(curves_dir)}) does not exist"
             )
-        if tech_cfg.power_curves is None:
-            missing.append(
-                "power curve (technologies.yaml power_curves maps no IEC class to a curve)"
-            )
-        if tech_cfg.iec_class_rule is None:
-            missing.append("iec_class_rule (technologies.yaml)")
-        if tech_cfg.power_curves is not None and tech_cfg.iec_class_rule is not None:
-            for iec_class, curve_id in tech_cfg.power_curves.items():
-                path = Path(curves_dir) / f"{curve_id}.yaml"
-                if not path.is_file():
-                    missing.append(f"power curve file {path.name} for IEC class {iec_class}")
-                    continue
+        if tech_cfg.power_curve is None:
+            missing.append("power_curve (technologies.yaml names no reference turbine curve)")
+        else:
+            path = curve_path(curves_dir, tech_cfg.power_curve)
+            if path is None:
+                missing.append(f"turbine curve file {tech_cfg.power_curve}.csv in {curves_dir}")
+            else:
                 curve = load_power_curve(path)
-                if curve.iec_class != iec_class:
-                    raise PowerCurveError(
-                        f"{path.name}: iec_class {curve.iec_class!r} differs from the registry class {iec_class!r}"
-                    )
                 assert_curve_usable(curve, production)
-                curves[iec_class] = curve
-                hashes[curve_id] = curve_file_sha256(path)
+                hashes[tech_cfg.power_curve] = curve_file_sha256(path)
     if missing:
         raise MissingParameterError(iso, technology, missing)
     return ResolvedTechnology(
@@ -214,13 +224,15 @@ def resolve_technology(
         model=model,
         settings=CfSettings(
             parameters=values,
-            curves=curves,
-            iec_class_rule=tech_cfg.iec_class_rule,
+            curve=curve,
+            class_flag=tech_cfg.class_flag,
             resource_layers=tuple(tech_cfg.resource_layers),
             rho0=RHO0_KG_M3,
+            t_star_k=ISA_T0_K,
             hours_per_day=HOURS_PER_DAY,
         ),
         parameters=values,
+        scenario_parameters=by_scenario,
         curve_sha256=hashes,
     )
 
@@ -245,8 +257,15 @@ def _provenance(
         "scenario": scenario,
         "cf_model": resolved.cf_model_name,
         "parameters": dict(resolved.parameters),
+        "scenario_parameters": {k: v[scenario] for k, v in resolved.scenario_parameters.items()},
         "curve_sha256": dict(resolved.curve_sha256),
-        "rho0_kg_m3": RHO0_KG_M3,
+        "rho0_kg_m3": (
+            RHO0_KG_M3
+            if resolved.settings.curve is None
+            or resolved.settings.curve.reference_density_kg_m3 is None
+            else resolved.settings.curve.reference_density_kg_m3
+        ),
+        "t_star_k": ISA_T0_K,
         "hours_per_year": HOURS_PER_YEAR,
         "integration": INTEGRATION_METHOD,
         "c2_applied": False,
@@ -326,13 +345,13 @@ def build_technology_potential(
             raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
         by_member[str(member)] = group.set_index("cell_id")
 
-    luf = resolved.parameters["luf"]
-    power_density = resolved.parameters["power_density_mw_per_km2"]
     scenario_results: dict[str, ScenarioPotential] = {}
     aggregate_frames: list[pd.DataFrame] = []
     for scenario, frame in candidates.items():
         cell_ids = frame["cell_id"].to_numpy()
         area = frame["eligible_area_km2"].to_numpy(dtype="float64")
+        luf = resolved.scenario_parameters["luf"][scenario]
+        power_density = resolved.scenario_parameters["power_density_mw_per_km2"][scenario]
         p_mw = capacity_mw(area, luf, power_density)
         prepared = resolved.model.prepare(frame, resolved.settings)
         energy_by_member: dict[str, np.ndarray] = {}
@@ -400,6 +419,24 @@ def build_technology_potential(
             compression="zstd",
             extra_metadata=_provenance(resolved, scenario, absent_by_member, production),
         )
+        flag_path: Path | None = None
+        p_gw_flag: float | None = None
+        if prepared.class_flag is not None:
+            flag_path = Path(out_dir) / f"class_flag_{tech}__{scenario}.parquet"
+            write_table(
+                pd.DataFrame(
+                    {
+                        "cell_id": cell_ids.astype("int64"),
+                        "v_ave_ms": prepared.v_ave_ms,
+                        "exceeds_class": prepared.class_flag,
+                    }
+                ),
+                flag_path,
+                schema_version=CLASS_FLAG_TABLE_SCHEMA_VERSION,
+                row_model=ClassFlagRow,
+                compression="zstd",
+            )
+            p_gw_flag = float(p_mw[prepared.class_flag].sum()) / 1e3
         aggregate = aggregate_scenario(
             scenario,
             list(members),
@@ -437,6 +474,10 @@ def build_technology_potential(
             n_absent_cell_members=int(sum(absent_by_member.values())),
             p_gw_reference=float(ref["P_GW"]),
             e_twh_reference=float(ref["E_TWh"]),
+            luf=luf,
+            power_density_mw_per_km2=power_density,
+            class_flag_path=flag_path,
+            p_gw_class_flag=p_gw_flag,
         )
         logger.info(
             "%s %s [%s]: %d cells x %d members, %d rows, %d absent cell-members, %.3f GW and %.3f TWh at m0",

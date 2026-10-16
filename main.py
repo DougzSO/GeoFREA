@@ -176,7 +176,7 @@ SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
 TECHNOLOGIES_YAML = REPO_ROOT / "config" / "technologies.yaml"
-POWER_CURVES_DIR = REPO_ROOT / "config" / "power_curves"
+POWER_CURVES_DIR = REPO_ROOT / "config" / "turbines"  # reference turbine curves (M-F5-03)
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
 _METHODOLOGY_VERSION_RE = re.compile(r"^\|\s*Version\s*\|\s*([0-9.]+)\s*\|\s*$", re.MULTILINE)

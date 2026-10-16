@@ -16,14 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, model_validato
 from geofrea.config_models.land_availability import LandAvailability
 
 
-class IecClassBound(BaseModel):
-    """One class of the siting rule `iec_class_rule` (M-F5-03, D-F5-017): the class is taken by a cell whose annual mean wind
-    speed at hub height is at most `mean_speed_upper_ms`; `null` marks the highest class (no upper limit)."""
+class ClassFlagRule(BaseModel):
+    """The design-class screening flag of the single reference turbine (M-F5-03): a cell is flagged when the annual mean wind speed
+    of the Weibull layer at `layer_height_m`, in the reference climate, exceeds `mean_speed_threshold_ms` (the `V_ave` limit of
+    `iec_class`). The flag does not change the capacity factor or the eligibility."""
 
     model_config = ConfigDict(extra="forbid")
 
     iec_class: str
-    mean_speed_upper_ms: float | None
+    mean_speed_threshold_ms: PositiveFloat
+    layer_height_m: PositiveFloat
     source: str | None
 
 
@@ -40,22 +42,12 @@ class TechnologyConfig(BaseModel):
     required_parameters: list[str] = Field(
         default_factory=list
     )  # F5 inputs a production run must find (D-F5-011)
-    power_curves: dict[str, str] | None = (
-        None  # wind only: IEC class -> curve id in config/power_curves/ (OQ-005, D-F5-004)
+    power_curve: str | None = (
+        None  # wind only: id of the single reference turbine curve in config/turbines/ (M-F5-03)
     )
-    iec_class_rule: list[IecClassBound] | None = (
-        None  # wind only: lowest class first, last bound null (OQ-005, D-F5-017)
+    class_flag: ClassFlagRule | None = (
+        None  # wind only: the design-class screening flag of that turbine (M-F5-03)
     )
-
-    @model_validator(mode="after")
-    def _curves_match_the_class_rule(self) -> TechnologyConfig:
-        if self.iec_class_rule is not None and self.power_curves is not None:
-            classes = [b.iec_class for b in self.iec_class_rule]
-            if len(set(classes)) != len(classes) or set(classes) != set(self.power_curves):
-                raise ValueError(
-                    f"iec_class_rule classes {classes} must be the same distinct classes as power_curves {sorted(self.power_curves)}"
-                )
-        return self
 
 
 class TechnologiesFile(BaseModel):

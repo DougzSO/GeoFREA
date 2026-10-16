@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 POTENTIAL_TABLE_SCHEMA_VERSION = "1.0"
+CLASS_FLAG_TABLE_SCHEMA_VERSION = "1.0"
 
 
 class PotentialRow(BaseModel):
@@ -43,3 +44,14 @@ class PotentialAggregateRow(BaseModel):
     P_GW_like_for_like: float
     E_TWh_like_for_like: float
     delta_E_pct_vs_m0_like_for_like: float | None
+
+
+class ClassFlagRow(BaseModel):
+    """The design-class screening flag of one candidate cell (M-F5-03): the reference mean speed of the flag layer and whether it
+    exceeds the class limit. Fixed across members; it changes neither the capacity factor nor the eligibility."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: int
+    v_ave_ms: float
+    exceeds_class: bool

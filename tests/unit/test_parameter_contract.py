@@ -59,7 +59,7 @@ def test_every_value_of_the_real_parameters_file_is_within_its_range():
     for iso, country in parameters.countries.items():
         for tech in ("solar", "wind"):
             for key, vv in getattr(country.technologies, tech).__dict__.items():
-                if vv.range is not None and vv.value is not None:
+                if vv is not None and vv.range is not None and vv.value is not None:
                     assert vv.range.min <= vv.value <= vv.range.max, (iso, tech, key)
 
 
@@ -71,7 +71,7 @@ def test_proxy_flag_is_true_only_for_bra_and_ind_wind_fixed_om_and_defaults_to_f
         for iso, country in parameters.countries.items()
         for tech in ("solar", "wind")
         for key, vv in getattr(country.technologies, tech).__dict__.items()
-        if vv.proxy
+        if vv is not None and vv.proxy
     }
     assert proxies == {("BRA", "wind", "opex_fixed_frac"), ("IND", "wind", "opex_fixed_frac")}
     assert _vv(1.0).proxy is False

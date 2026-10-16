@@ -116,13 +116,16 @@ wind:
     - tau_lcoe_usd_per_mwh      # M-F7-04, T-R12, H5 (OQ-008)
     - top_k_percent             # M-F7-05 (OQ-021)
 
-  # Reference power curves (M-F5-03, D-F5-003, D-F5-004): IEC class -> curve id. The table and its
-  # provenance live in config/power_curves/<curve_id>.yaml. The real curves come from OQ-005.
-  power_curves: null  # Set by OQ-005
+  # Reference turbine (M-F5-03): one open turbine, the same in every cell, country and climate member. The curve is
+  # config/turbines/<power_curve>.csv, with its provenance in the file header (U-05 fields, licence, commit).
+  power_curve: iea_3.4_130
 
-  # IEC class per cell (M-F5-03, D-F5-004, D-F5-017): a siting rule, not a property of a turbine curve. The class is taken from
-  # the annual mean wind speed at hub height in the reference climate and is fixed across members. A list of
-  # {iec_class, mean_speed_upper_ms, source}, lowest class first, the last upper bound null (no limit); the classes must be
-  # those of power_curves. All null; OQ-005 sets them (the thresholds come from the IEC standard, sourced by the author).
-  # (Moved here from solar 2026-09-24, ADJ-7.)
-  iec_class_rule: null  # Set by OQ-005
+  # Design-class screening flag (M-F5-03): a cell is flagged when the annual mean wind speed V_ave of the Weibull layer at
+  # layer_height_m, in the reference climate, exceeds the limit of the turbine's IEC class. The flag is fixed across members and
+  # does not change the capacity factor or the eligibility; it reports the share of potential where a stronger turbine would be
+  # chosen. IEC 61400-1: V_ave = 7.5 m/s for class III.
+  class_flag:
+    iec_class: III
+    mean_speed_threshold_ms: 7.5
+    layer_height_m: 100
+    source: "IEC 61400-1, Table 1 (class III, V_ave = 7.5 m/s)"
