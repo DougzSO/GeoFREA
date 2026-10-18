@@ -239,7 +239,10 @@ def test_the_shipped_published_file_is_empty_and_only_f7b_reads_it():
         for p in SRC.rglob("*.py")
         if "published_potential" in p.read_text(encoding="utf-8")
     ]
-    assert readers and all(r.startswith("external_validation/") for r in readers)
+    # core/config_fingerprint.py only hashes the file (the manifest resumes F7b while it is unchanged); it reads no value
+    assert readers and all(
+        r.startswith("external_validation/") or r == "core/config_fingerprint.py" for r in readers
+    )
 
 
 def _entry(**changes) -> PublishedEntry:

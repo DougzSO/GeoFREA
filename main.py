@@ -64,6 +64,7 @@ import logging
 import re
 import sys
 from collections import Counter
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -87,6 +88,7 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
 )
 from geofrea.core.artifact_json import dump_artifact
+from geofrea.core.config_fingerprint import DiskConfigSource, config_fingerprint
 from geofrea.core.config_loader import (
     load_audit_config,
     load_countries,
@@ -179,6 +181,7 @@ SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
 TECHNOLOGIES_YAML = REPO_ROOT / "config" / "technologies.yaml"
+PUBLISHED_POTENTIAL_YAML = REPO_ROOT / "config" / "published_potential.yaml"
 POWER_CURVES_DIR = REPO_ROOT / "config" / "turbines"  # reference turbine curves (M-F5-03)
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
@@ -408,6 +411,7 @@ def _build_phase_specs(
     production: bool = False,
     figures: str = "all",
     max_batch_gb: float | None = None,
+    country_code: str | None = None,
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -440,6 +444,9 @@ def _build_phase_specs(
         figures: settings.yaml's `figures` (A-08), closed over by potential_maps.
         max_batch_gb: settings.yaml's `memory.max_batch_gb` (A-10), closed over by lcoe_modeling; the phase raises
             if it is absent (no silent default).
+        country_code: the country of the run; with it every spec carries the fingerprint of the configuration its phase reads
+            (`core.config_fingerprint`), so that the manifest resumes a phase only while that configuration is unchanged.
+            Without it the specs carry none (the graph alone is wanted).
 
     Returns:
         The registered PhaseSpecs.
@@ -1075,6 +1082,23 @@ def _build_phase_specs(
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),
     ]
+    if country_code is not None:
+        source = DiskConfigSource(
+            {
+                "experiments": EXPERIMENTS_YAML,
+                "parameters": PARAMETERS_JSON,
+                "audit": AUDIT_YAML,
+                "technologies": TECHNOLOGIES_YAML,
+                "settings": SETTINGS_YAML,
+                "countries": COUNTRIES_YAML,
+                "published_potential": PUBLISHED_POTENTIAL_YAML,
+            },
+            POWER_CURVES_DIR,
+        )
+        specs = [
+            replace(spec, config_fingerprint=config_fingerprint(spec.name, country_code, source))
+            for spec in specs
+        ]
     graph.update(phase_graph(specs))
     return specs
 
@@ -1228,6 +1252,7 @@ def _run_geofrea(
             production,
             figures,
             max_batch_gb,
+            country_code,
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)
