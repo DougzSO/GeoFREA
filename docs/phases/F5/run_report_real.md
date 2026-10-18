@@ -294,7 +294,7 @@ The difference also includes the 36 central cells without elevation (2.7% of the
 - The three countries pass every check and the log of F5 has no warning, so F5 is `ran_clean` in PRT, IND and BRA. The Weibull layers no longer warn (validity limits of OQ-053), and no cell is outside them in any of the three heights.
 - Plausibility holds in the three: PV near the fleet value in PRT and BRA, wind below the fleet in IND and BRA because the candidate set is all eligible land and not the best sites (BRA: the best 2% of the capacity reach the fleet's CF); PRT wind brackets the fleet (26.6% weighted mean against 27.8%).
 - The 150 m layer raises the wind CF by +0.05 in the median in the three countries.
-- OQ-060 (cells without elevation) is the one open point of this round.
+- OQ-060 (cells without elevation) was the one open point of this round; it was closed on 2026-10-18 (METHODOLOGY 15.0.2, D-F3-018). The numbers of this report are those of the round of 2026-10-17; the solar candidates of IND (14 central cells) and BRA (1) of the later run are in `docs/phases/core/revalidation_52.md`.
 
 ## 7. Artifacts
 

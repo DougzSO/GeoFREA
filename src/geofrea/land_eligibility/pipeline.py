@@ -68,6 +68,9 @@ from geofrea.land_eligibility.eligibility import (
 )
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
 from geofrea.land_eligibility.scenarios import (
+    REASON_ELEVATION_MAX,
+    REASON_MISSING_ELEVATION,
+    candidate_exclusion_reasons,
     candidate_stability,
     check_scenario_order,
     scenario_composition,
@@ -142,6 +145,9 @@ class TechSummary(BaseModel):
     # scenario it removed, that is, the ones that would have been candidates by area (None: the technology has no limit)
     elevation_max_m: float | None = None
     n_cells_excluded_by_elevation: int | None = None
+    # OQ-060, COMMAND 51: cells of the central scenario with enough eligible area that are not candidates, by reason (`missing_elevation`
+    # for every technology, `elevation_max` for a technology with a limit); a cell below the minimum area is in neither
+    candidate_exclusions: dict[str, int] = {}
     n_candidates_weibull_k_below_1: dict[str, int] = {}
 
 
@@ -641,6 +647,21 @@ def build_eligibility(
                 n_excluded_by_elevation,
                 limit_m,
             )
+        reasons = _exclusion_reasons(central["cells"], params)
+        exclusions = {
+            reason: int((reasons == reason).sum())
+            for reason in (
+                (REASON_MISSING_ELEVATION, REASON_ELEVATION_MAX)
+                if limit_m is not None
+                else (REASON_MISSING_ELEVATION,)
+            )
+        }
+        logger.info(
+            "%s %s: central cells with enough eligible area that are not candidates, by reason: %s (OQ-060)",
+            iso,
+            tech,
+            exclusions,
+        )
         k_below_1 = {
             col: int((candidates[col] < 1.0).sum())
             for col in sorted(candidates.columns)
@@ -693,16 +714,25 @@ def build_eligibility(
             n_candidates_weibull_k_below_1=k_below_1,
             elevation_max_m=limit_m,
             n_cells_excluded_by_elevation=n_excluded_by_elevation,
+            candidate_exclusions=exclusions,
         )
     return EligibilitySummary(country_code=iso, technologies=summaries)
 
 
+def _exclusion_reasons(cells: pd.DataFrame, params: ParameterSet) -> pd.Series:
+    return candidate_exclusion_reasons(
+        cells["eligible_area_km2"],
+        cells[ELEVATION_COLUMN],
+        params.min_eligible_area_km2,
+        params.elevation_max_m,
+    )
+
+
 def _is_candidate(cells: pd.DataFrame, params: ParameterSet) -> pd.Series:
-    """M-F3-04: eligible area at least the minimum and, when the technology has an altitude limit, a cell altitude not above it (OQ-058)."""
-    ok = cells["eligible_area_km2"] >= params.min_eligible_area_km2
-    if params.elevation_max_m is not None:
-        ok &= cells[ELEVATION_COLUMN] <= params.elevation_max_m
-    return ok
+    """M-F3-04: eligible area at least the minimum, an elevation (OQ-060) and, when the technology has an altitude limit, not above it (OQ-058)."""
+    return (cells["eligible_area_km2"] >= params.min_eligible_area_km2) & _exclusion_reasons(
+        cells, params
+    ).isna()
 
 
 def _admin1_units(cells: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:
