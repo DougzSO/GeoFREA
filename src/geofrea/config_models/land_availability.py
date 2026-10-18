@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -111,6 +112,8 @@ class TechParameters(BaseModel):
 class LandAvailability(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # a cell with no elevation is not a candidate (OQ-060); the only rule, written in the configuration so that it is explicit and fingerprinted
+    missing_elevation: Literal["ineligible"] = "ineligible"
     # discharge thresholds (m3/s) at which the riparian shares are computed; a draw between them is interpolated
     riparian_discharge_grid_m3s: list[float]
     technologies: dict[str, TechParameters]

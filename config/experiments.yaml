@@ -124,6 +124,10 @@ sampler:
 # parameters are named `levels`. Sources and the evidence behind every value: docs/_audit/2026-10_f3_parameter_research.md.
 # These ranges feed the named land-availability scenarios of METHODOLOGY U-06 (central, restrictive, permissive) and the range report; the scenario composition is recorded in docs/phases/F3_land_eligibility.md.
 land_availability:
+  # OQ-060 (Douglas, 2026-10-18, COMMAND 51): a cell whose elevation is missing (no eligible pixel has a DEM value) is not a candidate, for every
+  # technology and every land scenario; it is counted under the reason `missing_elevation`. The altitude limit of a technology (`elevation_max_m`)
+  # is then evaluated only on cells that have an elevation (reason `elevation_max`). Eligible area is not changed; the rule acts on the candidate set.
+  missing_elevation: ineligible
   riparian_discharge_grid_m3s: [0.0, 1.0, 5.0, 10.0]  # thresholds at which the riparian shares are computed; draws between them are interpolated
   technologies:
     solar:

@@ -219,7 +219,9 @@ def test_cells_carry_the_altitude_and_f3_excludes_the_wind_cells_above_3000_m_an
         "weibull_k_200m": 0,
     }
     assert solar.elevation_max_m is None and solar.n_cells_excluded_by_elevation is None
-    assert (pd.read_parquet(solar.candidates)["elevation_m"] > 3000.0).any()  # solar keeps the high cells
+    assert (
+        pd.read_parquet(solar.candidates)["elevation_m"] > 3000.0
+    ).any()  # solar keeps the high cells
     assert solar.n_candidates_weibull_k_below_1 == {}
     assert "elevation_m" in pd.read_parquet(solar.candidates).columns
 
@@ -443,7 +445,8 @@ def test_the_altitude_limit_of_the_real_configuration_removes_the_cells_above_it
     assert text.count(old) == 1
     free_config = tmp_path / "experiments_free.yaml"
     free_config.write_text(
-        text.replace(old, "nominal: null" + chr(10) + "        sensitivity: 3000.0"), encoding="utf-8"
+        text.replace(old, "nominal: null" + chr(10) + "        sensitivity: 3000.0"),
+        encoding="utf-8",
     )
 
     free = build_eligibility(
@@ -459,7 +462,9 @@ def test_the_altitude_limit_of_the_real_configuration_removes_the_cells_above_it
         ["wind"],
     ).technologies["wind"]
 
-    capped = _run(world, ("wind",)).technologies["wind"]  # second: both runs write to the same folder
+    capped = _run(world, ("wind",)).technologies[
+        "wind"
+    ]  # second: both runs write to the same folder
     assert capped.n_candidates < free.n_candidates
     for scenario, summary in capped.scenarios.items():
         assert (pd.read_parquet(summary.candidates)["elevation_m"] <= 3000.0).all()
@@ -469,3 +474,115 @@ def test_the_altitude_limit_of_the_real_configuration_removes_the_cells_above_it
     stability = pd.read_parquet(capped.stability)
     above = pd.read_parquet(capped.cells).set_index("cell_id")["elevation_m"] > 3000.0
     assert not stability["cell_id"].isin(above.index[above]).any()
+
+
+# ─── OQ-060: a missing elevation is a reason of its own ──────────────────
+
+
+def _cells_for_reasons() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "eligible_area_km2": [1.0, 1.0, 1.0, 0.01],
+            "elevation_m": [np.nan, 3100.0, 500.0, np.nan],
+        },
+        index=["no_elevation", "at_3100_m", "at_500_m", "no_elevation_small"],
+    )
+
+
+def test_reasons_a_cell_without_elevation_is_not_a_candidate_for_either_technology_and_3100_m_only_for_wind():
+    from geofrea.land_eligibility.scenarios import candidate_exclusion_reasons
+
+    cells = _cells_for_reasons()
+    solar = candidate_exclusion_reasons(cells["eligible_area_km2"], cells["elevation_m"], 0.1, None)
+    wind = candidate_exclusion_reasons(
+        cells["eligible_area_km2"], cells["elevation_m"], 0.1, 3000.0
+    )
+    assert solar.to_dict() == {
+        "no_elevation": "missing_elevation",
+        "at_3100_m": None,
+        "at_500_m": None,
+        "no_elevation_small": None,  # below the minimum area: not an elevation matter
+    }
+    assert wind.to_dict() == {
+        "no_elevation": "missing_elevation",
+        "at_3100_m": "elevation_max",
+        "at_500_m": None,
+        "no_elevation_small": None,
+    }
+
+
+def test_the_candidate_filter_and_the_stability_table_apply_the_same_rule():
+    from geofrea.config_models.land_availability import ParameterSet
+    from geofrea.land_eligibility.pipeline import _is_candidate
+    from geofrea.land_eligibility.scenarios import candidate_stability
+
+    cells = _cells_for_reasons()
+
+    def params(limit):
+        return ParameterSet(
+            slope_max_deg=10,
+            pop_density_max_per_km2=200,
+            riparian_setback_km=0.5,
+            min_eligible_area_km2=0.1,
+            excluded_classes=(10,),
+            iucn_categories=("i",),
+            elevation_max_m=limit,
+        )
+
+    assert _is_candidate(cells, params(None)).to_dict() == {
+        "no_elevation": False,
+        "at_3100_m": True,
+        "at_500_m": True,
+        "no_elevation_small": False,
+    }
+    assert _is_candidate(cells, params(3000.0)).to_dict() == {
+        "no_elevation": False,
+        "at_3100_m": False,
+        "at_500_m": True,
+        "no_elevation_small": False,
+    }
+    cells = cells.assign(cell_id=range(len(cells)))
+    for limit, expected in ((None, {1, 2}), (3000.0, {2})):
+        stable = candidate_stability({"central": cells}, 0.1, limit)
+        assert set(stable["cell_id"]) == expected
+
+
+def test_f3_counts_the_reasons_and_keeps_both_kinds_of_cell_out_of_every_candidate_table(world):
+    elevation = np.full((H, W), 500.0)
+    elevation[:, 25:] = 3500.0
+    elevation[10:15, 15:20] = np.nan  # cell row 2, column 3 (eligible land): no elevation at all
+    elevation[5:10, 15:20] = 3100.0  # cell row 1, column 3
+    _write(Path(world.grid_result.elevation), elevation)
+    summary = _run(world, ("solar", "wind"))
+    solar, wind = summary.technologies["solar"], summary.technologies["wind"]
+    assert solar.candidate_exclusions == {"missing_elevation": 1}
+    assert wind.candidate_exclusions["missing_elevation"] == 1
+    assert wind.candidate_exclusions["elevation_max"] >= 2  # the 3100 m cell and the 3500 m column
+    assert wind.n_cells_excluded_by_elevation == wind.candidate_exclusions["elevation_max"]
+    for tech in (solar, wind):
+        for scenario in ("restrictive", "central", "permissive"):
+            table = pd.read_parquet(tech.scenarios[scenario].candidates)
+            assert table["elevation_m"].notna().all(), (tech.technology, scenario)
+        cells = pd.read_parquet(tech.cells)
+        assert (
+            cells["elevation_m"].isna().sum() >= 1
+        )  # the cell stays in the cell table with its area
+        assert (
+            not pd.read_parquet(tech.stability)["cell_id"]
+            .isin(cells.loc[cells["elevation_m"].isna(), "cell_id"])
+            .any()
+        )
+    solar_elev = pd.read_parquet(solar.candidates)["elevation_m"]
+    assert ((solar_elev - 3100.0).abs() < 1e-3).any()  # a cell at 3100 m stays a solar candidate
+    assert not (pd.read_parquet(wind.candidates)["elevation_m"] > 3099.0).any()
+
+
+def test_the_rule_is_written_in_the_configuration_and_nothing_else_is_accepted():
+    import yaml
+
+    from geofrea.config_models.land_availability import LandAvailability
+
+    block = yaml.safe_load(EXPERIMENTS.read_text(encoding="utf-8"))["land_availability"]
+    assert block["missing_elevation"] == "ineligible"
+    with pytest.raises(ValueError):
+        LandAvailability.model_validate({**block, "missing_elevation": "eligible"})

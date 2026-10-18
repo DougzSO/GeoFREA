@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 from typing import NamedTuple
 
+import numpy as np
 import pandas as pd
 
 from geofrea.config_models.land_availability import (
@@ -110,6 +111,32 @@ def check_scenario_order(
         )
 
 
+REASON_MISSING_ELEVATION = "missing_elevation"
+REASON_ELEVATION_MAX = "elevation_max"
+
+
+def candidate_exclusion_reasons(
+    eligible_area_km2: pd.Series,
+    elevation_m: pd.Series,
+    min_eligible_area_km2: float,
+    elevation_max_m: float | None,
+) -> pd.Series:
+    """Why a cell with enough eligible area is not a candidate (M-F3-04, OQ-060); None for a candidate and for a cell below the minimum area.
+
+    `missing_elevation`: the cell has no elevation (no eligible pixel has a DEM value), for every technology; `elevation_max`: the cell has
+    an elevation above the limit of the technology. The altitude limit is evaluated only on cells that have an elevation.
+    """
+    reason = pd.Series(
+        np.full(len(eligible_area_km2), None, dtype=object), index=eligible_area_km2.index
+    )
+    enough = eligible_area_km2 >= min_eligible_area_km2
+    missing = elevation_m.isna()
+    reason[enough & missing] = REASON_MISSING_ELEVATION
+    if elevation_max_m is not None:
+        reason[enough & ~missing & (elevation_m > elevation_max_m)] = REASON_ELEVATION_MAX
+    return reason
+
+
 def candidate_stability(
     cells_by_scenario: dict[str, pd.DataFrame],
     min_eligible_area_km2: float,
@@ -127,9 +154,13 @@ def candidate_stability(
             columns={"eligible_area_km2": f"area_km2_{scenario}"}
         )
         if (
-            elevation_max_m is not None
-        ):  # a cell above the altitude limit is not a candidate in any scenario (OQ-058)
-            part.loc[df["elevation_m"].to_numpy() > elevation_max_m, f"area_km2_{scenario}"] = 0.0
+            "elevation_m" in df.columns
+        ):  # a cell with no elevation, or above the altitude limit, is not a candidate in any scenario (OQ-058, OQ-060)
+            elevation = df["elevation_m"].to_numpy()
+            out = np.isnan(elevation)
+            if elevation_max_m is not None:
+                out = out | (elevation > elevation_max_m)
+            part.loc[out, f"area_km2_{scenario}"] = 0.0
         table = part if table is None else table.merge(part, on="cell_id", how="outer")
     assert table is not None
     for scenario in scenarios:
