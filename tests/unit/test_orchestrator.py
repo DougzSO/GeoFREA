@@ -639,7 +639,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.4"
+    assert orchestrator.manifest.schema_version == "2.5"
 
 
 @pytest.mark.unit
@@ -653,7 +653,7 @@ def test_manifest_records_methodology_version(tmp_path):
     orchestrator.run([ok, bad])
 
     on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == "2.4"
+    assert on_disk["schema_version"] == "2.5"
     assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
         "phase_ok": "test-1.0.0",
         "phase_bad": "test-1.0.0",
@@ -960,6 +960,6 @@ def test_a_manifest_of_schema_2_3_is_readable_and_its_phases_have_no_times(tmp_p
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.4"
+    assert reloaded.manifest.schema_version == "2.5"
     assert reloaded.manifest.phases["phase_a"].wall_s is None
     assert reloaded.manifest.phases["phase_a"].cpu_s is None

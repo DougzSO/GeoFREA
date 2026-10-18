@@ -48,7 +48,10 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.4"
+_MANIFEST_SCHEMA_VERSION = "2.5"
+# 2.5 (D-core-041, A-02): every successful PhaseManifestEntry records `config_fingerprint`, the hash of the configuration the phase
+# read (`core.config_fingerprint`); a phase is resumed only while its current fingerprint equals the recorded one (None for entries
+# written before 2.5: resumed once, with a warning, and the current fingerprint is recorded).
 # 2.4 (METHODOLOGY 14.0.0, A-02): every PhaseManifestEntry records, besides its time stamps, the wall-clock time and the CPU time of the process
 # for the phase (`wall_s`, `cpu_s`, None for entries written before 2.4), so that a phase whose wall time is far above its CPU time is visible.
 # 2.3 (METHODOLOGY 7.0.0, A-02): every PhaseManifestEntry records the METHODOLOGY version it ran under
@@ -59,7 +62,9 @@ _MANIFEST_SCHEMA_VERSION = "2.4"
 # on-disk tag to "2.3" in memory before validating (RunManifest's
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
-_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset({"2.1", "2.2", "2.3", _MANIFEST_SCHEMA_VERSION})
+_READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
+    {"2.1", "2.2", "2.3", "2.4", _MANIFEST_SCHEMA_VERSION}
+)
 
 
 def _now_iso() -> str:
@@ -265,6 +270,11 @@ class PhaseManifestEntry(BaseModel):
         methodology_version: The METHODOLOGY version the phase ran (or
             failed, or was skipped) under (A-02). None only for entries
             written before manifest schema 2.3.
+        config_fingerprint: For a "success" entry, the fingerprint of the
+            configuration the phase read (`PhaseSpec.config_fingerprint` at
+            the time it ran). A later run resumes the phase only if the
+            current fingerprint is equal. None for entries written before
+            manifest schema 2.5 and for phases whose spec declares none.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -281,6 +291,7 @@ class PhaseManifestEntry(BaseModel):
     methodology_version: str | None = None
     wall_s: float | None = None
     cpu_s: float | None = None
+    config_fingerprint: str | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -327,7 +338,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.4"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.5"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -418,6 +429,12 @@ class PhaseSpec:
             F1b's audited/not_audited counts, F2a's raster dimensions
             and grid origin. A phase with no `summarize` logs completion
             with elapsed time and artifacts only, no phase-specific line.
+        config_fingerprint: Hash of the configuration the phase reads
+            (`core.config_fingerprint.config_fingerprint`). Recorded in the
+            manifest when the phase succeeds; a phase whose recorded
+            fingerprint differs from this one is executed again instead
+            of resumed. None: the phase is not checked against the
+            configuration (a spec built without a country).
     """
 
     name: str
@@ -427,6 +444,7 @@ class PhaseSpec:
     produces: frozenset[str] = frozenset()
     produces_schema_versions: Mapping[str, str] = field(default_factory=dict)
     summarize: Callable[[BaseModel], str] | None = None
+    config_fingerprint: str | None = None
 
 
 def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
@@ -626,6 +644,15 @@ class Orchestrator:
         if entry is None or entry.status != "stale_upstream":
             raise ValueError(
                 f"cannot revalidate {spec.name!r}: its manifest entry is {entry.status if entry else 'absent'}, not stale_upstream"
+            )
+        if (
+            entry.config_fingerprint is not None
+            and spec.config_fingerprint is not None
+            and entry.config_fingerprint != spec.config_fingerprint
+        ):
+            raise ValueError(
+                f"cannot revalidate {spec.name!r}: the configuration it reads changed since it ran "
+                f"(recorded fingerprint {entry.config_fingerprint[:12]}, now {spec.config_fingerprint[:12]}); rerun it"
             )
         for key in spec.requires:
             if key not in self.manifest.artifacts:
@@ -913,11 +940,36 @@ class Orchestrator:
 
             must_force = spec.name in rerun_set
             existing = self.manifest.phases.get(spec.name)
-            if not must_force and existing is not None and existing.status == "success":
+            config_changed = (
+                existing is not None
+                and existing.status == "success"
+                and existing.config_fingerprint is not None
+                and spec.config_fingerprint is not None
+                and existing.config_fingerprint != spec.config_fingerprint
+            )
+            if (
+                not must_force
+                and not config_changed
+                and existing is not None
+                and existing.status == "success"
+            ):
                 self._check_resume_is_not_stale(spec)
                 for key in spec.produces:
                     self._verify_artifact_integrity(key)
                 self._warn_on_lineage_drift(spec, existing)
+                if existing.config_fingerprint is None and spec.config_fingerprint is not None:
+                    logger.warning(
+                        "Phase '%s' [%s]: the manifest entry predates the configuration fingerprint (schema 2.5); resuming it and "
+                        "recording the current fingerprint %s. A change of configuration made after that run is not detected; "
+                        "name the phase in rerun_phases if it is in doubt.",
+                        spec.name,
+                        self.country_code,
+                        spec.config_fingerprint[:12],
+                    )
+                    existing = existing.model_copy(
+                        update={"config_fingerprint": spec.config_fingerprint}
+                    )
+                    self.manifest.phases[spec.name] = existing
                 try:
                     output = (
                         spec.output_model.model_validate(existing.output)
@@ -950,6 +1002,8 @@ class Orchestrator:
             start_reason = (
                 "named in rerun_phases (forced)"
                 if must_force
+                else f"the configuration it reads changed since it ran (fingerprint {existing.config_fingerprint[:12]} -> {spec.config_fingerprint[:12]})"
+                if config_changed
                 else f"manifest status {existing.status!r}, does not resume"
                 if existing is not None
                 else "no manifest entry yet"
@@ -1111,6 +1165,7 @@ class Orchestrator:
                 methodology_version=self.methodology_version,
                 wall_s=result.wall_s,
                 cpu_s=result.cpu_s,
+                config_fingerprint=spec.config_fingerprint,
             )
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
