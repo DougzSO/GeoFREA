@@ -68,6 +68,7 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import geopandas as gpd
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -141,7 +142,12 @@ from geofrea.grid_alignment.adapter import (
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
-from geofrea.land_eligibility.pipeline import EligibilitySummary, build_eligibility
+from geofrea.land_eligibility.admin1 import read_units
+from geofrea.land_eligibility.pipeline import (
+    EligibilitySummary,
+    MissingRequiredLayerError,
+    build_eligibility,
+)
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.lcoe_modeling.maps import LcoeMapsSummary, build_lcoe_maps
 from geofrea.lcoe_modeling.maps import slug as ssp_slug
@@ -158,6 +164,7 @@ from geofrea.robustness_analysis.maps import RobustnessMapsSummary, build_robust
 from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
+from geofrea.technical_potential.absolute_maps import absolute_map_names
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
 from geofrea.technical_potential.table_schemas import (
@@ -704,8 +711,26 @@ def _build_phase_specs(
 
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
-        result = build_potential_maps(context.country_code, technologies, figures)
-        for key, path in result.rasters.items():
+        units = None
+        if (
+            figures == "all"
+        ):  # the maps of capacity and energy per state need the admin1 units of F3 (D-F5-029)
+            acquisition = context.prior_results["data_acquisition"].output
+            layers = {layer.layer_name: layer for layer in acquisition.layers}
+            admin1 = resolved_path(layers.get("admin1"))
+            if admin1 is None:
+                raise MissingRequiredLayerError(
+                    f"potential_maps requires a resolved 'admin1' layer for {context.country_code!r}"
+                )
+            units = read_units(gpd.read_file(str(admin1)))
+        result = build_potential_maps(
+            context.country_code,
+            technologies,
+            figures,
+            units=units,
+            absolute_maps=load_experiments(EXPERIMENTS_YAML).absolute_maps,
+        )
+        for key, path in {**result.rasters, **result.absolute_figures}.items():
             context.register_artifact(key, path, "1.0")
         _register_json_artifact(context, "potential_maps", result)
         return result
@@ -1006,10 +1031,19 @@ def _build_phase_specs(
             name="potential_maps",
             output_model=PotentialMapsSummary,
             run=potential_maps_run,
-            requires=frozenset({f"potential_{tech}__central" for tech in technologies}),
+            requires=frozenset({"layer_registry", "land_eligibility"})
+            | {
+                f"potential_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            }
+            | {f"potential_aggregates_{tech}" for tech in technologies},
             produces=frozenset({"potential_maps"})
             | {f"potential_density_{tech}" for tech in technologies}
-            | {f"capacity_factor_{tech}" for tech in technologies},
+            | {f"capacity_factor_{tech}" for tech in technologies}
+            | {
+                key for tech in technologies if figures == "all" for key in absolute_map_names(tech)
+            },
             summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
         ),
         PhaseSpec(

@@ -150,6 +150,15 @@ def test_every_phase_from_f1_to_f8_runs_and_succeeds(zzz2):
 
 
 @pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_potential_maps_of_the_second_synthetic_world_add_up_to_the_f5_totals(zzz2, tech):
+    """D-F5-029: the cells whose potential changes order between members still give 8 maps and states that add up to the national total."""
+    from absolute_maps_checks import check_absolute_maps
+
+    check_absolute_maps(zzz2[0], "ZZZ", tech)
+
+
+@pytest.mark.synthetic
 def test_the_change_factors_of_every_cell_centre_are_the_closed_forms_of_the_world(zzz2):
     """F4 interpolates linear native fields: each delta_wind, delta_rsds and dT must equal its closed form to single precision."""
     forcing = pd.read_parquet(_art(zzz2, "climate_forcing") / "forcing.parquet").astype(

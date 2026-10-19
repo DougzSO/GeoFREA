@@ -486,6 +486,16 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
     assert (figures / "potential_density_solar__ref__na__na.png").is_file()
 
 
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_potential_maps_write_the_maps_of_capacity_and_energy_per_cell_and_per_state(zzz, tech):
+    """D-F5-029: 8 maps and the limits file per technology; monotone limits; the states add up to the F5 total; the files are artifacts."""
+    from tests.synthetic.absolute_maps_checks import check_absolute_maps
+
+    content = check_absolute_maps(zzz[0], "ZZZ", tech)
+    assert set(content["per_state"]["land_scenarios"]) == {"central", "restrictive", "permissive"}
+
+
 # -- F6 --------------------------------------------------------------------------------------------
 
 
@@ -879,7 +889,10 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
     )
     for tech in ("solar", "wind"):
         entry = summary["technologies"][tech]
-        roles = {"core", "sensitivity"}  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
+        roles = {
+            "core",
+            "sensitivity",
+        }  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
         assert entry["provisional"] is False and set(entry["windows"]) == roles
         assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
 
@@ -1896,7 +1909,10 @@ def test_f8_t_r6_has_one_verdict_row_per_hypothesis_read_from_the_summaries_of_f
         assert {"top_k_percent_5", "tolerance_2k"} <= set(h3_shown["variant"])
         h2_shown = pd.read_csv(thesis / f"T-R6_h2_summary_ZZZ_{tech}.csv")
         assert {"gamma_0.30", "median_statistic"} <= set(h2_shown["variant"])
-        roles = {"core", "sensitivity"}  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
+        roles = {
+            "core",
+            "sensitivity",
+        }  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
         assert set(h3_shown["role"]) == roles
 
 

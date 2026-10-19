@@ -105,7 +105,9 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
         settings=["figures", "run.technologies"],
     ),
     "robustness_maps": _scope(experiments=["windows"], settings=["figures", "run.technologies"]),
-    "potential_maps": _scope(settings=["figures", "run.technologies"]),
+    "potential_maps": _scope(
+        experiments=["absolute_maps"], settings=["figures", "run.technologies"]
+    ),
     "results_synthesis": _scope(
         technologies=[WHOLE],
         parameters=[WHOLE],
