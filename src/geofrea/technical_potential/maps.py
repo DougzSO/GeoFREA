@@ -16,14 +16,18 @@ and are always written. A cell without a `m0` row cannot occur (the reference fa
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import geopandas as gpd
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
 from geofrea.core import paths as core_paths
+from geofrea.core.config_schemas import AbsoluteMapsConfig
 from geofrea.land_eligibility.map_raster import FIGURE_MODES, cell_grid, plot_grid, write_cog
+from geofrea.technical_potential.absolute_maps import build_absolute_maps
 
 CENTRAL = "central"
 
@@ -39,6 +43,10 @@ class PotentialMapsSummary(BaseModel):
     figures_mode: str
     rasters: dict[str, Path]
     figures: list[Path]
+    # D-F5-029: the maps of capacity and energy (per cell and per state) and the files of their class limits, by artifact key, and the sum checks
+    # of each technology (the cells and the states against the F5 national total); empty when `figures` is not `all` or no admin1 units were given
+    absolute_figures: dict[str, Path] = {}
+    absolute_checks: dict[str, Any] = {}
 
 
 def build_potential_maps(
@@ -49,6 +57,8 @@ def build_potential_maps(
     potential_dir: Path | None = None,
     cells_dir: Path | None = None,
     figures_dir: Path | None = None,
+    units: gpd.GeoDataFrame | None = None,
+    absolute_maps: AbsoluteMapsConfig | None = None,
 ) -> PotentialMapsSummary:
     """COG rasters and PNG maps of `P_MW / cell_area_km2` and `CF` at `m0`, central land scenario.
 
@@ -61,6 +71,9 @@ def build_potential_maps(
         potential_dir: Directory of the potential tables (default: the F5 artifacts directory).
         cells_dir: Directory of the F3 cell tables (default: the F3 artifacts directory).
         figures_dir: Directory of the PNGs (default: the F5 figures directory).
+        units: The admin1 units of the country (`read_units` of the F3 admin1 layer); with `absolute_maps` and `figures_mode == "all"` the maps
+            of capacity and energy are drawn (D-F5-029).
+        absolute_maps: Classification of those maps (`experiments.yaml` `absolute_maps`).
 
     Raises:
         PotentialMapsError: unknown `figures_mode`, a missing table, or potential rows for cells the F3 table lacks.
@@ -122,6 +135,20 @@ def build_potential_maps(
                     Path(figures_dir) / f"capacity_factor_{tech}__ref__na__na.png",
                 )
             )
+    absolute_figures: dict[str, Path] = {}
+    absolute_checks: dict[str, Any] = {}
+    if figures_mode == "all" and units is not None and absolute_maps is not None:
+        for tech in technologies:
+            written, content = build_absolute_maps(
+                iso, tech, Path(artifacts), Path(cells_dir), Path(figures_dir), units, absolute_maps
+            )
+            absolute_figures.update(written)
+            absolute_checks[tech] = content["sum_checks"]
     return PotentialMapsSummary(
-        country_code=iso, figures_mode=figures_mode, rasters=rasters, figures=figures
+        country_code=iso,
+        figures_mode=figures_mode,
+        rasters=rasters,
+        figures=figures,
+        absolute_figures=absolute_figures,
+        absolute_checks=absolute_checks,
     )
