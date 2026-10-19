@@ -45,15 +45,20 @@ def check_absolute_maps(data: Path, iso: str, tech: str) -> dict:
         assert (
             limits and limits == sorted(set(limits)) and limits[0] > 0
         )  # monotone, no repeated limit
-        assert part["classes_final"] == len(limits) <= part["classes_requested"]
+        assert part["classes_final"] == len(limits) + (1 if part["last_class_open"] else 0)
+        assert part["classes_final"] <= part["classes_requested"]
         intervals = part["intervals"]
         assert intervals[0][0] == 0 and all(a[1] == b[0] for a, b in itertools.pairwise(intervals))
+        assert (intervals[-1][1] is None) == part["last_class_open"]
+    assert not content["per_cell"]["capacity"]["last_class_open"]
+    assert content["per_state"]["capacity"]["last_class_open"]
+    assert content["per_state"]["energy"]["last_class_open"]
     assert content["per_cell"]["capacity"]["classes_requested"] == 7
     assert content["per_state"]["capacity"]["classes_requested"] == 6
 
     aggregates = pd.read_parquet(artifacts / f"potential_aggregates_{tech}.parquet")
     aggregates = aggregates[aggregates["member"].astype(str) == "m0"].set_index("scenario")
-    state_gw_max = 0.0
+    central_state_gw = None
     for scenario in SCENARIOS:
         table = pd.read_parquet(artifacts / f"potential_{tech}__{scenario}.parquet")
         m0 = table[table["member"].astype(str) == "m0"]
@@ -70,13 +75,24 @@ def check_absolute_maps(data: Path, iso: str, tech: str) -> dict:
             abs(by_state["P_MW"].sum() / 1e3 - gw) <= 1e-3 * gw
         )  # the states add up to the national total
         assert abs(by_state["E_MWh"].sum() / 1e6 - twh) <= 1e-3 * twh
-        state_gw_max = max(state_gw_max, float(by_state["P_MW"].max() / 1e3))
+        if scenario == "central":
+            central_state_gw = by_state["P_MW"].to_numpy() / 1e3
         for quantity in ("capacity_gw", "energy_twh"):
             for what in ("cells", "states"):
                 assert content["sum_checks"][scenario][quantity][what]["ok"]
         assert content["national_totals_f5"][scenario]["P_GW"] == aggregates.loc[scenario, "P_GW"]
-    # the state classes are those of the three scenarios together: the largest state of any scenario is inside the last class
-    assert content["per_state"]["capacity"]["upper_limits"][-1] >= state_gw_max
+    # the state limits are those of the central scenario alone, recomputed here with mapclassify and python's two-figure format
+    import mapclassify
+    import numpy as np
+
+    values = central_state_gw[central_state_gw > 0]
+    k = min(6, len(np.unique(values)))
+    expected = []
+    for b in mapclassify.FisherJenks(values, k=k).bins[:-1]:
+        v = float(f"{b:.2g}")
+        if not expected or v > expected[-1]:
+            expected.append(v)
+    assert content["per_state"]["capacity"]["upper_limits"] == expected
 
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     for key in names:

@@ -5,12 +5,13 @@ For every technology of a country, at the reference climate (member `m0`):
   - per cell, central land scenario: installable capacity (MW per cell) and annual energy (GWh per year per cell), 7 classes by quantiles
     of the cells with a value above zero (the distribution is very skewed);
   - per state (admin1 unit of F3), in each of the three land scenarios: capacity (GW per state) and energy (TWh per year per state), 6
-    classes by Fisher-Jenks natural breaks (`mapclassify`) of the state totals of the three scenarios taken together, and the same classes
-    in the three maps so that the colours are comparable between scenarios.
+    classes by Fisher-Jenks natural breaks (`mapclassify`) of the state totals of the central scenario, the same classes in the three
+    maps so that the colours are comparable between scenarios, the last class open ("> limit") so that a state of the restrictive or the
+    permissive scenario above the largest central value falls in it (D-F5-030).
 
 The class limits are never fixed: they come from the data of the country and the technology, are rounded to the configured significant
-figures (the last limit upwards, so that the largest value is inside), and a class that collapses with its neighbour after the rounding is
-dropped and recorded. The limits go to `potential_breaks_<tech>.json` beside the figures, with the totals that the maps are checked against.
+figures (the last limit of a closed class upwards, so that the largest value is inside; an open last class has none), and a class that
+collapses with its neighbour after the rounding is dropped and recorded. The limits go to `potential_breaks_<tech>.json` beside the figures, with the totals that the maps are checked against.
 The sum of the cells and the sum of the states must equal the national total of F5 within 0.1% in every scenario, or the phase fails (A-09).
 
 Files (one map per file, `<map>__<window>__<ssp>__<gcm>.png`, 300 dpi) under `outputs/<ISO3>/technical_potential/figures/`:
@@ -61,7 +62,10 @@ class AbsoluteMapsError(RuntimeError):
 
 @dataclass(frozen=True)
 class ClassBreaks:
-    """Upper limits of the classes of the values above zero; class i holds (limits[i-1], limits[i]], with limits[-1] before the first = 0."""
+    """Upper limits of the classes of the values above zero; class i holds (limits[i-1], limits[i]], with limits[-1] before the first = 0.
+
+    With `open_last` the last class has no upper limit: it holds every value above `limits[-1]` ("> limit"), so there is one class more than limits.
+    """
 
     method: str
     requested: int
@@ -69,10 +73,11 @@ class ClassBreaks:
     raw_limits: tuple[float, ...]
     n_values: int
     notes: tuple[str, ...]
+    open_last: bool = False
 
     @property
     def n_classes(self) -> int:
-        return len(self.limits)
+        return len(self.limits) + (1 if self.open_last and self.limits else 0)
 
     def assign(self, values: np.ndarray) -> np.ndarray:
         """Class index (0-based) of each value above zero; -1 for a value that is not above zero or not finite."""
@@ -85,9 +90,11 @@ class ClassBreaks:
         )
         return out
 
-    def intervals(self) -> list[tuple[float, float]]:
-        lows = (0.0, *self.limits[:-1])
-        return list(zip(lows, self.limits, strict=True))
+    def intervals(self) -> list[tuple[float, float | None]]:
+        """(low, high] of every class; the high of an open last class is None."""
+        lows = (0.0, *self.limits[: self.n_classes - 1])
+        highs = (*self.limits, *((None,) if self.open_last and self.limits else ()))
+        return list(zip(lows, highs, strict=True))
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -95,6 +102,7 @@ class ClassBreaks:
             "classes_requested": self.requested,
             "classes_final": self.n_classes,
             "collapsed": self.n_classes < self.requested,
+            "last_class_open": bool(self.open_last and self.limits),
             "upper_limits": list(self.limits),
             "upper_limits_before_rounding": list(self.raw_limits),
             "intervals": [[lo, hi] for lo, hi in self.intervals()],
@@ -114,16 +122,19 @@ def round_significant(x: float, figures: int, *, up: bool = False) -> float:
     return float(f"{rounded / scale:.10g}")
 
 
-def class_breaks(values: np.ndarray, method: str, classes: int, figures: int) -> ClassBreaks:
+def class_breaks(
+    values: np.ndarray, method: str, classes: int, figures: int, *, open_last: bool = False
+) -> ClassBreaks:
     """Class limits of the values above zero by `method` (`quantile` or `fisher_jenks`), rounded to `figures` significant figures.
 
-    The number of classes is reduced, and the reduction recorded, when there are fewer distinct values than classes or when two limits
-    are the same number after the rounding.
+    With `open_last` the largest limit (the maximum of `values`) is dropped and the last class is "> the limit before it": values larger
+    than any of `values` belong to it. The number of classes is reduced, and the reduction recorded, when there are fewer distinct values
+    than classes or when two limits are the same number after the rounding.
     """
     values = np.asarray(values, dtype="float64")
     values = values[np.isfinite(values) & (values > 0)]
     if values.size == 0:
-        return ClassBreaks(method, classes, (), (), 0, ("no value above zero",))
+        return ClassBreaks(method, classes, (), (), 0, ("no value above zero",), open_last)
     notes: list[str] = []
     n_distinct = int(np.unique(values).size)
     k = min(classes, n_distinct)
@@ -147,11 +158,18 @@ def class_breaks(values: np.ndarray, method: str, classes: int, figures: int) ->
         if not limits or b > limits[-1]:
             limits.append(b)
     limits = [b for b in limits[:-1] if b < limits[-1]] + [limits[-1]]
-    if len(limits) < k:
+    if open_last and len(limits) > 1:
+        limits = limits[:-1]  # the last class has no upper limit
+    else:
+        open_last = False  # one class only: it holds everything
+    n_final = len(limits) + (1 if open_last else 0)
+    if n_final < k:
         notes.append(
-            f"{k - len(limits)} class(es) merged: limits {rounded} are not distinct at {figures} significant figures; {len(limits)} classes"
+            f"{k - n_final} class(es) merged: limits {rounded} are not distinct at {figures} significant figures; {n_final} classes"
         )
-    return ClassBreaks(method, classes, tuple(limits), tuple(raw), int(values.size), tuple(notes))
+    return ClassBreaks(
+        method, classes, tuple(limits), tuple(raw), int(values.size), tuple(notes), open_last
+    )
 
 
 def format_limit(x: float) -> str:
@@ -224,7 +242,11 @@ def _palette(name: str, n: int) -> list[tuple[float, ...]]:
 def _legend(ax, breaks: ClassBreaks, colours, unit: str) -> None:
     handles = [
         Patch(
-            facecolor=colours[i], edgecolor="none", label=f"{format_limit(lo)} - {format_limit(hi)}"
+            facecolor=colours[i],
+            edgecolor="none",
+            label=f"> {format_limit(lo)}"
+            if hi is None
+            else f"{format_limit(lo)} - {format_limit(hi)}",
         )
         for i, (lo, hi) in enumerate(breaks.intervals())
     ]
@@ -415,14 +437,18 @@ def build_absolute_maps(
     cap_mw, en_gwh = central["P_MW"].to_numpy(), central["E_MWh"].to_numpy() / 1e3
     cell_cap = class_breaks(cap_mw, cfg.per_cell.method, cfg.per_cell.classes, sig)
     cell_en = class_breaks(en_gwh, cfg.per_cell.method, cfg.per_cell.classes, sig)
-    pooled = {
-        q: pd.concat([states[s][q] for s in SCENARIOS]).to_numpy()
+    basis = SCENARIOS if cfg.per_state.basis == "all_scenarios" else (CENTRAL,)
+    on = {
+        q: pd.concat([states[s][q] for s in basis]).to_numpy()
         for q in ("capacity_gw", "energy_twh")
     }
+    open_last = cfg.per_state.open_last_class
     state_cap = class_breaks(
-        pooled["capacity_gw"], cfg.per_state.method, cfg.per_state.classes, sig
+        on["capacity_gw"], cfg.per_state.method, cfg.per_state.classes, sig, open_last=open_last
     )
-    state_en = class_breaks(pooled["energy_twh"], cfg.per_state.method, cfg.per_state.classes, sig)
+    state_en = class_breaks(
+        on["energy_twh"], cfg.per_state.method, cfg.per_state.classes, sig, open_last=open_last
+    )
 
     written: dict[str, Path] = {}
     gw_c, twh_c = totals[CENTRAL]
@@ -463,7 +489,8 @@ def build_absolute_maps(
         },
         "per_state": {
             "land_scenarios": list(SCENARIOS),
-            "classes_computed_on": "the state totals of the three scenarios together; the same classes in the three maps",
+            "classes_computed_on": f"the state totals of the {' and '.join(basis)} scenario(s); the same classes in the three maps"
+            + ("; the last class is open (above its lower limit)" if open_last else ""),
             "capacity": {"unit": UNIT_STATE_CAPACITY, **state_cap.as_json()},
             "energy": {"unit": UNIT_STATE_ENERGY, **state_en.as_json()},
         },
