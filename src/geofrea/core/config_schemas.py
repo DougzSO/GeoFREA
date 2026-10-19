@@ -388,6 +388,10 @@ class ClassingConfig(BaseModel):
 
     method: Literal["quantile", "fisher_jenks"]
     classes: int = Field(ge=2, le=12)
+    # per state: the scenarios whose state totals give the limits (`central` or `all_scenarios`) and whether the last class is open
+    # ("> limit"), so that a value above every value of the basis falls in it (D-F5-030); per cell the limits are those of the central scenario
+    basis: Literal["central", "all_scenarios"] = "central"
+    open_last_class: bool = False
 
 
 class AbsoluteMapsConfig(BaseModel):

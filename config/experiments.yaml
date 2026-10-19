@@ -426,9 +426,10 @@ external_validation:
 # Maps of the technical potential in capacity and energy (potential_maps, D-F5-029). One map per file, per country and technology: per cell
 # (central land scenario, reference climate) capacity in MW and energy in GWh per year; per state (admin1) in the three land scenarios, capacity in
 # GW and energy in TWh per year. The class limits are computed from the data (no fixed limits): per cell by quantiles of the cells with a value
-# above zero (the distribution is very skewed), per state by Fisher-Jenks natural breaks of the state totals of the three scenarios together, so that
-# the colours are comparable between scenarios. The limits are rounded to `significant_figures` (the last one upwards); a class that collapses with its
-# neighbour after the rounding is dropped and recorded in potential_breaks_<tech>.json. The sum of the cells and of the states must equal the F5
+# above zero (the distribution is very skewed), per state by Fisher-Jenks natural breaks of the state totals of the central scenario, applied to the
+# three scenarios so that the colours are comparable between them; the last class is open ("> limit") and holds the larger values of the restrictive
+# and permissive scenarios (D-F5-030). The limits are rounded to `significant_figures` (the last limit of a closed class upwards); a class that
+# collapses with its neighbour after the rounding is dropped and recorded in potential_breaks_<tech>.json. The sum of the cells and of the states must equal the F5
 # national total within 0.1% or the phase fails.
 absolute_maps:
   per_cell:
@@ -437,6 +438,8 @@ absolute_maps:
   per_state:
     method: fisher_jenks
     classes: 6
+    basis: central
+    open_last_class: true
   significant_figures: 2
   palette: viridis
   dpi: 300

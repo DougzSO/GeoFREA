@@ -1,6 +1,6 @@
-# Maps of the technical potential in capacity and energy (D-F5-029, 2026-10-19)
+# Maps of the technical potential in capacity and energy (D-F5-029 and D-F5-030, 2026-10-19)
 
-Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.1.0 (M-F5-07). Results are those of the real run of 2026-10-19 on the F5 tables of 2026-10-18 (reference climate `m0`).
+Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.1.1 (M-F5-07). Results are those of the real run of 2026-10-19 on the F5 tables of 2026-10-18 (reference climate `m0`).
 
 ## 1. Audit before the change (read only)
 
@@ -13,7 +13,7 @@ Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.1.0 (M-F5-07). Resul
 In the phase `potential_maps` (`technical_potential/absolute_maps.py`, called by `build_potential_maps`; not a script):
 
 * **Per cell**, central land scenario, reference climate: capacity (MW per cell) and annual energy (GWh per year per cell). 7 classes by quantiles of the cells with a value above zero.
-* **Per state** (admin1 unit of F3), in the three land scenarios: capacity (GW per state) and energy (TWh per year per state). 6 classes by Fisher-Jenks natural breaks (`mapclassify`) of the state totals of the three scenarios taken together; the same classes in the three maps of a variable, so the colours compare between scenarios.
+* **Per state** (admin1 unit of F3), in the three land scenarios: capacity (GW per state) and energy (TWh per year per state). 6 classes by Fisher-Jenks natural breaks (`mapclassify`) of the state totals of the central scenario (since COMMAND 54, D-F5-030; before, of the three scenarios together, which made the central map use only the lower classes); the same classes in the three maps of a variable, so the colours compare between scenarios, and the last class is open ("> limit"): it holds the larger values of the restrictive and permissive scenarios.
 * The limits are computed per country, technology and variable (no fixed limits), rounded to 2 significant figures (the last one upwards, so the largest value is inside), and a class that collapses with its neighbour after the rounding is dropped and recorded (`notes` and `collapsed` in the limits file). No class collapsed in any of the 48 maps of this run.
 * Look: viridis (perceptually uniform and colour-blind safe); cells of the country without potential (not a candidate or zero) in light grey; sea and outside the country white; thin boundaries of the states and of the country; legend with the intervals and the unit; title with country, technology, land scenario, climate and the national total in GW and TWh per year; longitude-latitude axes as in the other maps of the phase; 300 dpi, PNG.
 * **Check that blocks.** In every scenario the sum of the cells and the sum of the states must equal the F5 national total of `m0` within 0.1% (capacity and energy), or the phase raises `AbsoluteMapsError` and writes no map of that technology.
@@ -42,30 +42,30 @@ Count: 3 countries x 2 technologies x (2 per cell + 6 per state) = **48 maps**, 
 |---|---|---|---|---|---|---|
 | PRT | solar | per cell, capacity (MW per cell) | quantile | 7 of 7 | 9.1, 23, 45, 76, 110, 160, 280 | 3,446 |
 | PRT | solar | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 14, 36, 69, 120, 180, 260, 460 | 3,446 |
-| PRT | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 7.1, 14, 32, 51, 64, 110 | 54 |
-| PRT | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 12, 21, 49, 75, 100, 170 | 54 |
+| PRT | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 1.9, 5.7, 14, 23, 27; last class open: above 27 | 18 |
+| PRT | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 2.8, 8.7, 21, 37, 44; last class open: above 44 | 18 |
 | PRT | wind | per cell, capacity (MW per cell) | quantile | 7 of 7 | 0.93, 2.4, 4.2, 6.6, 9, 11, 19 | 3,496 |
 | PRT | wind | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 1.9, 4.7, 9.1, 14, 20, 28, 51 | 3,496 |
-| PRT | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 0.58, 2.1, 3.1, 4.9, 6.2, 11 | 54 |
-| PRT | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 1.3, 3.1, 6.1, 9, 15, 24 | 54 |
+| PRT | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 0.23, 0.55, 1.1, 1.6, 1.8; last class open: above 1.8 | 18 |
+| PRT | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 0.56, 1.2, 2.4, 3.1, 4.3; last class open: above 4.3 | 18 |
 | IND | solar | per cell, capacity (MW per cell) | quantile | 7 of 7 | 1.3, 2.5, 4.4, 7.3, 12, 25, 150 | 54,168 |
 | IND | solar | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 2, 4, 7, 12, 20, 41, 250 | 54,168 |
-| IND | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 39, 120, 230, 320, 420, 1,400 | 97 |
-| IND | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 63, 190, 370, 540, 720, 2,400 | 97 |
+| IND | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 5.5, 27, 54, 69, 100; last class open: above 100 | 32 |
+| IND | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 8.6, 42, 87, 110, 170; last class open: above 170 | 32 |
 | IND | wind | per cell, capacity (MW per cell) | quantile | 7 of 7 | 0.26, 0.77, 1.6, 3, 4.8, 6.8, 12 | 61,366 |
 | IND | wind | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 0.21, 0.78, 1.9, 3.8, 6.8, 11, 35 | 61,366 |
-| IND | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 2.7, 13, 28, 58, 85, 200 | 91 |
-| IND | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 6.8, 22, 45, 110, 150, 320 | 91 |
+| IND | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 2.2, 8.6, 13, 18, 26; last class open: above 26 | 31 |
+| IND | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 2.1, 5, 22, 33, 45; last class open: above 45 | 31 |
 | BRA | solar | per cell, capacity (MW per cell) | quantile | 7 of 7 | 15, 39, 72, 110, 150, 210, 390 | 180,040 |
 | BRA | solar | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 23, 60, 110, 180, 250, 340, 690 | 180,040 |
-| BRA | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 270, 760, 1,800, 3,100, 5,300, 7,000 | 81 |
-| BRA | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 1,000, 2,500, 3,800, 5,300, 8,600, 12,000 | 81 |
+| BRA | solar | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 230, 670, 1,100, 1,300, 2,200; last class open: above 2,200 | 27 |
+| BRA | solar | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 360, 1,000, 1,900, 2,300, 3,500; last class open: above 3,500 | 27 |
 | BRA | wind | per cell, capacity (MW per cell) | quantile | 7 of 7 | 2, 5.1, 8, 10, 13, 15, 23 | 181,276 |
 | BRA | wind | per cell, energy (GWh per year per cell) | quantile | 7 of 7 | 1.2, 3.8, 6.9, 11, 16, 26, 120 | 181,276 |
-| BRA | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 43, 130, 240, 310, 430, 730 | 81 |
-| BRA | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 100, 240, 360, 560, 820, 1,300 | 81 |
+| BRA | wind | per state, capacity (GW per state) | fisher_jenks | 6 of 6 | 13, 54, 92, 130, 170; last class open: above 170 | 27 |
+| BRA | wind | per state, energy (TWh per year per state) | fisher_jenks | 6 of 6 | 23, 69, 100, 180, 240; last class open: above 240 | 27 |
 
-Per-state limits are shared by the three scenarios of a variable. Because they are computed on the three scenarios together, the central map uses the lower classes and the permissive map the upper ones (the legend keeps all classes).
+Per-state limits are computed on the central scenario and shared by the three scenarios of a variable; the last class is open, so a state of the permissive scenario above the largest central total falls in it (the number of states in it is in the maps; the limits file keeps `last_class_open` and the intervals, the upper limit of the last being `null`).
 
 ## 5. Sum checks
 
@@ -84,7 +84,7 @@ All 12 combinations pass (differences of the order of 1e-16, the rounding of the
 
 ## 6. Two examples
 
-BRA, solar, central scenario, capacity per state (Fisher-Jenks, 6 classes shared by the three scenarios):
+BRA, solar, central scenario, capacity per state (Fisher-Jenks of the central scenario, 6 classes, the last open, shared by the three scenarios):
 
 ![BRA solar, capacity per state, central](potential_maps_absolute/BRA_potential_capacity_gw_state_solar_central__ref__na__na.png)
 
@@ -96,7 +96,7 @@ In the Indian map there are white areas inside the outline (the north and the no
 
 ## 7. Run
 
-Phase `potential_maps` for the three countries (`--rerun potential_maps`): PRT 78 s and 768 MB peak; IND 232 s and 1456 MB; BRA 255 s and 2488 MB. Only the `m0` rows of the potential tables are read.
+Phase `potential_maps` for the three countries (`--rerun potential_maps`): PRT 81 s and 824 MB peak; IND 232 s and 1424 MB; BRA 260 s and 2479 MB. Only the `m0` rows of the potential tables are read.
 
 ## 8. Tests
 
