@@ -145,3 +145,4 @@ Provides to all phases: DAG orchestrator, artifact registry and manifest, config
 - 2026-10-18 (D-core-041, COMMAND 51): manifest 2.5 and the configuration fingerprint of each phase.
 - 2026-10-18 (D-core-041, COMMAND 51): the fingerprint was applied to the real manifests of PRT, IND and BRA (rerun of `data_acquisition` and `external_inputs`, `docs/phases/core/revalidation_52.md`); the manifest staleness follows the file hash, which includes provenance metadata of the parquet files (recorded in that report).
 - 2026-10-19 (COMMAND 54): diagnostics of the coverage of the outline and of the alignment of elevation and slope, `docs/phases/core/coverage_alignment_54.md`; OQ-061, L-045, L-046.
+- 2026-10-19 (COMMAND 55): contiguous mask and GLO-30 elevation, `docs/phases/core/geometry_dem_55.md`; OQ-061 closed, L-045 and L-046 retired, L-047.

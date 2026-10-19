@@ -31,7 +31,7 @@
 
 BRA:
   gem_country_name: "Brazil"  # F5-1: spelling of Country/area in the GEM tracker (label only)
-  # Islands (e.g. Fernando de Noronha) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
+  # Islands (e.g. Fernando de Noronha) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the contiguous territory (largest polygon plus polygons within 1 km, M-F2a-01).
   mainland_only: true
   hydrosheds_region: "sa"  # South America (HydroRIVERS)
   grip4_region_dir: "Region_2_Central_South_America"
@@ -112,7 +112,7 @@ PRT:
 
 IND:
   gem_country_name: "India"  # F5-1: spelling of Country/area in the GEM tracker (label only)
-  # Islands (Andaman and Nicobar, Lakshadweep) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the mainland only.
+  # Islands (Andaman and Nicobar, Lakshadweep) are outside the analyses, as for PRT (Douglas, 2026-10-06, OQ-039): borders/admin1 resolve to the contiguous territory (largest polygon plus polygons within 1 km, M-F2a-01), which includes the north block and Arunachal Pradesh as GADM 4.1 draws them (L-047).
   mainland_only: true
   # HydroRIVERS region = "as" (Central and South-East Asia), per
   # HydroRIVERS_TechDoc_v10.pdf p.4 (raw/hydrology/rivers/, and
