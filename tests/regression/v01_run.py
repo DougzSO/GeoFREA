@@ -8,6 +8,8 @@ E1 protected, E2 water and E3 riparian are frozen as the excluded shares of each
 (`land_eligibility/fractions.py`: sub-pixel coverage; E1 with every designation, E3 at the central setback and
 discharge threshold of `land_availability`). Refrozen with Douglas's authorization of 2026-10-08 (verdict G),
 replacing the binary masks of the retired legacy phase. The F2a river-distance raster stays frozen as well.
+Elevation and slope refrozen on 2026-10-19 (COMMAND 55, D-F2a-021): both are now the mean of the 30 m GLO-30 samples of each
+pixel, the elevation no longer comes from a bundled raster; no other layer changed.
 """
 
 from __future__ import annotations

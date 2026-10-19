@@ -50,7 +50,7 @@ import pandas as pd
 
 from geofrea.core import paths
 from geofrea.core.config_loader import load_countries
-from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.core.geo_utils import MAINLAND_MAX_GAP_KM, load_mainland_boundary
 from geofrea.core.http_retry import get_with_retry
 from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.data_acquisition.schemas import HASH_CHUNK_BYTES
@@ -355,12 +355,31 @@ def _mainland_only(country_code: str) -> bool:
     return bool(_load_countries_config().get(country_code, {}).get("mainland_only", False))
 
 
+MAINLAND_RULE_VERSION = f"contiguous-{MAINLAND_MAX_GAP_KM:g}km"  # METHODOLOGY 15.2.0; the earlier rule was the largest polygon alone
+
+
+def _rule_stamp(derived: Path) -> Path:
+    return derived.with_suffix(".rule")
+
+
 def _derived_is_fresh(derived: Path, source: Path) -> bool:
-    return derived.exists() and derived.stat().st_mtime >= source.stat().st_mtime
+    """The derived file exists, is newer than its source and was written by the current mainland rule (a file of an earlier rule is rebuilt)."""
+    stamp = _rule_stamp(derived)
+    return (
+        derived.exists()
+        and derived.stat().st_mtime >= source.stat().st_mtime
+        and stamp.exists()
+        and stamp.read_text(encoding="utf-8").strip() == MAINLAND_RULE_VERSION
+    )
+
+
+def _stamp_derived(derived: Path) -> None:
+    _rule_stamp(derived).write_text(MAINLAND_RULE_VERSION + "\n", encoding="utf-8")
 
 
 def _mainland_level0(source: Path, country_code: str) -> Path:
-    """Level-0 reduced to its largest polygon, written once under GEOFREA_DATA_DIR/raw/gadm.
+    """Level-0 reduced to its contiguous territory (largest polygon plus the polygons that touch it or lie < 1 km from it, M-F2a-01),
+    written once under GEOFREA_DATA_DIR/raw/gadm.
 
     Derived from `source` (never modifies it, so the local database's recorded
     sha256 stays valid); the derived file is what every acquisition consumer
@@ -371,11 +390,13 @@ def _mainland_level0(source: Path, country_code: str) -> Path:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     load_mainland_boundary(source).to_file(dest)
+    _stamp_derived(dest)
     return dest
 
 
 def _mainland_level1(level1_source: Path, mainland_level0: Path, country_code: str) -> Path:
-    """Level-1 units that touch the mainland polygon (drops e.g. Madeira/Azores for PRT)."""
+    """Level-1 units that touch the contiguous territory, clipped to it, so the drawn outline and the cell mask are one geometry (drops e.g.
+    Madeira/Azores for PRT)."""
     dest = paths.fetched_raw("gadm", country_code) / f"gadm41_{country_code}_1_mainland.shp"
     if _derived_is_fresh(dest, level1_source) and _derived_is_fresh(dest, mainland_level0):
         return dest
@@ -384,9 +405,12 @@ def _mainland_level1(level1_source: Path, mainland_level0: Path, country_code: s
     units = gpd.read_file(level1_source)
     mainland = gpd.read_file(mainland_level0).to_crs(units.crs)
     geom = mainland.union_all() if hasattr(mainland, "union_all") else mainland.unary_union
-    kept = units[units.intersects(geom)]
+    kept = units[units.intersects(geom)].copy()
+    kept["geometry"] = kept.geometry.intersection(geom)
+    kept = kept[~kept.geometry.is_empty]
     dest.parent.mkdir(parents=True, exist_ok=True)
     kept.to_file(dest)
+    _stamp_derived(dest)
     return dest
 
 

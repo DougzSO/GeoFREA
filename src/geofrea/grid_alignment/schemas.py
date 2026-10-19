@@ -54,13 +54,6 @@ class GridAlignmentInputs(BaseModel):
     clipped artifact from another phase.
 
     Args:
-        elevation_path: DEM raster path.
-        slope_path: OPTIONAL pre-computed slope raster override. Normally
-            None: grid_alignment derives slope from `elevation_path` at
-            the DEM's native resolution (raster_alignment.
-            derive_slope_from_dem), then reprojects it onto the grid like
-            elevation — see run_grid_alignment_phase(). Set this only to
-            skip that derivation with a slope raster made elsewhere.
         solar_path: PVOUT raster path.
         wind_paths: Wind speed/power-density raster paths. Unlike
             AuditInputs (which only ever inspects wind_paths[0]),
@@ -71,7 +64,8 @@ class GridAlignmentInputs(BaseModel):
         population_path: Population raster path.
         land_cover_count_tiles: 10 m WorldCover tiles acquired for the class counts when the local tiles are coarser (D-F2a-017);
             empty means the counts use `land_cover_tiles`.
-        slope_dem_tiles: Copernicus GLO-30 (30 m) tile paths for the slope bins (D-F2a-016); empty if not acquired.
+        slope_dem_tiles: Copernicus GLO-30 (30 m) tile paths: the one source of the aligned elevation, the aligned slope and the slope bins
+            (D-F2a-016, D-F2a-021); empty if not acquired (elevation and slope are then not produced). There is no other DEM input.
         land_cover_tiles: ESA WorldCover tile paths (mosaicked, not
             reprojected individually).
         roads_source: Raw GRIP4 regional shapefile path, unclipped —
@@ -83,8 +77,8 @@ class GridAlignmentInputs(BaseModel):
         lakes_path: HydroLAKES vector path (global — clipped internally
             by this phase, same approach data_quality_audit uses).
         rivers_path: HydroRIVERS vector path (global — clipped internally).
-        country_gdf: Country polygon (mainland-filtered, from
-            core.geo_utils.get_mainland_gdf()) — the geometry the
+        country_gdf: Country polygon (contiguous territory, from
+            core.geo_utils.get_contiguous_mainland_gdf()) — the geometry the
             output grid is built from (build_reference_grid() in
             legacy) and the clip mask applied to every output layer.
             Required, unlike AuditInputs.country_gdf (Optional there) —
@@ -110,8 +104,6 @@ class GridAlignmentInputs(BaseModel):
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    elevation_path: Path | None = None
-    slope_path: Path | None = None
     solar_path: Path | None = None
     wind_layers: dict[str, Path] = {}
     population_path: Path | None = None

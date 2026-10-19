@@ -131,8 +131,10 @@ from typing import Any, NamedTuple
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import pyogrio
 import shapely
+from shapely import STRtree
 from shapely.geometry import Point
 
 
@@ -303,6 +305,74 @@ def get_mainland_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return exploded.iloc[[idx]].to_crs("EPSG:4326")
 
 
+MAINLAND_MAX_GAP_KM = 1.0  # polygons that touch the kept set or lie closer than this belong to the contiguous territory (COMMAND 55)
+
+
+def contiguous_mainland_report(
+    gdf: gpd.GeoDataFrame, max_gap_km: float = MAINLAND_MAX_GAP_KM
+) -> pd.DataFrame:
+    """One row per polygon of the country: area, centroid, distance to the kept set and whether the contiguous rule keeps it.
+
+    The rule (METHODOLOGY 15.2.0, M-F2a-01): the largest polygon is kept, and so is every polygon that touches a kept polygon or lies
+    less than `max_gap_km` from one (transitively); the rest (islands, exclaves) is discarded. Areas are on the equal-area EPSG:6933
+    grid, distances in the local UTM zone (a 1 km threshold is far above its distortion).
+    """
+    parts = gdf.explode(index_parts=False).reset_index(drop=True).to_crs("EPSG:4326")
+    utm = get_local_utm_crs(
+        parts.geometry.union_all()
+        if hasattr(parts.geometry, "union_all")
+        else parts.geometry.unary_union
+    )
+    proj = parts.to_crs(utm).geometry
+    area_km2 = parts.to_crs("EPSG:6933").geometry.area.to_numpy() / 1e6
+    kept = np.zeros(len(parts), dtype=bool)
+    kept[int(np.argmax(area_km2))] = True
+    tree = STRtree(proj.to_numpy())
+    gap_m = max_gap_km * 1000.0
+    frontier = [int(np.argmax(area_km2))]
+    via = {frontier[0]: -1}
+    while frontier:
+        nxt = []
+        for i in frontier:
+            for j in tree.query(proj.iloc[i], predicate="dwithin", distance=gap_m):
+                if not kept[j]:
+                    kept[j] = True
+                    via[int(j)] = i
+                    nxt.append(int(j))
+        frontier = nxt
+    kept_union = proj[kept].union_all() if hasattr(proj, "union_all") else proj[kept].unary_union
+    centroids = parts.geometry.representative_point()
+    return pd.DataFrame(
+        {
+            "polygon": np.arange(len(parts)),
+            "area_km2": area_km2,
+            "lon": centroids.x.to_numpy(),
+            "lat": centroids.y.to_numpy(),
+            "distance_to_kept_km": [
+                0.0 if k else float(g.distance(kept_union)) / 1000.0
+                for k, g in zip(kept, proj, strict=True)
+            ],
+            "kept": kept,
+        }
+    )
+
+
+def get_contiguous_mainland_gdf(
+    gdf: gpd.GeoDataFrame, max_gap_km: float = MAINLAND_MAX_GAP_KM
+) -> gpd.GeoDataFrame:
+    """Single-row GeoDataFrame (EPSG:4326) with the contiguous territory of the country: its largest polygon and the polygons that
+    touch it or lie less than `max_gap_km` from it, transitively. Islands and exclaves farther away are dropped."""
+    parts = gdf.explode(index_parts=False).reset_index(drop=True).to_crs("EPSG:4326")
+    report = contiguous_mainland_report(gdf, max_gap_km)
+    kept = parts[report["kept"].to_numpy()]
+    geom = (
+        kept.geometry.union_all()
+        if hasattr(kept.geometry, "union_all")
+        else kept.geometry.unary_union
+    )
+    return gpd.GeoDataFrame({"contiguous": [True]}, geometry=[geom], crs="EPSG:4326")
+
+
 def detect_island_nation(gdf: gpd.GeoDataFrame, threshold_pct: float = 0.60) -> bool:
     """Detect whether get_mainland_gdf() would discard too much territory.
 
@@ -340,7 +410,8 @@ def detect_island_nation(gdf: gpd.GeoDataFrame, threshold_pct: float = 0.60) -> 
 
 
 def load_mainland_boundary(path: str | Path) -> gpd.GeoDataFrame:
-    """Read a country-boundary vector file and reduce it to its mainland polygon.
+    """Read a country-boundary vector file and reduce it to its contiguous territory (largest polygon plus the polygons that touch it
+    or lie less than MAINLAND_MAX_GAP_KM from it, COMMAND 55; before it was the largest polygon alone).
 
     Mechanical read + get_mainland_gdf() only — no None-handling, no
     fallback. Extracted 2026-09-08 (see docs/DECISIONS.md same date,
@@ -357,9 +428,9 @@ def load_mainland_boundary(path: str | Path) -> gpd.GeoDataFrame:
             mainland, islands, enclaves).
 
     Returns:
-        Single-row GeoDataFrame with the largest polygon, in EPSG:4326.
+        Single-row GeoDataFrame with the contiguous territory, in EPSG:4326.
     """
-    return get_mainland_gdf(gpd.read_file(path))
+    return get_contiguous_mainland_gdf(gpd.read_file(path))
 
 
 # ~111m at the equator (geographic CRSs) / ~100m (projected CRSs, in

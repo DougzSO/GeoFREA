@@ -82,7 +82,7 @@ def test_adapter_with_only_borders_produces_mainland_filtered_country_gdf(tmp_pa
 
     assert isinstance(inputs, GridAlignmentInputs)
     assert len(inputs.country_gdf) == 1  # mainland only, islet dropped
-    assert inputs.elevation_path is None
+    assert inputs.slope_dem_tiles == []
     assert inputs.roads_source is None
     assert inputs.grid_source is None
 
@@ -90,14 +90,12 @@ def test_adapter_with_only_borders_produces_mainland_filtered_country_gdf(tmp_pa
 @pytest.mark.unit
 def test_adapter_maps_source_path_fields(tmp_path):
     boundary_path = _boundary_path(tmp_path)
-    elevation_path = Path("/fake/elevation.tif")
     roads_path = Path("/fake/roads_grip4.shp")
     grid_path = Path("/fake/grid_osm.geojson")
 
     result = _result(
         [
             _layer("borders", boundary_path),
-            _layer("elevation", elevation_path),
             _layer("roads", roads_path),
             _layer("grid", grid_path),
         ]
@@ -107,7 +105,6 @@ def test_adapter_maps_source_path_fields(tmp_path):
         result, ResolutionsConfig(suitability=0.01), 100.0
     )
 
-    assert inputs.elevation_path == elevation_path
     # Deliberately renamed fields (see schemas.py/adapter.py module
     # docstrings) — roads/grid map to *_source, not *_path.
     assert inputs.roads_source == roads_path

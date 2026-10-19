@@ -11,6 +11,7 @@ from rasterio.transform import from_origin
 from shapely.geometry import LineString, Polygon
 
 import geofrea.grid_alignment.alignment as alignment_module
+import geofrea.grid_alignment.raster_alignment as raster_alignment_module
 from geofrea.core import paths
 from geofrea.core.config_loader import load_parameters
 from geofrea.core.orchestrator import PhaseContext
@@ -30,6 +31,14 @@ PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 def _data_dir(tmp_path, monkeypatch):
     """Interim caches (A-08, `paths.interim()`) live under GEOFREA_DATA_DIR: isolate it per test."""
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path / "data_dir"))
+
+
+_SP = 400  # samples per degree of the synthetic GLO-30 tiles (4 x 4 per 0.01 degree pixel); the real tiles have 3600
+
+
+@pytest.fixture(autouse=True)
+def _small_glo30_tiles(monkeypatch):
+    monkeypatch.setattr(raster_alignment_module, "_GLO30_SAMPLES_PER_DEGREE", _SP)
 
 
 def _inputs(**kwargs) -> GridAlignmentInputs:
@@ -68,6 +77,29 @@ def _context(tmp_path: Path, country_code: str = "PRT") -> PhaseContext:
         outputs_dir=tmp_path,
         prior_results={},
     )
+
+
+def _write_dem_tile(tmp_path: Path, z: float | np.ndarray) -> list[Path]:
+    """The synthetic GLO-30 tile (38 N, 9 W) that holds the test country; its first sample is on the integer corner (39 N, 9 W)."""
+    data = (
+        np.full((_SP, _SP), z, dtype="float32")
+        if np.isscalar(z)
+        else np.asarray(z, dtype="float32")
+    )
+    path = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        height=_SP,
+        width=_SP,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(-9.0 - 0.5 / _SP, 39.0 + 0.5 / _SP, 1 / _SP, 1 / _SP),
+    ) as dst:
+        dst.write(data, 1)
+    return [path]
 
 
 def _write_raster(path: Path, value: float, size: int = 60) -> None:
@@ -148,30 +180,29 @@ def test_verify_alignment_passes_for_matching_dimensions_and_none_entries(tmp_pa
 @pytest.mark.unit
 def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path):
     country_gdf = _country_gdf()
-    elev_path = tmp_path / "elev.tif"
-    _write_raster(elev_path, value=100.0)
-    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 100.0), country_gdf=country_gdf)
     context = _context(tmp_path)
 
-    def bad_reproject(src_path, out_path, grid, *args, **kwargs):
+    def bad_elevation(tiles, elevation_out, slope_out, grid, *args, **kwargs):
         transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
-        with rasterio.open(
-            out_path,
-            "w",
-            driver="GTiff",
-            height=3,
-            width=3,
-            count=1,
-            dtype="float32",
-            crs="EPSG:4326",
-            transform=transform,
-            nodata=-9999.0,
-        ) as dst:
-            dst.write(np.ones((3, 3), dtype="float32"), 1)
-        return out_path
+        for out_path in (elevation_out, slope_out):
+            with rasterio.open(
+                out_path,
+                "w",
+                driver="GTiff",
+                height=3,
+                width=3,
+                count=1,
+                dtype="float32",
+                crs="EPSG:4326",
+                transform=transform,
+                nodata=-9999.0,
+            ) as dst:
+                dst.write(np.ones((3, 3), dtype="float32"), 1)
+        return elevation_out, slope_out
 
     with (
-        patch.object(alignment_module, "reproject_to_grid", side_effect=bad_reproject),
+        patch.object(alignment_module, "elevation_and_slope_from_glo30", side_effect=bad_elevation),
         pytest.raises(RuntimeError, match="Topology mismatch"),
     ):
         run_grid_alignment_phase(context, inputs)
@@ -219,23 +250,23 @@ def test_run_grid_alignment_phase_reuses_already_aligned_raster_on_second_call(t
     # already-aligned elevation tif from the first call rather than
     # calling reproject_to_grid() again.
     country_gdf = _country_gdf()
-    elev_path = tmp_path / "elev.tif"
-    _write_raster(elev_path, value=55.0)
-    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 55.0), country_gdf=country_gdf)
     context = _context(tmp_path)
 
     first = run_grid_alignment_phase(context, inputs)
-    assert first.elevation is not None
+    assert first.elevation is not None and first.slope is not None
 
     def fail_if_called(*a, **k):
         raise AssertionError(
-            "reproject_to_grid() was called again — alignment cache was NOT reused!"
+            "elevation_and_slope_from_glo30() was called again — alignment cache was NOT reused!"
         )
 
-    with patch.object(alignment_module, "reproject_to_grid", side_effect=fail_if_called):
+    with patch.object(
+        alignment_module, "elevation_and_slope_from_glo30", side_effect=fail_if_called
+    ):
         second = run_grid_alignment_phase(context, inputs)
 
-    assert second.elevation == first.elevation
+    assert second.elevation == first.elevation and second.slope == first.slope
 
 
 @pytest.mark.unit
@@ -265,9 +296,7 @@ def test_run_grid_alignment_phase_recomputes_when_cached_raster_dims_mismatch(tm
     # grid must be unlinked and recomputed, not returned as-is (that
     # would silently defeat _verify_alignment()'s whole purpose).
     country_gdf = _country_gdf()
-    elev_path = tmp_path / "elev.tif"
-    _write_raster(elev_path, value=55.0)
-    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 55.0), country_gdf=country_gdf)
     context = _context(tmp_path)
 
     stale_path = (
@@ -302,9 +331,7 @@ def test_run_grid_alignment_phase_recomputes_when_cached_raster_dims_mismatch(tm
 @pytest.mark.unit
 def test_run_grid_alignment_phase_minimal_inputs_produces_result(tmp_path):
     country_gdf = _country_gdf()
-    elev_path = tmp_path / "elev.tif"
-    _write_raster(elev_path, value=123.0)
-    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 123.0), country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -313,6 +340,7 @@ def test_run_grid_alignment_phase_minimal_inputs_produces_result(tmp_path):
     assert result.elevation.exists()
     with rasterio.open(result.elevation) as src:
         assert (src.height, src.width) == (result.grid_metadata.height, result.grid_metadata.width)
+        assert np.nanmax(src.read(1)) == pytest.approx(123.0)
     assert result.roads is None
     assert result.grid is None
 
@@ -358,42 +386,54 @@ def test_run_grid_alignment_phase_saves_grid_metadata_json(tmp_path):
     assert on_disk["height"] == result.grid_metadata.height
 
 
+def _pixel_of_each_sample(grid):
+    """Grid row and column of every sample row and column of the synthetic tile: the pixel that holds its centre, an edge going below and east."""
+    lat = 39.0 - np.arange(_SP) / _SP
+    lon = -9.0 + np.arange(_SP) / _SP
+    res = abs(grid.transform.a)
+    row = np.floor((grid.transform.f - lat) / res + 1e-6).astype(int)
+    col = np.floor((lon - grid.transform.c) / res + 1e-6).astype(int)
+    return row, col
+
+
 @pytest.mark.unit
-def test_run_grid_alignment_phase_reprojects_source_with_different_crs(tmp_path):
+def test_aligned_elevation_is_the_mean_of_the_samples_of_each_pixel_with_no_displacement(tmp_path):
     country_gdf = _country_gdf()
-    elev_path = tmp_path / "elev_3857.tif"
-    # Build a raster in EPSG:3857 covering the same area.
-    from pyproj import Transformer
-
-    transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
-    x0, y0 = transformer.transform(_ORIGIN_LON, _ORIGIN_LAT)
-    x1, y1 = transformer.transform(_ORIGIN_LON + 0.6, _ORIGIN_LAT - 0.6)
-    transform = rasterio.transform.from_bounds(x0, y1, x1, y0, 60, 60)
-    with rasterio.open(
-        elev_path,
-        "w",
-        driver="GTiff",
-        height=60,
-        width=60,
-        count=1,
-        dtype="float32",
-        crs="EPSG:3857",
-        transform=transform,
-        nodata=-9999.0,
-    ) as dst:
-        dst.write(np.full((60, 60), 77.0, dtype="float32"), 1)
-
-    inputs = _inputs(elevation_path=elev_path, country_gdf=country_gdf)
+    grid = build_reference_grid(country_gdf, resolution_deg=_RES)
+    row, col = _pixel_of_each_sample(grid)
+    z = (1000 + 10 * row[:, None] + col[None, :]).astype(
+        "float32"
+    )  # every sample carries its pixel
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, z), country_gdf=country_gdf)
 
     result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
-    assert result.elevation is not None
     with rasterio.open(result.elevation) as src:
-        assert src.crs.to_string() == "EPSG:4326"
-        data = src.read(1)
-    valid = data[data != -9999.0]
-    assert valid.size > 0
-    assert np.allclose(valid, 77.0, atol=1.0)
+        elevation, nodata = src.read(1), src.nodata
+    rr, cc = np.nonzero(grid.country_mask)
+    # a pixel's elevation is the value its own samples carry: no pixel is shifted (the bundled file was displaced by 0.4 pixel)
+    assert np.allclose(elevation[rr, cc], 1000 + 10 * rr + cc)
+    assert (elevation[~grid.country_mask] == nodata).all()
+
+
+@pytest.mark.unit
+def test_elevation_and_slope_share_the_same_valid_pixels_and_have_no_seams(tmp_path):
+    country_gdf = _country_gdf()
+    grid = build_reference_grid(country_gdf, resolution_deg=_RES)
+    lat = 39.0 - np.arange(_SP) / _SP
+    z = np.tile((lat * 111_000.0 * 0.2)[:, None], (1, _SP))  # a uniform slope of atan(0.2)
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, z), country_gdf=country_gdf)
+
+    result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    with rasterio.open(result.elevation) as e, rasterio.open(result.slope) as sl:
+        elevation, slope = e.read(1), sl.read(1)
+        e_nodata, s_nodata = e.nodata, sl.nodata
+    inside = grid.country_mask
+    # no pixel of the country has a slope and no elevation, or the reverse, and neither has seam lines of missing values
+    assert ((elevation[inside] != e_nodata) == (slope[inside] != s_nodata)).all()
+    assert (elevation[inside] != e_nodata).all()
+    assert np.allclose(slope[inside], np.degrees(np.arctan(0.2)), atol=0.3)
 
 
 @pytest.mark.unit

@@ -29,6 +29,8 @@ from tests.unit.test_grid_alignment_alignment import (  # noqa: F401  (_data_dir
     _country_gdf,
     _data_dir,
     _inputs,
+    _small_glo30_tiles,
+    _write_dem_tile,
     _write_raster,
 )
 
@@ -105,8 +107,11 @@ def test_the_hash_memo_reuses_a_hash_while_size_and_mtime_hold_and_survives_a_re
 
 
 def _calls_of_reproject(inputs, context):
+    """Calls of the elevation and slope pass (F2a reads the GLO-30 tiles, D-F2a-021)."""
     with patch.object(
-        alignment_module, "reproject_to_grid", wraps=alignment_module.reproject_to_grid
+        alignment_module,
+        "elevation_and_slope_from_glo30",
+        wraps=alignment_module.elevation_and_slope_from_glo30,
     ) as spy:
         run_grid_alignment_phase(context, inputs)
     return spy.call_count
@@ -115,27 +120,24 @@ def _calls_of_reproject(inputs, context):
 def test_alignment_recomputes_a_layer_only_when_a_component_of_its_key_changes(
     tmp_path, monkeypatch
 ):
-    elev = tmp_path / "elev.tif"
-    _write_raster(elev, 55.0)
-    inputs = _inputs(elevation_path=elev, country_gdf=_country_gdf())
+    tiles = _write_dem_tile(tmp_path, 55.0)
+    inputs = _inputs(slope_dem_tiles=tiles, country_gdf=_country_gdf())
     context = _context(tmp_path)
     assert _calls_of_reproject(inputs, context) >= 1
 
     assert _calls_of_reproject(inputs, context) == 0  # nothing changed: reused
 
-    monkeypatch.setattr(alignment_module, "ALIGNMENT_ALGORITHM_VERSION", 2)  # algorithm version
+    monkeypatch.setattr(alignment_module, "ALIGNMENT_ALGORITHM_VERSION", 99)  # algorithm version
     assert _calls_of_reproject(inputs, context) >= 1
     assert _calls_of_reproject(inputs, context) == 0
 
-    _write_raster(elev, 77.0)  # content of the input file
+    _write_dem_tile(tmp_path, 77.0)  # content of the input file
     assert _calls_of_reproject(inputs, context) >= 1
     assert _calls_of_reproject(inputs, context) == 0
 
 
 def test_an_aligned_layer_without_a_key_sidecar_is_recomputed(tmp_path):
-    elev = tmp_path / "elev.tif"
-    _write_raster(elev, 55.0)
-    inputs = _inputs(elevation_path=elev, country_gdf=_country_gdf())
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 55.0), country_gdf=_country_gdf())
     context = _context(tmp_path)
     result = run_grid_alignment_phase(context, inputs)
     aligned = result.elevation

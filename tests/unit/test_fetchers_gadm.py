@@ -363,6 +363,45 @@ def test_mainland_only_country_gets_a_mainland_borders_and_admin1(tmp_path, monk
 
 
 @pytest.mark.unit
+def test_admin1_units_are_clipped_to_the_contiguous_territory(tmp_path, monkeypatch):
+    """A level-1 unit that also holds a far island is cut to the territory, so the outline and the cell mask are one geometry."""
+    mainland, island = box(0, 0, 4, 4), box(10, 10, 10.5, 10.5)
+    level0 = tmp_path / "raw" / "gadm41_PRT_0.shp"
+    level0.parent.mkdir(parents=True)
+    gpd.GeoDataFrame(
+        {"GID_0": ["PRT"]}, geometry=[mainland.union(island)], crs="EPSG:4326"
+    ).to_file(level0)
+    level1 = tmp_path / "raw" / "gadm41_PRT_1.shp"
+    gpd.GeoDataFrame(
+        {"NAME_1": ["Tudo"]}, geometry=[mainland.union(island)], crs="EPSG:4326"
+    ).to_file(level1)
+    monkeypatch.setattr(gadm, "_resolve_level0", lambda outputs_dir, cc: level0)
+    monkeypatch.setattr(gadm, "_resolve_level1", lambda outputs_dir, cc: level1)
+    monkeypatch.setattr(gadm, "_mainland_only", lambda country_code: True)
+
+    admin1 = gadm.fetch_admin1(tmp_path, "PRT")
+
+    assert gpd.read_file(admin1).union_all().area == pytest.approx(16.0)
+    assert gpd.read_file(level1).union_all().area == pytest.approx(16.25)  # raw file untouched
+
+
+@pytest.mark.unit
+def test_a_derived_file_of_an_earlier_rule_is_rebuilt(tmp_path, monkeypatch):
+    level0, _level1 = _write_country_with_island(tmp_path)
+    monkeypatch.setattr(gadm, "_resolve_level0", lambda outputs_dir, cc: level0)
+    monkeypatch.setattr(gadm, "_mainland_only", lambda country_code: True)
+    borders = gadm.fetch_borders(tmp_path, "PRT")
+    stamp = gadm._rule_stamp(borders)
+    assert stamp.read_text(encoding="utf-8").strip() == gadm.MAINLAND_RULE_VERSION
+    stamp.unlink()  # a file written before the rule had a version
+    gpd.GeoDataFrame({"GID_0": ["PRT"]}, geometry=[box(0, 0, 1, 1)], crs="EPSG:4326").to_file(
+        borders
+    )
+    rebuilt = gadm.fetch_borders(tmp_path, "PRT")
+    assert gpd.read_file(rebuilt).union_all().area == pytest.approx(16.0) and stamp.exists()
+
+
+@pytest.mark.unit
 def test_country_without_mainland_only_keeps_the_raw_borders_and_admin1(tmp_path, monkeypatch):
     level0, level1 = _write_country_with_island(tmp_path)
     monkeypatch.setattr(gadm, "_resolve_level0", lambda outputs_dir, cc: level0)

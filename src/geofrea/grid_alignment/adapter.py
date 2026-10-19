@@ -68,7 +68,6 @@ from geofrea.grid_alignment.schemas import GridAlignmentInputs
 # country_gdf need special handling below — see module
 # docstring.
 _SOURCE_PATH_FIELDS: dict[str, str] = {
-    "elevation": "elevation_path",
     "solar": "solar_path",
     "population": "population_path",
     "lakes": "lakes_path",

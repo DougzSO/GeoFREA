@@ -13,7 +13,9 @@ from geofrea.core.geo_utils import (
     _intersection_threaded,
     _simplify_for_intersection,
     clip_vector_to_country,
+    contiguous_mainland_report,
     detect_island_nation,
+    get_contiguous_mainland_gdf,
     get_local_utm_crs,
     get_mainland_gdf,
     read_clipped_to_country,
@@ -450,3 +452,45 @@ def test_utm_zone_of_a_very_large_layer_comes_from_its_bounding_box_not_from_a_u
     assert (
         gu.get_local_utm_crs(gdf) == "EPSG:32629"
     )  # bbox centre (-8.45, 38.55) lies in zone 29 north
+
+
+def _country_with_neighbours():
+    """A 4 x 4 degree mainland near the equator (1 degree = 111 km); pieces at 0 (touching), 0.5 km, 0.9 km after a kept piece, 2 km and far away."""
+    km = 1 / 111.32
+    main = shapely.box(0, 0, 4, 4)
+    touching = shapely.box(4, 1, 4.5, 1.5)
+    near = shapely.box(4 + 0.5 * km, 3, 4.5, 3.4)  # 0.5 km from the mainland
+    chain = shapely.box(4.5 + 0.9 * km, 3, 5, 3.4)  # 0.9 km from `near`, 5 km from the mainland
+    gap = shapely.box(0, 4 + 2 * km, 0.5, 4.5)  # 2 km from the mainland
+    far = shapely.box(10, 10, 10.5, 10.5)
+    return gpd.GeoDataFrame(
+        {"id": range(6)}, geometry=[main, touching, near, chain, gap, far], crs="EPSG:4326"
+    )
+
+
+@pytest.mark.unit
+def test_the_contiguous_rule_keeps_touching_and_near_polygons_transitively():
+    report = contiguous_mainland_report(_country_with_neighbours())
+    assert report["kept"].tolist() == [True, True, True, True, False, False]
+    assert report.loc[4, "distance_to_kept_km"] == pytest.approx(
+        2.0, abs=0.2
+    )  # the box edges have no intermediate vertices, so the projection bends them
+    assert report["area_km2"].iloc[0] > report["area_km2"].iloc[1:].max()
+    assert {"lon", "lat", "area_km2"} <= set(report.columns)
+
+
+@pytest.mark.unit
+def test_the_contiguous_territory_is_one_row_with_the_kept_polygons_only():
+    kept = get_contiguous_mainland_gdf(_country_with_neighbours())
+    assert len(kept) == 1 and str(kept.crs) == "EPSG:4326"
+    geom = kept.geometry.iloc[0]
+    assert geom.contains(shapely.Point(4.2, 1.2)) and geom.contains(shapely.Point(4.9, 3.2))
+    assert not geom.intersects(shapely.Point(0.2, 4.2)) and not geom.intersects(
+        shapely.Point(10.2, 10.2)
+    )
+
+
+@pytest.mark.unit
+def test_a_larger_gap_keeps_the_polygon_beyond_it():
+    report = contiguous_mainland_report(_country_with_neighbours(), max_gap_km=3.0)
+    assert report["kept"].tolist() == [True, True, True, True, True, False]

@@ -14,6 +14,7 @@ from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.grid_alignment.raster_alignment import (
     LandCoverCountNotExactError,
     MissingSourceCrsError,
+    elevation_and_slope_from_glo30,
     land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
@@ -616,3 +617,47 @@ def test_slope_class_counts_leave_pixels_without_a_tile_empty(tmp_path):
         slope_class_counts([other], tmp_path / "slope_counts.tif", grid, samples_per_degree=sp)
         is None
     )
+
+
+@pytest.mark.unit
+def test_elevation_and_slope_from_glo30_leave_pixels_without_a_tile_empty(tmp_path):
+    grid, sp = _grid(), 400
+    other = tmp_path / "Copernicus_DSM_COG_10_N10_00_E010_00_DEM.tif"  # far from the country
+    with rasterio.open(
+        other,
+        "w",
+        driver="GTiff",
+        height=sp,
+        width=sp,
+        count=1,
+        dtype="float32",
+        crs="EPSG:4326",
+        transform=from_origin(10 - 0.5 / sp, 11 + 0.5 / sp, 1 / sp, 1 / sp),
+    ) as dst:
+        dst.write(np.zeros((sp, sp), dtype="float32"), 1)
+    assert elevation_and_slope_from_glo30(
+        [other], tmp_path / "e.tif", tmp_path / "s.tif", grid, samples_per_degree=sp
+    ) == (None, None)
+
+
+@pytest.mark.unit
+def test_elevation_and_slope_from_glo30_agree_with_the_slope_bins(tmp_path):
+    """The mean slope of a pixel lies inside the bin that the slope counts give it (same samples, same stencil, same pixel rule)."""
+    grid, sp = _grid(), 400
+    lat = 39.0 - np.arange(sp) / sp
+    _, lon_km = wgs84_km_per_degree(lat.reshape(-1, 1))
+    dx_m = lon_km * 1000.0 / sp
+    z = np.arange(sp)[None, :] * np.tan(np.radians(20.5)) * dx_m
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+    e_path, s_path = elevation_and_slope_from_glo30(
+        [tile], tmp_path / "e.tif", tmp_path / "s.tif", grid, samples_per_degree=sp
+    )
+    counts_path = slope_class_counts([tile], tmp_path / "c.tif", grid, samples_per_degree=sp)
+    with rasterio.open(e_path) as e, rasterio.open(s_path) as s, rasterio.open(counts_path) as c:
+        elevation, slope, counts = e.read(1), s.read(1), c.read()
+        e_nodata = e.nodata
+    inside = grid.country_mask
+    assert (elevation[inside] != e_nodata).all()
+    assert np.allclose(slope[inside], 20.5, atol=0.05)
+    assert (counts[20][inside] == 16).all()
