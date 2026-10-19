@@ -16,9 +16,17 @@ from geofrea.core.production import audit_parameters
 from geofrea.lcoe_modeling.design import build_design
 from geofrea.lcoe_modeling.sampling import UncertainSpec, draw_lhs
 from geofrea.technical_potential.pipeline import resolve_technology
-from geofrea.technical_potential.power_curve import PowerCurve, assert_curve_usable, load_power_curve
+from geofrea.technical_potential.power_curve import (
+    PowerCurve,
+    assert_curve_usable,
+    load_power_curve,
+)
 from geofrea.technical_potential.weibull_cf import weibull_capacity_factor
-from tests.unit.test_technical_potential_functions import AK_GRID, V02_RELATIVE_TOLERANCE, _reference_cf
+from tests.unit.test_technical_potential_functions import (
+    AK_GRID,
+    V02_RELATIVE_TOLERANCE,
+    _reference_cf,
+)
 
 REPO = Path(__file__).resolve().parents[2]
 PARAMS = load_parameters(REPO / "config" / "parameters.json")

@@ -32,7 +32,8 @@ def test_grid_alignment_inputs_accepts_country_gdf_only():
     inputs = GridAlignmentInputs(
         country_gdf=_COUNTRY_GDF, distance_cap_km=100.0, resolution_deg=0.01
     )
-    assert inputs.elevation_path is None
+    assert inputs.slope_dem_tiles == []
+    assert not hasattr(inputs, "elevation_path")  # the only DEM input is the GLO-30 tiles (D-F2a-021)
     assert inputs.roads_source is None
     assert inputs.grid_source is None
     assert inputs.wind_layers == {}

@@ -110,7 +110,7 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
-    derive_slope_from_dem,
+    elevation_and_slope_from_glo30,
     land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
@@ -130,7 +130,9 @@ logger = logging.getLogger(__name__)
 
 # Version of the alignment logic, part of every aligned layer's cache key (OQ-026). Bump it by hand when the logic of any aligner
 # changes (resampling, masking, binning, distance rasterization), or the previous outputs would be reused.
-ALIGNMENT_ALGORITHM_VERSION = 1
+ALIGNMENT_ALGORITHM_VERSION = (
+    2  # 2: elevation and slope from the GLO-30 tiles (D-F2a-021, COMMAND 55)
+)
 
 
 @contextmanager
@@ -380,34 +382,28 @@ def run_grid_alignment_phase(
     )
     aligned: dict[str, Path | None] = {}
 
+    # Elevation and slope come from the same source and the same pixel rule (D-F2a-021): the mean of the 30 m Copernicus GLO-30 samples
+    # inside each pixel (METHODOLOGY 15.2.0, M-F2a-02). There is no other DEM input (the bundled `<ISO>_elevation.tif` is not read).
+    dem_tiles = list(inputs.slope_dem_tiles)
+
+    def _elevation_and_slope() -> tuple[Path | None, Path | None]:
+        outputs = elevation_and_slope_from_glo30(
+            dem_tiles, _path("elevation"), _path("slope"), grid
+        )
+        if (
+            outputs[1] is not None
+        ):  # both rasters come from one pass: the slope is as current as the elevation
+            write_cache_key(outputs[1], _key(dem_tiles))
+        return outputs
+
     with timer("elevation", timings), gdal_quiet():
         aligned["elevation"] = _execute_or_load(
-            "elevation",
-            lambda: reproject_to_grid(inputs.elevation_path, _path("elevation"), grid),
-            _exists(inputs.elevation_path),
-            files=[inputs.elevation_path],
+            "elevation", lambda: _elevation_and_slope()[0], bool(dem_tiles), files=dem_tiles
         )
-
-    # slope is NOT an acquired layer — it is derived here from the DEM at
-    # the DEM's native resolution (legacy main.py L598-609 / raster_
-    # processor.calculate_slope), then reprojected onto the reference
-    # grid like elevation. `inputs.slope_path`, when set, is an optional
-    # pre-computed override; normally it is None and we derive.
-    def _align_slope() -> Path | None:
-        slope_src = inputs.slope_path
-        if not _exists(slope_src):
-            slope_src = interim_dir / f"{context.country_code}_slope_native.tif"
-            interim_dir.mkdir(parents=True, exist_ok=True)
-            if derive_slope_from_dem(inputs.elevation_path, slope_src) is None:
-                return None
-        return reproject_to_grid(slope_src, _path("slope"), grid)
 
     with timer("slope", timings), gdal_quiet():
         aligned["slope"] = _execute_or_load(
-            "slope",
-            _align_slope,
-            _exists(inputs.slope_path) or _exists(inputs.elevation_path),
-            files=[inputs.slope_path if _exists(inputs.slope_path) else inputs.elevation_path],
+            "slope", lambda: _elevation_and_slope()[1], bool(dem_tiles), files=dem_tiles
         )
 
     with timer("solar", timings), gdal_quiet():
