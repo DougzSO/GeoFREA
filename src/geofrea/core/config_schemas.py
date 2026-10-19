@@ -381,6 +381,29 @@ class ExternalValidationConfig(BaseModel):
         return self
 
 
+class ClassingConfig(BaseModel):
+    """How the values of a map are put into classes (D-F5-029): the method and the number of classes asked for."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    method: Literal["quantile", "fisher_jenks"]
+    classes: int = Field(ge=2, le=12)
+
+
+class AbsoluteMapsConfig(BaseModel):
+    """Maps of the potential in capacity and energy (potential_maps, D-F5-029): the classes come from the data, never from fixed limits."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    per_cell: ClassingConfig  # the cells with a value above zero, central land scenario
+    per_state: ClassingConfig  # the state totals of the three land scenarios together
+    significant_figures: int = Field(
+        ge=1, le=4
+    )  # the limits are rounded to this many (the last one upwards)
+    palette: Literal["viridis", "cividis"]
+    dpi: int = Field(ge=72, le=600)
+
+
 class ExperimentsFile(BaseModel):
     """Root of `experiments.yaml`."""
 
@@ -403,6 +426,7 @@ class ExperimentsFile(BaseModel):
     synthesis: SynthesisConfig
     thesis_figures: ThesisFiguresConfig
     external_validation: ExternalValidationConfig
+    absolute_maps: AbsoluteMapsConfig
 
     @model_validator(mode="after")
     def _h1_to_h5_have_their_own_form(self) -> ExperimentsFile:
