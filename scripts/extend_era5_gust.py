@@ -60,6 +60,7 @@ def _load_acquire_module():
         "acquire_era5_gust", REPO_ROOT / "scripts" / "acquire_era5_gust.py"
     )
     mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # a dataclass in the module looks itself up here
     spec.loader.exec_module(mod)
     return mod
 
