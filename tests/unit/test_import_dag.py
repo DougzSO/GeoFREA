@@ -16,6 +16,7 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "geofrea"
 LAYERS = (
     "config_models",
     "core",
+    "viz",
     "data_acquisition",
     "data_quality_audit",
     "grid_alignment",
