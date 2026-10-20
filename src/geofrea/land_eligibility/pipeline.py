@@ -38,6 +38,7 @@ from geofrea.config_models.land_availability import (
     riparian_thresholds_km,
 )
 from geofrea.core import paths as core_paths
+from geofrea.core.code_fingerprint import normalised_source
 from geofrea.core.constants import (
     CELL_ORIGIN_LAT,
     CELL_ORIGIN_LON,
@@ -54,6 +55,7 @@ from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
+from geofrea.land_eligibility import fractions as _fractions_module
 from geofrea.land_eligibility.admin1 import assign_admin1, read_units
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
@@ -271,6 +273,16 @@ def _key(*parts) -> str:
     return hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()
 
 
+def _fractions_code_hash() -> str:
+    """Hash of the code that computes the sub-pixel shares (comments, docstrings and formatting do not count).
+
+    The share caches are keyed by their inputs; without this the cache of a run made with an earlier algorithm is read as current (COMMAND 58:
+    the tie-break of D-F3-020 never reached the real results because the shares of the day before were reused).
+    """
+    source = Path(_fractions_module.__file__).read_text(encoding="utf-8")
+    return hashlib.sha256(normalised_source(source).encode()).hexdigest()
+
+
 def _required_resources(tech: str, siting: dict[str, Path]) -> dict[str, Path]:
     names = ["dist_grid_km", "dist_road_km"]
     if tech == "solar":
@@ -384,7 +396,7 @@ def prepare_shared_layers(
     lakes_gdf = _clipped(lakes_path, "lakes", country_gdf, interim)
     protected_gdf = _clipped(protected_path, "protected", country_gdf, interim)
     rivers_gdf = _clipped(rivers_path, "rivers", country_gdf, interim)
-    id_parts = (transform, shape, DOMINANT_CODES)
+    id_parts = (transform, shape, DOMINANT_CODES, _fractions_code_hash())
     lakes_fraction = _fraction_cache(
         interim / "lakes_fraction.npz",
         _key(
