@@ -1,5 +1,7 @@
 # Maps of the technical potential in capacity and energy (D-F5-029 and D-F5-030, 2026-10-19)
 
+> **Superseded on 2026-10-20 (COMMAND 60, D-F5-032).** The maps described here (MW and GWh per cell and GW and TWh per state, in classes) are no longer the main maps of the phase; the set is now described in `potential_maps_v2.md`. The per-cell maps remain available with `absolute_maps.per_cell: true`. This file is kept as the record of the version of 2026-10-19.
+
 Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.2.0 (M-F5-07). Results are those of the real run of 2026-10-19 (F1 to F5 run again with the contiguous mask and the GLO-30 elevation, COMMAND 55; reference climate `m0`).
 
 ## 1. Audit before the change (read only)

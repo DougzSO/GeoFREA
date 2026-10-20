@@ -307,3 +307,5 @@ In `GEOFREA_DATA_DIR\outputs\<ISO3>\technical_potential\`: `artifacts\` (potenti
 | BRA | `D:\Douglas\DOUTORADO\GeoFREA_data\outputs\BRA\technical_potential\figures_run_report\potential_<tech>__<scenario>.png` (6 files: solar and wind, three scenarios) |
 
 The scripts of the run (driver, checks, comparisons) are in the session scratch directory and are not part of the repository.
+
+> **2026-10-20 (COMMAND 59):** the folders `figures_run_report\` of the three countries, which had no producer in the code, were moved (not deleted) to `GEOFREA_DATA_DIRrchiveigures_20261020\<ISO3>	echnical_potentialigures_run_report\`.
