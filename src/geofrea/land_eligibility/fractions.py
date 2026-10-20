@@ -23,6 +23,15 @@ from geofrea.core.geodesy import wgs84_km_per_degree
 
 DEFAULT_FACTOR = 10
 DEFAULT_STRIP_ROWS = 40
+# The sampling points of the sub-pixel grid are moved this far (degrees) east, and 0.618 times as far south. A source whose vertices lie on the
+# sub-pixel lattice (the WDPA file of IND: 96% of the vertices have three decimals, the sub-pixel is 0.001 degree) has diagonal edges that run
+# exactly through sub-pixel centres, and whether such a centre is inside was decided by rounding noise in the origin of the grid: the same
+# polygons gave other shares on a grid with another origin (COMMAND 58: 20,691 of 53,633 protected cells of IND changed between two grids of the
+# same country, none in PRT or BRA). A shift much larger than the noise (1e-13) and much smaller than the sub-pixel (1e-7 is 1e-4 of it) decides
+# those centres by geometry, the same on every grid. The two shifts differ, by an irrational ratio: with equal shifts an edge of slope -1 would
+# keep the centres on it (the edge moves as much as the centre), and so would any edge whose slope is the ratio of the shifts.
+TIE_BREAK_DEG = 1e-7
+TIE_BREAK_SOUTH_RATIO = 0.6180339887498949
 
 
 def _block_mean(a: np.ndarray, k: int) -> np.ndarray:
@@ -49,15 +58,39 @@ def _strip_geoms(
     return gdf.geometry.iloc[list(gdf.sindex.query(window, predicate="intersects"))]
 
 
-def _fine_transform(transform: rasterio.Affine, factor: int, row_off: int) -> rasterio.Affine:
+def _fine_transform(
+    transform: rasterio.Affine, factor: int, row_off: int, tie_break_deg: float = TIE_BREAK_DEG
+) -> rasterio.Affine:
     return rasterio.Affine(
         transform.a / factor,
         0.0,
-        transform.c,
+        transform.c + tie_break_deg,
         0.0,
         transform.e / factor,
-        transform.f + row_off * transform.e,
+        transform.f + row_off * transform.e - tie_break_deg * TIE_BREAK_SOUTH_RATIO,
     )
+
+
+def _anchored_strips(
+    transform: rasterio.Affine, height: int, strip_rows: int
+) -> list[tuple[int, int, int]]:
+    """Strips of rows `(r0, r1, k0)` whose boundaries lie on multiples of `strip_rows` of the absolute row index (rows counted from 90 degrees north).
+
+    `k0` is the absolute index of the first row of the whole strip, also for the first and the last strip, which can be partial. The strips
+    of a pixel therefore do not depend on where the grid of the country begins (the mask), and a quantity taken at the middle of a strip is
+    the same for the same pixel on any grid of the same lattice.
+    """
+    pixel = abs(transform.e)
+    top = round((90.0 - transform.f) / pixel)
+    strips = []
+    r = 0
+    while r < height:
+        k = top + r
+        k0 = (k // strip_rows) * strip_rows
+        r1 = min(r + (k0 + strip_rows - k), height)
+        strips.append((r, r1, k0))
+        r = r1
+    return strips
 
 
 def polygon_coverage_fraction(
@@ -66,6 +99,7 @@ def polygon_coverage_fraction(
     shape: tuple[int, int],
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
+    tie_break_deg: float = TIE_BREAK_DEG,
 ) -> np.ndarray:
     """Share of each pixel covered by the polygons of `gdf` (float32 in [0, 1]); zeros when `gdf` is None or empty."""
     height, width = shape
@@ -73,15 +107,14 @@ def polygon_coverage_fraction(
     if gdf is None or len(gdf) == 0:
         return out
     gdf = gdf.reset_index(drop=True)
-    for r0 in range(0, height, strip_rows):
-        r1 = min(r0 + strip_rows, height)
+    for r0, r1, _ in _anchored_strips(transform, height, strip_rows):
         geoms = _strip_geoms(gdf, transform, r0, r1, width, pad_deg=0.0)
         if len(geoms) == 0:
             continue
         fine = rasterize(
             [(g, 1) for g in geoms if g is not None and not g.is_empty],
             out_shape=((r1 - r0) * factor, width * factor),
-            transform=_fine_transform(transform, factor, r0),
+            transform=_fine_transform(transform, factor, r0, tie_break_deg),
             fill=0,
             all_touched=False,
             dtype=np.uint8,
@@ -97,8 +130,14 @@ def river_setback_fractions(
     thresholds_km: list[float],
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
+    tie_break_deg: float = 0.0,
 ) -> dict[float, np.ndarray]:
-    """For each setback in `thresholds_km`, the share of each pixel within that geodesic distance of a river line."""
+    """For each setback in `thresholds_km`, the share of each pixel within that geodesic distance of a river line.
+
+    The lines are burned with `all_touched`, so a line on the edge of a sub-pixel touches both sides and there is no tie to decide: the sampling
+    points are not shifted (`tie_break_deg=0`). What depends on the grid here is the km per degree at the middle of a strip, anchored on the
+    absolute lattice (`_anchored_strips`).
+    """
     height, width = shape
     out = {t: np.zeros(shape, dtype=np.float32) for t in thresholds_km}
     if lines is None or len(lines) == 0 or not thresholds_km:
@@ -106,9 +145,10 @@ def river_setback_fractions(
     lines = lines.reset_index(drop=True)
     sub_deg = abs(transform.a) / factor
     max_km = max(thresholds_km)
-    for r0 in range(0, height, strip_rows):
-        r1 = min(r0 + strip_rows, height)
-        lat_mid = transform.f + 0.5 * (r0 + r1) * transform.e
+    for r0, r1, k0 in _anchored_strips(transform, height, strip_rows):
+        lat_mid = 90.0 - (k0 + 0.5 * strip_rows) * abs(
+            transform.e
+        )  # middle of the whole strip on the absolute lattice
         lat_km, lon_km = wgs84_km_per_degree(np.array([lat_mid]))
         dy_km, dx_km = sub_deg * float(lat_km[0]), sub_deg * float(lon_km[0])
         pad_rows = (
@@ -122,7 +162,7 @@ def river_setback_fractions(
         river = rasterize(
             [(g, 1) for g in geoms if g is not None and not g.is_empty],
             out_shape=((p1 - p0) * factor, width * factor),
-            transform=_fine_transform(transform, factor, p0),
+            transform=_fine_transform(transform, factor, p0, tie_break_deg),
             fill=0,
             all_touched=True,
             dtype=np.uint8,
