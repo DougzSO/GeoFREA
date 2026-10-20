@@ -166,7 +166,7 @@ def join_products(existing: Path, extension: Path, out_path: Path) -> dict:
     return report
 
 
-def run(iso: str) -> dict:
+def run(iso: str, reverse: bool = False, download_only: bool = False) -> dict:
     import cdsapi
 
     acq = _load_acquire_module()
@@ -185,7 +185,8 @@ def run(iso: str) -> dict:
     start, end = REFERENCE_PERIOD
     year_paths: list[Path] = []
     failed: dict[str, str] = {}
-    for year in range(start, end + 1):
+    years = range(end, start - 1, -1) if reverse else range(start, end + 1)
+    for year in years:
         final = global_dir / f"{job.country}_fg10_hourly_bbox_{year}.nc"
         if final.exists():
             print(f"[skip] {job.key}/{year}: already downloaded", flush=True)
@@ -205,6 +206,9 @@ def run(iso: str) -> dict:
         year_paths.append(path)
     if failed:
         raise SystemExit(f"{iso}: years missing {sorted(failed)}; the product is left as it was")
+    if download_only:  # a second process that only requests the years, from the last one back, while the first one goes forward
+        print(f"{iso}: download only, {len(year_paths)} year files on disk", flush=True)
+        return {"plan": p, "downloaded": len(year_paths)}
 
     ext_path = country_dir / f"{iso}_fg10_annual_max_ext.nc"
     era5.write_annual_maxima_incremental(
@@ -253,12 +257,20 @@ def main() -> None:
     ap.add_argument(
         "--plan", action="store_true", help="print the plan and the time estimate; no network"
     )
+    ap.add_argument(
+        "--reverse", action="store_true", help="request the years from the last one back"
+    )
+    ap.add_argument(
+        "--download-only",
+        action="store_true",
+        help="request and stop: no reduction, join or registration",
+    )
     args = ap.parse_args()
     for iso in args.iso:
         if args.plan:
             print(json.dumps(plan(iso), indent=1, default=str))
         else:
-            run(iso)
+            run(iso, reverse=args.reverse, download_only=args.download_only)
 
 
 if __name__ == "__main__":
