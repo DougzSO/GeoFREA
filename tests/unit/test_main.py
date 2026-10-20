@@ -287,15 +287,15 @@ def test_build_audit_inputs_falls_back_to_empty_when_acquisition_output_is_none(
 
 @pytest.mark.unit
 def test_build_audit_inputs_adapts_real_acquisition_output(tmp_path):
-    elevation_path = Path("/fake/elevation.tif")
+    population_path = Path("/fake/population.tif")
     prior_results = {
         "data_acquisition": _acquisition_phase_result(
             [
                 AcquiredLayer(
-                    layer_name="elevation",
+                    layer_name="population",
                     provenance="fetched",
                     auth_required=False,
-                    path=elevation_path,
+                    path=population_path,
                 )
             ]
         )
@@ -303,7 +303,7 @@ def test_build_audit_inputs_adapts_real_acquisition_output(tmp_path):
 
     inputs = main._build_audit_inputs(_context(tmp_path, prior_results=prior_results))
 
-    assert inputs.elevation_path == elevation_path
+    assert inputs.population_path == population_path
 
 
 @pytest.mark.unit
@@ -339,14 +339,14 @@ def test_audit_run_reflects_data_acquisition_output_end_to_end(tmp_path):
     # Untouched layers correctly surface as missing, not as an error —
     # this is the audit doing its job on a genuinely partial
     # acquisition, not a sign the wiring is broken.
-    assert result.rasters["elevation"].error == "File not found"
+    assert result.rasters["solar"].error == "File not found"
 
 
 @pytest.mark.unit
 def test_audit_run_with_no_prior_acquisition_matches_standalone_behavior(tmp_path):
     result = main._audit_run(_context(tmp_path, prior_results={}), _audit_config())
     assert result.vectors["borders"].found is False
-    assert result.rasters["elevation"].error == "File not found"
+    assert result.rasters["solar"].error == "File not found"
 
 
 # ─── grid_alignment wiring (2026-09-08, see DECISIONS.md same date) ───

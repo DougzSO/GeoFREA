@@ -12,7 +12,7 @@ opened).
 Mirrors inspect_raster()'s architecture on purpose:
   - Takes an unopened `path` and opens the file itself — AuditInputs'
     vector fields stay `Path | None`, the same "already-resolved Path"
-    convention as solar_path/elevation_path, NOT pre-loaded
+    convention as solar_path/population_path, NOT pre-loaded
     GeoDataFrames. (An earlier version of this stage's instructions
     described adapter.py pre-loading GeoDataFrames, mirroring
     _load_mainland_boundary/plants_df — that would have meant this

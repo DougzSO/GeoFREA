@@ -503,6 +503,17 @@ def _stats_all_bands(
     }
 
 
+def _pixels_inside(
+    country_gdf: gpd.GeoDataFrame,
+    crs: rasterio.crs.CRS | None,
+    shape: tuple[int, int],
+    transform: rasterio.Affine,
+) -> int:
+    """Number of pixels of a window inside the country polygon (the rule `_mask_raster_by_polygon` applies)."""
+    geoms = [mapping(g) for g in country_gdf.to_crs(crs).geometry]
+    return int(geometry_mask(geoms, out_shape=shape, transform=transform, invert=True).sum())
+
+
 def inspect_raster(
     path: Path,
     country_gdf: gpd.GeoDataFrame | None = None,
@@ -552,6 +563,7 @@ def inspect_raster(
         "max": None,
         "mean": None,
         "valid_pct": None,
+        "mask_coverage_pct": None,
         "area_km2": None,
         "error": None,
     }
@@ -635,6 +647,14 @@ def inspect_raster(
             valid_data = data[valid_mask]
             total_px = data.size
             valid_px = valid_data.size
+            if country_gdf is not None and result["masked_by"] == "country polygon (windowed)":
+                # the pixels inside the polygon (the rule of the mask above): what share of them holds a valid value
+                inside_px = _pixels_inside(
+                    country_gdf, effective_crs or src.crs, data.shape, transform
+                )
+                result["mask_coverage_pct"] = (
+                    round(100.0 * valid_px / inside_px, 1) if inside_px else None
+                )
 
             if valid_px > 0:
                 result["min"] = round(float(valid_data.min()), 4)
@@ -895,6 +915,12 @@ def inspect_land_cover_tiles(
     }
 
 
+MASK_COVERAGE_WARN_PCT = 99.0  # a wind layer with a valid value in fewer than this share of the country mask raises an alert
+MASK_COVERAGE_LAYERS = frozenset(
+    {"wind", "weibull_a", "weibull_k", "air_density"}
+)  # the Global Wind Atlas layers (F1 completes them to the mask)
+
+
 def diagnose_consistency(
     raster_meta: dict[str, dict],
     expected_resolutions: dict[str, float | None],
@@ -918,6 +944,18 @@ def diagnose_consistency(
     """
     alerts: list[str] = []
     not_audited: dict[str, str] = {}
+
+    for layer, meta in raster_meta.items():
+        coverage = meta.get("mask_coverage_pct")
+        if (
+            layer in MASK_COVERAGE_LAYERS
+            and coverage is not None
+            and coverage < MASK_COVERAGE_WARN_PCT
+        ):
+            alerts.append(
+                f"LOW MASK COVERAGE [{layer}]: {coverage:.1f}% of the country mask holds a valid value "
+                f"(below {MASK_COVERAGE_WARN_PCT:.0f}%) — the layer has no data over part of the analysed territory (OQ-062)."
+            )
 
     crs_set = {m["crs"] for m in raster_meta.values() if m.get("crs") and not m.get("error")}
     if len(crs_set) > 1:

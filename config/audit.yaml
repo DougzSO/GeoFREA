@@ -49,9 +49,8 @@ layers:
     # against plausible urban density in persons/km2 for all three countries), not
     # an anomaly this gate should flag.
 
-  elevation:
-    expected_resolution_deg: 0.005
-    source: "native metadata (GDAL transform) of Copernicus DEM 30m files BRA_elevation.tif and PRT_elevation.tif, both agreeing at 0.005 deg — read 2026-09-22"
+  # No `elevation` entry (removed COMMAND 58): the DEM is not a layer of F1 or F1b. F2a builds the aligned elevation and slope from the
+  # Copernicus GLO-30 tiles (D-F2a-021); the bundled `<ISO>_elevation.tif` is not read by any phase.
 
   # No `slope` entry (removed 2026-09-23, see docs/phases/
   # F1b_data_quality_audit.md D-F1b-003, resolving OQ-030): slope is
@@ -144,12 +143,9 @@ country_overrides:
     land_cover:
       expected_resolution_deg: 0.01
       source: "scripts/generate_zzz_fixture.py -- fixture raster written at the 0.01 deg analysis-grid resolution directly, not a real ESA WorldCover tile."
-    elevation:
-      expected_resolution_deg: 0.01
-      source: "scripts/generate_zzz_fixture.py -- fixture DEM written at 0.01 deg (matches the analysis grid, unlike the real 0.005 deg Copernicus DEM) so its pixel count matches the fixture design's decision-cell math exactly."
     population:
       expected_resolution_deg: 0.01
-      source: "scripts/generate_zzz_fixture.py -- fixture population raster written at 0.01 deg for the same reason as elevation above."
+      source: "scripts/generate_zzz_fixture.py -- fixture population raster written at 0.01 deg for the same reason as land_cover above."
     solar:
       expected_resolution_deg: 0.01
       source: "scripts/generate_zzz_fixture.py -- fixture PVOUT raster written at 0.01 deg (not the real Global Solar Atlas 0.00833 deg)."

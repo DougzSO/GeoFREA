@@ -86,7 +86,6 @@ _CMIP6_REPRESENTATIVE_VARIABLE = "tas"
 # filtered here), not a conflict.
 _SINGLE_PATH_FIELDS: dict[str, str] = {
     "solar": "solar_path",
-    "elevation": "elevation_path",
     "population": "population_path",
     "lakes": "lakes_path",
     "rivers": "rivers_path",

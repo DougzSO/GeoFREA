@@ -40,6 +40,9 @@ class RasterInspection(BaseModel):
     max: float | None = None
     mean: float | None = None
     valid_pct: float | None = None
+    mask_coverage_pct: float | None = (
+        None  # share of the country-mask pixels that hold a valid value (None: not measured)
+    )
     area_km2: float | None = None
     error: str | None = None
 
@@ -150,6 +153,9 @@ class RasterLayerSummary(BaseModel):
     error: str | None = None
     value_range: tuple[float, float] | None = None
     file_count: int | None = None
+    mask_coverage_pct: float | None = (
+        None  # COMMAND 58 (OQ-062): valid share of the country mask, for the wind layers
+    )
 
 
 class VectorLayerSummary(BaseModel):

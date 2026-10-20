@@ -283,7 +283,7 @@ def _country_raw_root(country_code: str) -> Path | None:
     relative to GEOFREA_DATA_DIR (never GEOFREA_DATA_DIR, which
     stays real-country-only and read-only) holding its generated fixture
     tree (`scripts/generate_zzz_fixture.py`). This is the single place
-    that decides which root every one of resolve_elevation_path() /
+    that decides which root every one of resolve_population_path() /
     resolve_population_path() / resolve_solar_path() / resolve_grid_path()
     / resolve_land_cover_tiles() / resolve_roads_path() below searches —
     none of those five functions' own path-construction logic changed.
@@ -353,36 +353,6 @@ def resolve_synthetic_fetched_layer(country_code: str, layer_name: str) -> Path 
     return path
 
 
-def resolve_elevation_path(country_code: str) -> Path | None:
-    """Resolve the local Copernicus DEM elevation raster for one country.
-
-    Args:
-        country_code: ISO-3166-alpha-3 code. Must have an elevation_dir
-            mapping in config/countries.yaml.
-
-    Returns:
-        Path to `<raw>/elevation/<dir>/<country_code>_elevation.tif`, or
-        None if GEOFREA_DATA_DIR is unset or the file is genuinely
-        absent on disk (logged, not raised in either case).
-
-    Raises:
-        CountryMappingError: If country_code is not in countries.yaml or
-            if its elevation_dir mapping is null — a configuration gap,
-            not a runtime condition (see module docstring).
-    """
-    _require_country(country_code)
-
-    raw_data_dir = _country_raw_root(country_code)
-    if raw_data_dir is None:
-        return None
-
-    path = raw_data_dir / "elevation" / country_code / f"{country_code}_elevation.tif"
-    if not path.exists():
-        logger.warning("Local elevation raster not found for %s: %s", country_code, path)
-        return None
-    return path
-
-
 def resolve_population_path(country_code: str) -> Path | None:
     """Resolve the local WorldPop population raster for one country.
 
@@ -435,7 +405,7 @@ def resolve_solar_path(country_code: str) -> Path | None:
     Returns:
         Path to `<raw>/solar_potential/World_PVOUT_.../PVOUT.tif`, or None
         if GEOFREA_DATA_DIR is unset or the file is genuinely absent
-        on disk (logged, not raised — same as resolve_elevation_path).
+        on disk (logged, not raised — same as resolve_population_path).
     """
     raw_data_dir = _country_raw_root(country_code)
     if raw_data_dir is None:
@@ -567,7 +537,7 @@ def resolve_roads_path(country_code: str) -> Path | None:
     """Resolve the local GRIP4 regional roads shapefile covering one country.
 
     UNCLIPPED — this is the same shape of resolver as
-    resolve_elevation_path() etc. (locate a path, do not process it),
+    resolve_population_path() etc. (locate a path, do not process it),
     but the file itself spans many countries (GRIP4's continental
     region split), same as lakes/rivers/protected's global/continental
     source files. The per-country clip happens downstream, at

@@ -15,7 +15,6 @@ import pytest
 from shapely.geometry import box
 
 from geofrea.data_acquisition.local_layers import (
-    resolve_elevation_path,
     resolve_grid_path,
     resolve_land_cover_tiles,
     resolve_population_path,
@@ -36,58 +35,6 @@ def _make_raw_dir(tmp_path: Path) -> Path:
     raw = tmp_path / "raw"
     raw.mkdir()
     return raw
-
-
-@pytest.mark.unit
-def test_resolve_elevation_path_found(tmp_path, monkeypatch):
-    raw = _make_raw_dir(tmp_path)
-    (raw / "elevation" / "BRA").mkdir(parents=True)
-    expected = raw / "elevation" / "BRA" / "BRA_elevation.tif"
-    expected.write_bytes(b"")
-    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
-
-    assert resolve_elevation_path("BRA") == expected
-
-
-@pytest.mark.unit
-def test_resolve_elevation_path_uses_iso3_dir_name_for_prt(tmp_path, monkeypatch):
-    # PRT is one of the two countries whose elevation directory is
-    # named by ISO3 code rather than full country name (confirmed
-    # against the real database — see local_layers.py's module
-    # docstring, "elevation subdirectories do NOT follow one
-    # convention").
-    raw = _make_raw_dir(tmp_path)
-    (raw / "elevation" / "PRT").mkdir(parents=True)
-    expected = raw / "elevation" / "PRT" / "PRT_elevation.tif"
-    expected.write_bytes(b"")
-    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
-
-    assert resolve_elevation_path("PRT") == expected
-
-
-@pytest.mark.unit
-def test_resolve_elevation_path_missing_file_returns_none(tmp_path, monkeypatch):
-    raw = _make_raw_dir(tmp_path)
-    (raw / "elevation" / "BRA").mkdir(parents=True)
-    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
-
-    assert resolve_elevation_path("BRA") is None
-
-
-@pytest.mark.unit
-def test_resolve_elevation_path_unmapped_country_raises_keyerror(tmp_path, monkeypatch):
-    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
-
-    with pytest.raises(KeyError):
-        resolve_elevation_path("XXX")
-
-
-@pytest.mark.unit
-def test_resolve_elevation_path_no_env_var_returns_none(tmp_path):
-    # GEOFREA_SHARED_RAW_DIR unset entirely — graceful, not a raise (see
-    # module docstring's "two different failure modes"). Deliberately
-    # NOT raised even for a country that IS in the mapping table.
-    assert resolve_elevation_path("BRA") is None
 
 
 @pytest.mark.unit

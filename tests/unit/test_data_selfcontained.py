@@ -39,7 +39,6 @@ def test_the_resolvers_ignore_a_shared_raw_directory_that_still_has_every_file(
     """With the old variable pointing at a complete tree and GEOFREA_DATA_DIR empty, nothing resolves."""
     shared = tmp_path / "shared"
     for rel in (
-        "elevation/Brazil/BRA_elevation.tif",
         "population/bra_pop_2020.tif",
         "infrastructure/grid/BRA_grid_osm.geojson",
         "infrastructure/roads/Region_2_Central_South_America/GRIP4_region2.shp",
@@ -54,7 +53,6 @@ def test_the_resolvers_ignore_a_shared_raw_directory_that_still_has_every_file(
     data.mkdir()
     monkeypatch.setenv("GEOFREA_SHARED_RAW_DIR", str(shared))
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(data))
-    assert local_layers.resolve_elevation_path("BRA") is None
     assert local_layers.resolve_population_path("BRA") is None
     assert local_layers.resolve_grid_path("BRA") is None
     assert local_layers.resolve_roads_path("BRA") is None
@@ -69,7 +67,6 @@ def test_the_resolvers_read_the_layout_of_a8_inside_the_data_directory(tmp_path,
     monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
     raw = tmp_path / "raw"
     expected = {
-        "elevation": raw / "elevation" / "BRA" / "BRA_elevation.tif",
         "population": raw / "population" / "BRA" / "bra_pop_2020.tif",
         "grid": raw / "infrastructure_grid" / "BRA" / "BRA_grid_osm.geojson",
         "roads": raw
@@ -81,7 +78,6 @@ def test_the_resolvers_read_the_layout_of_a8_inside_the_data_directory(tmp_path,
     for path in expected.values():
         path.parent.mkdir(parents=True)
         path.write_bytes(b"")
-    assert local_layers.resolve_elevation_path("BRA") == expected["elevation"]
     assert local_layers.resolve_population_path("BRA") == expected["population"]
     assert local_layers.resolve_grid_path("BRA") == expected["grid"]
     assert local_layers.resolve_roads_path("BRA") == expected["roads"]

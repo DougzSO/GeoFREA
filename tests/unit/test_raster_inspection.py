@@ -971,3 +971,35 @@ def test_inspect_raster_multiband_valid_pct_counts_nan_cells_across_all_bands(tm
 
     assert meta["valid_pct"] == 75.0
     assert meta["max"] == 4.0
+
+
+# ─── coverage of the country mask (OQ-062, COMMAND 58) ───────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_inspect_raster_reports_the_share_of_the_mask_that_holds_a_valid_value(tmp_path):
+    data = np.full((_SIZE, _SIZE), 10.0, dtype=np.float32)
+    data[:, 5:] = -9999.0  # the east half of the country has no data
+    path = tmp_path / "half.tif"
+    _write_raster(path, data, nodata=-9999.0)
+
+    result = inspect_raster(path, country_gdf=_covering_gdf())
+
+    assert result["mask_coverage_pct"] == pytest.approx(50.0, abs=1.0)
+    full = tmp_path / "full.tif"
+    _write_raster(full, np.full((_SIZE, _SIZE), 1.0, dtype=np.float32), nodata=-9999.0)
+    assert inspect_raster(full, country_gdf=_covering_gdf())["mask_coverage_pct"] == pytest.approx(100.0)
+    assert inspect_raster(full, country_gdf=None)["mask_coverage_pct"] is None  # no mask, nothing to measure
+
+
+@pytest.mark.unit
+def test_a_wind_layer_below_99_percent_of_the_mask_raises_an_alert_and_other_layers_do_not():
+    meta = {"crs": "EPSG:4326", "resolution": 0.01, "error": None}
+    raster_meta = {
+        "wind": {**meta, "mask_coverage_pct": 96.7},
+        "weibull_k": {**meta, "mask_coverage_pct": 99.4},
+        "population": {**meta, "mask_coverage_pct": 40.0},  # not a GWA layer: no alert
+    }
+    alerts, _ = diagnose_consistency(raster_meta, {}, 0.1)
+    low = [a for a in alerts if a.startswith("LOW MASK COVERAGE")]
+    assert len(low) == 1 and "[wind]" in low[0] and "96.7%" in low[0]
