@@ -86,7 +86,6 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
 
     for layer in (
         "solar",
-        "elevation",
         "population",
         "slope",
         "wind",
@@ -114,7 +113,6 @@ def test_run_audit_phase_with_no_inputs_reports_every_layer_missing(tmp_path):
     }
     assert missing_rasters == {
         "solar",
-        "elevation",
         "population",
         "slope",
         "wind",
@@ -148,17 +146,17 @@ def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_pat
     # (see DECISIONS.md same date, "AuditSummary refactor to
     # layer-keyed dict"), covering _format_report()'s rewritten SUMMARY
     # section end to end, not just the schema behind it.
-    elevation_path = tmp_path / "elevation.tif"
+    population_path = tmp_path / "population.tif"
     data = np.full((_SIZE, _SIZE), 100.0, dtype=np.float32)
     data[0, 0] = 300.0
-    _write_raster(elevation_path, data)
+    _write_raster(population_path, data)
 
     lake = box(_ORIGIN_LON, _ORIGIN_LAT - 0.02, _ORIGIN_LON + 0.01, _ORIGIN_LAT - 0.01)
     lakes_path = tmp_path / "lakes.geojson"
     gpd.GeoDataFrame(geometry=[lake], crs="EPSG:4326").to_file(lakes_path, driver="GeoJSON")
 
     inputs = AuditInputs(
-        elevation_path=elevation_path,
+        population_path=population_path,
         lakes_path=lakes_path,
         country_gdf=_covering_gdf(),
     )
@@ -169,9 +167,9 @@ def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_pat
 
     # Raster: value_range surfaces in the SUMMARY footer with the
     # existing label/format string.
-    elevation_line = next(line for line in summary_lines if "Elevation (m)" in line)
-    assert "100" in elevation_line
-    assert "300" in elevation_line
+    population_line = next(line for line in summary_lines if "Population (people/pixel)" in line)
+    assert "100" in population_line
+    assert "300" in population_line
 
     # Vector: HydroLAKES shows [OK] found in the footer, now sourced
     # from AuditSummary.layers (not result.vectors read directly).
@@ -181,7 +179,7 @@ def test_run_audit_phase_summary_footer_text_for_raster_and_vector_layer(tmp_pat
     # The consolidated "Layers OK" row spans both kinds — a raster
     # name and a vector name on the same line.
     layers_ok_line = next(line for line in summary_lines if "Layers OK" in line)
-    assert "elevation" in layers_ok_line
+    assert "population" in layers_ok_line
     assert "lakes" in layers_ok_line
 
 
@@ -198,16 +196,16 @@ def test_run_audit_phase_writes_report_under_outputs_dir(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_inspects_a_present_raster(tmp_path):
-    elevation_path = tmp_path / "elevation.tif"
-    _write_raster(elevation_path, np.full((_SIZE, _SIZE), 250.0, dtype=np.float32))
+    population_path = tmp_path / "population.tif"
+    _write_raster(population_path, np.full((_SIZE, _SIZE), 250.0, dtype=np.float32))
 
-    inputs = AuditInputs(elevation_path=elevation_path, country_gdf=_covering_gdf())
+    inputs = AuditInputs(population_path=population_path, country_gdf=_covering_gdf())
     result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
-    assert result.rasters["elevation"].error is None
-    assert result.rasters["elevation"].mean == pytest.approx(250.0)
-    assert result.summary.layers["elevation"].status == "ok"
-    assert result.summary.layers["elevation"].value_range == pytest.approx((250.0, 250.0))
+    assert result.rasters["population"].error is None
+    assert result.rasters["population"].mean == pytest.approx(250.0)
+    assert result.summary.layers["population"].status == "ok"
+    assert result.summary.layers["population"].value_range == pytest.approx((250.0, 250.0))
     # Everything else is still genuinely absent.
     assert result.rasters["solar"].error == "File not found"
     assert result.summary.layers["solar"].status == "missing"

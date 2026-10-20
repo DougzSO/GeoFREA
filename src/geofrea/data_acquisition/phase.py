@@ -85,11 +85,11 @@ from geofrea.data_acquisition.fetchers.protected_planet import fetch_protected_a
 from geofrea.data_acquisition.fetchers.wind import (
     GWA_HEIGHTS_M,
     GWA_PRODUCTS,
+    complete_gwa_to_mask,
     fetch_gwa_product,
     fetch_wind,
 )
 from geofrea.data_acquisition.local_layers import (
-    resolve_elevation_path,
     resolve_grid_path,
     resolve_land_cover_tiles,
     resolve_population_path,
@@ -146,7 +146,9 @@ class DataAcquisitionLayerFailedError(RuntimeError):
 # (surfaced by the Orchestrator as a failed phase) rather
 # than silently degrade to path=None like a real network error would.
 _FETCHED_LAYER_HANDLERS: dict[str, Callable[[PhaseContext], Path | None]] = {
-    "wind": lambda ctx: fetch_wind(ctx.outputs_dir, ctx.country_code),
+    "wind": lambda ctx: complete_gwa_to_mask(
+        ctx.outputs_dir, ctx.country_code, "wind_speed", 100, fetch_wind(ctx.outputs_dir, ctx.country_code)
+    ),
     "lakes": lambda ctx: fetch_lakes(ctx.outputs_dir),
     "rivers": lambda ctx: fetch_rivers(ctx.outputs_dir, ctx.country_code),
     "borders": lambda ctx: fetch_borders(ctx.outputs_dir, ctx.country_code),
@@ -179,8 +181,8 @@ _GWA_EXTRA_LAYER_SPECS: tuple[tuple[str, str, int], ...] = tuple(
 )
 
 for _layer_name, _product, _height in _GWA_EXTRA_LAYER_SPECS:
-    _FETCHED_LAYER_HANDLERS[_layer_name] = lambda ctx, p=_product, h=_height: fetch_gwa_product(
-        ctx.outputs_dir, ctx.country_code, p, h
+    _FETCHED_LAYER_HANDLERS[_layer_name] = lambda ctx, p=_product, h=_height: complete_gwa_to_mask(
+        ctx.outputs_dir, ctx.country_code, p, h, fetch_gwa_product(ctx.outputs_dir, ctx.country_code, p, h)
     )
 del _layer_name, _product, _height
 
@@ -205,7 +207,6 @@ assert set(_FETCHED_LAYER_HANDLERS) == IMPLEMENTED_FETCH_LAYER_NAMES, (
 # docstring for why "resolved locally" and "fetched by GeoFREA's own
 # code" are deliberately different facts.
 _LOCAL_PATH_HANDLERS: dict[str, Callable[[str], Path | None]] = {
-    "elevation": lambda country_code: resolve_elevation_path(country_code),
     "population": lambda country_code: resolve_population_path(country_code),
     "grid": lambda country_code: resolve_grid_path(country_code),
     "roads": lambda country_code: resolve_roads_path(country_code),
@@ -221,7 +222,7 @@ _LOCAL_PATH_HANDLERS: dict[str, Callable[[str], Path | None]] = {
 # _FETCHED_LAYER_HANDLERS already uses (module docstring's lambdas call
 # fetch_power_plants() etc. by name). This is not stylistic: a direct
 # reference would bind the function object at dict-construction time,
-# so a test's monkeypatch.setattr(phase_module, "resolve_elevation_path", ...)
+# so a test's monkeypatch.setattr(phase_module, "resolve_population_path", ...)
 # would silently miss it — the lambda instead looks the name up in this
 # module's globals on every call, which is what makes that monkeypatch
 # pattern work at all (confirmed by the test suite, not assumed).
@@ -387,13 +388,6 @@ _LAYER_REGISTRY: tuple[_LayerSpec, ...] = (
         True,
     ),
     _LayerSpec(
-        "elevation",
-        "local_only",
-        False,
-        "Copernicus DEM 30m (local bundled file, pre-downloaded)",
-        True,
-    ),
-    _LayerSpec(
         "population", "local_only", False, "WorldPop (local bundled file, pre-downloaded)", True
     ),
     _LayerSpec(
@@ -469,7 +463,7 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
 
     6 layers (wind, lakes, rivers, borders, admin1,
     protected — see _FETCHED_LAYER_HANDLERS) call a real fetcher and
-    may have a real `path` populated. 6 more (elevation, population,
+    may have a real `path` populated. 5 more (population,
     grid, roads, land_cover, solar — see _LOCAL_PATH_HANDLERS /
     _LOCAL_MULTI_PATH_HANDLERS) resolve a pre-placed path/paths from
     the local database instead — no fetch/download involved (see

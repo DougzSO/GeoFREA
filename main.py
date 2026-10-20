@@ -89,6 +89,7 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
 )
 from geofrea.core.artifact_json import dump_artifact
+from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.core.config_fingerprint import DiskConfigSource, config_fingerprint
 from geofrea.core.config_loader import (
     load_audit_config,
@@ -1130,7 +1131,11 @@ def _build_phase_specs(
             POWER_CURVES_DIR,
         )
         specs = [
-            replace(spec, config_fingerprint=config_fingerprint(spec.name, country_code, source))
+            replace(
+                spec,
+                config_fingerprint=config_fingerprint(spec.name, country_code, source),
+                code_fingerprint=cached_code_fingerprint(spec.name),
+            )
             for spec in specs
         ]
     graph.update(phase_graph(specs))

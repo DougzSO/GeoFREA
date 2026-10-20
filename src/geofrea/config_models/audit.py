@@ -135,7 +135,6 @@ class AuditInputs(BaseModel):
 
     Args:
         solar_path: PVOUT raster path.
-        elevation_path: DEM raster path.
         slope_path: Slope raster path, if one exists yet. Usually None:
             GeoFREA derives slope only later, inside grid_alignment
             (raster_alignment.derive_slope_from_dem(), 2026-09-11), so at
@@ -208,7 +207,6 @@ class AuditInputs(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     solar_path: Path | None = None
-    elevation_path: Path | None = None
     slope_path: Path | None = None
     population_path: Path | None = None
     wind_paths: list[Path] = []

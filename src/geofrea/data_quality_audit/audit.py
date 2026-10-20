@@ -181,7 +181,6 @@ def run_audit_phase(
     # ── Rasters ──────────────────────────────────────────────────────
     raster_map: dict[str, Path | None] = {
         "solar": inputs.solar_path,
-        "elevation": inputs.elevation_path,
         "population": inputs.population_path,
         "slope": inputs.slope_path,
         "wind": inputs.wind_paths[0] if inputs.wind_paths else None,
@@ -415,7 +414,7 @@ def run_audit_phase(
 # excluded (it never had a *_range field in the flat schema either,
 # despite going through the same inspect_raster() pipeline as these
 # four) — preserved as-is, not fixed, out of scope for this refactor.
-_RASTER_LAYERS_WITH_RANGE = frozenset({"solar", "elevation", "slope", "population"})
+_RASTER_LAYERS_WITH_RANGE = frozenset({"solar", "slope", "population"})
 
 
 def _build_summary(
@@ -448,6 +447,7 @@ def _build_summary(
             error=error,
             value_range=value_range,
             file_count=n_wind if layer == "wind" else None,
+            mask_coverage_pct=meta.get("mask_coverage_pct"),
         )
 
     for layer, meta in vectors.items():
@@ -657,7 +657,6 @@ def _format_report(result: AuditResult, audit_config: AuditConfig) -> str:
     )
     _RASTER_RANGE_LABELS = {
         "solar": (f"Solar PVOUT ({solar_unit})", "{0} – {1}"),
-        "elevation": ("Elevation (m)", "{0:.0f} – {1:.0f}"),
         "slope": ("Slope (°)", "{0:.1f} – {1:.1f}"),
         "population": ("Population (people/pixel)", "{0:.1f} – {1:.1f}"),
     }
@@ -668,6 +667,10 @@ def _format_report(result: AuditResult, audit_config: AuditConfig) -> str:
 
     wind_summary = s.layers.get("wind")
     row("Wind files", wind_summary.file_count if wind_summary and wind_summary.file_count else 0)
+    for gwa_layer in ("wind", "weibull_a", "weibull_k", "air_density"):
+        gwa_summary = s.layers.get(gwa_layer)
+        if gwa_summary is not None and getattr(gwa_summary, "mask_coverage_pct", None) is not None:
+            row(f"Mask coverage {gwa_layer}", f"{gwa_summary.mask_coverage_pct:.1f}%")
 
     # First time these rows are sourced from result.summary.layers
     # instead of reading result.vectors directly — see DECISIONS.md

@@ -13,6 +13,10 @@
 #     GEOFREA_DATA_DIR/raw/gadm/<ISO3>/gadm41_<ISO3>_shp (gadm41_<ISO3>_0.shp
 #     through _N.shp) — METHODOLOGY M-F1-07, local database checked
 #     before the network. The value is the ISO3 code; the folder is fixed.
+#   - gwa_neighbours: (optional) ISO3 codes of the countries whose Global Wind Atlas files complete this country's where its own file
+#     does not cover the country mask (a valid value in fewer than 99% of the mask pixels). F1 mosaics the same product and height
+#     (GWA v3, one grid) from these files, in this order, over the holes and cuts the result to the mask; the country file is
+#     kept as fetched. Absent: the country file is used as it is and a coverage below 99% is only logged and audited (F1b).
 #   - gadm_level0_sha256: Recorded sha256 of gadm_dir's level-0 (country
 #     boundary) shapefile. A local hit is trusted only when this matches
 #     (verified at fetch time); a mismatch fails loud
@@ -130,6 +134,10 @@ IND:
   grip4_region_file: "GRIP4_region6.shp"
   gadm_dir: "IND"
   gadm_level0_sha256: "6d53f0bd76c64d1c28453b8716642632aee7fcb6c447a2d13f413dc42f241263"
+  # GWA files that complete the India file where it does not cover the country mask (OQ-062, COMMAND 58): the Global Wind Atlas draws the
+  # borders of India without the north block (Jammu and Kashmir, Ladakh) and Arunachal Pradesh that GADM 4.1 includes, and gives that land
+  # to the files of these two countries. F1 mosaics the same product and height of those files over the holes and cuts the result to the mask.
+  gwa_neighbours: ["PAK", "CHN"]
 
 CHN:
   # OQ-012: GRIP4 region is open; elevation/land_cover confirmed from local database

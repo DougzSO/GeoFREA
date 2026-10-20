@@ -57,7 +57,7 @@ def test_adapter_with_no_resolved_layers_returns_empty_audit_inputs():
 
     assert isinstance(audit_inputs, AuditInputs)
     assert audit_inputs.solar_path is None
-    assert audit_inputs.elevation_path is None
+    assert audit_inputs.population_path is None
     assert audit_inputs.country_gdf is None
     assert audit_inputs.wind_paths == []
     assert audit_inputs.land_cover_tiles == []
@@ -65,21 +65,21 @@ def test_adapter_with_no_resolved_layers_returns_empty_audit_inputs():
 
 @pytest.mark.unit
 def test_adapter_maps_single_path_fields():
-    elevation_path = Path("/fake/elevation.tif")
+    population_path = Path("/fake/population.tif")
     result = _result(
         [
             AcquiredLayer(
-                layer_name="elevation",
+                layer_name="population",
                 provenance="fetched",
                 auth_required=False,
-                path=elevation_path,
+                path=population_path,
             )
         ]
     )
 
     audit_inputs = acquisition_result_to_audit_inputs(result)
 
-    assert audit_inputs.elevation_path == elevation_path
+    assert audit_inputs.population_path == population_path
 
 
 @pytest.mark.unit
@@ -91,7 +91,7 @@ def test_adapter_fails_loud_on_a_failed_layer_never_treats_it_as_absent():
     result = _result(
         [
             AcquiredLayer(
-                layer_name="elevation",
+                layer_name="population",
                 provenance="local_only",
                 auth_required=False,
                 path=None,
@@ -106,8 +106,8 @@ def test_adapter_fails_loud_on_a_failed_layer_never_treats_it_as_absent():
     with pytest.raises(LayerAcquisitionFailedError) as exc_info:
         acquisition_result_to_audit_inputs(result)
 
-    assert exc_info.value.layer_name == "elevation"
-    assert "elevation" in str(exc_info.value)
+    assert exc_info.value.layer_name == "population"
+    assert "population" in str(exc_info.value)
     assert "KeyError" in str(exc_info.value)
 
 

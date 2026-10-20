@@ -98,6 +98,13 @@ def _no_network_fetchers(monkeypatch, tmp_path):
         return fake_path
 
     monkeypatch.setattr(phase_module, "fetch_gwa_product", _default_fetch_gwa_product)
+    # the completion of a GWA file to the country mask (OQ-062) reads the real raster and the borders: not in these tests (its own tests are in
+    # test_fetchers_wind.py), so the fake file stands as it is
+    monkeypatch.setattr(
+        phase_module,
+        "complete_gwa_to_mask",
+        lambda outputs_dir, country_code, product, height_m, own: own,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -152,7 +159,8 @@ def test_run_acquisition_phase_slope_is_not_in_the_registry(tmp_path):
     layer_names = {layer.layer_name for layer in result.layers}
 
     assert "slope" not in layer_names
-    assert "elevation" in layer_names
+    # nor is the DEM: F2a builds the aligned elevation and slope from the GLO-30 tiles (D-F2a-021, COMMAND 58)
+    assert "elevation" not in layer_names
 
 
 @pytest.mark.unit
@@ -192,7 +200,7 @@ def test_run_acquisition_phase_global_layers_have_no_country_code(tmp_path):
     ):
         assert layers_by_name[name].country_code is None
 
-    for name in ("borders", "elevation", "wind", "land_cover"):
+    for name in ("borders", "wind", "land_cover"):
         assert layers_by_name[name].country_code == "PRT"
 
 
@@ -201,7 +209,7 @@ def test_run_acquisition_phase_reads_country_code_from_context(tmp_path):
     result = run_acquisition_phase(_context(tmp_path, country_code="BRA"))
     assert result.country_code == "BRA"
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
-    assert layers_by_name["elevation"].country_code == "BRA"
+    assert layers_by_name["borders"].country_code == "BRA"
 
 
 @pytest.mark.unit
@@ -238,7 +246,6 @@ def test_run_acquisition_phase_provenance_split_2026_09_11(tmp_path):
     )
     assert local_only == {
         "land_cover",
-        "elevation",
         "population",
         "grid",
         "roads",
@@ -285,7 +292,6 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
     assert by_status["implemented_not_activated"] == set()
     assert by_status["not_implemented"] == {
         "land_cover",
-        "elevation",
         "population",
         "grid",
         "roads",
@@ -383,14 +389,13 @@ def test_run_acquisition_phase_protected_token_missing_records_failed_layer(tmp_
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("layer_name", ["elevation", "population", "grid", "roads", "solar"])
+@pytest.mark.parametrize("layer_name", ["population", "grid", "roads", "solar"])
 def test_run_acquisition_phase_populates_path_from_local_resolver(
     tmp_path, monkeypatch, layer_name
 ):
     fake_path = tmp_path / f"{layer_name}.fake"
     fake_path.write_bytes(b"fake layer bytes")  # real bytes: resolution now hashes the file
     handler_name = {
-        "elevation": "resolve_elevation_path",
         "population": "resolve_population_path",
         "grid": "resolve_grid_path",
         "roads": "resolve_roads_path",
@@ -427,7 +432,7 @@ def test_run_acquisition_phase_local_resolvers_receive_country_code(tmp_path, mo
     received = []
     monkeypatch.setattr(
         phase_module,
-        "resolve_elevation_path",
+        "resolve_population_path",
         lambda country_code: received.append(country_code) or None,
     )
 
@@ -443,21 +448,21 @@ def test_run_acquisition_phase_does_not_call_local_resolvers_for_unrelated_layer
     called = []
     monkeypatch.setattr(
         phase_module,
-        "resolve_elevation_path",
-        lambda country_code: called.append("elevation") or None,
+        "resolve_population_path",
+        lambda country_code: called.append("population") or None,
     )
 
     run_acquisition_phase(_context(tmp_path))
 
-    assert called == ["elevation"]
+    assert called == ["population"]
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_elevation_unmapped_country_records_failed_layer(
+def test_run_acquisition_phase_population_unmapped_country_records_failed_layer(
     tmp_path, monkeypatch
 ):
     # Mirrors test_run_acquisition_phase_rivers_unmapped_country_records_
-    # failed_layer above: local_layers.py's resolve_elevation_path()/
+    # failed_layer above: local_layers.py's resolve_population_path()/
     # resolve_land_cover_tiles() deliberately raise KeyError for a
     # country outside their lookup tables (a configuration gap, not a
     # transient failure — see local_layers.py's module docstring) —
@@ -466,15 +471,15 @@ def test_run_acquisition_phase_elevation_unmapped_country_records_failed_layer(
     def _raise_unmapped(country_code):
         raise KeyError(country_code)
 
-    monkeypatch.setattr(phase_module, "resolve_elevation_path", _raise_unmapped)
+    monkeypatch.setattr(phase_module, "resolve_population_path", _raise_unmapped)
 
     result = run_acquisition_phase(_context(tmp_path))
 
-    elevation = next(layer for layer in result.layers if layer.layer_name == "elevation")
-    assert elevation.resolution_status == "failed"
-    assert elevation.error_type == "KeyError"
-    assert elevation.path is None
-    other_layers = [layer for layer in result.layers if layer.layer_name != "elevation"]
+    population = next(layer for layer in result.layers if layer.layer_name == "population")
+    assert population.resolution_status == "failed"
+    assert population.error_type == "KeyError"
+    assert population.path is None
+    other_layers = [layer for layer in result.layers if layer.layer_name != "population"]
     assert all(layer.resolution_status != "failed" for layer in other_layers)
 
 
@@ -512,7 +517,7 @@ def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir
     result = run_acquisition_phase(_context(tmp_path))
 
     layers_by_name = {layer.layer_name: layer for layer in result.layers}
-    for name in ("elevation", "population", "grid", "roads"):
+    for name in ("population", "grid", "roads"):
         assert layers_by_name[name].path is None
 
 
