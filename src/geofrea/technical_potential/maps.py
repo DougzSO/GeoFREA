@@ -1,4 +1,4 @@
-"""Potential-density and capacity-factor maps of the central land scenario at the reference climate (T-R1; D-F5-015, A-07, A-08).
+"""Maps of the technical potential at the central land scenario and the reference climate (T-R1; D-F5-015, A-07, A-08; COMMAND 60).
 
 Reads `potential_<tech>__central.parquet` (member `m0`) and `cells_<tech>__central.parquet` (every country cell, for the extent
 and the cell area) and writes, under
@@ -7,10 +7,11 @@ and the cell area) and writes, under
   - `artifacts/potential_density_<tech>.tif`: `P_MW / cell_area_km2`, MW per km2 of cell (T-R1), Cloud Optimized GeoTIFF on the
     0.05 degree lattice, EPSG:4326, nodata where a cell is not a candidate (a technology without candidates gets an all-nodata raster and no figure);
   - `artifacts/capacity_factor_<tech>.tif`: `CF` at `m0`, same grid;
-  - `figures/potential_density_<tech>__ref__na__na.png` and `figures/capacity_factor_<tech>__ref__na__na.png`.
+  - `figures/`: the maps of `technical_potential/absolute_maps.py` (densities per cell and per state, circles of the totals) and the map of the
+    capacity factor, all in the common style of `viz/mapstyle.py`.
 
-`settings.yaml` `figures` decides the PNGs: `all` draws both, `summary` only the density map, `none` none. The rasters are artifacts
-and are always written. A cell without a `m0` row cannot occur (the reference factors are 1, 0, 1 and never masked).
+`settings.yaml` `figures` decides the PNGs: `all` draws everything, `summary` only the two density maps per cell, `none` none. The rasters are
+artifacts and are always written. A cell without a `m0` row cannot occur (the reference factors are 1, 0, 1 and never masked).
 """
 
 from __future__ import annotations
@@ -26,8 +27,15 @@ from pydantic import BaseModel, ConfigDict
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
 from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import AbsoluteMapsConfig
-from geofrea.land_eligibility.map_raster import FIGURE_MODES, cell_grid, plot_grid, write_cog
-from geofrea.technical_potential.absolute_maps import build_absolute_maps
+from geofrea.land_eligibility.map_raster import FIGURE_MODES, cell_grid, write_cog
+from geofrea.technical_potential.absolute_maps import (
+    SUBTITLE_CLIMATE,
+    build_absolute_maps,
+    build_cell_density_maps,
+    country_geometry,
+    draw_cell_density_map,
+    load_neighbours,
+)
 
 CENTRAL = "central"
 
@@ -71,8 +79,8 @@ def build_potential_maps(
         potential_dir: Directory of the potential tables (default: the F5 artifacts directory).
         cells_dir: Directory of the F3 cell tables (default: the F3 artifacts directory).
         figures_dir: Directory of the PNGs (default: the F5 figures directory).
-        units: The admin1 units of the country (`read_units` of the F3 admin1 layer); with `absolute_maps` and `figures_mode == "all"` the maps
-            of capacity and energy are drawn (D-F5-029).
+        units: The admin1 units of the country (`read_units` of the F3 admin1 layer); with `absolute_maps` and `figures_mode == "all"` the state
+            maps are drawn (D-F5-029); without them the territory is the union of the cells.
         absolute_maps: Classification of those maps (`experiments.yaml` `absolute_maps`).
 
     Raises:
@@ -85,6 +93,7 @@ def build_potential_maps(
     figures_dir = figures_dir or core_paths.phase_dir(iso, "technical_potential", "figures")
     rasters: dict[str, Path] = {}
     figures: list[Path] = []
+    neighbours = load_neighbours(iso) if figures_mode != "none" else None
     for tech in technologies:
         potential_path = Path(artifacts) / f"potential_{tech}__{CENTRAL}.parquet"
         cells_path = Path(cells_dir) / f"cells_{tech}__{CENTRAL}.parquet"
@@ -111,36 +120,42 @@ def build_potential_maps(
         rasters[f"capacity_factor_{tech}"] = write_cog(
             Path(artifacts) / f"capacity_factor_{tech}.tif", cf, row0, col0
         )
-        if has_values and figures_mode in ("all", "summary"):
-            figures.append(
-                plot_grid(
-                    density,
-                    row0,
-                    col0,
-                    f"{tech}: technical potential density, reference climate, central land scenario",
-                    "MW per km2 of cell",
-                    "viridis",
-                    Path(figures_dir) / f"potential_density_{tech}__ref__na__na.png",
-                )
-            )
         if has_values and figures_mode == "all":
+            geometry = country_geometry(units, cell_ids)
             figures.append(
-                plot_grid(
-                    cf,
-                    row0,
-                    col0,
-                    f"{tech}: capacity factor, reference climate, central land scenario",
-                    "capacity factor",
-                    "magma",
-                    Path(figures_dir) / f"capacity_factor_{tech}__ref__na__na.png",
-                )
+                draw_cell_density_map(
+                    cell_ids,
+                    merged["CF"].to_numpy(),
+                    geometry,
+                    neighbours,
+                    iso=iso,
+                    tech=tech,
+                    variable="Capacity factor",
+                    label="Capacity factor",
+                    kind="capacity_factor",
+                    subtitle=f"Central scenario · {SUBTITLE_CLIMATE}",
+                    total_text=None,
+                    path=Path(figures_dir) / f"capacity_factor_{tech}__ref__na__na.png",
+                )[0]
             )
+        if has_values and figures_mode == "summary":
+            written, _ = build_cell_density_maps(
+                iso, tech, artifacts, cells_dir, Path(figures_dir), units, neighbours
+            )
+            figures.extend(p for k, p in written.items() if "density" in k)
     absolute_figures: dict[str, Path] = {}
     absolute_checks: dict[str, Any] = {}
     if figures_mode == "all" and units is not None and absolute_maps is not None:
         for tech in technologies:
             written, content = build_absolute_maps(
-                iso, tech, Path(artifacts), Path(cells_dir), Path(figures_dir), units, absolute_maps
+                iso,
+                tech,
+                Path(artifacts),
+                Path(cells_dir),
+                Path(figures_dir),
+                units,
+                absolute_maps,
+                neighbours,
             )
             absolute_figures.update(written)
             absolute_checks[tech] = content["sum_checks"]

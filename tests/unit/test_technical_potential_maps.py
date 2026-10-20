@@ -1,4 +1,4 @@
-"""F5 maps: COG of potential density and CF at m0 (central scenario), the T-R1 figure, and `settings.yaml` `figures` (D-F5-015)."""
+"""F5 maps: COG of potential density and CF at m0 (central scenario), the density and capacity-factor figures, and `settings.yaml` `figures` (D-F5-015, COMMAND 60)."""
 
 # ruff: noqa: F401, F811  (the F5 pipeline test module owns the fixtures; they are imported by name for pytest)
 from __future__ import annotations
@@ -122,18 +122,20 @@ def test_figures_follow_the_figures_setting(run_ok, tmp_path):
 
     summary = _maps(run_ok, tmp_path / "summary", "summary")
     assert sorted(p.name for p in summary.figures) == [
-        "potential_density_solar__ref__na__na.png",
-        "potential_density_wind__ref__na__na.png",
+        "potential_capacity_density_solar_central__ref__na__na.png",
+        "potential_capacity_density_wind_central__ref__na__na.png",
+        "potential_energy_density_solar_central__ref__na__na.png",
+        "potential_energy_density_wind_central__ref__na__na.png",
     ]
 
+    # without the admin1 units the state maps are not drawn: `all` adds the capacity-factor maps to the same two densities
     everything = _maps(run_ok, tmp_path / "all", "all")
     assert sorted(p.name for p in everything.figures) == [
         "capacity_factor_solar__ref__na__na.png",
         "capacity_factor_wind__ref__na__na.png",
-        "potential_density_solar__ref__na__na.png",
-        "potential_density_wind__ref__na__na.png",
     ]
-    assert all(p.stat().st_size > 1000 for p in everything.figures)
+    assert not everything.absolute_figures
+    assert all(p.stat().st_size > 1000 for p in (*summary.figures, *everything.figures))
 
 
 @pytest.mark.unit

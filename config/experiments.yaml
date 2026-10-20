@@ -423,16 +423,19 @@ external_validation:
   vintage_reason: null
   excluded_location_accuracy: null
 
-# Maps of the technical potential in capacity and energy (potential_maps, D-F5-029). One map per file, per country and technology: per cell
-# (central land scenario, reference climate) capacity in MW and energy in GWh per year; per state (admin1) in the three land scenarios, capacity in
-# GW and energy in TWh per year. The class limits are computed from the data (no fixed limits): per cell by quantiles of the cells with a value
-# above zero (the distribution is very skewed), per state by Fisher-Jenks natural breaks of the state totals of the central scenario, applied to the
-# three scenarios so that the colours are comparable between them; the last class is open ("> limit") and holds the larger values of the restrictive
-# and permissive scenarios (D-F5-030). The limits are rounded to `significant_figures` (the last limit of a closed class upwards); a class that
-# collapses with its neighbour after the rounding is dropped and recorded in potential_breaks_<tech>.json. The sum of the cells and of the states must equal the F5
-# national total within 0.1% or the phase fails.
+# Maps of the technical potential (potential_maps, D-F5-029, COMMAND 60). One map per file, per country and technology, in the common style of
+# viz/mapstyle.py. Main maps: capacity density (MW per km2) and energy density (GWh per km2 per year) per cell of the central scenario, continuous
+# (robust colour limits, no interpolation: a pixel is a cell of 0.05 degree), and per state (admin1) in the three land scenarios the same densities as a
+# choropleth (the state total over its land area) with a circle over each state whose area is proportional to its total (GW, TWh per year).
+# The classes of the state maps are computed from the data (no fixed limits): Fisher-Jenks natural breaks of the state densities of the central scenario,
+# applied to the three scenarios so that the colours are comparable between them; the last class is open ("> limit") and holds the larger values of
+# the restrictive and permissive scenarios (D-F5-030). The limits are rounded to `significant_figures` (the last limit of a closed class upwards); a
+# class that collapses with its neighbour after the rounding is dropped and recorded in potential_breaks_<tech>.json. The sum of the cells and of the
+# states must equal the F5 national total within 0.1% or the phase fails.
+# per_cell: true also draws the classed maps of MW and GWh per cell (the maps of the earlier version), with the classes of per_cell_classes.
 absolute_maps:
-  per_cell:
+  per_cell: false
+  per_cell_classes:
     method: quantile
     classes: 7
   per_state:
@@ -442,7 +445,6 @@ absolute_maps:
     open_last_class: true
   significant_figures: 2
   palette: viridis
-  dpi: 300
 
 # Future-only analysis (F7 onward)
 # OQ-013: Technical stack for the precomputed explorer (E1)

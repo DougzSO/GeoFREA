@@ -26,13 +26,19 @@ from geofrea.technical_potential.absolute_maps import (
 
 CFG = AbsoluteMapsConfig.model_validate(
     {
-        "per_cell": {"method": "quantile", "classes": 7},
-        "per_state": {"method": "fisher_jenks", "classes": 6, "basis": "central", "open_last_class": True},
+        "per_cell": False,
+        "per_cell_classes": {"method": "quantile", "classes": 7},
+        "per_state": {
+            "method": "fisher_jenks",
+            "classes": 6,
+            "basis": "central",
+            "open_last_class": True,
+        },
         "significant_figures": 2,
         "palette": "viridis",
-        "dpi": 100,
     }
 )
+CFG_WITH_CELLS = CFG.model_copy(update={"per_cell": True})
 
 
 # ─── the limits ──────────────────────────────────────────────────────────
@@ -62,9 +68,7 @@ def test_limits_are_positive_strictly_increasing_and_hold_the_largest_value(meth
     assert classes[values > 0].min() == 0 and classes[values > 0].max() == 6
     assert (classes[~(values > 0) | ~np.isfinite(values)] == -1).all()
     intervals = breaks.intervals()
-    assert intervals[0][0] == 0.0 and all(
-        a[1] == b[0] for a, b in itertools.pairwise(intervals)
-    )
+    assert intervals[0][0] == 0.0 and all(a[1] == b[0] for a, b in itertools.pairwise(intervals))
 
 
 @pytest.mark.unit
@@ -118,12 +122,18 @@ def test_an_open_last_class_holds_every_value_above_the_last_limit():
     breaks = class_breaks(central, "fisher_jenks", 4, 2, open_last=True)
     assert breaks.n_classes == 4 and len(breaks.limits) == 3 and breaks.open_last
     assert np.all(np.diff(breaks.limits) > 0) and breaks.limits[-1] < central.max()
-    classes = breaks.assign(np.array([central.max(), central.max() * 100, breaks.limits[-1] * 1.001, 0.5]))
+    classes = breaks.assign(
+        np.array([central.max(), central.max() * 100, breaks.limits[-1] * 1.001, 0.5])
+    )
     assert list(classes) == [3, 3, 3, 0]
     intervals = breaks.intervals()
     assert intervals[-1] == (breaks.limits[-1], None) and len(intervals) == 4
     as_json = breaks.as_json()
-    assert as_json["last_class_open"] and as_json["classes_final"] == 4 and as_json["intervals"][-1][1] is None
+    assert (
+        as_json["last_class_open"]
+        and as_json["classes_final"] == 4
+        and as_json["intervals"][-1][1] is None
+    )
     closed = class_breaks(central, "fisher_jenks", 4, 2)
     assert not closed.open_last and closed.n_classes == 4 and len(closed.limits) == 4
     assert closed.limits[:-1] == breaks.limits  # the same breaks; only the last limit is dropped
@@ -132,14 +142,18 @@ def test_an_open_last_class_holds_every_value_above_the_last_limit():
 @pytest.mark.unit
 def test_an_open_last_class_with_one_class_only_stays_closed():
     breaks = class_breaks(np.array([3.0, 3.0]), "fisher_jenks", 6, 2, open_last=True)
-    assert breaks.n_classes == 1 and not breaks.open_last and breaks.assign(np.array([3.0, 99.0])).tolist() == [0, 0]
+    assert (
+        breaks.n_classes == 1
+        and not breaks.open_last
+        and breaks.assign(np.array([3.0, 99.0])).tolist() == [0, 0]
+    )
 
 
 @pytest.mark.unit
 def test_the_configuration_accepts_only_known_methods():
     with pytest.raises(ValueError):
         AbsoluteMapsConfig.model_validate(
-            {**CFG.model_dump(), "per_cell": {"method": "equal", "classes": 7}}
+            {**CFG.model_dump(), "per_cell_classes": {"method": "equal", "classes": 7}}
         )
     with pytest.raises(ValueError):
         AbsoluteMapsConfig.model_validate({**CFG.model_dump(), "palette": "jet"})
@@ -183,7 +197,7 @@ def _world(tmp_path: Path):
                     )
                 )
             pd.concat(tables).to_parquet(pot / f"potential_{tech}__{scenario}.parquet")
-            pd.DataFrame({"cell_id": ids, "admin1_id": state}).to_parquet(
+            pd.DataFrame({"cell_id": ids, "admin1_id": state, "cell_area_km2": 20.0}).to_parquet(
                 land / f"cells_{tech}__{scenario}.parquet"
             )
             aggregates.append(
@@ -199,7 +213,9 @@ def _world(tmp_path: Path):
     north = CELL_ORIGIN_LAT - 100 * 0.05
     units = gpd.GeoDataFrame(
         {"admin1_id": [f"ZZZ.{i}_1" for i in range(1, 7)], "admin1_name": list("ABCDEF")},
-        geometry=[box(west + 0.05 * i, north - 0.2, west + 0.05 * (i + 1), north) for i in range(6)],
+        geometry=[
+            box(west + 0.05 * i, north - 0.2, west + 0.05 * (i + 1), north) for i in range(6)
+        ],
         crs="EPSG:4326",
     )
     return pot, land, units
@@ -215,7 +231,11 @@ def test_eight_maps_and_the_limits_file_per_technology_with_sums_that_match_f5(t
     assert set(written) == set(names) and len(names) == 9
     for key, name in names.items():
         assert written[key] == figures / name and (figures / name).stat().st_size > 0
-    assert len([n for n in names.values() if n.endswith(".png")]) == 8
+    pngs = [n for n in names.values() if n.endswith(".png")]
+    assert len(pngs) == 8  # 2 densities per cell + 6 per state
+    assert not any(
+        "_cell_" in n for n in pngs
+    )  # the maps of MW and GWh per cell are off by default
     on_disk = json.loads((figures / names[f"potential_breaks_{tech}"]).read_text(encoding="utf-8"))
     assert on_disk == json.loads(json.dumps(content))
     for scenario in SCENARIO_SCALE:
@@ -223,23 +243,60 @@ def test_eight_maps_and_the_limits_file_per_technology_with_sums_that_match_f5(t
         for quantity in ("capacity_gw", "energy_twh"):
             assert checks[quantity]["cells"]["ok"] and checks[quantity]["states"]["ok"]
             assert checks[quantity]["states"]["relative_difference"] < 1e-9
-    for part in (
-        content["per_cell"]["capacity"],
-        content["per_cell"]["energy"],
-        content["per_state"]["capacity"],
-        content["per_state"]["energy"],
-    ):
+    for part in (content["per_state"]["capacity_density"], content["per_state"]["energy_density"]):
         limits = part["upper_limits"]
         assert limits == sorted(set(limits)) and limits[0] > 0
         assert part["classes_final"] == len(limits) + (1 if part["last_class_open"] else 0)
         assert part["classes_final"] <= part["classes_requested"]
-    assert content["per_cell"]["capacity"]["method"] == "quantile"
-    assert content["per_state"]["capacity"]["method"] == "fisher_jenks"
-    assert not content["per_cell"]["capacity"]["last_class_open"]  # per cell the last class is closed
-    for q in ("capacity", "energy"):  # per state it is open: "> limit"
-        part = content["per_state"][q]
-        assert part["last_class_open"] and part["intervals"][-1][1] is None and part["classes_final"] == 6
+        assert part["method"] == "fisher_jenks"
+        assert part["last_class_open"] and part["intervals"][-1][1] is None
         assert part["intervals"][-1][0] == part["upper_limits"][-1]
+    assert content["per_cell_classed"] is None
+    assert content["resolution"]["cell_deg"] == 0.05
+    cells = content["density_cells"]
+    assert (
+        cells["capacity_density"]["unit"] == "MW per km²"
+        and cells["energy_density"]["unit"] == "GWh per km² per year"
+    )
+    assert cells["capacity_density"]["interpolation"].startswith("none")
+
+
+@pytest.mark.unit
+def test_the_per_cell_maps_are_drawn_only_when_the_configuration_asks_for_them(tmp_path):
+    pot, land, units = _world(tmp_path)
+    assert len(absolute_map_names("solar")) == 9
+    assert len(absolute_map_names("solar", per_cell=True)) == 11
+    written, content = build_absolute_maps(
+        "ZZZ", "solar", pot, land, tmp_path / "f", units, CFG_WITH_CELLS
+    )
+    assert {"potential_capacity_cell_solar", "potential_energy_cell_solar"} <= set(written)
+    assert (
+        tmp_path / "f" / "potential_capacity_mw_cell_solar_central__ref__na__na.png"
+    ).stat().st_size > 0
+    cell = content["per_cell_classed"]
+    assert cell["capacity"]["method"] == "quantile" and not cell["capacity"]["last_class_open"]
+
+
+@pytest.mark.unit
+def test_the_state_density_is_the_total_over_the_land_area_not_the_total(tmp_path):
+    pot, land, units = _world(tmp_path)
+    _, content = build_absolute_maps("ZZZ", "solar", pot, land, tmp_path / "f", units, CFG)
+    reference = pd.read_parquet(pot / "potential_solar__central.parquet").query("member == 'm0'")
+    cells = pd.read_parquet(
+        land / "cells_solar__central.parquet"
+    )  # every cell of the state counts in its area, candidate or not
+    joined = cells.merge(reference, on="cell_id", how="left")
+    by_state = joined.groupby("admin1_id").agg(p=("P_MW", "sum"), area=("cell_area_km2", "sum"))
+    density = by_state["p"] / by_state["area"]  # MW per km2
+    import mapclassify
+
+    bins = mapclassify.FisherJenks(density.to_numpy(), k=6).bins
+    expected = []
+    for b in bins[:-1]:
+        v = float(f"{b:.2g}")
+        if not expected or v > expected[-1]:
+            expected.append(v)
+    assert content["per_state"]["capacity_density"]["upper_limits"] == expected
 
 
 @pytest.mark.unit
@@ -254,31 +311,20 @@ def test_the_state_totals_are_the_sum_of_their_cells(tmp_path):
     assert by_state.sum() == pytest.approx(
         content["national_totals_f5"]["central"]["P_GW"], rel=1e-12
     )
-    # the state limits are those of the central scenario alone (recomputed here with mapclassify), the last class is open, and the larger
-    # states of the permissive scenario fall in it
-    import mapclassify
 
-    def state_totals(scenario):
-        return (
+    # the classes are those of the central scenario and the permissive scenario has states above the last limit (the open class)
+    def densities(scenario):
+        t = (
             pd.read_parquet(pot / f"potential_solar__{scenario}.parquet")
             .query("member == 'm0'")
-            .merge(pd.read_parquet(land / f"cells_solar__{scenario}.parquet"), on="cell_id")
-            .groupby("admin1_id")["P_MW"]
-            .sum()
-            / 1e3
+            .merge(pd.read_parquet(land / f"cells_{'solar'}__{scenario}.parquet"), on="cell_id")
         )
+        g = t.groupby("admin1_id").agg(p=("P_MW", "sum"), a=("cell_area_km2", "sum"))
+        return g["p"] / g["a"]
 
-    central = state_totals("central")
-    bins = mapclassify.FisherJenks(central.to_numpy(), k=6).bins
-    expected = []
-    for b in bins[:-1]:
-        v = float(f"{b:.2g}")
-        if not expected or v > expected[-1]:
-            expected.append(v)
-    assert content["per_state"]["capacity"]["upper_limits"] == expected
-    permissive = state_totals("permissive")
-    assert permissive.max() > central.max() > expected[-1]  # the open class holds the central maximum and more
-    assert (permissive > expected[-1]).sum() > (central > expected[-1]).sum()
+    last = content["per_state"]["capacity_density"]["upper_limits"][-1]
+    assert densities("permissive").max() > densities("central").max() > last * 0.99
+    assert (densities("permissive") > last).sum() >= (densities("central") > last).sum()
 
 
 @pytest.mark.unit

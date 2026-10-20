@@ -395,17 +395,18 @@ class ClassingConfig(BaseModel):
 
 
 class AbsoluteMapsConfig(BaseModel):
-    """Maps of the potential in capacity and energy (potential_maps, D-F5-029): the classes come from the data, never from fixed limits."""
+    """Maps of the potential (potential_maps, D-F5-029, COMMAND 60): the classes come from the data, never from fixed limits."""
 
     model_config = ConfigDict(extra="forbid")
 
-    per_cell: ClassingConfig  # the cells with a value above zero, central land scenario
-    per_state: ClassingConfig  # the state totals of the three land scenarios together
+    # also draw the classed maps of MW and GWh per cell (the main maps are the densities); off by default
+    per_cell: bool = False
+    per_cell_classes: ClassingConfig  # the cells with a value above zero, central land scenario (only used when per_cell is true)
+    per_state: ClassingConfig  # the state densities of the central scenario, applied to the three land scenarios
     significant_figures: int = Field(
         ge=1, le=4
     )  # the limits are rounded to this many (the last one upwards)
     palette: Literal["viridis", "cividis"]
-    dpi: int = Field(ge=72, le=600)
 
 
 class ExperimentsFile(BaseModel):

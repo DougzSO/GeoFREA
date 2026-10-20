@@ -1043,7 +1043,12 @@ def _build_phase_specs(
             | {f"potential_density_{tech}" for tech in technologies}
             | {f"capacity_factor_{tech}" for tech in technologies}
             | {
-                key for tech in technologies if figures == "all" for key in absolute_map_names(tech)
+                key
+                for tech in technologies
+                if figures == "all"
+                for key in absolute_map_names(
+                    tech, load_experiments(EXPERIMENTS_YAML).absolute_maps.per_cell
+                )
             },
             summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
         ),

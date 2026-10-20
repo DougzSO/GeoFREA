@@ -234,6 +234,8 @@ def compute_layout(
     width_mm: float = FULL_WIDTH_MM,
     footer_mm: float = 0.0,
     max_height_mm: float = MAX_HEIGHT_MM,
+    legend_side_mm: float | None = None,
+    legend_below_mm: float | None = None,
 ) -> Layout:
     """Figure size and boxes: the height follows the aspect of the extent; the legend is to the right of a tall map, below a wide one.
 
@@ -241,13 +243,17 @@ def compute_layout(
     """
     ratio = map_height_over_width(extent)
     side = legend_position(extent) == "right"
-    avail_w = width_mm - LEFT_MM - RIGHT_MM - (LEGEND_SIDE_MM if side else 0.0)
-    fixed_h = HEADER_MM + BOTTOM_MM + footer_mm + (0.0 if side else LEGEND_BELOW_MM)
+    side_mm = (
+        LEGEND_SIDE_MM if legend_side_mm is None else legend_side_mm
+    )  # a classed legend needs more than a colour bar
+    below_mm = LEGEND_BELOW_MM if legend_below_mm is None else legend_below_mm
+    avail_w = width_mm - LEFT_MM - RIGHT_MM - (side_mm if side else 0.0)
+    fixed_h = HEADER_MM + BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
     map_w = min(avail_w, (max_height_mm - fixed_h) / ratio)
     map_h = map_w * ratio
     height = fixed_h + map_h
     x0 = LEFT_MM + (avail_w - map_w) / 2.0
-    y0 = BOTTOM_MM + footer_mm + (0.0 if side else LEGEND_BELOW_MM)
+    y0 = BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
     map_box = (x0, y0, x0 + map_w, y0 + map_h)
     if side:
         bar_x = x0 + map_w + 4.0
@@ -410,14 +416,6 @@ def place_furniture(
     return placed
 
 
-def _rebase(el: Furniture, old: Layout, new: Layout) -> Furniture:
-    """The same element at the same place of the map after the layout grew a footer (the map moved up by the difference)."""
-    dx, dy = new.map_box[0] - old.map_box[0], new.map_box[1] - old.map_box[1]
-    return Furniture(
-        el.name, (el.box[0] + dx, el.box[1] + dy, el.box[2] + dx, el.box[3] + dy), el.where
-    )
-
-
 def _outside_boxes(placed: dict[str, Furniture], layout: Layout) -> dict[str, Furniture]:
     """Final boxes of the elements that sit outside the map: the compass at the right end of the header, the rest left to right in the footer."""
     out = dict(placed)
@@ -552,6 +550,8 @@ def new_map(
     extent: Extent | None = None,
     contiguous: bool = True,
     grid_mask: tuple[np.ndarray, Extent] | None = None,
+    legend_side_mm: float | None = None,
+    legend_below_mm: float | None = None,
 ) -> MapCanvas:
     """Axes, legend slot, title and furniture of a map of the country `geometry` (lon/lat), ready to receive the data.
 
@@ -564,26 +564,32 @@ def new_map(
     extent = extent or country_extent(polygon, contiguous=False)
     if grid_mask is not None:
         data_mask = mask_on_extent(grid_mask[0], grid_mask[1], extent)
-    layout0 = compute_layout(extent, width_mm)
-    placed = place_furniture(
-        layout0, extent, data_mask=data_mask, polygon=polygon, total_text=total_text
-    )
-    footer = max(
-        (
-            el.box[3] - el.box[1] + 1.0
-            for n, el in placed.items()
-            if el.where == "outside" and n != "compass"
-        ),
-        default=0.0,
-    )
-    layout = compute_layout(extent, width_mm, footer_mm=footer)
-    placed = _outside_boxes(
-        {
-            n: (el if el.where == "outside" else _rebase(el, layout0, layout))
-            for n, el in placed.items()
-        },
-        layout,
-    )
+    # The furniture is placed on the layout it will be drawn on. A footer strip for an element that found no free corner shrinks a map that is
+    # limited by the height of the sheet, so the placement is repeated on the new layout until the strip no longer grows.
+    footer = 0.0
+    for _ in range(4):
+        layout = compute_layout(
+            extent,
+            width_mm,
+            footer_mm=footer,
+            legend_side_mm=legend_side_mm,
+            legend_below_mm=legend_below_mm,
+        )
+        placed = place_furniture(
+            layout, extent, data_mask=data_mask, polygon=polygon, total_text=total_text
+        )
+        needed = max(
+            (
+                el.box[3] - el.box[1] + 1.0
+                for n, el in placed.items()
+                if el.where == "outside" and n != "compass"
+            ),
+            default=0.0,
+        )
+        if needed <= footer + 1e-9:
+            break
+        footer = needed
+    placed = _outside_boxes(placed, layout)
 
     with plt.rc_context(_RC):
         fig = plt.figure(
@@ -761,14 +767,265 @@ def save_png(canvas_or_fig, path: Path) -> Path:
     return path
 
 
+# ------------------------------------------------------------------------------------------------- classed maps and proportional circles
+# (COMMAND 60: a choropleth with classes, and circles whose area is proportional to a total, drawn over it)
+
+SWATCH_W_MM, SWATCH_H_MM = 4.0, 3.2
+ROW_MM = 4.8  # height of one row of the class legend
+CIRCLE_MAX_MM = 9.0  # radius of the circle of the reference total (the largest), on paper
+CIRCLE_FACE, CIRCLE_EDGE = (
+    (0.85, 0.2, 0.15, 0.55),
+    "#7a1010",
+)  # the circles of the totals and their legend
+CIRCLE_MIN_MM = (
+    0.35  # a circle of a state with a total above zero is never smaller than this radius
+)
+
+
+@dataclass(frozen=True)
+class ClassedLegend:
+    """What the legend of a classed map holds: a title (the unit), one label and colour per class, an optional "no value" entry and an
+    optional list of proportional circles (label, radius in mm) with its own title."""
+
+    title: str
+    labels: tuple[str, ...]
+    colours: tuple
+    no_value_label: str | None = None
+    circle_title: str | None = None
+    circles: tuple[tuple[str, float], ...] = ()
+
+
+def circle_radius_mm(value: float, reference: float, max_radius_mm: float) -> float:
+    """Radius in mm of the circle of `value`: the area is proportional to the value, the circle of `reference` has `max_radius_mm`.
+
+    A value of zero (or less) has no circle; a positive value is never smaller than `CIRCLE_MIN_MM`.
+    """
+    if not (value > 0) or not (reference > 0):
+        return 0.0
+    return max(CIRCLE_MIN_MM, max_radius_mm * math.sqrt(value / reference))
+
+
+def nice_values_below(maximum: float, n: int = 3) -> list[float]:
+    """`n` round values (1, 2 or 5 times a power of ten) for a circle legend, the largest not above `maximum`, each about a tenth of the one before."""
+    if not (maximum > 0):
+        return []
+    exponent = math.floor(math.log10(maximum))
+    top = max(
+        m * 10.0**exponent for m in (1.0, 2.0, 5.0) if m * 10.0**exponent <= maximum * (1 + 1e-9)
+    )
+    return [top / 10.0**i for i in range(n)]
+
+
+def _wrap(text: str, width_mm: float, pt: float) -> list[str]:
+    """Words of `text` on lines no wider than `width_mm` by the same width estimate as the furniture."""
+    lines, current = [], ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if current and _text_width_mm(trial, pt) > width_mm:
+            lines.append(current)
+            current = word
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def legend_space(spec: ClassedLegend) -> tuple[float, float]:
+    """(side, below) space in mm that the legend needs: `side` is the width of the strip right of a tall map, `below` the height under a wide one."""
+    labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
+    widest = max(_text_width_mm(t, LEGEND_PT) for t in labels)
+    circle_w = max(
+        (2 * r + 2.0 + _text_width_mm(t, LEGEND_PT) for t, r in spec.circles), default=0.0
+    )
+    title_w = max(
+        (
+            _text_width_mm(w, LEGEND_PT)
+            for w in (spec.title + " " + (spec.circle_title or "")).split()
+        ),
+        default=0.0,
+    )
+    side = 4.0 + max(SWATCH_W_MM + 2.0 + widest, circle_w, title_w) + 3.0
+    biggest = max((r for _, r in spec.circles), default=0.0)
+    below = 15.5 + (2 * biggest + 8.0 if spec.circles else 0.0)
+    return side, below
+
+
+def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, list]:
+    """Draw the legend of a classed map in the strip the layout reserved (right of a tall map, below a wide one).
+
+    The colour-bar axes of the canvas is hidden. The drawn pieces are kept in `canvas.artists["legend"]` for the overlap tests.
+    """
+    from matplotlib.patches import Circle
+
+    layout, overlay = canvas.layout, canvas.overlay
+    canvas.cax.set_visible(False)
+    text_kw = {"fontsize": LEGEND_PT, "color": "#333333"}
+    pieces: list = []
+    labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
+    colours = list(spec.colours) + (["#d9d9d9"] if spec.no_value_label else [])
+    line_mm = LEGEND_PT * PT_MM * 1.3
+
+    def swatch(x, y, w, colour):
+        return overlay.add_patch(
+            Rectangle(
+                (x, y - SWATCH_H_MM),
+                w,
+                SWATCH_H_MM,
+                facecolor=colour,
+                edgecolor="#555555",
+                linewidth=0.2,
+            )
+        )
+
+    if layout.legend == "right":
+        x0 = layout.map_box[2] + 4.0
+        avail = layout.width_mm - RIGHT_MM - x0
+        y = layout.map_box[3]
+        for line in _wrap(spec.title, avail, LEGEND_PT):
+            pieces.append(
+                overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
+            )
+            y -= line_mm
+        y -= 1.5
+        for text, colour in zip(labels, colours, strict=True):
+            pieces.append(swatch(x0, y, SWATCH_W_MM, colour))
+            pieces.append(
+                overlay.text(
+                    x0 + SWATCH_W_MM + 2.0,
+                    y - SWATCH_H_MM / 2,
+                    text,
+                    va="center",
+                    ha="left",
+                    **text_kw,
+                )
+            )
+            y -= ROW_MM
+        if spec.circles:
+            y -= 2.5
+            for line in _wrap(spec.circle_title or "", avail, LEGEND_PT):
+                pieces.append(
+                    overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
+                )
+                y -= line_mm
+            y -= 1.0
+            biggest = max(r for _, r in spec.circles)
+            for text, r in spec.circles:
+                cy = y - r
+                pieces.append(
+                    overlay.add_patch(
+                        Circle(
+                            (x0 + biggest, cy),
+                            r,
+                            facecolor=CIRCLE_FACE,
+                            edgecolor=CIRCLE_EDGE,
+                            linewidth=0.4,
+                        )
+                    )
+                )
+                pieces.append(
+                    overlay.text(
+                        x0 + 2 * biggest + 2.0, cy, text, va="center", ha="left", **text_kw
+                    )
+                )
+                y -= 2 * r + 1.5
+    else:
+        n = len(labels)
+        x_start = layout.map_box[0]
+        width = layout.map_box[2] - layout.map_box[0]
+        slot = width / max(n, 1)
+        y = layout.map_box[1] - 4.0
+        for line in _wrap(spec.title, width, LEGEND_PT):
+            pieces.append(
+                overlay.text(x_start, y, line, va="top", ha="left", fontweight="bold", **text_kw)
+            )
+            y -= line_mm
+        y -= 1.0
+        for i, (text, colour) in enumerate(zip(labels, colours, strict=True)):
+            pieces.append(swatch(x_start + i * slot + 0.5, y, slot - 1.0, colour))
+            pieces.append(
+                overlay.text(
+                    x_start + (i + 0.5) * slot,
+                    y - SWATCH_H_MM - 0.8,
+                    text,
+                    va="top",
+                    ha="center",
+                    **text_kw,
+                )
+            )
+        if spec.circles:
+            y -= SWATCH_H_MM + 0.8 + line_mm + 2.0
+            biggest = max(r for _, r in spec.circles)
+            x = x_start
+            pieces.append(
+                overlay.text(
+                    x, y, spec.circle_title or "", va="top", ha="left", fontweight="bold", **text_kw
+                )
+            )
+            x += _text_width_mm(spec.circle_title or "", LEGEND_PT) + 6.0
+            cy = y - biggest - 1.0
+            for text, r in spec.circles:
+                pieces.append(
+                    overlay.add_patch(
+                        Circle(
+                            (x + r, cy),
+                            r,
+                            facecolor=CIRCLE_FACE,
+                            edgecolor=CIRCLE_EDGE,
+                            linewidth=0.4,
+                        )
+                    )
+                )
+                pieces.append(
+                    overlay.text(x + 2 * r + 1.5, cy, text, va="center", ha="left", **text_kw)
+                )
+                x += 2 * r + 1.5 + _text_width_mm(text, LEGEND_PT) + 6.0
+    canvas.artists["legend"] = pieces
+    return {"legend": pieces}
+
+
+def draw_choropleth(
+    canvas: MapCanvas, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
+) -> None:
+    """Fill the units (GeoDataFrame in lon/lat) with `facecolors` (one per row, RGBA or names) on the map axes."""
+    units.plot(
+        ax=canvas.ax, color=list(facecolors), edgecolor=edgecolor, linewidth=linewidth, zorder=2
+    )
+    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
+    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
+
+
+def draw_circles(canvas: MapCanvas, lon, lat, radii_mm) -> object:
+    """Circles of the given radii (mm on paper) centred on (lon, lat) over the map, largest first so that the small ones stay visible."""
+    radii = np.asarray(radii_mm, dtype="float64")
+    order = np.argsort(-radii)
+    diameter_pt = 2.0 * radii[order] / PT_MM
+    return canvas.ax.scatter(
+        np.asarray(lon, dtype="float64")[order],
+        np.asarray(lat, dtype="float64")[order],
+        s=diameter_pt**2,
+        facecolors=CIRCLE_FACE,
+        edgecolors=CIRCLE_EDGE,
+        linewidths=0.4,
+        zorder=6,
+    )
+
+
 __all__: Sequence[str] = (
     "FULL_WIDTH_MM",
     "HALF_WIDTH_MM",
+    "ClassedLegend",
     "MapCanvas",
+    "circle_radius_mm",
     "colormap_for",
     "country_extent",
+    "draw_choropleth",
+    "draw_circles",
+    "draw_classed_legend",
     "geographic_aspect",
+    "legend_space",
     "new_map",
+    "nice_values_below",
     "raster_map",
     "robust_norm",
     "save_png",

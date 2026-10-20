@@ -482,8 +482,13 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
     with rasterio.open(art / "potential_density_solar.tif") as src:
         assert src.read(1, masked=True).count() == 6  # the six solar candidate cells
     figures = _phase(zzz, "technical_potential", "figures")
-    assert (figures / "potential_density_wind__ref__na__na.png").is_file()
-    assert (figures / "potential_density_solar__ref__na__na.png").is_file()
+    for tech in (
+        "wind",
+        "solar",
+    ):  # COMMAND 60: the density maps of the cells, the capacity factor, in the common style
+        assert (figures / f"potential_capacity_density_{tech}_central__ref__na__na.png").is_file()
+        assert (figures / f"potential_energy_density_{tech}_central__ref__na__na.png").is_file()
+        assert (figures / f"capacity_factor_{tech}__ref__na__na.png").is_file()
 
 
 @pytest.mark.synthetic
