@@ -78,6 +78,8 @@ import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 from dask.callbacks import Callback
 
+from geofrea.data_acquisition.acquisition_area import acquisition_bbox, cds_area
+
 # 2026-10-09, root cause found (py-spy dump of a frozen merge worker, reproduced about once in a dozen runs of
 # `test_merge_yearly_files_concatenates_along_time`): a lock deadlock inside xarray's netCDF4 backend, not an OS or drive
 # stall. With the default threaded dask scheduler, one worker thread waits for the write lock in
@@ -172,13 +174,7 @@ def bbox_from_polygon(country_polygon_path: Path, margin_deg: float = 0.5) -> li
     never a boundary cell truncated by the CDS-side bbox itself.
     """
     country = gpd.read_file(country_polygon_path)
-    minx, miny, maxx, maxy = country.total_bounds
-    return [
-        float(maxy + margin_deg),
-        float(minx - margin_deg),
-        float(miny - margin_deg),
-        float(maxx + margin_deg),
-    ]
+    return cds_area(acquisition_bbox(country.total_bounds, margin_deg))
 
 
 def is_complete_download(
