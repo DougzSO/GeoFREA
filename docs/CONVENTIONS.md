@@ -83,6 +83,7 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 - Layout and file naming follow METHODOLOGY A-08. Paths are resolved via `src/geofrea/core/paths.py`, the only module that reads data-location environment variables.
 - Map file names: `<map>__<window>__<ssp>__<gcm>.png`, using `ref` for the reference climate and `na` for non-applicable fields.
 - One map per file. Figures respect `settings.yaml` `figures`.
+- Map style: new maps are drawn with `src/geofrea/viz/mapstyle.py` (`docs/figures/style_guide.md`); the figures that exist today are listed in `docs/figures/inventory.md` and move to it one at a time.
 - Thesis outputs are produced only by F8 into `GEOFREA_DATA_DIR/outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
 
 ## Thesis text
