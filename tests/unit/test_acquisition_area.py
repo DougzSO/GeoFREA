@@ -135,3 +135,17 @@ def test_a_product_with_no_valid_cell_asks_for_the_whole_acquisition_box():
     lat, lon, valid = _product(68.0, 8.0, 97.0, 33.0)
     boxes = uncovered_boxes(BODY, lat, lon, np.zeros_like(valid), 0.25)
     assert boxes == [acquisition_bbox(BODY.bounds)]
+
+
+def test_the_worldcover_tile_list_follows_the_mask_including_a_block_the_old_list_lacked():
+    from geofrea.data_acquisition.fetchers.esa_worldcover import tile_name, tiles_for_mask
+
+    assert tile_name(33, 72) == "ESA_WorldCover_10m_2020_v100_N33E072_Map.tif"
+    assert tile_name(-3, -51) == "ESA_WorldCover_10m_2020_v100_S03W051_Map.tif"
+    names = set(tiles_for_mask(MultiPolygon([BODY, BLOCK, EAST])))
+    assert (
+        "ESA_WorldCover_10m_2020_v100_N33E072_Map.tif" in names
+    )  # the north block (73.7-79.3 E, 32-35.5 N)
+    assert "ESA_WorldCover_10m_2020_v100_N33E078_Map.tif" in names
+    assert "ESA_WorldCover_10m_2020_v100_N36E072_Map.tif" not in names  # north of the mask
+    assert all(n.endswith("_Map.tif") for n in names)

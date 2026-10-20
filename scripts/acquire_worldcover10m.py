@@ -9,19 +9,33 @@ from __future__ import annotations
 import logging
 import sys
 
+import geopandas as gpd
 from dotenv import load_dotenv
 
+from geofrea.core import paths as core_paths
 from geofrea.data_acquisition import local_layers
 from geofrea.data_acquisition.fetchers import esa_worldcover
+from geofrea.data_acquisition.fetchers.gadm import fetch_borders
 
 
 def main(argv: list[str]) -> int:
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     for iso in argv or ["IND"]:
-        names = sorted({p.name for p in local_layers.resolve_land_cover_tiles(iso)})
-        if not names:
-            raise SystemExit(f"{iso}: no local land-cover tiles to take the tile names from")
+        mask = (
+            gpd.read_file(fetch_borders(core_paths.outputs_dir(), iso))
+            .to_crs("EPSG:4326")
+            .geometry.union_all()
+        )
+        wanted = set(esa_worldcover.tiles_for_mask(mask))
+        local = {p.name for p in local_layers.resolve_land_cover_tiles(iso)}
+        # the tiles of the mask, plus the ones the local set already names (they stay pinned); a tile that the bucket lacks is recorded as absent
+        names = sorted(wanted | local)
+        print(
+            iso,
+            f"{len(wanted - local)} tiles of the mask are not in the local set:",
+            sorted(wanted - local),
+        )
         print(iso, esa_worldcover.fetch_country(iso, names))
     return 0
 

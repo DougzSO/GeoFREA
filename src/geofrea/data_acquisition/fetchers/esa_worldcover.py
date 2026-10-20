@@ -11,11 +11,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
 import requests
+from shapely.geometry import box
 
 from geofrea.core import paths
 
@@ -25,10 +27,37 @@ BASE_URL = "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v100/2020/map"
 SOURCE = "ESA WorldCover 2020 v100, 10 m, AWS Open Data bucket `esa-worldcover`"
 MANIFEST = "manifest.json"
 _TIMEOUT_S = 180
+_TILE_DEG = 3
 
 
 class WorldCoverDownloadError(RuntimeError):
     """A tile could not be fetched for a reason other than being absent."""
+
+
+def tile_name(lat0: int, lon0: int) -> str:
+    """Tile id for the 3 degree tile whose south-west corner is (lat0, lon0), both multiples of 3."""
+    ns = "N" if lat0 >= 0 else "S"
+    ew = "E" if lon0 >= 0 else "W"
+    return f"ESA_WorldCover_10m_2020_v100_{ns}{abs(lat0):02d}{ew}{abs(lon0):03d}_Map.tif"
+
+
+def tiles_for_mask(mask) -> list[str]:
+    """Names of the 3 degree tiles that the mask touches (COMMAND 59: the tile list follows the mask, not a list kept from an earlier mask)."""
+    west, south, east, north = mask.bounds
+    names = []
+    for lat0 in range(
+        math.floor(south / _TILE_DEG) * _TILE_DEG,
+        math.ceil(north / _TILE_DEG) * _TILE_DEG,
+        _TILE_DEG,
+    ):
+        for lon0 in range(
+            math.floor(west / _TILE_DEG) * _TILE_DEG,
+            math.ceil(east / _TILE_DEG) * _TILE_DEG,
+            _TILE_DEG,
+        ):
+            if mask.intersects(box(lon0, lat0, lon0 + _TILE_DEG, lat0 + _TILE_DEG)):
+                names.append(tile_name(lat0, lon0))
+    return names
 
 
 def tiles_dir(iso: str) -> Path:
