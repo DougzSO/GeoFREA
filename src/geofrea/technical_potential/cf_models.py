@@ -196,7 +196,9 @@ class WeibullWithAirDensity:
                 raise CfModelError(
                     f"the class flag reads the {height:g} m layer, which the registry does not list"
                 )
-            v_ave = weibull_mean_speed(by_product["weibull_a"][height], by_product["weibull_k"][height])
+            v_ave = weibull_mean_speed(
+                by_product["weibull_a"][height], by_product["weibull_k"][height]
+            )
             flag = exceeds_class(v_ave, rule.mean_speed_threshold_ms)
         curve_rho0 = settings.curve.reference_density_kg_m3
         return _WeibullPrepared(

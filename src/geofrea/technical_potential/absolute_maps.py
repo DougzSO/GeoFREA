@@ -321,6 +321,25 @@ def _clip_neighbours(neighbours, geometry, extent):
     return out[~out.geometry.is_empty]
 
 
+@dataclass(frozen=True)
+class MapContext:
+    """What every map of a country shares, computed once: the contiguous territory, the extent of the maps and the neighbours cut to it.
+
+    The contiguous territory of a large country (a few hundred thousand vertices) takes about a minute to find, so it is not found again for each of the
+    sixteen or so maps of a technology.
+    """
+
+    polygon: object
+    extent: ms.Extent
+    neighbours: gpd.GeoDataFrame | None
+
+
+def map_context(geometry, neighbours: gpd.GeoDataFrame | None) -> MapContext:
+    polygon = ms.contiguous_geometry(geometry)
+    extent = ms.country_extent(polygon, contiguous=False)
+    return MapContext(polygon, extent, _clip_neighbours(neighbours, polygon, extent))
+
+
 def _grid_extent(shape: tuple[int, int], row0: int, col0: int) -> ms.Extent:
     cell = active_scale().cell_deg
     west = CELL_ORIGIN_LON + col0 * cell
@@ -343,8 +362,7 @@ def _total_text(gw: float, twh: float) -> str:
 def compose_cell_density_map(
     cell_ids: np.ndarray,
     values: np.ndarray,
-    geometry,
-    neighbours,
+    ctx: MapContext,
     *,
     iso: str,
     tech: str,
@@ -362,20 +380,17 @@ def compose_cell_density_map(
     positive = np.isfinite(grid) & (grid > 0)
     data = np.where(positive, grid, np.nan)
     info = ms.robust_norm(grid[positive])
-    probe = ms.new_map(
-        geometry, iso=iso, technology=technology_name(tech), variable=variable, contiguous=True
-    )
-    nb = _clip_neighbours(neighbours, geometry, probe.extent)
-    plt.close(probe.fig)
     canvas = ms.new_map(
-        geometry,
+        ctx.polygon,
         iso=iso,
         technology=technology_name(tech),
         variable=variable,
         subtitle=subtitle,
         total_text=total_text,
-        neighbours=nb,
+        neighbours=ctx.neighbours,
         grid_mask=(in_country, extent_grid),
+        extent=ctx.extent,
+        contiguous=False,
     )
     aspect = ms.geographic_aspect(canvas.extent)
     grey = np.zeros(grid.shape + (4,))
@@ -427,7 +442,7 @@ def compose_state_map(
     density: pd.Series,
     totals: pd.Series,
     breaks: ClassBreaks,
-    neighbours,
+    ctx: MapContext,
     *,
     iso: str,
     tech: str,
@@ -461,18 +476,16 @@ def compose_state_map(
         ),
     )
     side, below = ms.legend_space(spec)
-    geometry = units.union_all()
-    probe = ms.new_map(geometry, iso=iso, technology=technology_name(tech), variable=variable)
-    nb = _clip_neighbours(neighbours, geometry, probe.extent)
-    plt.close(probe.fig)
     canvas = ms.new_map(
-        geometry,
+        ctx.polygon,
         iso=iso,
         technology=technology_name(tech),
         variable=variable,
         subtitle=f"{scenario.capitalize()} scenario · {SUBTITLE_CLIMATE}",
         total_text=total_text,
-        neighbours=nb,
+        neighbours=ctx.neighbours,
+        extent=ctx.extent,
+        contiguous=False,
         width_mm=width_mm,
         legend_side_mm=side,
         legend_below_mm=below,
@@ -510,8 +523,7 @@ def draw_classed_cell_map(
     cell_ids: np.ndarray,
     values: np.ndarray,
     breaks: ClassBreaks,
-    geometry,
-    neighbours,
+    ctx: MapContext,
     *,
     iso: str,
     tech: str,
@@ -542,17 +554,16 @@ def draw_classed_cell_map(
         no_value_label=NO_POTENTIAL_LABEL,
     )
     side, below = ms.legend_space(spec)
-    probe = ms.new_map(geometry, iso=iso, technology=technology_name(tech), variable=variable)
-    nb = _clip_neighbours(neighbours, geometry, probe.extent)
-    plt.close(probe.fig)
     canvas = ms.new_map(
-        geometry,
+        ctx.polygon,
         iso=iso,
         technology=technology_name(tech),
         variable=variable,
         subtitle=subtitle,
         total_text=total_text,
-        neighbours=nb,
+        neighbours=ctx.neighbours,
+        extent=ctx.extent,
+        contiguous=False,
         grid_mask=(in_country, extent_grid),
         legend_side_mm=side,
         legend_below_mm=below,
@@ -609,6 +620,7 @@ def build_cell_density_maps(
     figures_dir: Path,
     units: gpd.GeoDataFrame | None,
     neighbours=None,
+    ctx: MapContext | None = None,
 ) -> tuple[dict[str, Path], dict[str, Any]]:
     """The two continuous maps of the central scenario (capacity density, energy density) and how their colour limits were chosen.
 
@@ -620,7 +632,7 @@ def build_cell_density_maps(
     totals = _national_totals(potential_dir, tech)
     ids = table["cell_id"].to_numpy()
     area = table["cell_area_km2"].to_numpy(dtype="float64")
-    geometry = country_geometry(units, ids)
+    ctx = ctx or map_context(country_geometry(units, ids), neighbours)
     gw, twh = totals[CENTRAL]
     subtitle = f"{CENTRAL.capitalize()} scenario · {SUBTITLE_CLIMATE}"
     out = Path(figures_dir)
@@ -645,8 +657,7 @@ def build_cell_density_maps(
         written[key], info[key] = draw_cell_density_map(
             ids,
             values,
-            geometry,
-            neighbours,
+            ctx,
             iso=iso,
             tech=tech,
             variable=variable,
@@ -668,6 +679,7 @@ def build_absolute_maps(
     units: gpd.GeoDataFrame,
     cfg: AbsoluteMapsConfig,
     neighbours=None,
+    ctx: MapContext | None = None,
 ) -> tuple[dict[str, Path], dict[str, Any]]:
     """The maps of one technology and the limits file; returns (artifact key -> path, the content of the limits file).
 
@@ -731,9 +743,9 @@ def build_absolute_maps(
     sig = cfg.significant_figures
     central = tables[CENTRAL]
     ids = central["cell_id"].to_numpy()
-    geometry = country_geometry(units, ids)
+    ctx = ctx or map_context(country_geometry(units, ids), neighbours)
     written, density_info = build_cell_density_maps(
-        iso, tech, potential_dir, cells_dir, out, units, neighbours
+        iso, tech, potential_dir, cells_dir, out, units, neighbours, ctx
     )
 
     basis = SCENARIOS if cfg.per_state.basis == "all_scenarios" else (CENTRAL,)
@@ -765,14 +777,14 @@ def build_absolute_maps(
         st = states[scenario]
         key = f"potential_capacity_density_state_{tech}__{scenario}"
         written[key], circles[key] = draw_state_map(
-            units, st["capacity_density"], st["capacity_gw"], state_cap, neighbours,
+            units, st["capacity_density"], st["capacity_gw"], state_cap, ctx,
             iso=iso, tech=tech, variable="Capacity density by state", unit=UNIT_CAPACITY_DENSITY,
             circle_unit=UNIT_CIRCLE_CAPACITY, circle_reference=ref_gw, scenario=scenario,
             total_text=_total_text(gw, twh), palette=cfg.palette, path=out / names[key],
         )  # fmt: skip
         key = f"potential_energy_density_state_{tech}__{scenario}"
         written[key], circles[key] = draw_state_map(
-            units, st["energy_density"], st["energy_twh"], state_en, neighbours,
+            units, st["energy_density"], st["energy_twh"], state_en, ctx,
             iso=iso, tech=tech, variable="Energy density by state", unit=UNIT_ENERGY_DENSITY,
             circle_unit=UNIT_CIRCLE_ENERGY, circle_reference=ref_twh, scenario=scenario,
             total_text=_total_text(gw, twh), palette=cfg.palette, path=out / names[key],
@@ -794,7 +806,7 @@ def build_absolute_maps(
             (f"potential_energy_cell_{tech}", "Energy per cell", en_gwh, UNIT_CELL_ENERGY, cell_en),
         ):  # fmt: skip
             written[key] = draw_classed_cell_map(
-                ids, values, br, geometry, neighbours, iso=iso, tech=tech, variable=variable, unit=unit,
+                ids, values, br, ctx, iso=iso, tech=tech, variable=variable, unit=unit,
                 subtitle=subtitle, total_text=_total_text(gw_c, twh_c), palette=cfg.palette, path=out / names[key],
             )  # fmt: skip
         per_cell_content = {

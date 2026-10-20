@@ -35,6 +35,7 @@ from geofrea.technical_potential.absolute_maps import (
     country_geometry,
     draw_cell_density_map,
     load_neighbours,
+    map_context,
 )
 
 CENTRAL = "central"
@@ -94,6 +95,7 @@ def build_potential_maps(
     rasters: dict[str, Path] = {}
     figures: list[Path] = []
     neighbours = load_neighbours(iso) if figures_mode != "none" else None
+    ctx = None  # the contiguous territory, the extent and the neighbours cut to it: found once per country, used by every map
     for tech in technologies:
         potential_path = Path(artifacts) / f"potential_{tech}__{CENTRAL}.parquet"
         cells_path = Path(cells_dir) / f"cells_{tech}__{CENTRAL}.parquet"
@@ -121,13 +123,12 @@ def build_potential_maps(
             Path(artifacts) / f"capacity_factor_{tech}.tif", cf, row0, col0
         )
         if has_values and figures_mode == "all":
-            geometry = country_geometry(units, cell_ids)
+            ctx = ctx or map_context(country_geometry(units, cell_ids), neighbours)
             figures.append(
                 draw_cell_density_map(
                     cell_ids,
                     merged["CF"].to_numpy(),
-                    geometry,
-                    neighbours,
+                    ctx,
                     iso=iso,
                     tech=tech,
                     variable="Capacity factor",
@@ -140,12 +141,13 @@ def build_potential_maps(
             )
         if has_values and figures_mode == "summary":
             written, _ = build_cell_density_maps(
-                iso, tech, artifacts, cells_dir, Path(figures_dir), units, neighbours
+                iso, tech, artifacts, cells_dir, Path(figures_dir), units, neighbours, ctx
             )
             figures.extend(p for k, p in written.items() if "density" in k)
     absolute_figures: dict[str, Path] = {}
     absolute_checks: dict[str, Any] = {}
     if figures_mode == "all" and units is not None and absolute_maps is not None:
+        ctx = ctx or map_context(country_geometry(units, np.empty(0, dtype="int64")), neighbours)
         for tech in technologies:
             written, content = build_absolute_maps(
                 iso,
@@ -156,6 +158,7 @@ def build_potential_maps(
                 units,
                 absolute_maps,
                 neighbours,
+                ctx,
             )
             absolute_figures.update(written)
             absolute_checks[tech] = content["sum_checks"]

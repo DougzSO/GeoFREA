@@ -18,6 +18,7 @@ from shapely.geometry import box
 from geofrea.technical_potential.absolute_maps import (
     class_breaks,
     compose_state_map,
+    map_context,
     technology_name,
 )
 from geofrea.viz import mapstyle as ms
@@ -109,7 +110,7 @@ def _state_map(name: str):
     totals = pd.Series(rng.uniform(1.0, 400.0, len(units)), index=units["admin1_id"])
     breaks = class_breaks(density.to_numpy(), "fisher_jenks", 5, 2, open_last=True)
     canvas, info = compose_state_map(
-        units, density, totals, breaks, country.neighbours,
+        units, density, totals, breaks, map_context(country.geometry, country.neighbours),
         iso="XXX", tech="solar", variable="Energy density by state", unit="GWh per km² per year",
         circle_unit="Energy (TWh per year)", circle_reference=float(totals.max()), scenario="central",
         total_text="National total\n1,234.5 GW · 2,345.6 TWh per year", palette="viridis", width_mm=CASES[name],
