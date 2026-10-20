@@ -36,6 +36,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from geofrea.core.content_hash import content_hash
 from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.scale import manifest_file_name
 from geofrea.core.schemas import CountryParams
@@ -48,7 +49,12 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.5"
+_MANIFEST_SCHEMA_VERSION = "2.6"
+# 2.6 (COMMAND 58, A-02): every successful PhaseManifestEntry records `code_fingerprint` (`core.code_fingerprint`: the normalised source of the
+# modules the phase runs), and a phase is executed again when it differs from the current one; every ArtifactEntry records
+# `content_sha256` (`core.content_hash`: the data of the artifact without file metadata), and a consumer is marked stale only when that hash
+# changed, not the hash of the bytes. Entries written before 2.6 have None: the code fingerprint is recorded at the next resume (with a
+# warning), and the content hash is compared with the byte hash until a rerun records it.
 # 2.5 (D-core-041, A-02): every successful PhaseManifestEntry records `config_fingerprint`, the hash of the configuration the phase
 # read (`core.config_fingerprint`); a phase is resumed only while its current fingerprint equals the recorded one (None for entries
 # written before 2.5: resumed once, with a warning, and the current fingerprint is recorded).
@@ -63,7 +69,7 @@ _MANIFEST_SCHEMA_VERSION = "2.5"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -168,6 +174,13 @@ class StaleManifestEntryError(RuntimeError):
     transitively requires it) in `rerun_phases`, which discards the
     stale entry and reruns it — see RunConfig.rerun_phases.
     """
+
+
+def _same_content(old: ArtifactEntry, new: ArtifactEntry) -> bool:
+    """Whether two registrations of an artifact hold the same content: by canonical content hash, by the hash of the bytes when the old entry has none."""
+    if old.content_sha256 is not None and new.content_sha256 is not None:
+        return old.content_sha256 == new.content_sha256
+    return old.sha256 == new.sha256
 
 
 def _sha256_file(path: Path) -> str:
@@ -275,6 +288,9 @@ class PhaseManifestEntry(BaseModel):
             the time it ran). A later run resumes the phase only if the
             current fingerprint is equal. None for entries written before
             manifest schema 2.5 and for phases whose spec declares none.
+        code_fingerprint: For a "success" entry, the fingerprint of the source of the modules the phase runs
+            (`PhaseSpec.code_fingerprint` at the time it ran); a phase whose recorded fingerprint differs from the current one is
+            executed again. None for entries written before manifest schema 2.6 and for phases whose spec declares none.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -292,6 +308,7 @@ class PhaseManifestEntry(BaseModel):
     wall_s: float | None = None
     cpu_s: float | None = None
     config_fingerprint: str | None = None
+    code_fingerprint: str | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -301,9 +318,12 @@ class ArtifactEntry(BaseModel):
         key: Artifact key, matching an entry in some PhaseSpec.produces.
         path: StoredPath of the artifact (root + relative posix-style path).
             Resolves to an absolute Path at read time via StoredPath.resolve().
-        sha256: Content hash, computed at registration and reused on a
-            later registration at the same path when size_bytes and
-            mtime_ns are unchanged.
+        sha256: Hash of the bytes of the file, computed at registration and
+            reused on a later registration at the same path when size_bytes
+            and mtime_ns are unchanged. It guards the integrity of the file.
+        content_sha256: Canonical content hash (`core.content_hash`): the data
+            without file metadata. Staleness of consumers follows it. None for
+            entries written before manifest schema 2.6.
         size_bytes: File size at hash time.
         mtime_ns: File modification time (nanoseconds) at hash time.
         schema_version: Schema version of the artifact's content.
@@ -321,6 +341,7 @@ class ArtifactEntry(BaseModel):
     schema_version: str
     phase: str
     run_id: str
+    content_sha256: str | None = None
 
 
 class RunManifest(BaseModel):
@@ -338,7 +359,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.5"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.6"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -435,6 +456,9 @@ class PhaseSpec:
             fingerprint differs from this one is executed again instead
             of resumed. None: the phase is not checked against the
             configuration (a spec built without a country).
+        code_fingerprint: Hash of the normalised source of the modules the phase runs
+            (`core.code_fingerprint.code_fingerprint`), recorded and checked like `config_fingerprint`. None: the phase is not
+            checked against its code.
     """
 
     name: str
@@ -445,6 +469,7 @@ class PhaseSpec:
     produces_schema_versions: Mapping[str, str] = field(default_factory=dict)
     summarize: Callable[[BaseModel], str] | None = None
     config_fingerprint: str | None = None
+    code_fingerprint: str | None = None
 
 
 def _validate_and_order(phase_specs: Sequence[PhaseSpec]) -> list[PhaseSpec]:
@@ -654,6 +679,15 @@ class Orchestrator:
                 f"cannot revalidate {spec.name!r}: the configuration it reads changed since it ran "
                 f"(recorded fingerprint {entry.config_fingerprint[:12]}, now {spec.config_fingerprint[:12]}); rerun it"
             )
+        if (
+            entry.code_fingerprint is not None
+            and spec.code_fingerprint is not None
+            and entry.code_fingerprint != spec.code_fingerprint
+        ):
+            raise ValueError(
+                f"cannot revalidate {spec.name!r}: the code it runs changed since it ran "
+                f"(recorded fingerprint {entry.code_fingerprint[:12]}, now {spec.code_fingerprint[:12]}); rerun it"
+            )
         for key in spec.requires:
             if key not in self.manifest.artifacts:
                 raise UndeclaredArtifactMissingError(
@@ -714,8 +748,8 @@ class Orchestrator:
         self.manifest_path.parent.mkdir(parents=True, exist_ok=True)
         self.manifest_path.write_text(self.manifest.model_dump_json(indent=2), encoding="utf-8")
 
-    def _hash_with_reuse(self, key: str, path: Path) -> tuple[str, int, int]:
-        """Hash `path`, reusing a prior sha256 for this key if size/mtime match."""
+    def _hash_with_reuse(self, key: str, path: Path) -> tuple[str, int, int, str]:
+        """Hash `path` (bytes and canonical content), reusing the prior hashes for this key if size/mtime match."""
         stat = path.stat()
         size_bytes = stat.st_size
         mtime_ns = stat.st_mtime_ns
@@ -725,9 +759,10 @@ class Orchestrator:
             and existing.path.resolve() == path.resolve()
             and existing.size_bytes == size_bytes
             and existing.mtime_ns == mtime_ns
+            and existing.content_sha256 is not None
         ):
-            return existing.sha256, size_bytes, mtime_ns
-        return _sha256_file(path), size_bytes, mtime_ns
+            return existing.sha256, size_bytes, mtime_ns, existing.content_sha256
+        return _sha256_file(path), size_bytes, mtime_ns, content_hash(path)
 
     def _check_resume_is_not_stale(self, spec: PhaseSpec) -> None:
         """Raise StaleManifestEntryError if spec's recorded entry no longer fits spec.
@@ -947,9 +982,17 @@ class Orchestrator:
                 and spec.config_fingerprint is not None
                 and existing.config_fingerprint != spec.config_fingerprint
             )
+            code_changed = (
+                existing is not None
+                and existing.status == "success"
+                and existing.code_fingerprint is not None
+                and spec.code_fingerprint is not None
+                and existing.code_fingerprint != spec.code_fingerprint
+            )
             if (
                 not must_force
                 and not config_changed
+                and not code_changed
                 and existing is not None
                 and existing.status == "success"
             ):
@@ -968,6 +1011,19 @@ class Orchestrator:
                     )
                     existing = existing.model_copy(
                         update={"config_fingerprint": spec.config_fingerprint}
+                    )
+                    self.manifest.phases[spec.name] = existing
+                if existing.code_fingerprint is None and spec.code_fingerprint is not None:
+                    logger.warning(
+                        "Phase '%s' [%s]: the manifest entry predates the code fingerprint (schema 2.6); resuming it and recording "
+                        "the current fingerprint %s. A change of code made after that run is not detected; name the phase in "
+                        "rerun_phases if it is in doubt.",
+                        spec.name,
+                        self.country_code,
+                        spec.code_fingerprint[:12],
+                    )
+                    existing = existing.model_copy(
+                        update={"code_fingerprint": spec.code_fingerprint}
                     )
                     self.manifest.phases[spec.name] = existing
                 try:
@@ -1004,6 +1060,8 @@ class Orchestrator:
                 if must_force
                 else f"the configuration it reads changed since it ran (fingerprint {existing.config_fingerprint[:12]} -> {spec.config_fingerprint[:12]})"
                 if config_changed
+                else f"the code it runs changed since it ran (fingerprint {existing.code_fingerprint[:12]} -> {spec.code_fingerprint[:12]})"
+                if code_changed
                 else f"manifest status {existing.status!r}, does not resume"
                 if existing is not None
                 else "no manifest entry yet"
@@ -1041,7 +1099,7 @@ class Orchestrator:
 
                 new_artifacts: dict[str, ArtifactEntry] = {}
                 for key, (path, schema_version) in context._artifact_sink.items():
-                    sha256, size_bytes, mtime_ns = self._hash_with_reuse(key, path)
+                    sha256, size_bytes, mtime_ns, content_sha256 = self._hash_with_reuse(key, path)
                     stored_path = to_stored_path(path)
                     new_artifacts[key] = ArtifactEntry(
                         key=key,
@@ -1049,6 +1107,7 @@ class Orchestrator:
                         sha256=sha256,
                         size_bytes=size_bytes,
                         mtime_ns=mtime_ns,
+                        content_sha256=content_sha256,
                         schema_version=schema_version,
                         phase=spec.name,
                         run_id=self.run_id,
@@ -1079,7 +1138,9 @@ class Orchestrator:
                         )
                         continue
                     try:
-                        sha256, size_bytes, mtime_ns = self._hash_with_reuse(key, path)
+                        sha256, size_bytes, mtime_ns, content_sha256 = self._hash_with_reuse(
+                            key, path
+                        )
                     except OSError:
                         logger.warning(
                             "Phase '%s' failed and its registered artifact '%s' at %s "
@@ -1095,6 +1156,7 @@ class Orchestrator:
                         sha256=sha256,
                         size_bytes=size_bytes,
                         mtime_ns=mtime_ns,
+                        content_sha256=content_sha256,
                         schema_version=schema_version,
                         phase=spec.name,
                         run_id=self.run_id,
@@ -1166,6 +1228,7 @@ class Orchestrator:
                 wall_s=result.wall_s,
                 cpu_s=result.cpu_s,
                 config_fingerprint=spec.config_fingerprint,
+                code_fingerprint=spec.code_fingerprint,
             )
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
@@ -1177,13 +1240,15 @@ class Orchestrator:
             }
             for stale_key in removed_keys:
                 del self.manifest.artifacts[stale_key]
-            # Staleness follows CONTENT: a consumer is invalidated only by an artifact whose hash changed (or that
-            # appeared or disappeared). An artifact re-registered with identical content keeps the run_id that first
-            # produced it, so the lineage recorded by its consumers stays true.
+            # Staleness follows CONTENT (A-02): a consumer is invalidated only by an artifact whose canonical content hash
+            # changed (or that appeared or disappeared); the hash of the bytes is not the criterion, because a rewrite of the same
+            # data changes file metadata. An artifact re-registered with identical content keeps the run_id that first produced it,
+            # so the lineage recorded by its consumers stays true. An old entry without a content hash (manifest before 2.6) is
+            # compared by the hash of its bytes.
             changed_keys: set[str] = set()
             for key, entry_new in list(new_artifacts.items()):
                 old = self.manifest.artifacts.get(key)
-                if old is not None and old.sha256 == entry_new.sha256:
+                if old is not None and _same_content(old, entry_new):
                     new_artifacts[key] = entry_new.model_copy(update={"run_id": old.run_id})
                 else:
                     changed_keys.add(key)
