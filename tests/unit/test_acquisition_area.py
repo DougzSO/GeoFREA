@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import geopandas as gpd
+import numpy as np
 import pytest
 from shapely.geometry import MultiPolygon, box
 
@@ -14,6 +15,7 @@ from geofrea.data_acquisition.acquisition_area import (
     missing_parts,
     native_grid_covers,
     native_grid_extent,
+    uncovered_boxes,
 )
 from geofrea.data_acquisition.fetchers.era5 import bbox_from_polygon
 
@@ -88,3 +90,48 @@ def test_the_missing_parts_complete_the_product_and_overlap_the_seam():
 def test_nothing_is_missing_when_the_product_already_contains_the_area():
     have = (60.0, 0.0, 100.0, 40.0)
     assert missing_parts(have, acquisition_bbox(MultiPolygon([BODY, BLOCK, EAST]).bounds)) == []
+
+
+def _product(west, south, east, north, res=0.25, holes=()):
+    """Cell centres of a regular product with the cells inside the given boxes (west, south, east, north) switched off."""
+    lat = np.arange(south + res / 2, north, res)
+    lon = np.arange(west + res / 2, east, res)
+    valid = np.ones((len(lat), len(lon)), dtype=bool)
+    for hw, hs, he, hn in holes:
+        valid[np.ix_((lat >= hs) & (lat <= hn), (lon >= hw) & (lon <= he))] = False
+    return lat, lon, valid
+
+
+def test_only_the_parts_of_the_mask_with_no_valid_cell_are_asked_for_and_each_has_its_own_box():
+    mask = MultiPolygon([BODY, BLOCK, EAST])
+    lat, lon, valid = _product(68.0, 8.0, 97.0, 33.0)  # the product of the old mask
+    boxes = uncovered_boxes(mask, lat, lon, valid, 0.25, overlap_deg=0.25)
+    assert len(boxes) == 2
+    north = next(b for b in boxes if b[3] > 35.0)
+    east = next(b for b in boxes if b[3] < 35.0)
+    assert bbox_contains(north, (73.8, 33.6, 79.2, 35.4)), "the north block is inside its box"
+    assert north[3] == pytest.approx(35.5 + MARGIN_DEG + 0.25, abs=0.06)
+    assert east[0] < 97.0 < east[2] and east[1] > 20.0, (
+        "the east box is the height of the east end, not of the country"
+    )
+
+
+def test_a_hole_inside_the_box_of_the_product_is_found():
+    # the old territory stopped at 32.0 N: between 32.0 and 33.0 N the product has cells with no value inside the block
+    mask = MultiPolygon([BODY, BLOCK])
+    lat, lon, valid = _product(68.0, 8.0, 97.0, 33.0, holes=[(73.0, 32.0, 80.0, 33.0)])
+    boxes = uncovered_boxes(mask, lat, lon, valid, 0.25)
+    assert len(boxes) == 1 and bbox_contains(boxes[0], BLOCK.bounds)
+
+
+def test_nothing_is_asked_when_the_product_reaches_the_mask_to_within_a_cell():
+    lat, lon, valid = _product(68.0, 8.0, 97.0, 33.0)
+    assert uncovered_boxes(box(68.3, 8.2, 96.9, 32.9), lat, lon, valid, 0.25) == []
+    # a coast cell dropped by the polygon crop: one native cell short on the west side
+    assert uncovered_boxes(box(67.9, 8.2, 96.9, 32.9), lat, lon, valid, 0.25) == []
+
+
+def test_a_product_with_no_valid_cell_asks_for_the_whole_acquisition_box():
+    lat, lon, valid = _product(68.0, 8.0, 97.0, 33.0)
+    boxes = uncovered_boxes(BODY, lat, lon, np.zeros_like(valid), 0.25)
+    assert boxes == [acquisition_bbox(BODY.bounds)]

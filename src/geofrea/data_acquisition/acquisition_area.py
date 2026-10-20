@@ -12,6 +12,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import numpy as np
+import shapely
+from scipy.ndimage import binary_dilation, label
+from scipy.spatial import cKDTree
+from shapely.geometry import box
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import unary_union
+
 MARGIN_DEG = 0.5
 
 Bbox = tuple[float, float, float, float]
@@ -83,6 +91,61 @@ def missing_parts(
     if ne > he and south < north:
         parts.append((he - overlap_deg, south, ne, north))
     return parts
+
+
+def uncovered_boxes(
+    mask: BaseGeometry,
+    lat: np.ndarray,
+    lon: np.ndarray,
+    valid: np.ndarray,
+    native_res_deg: float,
+    margin_deg: float = MARGIN_DEG,
+    overlap_deg: float = 0.0,
+    tol_cells: float = 1.0,
+    step_deg: float = 0.05,
+) -> list[Bbox]:
+    """Boxes to acquire so that a product reaches the mask: one per part of the mask with no valid native cell within `tol_cells` cells.
+
+    `valid[i, j]` tells whether the native cell at (lat[i], lon[j]) holds a value. The mask is sampled every `step_deg`; a sample farther than
+    `tol_cells` native cells from every valid cell is uncovered (a coast cell that the polygon crop dropped is within the tolerance and is not a
+    missing territory). Uncovered samples that are neighbours form one part; each part's box is grown by the margin and by `overlap_deg`, so the
+    cells of the polygon crop are whole and the seam has cells on both sides, and boxes that touch are merged. The mask is the geometry, not its
+    box: the north block and the east end of IND are two small boxes, not the width of the country, and a hole inside the product's box is found.
+    """
+    west, south, east, north = mask.bounds
+    xs = np.arange(np.floor(west / step_deg) * step_deg + step_deg / 2, east, step_deg)
+    ys = np.arange(np.floor(south / step_deg) * step_deg + step_deg / 2, north, step_deg)
+    gx, gy = np.meshgrid(xs, ys)
+    inside = shapely.contains_xy(mask, gx.ravel(), gy.ravel()).reshape(gx.shape)
+    la, lo = np.meshgrid(np.asarray(lat, dtype=float), np.asarray(lon, dtype=float), indexing="ij")
+    keep = np.asarray(valid, dtype=bool)
+    if not keep.any():
+        return [acquisition_bbox(mask.bounds, margin_deg)]
+    dist, _ = cKDTree(np.column_stack([la[keep], lo[keep]])).query(
+        np.column_stack([gy.ravel(), gx.ravel()])
+    )
+    uncovered = inside & (dist.reshape(gx.shape) > tol_cells * native_res_deg + 1e-9)
+    if not uncovered.any():
+        return []
+    # samples closer than two native cells belong to the same part
+    joined = binary_dilation(uncovered, iterations=max(1, round(2 * native_res_deg / step_deg)))
+    labels, n = label(joined, structure=np.ones((3, 3)))
+    grown = []
+    for k in range(1, n + 1):
+        part = (labels == k) & uncovered
+        if not part.any():
+            continue
+        grown.append(
+            box(
+                *acquisition_bbox(
+                    (gx[part].min(), gy[part].min(), gx[part].max(), gy[part].max()),
+                    margin_deg + overlap_deg,
+                )
+            )
+        )
+    merged = unary_union(grown)
+    boxes = list(merged.geoms) if hasattr(merged, "geoms") else [merged]
+    return [tuple(float(v) for v in b.bounds) for b in boxes]
 
 
 def cds_area(box: Sequence[float]) -> list[float]:
