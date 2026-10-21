@@ -133,7 +133,9 @@ def _round_coords(ds: xr.Dataset) -> xr.Dataset:
     )
 
 
-def join_products(existing: Path, extension: Path, out_path: Path) -> dict:
+def join_products(
+    existing: Path, extension: Path, out_path: Path, attrs_update: dict | None = None
+) -> dict:
     """Existing values win; the extension fills the cells the existing product lacks. Returns the continuity of the seam."""
     with xr.open_dataset(existing) as a, xr.open_dataset(extension) as b:
         a, b = _round_coords(a.load()), _round_coords(b.load())
@@ -152,7 +154,7 @@ def join_products(existing: Path, extension: Path, out_path: Path) -> dict:
             "mean_value_in_overlap_ms": float(sa.values[overlap].mean()) if diff.size else None,
         }
         merged = va.combine_first(vb).astype("float32")
-        ds = xr.Dataset({"fg10": merged}, attrs=a.attrs)
+        ds = xr.Dataset({"fg10": merged}, attrs={**a.attrs, **(attrs_update or {})})
         report["cells_with_value_before"] = int(np.isfinite(va.isel(year=0)).sum())
         report["cells_with_value_after"] = int(np.isfinite(merged.isel(year=0)).sum())
         report["grid_after"] = {
