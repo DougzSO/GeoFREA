@@ -229,8 +229,9 @@ def test_the_legend_names_every_class_the_no_value_entry_and_the_circle_sizes():
 
 
 def test_technology_names_are_the_short_ones_of_the_titles():
-    assert technology_name("solar") == "Solar PV" and technology_name("wind") == "Wind"
-    assert technology_name("solar_pv_tracking") == "Solar Pv Tracking"
+    assert (
+        technology_name("solar_tracking") == "Solar Tracking" and technology_name("wind") == "Wind"
+    )
 
 
 # --------------------------------------------------------------------------------------------- visual regression by perceptual hash

@@ -246,7 +246,6 @@ def _check(label: str, got: float, expected: float) -> dict[str, float | bool]:
 # neighbours, short title, 300 dpi PNG). Resolution: the cell of the analysis is 0.05 degree (the potential, the capacity factor and the eligible
 # share are defined per cell); nothing is interpolated or smoothed, a pixel on the map is a cell.
 
-TECHNOLOGY_NAMES = {"solar": "Solar PV", "wind": "Wind"}
 UNIT_CAPACITY_DENSITY, UNIT_ENERGY_DENSITY = "MW per km²", "GWh per km² per year"
 UNIT_CIRCLE_CAPACITY, UNIT_CIRCLE_ENERGY = "Capacity (GW)", "Energy (TWh per year)"
 NO_POTENTIAL_LABEL = "no potential"
@@ -256,7 +255,8 @@ logger = logging.getLogger("geofrea.technical_potential.absolute_maps")
 
 
 def technology_name(tech: str) -> str:
-    return TECHNOLOGY_NAMES.get(tech, tech.replace("_", " ").title())
+    """The name in a title: the technology key with the underscores as spaces and capitals (A-04: the code names no technology)."""
+    return tech.replace("_", " ").title()
 
 
 def _palette(name: str, n: int) -> list[tuple[float, ...]]:
