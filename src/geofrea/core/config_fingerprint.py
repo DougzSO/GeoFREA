@@ -5,6 +5,11 @@ SHA-256 of the parts of the config files that the phase reads (`PHASE_CONFIG_SCO
 comment, the order of keys or a change in a section the phase does not read leave it unchanged; a change of any value it reads, or
 of a power-curve file, gives another one.
 
+The values are those the phase receives: each file is validated by its schema and the sections are taken from the validated model with the
+defaults resolved (COMMAND 61). A field added to a schema with a default changes the fingerprint of the phases that read that section and of
+no other, and so does a changed default; the schema modules are therefore not in the code fingerprint (`code_fingerprint.CONFIG_SCHEMA_MODULES`).
+`countries` and `published_potential` have no schema and enter as parsed.
+
 A scope names top-level sections (or dotted paths, `*` standing for every child of a mapping) of a file: a new key in a section a phase reads is read by
 it. When a phase begins to read another section, the scope is edited here and `test_config_fingerprint.py` checks that every
 registered phase has a scope and every section named exists in the file.
@@ -15,10 +20,15 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
+
+from geofrea.config_models.audit import AuditConfig
+from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
+from geofrea.core.schemas import ParametersFile, SettingsFile
 
 ABSENT = "<absent>"
 WHOLE = "*"
@@ -153,10 +163,33 @@ class DiskConfigSource:
         return {p.name: p.read_bytes() for p in sorted(self._turbines.iterdir()) if p.is_file()}
 
 
+def _validated(key: str, raw: Any) -> Any:
+    """`raw` as its schema holds it: validated, defaults resolved, as plain JSON values (files without a schema: as parsed)."""
+    if key == "experiments":
+        return ExperimentsFile.model_validate(raw).model_dump(mode="json")
+    if key == "parameters":
+        return ParametersFile.model_validate(raw).model_dump(mode="json")
+    if key == "settings":
+        return SettingsFile.model_validate(raw).model_dump(mode="json")
+    if key == "audit":
+        return AuditConfig.model_validate(raw).model_dump(mode="json")
+    if key == "technologies":  # the loader wraps the bare mapping of the file
+        return TechnologiesFile.model_validate({"technologies": raw}).model_dump(mode="json")[
+            "technologies"
+        ]
+    return raw
+
+
+@lru_cache(maxsize=64)
+def _parse_text(key: str, text: str) -> str:
+    raw = json.loads(text) if CONFIG_FILES[key].endswith(".json") else yaml.safe_load(text)
+    return json.dumps(_validated(key, raw), sort_keys=True, default=str)
+
+
 def _parse(key: str, text: str | None) -> Any:
     if text is None:
         return None
-    return json.loads(text) if CONFIG_FILES[key].endswith(".json") else yaml.safe_load(text)
+    return json.loads(_parse_text(key, text))
 
 
 def _select(doc: Any, path: str) -> Any:

@@ -10,6 +10,14 @@ A phase lists its roots in `PHASE_CODE_ROOTS` (a package, or a module for the ph
 `potential_maps` in `technical_potential`). The closure follows imports at any depth in the file (a function-level or `TYPE_CHECKING`
 import counts: it may run). Not included: the modules of `INFRASTRUCTURE_MODULES` (the manifest, the fingerprints, the run log: they decide whether a phase runs and compute no result), `main.py` (it only wires the phases), the config files (the other fingerprint), third-party
 packages and the interpreter.
+
+Schema modules (`CONFIG_SCHEMA_MODULES`: the pydantic models of the config files) enter by their code only, not by their declarations: the
+fields, their types and defaults, and the validators are left out of the normalised tree, because what they do to a phase reaches it as
+the validated configuration, which `config_fingerprint.py` hashes with the defaults resolved. A field added to a schema, or a default changed,
+therefore invalidates the phases that read that section and no other (COMMAND 61); methods, properties, helper functions and constants of those
+modules still count as code.
+
+The same closure serves the internal caches (`cached_closure_fingerprint`): a cache key holds the code that computed the cached result.
 """
 
 from __future__ import annotations
@@ -47,6 +55,16 @@ PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
 
 # Infrastructure of the manifest and of the run: it decides whether a phase runs, it never computes a result, so a phase that imports it
 # (for `PhaseContext`, say) is not invalidated by an edit of it.
+# Modules of the config-file models: their field declarations and validators do not count as code (see the module docstring).
+CONFIG_SCHEMA_MODULES = frozenset(
+    {
+        "core.config_schemas",
+        "core.schemas",
+        "config_models.audit",
+        "config_models.land_availability",
+    }
+)
+
 INFRASTRUCTURE_MODULES = frozenset(
     {
         "core.orchestrator",
@@ -131,9 +149,49 @@ def _strip_docstrings(tree: ast.AST) -> None:
                 node.body = body[1:] or [ast.Pass()]
 
 
-def normalised_source(source: str) -> str:
+def _base_name(base: ast.expr) -> str:
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return ""
+
+
+def _decorator_name(node: ast.expr) -> str:
+    if isinstance(node, ast.Call):
+        node = node.func
+    return _base_name(node)
+
+
+def _strip_declarations(tree: ast.AST) -> None:
+    """Remove the field declarations and the validators of the pydantic models of a module (the classes that derive from `BaseModel`)."""
+    classes = [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+    models = {c.name for c in classes if any(_base_name(b) == "BaseModel" for b in c.bases)}
+    grew = True
+    while grew:  # a model derived from a model of the module is one too
+        grew = False
+        for c in classes:
+            if c.name not in models and any(_base_name(b) in models for b in c.bases):
+                models.add(c.name)
+                grew = True
+    for c in classes:
+        if c.name not in models:
+            continue
+        c.body = [
+            stmt
+            for stmt in c.body
+            if not isinstance(stmt, ast.AnnAssign)
+            and not (
+                isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef)
+                and any(_decorator_name(d).endswith("validator") for d in stmt.decorator_list)
+            )
+        ] or [ast.Pass()]
+
+
+def normalised_source(source: str, *, schema: bool = False) -> str:
     """The syntax tree of `source` without docstrings, as text: comments, blank lines and formatting are not in it.
 
+    With `schema`, the field declarations and validators of its pydantic models are not in it either (`CONFIG_SCHEMA_MODULES`).
     A source that does not parse is returned as it is (its bytes then count).
     """
     try:
@@ -141,19 +199,23 @@ def normalised_source(source: str) -> str:
     except SyntaxError:
         return source
     _strip_docstrings(tree)
+    if schema:
+        _strip_declarations(tree)
     return ast.dump(tree, annotate_fields=True, include_attributes=False)
 
 
 @lru_cache(maxsize=4096)
-def _file_digest_cached(path: str, mtime_ns: int, size: int) -> str:
+def _file_digest_cached(path: str, mtime_ns: int, size: int, schema: bool) -> str:
     return hashlib.sha256(
-        normalised_source(Path(path).read_text(encoding="utf-8")).encode("utf-8")
+        normalised_source(Path(path).read_text(encoding="utf-8"), schema=schema).encode("utf-8")
     ).hexdigest()
 
 
-def _file_digest(path: Path) -> str:
+def _file_digest(path: Path, name: str) -> str:
     stat = path.stat()
-    return _file_digest_cached(str(path), stat.st_mtime_ns, stat.st_size)
+    return _file_digest_cached(
+        str(path), stat.st_mtime_ns, stat.st_size, name in CONFIG_SCHEMA_MODULES
+    )
 
 
 @lru_cache(maxsize=4096)
@@ -168,9 +230,14 @@ def phase_modules(phase: str, src_root: Path | None = None) -> list[str]:
     Raises:
         KeyError: `phase` has no entry in PHASE_CODE_ROOTS (a registered phase must declare its code).
     """
+    return closure_modules(PHASE_CODE_ROOTS[phase], src_root)
+
+
+def closure_modules(roots: tuple[str, ...], src_root: Path | None = None) -> list[str]:
+    """Dotted names of the modules named by `roots` (packages with all their files, or modules) and, transitively, of what they import."""
     root = Path(src_root) if src_root is not None else SRC_ROOT
     queue: list[str] = []
-    for item in PHASE_CODE_ROOTS[phase]:
+    for item in roots:
         if _is_package(root, item):
             queue.extend(_package_files(root, item))
         else:
@@ -192,15 +259,26 @@ def phase_modules(phase: str, src_root: Path | None = None) -> list[str]:
     return sorted(seen)
 
 
-def code_fingerprint(phase: str, src_root: Path | None = None) -> str:
-    """SHA-256 of the normalised source of the modules of `phase` (`phase_modules`), each with its dotted name."""
+def closure_fingerprint(roots: tuple[str, ...], src_root: Path | None = None) -> str:
+    """SHA-256 of the normalised source of the modules of `closure_modules(roots)`, each with its dotted name."""
     root = Path(src_root) if src_root is not None else SRC_ROOT
     digest = hashlib.sha256()
-    for name in phase_modules(phase, root):
+    for name in closure_modules(roots, root):
         path = _module_file(root, name)
         assert path is not None
-        digest.update(f"{name}:{_file_digest(path)}\n".encode())
+        digest.update(f"{name}:{_file_digest(path, name)}\n".encode())
     return digest.hexdigest()
+
+
+def code_fingerprint(phase: str, src_root: Path | None = None) -> str:
+    """SHA-256 of the normalised source of the modules of `phase` (`phase_modules`), each with its dotted name."""
+    return closure_fingerprint(PHASE_CODE_ROOTS[phase], src_root)
+
+
+@cache
+def cached_closure_fingerprint(roots: tuple[str, ...]) -> str:
+    """`closure_fingerprint(roots)` of the installed source, computed once per process: the code part of an internal cache key."""
+    return closure_fingerprint(roots)
 
 
 @cache
