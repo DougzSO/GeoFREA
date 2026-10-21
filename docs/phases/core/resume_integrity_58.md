@@ -62,3 +62,60 @@ The first real run after the merge reported `land_eligibility` as run, and the c
 ## 7. Tests and records
 
 The full suite of the branch passes (1,523 tests at `1ea2d9e`; the later commits of COMMAND 59 and 60 were run with their own subsets and the full suite before the merge). Decisions: `docs/phases/core.md` D-core-042, `F1_data_acquisition.md` D-F1-030, `F1b_data_quality_audit.md` D-F1b-017, `F3_land_eligibility.md` D-F3-020 and D-F3-021; `docs/OPEN_QUESTIONS.md` (OQ-062 removed, OQ-063 added); `docs/LIMITATIONS.md` L-047.
+
+## 8. Granularity of the fingerprints and the code in every internal cache (COMMAND 61, D-core-043, METHODOLOGY 15.2.3)
+
+Written for Douglas. Two things COMMAND 58 and 59 showed: an edit of `core/config_schemas.py` (a field with a default for the maps) changed the code
+fingerprint of every phase that imports it, so F3 to F8 would have run again for nothing; and the share caches of F3 ignored the code, so the E1 fix
+never reached the real results. No country was run for this command.
+
+### 8.1 Schemas leave the code hash; the validated configuration enters the configuration hash
+- `code_fingerprint.CONFIG_SCHEMA_MODULES` (`core.config_schemas`, `core.schemas`, `config_models.audit`, `config_models.land_availability`): of these
+  modules the normalised tree leaves out the field declarations and the validators of their pydantic models. What stays is code: methods and properties,
+  helper functions, constants. A line of calculation in `core/schemas.py` (`for_scenario`) still changes the phases that import it.
+- `config_fingerprint`: each file that has a schema (`experiments.yaml`, `parameters.json`, `settings.yaml`, `audit.yaml`, `technologies.yaml`) is
+  validated and the sections a phase reads are taken from the validated model with the **defaults resolved** (`model_dump(mode="json")`); `countries.yaml`
+  and `published_potential.yaml` have no schema and enter as parsed. A field added with a default, or a default changed, is in the value the phase
+  receives, so it changes the fingerprint of the phases that read that section and of no other. Writing a default explicitly in the YAML changes nothing.
+- Tests (`tests/unit/test_fingerprint_granularity.py`, 11): a new field with a default in the maps schema invalidates only `potential_maps` (code and
+  configuration together, on a copy of the source); a new field in a schema F3 does not read (hazard indicators) leaves F3 and F5 to F8 unchanged; a
+  changed default of a field F3 reads (`land_availability.missing_elevation`, not written in the YAML of the test) invalidates F3 to F8 and not the
+  maps, the hazards or the climate; a field, a default or a validator edited in a schema module changes no code fingerprint; a calculation or a helper
+  of a schema module changes exactly the phases that import it.
+
+### 8.2 Inventory of the stores outside the manifest
+Before: the key the store used. After: what it holds. "Content" is the content of the inputs.
+
+| Store (where) | Key before | Code | Configuration | Content of the inputs | After (COMMAND 61) |
+|---|---|---|---|---|---|
+| Clipped vectors `*_clipped.gpkg` + `.key` (F1b, F2a, F3; `core.geo_utils.clip_cache_key`) | version constant by hand, SHA-256 of the source and sidecars, country polygon | by hand only | polygon | yes | + code fingerprint of `core.geo_utils` and what it imports |
+| Aligned layers `<ISO>_*_aligned.tif.cachekey` (F2a; `alignment.aligned_layer_key`) | version constant by hand, SHA-256 of the inputs, resolution, nesting, polygon | by hand only | yes | yes | + code fingerprint of the package `grid_alignment` |
+| Land-cover tile results `land_cover_tile_cache/*.json` (F1b) | version constant by hand, SHA-256 of the tile, polygon, window | by hand only | yes | yes | + code fingerprint of `raster_inspection` |
+| Sub-pixel shares `interim/<ISO>/land_eligibility/*.npz` (F3 and the validation of F7b; `pipeline._share_key`) | file name, **mtime** of the input, grid, hash of `fractions.py` alone (COMMAND 58) | `fractions.py` only, not what it imports | thresholds and levels | **no** (mtime); the country polygon was not in the key | the clip key of the source (content, polygon, clip code), the grid, the thresholds and levels, and the code fingerprint of `fractions.py` and its imports |
+| Extremes of the 30 m DEM `interim/<ISO>/sanity/dem30_extremes.json` (`sanity.dem30_extremes`) | tile names | **no** | n/a | **no** | names and sizes of the tiles, code fingerprint of `sanity` (the size stands for the content: hashing hundreds of tiles costs as much as reading them) |
+| Year checkpoints of the ERA5 reduction (`write_annual_maxima_incremental`) | mask fingerprint, year, variable | **no** | mask | no (the year file is not hashed) | + `code_fingerprint` attribute of the checkpoint, read back before it is reused |
+| Batch files of the ERA5 merge and crop (interrupted runs) | the file exists | **no** | **no** | **no** | the name carries a tag of the code (and, for the crop, of the polygon file); a file with another tag is ignored |
+| GWA mosaic `<ISO>_*_mask.tif` + `.rule.json` (`wind.complete_gwa_to_mask`) | rule constant, name, size and mtime of the sources | by hand only | **no** (the mask was not in the stamp) | name, size, mtime | + code fingerprint of `wind`, + hash of the country mask |
+| Mainland files `gadm41_*_mainland.shp` + `.rule` (`gadm._current_rule`) | rule name, mtime order against the source | by hand only | rule | mtime order | + code fingerprint of `gadm` and what it imports (the mask of every country comes from here); the source is still compared by mtime order only |
+| Hash memo `FileHashMemo` | path, size, mtime -> SHA-256 | not a result | not a result | n/a | unchanged: it holds the hash of bytes, never a computed result; a file edited in place with the same size and mtime is not seen (stated in the module) |
+| Raw downloads (CDS, GWA, WDPA collection, DEM tiles, GADM zip, HydroSHEDS) | file exists / registry hash | not computed by our code | n/a | registry SHA-256 in F1 | unchanged: a re-run must not change data under a frozen run (`protected_planet`, `fetch_gwa_product`) |
+| In-process dictionaries (`lru_cache`, the interpolation cache of `forcing.py`) | n/a | n/a | n/a | n/a | die with the process |
+
+Mechanism. `core/cache_code.py` holds `CACHE_CODE_ROOTS` (cache -> the modules that compute what it stores) and `cache_code(name)`, the SHA-256 of the
+normalised source of those modules and of everything they import, transitively (`code_fingerprint.closure_fingerprint`, the same normalisation as the
+phases: a comment, a docstring or a reformat changes nothing, a calculation line does). `cache_key(...)` takes `code` as a required keyword: a key cannot
+be built without it. The version constants stay, as a hand-made extra invalidation. `core.cache_code` and `core.cache_key` are infrastructure of the
+fingerprints (they do not enter a phase fingerprint).
+
+Tests (`tests/unit/test_internal_caches.py`, 14; `test_cache_key.py`, `test_fetchers_era5.py`, `test_siting_sanity.py`, `test_fetchers_gadm.py` adapted):
+for each of the eight stores, on the real key or stamp read from an edited copy of the package, a numeric constant changed inside a function of the module
+that computes it gives another key, and a comment, a blank line or a trailing comment gives the same one; a change in the module of one cache does not
+change the key of a cache whose code does not import it; `cache_key` without `code` is a `TypeError`; every call of `cache_key` in `src` passes `code=`,
+every `cache_code("...")` names an entry of the inventory and every entry is used; the roots exist.
+
+### 8.3 What the next real run will do
+The format of the configuration fingerprint changed (validated values with defaults) and the code of the phases that imported the schema modules, the
+clip, the alignment and the share code now enter the keys. The first run of each country after this commit therefore runs **every phase again** and
+rebuilds the clips, the aligned layers, the land-cover tile results, the shares and the mainland files once (the results are the same; the stores were
+written under keys that did not hold the code). This is intended: the final round of the countries is the run that records the new fingerprints in
+the manifests. Nothing was run here.
