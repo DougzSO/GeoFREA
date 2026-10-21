@@ -3,6 +3,7 @@
 
 # Dados e outputs (vivem fora do repo)
 data/
+!/docs/data/
 outputs/
 outputs_baseline_fc7b43d/
 GeoFREA_data/
