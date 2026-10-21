@@ -5,7 +5,7 @@
 | Document | `docs/METHODOLOGY.md` |
 | Version | 15.2.3 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-20 |
+| Updated | 2026-10-21 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
