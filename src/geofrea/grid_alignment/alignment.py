@@ -98,6 +98,7 @@ import geopandas as gpd
 from rasterio.enums import Resampling
 
 from geofrea.core import paths as core_paths
+from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import (
@@ -133,6 +134,13 @@ logger = logging.getLogger(__name__)
 ALIGNMENT_ALGORITHM_VERSION = (
     2  # 2: elevation and slope from the GLO-30 tiles (D-F2a-021, COMMAND 55)
 )
+
+
+def aligned_layer_key(files, config: dict, hash_memo: FileHashMemo | None) -> str:
+    """Key of an aligned layer: the algorithm version, the code of the phase (`cache_code`, COMMAND 61), the input files by content and the config."""
+    return cache_key(
+        ALIGNMENT_ALGORITHM_VERSION, files, config, hash_memo, code=cache_code("aligned_layers")
+    )
 
 
 @contextmanager
@@ -345,7 +353,7 @@ def run_grid_alignment_phase(
             "cell_nesting_pixels": CELL_NESTING_PIXELS,
             "country_polygon_sha256": polygon_sha256,
         }
-        return cache_key(ALIGNMENT_ALGORITHM_VERSION, files, {**common, **config}, hash_memo)
+        return aligned_layer_key(files, {**common, **config}, hash_memo)
 
     def _execute_or_load(label: str, fn, condition: bool = True, files=(), **config):
         p = _path(label)

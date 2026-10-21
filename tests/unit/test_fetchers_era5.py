@@ -336,8 +336,15 @@ def test_year_checkpoint_from_a_different_polygon_is_not_reused(tmp_path):
         coords={"latitude": [1.0, 0.0], "longitude": [0.0, 1.0]},
     ).expand_dims(year=[2010])
     out.attrs["mask_fingerprint"] = "aaaa"
+    out.attrs["code_fingerprint"] = era5.cache_code("era5_reduction")
     out.to_netcdf(ckpt)
 
     assert era5._year_checkpoint_ok(ckpt, 2010, "fg10", "aaaa")
     assert not era5._year_checkpoint_ok(ckpt, 2010, "fg10", "bbbb")  # polygon changed
     assert not era5._year_checkpoint_ok(ckpt, 2011, "fg10", "aaaa")  # wrong year
+    earlier = out.copy()
+    earlier.attrs["code_fingerprint"] = "an earlier algorithm"
+    earlier.to_netcdf(tmp_path / "PRT_2012.nc")
+    assert not era5._year_checkpoint_ok(
+        tmp_path / "PRT_2012.nc", 2010, "fg10", "aaaa"
+    )  # other code

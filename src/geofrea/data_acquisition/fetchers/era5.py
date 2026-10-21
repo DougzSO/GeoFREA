@@ -78,6 +78,8 @@ import rioxarray  # noqa: F401 -- registers the .rio accessor used below
 import xarray as xr
 from dask.callbacks import Callback
 
+from geofrea.core.cache_code import cache_code
+from geofrea.core.cache_key import file_sha256
 from geofrea.data_acquisition.acquisition_area import acquisition_bbox, cds_area
 
 # 2026-10-09, root cause found (py-spy dump of a frozen merge worker, reproduced about once in a dozen runs of
@@ -433,7 +435,7 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
     comment; not a code bug, the watchdog caught it correctly). Years
     are merged in groups of `_MERGE_BATCH_SIZE` first, each batch
     written atomically to its own intermediate file
-    (`<out_path stem>_batch<N>of<M>.nc`) before a final merge combines
+    (`<out_path stem>_batch<N>of<M>_<tag>.nc`, the tag of the code, `_batch_tag`) before a final merge combines
     the batches into `out_path`. A watchdog-killed attempt only loses
     the one batch (or final merge) in progress -- already-finished
     batches are kept and skipped on retry, the same skip-if-intact
@@ -453,8 +455,10 @@ def merge_yearly_files(year_paths: list[Path], out_path: Path) -> Path:
         return out_path
 
     n = len(batches)
+    tag = _batch_tag()
     batch_out_paths = [
-        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)
+        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}_{tag}{out_path.suffix}")
+        for i in range(n)
     ]
     for i, (batch, batch_out) in enumerate(zip(batches, batch_out_paths), start=1):
         if batch_out.exists():
@@ -688,7 +692,7 @@ def crop_to_country_polygon(
     crop write instead of the merge write). `bbox_path`'s time span is
     split into groups of `_CROP_BATCH_YEARS` years, each cropped and
     written atomically to its own intermediate file
-    (`<out_path stem>_batch<N>of<M>.nc`) before a final concat combines
+    (`<out_path stem>_batch<N>of<M>_<tag>.nc`, the tag of the code, `_batch_tag`) before a final concat combines
     the batches into `out_path`. A watchdog-killed attempt only loses
     the one batch (or final concat) in progress -- already-finished
     batches are kept and skipped on retry, same skip-if-intact resume
@@ -707,8 +711,10 @@ def crop_to_country_polygon(
         return _crop_to(bbox_path, country_polygon_path, out_path, "crop", year_batches[0])
 
     n = len(year_batches)
+    tag = _batch_tag(file_sha256(country_polygon_path))
     batch_out_paths = [
-        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}{out_path.suffix}") for i in range(n)
+        out_path.with_name(f"{out_path.stem}_batch{i + 1}of{n}_{tag}{out_path.suffix}")
+        for i in range(n)
     ]
     cells: tuple[int, int] | None = None
     for i, (year_range, batch_out) in enumerate(zip(year_batches, batch_out_paths), start=1):
@@ -945,7 +951,19 @@ def _annual_year_worker(
         coords={lat_name: lat_vals, lon_name: lon_vals},
     ).expand_dims(year=[year])
     out.attrs["mask_fingerprint"] = mask.fingerprint
+    out.attrs["code_fingerprint"] = cache_code("era5_reduction")
     out.to_netcdf(out_path)
+
+
+def _batch_tag(*identity: str) -> str:
+    """Short tag in the name of a batch file left by an interrupted run: the code that wrote it (and what else decides its content).
+
+    A batch file is skipped on the next run only when its name holds the tag of the current code, so a file written by an earlier algorithm is
+    not reused (COMMAND 61); the files with another tag are not touched.
+    """
+    return hashlib.sha256("|".join([cache_code("era5_reduction"), *identity]).encode()).hexdigest()[
+        :8
+    ]
 
 
 def _year_checkpoint_ok(path: Path, year: int, variable: str, fingerprint: str) -> bool:
@@ -957,6 +975,7 @@ def _year_checkpoint_ok(path: Path, year: int, variable: str, fingerprint: str) 
                 variable in ds.data_vars
                 and list(ds["year"].values) == [year]
                 and ds.attrs.get("mask_fingerprint") == fingerprint
+                and ds.attrs.get("code_fingerprint") == cache_code("era5_reduction")
             )
     except Exception:  # noqa: BLE001 -- unreadable checkpoint = redo that year
         return False

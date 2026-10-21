@@ -30,6 +30,7 @@ import rasterio
 
 from geofrea.config_models.audit import AuditConfig, AuditLayerConfig
 from geofrea.core import paths as core_paths
+from geofrea.core.cache_code import cache_code
 from geofrea.core.constants import (
     ISA_G_M_S2,
     ISA_LAPSE_K_PER_M,
@@ -122,7 +123,7 @@ def dem30_extremes(tile_dir: Path, cache: Path | None = None) -> tuple[float, fl
     The 0.005 degree DEM that F2a aligns averages the terrain, so its highest pixel is lower than the highest peak that the wind-atlas
     density was computed on. The 30 m tiles (the ones F2a derives the slope from) bound the terrain from above and below. Tiles
     cover the country plus the border margin of their 1 degree squares, which only widens the envelope. The result is cached in
-    `cache` (JSON, keyed by the tile names) because BRA has hundreds of tiles.
+    `cache` (JSON, keyed by the tile names and sizes and by the code that reads them, COMMAND 61) because BRA has hundreds of tiles.
 
     Raises:
         SanityError: no tile, or no valid pixel.
@@ -130,10 +131,13 @@ def dem30_extremes(tile_dir: Path, cache: Path | None = None) -> tuple[float, fl
     tiles = sorted(Path(tile_dir).glob("*.tif"))
     if not tiles:
         raise SanityError(f"no 30 m DEM tile in {tile_dir}")
-    key = [t.name for t in tiles]
+    key = [
+        [t.name, t.stat().st_size] for t in tiles
+    ]  # hundreds of tiles: the size stands for the content, a hash of each would cost as much as reading it
+    code = cache_code("dem30_extremes")
     if cache is not None and cache.is_file():
         cached = json.loads(cache.read_text(encoding="utf-8"))
-        if cached.get("tiles") == key:
+        if cached.get("tiles") == key and cached.get("code") == code:
             return float(cached["z_min_m"]), float(cached["z_max_m"])
     z_min, z_max = math.inf, -math.inf
     for i, tile in enumerate(tiles, start=1):
@@ -148,7 +152,8 @@ def dem30_extremes(tile_dir: Path, cache: Path | None = None) -> tuple[float, fl
     if cache is not None:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(
-            json.dumps({"tiles": key, "z_min_m": z_min, "z_max_m": z_max}), encoding="utf-8"
+            json.dumps({"tiles": key, "code": code, "z_min_m": z_min, "z_max_m": z_max}),
+            encoding="utf-8",
         )
     return z_min, z_max
 

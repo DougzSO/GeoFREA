@@ -49,6 +49,7 @@ from pathlib import Path
 import pandas as pd
 
 from geofrea.core import paths
+from geofrea.core.cache_code import cache_code
 from geofrea.core.config_loader import load_countries
 from geofrea.core.geo_utils import MAINLAND_MAX_GAP_KM, load_mainland_boundary
 from geofrea.core.http_retry import get_with_retry
@@ -362,6 +363,11 @@ def _rule_stamp(derived: Path) -> Path:
     return derived.with_suffix(".rule")
 
 
+def _current_rule() -> str:
+    """The stamp of a derived file: the rule's name and the code that applies it (COMMAND 61), so a changed line of the rule rebuilds the files."""
+    return f"{MAINLAND_RULE_VERSION}|{cache_code('gadm_mainland')}"
+
+
 def _derived_is_fresh(derived: Path, source: Path) -> bool:
     """The derived file exists, is newer than its source and was written by the current mainland rule (a file of an earlier rule is rebuilt)."""
     stamp = _rule_stamp(derived)
@@ -369,12 +375,12 @@ def _derived_is_fresh(derived: Path, source: Path) -> bool:
         derived.exists()
         and derived.stat().st_mtime >= source.stat().st_mtime
         and stamp.exists()
-        and stamp.read_text(encoding="utf-8").strip() == MAINLAND_RULE_VERSION
+        and stamp.read_text(encoding="utf-8").strip() == _current_rule()
     )
 
 
 def _stamp_derived(derived: Path) -> None:
-    _rule_stamp(derived).write_text(MAINLAND_RULE_VERSION + "\n", encoding="utf-8")
+    _rule_stamp(derived).write_text(_current_rule() + "\n", encoding="utf-8")
 
 
 def _mainland_level0(source: Path, country_code: str) -> Path:

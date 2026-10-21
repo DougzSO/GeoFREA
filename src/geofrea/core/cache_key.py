@@ -2,7 +2,8 @@
 
 The key of a cache is the SHA-256 of three things: the sorted list of the input files with the SHA-256 of each, the config values that
 change the output, and an algorithm-version constant defined in the module that computes the cached result and bumped by hand when
-its logic changes. A change in any of the three gives another key, so a stale cache is recomputed, never reused. File names enter the
+its logic changes, and, since COMMAND 61, the fingerprint of the code that computes the result (`core.cache_code`), so a changed line of calculation
+gives another key whether or not anyone bumped the constant. A change in any of them gives another key, so a stale cache is recomputed, never reused. File names enter the
 key by base name, not by directory, so a data directory that moves keeps its caches.
 """
 
@@ -70,14 +71,18 @@ def cache_key(
     input_files: Iterable[Path | str | None],
     config: Mapping[str, Any] | None = None,
     memo: FileHashMemo | None = None,
+    *,
+    code: str,
 ) -> str:
-    """Key of one cached result: algorithm version, sorted (name, SHA-256) of the input files, and the config values.
+    """Key of one cached result: algorithm version, sorted (name, SHA-256) of the input files, the config values and the code.
 
     Args:
         algorithm_version: The module's constant, bumped by hand when the logic changes.
         input_files: Every file the result is computed from; `None` entries are skipped.
         config: The config values that affect the output (JSON-serializable, e.g. a resolution, a cap, a polygon hash).
         memo: Optional hash memo; without it every file is hashed.
+        code: Fingerprint of the code that computes the result (`core.cache_code.cache_code(name)`); required, a key without it is the
+            defect of COMMAND 58.
     """
     sha = memo.sha256 if memo is not None else file_sha256
     files = sorted((Path(p).name, sha(p)) for p in input_files if p is not None)
@@ -85,6 +90,7 @@ def cache_key(
         "algorithm_version": algorithm_version,
         "input_files": files,
         "config": dict(config or {}),
+        "code": code,
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()

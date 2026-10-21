@@ -588,31 +588,13 @@ def test_the_rule_is_written_in_the_configuration_and_nothing_else_is_accepted()
         LandAvailability.model_validate({**block, "missing_elevation": "eligible"})
 
 
-def test_the_share_caches_are_keyed_by_the_code_that_computes_them(tmp_path, monkeypatch):
-    """A share file written by an earlier algorithm is not current: the key holds the normalised source of `fractions.py` (COMMAND 58 and 59)."""
+def test_a_share_cache_is_read_only_under_its_own_key(tmp_path):
+    """A share file is current only for the key it was written under (the key holds the code, the input content and the grid: test_internal_caches)."""
     from geofrea.land_eligibility import pipeline
 
-    first = pipeline._fractions_code_hash()
-    assert first == pipeline._fractions_code_hash()
-
-    source = Path(pipeline._fractions_module.__file__).read_text(encoding="utf-8")
-    sandbox = tmp_path / "fractions.py"
-
-    def hash_of(text: str) -> str:
-        sandbox.write_text(text, encoding="utf-8")
-        monkeypatch.setattr(pipeline._fractions_module, "__file__", str(sandbox))
-        return pipeline._fractions_code_hash()
-
-    assert hash_of(source) == first
-    assert hash_of("# a comment\n" + source) == first  # a comment is not a change of the algorithm
-    assert hash_of(source.replace("TIE_BREAK_DEG = 1e-7", "TIE_BREAK_DEG = 2e-7")) != first
-
     path = tmp_path / "fraction.npz"
-    arrays = pipeline._fraction_cache(
-        path, pipeline._key("protected", first), lambda: {"a": np.zeros(3)}
-    )
+    arrays = pipeline._fraction_cache(path, "key one", lambda: {"a": np.zeros(3)})
     assert arrays["a"].sum() == 0
-    rebuilt = pipeline._fraction_cache(
-        path, pipeline._key("protected", "other code"), lambda: {"a": np.ones(3)}
-    )
+    assert pipeline._fraction_cache(path, "key one", lambda: {"a": np.ones(3)})["a"].sum() == 0
+    rebuilt = pipeline._fraction_cache(path, "key two", lambda: {"a": np.ones(3)})
     assert rebuilt["a"].sum() == 3

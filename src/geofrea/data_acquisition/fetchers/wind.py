@@ -46,6 +46,7 @@ others, so "raise" here is the correct contract, not an oversight.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from collections.abc import Sequence
@@ -58,6 +59,7 @@ from rasterio.features import geometry_mask
 from rasterio.windows import Window
 
 from geofrea.core import paths
+from geofrea.core.cache_code import cache_code
 from geofrea.core.constants import WIND_HEIGHTS_M
 from geofrea.core.http_retry import get_with_retry
 
@@ -276,16 +278,26 @@ def _source_identity(path: Path) -> list:
     return [path.name, stat.st_size, stat.st_mtime_ns]
 
 
-def _stamp(sources: Sequence[Path]) -> dict:
-    return {"rule": GWA_MASK_RULE_VERSION, "sources": [_source_identity(p) for p in sources]}
+def _mask_identity(mask: gpd.GeoDataFrame) -> str:
+    return hashlib.sha256(b"".join(g.wkb for g in mask.geometry)).hexdigest()
 
 
-def _derived_is_fresh(derived: Path, sources: Sequence[Path]) -> bool:
+def _stamp(sources: Sequence[Path], mask: gpd.GeoDataFrame) -> dict:
+    """What the mosaic was made from: the rule, the code that makes it (COMMAND 61), the country mask it was cut to and the source files."""
+    return {
+        "rule": GWA_MASK_RULE_VERSION,
+        "code": cache_code("gwa_mask_mosaic"),
+        "mask": _mask_identity(mask),
+        "sources": [_source_identity(p) for p in sources],
+    }
+
+
+def _derived_is_fresh(derived: Path, sources: Sequence[Path], mask: gpd.GeoDataFrame) -> bool:
     stamp = _stamp_path(derived)
     if not derived.is_file() or not stamp.is_file():
         return False
     try:
-        return json.loads(stamp.read_text(encoding="utf-8")) == _stamp(sources)
+        return json.loads(stamp.read_text(encoding="utf-8")) == _stamp(sources, mask)
     except ValueError:
         return False
 
@@ -428,9 +440,9 @@ def complete_gwa_to_mask(
     derived = (
         paths.fetched_raw("gwa", country_code) / f"{country_code}_{product}_{height_m}m_mask.tif"
     )
-    if not _derived_is_fresh(derived, files):
+    if not _derived_is_fresh(derived, files, mask):
         info = mosaic_to_mask(files, mask, derived)
-        _stamp_path(derived).write_text(json.dumps(_stamp(files)), encoding="utf-8")
+        _stamp_path(derived).write_text(json.dumps(_stamp(files, mask)), encoding="utf-8")
         logger.info(
             "GWA %s %sm for %s completed from %s (skipped %s)",
             product,

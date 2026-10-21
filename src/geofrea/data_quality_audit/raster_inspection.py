@@ -36,6 +36,7 @@ from rasterio.features import geometry_mask
 from rasterio.windows import from_bounds as window_from_bounds
 from shapely.geometry import box, mapping
 
+from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import cache_key
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
 from geofrea.core.geodesy import wgs84_km_per_degree
@@ -702,6 +703,7 @@ def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
         LAND_COVER_TILE_ALGORITHM_VERSION,
         [tile],
         {"country_polygon_fingerprint": geom_fingerprint, "window_px": _LAND_COVER_WINDOW_PX},
+        code=cache_code("land_cover_tiles"),
     )
 
 

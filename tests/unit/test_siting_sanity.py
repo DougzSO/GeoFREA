@@ -163,7 +163,7 @@ def test_country_geometry_widens_the_aligned_dem_with_the_30_m_tiles_and_caches(
     cache = tmp_path / "cache" / "extremes.json"
     widened = country_geometry(aligned, tiles, cache)
     assert (widened.z_min_m, widened.z_max_m) == (-5.0, 3000.0)
-    assert json.loads(cache.read_text())["tiles"] == ["t1.tif"]
+    assert json.loads(cache.read_text())["tiles"] == [["t1.tif", (tiles / "t1.tif").stat().st_size]]
     (tiles / "t1.tif").unlink()
     _write_dem(tiles / "t1.tif", np.array([[1.0, 2.0], [3.0, 4.0]]))
     assert dem30_extremes(tiles, cache) == (-5.0, 3000.0)  # same tile names: the cache is used

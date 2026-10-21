@@ -16,7 +16,6 @@ function of one `ParameterSet`, so ranges can be sampled later without changing 
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,7 +37,8 @@ from geofrea.config_models.land_availability import (
     riparian_thresholds_km,
 )
 from geofrea.core import paths as core_paths
-from geofrea.core.code_fingerprint import normalised_source
+from geofrea.core.cache_code import cache_code
+from geofrea.core.cache_key import cache_key
 from geofrea.core.constants import (
     CELL_ORIGIN_LAT,
     CELL_ORIGIN_LON,
@@ -55,7 +55,6 @@ from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
-from geofrea.land_eligibility import fractions as _fractions_module
 from geofrea.land_eligibility.admin1 import assign_admin1, read_units
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
@@ -269,18 +268,28 @@ def _fraction_cache(path: Path, key: str, build) -> dict[str, np.ndarray]:
     return arrays
 
 
-def _key(*parts) -> str:
-    return hashlib.sha256("|".join(str(p) for p in parts).encode()).hexdigest()
+SHARE_ALGORITHM_VERSION = 1
 
 
-def _fractions_code_hash() -> str:
-    """Hash of the code that computes the sub-pixel shares (comments, docstrings and formatting do not count).
+def _share_key(kind: str, source: Path | None, country_gdf, transform, shape, **config) -> str:
+    """Key of a share cache: the clip of the source (its content, the country polygon and the clip code), the grid, the thresholds and the code
+    of the shares (`fractions.py` and what it imports).
 
-    The share caches are keyed by their inputs; without this the cache of a run made with an earlier algorithm is read as current (COMMAND 58:
-    the tie-break of D-F3-020 never reached the real results because the shares of the day before were reused).
+    COMMAND 58 found a key made of the file name, its mtime and the grid: the shares of an earlier algorithm were read as current. COMMAND 61: the
+    key holds the content of the input through the clip key and the code through `cache_code`, as every other internal cache.
     """
-    source = Path(_fractions_module.__file__).read_text(encoding="utf-8")
-    return hashlib.sha256(normalised_source(source).encode()).hexdigest()
+    return cache_key(
+        SHARE_ALGORITHM_VERSION,
+        [],
+        {
+            "kind": kind,
+            "clip": clip_cache_key(source, country_gdf),
+            "transform": [float(v) for v in tuple(transform)[:6]],
+            "shape": [int(v) for v in shape],
+            **config,
+        },
+        code=cache_code("subpixel_shares"),
+    )
 
 
 def _required_resources(tech: str, siting: dict[str, Path]) -> dict[str, Path]:
@@ -396,12 +405,9 @@ def prepare_shared_layers(
     lakes_gdf = _clipped(lakes_path, "lakes", country_gdf, interim)
     protected_gdf = _clipped(protected_path, "protected", country_gdf, interim)
     rivers_gdf = _clipped(rivers_path, "rivers", country_gdf, interim)
-    id_parts = (transform, shape, DOMINANT_CODES, _fractions_code_hash())
     lakes_fraction = _fraction_cache(
         interim / "lakes_fraction.npz",
-        _key(
-            "lakes", lakes_path, Path(lakes_path).stat().st_mtime_ns if lakes_path else 0, *id_parts
-        ),
+        _share_key("lakes", lakes_path, country_gdf, transform, shape),
         lambda: {"a": polygon_coverage_fraction(lakes_gdf, transform, shape)},
     )["a"]
 
@@ -415,12 +421,8 @@ def prepare_shared_layers(
     for cats in level_sets:
         arrays = _fraction_cache(
             interim / f"protected_fraction_{'_'.join(cats).replace('*', 'any')}.npz",
-            _key(
-                "protected",
-                protected_path,
-                Path(protected_path).stat().st_mtime_ns if protected_path else 0,
-                cats,
-                *id_parts,
+            _share_key(
+                "protected", protected_path, country_gdf, transform, shape, categories=list(cats)
             ),
             lambda cats=cats: {
                 "a": polygon_coverage_fraction(_iucn_subset(protected_gdf, cats), transform, shape)
@@ -431,13 +433,14 @@ def prepare_shared_layers(
     discharges = riparian_discharges_m3s(la)
     rip = _fraction_cache(
         interim / "riparian_fraction.npz",
-        _key(
+        _share_key(
             "rivers",
             rivers_path,
-            Path(rivers_path).stat().st_mtime_ns if rivers_path else 0,
-            thr,
-            discharges,
-            *id_parts,
+            country_gdf,
+            transform,
+            shape,
+            thresholds=thr,
+            discharges=[float(q) for q in discharges],
         ),
         lambda: {
             f"q{q}_t{t}": a

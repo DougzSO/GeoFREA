@@ -392,7 +392,7 @@ def test_a_derived_file_of_an_earlier_rule_is_rebuilt(tmp_path, monkeypatch):
     monkeypatch.setattr(gadm, "_mainland_only", lambda country_code: True)
     borders = gadm.fetch_borders(tmp_path, "PRT")
     stamp = gadm._rule_stamp(borders)
-    assert stamp.read_text(encoding="utf-8").strip() == gadm.MAINLAND_RULE_VERSION
+    assert stamp.read_text(encoding="utf-8").strip() == gadm._current_rule()
     stamp.unlink()  # a file written before the rule had a version
     gpd.GeoDataFrame({"GID_0": ["PRT"]}, geometry=[box(0, 0, 1, 1)], crs="EPSG:4326").to_file(
         borders

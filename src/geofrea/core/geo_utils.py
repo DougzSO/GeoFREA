@@ -691,11 +691,16 @@ def clip_cache_key(path: str | Path, country_gdf: gpd.GeoDataFrame) -> str:
     """
     import hashlib
 
+    from geofrea.core.cache_code import cache_code
     from geofrea.core.cache_key import cache_key
 
     geom = hashlib.sha256(b"".join(g.wkb for g in country_gdf.geometry)).hexdigest()
     return cache_key(
-        CLIP_ALGORITHM_VERSION, clip_source_files(path), {"polygon": geom}, memo=_clip_hash_memo()
+        CLIP_ALGORITHM_VERSION,
+        clip_source_files(path),
+        {"polygon": geom},
+        memo=_clip_hash_memo(),
+        code=cache_code("clip"),
     )
 
 

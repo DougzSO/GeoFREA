@@ -1,7 +1,7 @@
 """Content-addressed cache keys (OQ-026): every component of the key invalidates the cache.
 
-The components are the sorted input files with their SHA-256, the config values that affect the output, and the algorithm-version
-constant of the module. They are tested on the key itself, on the aligned layers of F2a and on the land-cover tile cache of F1b.
+The components are the sorted input files with their SHA-256, the config values that affect the output, the algorithm-version
+constant of the module and the fingerprint of the code that computes the result (COMMAND 61). They are tested on the key itself, on the aligned layers of F2a and on the land-cover tile cache of F1b.
 """
 
 from __future__ import annotations
@@ -46,41 +46,59 @@ def _file(path: Path, text: str) -> Path:
 
 def test_the_key_is_stable_for_the_same_inputs_config_and_version(tmp_path):
     a, b = _file(tmp_path / "a.txt", "a"), _file(tmp_path / "b.txt", "b")
-    assert cache_key(1, [a, b], {"cap": 5.0}) == cache_key(1, [a, b], {"cap": 5.0})
+    assert cache_key(1, [a, b], {"cap": 5.0}, code="c") == cache_key(
+        1, [a, b], {"cap": 5.0}, code="c"
+    )
 
 
 def test_the_order_in_which_files_are_listed_does_not_change_the_key(tmp_path):
     a, b = _file(tmp_path / "a.txt", "a"), _file(tmp_path / "b.txt", "b")
-    assert cache_key(1, [a, b]) == cache_key(1, [b, a])
+    assert cache_key(1, [a, b], code="c") == cache_key(1, [b, a], code="c")
 
 
 def test_a_data_directory_that_moves_keeps_the_key(tmp_path):
     first = _file(tmp_path / "one" / "t.txt", "x")
     second = _file(tmp_path / "two" / "t.txt", "x")
-    assert cache_key(1, [first]) == cache_key(1, [second])
+    assert cache_key(1, [first], code="c") == cache_key(1, [second], code="c")
 
 
 def test_the_content_of_an_input_file_changes_the_key(tmp_path):
     a = _file(tmp_path / "a.txt", "a")
-    before = cache_key(1, [a])
+    before = cache_key(1, [a], code="c")
     _file(tmp_path / "a.txt", "changed")
-    assert cache_key(1, [a]) != before
+    assert cache_key(1, [a], code="c") != before
 
 
 def test_adding_or_removing_an_input_file_changes_the_key(tmp_path):
     a, b = _file(tmp_path / "a.txt", "a"), _file(tmp_path / "b.txt", "b")
-    assert len({cache_key(1, [a]), cache_key(1, [a, b]), cache_key(1, [b])}) == 3
+    assert (
+        len(
+            {
+                cache_key(1, [a], code="c"),
+                cache_key(1, [a, b], code="c"),
+                cache_key(1, [b], code="c"),
+            }
+        )
+        == 3
+    )
 
 
 def test_a_config_value_changes_the_key(tmp_path):
     a = _file(tmp_path / "a.txt", "a")
-    assert cache_key(1, [a], {"cap": 5.0}) != cache_key(1, [a], {"cap": 6.0})
-    assert cache_key(1, [a], {"cap": 5.0}) != cache_key(1, [a], {"cap": 5.0, "extra": 1})
+    assert cache_key(1, [a], {"cap": 5.0}, code="c") != cache_key(1, [a], {"cap": 6.0}, code="c")
+    assert cache_key(1, [a], {"cap": 5.0}, code="c") != cache_key(
+        1, [a], {"cap": 5.0, "extra": 1}, code="c"
+    )
+
+
+def test_the_code_changes_the_key(tmp_path):
+    a = _file(tmp_path / "a.txt", "a")
+    assert cache_key(1, [a], code="one") != cache_key(1, [a], code="two")
 
 
 def test_the_algorithm_version_changes_the_key(tmp_path):
     a = _file(tmp_path / "a.txt", "a")
-    assert cache_key(1, [a]) != cache_key(2, [a])
+    assert cache_key(1, [a], code="c") != cache_key(2, [a], code="c")
 
 
 def test_an_output_with_no_sidecar_or_another_key_is_not_current(tmp_path):
