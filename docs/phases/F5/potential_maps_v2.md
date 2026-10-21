@@ -94,4 +94,4 @@ The figures of the phase that are not part of the set were **moved, not deleted*
 
 ## 8. Run
 
-Phase `potential_maps` of the real run of 2026-10-20: **PRT 49 s, BRA 104 s, IND 123 s** (the phase alone, 20 maps and 2 limits files per country). The first version of the same run took 463, 1,257 and 2,633 s, almost all of it in the search for the contiguous territory (about a minute for IND), which it repeated for every map; the second version finds it once per country (`MapContext`). The files are written by the phase (`produces` lists them, per technology, when `figures` is `all`; the maps per cell only with `per_cell`).
+Phase `potential_maps` of the real run of 2026-10-20: **PRT 47 s, BRA 104 s, IND 123 s** (the phase alone, 20 maps and 2 limits files per country). The first version of the same run took 463, 1,257 and 2,633 s, almost all of it in the search for the contiguous territory (about a minute for IND), which it repeated for every map; the second version finds it once per country (`MapContext`). The files are written by the phase (`produces` lists them, per technology, when `figures` is `all`; the maps per cell only with `per_cell`).
