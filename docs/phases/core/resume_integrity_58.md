@@ -10,7 +10,7 @@ Written for Douglas. METHODOLOGY 15.2.1 (A-02, M-F1-02, M-F1-03, M-F1b-01), deci
 | E1 of IND deterministic between two executions | yes, and, after D-F3-021, the pipeline file and two new executions are identical pixel by pixel (section 4) |
 | GWA coverage of the mask at least 99% in the three countries, or the reason | PRT 100%, BRA 99.99%, **IND 94.2% with the reason recorded** (section 5): the three GWA files that exist (IND, PAK, CHN) do not hold a value in the two blocks that the contiguous mask added to IND |
 | F5 `ran_clean` in the three countries | yes: the checks of 49b (`check_f5_r3.py`) pass in PRT, IND and BRA (`ALL_PASS True`) in the final runs of 2026-10-20 |
-| Push done | see the end of the record of COMMAND 59 |
+| Push done | yes (main at `23bd2c3`, 2026-10-22) |
 
 Two things in this command did not come out as the text of the command expected, and one defect of mine was found afterwards: the GWA does not reach 99% for IND (section 5); the comparison of the grid sources is in `docs/data/grid_provenance.md`; the F3 share caches ignored the code, so the first real run did not carry the E1 fix (section 4.4).
 
@@ -57,11 +57,11 @@ The first real run after the merge reported `land_eligibility` as run, and the c
 
 ## 6. The transmission grid (OQ-063)
 
-`docs/data/grid_provenance.md` holds the metadata of `grid.gpkg` (one layer `grid`, LineString, EPSG:4326, one field `source` in gridfinder and openstreetmap, 3,678,243 lines, change date 2019-11-12 in `gpkg_contents`), the draft of the provenance for the author to complete (source, version, licence) and the comparison with the OSM extracts by country (total length, number of lines, lines in the blocks IND gained). **The source of the grid is not changed in the code**; the change is Group 3 and needs the confirmed provenance.
+`docs/data/grid_provenance.md` holds the metadata of `grid.gpkg` (one layer `grid`, LineString, EPSG:4326, one field `source` in gridfinder and openstreetmap, 3,678,243 lines, change date 2019-11-12 in `gpkg_contents`), the draft of the provenance for the author to complete (source, version, licence) and the comparison with the OSM extracts by country (total length, number of lines, lines in the blocks IND gained). **The source of the grid is not changed in the code**; the change is Group 3 and needs the confirmed provenance. Numbers of the comparison (lines of `grid.gpkg` in the country mask against the OSM extract the pipeline reads): PRT 27,893 km (gridfinder 13,996, OSM 13,898) against 17,433 km; IND 926,446 km (gridfinder 503,893, OSM 422,554) against 286,121 km, and in the blocks IND gained 11,394 km of `grid.gpkg` against none in the extract; BRA 508,312 km (gridfinder 275,289, OSM 233,024) against 299,857 km. `grid.gpkg` has no voltage field; the extracts do (section 3 of that document). Still marked for the author: the MD5 of the file, the date and method of the OSM extraction and the voltage levels of the paper (section 5 of that document).
 
 ## 7. Tests and records
 
-The full suite of the branch passes (1,523 tests at `1ea2d9e`; the later commits of COMMAND 59 and 60 were run with their own subsets and the full suite before the merge). Decisions: `docs/phases/core.md` D-core-042, `F1_data_acquisition.md` D-F1-030, `F1b_data_quality_audit.md` D-F1b-017, `F3_land_eligibility.md` D-F3-020 and D-F3-021; `docs/OPEN_QUESTIONS.md` (OQ-062 removed, OQ-063 added); `docs/LIMITATIONS.md` L-047.
+The full suite passes on main: **1,596 tests** (2026-10-22, before and after the merge of the ERA5 downloader and the grid provenance; 1,523 at `1ea2d9e` when COMMAND 58 was merged). Decisions: `docs/phases/core.md` D-core-042, `F1_data_acquisition.md` D-F1-030, `F1b_data_quality_audit.md` D-F1b-017, `F3_land_eligibility.md` D-F3-020 and D-F3-021; `docs/OPEN_QUESTIONS.md` (OQ-062 removed, OQ-063 added); `docs/LIMITATIONS.md` L-047.
 
 ## 8. Granularity of the fingerprints and the code in every internal cache (COMMAND 61, D-core-043, METHODOLOGY 15.2.3)
 
@@ -119,3 +119,44 @@ clip, the alignment and the share code now enter the keys. The first run of each
 rebuilds the clips, the aligned layers, the land-cover tile results, the shares and the mainland files once (the results are the same; the stores were
 written under keys that did not hold the code). This is intended: the final round of the countries is the run that records the new fingerprints in
 the manifests. Nothing was run here.
+
+## 10. The final round (COMMAND 62, 2026-10-21/22)
+
+Written for Douglas. The three countries ran from the data acquisition to the potential maps with no `--rerun`, after the merge of COMMAND 61. Every internal cache was rebuilt, because the keys now hold the code
+(section 8.3 announced it; the cost was not quantified there: slope tiles, land-cover tiles and the aligned layers dominate). Statuses after the round: PRT and BRA complete; **IND complete except `hazard_context` and `overview`**, which wait for the ERA5 extension (section 10.4).
+
+### 10.1 Phases, time and memory
+
+| Country | Wall time, all phases | Longest phases | Peak working set | Peak commit | Result |
+|---|---|---|---|---|---|
+| PRT | 1,236 s (20.6 min) | grid_alignment 355 s, data_quality_audit 238 s, data_acquisition 168 s | not measured | not measured | 12 phases success |
+| IND | 18,937 s (5.3 h) | grid_alignment 9,678 s, data_quality_audit 4,096 s, land_eligibility 3,325 s | 3.66 GB | 5.82 GB | 10 success; hazard_context and overview not run in this round (wait for the ERA5); the manifest still holds the failure of 2026-10-20 ("5262 cells have no native cell within 0.5 degrees") |
+| BRA | 52,488 s (14.6 h; data acquisition ran in an attempt that died, then the support phases were run again) | grid_alignment 42,176 s (977 slope tiles 4,883 s), land_eligibility 4,134 s, data_quality_audit 3,861 s | 3.60 GB | 6.91 GB | 12 phases success |
+
+The wrapper that reads the peak of the process tree returned 0.0 for the first runs (a handle truncated in `ctypes`); the peaks above are from a separate sampler of IND and BRA, and PRT was not sampled.
+
+### 10.2 The 15 checks of 49b
+
+`check_f5_r3.py`: **ALL_PASS in PRT, IND and BRA.** BRA: the air density ratio within [0.938, 0.988], no CF outside [0, 1] or NaN in the 6 scenario files, `CF_net/CF_gross` equal to 0.866 to 1e-16, no wind cell above 3000 m (maximum 2,027 m), the 20-cell capacity check with |dP| = 0, no warning in the 150 m run.
+
+### 10.3 Plausibility against the run of 2026-10-19 (central scenario)
+
+| Country | Tech | GW | TWh per year | Variation GW | Variation TWh |
+|---|---|---|---|---|---|
+| PRT | solar | 264.46 | 424.63 | -0.062% | -0.061% |
+| PRT | wind | 21.05 | 49.00 | -0.097% | -0.082% |
+| IND | solar | 753.37 | 1,253.59 | +0.015% | +0.016% |
+| IND | wind | 189.81 | 299.50 | +0.013% | +0.008% |
+| BRA | solar | 19,188.34 | 31,068.30 | -0.003% | -0.002% |
+| BRA | wind | 1,643.45 | 2,297.21 | -0.005% | -0.006% |
+
+No variation reaches 0.5%, so none needs a cause beyond the one of D-F3-020 and D-F3-021 (shares of F3 independent of the grid and cached by code). Against the final run of 2026-10-20 the wind of IND moved 0.002%.
+
+**E1 of IND** (the deterministic check of COMMAND 58): two executions of the round give the same raster, 0 pixels differ by more than 1e-6 from the saved one (sum 529,901.5, shape 2,750 x 2,930).
+
+**Wind eligible area with no Global Wind Atlas value** (OQ-062 follow-up, wind below 3000 m, central, computed with the E1-E6 shares and the resource layers left out): **380.6 km2, 0.075% of the eligible wind area of IND**. It is below the 1% that would open an open question, so none was opened; L-047 now carries the number.
+
+### 10.4 What waits for the ERA5 of IND
+
+`hazard_context` and `overview` of IND (the hazard of the wind gust needs the 1996-2014 annual maxima over the whole mask), the check that no cell of the mask has a NaN of fg10 in any year, the coverage audit "after" (`docs/data/coverage_audit_59.md`) and the hashes of IND. The extension is described in D-F1-031.
+

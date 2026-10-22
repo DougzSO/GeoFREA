@@ -1,5 +1,5 @@
 {
- "note": "SHA-256 (bytes) of the F5 artifacts after the run of F1 to F5 of 2026-10-20 (docs/phases/core/resume_integrity_58.md and docs/phases/F5/potential_maps_v2.md; METHODOLOGY 15.2.2; the shares of F3 computed with the code key of D-F3-021 and the tie-break of D-F3-020). It replaces the file of the round of 2026-10-19 (docs/phases/core/geometry_dem_55.md). The list of files is the one of that round; the sensitivity folders are those written by the checks of 49b in the same run (150 m wind for the three countries, the cells above 3000 m for IND). The figures of potential_maps are not listed (PNG, drawn by the common style; their limits are in potential_breaks_<tech>.json).",
+ "note": "SHA-256 (bytes) of the F5 artifacts after the run of F1 to F5 of 2026-10-20 (docs/phases/core/resume_integrity_58.md and docs/phases/F5/potential_maps_v2.md; METHODOLOGY 15.2.2; the shares of F3 computed with the code key of D-F3-021 and the tie-break of D-F3-020). It replaces the file of the round of 2026-10-19 (docs/phases/core/geometry_dem_55.md). The list of files is the one of that round; the sensitivity folders are those written by the checks of 49b in the same run (150 m wind for the three countries, the cells above 3000 m for IND). The figures of potential_maps are not listed (PNG, drawn by the common style; their limits are in potential_breaks_<tech>.json). PRT and BRA were replaced on 2026-10-22 by the hashes of the final round of COMMAND 62 (field `round` per country); IND still holds the run of 2026-10-20 until its hazard_context and overview have run on the complete ERA5 product.",
  "methodology_version": "15.2.2",
  "git_commit": "735188f",
  "countries": {
@@ -30,7 +30,8 @@
     "sensitivity_150m/potential_wind__permissive.parquet": "92ba42df407c8e14c11177e4c09999a15dfd6caf8c154167bb15b16a44103eee",
     "sensitivity_150m/potential_wind__restrictive.parquet": "22eff576b254b6c41f7edfe4b514a17e08d4ad1c6dbe4828d8d91365c63f87df",
     "sensitivity_150m/weibull_distribution_wind.csv": "6ca462cb5d5b05706f2bd8f23a2b22a8767aee44cd9a9331740d932d11ec4959"
-   }
+   },
+   "round": "final round of 2026-10-21/22 (COMMAND 62)"
   },
   "IND": {
    "dir": "GEOFREA_DATA_DIR/outputs/IND/technical_potential",
@@ -67,7 +68,8 @@
     "sensitivity_above3000m/potential_wind__permissive.parquet": "630707749fbc62744a23e28efdde5ee8e9c5c956d73e7041b5d6acc48711293e",
     "sensitivity_above3000m/potential_wind__restrictive.parquet": "768f64281ac3e714f98b98691c03c05437342e312a3244b46df0c99e267b84d1",
     "sensitivity_above3000m/weibull_distribution_wind.csv": "54510980097fd39e03f50c140783d3f4888f254e817469fcded1540da5b91ee7"
-   }
+   },
+   "round": "run of 2026-10-20: PENDING, replaced by the hashes of the final round of IND after the ERA5 extension (hazard_context and overview)"
   },
   "BRA": {
    "dir": "GEOFREA_DATA_DIR/outputs/BRA/technical_potential",
@@ -88,15 +90,16 @@
     "artifacts/potential_wind__permissive.parquet": "cfab4fd96a57b00027af50bdde412743e483380ec867508caa938fdad179f7c5",
     "artifacts/potential_wind__restrictive.parquet": "deb9580fb111574a26e54104f7b32b9483b093b372a8ef63dbbe6ded3c147658",
     "artifacts/weibull_distribution_wind.csv": "36857ca6404aedced809655ac19e3656ef486ced38e62d560ad53048a7b65079",
-    "sensitivity_150m/class_flag_wind__central.parquet": "9adf00a5a919913dfa9773dcb96b0770c028d0391962815839d752568fd7d727",
-    "sensitivity_150m/class_flag_wind__permissive.parquet": "0489798b9aa52a802606519b94a18bf3598f3a420b7fbba8b30ba1b6e070e90b",
-    "sensitivity_150m/class_flag_wind__restrictive.parquet": "a18c1eaf2e81c26e08a39bfcc5a93d907276050f637e1529634d4076390048de",
-    "sensitivity_150m/potential_aggregates_wind.parquet": "ade2e3391d6a196dbb85e61ae1bb447a65fbe4b0532f100f13ff02cd37e72c17",
-    "sensitivity_150m/potential_wind__central.parquet": "8563d1cb7ba6c68b7de4cc507828e4b1222984e38d491f5de23addcc7cf9216d",
-    "sensitivity_150m/potential_wind__permissive.parquet": "db50fb076665d0f888b68e15cfb2683a18c215112adfe66ffa7848df53f58602",
-    "sensitivity_150m/potential_wind__restrictive.parquet": "eb648e10112c96f4c594d0bd7e2fe7f5d1650daabff2cf254425ea30ca267082",
+    "sensitivity_150m/class_flag_wind__central.parquet": "dca9e00ed5e7df4eca0ca3e95c1118dcbebc90292a80b1d9173422a06932b297",
+    "sensitivity_150m/class_flag_wind__permissive.parquet": "3d6edb5ca96232722ed1290e133db021a75fa4021f1598ddfd0cfb59b2a377b9",
+    "sensitivity_150m/class_flag_wind__restrictive.parquet": "58a43a7120b92b913bbc6a9eef2b2233451bb47287f525ac5513737efb60276b",
+    "sensitivity_150m/potential_aggregates_wind.parquet": "2e4f7d3e756b6b4588cd59b27f389352f855572772ecc2f9bf05de342172fbb3",
+    "sensitivity_150m/potential_wind__central.parquet": "baca21294d7b89ab8751742ceb10661515a39d2269f0798de30beca7b783a850",
+    "sensitivity_150m/potential_wind__permissive.parquet": "7ffeb329411cc3865cdd3b350670aa2b4e2993a59a4b7b557152ca09744a8b61",
+    "sensitivity_150m/potential_wind__restrictive.parquet": "fa8d91665fb967e12d2516a11d2540f0aa9d8ba0e4991244b1e56a7f5cb634c3",
     "sensitivity_150m/weibull_distribution_wind.csv": "36857ca6404aedced809655ac19e3656ef486ced38e62d560ad53048a7b65079"
-   }
+   },
+   "round": "final round of 2026-10-21/22 (COMMAND 62)"
   }
  }
 }

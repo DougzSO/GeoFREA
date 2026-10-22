@@ -95,3 +95,11 @@ The figures of the phase that are not part of the set were **moved, not deleted*
 ## 8. Run
 
 Phase `potential_maps` of the real run of 2026-10-20: **PRT 47 s, BRA 104 s, IND 123 s** (the phase alone, 20 maps and 2 limits files per country). The first version of the same run took 463, 1,257 and 2,633 s, almost all of it in the search for the contiguous territory (about a minute for IND), which it repeated for every map; the second version finds it once per country (`MapContext`). The files are written by the phase (`produces` lists them, per technology, when `figures` is `all`; the maps per cell only with `per_cell`).
+
+## 9. Final round of 2026-10-22 (COMMAND 62)
+
+`potential_maps` ran again in PRT (55 s), IND (124 s) and BRA (147 s) after the rebuild of every cache. The before and after pairs of section 5 are the same figures: the totals moved by 0.1% or less
+(`docs/phases/core/resume_integrity_58.md` section 10.3), which does not change a class limit visibly, so the images of section 5 were not redrawn. The figures of the phase in `outputs/<ISO3>/technical_potential/figures/`
+(20 files per country) are those of the final round. The folder `figures_run_report/` (6 maps per country, written by the run report of 2026-10-17 to 21) was **moved, not deleted**, to
+`GEOFREA_DATA_DIR/archive/figures_run_report_20261022/<ISO3>/technical_potential/`. IND is redrawn once more when `hazard_context` and `overview` have run (nothing in `potential_maps` depends on them).
+
