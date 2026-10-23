@@ -225,6 +225,11 @@ def main() -> int:
     ap.add_argument("--max-active", type=int, default=2)
     ap.add_argument("--max-hours", type=float, default=40.0)
     ap.add_argument("--poll-s", type=float, default=60.0)
+    ap.add_argument(
+        "--request-first-year",
+        action="store_true",
+        help="request the first year of the period too, when the file of the earlier request does not hold the whole lattice of the box (it lacks the 0.25 deg margin: 1 cell of IND at 20.75 N, 87.0 E is outside the old product)",
+    )
     args = ap.parse_args()
     iso = args.iso
     load_dotenv(REPO_ROOT / ".env", override=False)
@@ -239,7 +244,7 @@ def main() -> int:
     global_dir = core_paths.fetched_raw("era5", "_global")
     state_path = global_dir / f"{iso}_{args.mode}_jobs.json"
     first, last = REFERENCE_PERIOD
-    years = list(range(first + 1, last + 1))
+    years = list(range(first if args.request_first_year else first + 1, last + 1))
     if state_path.exists():
         state = json.loads(state_path.read_text(encoding="utf-8"))
     else:
@@ -363,8 +368,12 @@ def main() -> int:
     entry = registry.entries[f"era5/{iso}/fg10"]
     parts_ds = []
     for key in state["rects"]:
-        first_year_from_existing(global_dir, iso, key, first, years[0])
-        year_paths = [rect_file(global_dir, iso, key, y) for y in [first, *years]]
+        if not args.request_first_year:
+            first_year_from_existing(global_dir, iso, key, first, years[0])
+        year_paths = [
+            rect_file(global_dir, iso, key, y)
+            for y in (years if args.request_first_year else [first, *years])
+        ]
         out = country_dir / f"{iso}_fg10_annual_max_{key}.nc"
         era5.write_annual_maxima_incremental(
             year_paths=year_paths,
@@ -391,7 +400,11 @@ def main() -> int:
     provenance = {
         "extension": "COMMAND 62b: one request per missing rectangle, fg10 hourly, reanalysis-era5-single-levels",
         "years_requested": [years[0], years[-1]],
-        "first_year": f"cut from {iso}_ext_fg10_hourly_bbox_{first}.nc (CDS job bfbe48be)",
+        "first_year": (
+            "requested like the others"
+            if args.request_first_year
+            else f"cut from {iso}_ext_fg10_hourly_bbox_{first}.nc (CDS job bfbe48be)"
+        ),
         "rectangles": {
             k: {"part": r["part"], "area_NWSE": r["area"], "jobs": r["jobs"]}
             for k, r in state["rects"].items()
