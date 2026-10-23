@@ -1,0 +1,2289 @@
+{
+ "iso": "PRT",
+ "parameters": {
+  "solar": {
+   "luf": {
+    "restrictive": 0.1,
+    "central": 0.25,
+    "permissive": 0.35
+   },
+   "power_density_mw_per_km2": {
+    "restrictive": 45.0,
+    "central": 50.0,
+    "permissive": 75.0
+   },
+   "eta_loss": null
+  },
+  "wind": {
+   "luf": {
+    "restrictive": 0.05,
+    "central": 0.15,
+    "permissive": 0.3
+   },
+   "power_density_mw_per_km2": {
+    "restrictive": 3.32,
+    "central": 4.99,
+    "permissive": 7.12
+   },
+   "eta_loss": 0.866
+  }
+ },
+ "item1": {
+  "luf_x_pd_central": {
+   "solar": 12.5,
+   "wind": 0.7485
+  },
+  "expected_ratio_constant_factor": 16.7000668002672,
+  "cells_with_both": 3449,
+  "cells_wind_only": 51,
+  "cells_solar_only": 0,
+  "capacity_density_ratio_solar_over_wind": {
+   "n": 3449,
+   "mean": 11.670532560854712,
+   "min": 0.9645607078130983,
+   "p5": 5.859821828802481,
+   "median": 12.143899228898613,
+   "p95": 16.077545529492255,
+   "max": 16.700066800267205
+  },
+  "eligible_share_ratio_solar_over_wind": {
+   "n": 3449,
+   "mean": 0.6988314897439803,
+   "min": 0.05775789518384833,
+   "p5": 0.3508861311086926,
+   "median": 0.7271766858264488,
+   "p95": 0.962723426305996,
+   "max": 1.0
+  },
+  "ratio_equals_factor_times_share_ratio_max_rel_err": 4.4082847556101104e-16,
+  "share_of_cells_ratio_within_1pct_of_factor": 0.009278051609162076,
+  "wind_P_equals_eligible_x_luf_x_pd_max_rel_err": 2.2178938770327399e-16,
+  "wind_E_equals_P_x_CF_x_8760_max_rel_err": 0.0,
+  "solar_P_equals_eligible_x_luf_x_pd_max_rel_err": 0.0,
+  "solar_E_equals_P_x_CF_x_8760_max_rel_err": 0.0,
+  "eligible_share": {
+   "cells": 3939,
+   "mean_wind": 0.3064838081245489,
+   "mean_solar": 0.23054822140502812,
+   "cells_identical_share": 0.07743082000507744,
+   "cells_wind_greater": 0.9225691799949226,
+   "cells_solar_greater": 0.0,
+   "mean_abs_difference": 0.07593558671952078,
+   "correlation_wind_solar": {
+    "n": 3939,
+    "pearson": 0.9558169158988479,
+    "spearman": 0.9728961357969794
+   }
+  },
+  "excluded_terms": {
+   "E1": {
+    "total_km2_wind": 19894.95707062242,
+    "total_km2_solar": 19894.95707062242,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.0
+   },
+   "E2": {
+    "total_km2_wind": 522.5209368185315,
+    "total_km2_solar": 522.5209368185315,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.0
+   },
+   "E3": {
+    "total_km2_wind": 21777.621451937404,
+    "total_km2_solar": 21777.621451937404,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.0
+   },
+   "E4": {
+    "total_km2_wind": 12395.257889029725,
+    "total_km2_solar": 28126.34497834894,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.9966996699669967
+   },
+   "E5": {
+    "total_km2_wind": 29954.87552766203,
+    "total_km2_solar": 34953.90928277718,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.9784209190149784
+   },
+   "E6": {
+    "total_km2_wind": 8490.262640929326,
+    "total_km2_solar": 8490.262640929326,
+    "cells_wind_greater": 0.0,
+    "cells_solar_greater": 0.0
+   }
+  },
+  "cells_solar_share_above_wind": {
+   "cells": 0,
+   "of_which_above_3000m": 0,
+   "of_which_wind_resource_missing": 0,
+   "of_which_other": 0
+  },
+  "energy_density_correlations": {
+   "wind": {
+    "energy_density_vs_own_CF": {
+     "n": 3500,
+     "pearson": 0.38508578492152395,
+     "spearman": 0.4039524854538472
+    },
+    "energy_per_eligible_km2_vs_own_CF": {
+     "n": 3500,
+     "pearson": 1.0,
+     "spearman": 1.0
+    },
+    "capacity_density_vs_own_CF": {
+     "n": 3500,
+     "pearson": 0.15527804506926607,
+     "spearman": 0.18884011580035934
+    },
+    "energy_density_vs_eligible_share": {
+     "n": 3500,
+     "pearson": 0.9500474337176859,
+     "spearman": 0.9649505200076227
+    }
+   },
+   "solar": {
+    "energy_density_vs_own_CF": {
+     "n": 3449,
+     "pearson": 0.513853874194947,
+     "spearman": 0.5221597503967322
+    },
+    "energy_per_eligible_km2_vs_own_CF": {
+     "n": 3449,
+     "pearson": 0.9999999999999999,
+     "spearman": 1.0
+    },
+    "capacity_density_vs_own_CF": {
+     "n": 3449,
+     "pearson": 0.49019796644221414,
+     "spearman": 0.49583138278377054
+    },
+    "energy_density_vs_eligible_share": {
+     "n": 3449,
+     "pearson": 0.9990737731839389,
+     "spearman": 0.9993962337514689
+    }
+   },
+   "cross_energy_density_wind_vs_solar_CF": null,
+   "energy_density_wind_vs_energy_density_solar": {
+    "n": 3449,
+    "pearson": 0.9131090942016615,
+    "spearman": 0.9350960608672664
+   },
+   "CF_wind_vs_CF_solar": {
+    "n": 3449,
+    "pearson": 0.2791084298683948,
+    "spearman": 0.29599340033881905
+   },
+   "energy_density_wind_vs_solar_CF": {
+    "n": 3449,
+    "pearson": 0.4592186432758099,
+    "spearman": 0.4752261295480012
+   }
+  }
+ },
+ "item2": {
+  "wind": {
+   "cells_in_table": 3939,
+   "area_km2_min_max": [
+    0.9194660026568877,
+    24.68776539558645
+   ],
+   "lat_of_smallest_cell": 42.074999999999996,
+   "lat_of_largest_cell": 37.025,
+   "smallest_over_largest_area": 0.037243792134433726,
+   "share_of_cells_cut_by_the_border": 0.1089108910891089,
+   "full_cells_area_vs_spherical_formula_rel_diff": {
+    "n": 3510,
+    "mean": 0.0009875131155593808,
+    "min": 0.0003797362880504209,
+    "p5": 0.0004700404267742825,
+    "median": 0.0009956249301637356,
+    "p95": 0.0014595596118392304,
+    "max": 0.0015412298473965523
+   },
+   "full_cells_area_decreases_with_latitude": true,
+   "full_cell_area_at_lat_min_over_lat_max": 1.0771418047395835,
+   "abs_lat_min_max": [
+    36.974999999999994,
+    42.125
+   ],
+   "uses_variable_area": true,
+   "P_GW_table": 21.049515739812144,
+   "E_TWh_table": 48.99973349229947,
+   "P_GW_cell_count_times_mean_area": 20.347156951864527,
+   "P_GW_constant_equatorial_area": 27.912292883875118,
+   "mean_cell_area_km2": 22.53301789376632,
+   "equatorial_cell_area_km2": 30.910863689522493,
+   "eligible_area_km2_sum": 28127.073462444387,
+   "eligible_area_km2_if_mean_area": 27202.75421739059,
+   "effect_mean_area_pct": -3.3366980819383163,
+   "effect_equatorial_area_pct": 32.603016757687286
+  },
+  "solar": {
+   "cells_in_table": 3939,
+   "area_km2_min_max": [
+    0.9194660026568877,
+    24.68776539558645
+   ],
+   "lat_of_smallest_cell": 42.074999999999996,
+   "lat_of_largest_cell": 37.025,
+   "smallest_over_largest_area": 0.037243792134433726,
+   "share_of_cells_cut_by_the_border": 0.1089108910891089,
+   "full_cells_area_vs_spherical_formula_rel_diff": {
+    "n": 3510,
+    "mean": 0.0009875131155593808,
+    "min": 0.0003797362880504209,
+    "p5": 0.0004700404267742825,
+    "median": 0.0009956249301637356,
+    "p95": 0.0014595596118392304,
+    "max": 0.0015412298473965523
+   },
+   "full_cells_area_decreases_with_latitude": true,
+   "full_cell_area_at_lat_min_over_lat_max": 1.0771418047395835,
+   "abs_lat_min_max": [
+    36.974999999999994,
+    42.125
+   ],
+   "uses_variable_area": true,
+   "P_GW_table": 264.4649022043893,
+   "E_TWh_table": 424.62940952907735,
+   "P_GW_cell_count_times_mean_area": 255.4740214283639,
+   "P_GW_constant_equatorial_area": 350.4600533233926,
+   "mean_cell_area_km2": 22.53301789376632,
+   "equatorial_cell_area_km2": 30.910863689522493,
+   "eligible_area_km2_sum": 21163.655246817274,
+   "eligible_area_km2_if_mean_area": 20462.897014085967,
+   "effect_mean_area_pct": -3.399649897239254,
+   "effect_equatorial_area_pct": 32.516659262612734
+  }
+ },
+ "item3": {
+  "solar": {
+   "restrictive": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 3358,
+      "GW": 70.57939563012859,
+      "TWh": 113.47463728851075,
+      "GW_share": 1.0,
+      "TWh_share": 1.0
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": ">0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     }
+    ],
+    "total_GW": 70.57939563012859,
+    "total_TWh": 113.47463728851075,
+    "cf_energy_weighted": 0.18353409804967075,
+    "cf_stats": {
+     "n": 3358,
+     "mean": 0.18010355190647262,
+     "min": 0.15653567930650256,
+     "p5": 0.1664127258745101,
+     "median": 0.18087728732513844,
+     "p95": 0.190994892385038,
+     "max": 0.20059541250210752
+    }
+   },
+   "central": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 3449,
+      "GW": 264.4649022043893,
+      "TWh": 424.6294095290773,
+      "GW_share": 1.0,
+      "TWh_share": 1.0
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": ">0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     }
+    ],
+    "total_GW": 264.4649022043893,
+    "total_TWh": 424.6294095290773,
+    "cf_energy_weighted": 0.1832896406397947,
+    "cf_stats": {
+     "n": 3449,
+     "mean": 0.1799246167135686,
+     "min": 0.15581176022557006,
+     "p5": 0.16604771649357492,
+     "median": 0.1807853251611786,
+     "p95": 0.19100282477707078,
+     "max": 0.20059467822815777
+    }
+   },
+   "permissive": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 3489,
+      "GW": 631.0385555650035,
+      "TWh": 1012.6343018355329,
+      "GW_share": 1.0,
+      "TWh_share": 1.0
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     },
+     {
+      "band": ">0.35",
+      "cells": 0,
+      "GW": 0.0,
+      "TWh": 0.0,
+      "GW_share": 0.0,
+      "TWh_share": 0.0
+     }
+    ],
+    "total_GW": 631.0385555650035,
+    "total_TWh": 1012.6343018355329,
+    "cf_energy_weighted": 0.1831861492790803,
+    "cf_stats": {
+     "n": 3489,
+     "mean": 0.1798433047798013,
+     "min": 0.1560504775458589,
+     "p5": 0.16591426773660167,
+     "median": 0.18070322138927677,
+     "p95": 0.19098441920123813,
+     "max": 0.20059446026569938
+    }
+   }
+  },
+  "wind": {
+   "restrictive": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 126,
+      "GW": 0.059311103433245325,
+      "TWh": 0.06458699804098293,
+      "GW_share": 0.020368624946472975,
+      "TWh_share": 0.009323493415845237
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 1263,
+      "GW": 0.8767553779338646,
+      "TWh": 1.685170738822368,
+      "GW_share": 0.30109541770770765,
+      "TWh_share": 0.24326379557098687
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 1702,
+      "GW": 1.8024097519827251,
+      "TWh": 4.606180009370183,
+      "GW_share": 0.618983733447508,
+      "TWh_share": 0.6649277763662303
+     },
+     {
+      "band": ">0.35",
+      "cells": 280,
+      "GW": 0.17340925666777277,
+      "TWh": 0.5714010912903493,
+      "GW_share": 0.0595522238983114,
+      "TWh_share": 0.08248493464693747
+     }
+    ],
+    "total_GW": 2.911885490017608,
+    "total_TWh": 6.927338837523883,
+    "cf_energy_weighted": 0.2715739020133609,
+    "cf_stats": {
+     "n": 3371,
+     "mean": 0.2637522793468799,
+     "min": 0.07937500227831416,
+     "p5": 0.15948683215498416,
+     "median": 0.2630579723176349,
+     "p95": 0.364423664829488,
+     "max": 0.5287447213621245
+    }
+   },
+   "central": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 148,
+      "GW": 0.6205918044480998,
+      "TWh": 0.6726434131618605,
+      "GW_share": 0.029482474187011304,
+      "TWh_share": 0.013727491258040606
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 1420,
+      "GW": 7.304320655040066,
+      "TWh": 13.95496139713313,
+      "GW_share": 0.34700658890812336,
+      "TWh_share": 0.2847966795437003
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 1679,
+      "GW": 12.057276956154363,
+      "TWh": 30.83357495863203,
+      "GW_share": 0.572805431972468,
+      "TWh_share": 0.6292600543118805
+     },
+     {
+      "band": ">0.35",
+      "cells": 253,
+      "GW": 1.067326324169617,
+      "TWh": 3.538553723372446,
+      "GW_share": 0.05070550493239718,
+      "TWh_share": 0.07221577488637863
+     }
+    ],
+    "total_GW": 21.049515739812144,
+    "total_TWh": 48.99973349229946,
+    "cf_energy_weighted": 0.2657342312204901,
+    "cf_stats": {
+     "n": 3500,
+     "mean": 0.259511562728112,
+     "min": 0.07911147506553443,
+     "p5": 0.15485625557227858,
+     "median": 0.2586743818717424,
+     "p95": 0.36174955488314986,
+     "max": 0.5287457354076803
+    }
+   },
+   "permissive": {
+    "bands": [
+     {
+      "band": "<0.15",
+      "cells": 171,
+      "GW": 2.646512513069957,
+      "TWh": 2.864785323391635,
+      "GW_share": 0.03517111579317104,
+      "TWh_share": 0.016605676502461284
+     },
+     {
+      "band": "0.15-0.25",
+      "cells": 1473,
+      "GW": 27.694452776473387,
+      "TWh": 52.323440949439615,
+      "GW_share": 0.36804844134289005,
+      "TWh_share": 0.30329188257407524
+     },
+     {
+      "band": "0.25-0.35",
+      "cells": 1677,
+      "GW": 41.367022040173595,
+      "TWh": 105.6007512846493,
+      "GW_share": 0.5497515371676405,
+      "TWh_share": 0.6121128518536586
+     },
+     {
+      "band": ">0.35",
+      "cells": 240,
+      "GW": 3.5387727854061146,
+      "TWh": 11.729457506999836,
+      "GW_share": 0.047028905696298466,
+      "TWh_share": 0.06798958906980486
+     }
+    ],
+    "total_GW": 75.24676011512305,
+    "total_TWh": 172.51843506448037,
+    "cf_energy_weighted": 0.2617240297283618,
+    "cf_stats": {
+     "n": 3561,
+     "mean": 0.25661892456654306,
+     "min": 0.07771392783092425,
+     "p5": 0.15151935030535954,
+     "median": 0.2561405700283577,
+     "p95": 0.3606809408993033,
+     "max": 0.5288874467120179
+    }
+   }
+  },
+  "figure": "PRT_supply_curves.png"
+ },
+ "item4": {
+  "consumption": {
+   "TWh": 50.7,
+   "year": 2023,
+   "source": "REN, electricity supplied by the public grid in 2023 (REN press release of 2024-01-02, 'Renewable energy generation sets new record in 2023')"
+  },
+  "solar": {
+   "restrictive": {
+    "eligible_fraction_of_country_area": 0.17679453440419576,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 15691.851050157074,
+    "luf": 0.1,
+    "power_density_mw_per_km2": 45.0,
+    "ceiling_mw_per_km2": 4.5,
+    "max_observed_capacity_density_mw_per_km2": 3.970965634023249,
+    "max_density_over_ceiling": 0.8824368075607221,
+    "max_eligible_share": 0.882436807560722,
+    "candidate_cells": 3358,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.14493127285956103,
+     0.4703158590021581,
+     0.7295022816599953
+    ],
+    "ceiling_times_max_share": 3.9709656340232486,
+    "P_GW": 70.57939563012859,
+    "E_TWh": 113.47463728851075,
+    "E_over_national_consumption": 2.2381585264006065
+   },
+   "central": {
+    "eligible_fraction_of_country_area": 0.23844341650276635,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 21163.655246817274,
+    "luf": 0.25,
+    "power_density_mw_per_km2": 50.0,
+    "ceiling_mw_per_km2": 12.5,
+    "max_observed_capacity_density_mw_per_km2": 11.568819588841835,
+    "max_density_over_ceiling": 0.9255055671073468,
+    "max_eligible_share": 0.9255055671073469,
+    "candidate_cells": 3449,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.21047074876665248,
+     0.5764455256565733,
+     0.7911609509811369
+    ],
+    "ceiling_times_max_share": 11.568819588841835,
+    "P_GW": 264.4649022043893,
+    "E_TWh": 424.62940952907735,
+    "E_over_national_consumption": 8.375333521283576
+   },
+   "permissive": {
+    "eligible_fraction_of_country_area": 0.2709105510072306,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 24045.358803923264,
+    "luf": 0.35,
+    "power_density_mw_per_km2": 75.0,
+    "ceiling_mw_per_km2": 26.25,
+    "max_observed_capacity_density_mw_per_km2": 25.01347646934995,
+    "max_density_over_ceiling": 0.9528943416895219,
+    "max_eligible_share": 0.952894341689522,
+    "candidate_cells": 3489,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.24169519869794423,
+     0.6478536712641827,
+     0.8404180358626336
+    ],
+    "ceiling_times_max_share": 25.013476469349953,
+    "P_GW": 631.0385555650038,
+    "E_TWh": 1012.6343018355329,
+    "E_over_national_consumption": 19.973063152574614
+   }
+  },
+  "wind": {
+   "restrictive": {
+    "eligible_fraction_of_country_area": 0.19771107361228776,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 17548.351981276133,
+    "luf": 0.05,
+    "power_density_mw_per_km2": 3.32,
+    "ceiling_mw_per_km2": 0.166,
+    "max_observed_capacity_density_mw_per_km2": 0.1601531799544224,
+    "max_density_over_ceiling": 0.9647781924965205,
+    "max_eligible_share": 0.9647781924965205,
+    "candidate_cells": 3371,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.1662953319902296,
+     0.5226168899900291,
+     0.7862718839629683
+    ],
+    "ceiling_times_max_share": 0.1601531799544224,
+    "P_GW": 2.9118854900176077,
+    "E_TWh": 6.927338837523882,
+    "E_over_national_consumption": 0.13663390212078663
+   },
+   "central": {
+    "eligible_fraction_of_country_area": 0.3168977860579227,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 28127.073462444387,
+    "luf": 0.15,
+    "power_density_mw_per_km2": 4.99,
+    "ceiling_mw_per_km2": 0.7485,
+    "max_observed_capacity_density_mw_per_km2": 0.7380725494942767,
+    "max_density_over_ceiling": 0.9860688703998352,
+    "max_eligible_share": 0.9860688703998352,
+    "candidate_cells": 3500,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.3188256967892208,
+     0.6842384020402819,
+     0.8799771320092956
+    ],
+    "ceiling_times_max_share": 0.7380725494942767,
+    "P_GW": 21.049515739812144,
+    "E_TWh": 48.99973349229947,
+    "E_over_national_consumption": 0.9664641714457488
+   },
+   "permissive": {
+    "eligible_fraction_of_country_area": 0.39694132914210667,
+    "country_area_km2_of_cells": 88757.55748354553,
+    "eligible_area_km2": 35231.5428389255,
+    "luf": 0.3,
+    "power_density_mw_per_km2": 7.12,
+    "ceiling_mw_per_km2": 2.136,
+    "max_observed_capacity_density_mw_per_km2": 2.1074049914863573,
+    "max_density_over_ceiling": 0.9866128237295679,
+    "max_eligible_share": 0.986612823729568,
+    "candidate_cells": 3561,
+    "cells_with_share_ge_0.999": 0,
+    "eligible_share_percentiles_p50_p90_p99": [
+     0.42250147230918134,
+     0.7851843615559729,
+     0.9240589711724294
+    ],
+    "ceiling_times_max_share": 2.1074049914863573,
+    "P_GW": 75.24676011512305,
+    "E_TWh": 172.5184350644804,
+    "E_over_national_consumption": 3.4027304746445837
+   }
+  }
+ },
+ "item5": {
+  "rasters": {
+   "grid_alignment": {
+    "PRT_elevation_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_grid_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_grid_aligned_capped.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_lakes_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_land_cover_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_land_cover_counts_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_population_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_rivers_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_rivers_aligned_capped.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_roads_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_roads_aligned_capped.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_slope_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_slope_counts_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_solar_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_air_density_100m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_air_density_150m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_air_density_200m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_a_100m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_a_150m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_a_200m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_k_100m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_k_150m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_weibull_k_200m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_wind_speed_100m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_wind_speed_150m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "PRT_wind_wind_speed_200m_aligned.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    }
+   },
+   "land_eligibility": {
+    "dominant_exclusion_solar.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "dominant_exclusion_wind.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "eligible_area_km2_solar.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "eligible_area_km2_wind.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "eligible_fraction_solar.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "eligible_fraction_wind.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    }
+   },
+   "siting_layers": {
+    "air_density_100m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "air_density_150m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "air_density_200m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "dist_grid_km.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "dist_road_km.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "pvout_kwh_kwp_day.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_a_100m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_a_150m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_a_200m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_k_100m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_k_150m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    },
+    "weibull_k_200m.tif": {
+     "res_deg": [
+      0.01,
+      0.01
+     ],
+     "shape": [
+      525,
+      340
+     ],
+     "crs": "EPSG:4326"
+    }
+   },
+   "technical_potential": {
+    "capacity_factor_solar.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "capacity_factor_wind.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "potential_density_solar.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    },
+    "potential_density_wind.tif": {
+     "res_deg": [
+      0.05,
+      0.05
+     ],
+     "shape": [
+      104,
+      67
+     ],
+     "crs": "EPSG:4326"
+    }
+   }
+  },
+  "figures": {
+   "climate_forcing": {
+    "n_png": 36,
+    "width_px_min_max": [
+     1650,
+     1650
+    ],
+    "height_px_min_max": [
+     572,
+     572
+    ],
+    "example": "PRT_m_access_cm2_ssp126_2041_2070.png",
+    "image_px_per_analysis_cell_upper_bound": 24.62686567164179
+   },
+   "overview": {
+    "n_png": 4,
+    "width_px_min_max": [
+     1000,
+     1800
+    ],
+    "height_px_min_max": [
+     1000,
+     1300
+    ],
+    "example": "PRT_aligned_layers.png",
+    "image_px_per_analysis_cell_upper_bound": 26.865671641791046
+   },
+   "technical_potential": {
+    "n_png": 18,
+    "width_px_min_max": [
+     2244,
+     2244
+    ],
+    "height_px_min_max": [
+     2716,
+     2716
+    ],
+    "example": "capacity_factor_solar__ref__na__na.png",
+    "image_px_per_analysis_cell_upper_bound": 33.492537313432834
+   }
+  },
+  "analysis_grid_columns": 67
+ },
+ "item6": {
+  "members": [
+   {
+    "member": "m0",
+    "gcm": "reference",
+    "ssp": "-",
+    "window": "1995-2014",
+    "rsds_mean": 1.0,
+    "rsds_min": 1.0,
+    "rsds_max": 1.0,
+    "wind_mean": 1.0,
+    "wind_min": 1.0,
+    "wind_max": 1.0,
+    "dT_mean": 0.0,
+    "dT_min": 0.0,
+    "dT_max": 0.0,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 0.0,
+    "E_solar_TWh": 424.62940952907735,
+    "dE_wind_pct_like_for_like": 0.0,
+    "E_wind_TWh": 48.99973349229947
+   },
+   {
+    "member": "m_access_cm2_ssp126_2041_2070",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.047210693359375,
+    "rsds_min": 1.028640866279602,
+    "rsds_max": 1.0701391696929932,
+    "wind_mean": 0.9782358407974243,
+    "wind_min": 0.9746556282043457,
+    "wind_max": 0.9826884865760803,
+    "dT_mean": 1.9598116874694824,
+    "dT_min": 1.6400766372680664,
+    "dT_max": 2.1545042991638184,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.8143072371682463,
+    "E_solar_TWh": 440.8260798278897,
+    "dE_wind_pct_like_for_like": -4.901771748917616,
+    "E_wind_TWh": 46.59787839892901
+   },
+   {
+    "member": "m_access_cm2_ssp126_2071_2100",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0609930753707886,
+    "rsds_min": 1.036967396736145,
+    "rsds_max": 1.0912681818008423,
+    "wind_mean": 0.9658794403076172,
+    "wind_min": 0.950303852558136,
+    "wind_max": 0.9795940518379211,
+    "dT_mean": 2.2358756065368652,
+    "dT_min": 1.8530761003494263,
+    "dT_max": 2.45469331741333,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 5.001779748105273,
+    "E_solar_TWh": 445.86843733940174,
+    "dE_wind_pct_like_for_like": -8.051640415016903,
+    "E_wind_TWh": 45.05445114718291
+   },
+   {
+    "member": "m_access_cm2_ssp370_2041_2070",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.03288733959198,
+    "rsds_min": 1.0151925086975098,
+    "rsds_max": 1.0566822290420532,
+    "wind_mean": 0.999324381351471,
+    "wind_min": 0.9878978729248047,
+    "wind_max": 1.0089648962020874,
+    "dT_mean": 2.363896608352661,
+    "dT_min": 1.9151339530944824,
+    "dT_max": 2.670262336730957,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.3489355760088593,
+    "E_solar_TWh": 434.60368079570225,
+    "dE_wind_pct_like_for_like": -1.1499952561305093,
+    "E_wind_TWh": 48.436238881621435
+   },
+   {
+    "member": "m_access_cm2_ssp370_2071_2100",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.044761300086975,
+    "rsds_min": 1.0173412561416626,
+    "rsds_max": 1.0799996852874756,
+    "wind_mean": 0.9840224385261536,
+    "wind_min": 0.9740750193595886,
+    "wind_max": 0.9917064905166626,
+    "dT_mean": 3.766268014907837,
+    "dT_min": 2.849529266357422,
+    "dT_max": 4.405498504638672,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.0116541736490587,
+    "E_solar_TWh": 437.41777886370113,
+    "dE_wind_pct_like_for_like": -4.4121870569372,
+    "E_wind_TWh": 46.83777359321851
+   },
+   {
+    "member": "m_access_cm2_ssp585_2041_2070",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0499039888381958,
+    "rsds_min": 1.0222731828689575,
+    "rsds_max": 1.0817747116088867,
+    "wind_mean": 0.9828401207923889,
+    "wind_min": 0.9768491983413696,
+    "wind_max": 0.9910086989402771,
+    "dT_mean": 2.4481430053710938,
+    "dT_min": 1.8749279975891113,
+    "dT_max": 2.8725152015686035,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.9335435707370303,
+    "E_solar_TWh": 441.332392367067,
+    "dE_wind_pct_like_for_like": -4.27690882264754,
+    "E_wind_TWh": 46.90405956749353
+   },
+   {
+    "member": "m_access_cm2_ssp585_2071_2100",
+    "gcm": "ACCESS-CM2",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.067897915840149,
+    "rsds_min": 1.0272825956344604,
+    "rsds_max": 1.107841968536377,
+    "wind_mean": 0.9659708738327026,
+    "wind_min": 0.9558454155921936,
+    "wind_max": 0.9793883562088013,
+    "dT_mean": 4.513223648071289,
+    "dT_min": 3.348963737487793,
+    "dT_max": 5.342613697052002,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 4.9661796692141325,
+    "E_solar_TWh": 445.7172689346144,
+    "dE_wind_pct_like_for_like": -8.41943081028267,
+    "E_wind_TWh": 44.87423483369241
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp126_2041_2070",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.038203239440918,
+    "rsds_min": 1.0212621688842773,
+    "rsds_max": 1.0547518730163574,
+    "wind_mean": 0.9961391687393188,
+    "wind_min": 0.9837623238563538,
+    "wind_max": 1.0076429843902588,
+    "dT_mean": 0.8878639340400696,
+    "dT_min": 0.5715919137001038,
+    "dT_max": 1.1653099060058594,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.5009663332979057,
+    "E_solar_TWh": 439.49554219797204,
+    "dE_wind_pct_like_for_like": -1.3149576657332074,
+    "E_wind_TWh": 48.35540774055364
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp126_2071_2100",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0306419134140015,
+    "rsds_min": 1.0171641111373901,
+    "rsds_max": 1.047228455543518,
+    "wind_mean": 1.0053050518035889,
+    "wind_min": 0.9854573011398315,
+    "wind_max": 1.0220099687576294,
+    "dT_mean": 0.8874772191047668,
+    "dT_min": 0.5185111165046692,
+    "dT_max": 1.2169603109359741,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.755398020576827,
+    "E_solar_TWh": 436.3296398740286,
+    "dE_wind_pct_like_for_like": 0.20498801982453685,
+    "E_wind_TWh": 49.100177075704636
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp370_2041_2070",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0324324369430542,
+    "rsds_min": 1.0164827108383179,
+    "rsds_max": 1.048008680343628,
+    "wind_mean": 1.0149396657943726,
+    "wind_min": 0.9985840320587158,
+    "wind_max": 1.0286445617675781,
+    "dT_mean": 1.3591047525405884,
+    "dT_min": 0.8639921545982361,
+    "dT_max": 1.832311987876892,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.841229884957519,
+    "E_solar_TWh": 436.69410721293616,
+    "dE_wind_pct_like_for_like": 2.23540686812691,
+    "E_wind_TWh": 50.09507690015021
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp370_2071_2100",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0410957336425781,
+    "rsds_min": 1.0160876512527466,
+    "rsds_max": 1.0627442598342896,
+    "wind_mean": 0.9903409481048584,
+    "wind_min": 0.9742610454559326,
+    "wind_max": 1.002439260482788,
+    "dT_mean": 2.988748073577881,
+    "dT_min": 2.2831883430480957,
+    "dT_max": 3.6387505531311035,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.080195958701837,
+    "E_solar_TWh": 437.7088274408515,
+    "dE_wind_pct_like_for_like": -3.0439109748727544,
+    "E_wind_TWh": 47.508225226868966
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp585_2041_2070",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0348584651947021,
+    "rsds_min": 1.0144059658050537,
+    "rsds_max": 1.0525038242340088,
+    "wind_mean": 0.9957811832427979,
+    "wind_min": 0.984674870967865,
+    "wind_max": 1.0044153928756714,
+    "dT_mean": 1.7571367025375366,
+    "dT_min": 1.2051080465316772,
+    "dT_max": 2.2782299518585205,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.9310841306758206,
+    "E_solar_TWh": 437.07565476596653,
+    "dE_wind_pct_like_for_like": -1.4489667541026763,
+    "E_wind_TWh": 48.289743644397134
+   },
+   {
+    "member": "m_cnrm_cm6_1_ssp585_2071_2100",
+    "gcm": "CNRM-CM6-1",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.0474637746810913,
+    "rsds_min": 1.0198763608932495,
+    "rsds_max": 1.0693734884262085,
+    "wind_mean": 0.9772250652313232,
+    "wind_min": 0.9562315344810486,
+    "wind_max": 0.996121883392334,
+    "dT_mean": 4.038662433624268,
+    "dT_min": 3.085094690322876,
+    "dT_max": 4.855175495147705,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.4378672911555164,
+    "E_solar_TWh": 439.2276051079043,
+    "dE_wind_pct_like_for_like": -6.213247655209308,
+    "E_wind_TWh": 45.95525870003036
+   },
+   {
+    "member": "m_gfdl_esm4_ssp126_2041_2070",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.028944730758667,
+    "rsds_min": 1.0091999769210815,
+    "rsds_max": 1.0592002868652344,
+    "wind_mean": 0.9892981052398682,
+    "wind_min": 0.9709659218788147,
+    "wind_max": 0.9946988821029663,
+    "dT_mean": 0.8723317384719849,
+    "dT_min": 0.6277760863304138,
+    "dT_max": 1.021932601928711,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.3760672889272527,
+    "E_solar_TWh": 434.7188900280627,
+    "dE_wind_pct_like_for_like": -2.4326635894719506,
+    "E_wind_TWh": 47.80773481669401
+   },
+   {
+    "member": "m_gfdl_esm4_ssp126_2071_2100",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.031463861465454,
+    "rsds_min": 1.015071988105774,
+    "rsds_max": 1.0595118999481201,
+    "wind_mean": 0.9845455884933472,
+    "wind_min": 0.971243143081665,
+    "wind_max": 1.0034829378128052,
+    "dT_mean": 0.6188812851905823,
+    "dT_min": 0.379309743642807,
+    "dT_max": 0.8571951985359192,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.8503523102797246,
+    "E_solar_TWh": 436.73284371371653,
+    "dE_wind_pct_like_for_like": -3.926332281261913,
+    "E_wind_TWh": 47.07584113845901
+   },
+   {
+    "member": "m_gfdl_esm4_ssp370_2041_2070",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0130271911621094,
+    "rsds_min": 0.994284987449646,
+    "rsds_max": 1.0373611450195312,
+    "wind_mean": 0.9803380370140076,
+    "wind_min": 0.9482780694961548,
+    "wind_max": 1.0022754669189453,
+    "dT_mean": 1.4202606678009033,
+    "dT_min": 1.0809646844863892,
+    "dT_max": 1.6746747493743896,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 0.6484882754580035,
+    "E_solar_TWh": 427.38308146401994,
+    "dE_wind_pct_like_for_like": -4.981761721288147,
+    "E_wind_TWh": 46.558683525646885
+   },
+   {
+    "member": "m_gfdl_esm4_ssp370_2071_2100",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0240764617919922,
+    "rsds_min": 0.9960181713104248,
+    "rsds_max": 1.0691667795181274,
+    "wind_mean": 0.9902592897415161,
+    "wind_min": 0.9693737626075745,
+    "wind_max": 1.0107810497283936,
+    "dT_mean": 2.641618251800537,
+    "dT_min": 1.8025071620941162,
+    "dT_max": 3.141967535018921,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 1.2397212399528845,
+    "E_solar_TWh": 429.8936305100959,
+    "dE_wind_pct_like_for_like": -3.248328269686196,
+    "E_wind_TWh": 47.40806129719821
+   },
+   {
+    "member": "m_gfdl_esm4_ssp585_2041_2070",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0276914834976196,
+    "rsds_min": 1.0069869756698608,
+    "rsds_max": 1.0524846315383911,
+    "wind_mean": 0.9896396398544312,
+    "wind_min": 0.9773523807525635,
+    "wind_max": 1.0073325634002686,
+    "dT_mean": 1.7104202508926392,
+    "dT_min": 1.2208447456359863,
+    "dT_max": 2.0021321773529053,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 2.010136580611266,
+    "E_solar_TWh": 433.16504062205496,
+    "dE_wind_pct_like_for_like": -3.0689181520096698,
+    "E_wind_TWh": 47.49597177671793
+   },
+   {
+    "member": "m_gfdl_esm4_ssp585_2071_2100",
+    "gcm": "GFDL-ESM4",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.0261605978012085,
+    "rsds_min": 0.9948040843009949,
+    "rsds_max": 1.0705066919326782,
+    "wind_mean": 0.9783408045768738,
+    "wind_min": 0.9575586318969727,
+    "wind_max": 1.0118839740753174,
+    "dT_mean": 2.9654836654663086,
+    "dT_min": 1.7905335426330566,
+    "dT_max": 3.5044894218444824,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 1.2946475784360256,
+    "E_solar_TWh": 430.12686389687275,
+    "dE_wind_pct_like_for_like": -6.383302962228576,
+    "E_wind_TWh": 45.87193205280141
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp126_2041_2070",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.0497339963912964,
+    "rsds_min": 1.02556574344635,
+    "rsds_max": 1.081068515777588,
+    "wind_mean": 0.9791234135627747,
+    "wind_min": 0.9649285674095154,
+    "wind_max": 0.9836688041687012,
+    "dT_mean": 1.089922547340393,
+    "dT_min": 0.5468307733535767,
+    "dT_max": 1.4338061809539795,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 4.437340819011992,
+    "E_solar_TWh": 443.4716636476407,
+    "dE_wind_pct_like_for_like": -4.544030003442789,
+    "E_wind_TWh": 46.77317090080238
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp126_2071_2100",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0537348985671997,
+    "rsds_min": 1.031459927558899,
+    "rsds_max": 1.0808653831481934,
+    "wind_mean": 0.9846588969230652,
+    "wind_min": 0.9732459187507629,
+    "wind_max": 0.9894875884056091,
+    "dT_mean": 1.30166757106781,
+    "dT_min": 0.7580196261405945,
+    "dT_max": 1.673689603805542,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 4.870307345982194,
+    "E_solar_TWh": 445.3101668545728,
+    "dE_wind_pct_like_for_like": -3.5196061959579916,
+    "E_wind_TWh": 47.275135836301594
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp370_2041_2070",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0411992073059082,
+    "rsds_min": 1.0148366689682007,
+    "rsds_max": 1.0746612548828125,
+    "wind_mean": 0.967120885848999,
+    "wind_min": 0.9492035508155823,
+    "wind_max": 0.9718900322914124,
+    "dT_mean": 1.7412511110305786,
+    "dT_min": 1.0275858640670776,
+    "dT_max": 2.184250593185425,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.3254682474527675,
+    "E_solar_TWh": 438.750325712313,
+    "dE_wind_pct_like_for_like": -7.071902818074749,
+    "E_wind_TWh": 45.53451995860843
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp370_2071_2100",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0661580562591553,
+    "rsds_min": 1.0244014263153076,
+    "rsds_max": 1.1108697652816772,
+    "wind_mean": 0.9549293518066406,
+    "wind_min": 0.927079975605011,
+    "wind_max": 0.9591901898384094,
+    "dT_mean": 3.456857204437256,
+    "dT_min": 2.2629635334014893,
+    "dT_max": 4.142895698547363,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 5.178588963834407,
+    "E_solar_TWh": 446.61922126814534,
+    "dE_wind_pct_like_for_like": -9.840440110259907,
+    "E_wind_TWh": 44.17794406380278
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp585_2041_2070",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0468692779541016,
+    "rsds_min": 1.0159916877746582,
+    "rsds_max": 1.0835891962051392,
+    "wind_mean": 0.9761786460876465,
+    "wind_min": 0.96346515417099,
+    "wind_max": 0.9824056625366211,
+    "dT_mean": 2.1568703651428223,
+    "dT_min": 1.3177011013031006,
+    "dT_max": 2.6973257064819336,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.755912159721886,
+    "E_solar_TWh": 440.5781171553352,
+    "dE_wind_pct_like_for_like": -5.567892854789225,
+    "E_wind_TWh": 46.271480832315966
+   },
+   {
+    "member": "m_ipsl_cm6a_lr_ssp585_2071_2100",
+    "gcm": "IPSL-CM6A-LR",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.091234803199768,
+    "rsds_min": 1.031556487083435,
+    "rsds_max": 1.1537327766418457,
+    "wind_mean": 0.9620528817176819,
+    "wind_min": 0.9418902397155762,
+    "wind_max": 0.9779855608940125,
+    "dT_mean": 4.686583042144775,
+    "dT_min": 2.9750559329986572,
+    "dT_max": 5.675725936889648,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 7.108175582484799,
+    "E_solar_TWh": 454.81281353327256,
+    "dE_wind_pct_like_for_like": -8.39712946590858,
+    "E_wind_TWh": 44.885162433000914
+   },
+   {
+    "member": "m_miroc6_ssp126_2041_2070",
+    "gcm": "MIROC6",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.0437290668487549,
+    "rsds_min": 1.0266697406768799,
+    "rsds_max": 1.0829966068267822,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 1.0033031702041626,
+    "dT_min": 0.38006553053855896,
+    "dT_max": 1.5690786838531494,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.637737323276724,
+    "E_solar_TWh": 440.07631204512614
+   },
+   {
+    "member": "m_miroc6_ssp126_2071_2100",
+    "gcm": "MIROC6",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0464268922805786,
+    "rsds_min": 1.030389428138733,
+    "rsds_max": 1.086936116218567,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 1.0624878406524658,
+    "dT_min": 0.30259719491004944,
+    "dT_max": 1.7424850463867188,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.9792539678840777,
+    "E_solar_TWh": 441.5264921565659
+   },
+   {
+    "member": "m_miroc6_ssp370_2041_2070",
+    "gcm": "MIROC6",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0373834371566772,
+    "rsds_min": 1.0179415941238403,
+    "rsds_max": 1.075275182723999,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 1.3195161819458008,
+    "dT_min": 0.5480439066886902,
+    "dT_max": 2.0341391563415527,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.0133620197350997,
+    "E_solar_TWh": 437.425030880452
+   },
+   {
+    "member": "m_miroc6_ssp370_2071_2100",
+    "gcm": "MIROC6",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0474600791931152,
+    "rsds_min": 1.0250184535980225,
+    "rsds_max": 1.09446382522583,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 2.5347869396209717,
+    "dT_min": 1.3927406072616577,
+    "dT_max": 3.5897037982940674,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.5876064493693294,
+    "E_solar_TWh": 439.86344161126146
+   },
+   {
+    "member": "m_miroc6_ssp585_2041_2070",
+    "gcm": "MIROC6",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0406743288040161,
+    "rsds_min": 1.019658088684082,
+    "rsds_max": 1.0810226202011108,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 1.685128927230835,
+    "dT_min": 0.7660688161849976,
+    "dT_max": 2.5075182914733887,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 3.1745352833470575,
+    "E_solar_TWh": 438.1094199580462
+   },
+   {
+    "member": "m_miroc6_ssp585_2071_2100",
+    "gcm": "MIROC6",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.0615391731262207,
+    "rsds_min": 1.0280956029891968,
+    "rsds_max": 1.1169532537460327,
+    "wind_mean": NaN,
+    "wind_min": NaN,
+    "wind_max": NaN,
+    "dT_mean": 3.616853952407837,
+    "dT_min": 1.965589165687561,
+    "dT_max": 5.026310920715332,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 4.453657366504915,
+    "E_solar_TWh": 443.54094850691547
+   },
+   {
+    "member": "m_mri_esm2_0_ssp126_2041_2070",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.0241397619247437,
+    "rsds_min": 1.0057435035705566,
+    "rsds_max": 1.0634052753448486,
+    "wind_mean": 1.011027455329895,
+    "wind_min": 0.998635470867157,
+    "wind_max": 1.017715334892273,
+    "dT_mean": 1.1968369483947754,
+    "dT_min": 0.7292743921279907,
+    "dT_max": 1.4324146509170532,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 1.5885223006689264,
+    "E_solar_TWh": 431.3747423946455,
+    "dE_wind_pct_like_for_like": 1.9160864575949121,
+    "E_wind_TWh": 49.93861075000302
+   },
+   {
+    "member": "m_mri_esm2_0_ssp126_2071_2100",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0153710842132568,
+    "rsds_min": 0.9970254898071289,
+    "rsds_max": 1.0573071241378784,
+    "wind_mean": 1.0370956659317017,
+    "wind_min": 1.0092706680297852,
+    "wind_max": 1.0474681854248047,
+    "dT_mean": 0.6771645545959473,
+    "dT_min": 0.2003447711467743,
+    "dT_max": 0.9432594180107117,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 0.8996960352590122,
+    "E_solar_TWh": 428.4497834911542,
+    "dE_wind_pct_like_for_like": 6.780236709419607,
+    "E_wind_TWh": 52.32203141006213
+   },
+   {
+    "member": "m_mri_esm2_0_ssp370_2041_2070",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0049095153808594,
+    "rsds_min": 0.9886939525604248,
+    "rsds_max": 1.0350141525268555,
+    "wind_mean": 1.0243736505508423,
+    "wind_min": 0.9999812841415405,
+    "wind_max": 1.0320779085159302,
+    "dT_mean": 1.5635889768600464,
+    "dT_min": 0.9993717670440674,
+    "dT_max": 1.8589658737182617,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": -0.33601655642410133,
+    "E_solar_TWh": 423.20258440961373,
+    "dE_wind_pct_like_for_like": 4.187290778782904,
+    "E_wind_TWh": 51.05149481445072
+   },
+   {
+    "member": "m_mri_esm2_0_ssp370_2071_2100",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0056785345077515,
+    "rsds_min": 0.9885126352310181,
+    "rsds_max": 1.043859839439392,
+    "wind_mean": 1.023079514503479,
+    "wind_min": 0.995419442653656,
+    "wind_max": 1.0333950519561768,
+    "dT_mean": 2.2540714740753174,
+    "dT_min": 1.4184759855270386,
+    "dT_max": 2.7717435359954834,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": -0.45827976851388064,
+    "E_solar_TWh": 422.6834188540456,
+    "dE_wind_pct_like_for_like": 3.7821527433030466,
+    "E_wind_TWh": 50.852978256789655
+   },
+   {
+    "member": "m_mri_esm2_0_ssp585_2041_2070",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.0168821811676025,
+    "rsds_min": 0.9988132119178772,
+    "rsds_max": 1.0494827032089233,
+    "wind_mean": 1.0156633853912354,
+    "wind_min": 0.9950067400932312,
+    "wind_max": 1.0235295295715332,
+    "dT_mean": 1.867554783821106,
+    "dT_min": 1.1783487796783447,
+    "dT_max": 2.267200469970703,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 0.7212095969158172,
+    "E_solar_TWh": 427.691877581928,
+    "dE_wind_pct_like_for_like": 2.4718493007626297,
+    "E_wind_TWh": 50.21093306200443
+   },
+   {
+    "member": "m_mri_esm2_0_ssp585_2071_2100",
+    "gcm": "MRI-ESM2-0",
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.0240110158920288,
+    "rsds_min": 1.0007084608078003,
+    "rsds_max": 1.0648748874664307,
+    "wind_mean": 1.0033470392227173,
+    "wind_min": 0.9768607020378113,
+    "wind_max": 1.01468026638031,
+    "dT_mean": 3.327277421951294,
+    "dT_min": 2.0918655395507812,
+    "dT_max": 4.039700508117676,
+    "n": 3939.0,
+    "wind_share_at_upper_limit": 0.0,
+    "wind_share_at_lower_limit": 0.0,
+    "dE_solar_pct_like_for_like": 0.871588275525248,
+    "E_solar_TWh": 428.33042967696485,
+    "dE_wind_pct_like_for_like": -0.40166307633020537,
+    "E_wind_TWh": 48.8029196553607
+   }
+  ],
+  "reference": {
+   "member": "m0",
+   "gcm": "reference",
+   "ssp": "-",
+   "window": "1995-2014",
+   "rsds_mean": 1.0,
+   "rsds_min": 1.0,
+   "rsds_max": 1.0,
+   "wind_mean": 1.0,
+   "wind_min": 1.0,
+   "wind_max": 1.0,
+   "dT_mean": 0.0,
+   "dT_min": 0.0,
+   "dT_max": 0.0,
+   "n": 3939.0,
+   "wind_share_at_upper_limit": 0.0,
+   "wind_share_at_lower_limit": 0.0,
+   "dE_solar_pct_like_for_like": 0.0,
+   "E_solar_TWh": 424.62940952907735,
+   "dE_wind_pct_like_for_like": 0.0,
+   "E_wind_TWh": 48.99973349229947
+  },
+  "solar_ratio_ordering_check": [
+   {
+    "gcm": "ACCESS-CM2",
+    "rsds_ssp126_2071_2100": 1.0609930753707886,
+    "rsds_ssp370_2041_2070": 1.03288733959198,
+    "ssp126_late_above_ssp370_early": true
+   },
+   {
+    "gcm": "CNRM-CM6-1",
+    "rsds_ssp126_2071_2100": 1.0306419134140015,
+    "rsds_ssp370_2041_2070": 1.0324324369430542,
+    "ssp126_late_above_ssp370_early": false
+   },
+   {
+    "gcm": "GFDL-ESM4",
+    "rsds_ssp126_2071_2100": 1.031463861465454,
+    "rsds_ssp370_2041_2070": 1.0130271911621094,
+    "ssp126_late_above_ssp370_early": true
+   },
+   {
+    "gcm": "IPSL-CM6A-LR",
+    "rsds_ssp126_2071_2100": 1.0537348985671997,
+    "rsds_ssp370_2041_2070": 1.0411992073059082,
+    "ssp126_late_above_ssp370_early": true
+   },
+   {
+    "gcm": "MIROC6",
+    "rsds_ssp126_2071_2100": 1.0464268922805786,
+    "rsds_ssp370_2041_2070": 1.0373834371566772,
+    "ssp126_late_above_ssp370_early": true
+   },
+   {
+    "gcm": "MRI-ESM2-0",
+    "rsds_ssp126_2071_2100": 1.0153710842132568,
+    "rsds_ssp370_2041_2070": 1.0049095153808594,
+    "ssp126_late_above_ssp370_early": true
+   }
+  ],
+  "ensemble_mean": [
+   {
+    "ssp": "SSP1-2.6",
+    "window": "2041-2070",
+    "rsds_mean": 1.0386602481206257,
+    "wind_mean": 0.9907647967338562,
+    "dT_mean": 1.1683450043201447
+   },
+   {
+    "ssp": "SSP1-2.6",
+    "window": "2071-2100",
+    "rsds_mean": 1.0397719542185466,
+    "wind_mean": 0.995496928691864,
+    "dT_mean": 1.1305923461914062
+   },
+   {
+    "ssp": "SSP3-7.0",
+    "window": "2041-2070",
+    "rsds_mean": 1.0269731879234314,
+    "wind_mean": 0.9972193241119385,
+    "dT_mean": 1.6279363830884297
+   },
+   {
+    "ssp": "SSP3-7.0",
+    "window": "2071-2100",
+    "rsds_mean": 1.0382050275802612,
+    "wind_mean": 0.9885263085365296,
+    "dT_mean": 2.9403916597366333
+   },
+   {
+    "ssp": "SSP5-8.5",
+    "window": "2041-2070",
+    "rsds_mean": 1.036146620909373,
+    "wind_mean": 0.9920205950737,
+    "dT_mean": 1.9375423391660054
+   },
+   {
+    "ssp": "SSP5-8.5",
+    "window": "2071-2100",
+    "rsds_mean": 1.0530512134234111,
+    "wind_mean": 0.9773873329162598,
+    "dT_mean": 3.8580140272776284
+   }
+  ],
+  "energy_vs_forcing": {
+   "wind_dE_vs_cubed_wind_ratio": {
+    "n": 30,
+    "pearson": 0.995248209562621,
+    "spearman": 0.9902113459399332
+   },
+   "solar_dE_vs_rsds_ratio": {
+    "n": 36,
+    "pearson": 0.9737843394014443,
+    "spearman": 0.9747747747747749
+   },
+   "wind_dE_pct_range": [
+    -9.840440110259907,
+    6.780236709419607
+   ],
+   "solar_dE_pct_range": [
+    -0.45827976851388064,
+    7.108175582484799
+   ],
+   "wind_ratio_range": [
+    0.9549293518066406,
+    1.0370956659317017
+   ]
+  },
+  "_pivot_rsds": {
+   "ACCESS-CM2|SSP1-2.6": {
+    "2041-2070": 1.047210693359375,
+    "2071-2100": 1.0609930753707886
+   },
+   "ACCESS-CM2|SSP3-7.0": {
+    "2041-2070": 1.03288733959198,
+    "2071-2100": 1.044761300086975
+   },
+   "ACCESS-CM2|SSP5-8.5": {
+    "2041-2070": 1.0499039888381958,
+    "2071-2100": 1.067897915840149
+   },
+   "CNRM-CM6-1|SSP1-2.6": {
+    "2041-2070": 1.038203239440918,
+    "2071-2100": 1.0306419134140015
+   },
+   "CNRM-CM6-1|SSP3-7.0": {
+    "2041-2070": 1.0324324369430542,
+    "2071-2100": 1.0410957336425781
+   },
+   "CNRM-CM6-1|SSP5-8.5": {
+    "2041-2070": 1.0348584651947021,
+    "2071-2100": 1.0474637746810913
+   },
+   "GFDL-ESM4|SSP1-2.6": {
+    "2041-2070": 1.028944730758667,
+    "2071-2100": 1.031463861465454
+   },
+   "GFDL-ESM4|SSP3-7.0": {
+    "2041-2070": 1.0130271911621094,
+    "2071-2100": 1.0240764617919922
+   },
+   "GFDL-ESM4|SSP5-8.5": {
+    "2041-2070": 1.0276914834976196,
+    "2071-2100": 1.0261605978012085
+   },
+   "IPSL-CM6A-LR|SSP1-2.6": {
+    "2041-2070": 1.0497339963912964,
+    "2071-2100": 1.0537348985671997
+   },
+   "IPSL-CM6A-LR|SSP3-7.0": {
+    "2041-2070": 1.0411992073059082,
+    "2071-2100": 1.0661580562591553
+   },
+   "IPSL-CM6A-LR|SSP5-8.5": {
+    "2041-2070": 1.0468692779541016,
+    "2071-2100": 1.091234803199768
+   },
+   "MIROC6|SSP1-2.6": {
+    "2041-2070": 1.0437290668487549,
+    "2071-2100": 1.0464268922805786
+   },
+   "MIROC6|SSP3-7.0": {
+    "2041-2070": 1.0373834371566772,
+    "2071-2100": 1.0474600791931152
+   },
+   "MIROC6|SSP5-8.5": {
+    "2041-2070": 1.0406743288040161,
+    "2071-2100": 1.0615391731262207
+   },
+   "MRI-ESM2-0|SSP1-2.6": {
+    "2041-2070": 1.0241397619247437,
+    "2071-2100": 1.0153710842132568
+   },
+   "MRI-ESM2-0|SSP3-7.0": {
+    "2041-2070": 1.0049095153808594,
+    "2071-2100": 1.0056785345077515
+   },
+   "MRI-ESM2-0|SSP5-8.5": {
+    "2041-2070": 1.0168821811676025,
+    "2071-2100": 1.0240110158920288
+   }
+  }
+ }
+}
