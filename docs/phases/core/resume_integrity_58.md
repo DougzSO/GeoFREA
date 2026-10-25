@@ -123,7 +123,7 @@ the manifests. Nothing was run here.
 ## 10. The final round (COMMAND 62, 2026-10-21/22)
 
 Written for Douglas. The three countries ran from the data acquisition to the potential maps with no `--rerun`, after the merge of COMMAND 61. Every internal cache was rebuilt, because the keys now hold the code
-(section 8.3 announced it; the cost was not quantified there: slope tiles, land-cover tiles and the aligned layers dominate). Statuses after the round: PRT and BRA complete; **IND complete except `hazard_context` and `overview`**, which wait for the ERA5 extension (section 10.4).
+(section 8.3 announced it; the cost was not quantified there: slope tiles, land-cover tiles and the aligned layers dominate). Statuses after the round: PRT, BRA and IND complete (`hazard_context` and `overview` of IND ran on 2026-10-25, after the ERA5 extension, section 10.4).
 
 ### 10.1 Phases, time and memory
 
@@ -156,7 +156,6 @@ No variation reaches 0.5%, so none needs a cause beyond the one of D-F3-020 and 
 
 **Wind eligible area with no Global Wind Atlas value** (OQ-062 follow-up, wind below 3000 m, central, computed with the E1-E6 shares and the resource layers left out): **380.6 km2, 0.075% of the eligible wind area of IND**. It is below the 1% that would open an open question, so none was opened; L-047 now carries the number.
 
-### 10.4 What waits for the ERA5 of IND
+### 10.4 The ERA5 of IND, closed (2026-10-25)
 
-`hazard_context` and `overview` of IND (the hazard of the wind gust needs the 1996-2014 annual maxima over the whole mask), the check that no cell of the mask has a NaN of fg10 in any year, the coverage audit "after" (`docs/data/coverage_audit_59.md`) and the hashes of IND. The extension is described in D-F1-031.
-
+The extension (D-F1-031) is complete: 20 years, 4,447 cells with a value, the old product reproduced to 1.9e-6 m/s in the 2,465 shared cells, no NaN of fg10 in the 4,449 cells of the mask in any year, coverage of the mask 99.94% (94.39% before). `hazard_context` (126 s) and `overview` (228 s) of IND ran on it and succeed; the checks of 49b were not repeated because F5 did not change. One thing to know: the manifest does not see the raw ERA5 file, so after the product changed the phases had to be forced with `--rerun hazard_context,overview` (D-F1-031).
