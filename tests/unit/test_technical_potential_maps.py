@@ -122,17 +122,17 @@ def test_figures_follow_the_figures_setting(run_ok, tmp_path):
 
     summary = _maps(run_ok, tmp_path / "summary", "summary")
     assert sorted(p.name for p in summary.figures) == [
-        "potential_capacity_density_solar_central__ref__na__na.png",
-        "potential_capacity_density_wind_central__ref__na__na.png",
-        "potential_energy_density_solar_central__ref__na__na.png",
-        "potential_energy_density_wind_central__ref__na__na.png",
+        "ZZZ_F5_capacity-density_solar_central_ref.png",
+        "ZZZ_F5_capacity-density_wind_central_ref.png",
+        "ZZZ_F5_energy-density_solar_central_ref.png",
+        "ZZZ_F5_energy-density_wind_central_ref.png",
     ]
 
     # without the admin1 units the state maps are not drawn: `all` adds the capacity-factor maps to the same two densities
     everything = _maps(run_ok, tmp_path / "all", "all")
     assert sorted(p.name for p in everything.figures) == [
-        "capacity_factor_solar__ref__na__na.png",
-        "capacity_factor_wind__ref__na__na.png",
+        "ZZZ_F5_capacity-factor_solar_central_ref.png",
+        "ZZZ_F5_capacity-factor_wind_central_ref.png",
     ]
     assert not everything.absolute_figures
     assert all(p.stat().st_size > 1000 for p in (*summary.figures, *everything.figures))

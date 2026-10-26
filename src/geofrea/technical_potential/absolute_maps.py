@@ -35,7 +35,6 @@ import geopandas as gpd
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -47,6 +46,12 @@ from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.land_eligibility.map_raster import cell_grid
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.technical_potential.display_layers import load_display_layer
+from geofrea.technical_potential.state_figures import (
+    ranking_chart,
+    ranking_name,
+    state_sheet,
+    state_sheet_name,
+)
 from geofrea.viz import mapstyle as ms
 from geofrea.viz.context import (  # noqa: F401  (the context moved to viz; the names stay importable from here)
     MapContext,
@@ -262,7 +267,7 @@ logger = logging.getLogger("geofrea.technical_potential.absolute_maps")
 
 
 def _palette(name: str, n: int) -> list[tuple[float, ...]]:
-    return [tuple(c) for c in plt.get_cmap(name)(np.linspace(0.0, 1.0, max(n, 1)))]
+    return [tuple(c) for c in matplotlib.colormaps[name](np.linspace(0.0, 1.0, max(n, 1)))]
 
 
 def class_labels(breaks: ClassBreaks) -> tuple[str, ...]:
@@ -335,7 +340,7 @@ def compose_cell_density_map(
     canvas = build(resolution)
     plan = ms.plan_display(canvas, data, extent_grid, resolution, display_layer, display_smoothing)
     if plan.shown != resolution:
-        plt.close(canvas.fig)
+        ms.close_figure(canvas)
         canvas = build(plan.shown)
     canvas.meta.update(ms.display_meta(plan, display_smoothing))
     canvas.fill_country()  # the cells of the country without potential show the grey of "no potential" under the data
@@ -363,99 +368,13 @@ def compose_cell_density_map(
     }
 
 
-def draw_cell_density_map(*args, path: Path, **kwargs) -> tuple[Path, dict[str, Any]]:
-    """`compose_cell_density_map`, saved as PNG at `path`; returns the file and how the colour limits were chosen."""
+def draw_cell_density_map(
+    *args, path: Path, data_source: str | None = None, **kwargs
+) -> tuple[Path, dict[str, Any]]:
+    """`compose_cell_density_map`, saved as PNG at `path` (with its `data_source` in the metadata); returns the file and how the colour limits were chosen."""
     canvas, info = compose_cell_density_map(*args, **kwargs)
-    return ms.save_png(canvas, path), info
-
-
-def _anchor(geom):
-    """A point inside the largest part of a unit (the middle of a state with islands is not in the sea)."""
-    if geom.geom_type == "MultiPolygon":
-        geom = max(geom.geoms, key=lambda g: g.area)
-    return geom.representative_point()
-
-
-def compose_state_map(
-    units: gpd.GeoDataFrame,
-    density: pd.Series,
-    totals: pd.Series,
-    breaks: ClassBreaks,
-    ctx: MapContext,
-    *,
-    iso: str,
-    tech: str,
-    variable: str,
-    unit: str,
-    circle_unit: str,
-    circle_reference: float,
-    scenario: str,
-    total_text: str,
-    palette: str,
-    width_mm: float = ms.FULL_WIDTH_MM,
-) -> tuple[ms.MapCanvas, dict[str, Any]]:
-    """A choropleth of the density of each state (its total over its land area) in the classes `breaks`, with a circle over each state whose
-    area is proportional to the state total (the circle of `circle_reference` has the largest radius)."""
-    units = units.to_crs("EPSG:4326").reset_index(drop=True)
-    colours = _palette(palette, breaks.n_classes)
-    values = units["admin1_id"].map(density).to_numpy(dtype="float64")
-    classes = breaks.assign(np.nan_to_num(values, nan=0.0))
-    face = [colours[c] if c >= 0 else matplotlib.colors.to_rgba(ms.NO_DATA_COLOUR) for c in classes]
-    r_max = ms.CIRCLE_MAX_MM
-    legend_values = ms.nice_values_below(circle_reference)
-    spec = ms.ClassedLegend(
-        title=unit,
-        labels=class_labels(breaks),
-        colours=tuple(colours),
-        no_value_label=NO_POTENTIAL_LABEL,
-        circle_title=circle_unit,
-        circles=tuple(
-            (format_limit(v), ms.circle_radius_mm(v, circle_reference, r_max))
-            for v in legend_values
-        ),
-    )
-    side, below = ms.legend_space(spec)
-    canvas = ms.new_map(
-        ctx.polygon,
-        iso=iso,
-        technology=technology_name(tech),
-        variable=variable,
-        subtitle=f"{scenario.capitalize()} scenario · {SUBTITLE_CLIMATE}",
-        total_text=total_text,
-        neighbours=ctx.neighbours,
-        extent=ctx.extent,
-        contiguous=False,
-        width_mm=width_mm,
-        legend_side_mm=side,
-        legend_below_mm=below,
-    )
-    ms.draw_choropleth(canvas, units, face)
-    anchors = units.geometry.apply(_anchor)
-    radii = [
-        ms.circle_radius_mm(float(totals.get(a1, 0.0)), circle_reference, r_max)
-        for a1 in units["admin1_id"]
-    ]
-    drawn = [i for i, r in enumerate(radii) if r > 0]
-    ms.draw_circles(
-        canvas,
-        [anchors.iloc[i].x for i in drawn],
-        [anchors.iloc[i].y for i in drawn],
-        [radii[i] for i in drawn],
-    )
-    ms.draw_classed_legend(canvas, spec)
-    return canvas, {
-        "circle_unit": circle_unit,
-        "circle_reference_total": circle_reference,
-        "circle_legend_values": legend_values,
-        "circle_max_radius_mm": r_max,
-        "states_with_circle": len(drawn),
-    }
-
-
-def draw_state_map(*args, path: Path, **kwargs) -> tuple[Path, dict[str, Any]]:
-    """`compose_state_map`, saved as PNG at `path`; returns the file and the circle scale."""
-    canvas, info = compose_state_map(*args, **kwargs)
-    return ms.save_png(canvas, path), info
+    meta = {"data_source": data_source} if data_source else None
+    return ms.save_png(canvas, path, meta), info
 
 
 def draw_classed_cell_map(
@@ -514,31 +433,52 @@ def draw_classed_cell_map(
 # --------------------------------------------------------------------------------------------------------------- the phase part
 
 
-def absolute_map_names(tech: str, per_cell: bool = False) -> dict[str, str]:
-    """Artifact key -> file name of the maps and of the limits file of one technology (the PhaseSpec `produces` and the writer agree).
+def absolute_map_keys(tech: str, per_cell: bool = False) -> tuple[str, ...]:
+    """The artifact keys of the maps and of the limits file of one technology (the PhaseSpec `produces`; they do not depend on the country).
 
-    The maps of MW and GWh per cell are in the list only when `absolute_maps.per_cell` is true.
-    """
+    The maps of MW and GWh per cell are in the list only when `absolute_maps.per_cell` is true."""
+    keys = [
+        f"potential_capacity_density_{tech}",
+        f"potential_energy_density_{tech}",
+        f"potential_capacity_density_state_{tech}",
+        f"potential_energy_density_state_{tech}",
+        f"potential_capacity_density_ranking_{tech}",
+        f"potential_energy_density_ranking_{tech}",
+        f"potential_breaks_{tech}",
+    ]
+    if per_cell:
+        keys += [f"potential_capacity_cell_{tech}", f"potential_energy_cell_{tech}"]
+    return tuple(keys)
+
+
+def absolute_map_names(iso: str, tech: str, per_cell: bool = False) -> dict[str, str]:
+    """Artifact key -> file name of the maps and of the limits file of one technology of the country `iso`, in the standard names
+    (`mapstyle.figure_filename`; the writer and the `produces` agree through the keys)."""
+    fn = ms.figure_filename
     names = {
-        f"potential_capacity_density_{tech}": f"potential_capacity_density_{tech}_{CENTRAL}__ref__na__na.png",
-        f"potential_energy_density_{tech}": f"potential_energy_density_{tech}_{CENTRAL}__ref__na__na.png",
+        f"potential_capacity_density_{tech}": fn(
+            iso, "F5", "capacity-density", tech, CENTRAL, "ref"
+        ),
+        f"potential_energy_density_{tech}": fn(iso, "F5", "energy-density", tech, CENTRAL, "ref"),
+        f"potential_capacity_density_state_{tech}": state_sheet_name(iso, "capacity", tech),
+        f"potential_energy_density_state_{tech}": state_sheet_name(iso, "energy", tech),
+        f"potential_capacity_density_ranking_{tech}": ranking_name(iso, "capacity", tech),
+        f"potential_energy_density_ranking_{tech}": ranking_name(iso, "energy", tech),
         f"potential_breaks_{tech}": f"potential_breaks_{tech}.json",
     }
-    for scenario in SCENARIOS:
-        names[f"potential_capacity_density_state_{tech}__{scenario}"] = (
-            f"potential_capacity_density_state_{tech}_{scenario}__ref__na__na.png"
-        )
-        names[f"potential_energy_density_state_{tech}__{scenario}"] = (
-            f"potential_energy_density_state_{tech}_{scenario}__ref__na__na.png"
-        )
     if per_cell:
-        names[f"potential_capacity_cell_{tech}"] = (
-            f"potential_capacity_mw_cell_{tech}_{CENTRAL}__ref__na__na.png"
+        names[f"potential_capacity_cell_{tech}"] = fn(
+            iso, "F5", "capacity-per-cell", tech, CENTRAL, "ref"
         )
-        names[f"potential_energy_cell_{tech}"] = (
-            f"potential_energy_gwh_cell_{tech}_{CENTRAL}__ref__na__na.png"
+        names[f"potential_energy_cell_{tech}"] = fn(
+            iso, "F5", "energy-per-cell", tech, CENTRAL, "ref"
         )
+    assert list(names) == list(absolute_map_keys(tech, per_cell))
     return names
+
+
+def capacity_factor_name(iso: str, tech: str) -> str:
+    return ms.figure_filename(iso, "F5", "capacity-factor", tech, CENTRAL, "ref")
 
 
 def build_cell_density_maps(
@@ -559,7 +499,7 @@ def build_cell_density_maps(
     Raises:
         AbsoluteMapsError: a table is missing.
     """
-    names = absolute_map_names(tech)
+    names = absolute_map_names(iso, tech)
     table = _scenario_table(potential_dir, cells_dir, tech, CENTRAL, with_admin1=False)
     totals = _national_totals(potential_dir, tech)
     ids = table["cell_id"].to_numpy()
@@ -600,6 +540,7 @@ def build_cell_density_maps(
             subtitle=subtitle,
             total_text=_total_text(gw, twh),
             path=out / names[key],
+            data_source=f"F5 potential_{tech}__{CENTRAL}, member m0",
             display_layer=load_display_layer(potential_dir, layer, tech),
             display_smoothing=display_smoothing,
         )
@@ -625,7 +566,7 @@ def build_absolute_maps(
     Raises:
         AbsoluteMapsError: a table is missing, or the sum of the cells or of the states differs from the F5 national total by more than 0.1%.
     """
-    names = absolute_map_names(tech, cfg.per_cell)
+    names = absolute_map_names(iso, tech, cfg.per_cell)
     out = Path(figures_dir)
     tables = {s: _scenario_table(potential_dir, cells_dir, tech, s) for s in SCENARIOS}
     totals = _national_totals(potential_dir, tech)
@@ -712,27 +653,30 @@ def build_absolute_maps(
         sig,
         open_last=open_last,
     )
-    # one circle scale for the six state maps of a quantity: the largest state total of the three scenarios
+    # one circle scale for the three scenarios of a quantity: the largest state total of the three
     ref_gw = max(float(states[s]["capacity_gw"].max()) for s in SCENARIOS)
     ref_twh = max(float(states[s]["energy_twh"].max()) for s in SCENARIOS)
+    totals_text = "\n".join(
+        f"{s.capitalize()}: {totals[s][0]:,.1f} GW · {totals[s][1]:,.1f} TWh per year"
+        for s in ("restrictive", "central", "permissive")
+    )
     circles: dict[str, Any] = {}
-    for scenario in SCENARIOS:
-        gw, twh = totals[scenario]
-        st = states[scenario]
-        key = f"potential_capacity_density_state_{tech}__{scenario}"
-        written[key], circles[key] = draw_state_map(
-            units, st["capacity_density"], st["capacity_gw"], state_cap, ctx,
-            iso=iso, tech=tech, variable="Capacity density by state", unit=UNIT_CAPACITY_DENSITY,
-            circle_unit=UNIT_CIRCLE_CAPACITY, circle_reference=ref_gw, scenario=scenario,
-            total_text=_total_text(gw, twh), palette=cfg.palette, path=out / names[key],
+    for quantity, breaks, unit, circle_unit, reference in (
+        ("capacity", state_cap, UNIT_CAPACITY_DENSITY, UNIT_CIRCLE_CAPACITY, ref_gw),
+        ("energy", state_en, UNIT_ENERGY_DENSITY, UNIT_CIRCLE_ENERGY, ref_twh),
+    ):
+        key = f"potential_{quantity}_density_state_{tech}"
+        sheet, circles[key] = state_sheet(
+            ctx, iso, tech, units, states, breaks,
+            quantity=quantity, unit_label=unit, class_labels=class_labels(breaks),
+            circle_title=circle_unit, circle_reference=reference, totals_text=totals_text,
         )  # fmt: skip
-        key = f"potential_energy_density_state_{tech}__{scenario}"
-        written[key], circles[key] = draw_state_map(
-            units, st["energy_density"], st["energy_twh"], state_en, ctx,
-            iso=iso, tech=tech, variable="Energy density by state", unit=UNIT_ENERGY_DENSITY,
-            circle_unit=UNIT_CIRCLE_ENERGY, circle_reference=ref_twh, scenario=scenario,
-            total_text=_total_text(gw, twh), palette=cfg.palette, path=out / names[key],
-        )  # fmt: skip
+        written[key] = ms.save_png(sheet, out / names[key], {"grid": "admin1 units of F1"})
+        key = f"potential_{quantity}_density_ranking_{tech}"
+        written[key] = ms.save_png(
+            ranking_chart(iso, tech, units, states, quantity=quantity, unit_label=unit),
+            out / names[key],
+        )
 
     per_cell_content: dict[str, Any] | None = None
     if cfg.per_cell:

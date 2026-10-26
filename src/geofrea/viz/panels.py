@@ -232,13 +232,14 @@ def new_panels(
     graticule: bool = True,
     bar: str = "shared",
     legend_labels: Sequence[str] = (),
+    legend_extra_mm: float = 0.0,
 ) -> PanelFigure:
     """The axes, the colour bar slots, the title and the furniture of `n_rows x n_cols` maps of the country `geometry` (lon/lat).
 
     `captions` has one text per map, in reading order (left to right, top to bottom); `bar` is `shared` (one horizontal colour bar under
     all the maps, for maps that share a scale), `each` (a slot under each map, for maps of different variables: a colour bar, or the patches of
     a class legend, `add_panel_classes`) or `none`. `legend_labels` are the longest set of labels of a class legend, so that the slot is as tall
-    as that legend needs at the width of a map. The rest is as in `mapstyle.new_map`; the projection and the frame are those of `new_map` for
+    as that legend needs at the width of a map, and `legend_extra_mm` more room under it (the circles of `add_panel_circles`). The rest is as in `mapstyle.new_map`; the projection and the frame are those of `new_map` for
     the same country.
     """
     import geopandas as gpd
@@ -296,6 +297,8 @@ def new_panels(
         if n_cols == 1:
             return min(max(pw, SLOT_MIN_MM), width - LEFT_MM - RIGHT_MM)
         gap = max(PANEL_GAP_MM, word_w - pw + 1.5)
+        if bar == "shared":  # one slot under all the maps: as wide as the maps are together
+            return n_cols * pw + (n_cols - 1) * gap
         return min(max(pw, SLOT_MIN_MM), pw + gap - 1.0)
 
     lines, slot_mm = 1, BAR_MM
@@ -307,7 +310,7 @@ def new_panels(
         wrapped = [ms._wrap(c, pw - 0.5, pre.label_pt, bold=True) for c in captions]
         need = max(len(w) for w in wrapped)
         need_slot = (
-            max(BAR_MM, legend_height_mm(legend_labels, slot_width(pw), pre))
+            max(BAR_MM, legend_height_mm(legend_labels, slot_width(pw), pre) + legend_extra_mm)
             if bar != "none"
             else 0.0
         )
@@ -526,10 +529,12 @@ def add_panel_classes(
     labels: Sequence[str],
     colours: Sequence,
     meaning: str,
+    title: str | None = None,
 ) -> list:
     """The patches of a class legend (a colour and its label, in rows) in the slot of the map `index`; the colour bar axes of that slot is hidden.
 
-    `meaning` names what the colours stand for in this sheet (a colour keeps one meaning in a sheet)."""
+    `meaning` names what the colours stand for in this sheet (a colour keeps one meaning in a sheet); a `title` (the unit, say) takes the first row
+    of the slot, which the caller has paid for in `legend_extra_mm`."""
     from matplotlib.patches import Rectangle
 
     pre = sheet.preset
@@ -538,6 +543,21 @@ def add_panel_classes(
     rows = legend_rows(labels, box[2] - box[0], pre)
     artists: list = []
     y_top = box[3] - 1.5
+    if title:
+        validate_label(title, "legend title")
+        artists.append(
+            sheet.overlay.text(
+                box[0],
+                y_top - ms.ROW_MM / 2.0,
+                title,
+                fontsize=pre.legend_pt,
+                fontweight="bold",
+                color="#333333",
+                ha="left",
+                va="center",
+            )
+        )
+        y_top -= ms.ROW_MM
     for r, members in enumerate(rows):
         x = box[0]
         y = y_top - (r + 1) * ms.ROW_MM + (ms.ROW_MM - ms.SWATCH_H_MM) / 2.0
@@ -568,6 +588,65 @@ def add_panel_classes(
             )
             x += ms.SWATCH_W_MM + 1.5 + ms._text_width_mm(labels[i], pre.legend_pt) + 3.0
     sheet.artists[f"legend {index}"] = artists
+    return artists
+
+
+def add_panel_circles(
+    sheet: PanelFigure,
+    index: int,
+    title: str,
+    items: Sequence[tuple[str, float]],
+) -> list:
+    """The size legend of the circles of a sheet at the bottom of the slot `index`: `title`, then each circle (radius in mm on paper) with its label.
+
+    The sizes are the ones the circles of the maps have (`mapstyle.circle_radius_mm`), taken from the data by the caller."""
+    from matplotlib.patches import Circle
+
+    pre = sheet.preset
+    box = sheet.slot_boxes[index]
+    validate_label(title, "legend title")
+    artists: list = []
+    x = box[0]
+    y_base = box[1] + 0.8
+    artists.append(
+        sheet.overlay.text(
+            x,
+            y_base + max((r for _, r in items), default=0.0),
+            title,
+            fontsize=pre.legend_pt,
+            color="#333333",
+            fontweight="bold",
+            ha="left",
+            va="center",
+        )
+    )
+    x += ms._text_width_mm(title, pre.legend_pt, bold=True) + 4.0
+    for label, radius in items:
+        validate_label(label, "legend label")
+        artists.append(
+            sheet.overlay.add_patch(
+                Circle(
+                    (x + radius, y_base + radius),
+                    radius,
+                    facecolor=ms.CIRCLE_FACE,
+                    edgecolor=ms.CIRCLE_EDGE,
+                    linewidth=0.4,
+                )
+            )
+        )
+        artists.append(
+            sheet.overlay.text(
+                x + 2 * radius + 1.2,
+                y_base + radius,
+                label,
+                fontsize=pre.legend_pt,
+                color="#333333",
+                ha="left",
+                va="center",
+            )
+        )
+        x += 2 * radius + 1.2 + ms._text_width_mm(label, pre.legend_pt) + 4.0
+    sheet.artists[f"circles {index}"] = artists
     return artists
 
 

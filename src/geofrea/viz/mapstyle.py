@@ -417,7 +417,12 @@ PLAIN_CMAPS = {  # kinds that do not depend on the technology
     "weibull_k": "PuRd",
     "air_density": "BuPu",
 }
-TRUNCATED_PLAIN = {"population", "water", "weibull_k", "air_density"}  # sequential maps that start at white: cut from 15% like the technologies
+TRUNCATED_PLAIN = {
+    "population",
+    "water",
+    "weibull_k",
+    "air_density",
+}  # sequential maps that start at white: cut from 15% like the technologies
 COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
 
 # Qualitative classes (the dominant exclusion E1-E6): the Okabe-Ito colours without green and without the black, and a neutral grey for "none".
@@ -438,6 +443,11 @@ def _truncated(name: str, start: float) -> Colormap:
         cmap, force=True
     )  # by name, so that a figure can look it up again
     return cmap
+
+
+def family_of(tech: str) -> str:
+    """The family of colours of a technology: a variant of a technology takes the family of its name."""
+    return WIND if WIND in tech else SOLAR
 
 
 def colormap_for(kind: str, tech: str | None = None) -> Colormap:
@@ -2076,6 +2086,11 @@ def png_metadata(canvas: MapFigure, extra: dict[str, str] | None = None) -> dict
             else f"{META_PREFIX}{key.removeprefix(META_PREFIX)}"
         ] = str(value)
     return meta
+
+
+def close_figure(figure) -> None:
+    """Close a figure that will not be saved (a header that is drawn again): the `Figure` itself, or a map or sheet that holds one."""
+    plt.close(getattr(figure, "fig", figure))
 
 
 def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) -> Path:

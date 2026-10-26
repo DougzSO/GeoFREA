@@ -7,8 +7,10 @@ import json
 import math
 import os
 from pathlib import Path
+from typing import Any
 
 import geopandas as gpd
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,8 +18,13 @@ from PIL import Image
 from shapely.geometry import box
 
 from geofrea.technical_potential.absolute_maps import (
+    NO_POTENTIAL_LABEL,
+    SUBTITLE_CLIMATE,
+    ClassBreaks,
+    _palette,
     class_breaks,
-    compose_state_map,
+    class_labels,
+    format_limit,
     map_context,
     technology_name,
 )
@@ -32,6 +39,93 @@ CASES = {
     "wide": ms.FULL_WIDTH_MM,
     "small": ms.FULL_WIDTH_MM,
 }  # state maps are full-page maps (title and circles need the width)
+
+
+# The single-map composition of the choropleth of the states with circles (the sheets of the three scenarios are `technical_potential/state_figures.py`;
+# this is the machinery of `mapstyle` that they share: classed legend, choropleth, circles, no overlap), kept here as the thing under test.
+
+
+def _anchor(geom):
+    """A point inside the largest part of a unit (the middle of a state with islands is not in the sea)."""
+    if geom.geom_type == "MultiPolygon":
+        geom = max(geom.geoms, key=lambda g: g.area)
+    return geom.representative_point()
+
+
+def compose_state_map(
+    units: gpd.GeoDataFrame,
+    density: pd.Series,
+    totals: pd.Series,
+    breaks: ClassBreaks,
+    ctx,
+    *,
+    iso: str,
+    tech: str,
+    variable: str,
+    unit: str,
+    circle_unit: str,
+    circle_reference: float,
+    scenario: str,
+    total_text: str,
+    palette: str,
+    width_mm: float = ms.FULL_WIDTH_MM,
+) -> tuple[ms.MapCanvas, dict[str, Any]]:
+    """A choropleth of the density of each state (its total over its land area) in the classes `breaks`, with a circle over each state whose
+    area is proportional to the state total (the circle of `circle_reference` has the largest radius)."""
+    units = units.to_crs("EPSG:4326").reset_index(drop=True)
+    colours = _palette(palette, breaks.n_classes)
+    values = units["admin1_id"].map(density).to_numpy(dtype="float64")
+    classes = breaks.assign(np.nan_to_num(values, nan=0.0))
+    face = [colours[c] if c >= 0 else matplotlib.colors.to_rgba(ms.NO_DATA_COLOUR) for c in classes]
+    r_max = ms.CIRCLE_MAX_MM
+    legend_values = ms.nice_values_below(circle_reference)
+    spec = ms.ClassedLegend(
+        title=unit,
+        labels=class_labels(breaks),
+        colours=tuple(colours),
+        no_value_label=NO_POTENTIAL_LABEL,
+        circle_title=circle_unit,
+        circles=tuple(
+            (format_limit(v), ms.circle_radius_mm(v, circle_reference, r_max))
+            for v in legend_values
+        ),
+    )
+    side, below = ms.legend_space(spec)
+    canvas = ms.new_map(
+        ctx.polygon,
+        iso=iso,
+        technology=technology_name(tech),
+        variable=variable,
+        subtitle=f"{scenario.capitalize()} scenario · {SUBTITLE_CLIMATE}",
+        total_text=total_text,
+        neighbours=ctx.neighbours,
+        extent=ctx.extent,
+        contiguous=False,
+        width_mm=width_mm,
+        legend_side_mm=side,
+        legend_below_mm=below,
+    )
+    ms.draw_choropleth(canvas, units, face)
+    anchors = units.geometry.apply(_anchor)
+    radii = [
+        ms.circle_radius_mm(float(totals.get(a1, 0.0)), circle_reference, r_max)
+        for a1 in units["admin1_id"]
+    ]
+    drawn = [i for i, r in enumerate(radii) if r > 0]
+    ms.draw_circles(
+        canvas,
+        [anchors.iloc[i].x for i in drawn],
+        [anchors.iloc[i].y for i in drawn],
+        [radii[i] for i in drawn],
+    )
+    ms.draw_classed_legend(canvas, spec)
+    return canvas, {
+        "circle_unit": circle_unit,
+        "circle_reference_total": circle_reference,
+        "circle_legend_values": legend_values,
+        "circle_max_radius_mm": r_max,
+        "states_with_circle": len(drawn),
+    }
 
 
 # ------------------------------------------------------------------------------------------------------------------------- the pieces

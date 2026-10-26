@@ -179,7 +179,7 @@ def eligibility_sheet(
     sheet = build(resolution)
     plan = ms.plan_display(sheet.panels[0], share, extent, resolution, fraction, display_smoothing)
     if plan.shown != resolution:
-        ms.plt.close(sheet.fig)
+        ms.close_figure(sheet)
         sheet = build(plan.shown)
     left, right = sheet.panels
     left.fill_country()
@@ -238,6 +238,8 @@ def exclusion_chart(
         variable="Contribution of each exclusion to the excluded land",
         subtitle="Central land scenario · the exclusions overlap: each is measured alone and the bars add up to 100% of their sum, not of the union",
         n_bars=len(techs),
+        labels=[f"{technology_name(t)}\n{land[t]:,.0f} km² of land" for t in techs],
+        source="Source: F3 land eligibility, central scenario",
         legend_labels=[EXCLUSION_TITLES[c] for c in EXCLUSION_NAMES],
         preset=preset,
         country=country,

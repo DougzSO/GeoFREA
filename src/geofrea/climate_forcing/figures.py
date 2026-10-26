@@ -296,7 +296,7 @@ def ensemble_sheet(
     sheet = build(resolution)
     plan = _plan(sheet, fields["solar"].mean, extent, resolution, display_smoothing)
     if plan.shown != resolution:
-        ms.plt.close(sheet.fig)
+        ms.close_figure(sheet)
         sheet = build(plan.shown)
     for i, v in enumerate(VARIABLES):
         field = fields[v.key]
@@ -376,7 +376,7 @@ def grid_sheet(
     sheet = build(resolution)
     plan = _plan(sheet, fields[scenarios[0]][variable].mean, extent, resolution, display_smoothing)
     if plan.shown != resolution:
-        ms.plt.close(sheet.fig)
+        ms.close_figure(sheet)
         sheet = build(plan.shown)
     image = None
     for panel, sw in zip(sheet.panels, scenarios, strict=True):
@@ -436,7 +436,7 @@ def member_sheet(
         display_smoothing,
     )
     if plan.shown != resolution:
-        ms.plt.close(sheet.fig)
+        ms.close_figure(sheet)
         sheet = build(plan.shown)
     for i, v in enumerate(VARIABLES):
         panel = sheet.panels[i]

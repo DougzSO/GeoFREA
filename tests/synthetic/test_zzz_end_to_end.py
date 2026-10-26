@@ -486,9 +486,9 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
         "wind",
         "solar",
     ):  # COMMAND 60: the density maps of the cells, the capacity factor, in the common style
-        assert (figures / f"potential_capacity_density_{tech}_central__ref__na__na.png").is_file()
-        assert (figures / f"potential_energy_density_{tech}_central__ref__na__na.png").is_file()
-        assert (figures / f"capacity_factor_{tech}__ref__na__na.png").is_file()
+        assert (figures / f"ZZZ_F5_capacity-density_{tech}_central_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_energy-density_{tech}_central_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_capacity-factor_{tech}_central_ref.png").is_file()
 
 
 @pytest.mark.synthetic
