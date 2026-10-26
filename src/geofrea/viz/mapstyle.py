@@ -1685,6 +1685,7 @@ def raster_map(
     no_data_label: str | None = None,
     locator: bool = False,
     graticule: bool = True,
+    contiguous: bool = True,
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
@@ -1717,6 +1718,7 @@ def raster_map(
         no_data_label=no_data_label,
         locator=locator,
         graticule=graticule,
+        contiguous=contiguous,
     )
     if no_data_label:
         canvas.fill_country()
@@ -2025,7 +2027,7 @@ def legend_space(spec: ClassedLegend, preset: Preset = THESIS) -> tuple[float, f
     )
     side = 4.0 + max(SWATCH_W_MM + 2.0 + widest, circle_w, title_w) + 3.0
     biggest = max((r for _, r in spec.circles), default=0.0)
-    below = 15.5 + (2 * biggest + 8.0 if spec.circles else 0.0)
+    below = 17.5 + (2 * biggest + 8.0 if spec.circles else 0.0)
     return side, below
 
 
@@ -2117,7 +2119,7 @@ def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, lis
         x_start = layout.map_box[0]
         width = layout.map_box[2] - layout.map_box[0]
         slot = width / max(n, 1)
-        y = layout.map_box[1] - 4.0
+        y = layout.map_box[1] - 6.0
         for line in _wrap(spec.title, width, pt):
             pieces.append(
                 overlay.text(x_start, y, line, va="top", ha="left", fontweight="bold", **text_kw)
