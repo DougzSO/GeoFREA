@@ -61,3 +61,5 @@ Types: **raster** = continuous raster, **classes** = classified raster or chorop
 ## 5. What `mapstyle` replaces, when a figure is migrated
 
 Items 1-5, 7-9, 11 and 12 of section 1 draw one map on one axes and can move to `mapstyle.raster_map` or `mapstyle.new_map`; items 2-4 and 12 have several panels and need a panel layout that `mapstyle` does not have yet (COMMAND 56 does not migrate any figure). Items 6 and 10 are outside `src/`. The class-based legends of items 8-9 will use the legend slot of the canvas (`canvas.cax`) with a patch legend instead of a colour bar.
+
+**COMMAND 66.** `mapstyle.py` is now `MapFigure` with a fixed layout, presets, the semantic palette and scales, title rules, file names and PNG metadata (`docs/figures/style_guide.md`, D-core-045). The figures listed above were not redrawn.

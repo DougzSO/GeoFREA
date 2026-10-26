@@ -1,0 +1,19 @@
+# Names of the countries as they are written in the title of a figure (viz/mapstyle.py, `country_name`), by language.
+# The code names no country (METHODOLOGY A-05): a country that is not here needs `country=` in `new_map`.
+# This file is not part of the configuration fingerprint (core/config_fingerprint.py): changing a name never invalidates a phase.
+en:
+  BRA: "Brazil"
+  PRT: "Portugal"
+  IND: "India"
+  CHL: "Chile"
+  CHE: "Switzerland"
+  IDN: "Indonesia"
+  LUX: "Luxembourg"
+pt:
+  BRA: "Brasil"
+  PRT: "Portugal"
+  IND: "Índia"
+  CHL: "Chile"
+  CHE: "Suíça"
+  IDN: "Indonésia"
+  LUX: "Luxemburgo"

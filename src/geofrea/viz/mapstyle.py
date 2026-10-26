@@ -904,26 +904,18 @@ class MapFigure:
 MapCanvas = MapFigure  # the name before COMMAND 66
 
 
-COUNTRY_NAMES = {  # the name of a country in a title, by language: the scope of the thesis and the archetypes of the tests
-    "en": {
-        "BRA": "Brazil",
-        "PRT": "Portugal",
-        "IND": "India",
-        "CHL": "Chile",
-        "CHE": "Switzerland",
-        "IDN": "Indonesia",
-        "LUX": "Luxembourg",
-    },
-    "pt": {
-        "BRA": "Brasil",
-        "PRT": "Portugal",
-        "IND": "Índia",
-        "CHL": "Chile",
-        "CHE": "Suíça",
-        "IDN": "Indonésia",
-        "LUX": "Luxemburgo",
-    },
-}
+def _load_country_names() -> dict[str, dict[str, str]]:
+    """`config/country_names.yaml`: the name of a country in a title, by language (the code names no country, A-05)."""
+    import yaml
+
+    path = Path(__file__).resolve().parents[3] / "config" / "country_names.yaml"
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return {"en": {}, "pt": {}}
+
+
+COUNTRY_NAMES = _load_country_names()
 
 LABELS = {  # the words the module writes itself, by language (`en` is the default, `pt` the other one the thesis may use)
     "en": {
