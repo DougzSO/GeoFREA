@@ -28,6 +28,7 @@ class ChartFigure:
 
     fig: object
     ax: object
+    axes: list
     overlay: object
     width_mm: float
     height_mm: float
@@ -62,10 +63,15 @@ def new_chart(
     bar_room_mm: float = 9.0,
     labels: Sequence[str] = (),
     plot_height_mm: float | None = None,
+    grid: tuple[int, int] = (1, 1),
+    panel_titles: Sequence[str] = (),
+    panel_gap_mm: float = 10.0,
 ) -> ChartFigure:
     """The axes (one bar per `n_bars`, `bar_room_mm` of height each), the header and the legend rows of a chart of the country `iso`.
 
-    `plot_height_mm` is the height of the axes of a chart that is not made of bars. `labels` are the names of the bars: the room at the left of the axes follows the longest. `source` is the footer text (the data it draws on);
+    `plot_height_mm` is the height of the axes of a chart that is not made of bars. With `grid=(rows, columns)` the sheet has that many axes
+    (`chart.axes`, row by row, the first is `chart.ax`), each with the room for its own labels and, from `panel_titles`, a bold caption;
+    `plot_height_mm` is then the height of one panel. `labels` are the names of the bars: the room at the left of the axes follows the longest. `source` is the footer text (the data it draws on);
     a chart has none unless it is given."""
     pre = get_preset(preset)
     width = pre.width_mm if width_mm is None else width_mm
@@ -81,8 +87,18 @@ def new_chart(
     legend_mm = legend_height_mm(legend_labels, width - 2 * ms.LEFT_MM, pre)
     axis_mm = 8.0  # the numbers under the axis and its name
     plot_mm = plot_height_mm if plot_height_mm is not None else n_bars * bar_room_mm
+    n_rows, n_cols = grid
+    caption_mm = 5.0 if panel_titles else 0.0
+    row_mm = plot_mm + caption_mm
     footer = 6.0
-    height = header_mm + plot_mm + axis_mm + legend_mm + footer
+    height = (
+        header_mm
+        + n_rows * row_mm
+        + (n_rows - 1) * (axis_mm + panel_gap_mm - 2.0)
+        + axis_mm
+        + legend_mm
+        + footer
+    )
     with ms.plt.rc_context(ms._rc(pre)):
         fig = ms.plt.figure(figsize=(width / 25.4, height / 25.4), dpi=ms.DPI, facecolor="white")
         overlay = fig.add_axes((0, 0, 1, 1), facecolor="none")
@@ -90,25 +106,49 @@ def new_chart(
         overlay.set_ylim(0, height)
         overlay.axis("off")
         overlay.set_zorder(5)
-        y0 = footer + legend_mm + axis_mm
         lines = [line for label in labels for line in str(label).split("\n")]
         left = max(
             LEFT_LABEL_MM,
             max((ms._text_width_mm(line, pre.label_pt) for line in lines), default=0.0) + 5.0,
         )
-        box = (left, y0, width - AXES_RIGHT_MM, y0 + plot_mm)
-        ax = fig.add_axes(
-            (box[0] / width, box[1] / height, (box[2] - box[0]) / width, (box[3] - box[1]) / height)
-        )
-        chart = ChartFigure(fig, ax, overlay, width, height, pre)
-        chart.meta["axes_box_mm"] = ",".join(f"{v:.2f}" for v in box)
+        column_w = (width - n_cols * left - AXES_RIGHT_MM - (n_cols - 1) * panel_gap_mm) / n_cols
+        axes = []
+        boxes = []
+        for r in range(n_rows):
+            top_mm = height - header_mm - r * (row_mm + axis_mm + panel_gap_mm - 2.0)
+            for c in range(n_cols):
+                x0 = left + c * (left + column_w + panel_gap_mm)
+                box = (x0, top_mm - row_mm, x0 + column_w, top_mm - caption_mm)
+                boxes.append(box)
+                ax = fig.add_axes(
+                    (
+                        box[0] / width,
+                        box[1] / height,
+                        (box[2] - box[0]) / width,
+                        (box[3] - box[1]) / height,
+                    )
+                )
+                ax.tick_params(labelsize=pre.label_pt, pad=1.5, width=0.4, length=2.0)
+                for side in ("top", "right"):
+                    ax.spines[side].set_visible(False)
+                for side in ("left", "bottom"):
+                    ax.spines[side].set_linewidth(0.4)
+                    ax.spines[side].set_color("#888888")
+                axes.append(ax)
+        chart = ChartFigure(fig, axes[0], axes, overlay, width, height, pre)
+        chart.meta["axes_box_mm"] = ";".join(",".join(f"{v:.2f}" for v in box) for box in boxes)
         chart.use_colour(ms.SEA_COLOUR, "background")
-        ax.tick_params(labelsize=pre.label_pt, pad=1.5, width=0.4, length=2.0)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        for side in ("left", "bottom"):
-            ax.spines[side].set_linewidth(0.4)
-            ax.spines[side].set_color("#888888")
+        for i, title_text in enumerate(panel_titles[: len(axes)]):
+            box = boxes[i]
+            chart.texts[f"panel_{i}"] = overlay.text(
+                box[0] - left + 2.0,
+                box[3] + 1.0,
+                title_text,
+                fontsize=pre.label_pt,
+                fontweight="bold",
+                ha="left",
+                va="bottom",
+            )
         top = height - 2.0
         chart.texts["title"] = overlay.text(
             2.0,
@@ -151,12 +191,13 @@ def stacked_bars(
     *,
     unit: str = "%",
     minimum_label_pct: float = 6.0,
+    ax=None,
 ) -> list:
     """Horizontal stacked bars: one bar per category, one segment per series (values in `unit`, each bar adding up to 100 when `unit` is `%`).
 
     A segment wide enough carries its value; every series has a colour (`colours`) and a legend entry under the axis, and keeps its colour in
     the whole figure."""
-    ax, pre = chart.ax, chart.preset
+    ax, pre = ax or chart.ax, chart.preset
     y = np.arange(len(categories))[::-1]
     left = np.zeros(len(categories))
     artists: list = []
@@ -247,10 +288,11 @@ def ranked_bars(
     colour: str,
     meaning: str,
     range_label: str | None = None,
+    ax=None,
 ) -> list:
     """Horizontal bars in the order given (largest on top), each with its value; `low` and `high` draw a thin line over the bar for the
     range of another set of values (the restrictive and the permissive land scenario around the central one)."""
-    ax, pre = chart.ax, chart.preset
+    ax, pre = ax or chart.ax, chart.preset
     y = np.arange(len(labels))[::-1]
     v = np.asarray(values, dtype="float64")
     chart.use_colour(colour, meaning)
@@ -291,9 +333,10 @@ def step_curve(
     ylabel: str,
     colour: str,
     meaning: str,
+    ax=None,
 ) -> list:
     """A curve drawn as steps (a supply curve: the cost of the next block of capacity), with the labels of its axes."""
-    ax, pre = chart.ax, chart.preset
+    ax, pre = ax or chart.ax, chart.preset
     chart.use_colour(colour, meaning)
     line = ax.step(
         np.asarray(x, dtype="float64"),
@@ -307,3 +350,91 @@ def step_curve(
     ax.margins(x=0.02)
     chart.artists["curve"] = list(line)
     return list(line)
+
+
+def curves(
+    chart: ChartFigure,
+    series: dict[str, tuple[Sequence[float], Sequence[float]]],
+    colours: dict[str, str],
+    *,
+    xlabel: str,
+    ylabel: str,
+    widths: dict[str, float] | None = None,
+    styles: dict[str, str] | None = None,
+    xlim: tuple[float, float] | None = None,
+    invert_x: bool = False,
+    ax=None,
+) -> list:
+    """Several lines on one axes (a cumulative curve per land scenario or per country), each with its colour, its width and its line style, and a
+    legend entry under the axis."""
+    ax, pre = ax or chart.ax, chart.preset
+    lines: list = []
+    for name, (x, y) in series.items():
+        chart.use_colour(colours[name], name)
+        lines += ax.plot(
+            np.asarray(x, dtype="float64"),
+            np.asarray(y, dtype="float64"),
+            color=colours[name],
+            linewidth=(widths or {}).get(name, 1.2),
+            linestyle=(styles or {}).get(name, "-"),
+        )
+    ax.set_xlabel(xlabel, fontsize=pre.legend_pt)
+    ax.set_ylabel(ylabel, fontsize=pre.legend_pt)
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if invert_x:
+        ax.invert_xaxis()
+    ax.margins(y=0.04)
+    chart.artists.setdefault("curves", []).extend(lines)
+    if "legend" not in chart.artists:
+        _legend(chart, list(series), [colours[n] for n in series])
+    return lines
+
+
+def interval_rows(
+    chart: ChartFigure,
+    labels: Sequence[str],
+    series: dict[str, tuple[Sequence[float], Sequence[float], Sequence[float]]],
+    colours: dict[str, str],
+    *,
+    xlabel: str,
+    xlim: tuple[float, float] | None = None,
+    zero_line: bool = False,
+    ax=None,
+) -> list:
+    """Rows of interval bars: one row per label, one series per colour; a series is `(centre, low, high)` per row, drawn as a line from `low` to
+    `high` with a dot at `centre`. The series of a row are offset so that they do not overlap. A NaN centre leaves the row of that series empty."""
+    ax, pre = ax or chart.ax, chart.preset
+    y = np.arange(len(labels))[::-1].astype("float64")
+    n = len(series)
+    step = BAR_HEIGHT / max(n, 1)
+    artists: list = []
+    for k, (name, (centre, low, high)) in enumerate(series.items()):
+        chart.use_colour(colours[name], name)
+        offset = (k - (n - 1) / 2.0) * step
+        c = np.asarray(centre, dtype="float64")
+        lo = np.asarray(low, dtype="float64")
+        hi = np.asarray(high, dtype="float64")
+        artists.append(ax.hlines(y + offset, lo, hi, color=colours[name], linewidth=2.2, zorder=2))
+        artists += ax.plot(
+            c,
+            y + offset,
+            linestyle="none",
+            marker="o",
+            markersize=3.4,
+            color=colours[name],
+            mec="white",
+            mew=0.4,
+            zorder=3,
+        )
+    if zero_line:
+        ax.axvline(0.0, color="#888888", linewidth=0.5, zorder=1)
+    ax.set_yticks(y, list(labels))
+    ax.set_ylim(-0.6, len(labels) - 0.4)
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    ax.set_xlabel(xlabel, fontsize=pre.legend_pt)
+    chart.artists.setdefault("intervals", []).extend(artists)
+    if n > 1 and "legend" not in chart.artists:
+        _legend(chart, list(series), [colours[nm] for nm in series])
+    return artists
