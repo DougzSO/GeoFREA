@@ -61,10 +61,11 @@ def new_chart(
     lang: str = "en",
     bar_room_mm: float = 9.0,
     labels: Sequence[str] = (),
+    plot_height_mm: float | None = None,
 ) -> ChartFigure:
     """The axes (one bar per `n_bars`, `bar_room_mm` of height each), the header and the legend rows of a chart of the country `iso`.
 
-    `labels` are the names of the bars: the room at the left of the axes follows the longest. `source` is the footer text (the data it draws on);
+    `plot_height_mm` is the height of the axes of a chart that is not made of bars. `labels` are the names of the bars: the room at the left of the axes follows the longest. `source` is the footer text (the data it draws on);
     a chart has none unless it is given."""
     pre = get_preset(preset)
     width = pre.width_mm if width_mm is None else width_mm
@@ -79,7 +80,7 @@ def new_chart(
     )
     legend_mm = legend_height_mm(legend_labels, width - 2 * ms.LEFT_MM, pre)
     axis_mm = 8.0  # the numbers under the axis and its name
-    plot_mm = n_bars * bar_room_mm
+    plot_mm = plot_height_mm if plot_height_mm is not None else n_bars * bar_room_mm
     footer = 6.0
     height = header_mm + plot_mm + axis_mm + legend_mm + footer
     with ms.plt.rc_context(ms._rc(pre)):
@@ -279,3 +280,30 @@ def ranked_bars(
     if range_label:
         chart.meta["range"] = range_label
     return artists
+
+
+def step_curve(
+    chart: ChartFigure,
+    x: Sequence[float],
+    y: Sequence[float],
+    *,
+    xlabel: str,
+    ylabel: str,
+    colour: str,
+    meaning: str,
+) -> list:
+    """A curve drawn as steps (a supply curve: the cost of the next block of capacity), with the labels of its axes."""
+    ax, pre = chart.ax, chart.preset
+    chart.use_colour(colour, meaning)
+    line = ax.step(
+        np.asarray(x, dtype="float64"),
+        np.asarray(y, dtype="float64"),
+        where="post",
+        color=colour,
+        linewidth=1.2,
+    )
+    ax.set_xlabel(xlabel, fontsize=pre.legend_pt)
+    ax.set_ylabel(ylabel, fontsize=pre.legend_pt)
+    ax.margins(x=0.02)
+    chart.artists["curve"] = list(line)
+    return list(line)

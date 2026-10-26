@@ -134,7 +134,7 @@ def test_the_lcoe_figures_follow_the_figures_setting(tmp_path, mode):
     assert len(result.figures) == {"none": 0, "summary": 1, "all": 7}[mode]
     assert all(p.is_file() for p in result.figures)
     if mode == "summary":
-        assert result.figures[0].name == "lcoe_nominal_wind__ref__na__na.png"
+        assert result.figures[0].name == "ZZZ_F6_lcoe-nominal_wind_central_ref.png"
 
 
 @pytest.mark.unit
@@ -194,7 +194,9 @@ def test_the_robustness_figures_follow_the_figures_setting_and_skip_maps_without
         "ZZZ", ["wind"], mode, {"core": CORE}, robustness_dir=out, figures_dir=tmp_path / "figs"
     )
     names = {p.name for p in result.figures}
-    summary = {f"{m}_wind__{CORE}__na__na.png" for m, v in MAPS.items() if v[3]}
+    summary = {
+        f"ZZZ_F7_{m.replace('_', '-')}_wind_central_{CORE}.png" for m, v in MAPS.items() if v[4]
+    }
     if mode == "none":
         assert names == set()
     elif mode == "summary":

@@ -651,12 +651,18 @@ def add_panel_circles(
 
 
 def add_panel_colorbar(
-    sheet: PanelFigure, mappable, label: str, extend: str = "neither", index: int = 0
+    sheet: PanelFigure,
+    mappable,
+    label: str,
+    extend: str = "neither",
+    index: int = 0,
+    meaning: str | None = None,
 ):
-    """The colour bar of the sheet (`index` 0 when it is shared, the number of the map when there is one under each)."""
+    """The colour bar of the sheet (`index` 0 when it is shared, the number of the map when there is one under each). Two maps that share a
+    colormap say what they have in common with `meaning` (the label of the bar by default): a colormap keeps one meaning in a sheet."""
     validate_label(label, "colour bar label")
     pt = sheet.preset.legend_pt
-    sheet.use_cmap(mappable.get_cmap(), label)
+    sheet.use_cmap(mappable.get_cmap(), meaning or label)
     with ms.plt.rc_context(ms._rc(sheet.preset)):
         bar = sheet.fig.colorbar(
             mappable, cax=sheet.bars[index], orientation="horizontal", extend=extend

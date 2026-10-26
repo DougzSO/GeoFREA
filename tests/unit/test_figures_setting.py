@@ -11,7 +11,6 @@ from rasterio.transform import from_origin
 
 from geofrea.climate_forcing.pipeline import build_maps
 from geofrea.overview.figures import build_overview
-from geofrea.overview.layer_maps import build_layer_maps
 from tests.unit.test_overview_figures import (
     ISO,
     _cell_ids,
@@ -66,23 +65,7 @@ def _names(paths):
 
 
 @pytest.mark.unit
-def test_layer_maps_all_draws_the_cost_drivers_and_the_rest_is_the_f3_figures(data_dir):
-    _write_cost(data_dir)
-    paths = build_layer_maps(ISO, "all")
-    assert _names(paths) == ["dist_grid_km__na__na__na.png", "dist_road_km__na__na__na.png"]
-    assert all(p.stat().st_size > 2000 for p in paths)
-    assert build_layer_maps(ISO, "summary") == [] and build_layer_maps(ISO, "none") == []
-
-
-@pytest.mark.unit
-def test_layer_maps_skip_absent_inputs_and_reject_an_unknown_mode(data_dir):
-    assert build_layer_maps(ISO, "all") == []  # nothing on disk: nothing drawn, nothing invented
-    with pytest.raises(ValueError, match="figures must be"):
-        build_layer_maps(ISO, "some")
-
-
-@pytest.mark.unit
-def test_overview_none_writes_the_table_only_and_all_adds_the_layer_maps(data_dir):
+def test_overview_none_writes_the_table_only_and_all_adds_the_diagnostic_maps(data_dir):
     _write_aligned(data_dir)
     _write_climate(data_dir)
     _write_cells(data_dir)
@@ -90,10 +73,10 @@ def test_overview_none_writes_the_table_only_and_all_adds_the_layer_maps(data_di
     none = build_overview(ISO, "none")
     assert none.figures == [] and none.table.exists()
     everything = build_overview(ISO, "all")
-    # aligned layers, hazard context, the F3 sheets (2) and chart, the exclusion maps (12) and the cost drivers (2)
-    assert len(everything.figures) == 2 + 3 + 12 + 2
+    # the three aligned sheets and the land cover, the hazard context, the F3 sheets (2) and chart, the exclusion maps (12), the cost drivers (2)
+    assert len(everything.figures) == 3 + 1 + 1 + 3 + 12 + 2
     summary = build_overview(ISO, "summary")
-    assert len(summary.figures) == 2 + 3
+    assert len(summary.figures) == 3 + 1 + 1 + 3
     with pytest.raises(ValueError, match="figures must be"):
         build_overview(ISO, "some")
 

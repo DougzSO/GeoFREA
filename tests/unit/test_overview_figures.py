@@ -30,6 +30,8 @@ def _write_aligned(base, skip=None):
         if stem == skip:
             continue
         data = rng.uniform(1, 10, (20, 30)).astype("float32")
+        if stem == "land_cover":  # classes of the ESA product
+            data = rng.choice([10, 30, 40, 80], size=(20, 30)).astype("float32")
         data[0, 0] = -9999.0
         with rasterio.open(
             art / f"{ISO}_{stem}_aligned.tif",
@@ -130,8 +132,11 @@ def test_overview_writes_two_figures_and_a_table(data_dir):
     _write_climate(data_dir)
     result = build_overview(ISO, "all")
     assert [p.name for p in result.figures] == [
-        f"{ISO}_aligned_layers.png",
-        f"{ISO}_hazard_context.png",
+        f"{ISO}_F2a_aligned-layers_terrain-and-land.png",
+        f"{ISO}_F2a_aligned-layers_distances.png",
+        f"{ISO}_F2a_aligned-layers_resource.png",
+        f"{ISO}_F2a_land-cover.png",
+        f"{ISO}_F4_hazard-context.png",
     ]
     assert all(p.exists() and p.stat().st_size > 5000 for p in result.figures)
     text = result.table.read_text(encoding="utf-8")

@@ -6,8 +6,8 @@ Reads `robustness_<tech>__<role>.parquet` (F7) and writes, per technology and wi
   - `artifacts/<map>_<tech>__<role>.tif`: COG on the lattice of the active scale, nodata where a cell is not a candidate or the value is null;
     `<map>` is `max_regret`, `satisficing`, `topk_nominal`, `topk_robust` (1 in the set, 0 outside it), `cell_class` (a code, see `CLASS_CODES`),
     `max_regret_climate_only`, `max_regret_techno_only` and `n_failing_members`;
-  - `figures/<map>_<tech>__<window>__na__na.png`: with `figures: all` every map, with `summary` the max regret, the satisficing, the
-    robust top-k and the classes, with `none` nothing.
+  - `figures/<ISO3>_F7_<map>_<tech>_central_<window>.png`: with `figures: all` every map, with `summary` the max regret, the satisficing, the
+    robust top-k and the classes, with `none` nothing; in the common style of `viz/mapstyle.py` (diagnostics, A-08).
 
 The rasters are always written; a map with no value (a null `tau` or `top_k_percent`) gets an all-nodata raster and no figure.
 """
@@ -25,21 +25,46 @@ from geofrea.land_eligibility.map_raster import (
     MapError,
     cell_grid,
     check_figures_mode,
-    plot_grid,
+    draw_grid,
     write_cog,
 )
+from geofrea.viz import mapstyle as ms
+from geofrea.viz.context import technology_name
 
+CENTRAL = "central"
 CLASS_CODES = {"ranked": 0, "climate_fragile": 1, "climate_data_invalid": 2, "infeasible_at_f0": 3}
-# map -> (column, label, colormap, shown in the `summary` mode)
+# map -> (column, title of the map, label of the colour bar, kind of colour, shown in the `summary` mode, the two classes of a 0/1 map)
+IN_OUT = {1: "In the set", 0: "Outside the set"}
 MAPS = {
-    "max_regret": ("mr", "max regret MR (relative)", "magma_r", True),
-    "satisficing": ("sr", "satisficing robustness SR", "viridis", True),
-    "topk_nominal": ("topk_nominal", "nominal top-k (1 = in)", "Greens", False),
-    "topk_robust": ("topk_robust", "robust top-k (1 = in)", "Greens", True),
-    "cell_class": ("cell_class", "class", "tab10", True),
-    "max_regret_climate_only": ("mr_clim", "MR_clim (relative)", "magma_r", False),
-    "max_regret_techno_only": ("mr_tech", "MR_tech (relative)", "magma_r", False),
-    "n_failing_members": ("n_failing_members", "members below CF_min", "Reds", False),
+    "max_regret": ("mr", "Max regret MR", "MR (relative)", "regret", True, None),
+    "satisficing": ("sr", "Satisficing robustness SR", "SR", "satisficing", True, None),
+    "topk_nominal": ("topk_nominal", "Nominal top-k", "Nominal top-k", None, False, IN_OUT),
+    "topk_robust": ("topk_robust", "Robust top-k", "Robust top-k", None, True, IN_OUT),
+    "cell_class": ("cell_class", "Class of the cell", "Class", None, True, "classes"),
+    "max_regret_climate_only": (
+        "mr_clim",
+        "Max regret, climate only",
+        "MR_clim (relative)",
+        "regret",
+        False,
+        None,
+    ),
+    "max_regret_techno_only": (
+        "mr_tech",
+        "Max regret, techno-economic only",
+        "MR_tech (relative)",
+        "regret",
+        False,
+        None,
+    ),
+    "n_failing_members": (
+        "n_failing_members",
+        "Members below the minimum capacity factor",
+        "Members",
+        "count",
+        False,
+        None,
+    ),
 }
 
 
@@ -96,7 +121,7 @@ def build_robustness_maps(
                 raise MapError(f"missing input {path}")
             table = pd.read_parquet(path)
             cell_ids = table["cell_id"].to_numpy()
-            for name, (column, label, cmap, in_summary) in MAPS.items():
+            for name, (column, title, label, kind, in_summary, classes) in MAPS.items():
                 values = _values(table, column)
                 grid, row0, col0 = cell_grid(cell_ids, values)
                 rasters[f"{name}_{tech}__{role}"] = write_cog(
@@ -104,18 +129,27 @@ def build_robustness_maps(
                 )
                 wanted = figures_mode == "all" or (figures_mode == "summary" and in_summary)
                 if wanted and np.isfinite(grid).any():
+                    categories = (
+                        {v: k.replace("_", " ").capitalize() for k, v in CLASS_CODES.items()}
+                        if classes == "classes"
+                        else classes
+                    )
                     figures.append(
-                        plot_grid(
+                        draw_grid(
                             grid,
                             row0,
                             col0,
-                            f"{tech}: {label}, {window}, central land scenario",
-                            label,
-                            cmap,
-                            figures_dir / f"{name}_{tech}__{window}__na__na.png",
-                            categories={v: k for k, v in CLASS_CODES.items()}
-                            if name == "cell_class"
-                            else None,
+                            iso=iso,
+                            technology=technology_name(tech),
+                            variable=title,
+                            label=label,
+                            kind=kind or "",
+                            subtitle=f"{window} · central land scenario",
+                            path=figures_dir
+                            / ms.figure_filename(
+                                iso, "F7", name.replace("_", "-"), tech, CENTRAL, window
+                            ),
+                            categories=categories,
                         )
                     )
     return RobustnessMapsSummary(

@@ -416,12 +416,19 @@ PLAIN_CMAPS = {  # kinds that do not depend on the technology
     "water": "Blues",
     "weibull_k": "PuRd",
     "air_density": "BuPu",
+    "frequency": "PuBu",  # a share of days
+    # the maps of F6 and F7 (diagnostic): the cost, the regret, the satisficing share and a count
+    "lcoe": "viridis_r",
+    "regret": "magma_r",
+    "satisficing": "viridis",
+    "count": "Reds",
 }
 TRUNCATED_PLAIN = {
     "population",
     "water",
     "weibull_k",
     "air_density",
+    "frequency",
 }  # sequential maps that start at white: cut from 15% like the technologies
 COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
 
@@ -1472,6 +1479,9 @@ def _neighbours_in_frame(neighbours, frame: MapFrame):
         .simplify(BORDER_GAP_M / 20)
         .buffer(BORDER_GAP_M, quad_segs=2)
         .intersection(frame.polygon.simplify(BORDER_GAP_M / 20).buffer(BORDER_GAP_M, quad_segs=2))
+        .difference(
+            frame.polygon
+        )  # only the sliver outside the country: inside it the map has its own colours
     )
     cut = gpd.GeoSeries([*projected.geometry, gap], crs=frame.crs).clip_by_rect(
         xmin, ymin, xmax, ymax

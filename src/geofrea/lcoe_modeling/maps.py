@@ -6,8 +6,8 @@ and `members.yaml` (F4), and writes, under `outputs/<ISO3>/lcoe_modeling/`:
   - `artifacts/lcoe_<stat>_<tech>.tif`, `<stat>` = `nominal`, `p10`, `p50`, `p90`: the LCOE of the reference member `m0` in USD2024/MWh,
     COG on the lattice of the active scale, nodata where a cell is not a candidate or its LCOE is not finite;
   - `artifacts/lcoe_nominal_<tech>__<ssp>.tif`: the nominal LCOE of the core window, the median over the members of that SSP (all GCMs);
-  - `figures/lcoe_nominal_<tech>__ref__na__na.png` (T-R11), and with `figures: all` the three quantile maps, the maps by SSP and
-    `supply_curve_<tech>__ref__na__na.png`.
+  - `figures/<ISO3>_F6_lcoe-nominal_<tech>_central_ref.png` (T-R11), and with `figures: all` the three quantile maps, the maps by SSP and
+    `<ISO3>_F6_supply-curve_<tech>_central_ref.png`, in the common style of `viz/mapstyle.py` (diagnostics, A-08).
 
 `settings.yaml` `figures` decides the PNGs: `all` draws all of them, `summary` only the nominal map at `m0`, `none` none. The rasters are
 always written.
@@ -18,10 +18,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
@@ -33,9 +29,12 @@ from geofrea.land_eligibility.map_raster import (
     MapError,
     cell_grid,
     check_figures_mode,
-    plot_grid,
+    draw_grid,
     write_cog,
 )
+from geofrea.viz import mapstyle as ms
+from geofrea.viz.charts import new_chart, step_curve
+from geofrea.viz.context import technology_name
 
 CENTRAL = "central"
 STATISTICS = {"nominal": "lcoe_nominal", "p10": "lcoe_p10", "p50": "lcoe_p50", "p90": "lcoe_p90"}
@@ -60,19 +59,28 @@ def _finite(values: np.ndarray) -> np.ndarray:
     return np.where(np.isfinite(values), values, np.nan)
 
 
-def _supply_curve_figure(curve: pd.DataFrame, tech: str, path: Path) -> Path:
+def _supply_curve_figure(curve: pd.DataFrame, iso: str, tech: str, path: Path) -> Path:
+    """The nominal supply curve as a chart in the common style: the cumulative capacity against the LCOE of the next block."""
     finite = curve[np.isfinite(curve["lcoe_nominal"])]
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.step(finite["cum_P_GW"], finite["lcoe_nominal"], where="post")
-    ax.set_xlabel("Cumulative capacity (GW)")
-    ax.set_ylabel(LABEL)
-    ax.set_title(
-        f"{tech}: nominal supply curve, reference climate, central land scenario", fontsize=10
+    chart = new_chart(
+        iso=iso,
+        technology=technology_name(tech),
+        variable="Nominal supply curve",
+        subtitle="Reference climate · central land scenario · diagnostic",
+        plot_height_mm=70.0,
+        source="Source: F6 supply curve, member m0",
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return path
+    step_curve(
+        chart,
+        finite["cum_P_GW"],
+        finite["lcoe_nominal"],
+        xlabel="Cumulative capacity (GW)",
+        ylabel=LABEL,
+        colour=ms.colormap_for("lcoe")(0.3),
+        meaning="nominal LCOE",
+    )
+    chart.meta["status"] = "diagnostic"
+    return ms.save_png(chart, path)
 
 
 def build_lcoe_maps(
@@ -146,14 +154,18 @@ def build_lcoe_maps(
             )
             if wanted and np.isfinite(grid).any():
                 figures.append(
-                    plot_grid(
+                    draw_grid(
                         grid,
                         row0,
                         col0,
-                        f"{tech}: {stat} LCOE, reference climate, central land scenario",
-                        LABEL,
-                        "viridis_r",
-                        figures_dir / f"lcoe_{stat}_{tech}__ref__na__na.png",
+                        iso=iso,
+                        technology=technology_name(tech),
+                        variable="Nominal LCOE" if stat == "nominal" else f"LCOE, {stat.upper()}",
+                        label=LABEL,
+                        kind="lcoe",
+                        subtitle="Reference climate · central land scenario",
+                        path=figures_dir
+                        / ms.figure_filename(iso, "F6", f"lcoe-{stat}", tech, CENTRAL, "ref"),
                     )
                 )
         for ssp, members in sorted(by_ssp.items()):
@@ -165,14 +177,18 @@ def build_lcoe_maps(
             )
             if figures_mode == "all" and np.isfinite(grid).any():
                 figures.append(
-                    plot_grid(
+                    draw_grid(
                         grid,
                         row0,
                         col0,
-                        f"{tech}: nominal LCOE, median of the {ssp} members, {core_window}",
-                        LABEL,
-                        "viridis_r",
-                        figures_dir / f"lcoe_nominal_{tech}__{core_window}__{slug(ssp)}__na.png",
+                        iso=iso,
+                        technology=technology_name(tech),
+                        variable="Nominal LCOE, median of the members",
+                        label=LABEL,
+                        kind="lcoe",
+                        subtitle=f"{ssp} · {core_window} · central land scenario",
+                        path=figures_dir
+                        / ms.figure_filename(iso, "F6", "lcoe-nominal", tech, ssp, core_window),
                     )
                 )
         curve = pd.read_parquet(curve_path)
@@ -180,7 +196,11 @@ def build_lcoe_maps(
         if figures_mode == "all" and np.isfinite(curve["lcoe_nominal"]).any():
             figures.append(
                 _supply_curve_figure(
-                    curve, tech, figures_dir / f"supply_curve_{tech}__ref__na__na.png"
+                    curve,
+                    iso,
+                    tech,
+                    figures_dir
+                    / ms.figure_filename(iso, "F6", "supply-curve", tech, CENTRAL, "ref"),
                 )
             )
     return LcoeMapsSummary(

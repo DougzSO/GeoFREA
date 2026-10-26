@@ -6,6 +6,7 @@ border, the frame and the neighbours are the same in all of them.
 
 from __future__ import annotations
 
+import functools
 import logging
 from dataclasses import dataclass
 
@@ -95,8 +96,15 @@ class MapContext:
 
 def map_context(geometry, neighbours: gpd.GeoDataFrame | None) -> MapContext:
     polygon = ms.contiguous_geometry(geometry)
-    extent = ms.country_extent(polygon, contiguous=False)
+    west, east, south, north = ms.country_extent(polygon, contiguous=False)
+    extent = (west, east, max(south, -90.0), min(north, 90.0))  # the margin must not pass a pole
     return MapContext(polygon, extent, _clip_neighbours(neighbours, polygon, extent))
+
+
+@functools.lru_cache(maxsize=4)
+def _context_from_file(iso: str, path: str) -> MapContext:
+    geometry = gpd.read_file(path).to_crs("EPSG:4326").union_all()
+    return map_context(geometry, load_neighbours(iso))
 
 
 def country_context(iso: str, cell_ids: np.ndarray | None = None) -> MapContext:
@@ -107,8 +115,10 @@ def country_context(iso: str, cell_ids: np.ndarray | None = None) -> MapContext:
     """
     path = core_paths.fetched_raw("gadm", iso) / f"gadm41_{iso}_0_mainland.shp"
     if path.is_file():
-        geometry = gpd.read_file(path).to_crs("EPSG:4326").union_all()
-    elif cell_ids is not None:
+        return _context_from_file(
+            iso, str(path)
+        )  # the territory of a large country takes about a minute: once per run
+    if cell_ids is not None:
         logger.warning(
             "the mainland border of %s is missing (%s): the territory is the union of its cells",
             iso,
