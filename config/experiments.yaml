@@ -445,6 +445,10 @@ absolute_maps:
     open_last_class: true
   significant_figures: 2
   palette: viridis
+  # Display only (COMMAND 67b, D-core-047): a continuous map (capacity factor, densities) whose analysis cell covers more than 4 pixels of the image
+  # is drawn from the 0.01 degree display layer when there is one, and, if a cell is still a block, interpolated with its mask; the subtitle says
+  # "display smoothing" and the source resolution. Classes, categories and per-state maps are never smoothed. auto | off.
+  display_smoothing: auto
 
 # Future-only analysis (F7 onward)
 # OQ-013: Technical stack for the precomputed explorer (E1)

@@ -47,7 +47,9 @@ from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.land_eligibility.map_raster import cell_grid
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.technical_potential.display_layers import load_display_layer
 from geofrea.viz import mapstyle as ms
+from geofrea.viz.display import DisplayLayer
 
 CENTRAL = "central"
 TOTAL_TOLERANCE = (
@@ -371,33 +373,48 @@ def compose_cell_density_map(
     kind: str,
     subtitle: str,
     total_text: str | None,
+    display_layer: DisplayLayer | None = None,
+    display_smoothing: str = "auto",
 ) -> tuple[ms.MapCanvas, dict[str, Any]]:
     """A continuous map of a per-cell variable at the resolution of the cells, with the robust norm of the style; cells of the country
-    without potential (not a candidate, or zero) in light grey. Returns the file and how the colour limits were chosen."""
+    without potential (not a candidate, or zero) in light grey. Returns the file and how the colour limits were chosen.
+
+    Display resolution (COMMAND 67b): a finer `display_layer` (0.01 degree, descriptive) is drawn instead of the cells when they would be blocks,
+    and `display_smoothing` (`auto`/`off`) interpolates a field whose cell is still a block; the colours and the legend come from the cells."""
     grid, row0, col0 = cell_grid(cell_ids, values)
     extent_grid = _grid_extent(grid.shape, row0, col0)
-    in_country = _in_country(cell_ids, row0, col0, grid.shape)
     positive = np.isfinite(grid) & (grid > 0)
     data = np.where(positive, grid, np.nan)
     info = ms.resolve_scale(grid[positive], ms.default_scale(kind, tech))
-    subtitle = ms.format_subtitle(subtitle, ms.clip_note(info, label))
-    canvas = ms.new_map(
-        ctx.polygon,
-        iso=iso,
-        technology=technology_name(tech),
-        variable=variable,
-        subtitle=subtitle,
-        total_text=total_text,
-        neighbours=ctx.neighbours,
-        extent=ctx.extent,
-        contiguous=False,
-        no_data_label=NO_POTENTIAL_LABEL,
-    )
-    grey = np.zeros(grid.shape + (4,))
-    grey[in_country & ~positive] = matplotlib.colors.to_rgba(ms.NO_DATA_COLOUR)
-    canvas.draw_raster(grey, extent_grid, zorder=1.5)
+    resolution = ms.resolution_note(cell_deg=active_scale().cell_deg)
+
+    def build(resolution_text: str | None) -> ms.MapCanvas:
+        return ms.new_map(
+            ctx.polygon,
+            iso=iso,
+            technology=technology_name(tech),
+            variable=variable,
+            subtitle=ms.format_subtitle(subtitle, resolution_text, ms.clip_note(info, label)),
+            total_text=total_text,
+            neighbours=ctx.neighbours,
+            extent=ctx.extent,
+            contiguous=False,
+            no_data_label=NO_POTENTIAL_LABEL,
+        )
+
+    canvas = build(resolution)
+    plan = ms.plan_display(canvas, data, extent_grid, resolution, display_layer, display_smoothing)
+    if plan.shown != resolution:
+        plt.close(canvas.fig)
+        canvas = build(plan.shown)
+    canvas.meta.update(ms.display_meta(plan, display_smoothing))
+    canvas.fill_country()  # the cells of the country without potential show the grey of "no potential" under the data
     image = canvas.draw_raster(
-        np.ma.masked_invalid(data), extent_grid, cmap=ms.colormap_for(kind, tech), norm=info.norm
+        np.ma.masked_invalid(plan.grid),
+        plan.extent,
+        cmap=ms.colormap_for(kind, tech),
+        norm=info.norm,
+        smooth=plan.factor,
     )
     ms.add_colorbar(canvas, image, label, info.extend)
     return canvas, {
@@ -411,7 +428,8 @@ def compose_cell_density_map(
         "p98_over_p50": None if not math.isfinite(info.skew) else info.skew,
         "cells_with_value": int(positive.sum()),
         "cell_deg": active_scale().cell_deg,
-        "interpolation": "none (one pixel is one cell)",
+        "interpolation": "display smoothing" if plan.smooth else "none (one pixel is one cell)",
+        "display_px_per_cell": round(plan.px, 1),
     }
 
 
@@ -602,8 +620,11 @@ def build_cell_density_maps(
     units: gpd.GeoDataFrame | None,
     neighbours=None,
     ctx: MapContext | None = None,
+    display_smoothing: str = "auto",
 ) -> tuple[dict[str, Path], dict[str, Any]]:
     """The two continuous maps of the central scenario (capacity density, energy density) and how their colour limits were chosen.
+
+    The 0.01 degree display layers of the technology (`display_layers`, in `potential_dir`) are drawn when the cells would be blocks.
 
     Raises:
         AbsoluteMapsError: a table is missing.
@@ -619,13 +640,14 @@ def build_cell_density_maps(
     out = Path(figures_dir)
     written: dict[str, Path] = {}
     info: dict[str, Any] = {}
-    for key, variable, values, label, kind in (
+    for key, variable, values, label, kind, layer in (
         (
             f"potential_capacity_density_{tech}",
             "Capacity density",
             table["P_MW"].to_numpy() / area,
             UNIT_CAPACITY_DENSITY,
             "potential",
+            "capacity-density",
         ),
         (
             f"potential_energy_density_{tech}",
@@ -633,6 +655,7 @@ def build_cell_density_maps(
             table["E_MWh"].to_numpy() / 1e3 / area,
             UNIT_ENERGY_DENSITY,
             "energy",
+            "energy-density",
         ),
     ):
         written[key], info[key] = draw_cell_density_map(
@@ -647,6 +670,8 @@ def build_cell_density_maps(
             subtitle=subtitle,
             total_text=_total_text(gw, twh),
             path=out / names[key],
+            display_layer=load_display_layer(potential_dir, layer, tech),
+            display_smoothing=display_smoothing,
         )
     return written, info
 
@@ -726,7 +751,15 @@ def build_absolute_maps(
     ids = central["cell_id"].to_numpy()
     ctx = ctx or map_context(country_geometry(units, ids), neighbours)
     written, density_info = build_cell_density_maps(
-        iso, tech, potential_dir, cells_dir, out, units, neighbours, ctx
+        iso,
+        tech,
+        potential_dir,
+        cells_dir,
+        out,
+        units,
+        neighbours,
+        ctx,
+        display_smoothing=cfg.display_smoothing,
     )
 
     basis = SCENARIOS if cfg.per_state.basis == "all_scenarios" else (CENTRAL,)
