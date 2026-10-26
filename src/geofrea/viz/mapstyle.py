@@ -1296,16 +1296,212 @@ def scale_meta(info: NormInfo) -> dict[str, str]:
     }
 
 
-def save_png(canvas_or_fig, path: Path) -> Path:
-    """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written."""
+# ------------------------------------------------------------------------------------------------------ file names, metadata and index (T-05)
+
+NOT_APPLICABLE = {
+    "na",
+    "n-a",
+    "none",
+    "nan",
+    "null",
+    "nil",
+}  # a field that does not apply is left out, never written like this
+FILENAME_RE = re.compile(r"^[A-Z]{3}_[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9][A-Za-z0-9.\-]*)+\.png$")
+META_PREFIX = "geofrea_"
+
+
+def slug(text: str) -> str:
+    """A readable piece of a file name: letters, digits, `.` and `-`; spaces, underscores and slashes become `-`. The case is kept
+    (`ACCESS-CM2`, `SSP3-7.0`, `E5-land-cover`)."""
+    out = re.sub(r"[\s_/\\]+", "-", str(text).strip())
+    out = re.sub(r"[^A-Za-z0-9.\-]", "", out)
+    return re.sub(r"-{2,}", "-", out).strip("-.")
+
+
+def _pieces(field_value) -> list[str]:
+    if field_value is None:
+        return []
+    items = [field_value] if isinstance(field_value, str) else list(field_value)
+    return [p for p in (slug(i) for i in items if i is not None) if p]
+
+
+def figure_filename(
+    iso: str,
+    phase: str,
+    variable: str | Sequence[str],
+    technology: str | Sequence[str] | None = None,
+    scenario: str | Sequence[str] | None = None,
+    climate: str | Sequence[str] | None = None,
+) -> str:
+    """`{ISO3}_{phase}_{variable}_{technology}_{scenario}_{climate}.png`, with the fields that do not apply left out.
+
+    Examples: `BRA_F3_excluded-share_E5-land-cover_wind.png` (variable given as two pieces),
+    `BRA_F4_forcing_ACCESS-CM2_SSP3-7.0_2041-2070.png` (climate as three pieces), `PRT_F5_capacity-factor_wind_central_ref.png`.
+    The code of the country is always there (three countries never write the same name), no field is empty or `na`, no hash.
+    """
+    if not re.fullmatch(r"[A-Z]{3}", iso):
+        raise ValueError(f"the file name starts with the ISO3 code of the country, got {iso!r}")
+    parts = [iso, slug(phase)]
+    if not parts[1]:
+        raise ValueError("the file name needs the phase")
+    named = {
+        "variable": variable,
+        "technology": technology,
+        "scenario": scenario,
+        "climate": climate,
+    }
+    for field_name, value in named.items():
+        pieces = _pieces(value)
+        if field_name == "variable" and not pieces:
+            raise ValueError("the file name needs the variable")
+        parts += pieces
+    for piece in parts:
+        if piece.lower() in NOT_APPLICABLE:
+            raise ValueError(
+                f"a field that does not apply is left out of the file name, not written as {piece!r}"
+            )
+    name = "_".join(parts) + ".png"
+    validate_filename(name)
+    return name
+
+
+def validate_filename(name: str) -> str:
+    """The name itself when it follows the standard; ValueError otherwise (no ISO3 first, an empty field, `na`, a hash-like tail)."""
+    if not FILENAME_RE.match(name):
+        raise ValueError(f"{name!r} does not follow {{ISO3}}_{{phase}}_{{variable}}[_...].png")
+    stem = name[:-4]
+    for piece in stem.split("_"):
+        if piece.lower() in NOT_APPLICABLE:
+            raise ValueError(f"{name!r} has a field written as {piece!r}")
+    if re.search(r"(?:^|_)[0-9a-f]{6,}$", stem) and not re.search(r"[A-Z]", stem.split("_")[-1]):
+        raise ValueError(f"{name!r} ends with what looks like a hash: use a readable slug")
+    return name
+
+
+@functools.cache
+def repo_commit() -> str:
+    """The short commit of the code that draws (`GEOFREA_GIT_COMMIT` if set), or `unknown` outside a repository."""
+    import os
+    import subprocess
+
+    if os.environ.get("GEOFREA_GIT_COMMIT"):
+        return os.environ["GEOFREA_GIT_COMMIT"]
+    root = Path(__file__).resolve().parents[3]
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        return out.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+@functools.cache
+def config_hash() -> str:
+    """The first 12 hex digits of the SHA-256 of `config/parameters.json` (or `unknown`)."""
+    import hashlib
+
+    path = Path(__file__).resolve().parents[3] / "config" / "parameters.json"
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return "unknown"
+
+
+def png_metadata(canvas: MapFigure, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The text chunks of the PNG: title and subtitle, commit, hash of the config, date, preset, the scale (mode, scope, limits) and
+    whatever the caller adds (`grid` for the grid and resolution, `data_source`). Keys of the project start with `geofrea_`."""
+    from datetime import UTC, datetime
+
+    meta = {
+        "Title": canvas.texts["title"].get_text().replace("\n", " "),
+        "geofrea_commit": repo_commit(),
+        "geofrea_config_hash": config_hash(),
+        "geofrea_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        "geofrea_preset": canvas.preset.name,
+    }
+    if "subtitle" in canvas.texts:
+        meta["Description"] = canvas.texts["subtitle"].get_text().replace("\n", " ")
+    meta.update({f"{META_PREFIX}{k}": str(v) for k, v in canvas.meta.items()})
+    for key, value in (extra or {}).items():
+        meta[
+            key
+            if key in {"Title", "Description"}
+            else f"{META_PREFIX}{key.removeprefix(META_PREFIX)}"
+        ] = str(value)
+    return meta
+
+
+def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) -> Path:
+    """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written.
+
+    A `MapFigure` carries its metadata in the text chunks of the file (`png_metadata`): there is no sidecar file per figure.
+    `metadata` adds fields, e.g. `{"grid": "0.05 degree analysis grid", "data_source": "F5 potential_wind__central"}`.
+    """
     path = Path(path)
     if path.suffix.lower() != ".png":
         raise ValueError(f"maps are written as PNG only, got {path.suffix!r}")
-    fig = canvas_or_fig.fig if isinstance(canvas_or_fig, MapFigure) else canvas_or_fig
+    is_map = isinstance(canvas_or_fig, MapFigure)
+    fig = canvas_or_fig.fig if is_map else canvas_or_fig
+    text = {"Software": None}
+    if is_map:
+        text.update(png_metadata(canvas_or_fig, metadata))
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=DPI, facecolor="white", metadata={"Software": None})
+    fig.savefig(path, dpi=DPI, facecolor="white", metadata=text)
     plt.close(fig)
     return path
+
+
+def read_png_metadata(path: Path) -> dict[str, str]:
+    """The text chunks of a PNG."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        return {str(k): str(v) for k, v in im.text.items()}
+
+
+def write_figures_index(folder: Path) -> Path:
+    """`figures_index.json` of a folder: for each PNG its file name, size, SHA-256 and the `geofrea_*` text of the file, and the list
+    of the files whose name does not follow the standard. One index per folder, the only file besides the figures."""
+    import hashlib
+    import json
+
+    from PIL import Image
+
+    folder = Path(folder)
+    entries, nonconforming = [], []
+    for png in sorted(folder.glob("*.png")):
+        try:
+            validate_filename(png.name)
+        except ValueError:
+            nonconforming.append(png.name)
+        with Image.open(png) as im:
+            size = list(im.size)
+            text = {str(k): str(v) for k, v in im.text.items()}
+        entries.append(
+            {
+                "file": png.name,
+                "size_px": size,
+                "sha256": hashlib.sha256(png.read_bytes()).hexdigest(),
+                "title": text.get("Title", ""),
+                "subtitle": text.get("Description", ""),
+                "metadata": {k: v for k, v in sorted(text.items()) if k.startswith(META_PREFIX)},
+            }
+        )
+    out = folder / "figures_index.json"
+    out.write_text(
+        json.dumps(
+            {"figures": entries, "nonconforming": nonconforming}, indent=1, ensure_ascii=False
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return out
 
 
 # ------------------------------------------------------------------------------------------------- classed maps and proportional circles
