@@ -1,0 +1,212 @@
+{
+ "BRA_capacity_factor": {
+  "hash": "26c003480262817c03df03f513fb01fe40f6c0fe407c40704068094400075ce3",
+  "size": [
+   2244,
+   2683
+  ]
+ },
+ "BRA_density": {
+  "hash": "2eb04348056291fc03ff03fd13ff01fe40fec0fe407c407040680946000d5ce1",
+  "size": [
+   2244,
+   2683
+  ]
+ },
+ "BRA_eligibility": {
+  "hash": "ae00034c126180fc0c5f3c3d131f011e4006c00e403c4060006839d531a95c06",
+  "size": [
+   2244,
+   2706
+  ]
+ },
+ "BRA_forcing": {
+  "hash": "8f70631c1261827c03df03f313ff01fe40fec0fe407c40f040e000464f865ce1",
+  "size": [
+   2244,
+   2683
+  ]
+ },
+ "BRA_state": {
+  "hash": "3c80036403614b6e836f8863006640cc64dd207824644040050f056b05001943",
+  "size": [
+   2244,
+   2716
+  ]
+ },
+ "CHE_capacity_factor": {
+  "hash": "5bc026c42e39204d21ed23fd43ff03ff03ff27bb2599079536d1000708cf2ce1",
+  "size": [
+   2244,
+   1931
+  ]
+ },
+ "CHE_density": {
+  "hash": "57b024b4305920ed233d25ed43fd03fd13ff27bf25b9079536d3000d2ccd2ce1",
+  "size": [
+   2244,
+   1931
+  ]
+ },
+ "CHE_eligibility": {
+  "hash": "578022c43e39212d20ed276d091f071d1117239b259925957adb31b92dad6e02",
+  "size": [
+   2244,
+   1955
+  ]
+ },
+ "CHE_forcing": {
+  "hash": "55b00cc43f3b211d21ed23fd43ff09ff07fd25e927e10e1530d90f060e862ce1",
+  "size": [
+   2244,
+   1931
+  ]
+ },
+ "CHE_state": {
+  "hash": "5bc01f202439246d262d138f034d0f8f259b25990791280f2d2d0a00090c2c61",
+  "size": [
+   2244,
+   2187
+  ]
+ },
+ "CHL_capacity_factor": {
+  "hash": "4dc111b921b428bd31b433bc33b427b527b46f3827340f3c4f30073a1a560c57",
+  "size": [
+   1033,
+   2716
+  ]
+ },
+ "CHL_density": {
+  "hash": "7c69126131b430b510bc33b433b013bc27bc2f3027380f384f3827361a660c5f",
+  "size": [
+   1033,
+   2716
+  ]
+ },
+ "CHL_eligibility": {
+  "hash": "5c61119121b629bf31c033c032a023e027404f4027400f404f40074012400c09",
+  "size": [
+   1054,
+   2716
+  ]
+ },
+ "CHL_forcing": {
+  "hash": "6af1536110d834d910da31d83b5813d627962798079c271a279e035a4d640097",
+  "size": [
+   944,
+   2716
+  ]
+ },
+ "CHL_state": {
+  "hash": "4de1015d299e29f729df339b32c203e807e06f6027600f604f60276016640c57",
+  "size": [
+   1033,
+   2716
+  ]
+ },
+ "IDN_capacity_factor": {
+  "hash": "53c006c040103cd038d899ae09e74d616e2113d4c8341441000d000f18c019c5",
+  "size": [
+   2244,
+   1398
+  ]
+ },
+ "IDN_density": {
+  "hash": "63b02eb052c03cd018d899ae09e74d6b6e2013d4c87c1441000d000d18801945",
+  "size": [
+   2244,
+   1398
+  ]
+ },
+ "IDN_eligibility": {
+  "hash": "e340a30050502cd438c898ae09674d69e72113f5c830104139b925ad10001c21",
+  "size": [
+   2244,
+   1422
+  ]
+ },
+ "IDN_forcing": {
+  "hash": "e5b09d3058402cd034c899ae49e74d6b6e2013d5c83410610f060e8630c01947",
+  "size": [
+   2244,
+   1398
+  ]
+ },
+ "IDN_state": {
+  "hash": "52c0982426d13cc899ae49ef4d696375c3341c61292d2d2d4dc00d01104019c1",
+  "size": [
+   2244,
+   1715
+  ]
+ },
+ "LUX_capacity_factor": {
+  "hash": "49c0361223160b160356039607d607f707ff0ffe07fe4bf60ffe072e272f38c5",
+  "size": [
+   2131,
+   2682
+  ]
+ },
+ "LUX_density": {
+  "hash": "5790261633161b161756171613960af71ef711ee0d7642f603ae072e262d38c5",
+  "size": [
+   2131,
+   2682
+  ]
+ },
+ "LUX_eligibility": {
+  "hash": "5780320b23530f1f0f4c1dac2ccc336c182d0cbd037c4d7c0cec063c27ac3005",
+  "size": [
+   2152,
+   2682
+  ]
+ },
+ "LUX_forcing": {
+  "hash": "52f0332a234b0b4b036b01ab02cb07f707ff07fb26e30b630323241b2b1b32c5",
+  "size": [
+   2037,
+   2682
+  ]
+ },
+ "LUX_state": {
+  "hash": "58e0360b236b4b570b4b19ab33ad0b7e071d031d099c49bc096c032c262c38c5",
+  "size": [
+   2131,
+   2682
+  ]
+ },
+ "PRT_capacity_factor": {
+  "hash": "55f0662447252535676527e547e547e787e70fd507dd47ff47bc4b9f13073c8b",
+  "size": [
+   1685,
+   2716
+  ]
+ },
+ "PRT_density": {
+  "hash": "52f0666440252225676527e547e547e787e70fc505dd47ff479c4b9d13033c8b",
+  "size": [
+   1685,
+   2716
+  ]
+ },
+ "PRT_eligibility": {
+  "hash": "52c046154737253725f821f844f844d814d814d804d844d8459845981b183861",
+  "size": [
+   1705,
+   2682
+  ]
+ },
+ "PRT_forcing": {
+  "hash": "59306636663625be63f627f667fe43ef87cd8fee07f6673646564dd61926181b",
+  "size": [
+   1590,
+   2716
+  ]
+ },
+ "PRT_state": {
+  "hash": "5d5847174636263760f726f746794bd89dd80dd807d846d807984b98130a3e83",
+  "size": [
+   1685,
+   2716
+  ]
+ }
+}

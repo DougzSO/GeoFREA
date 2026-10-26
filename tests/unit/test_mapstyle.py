@@ -213,12 +213,15 @@ def test_only_png_is_written(tmp_path):
 
 
 @pytest.mark.parametrize("name", list(CASES))
-def test_map_axes_has_the_geographic_aspect(name):
+def test_map_axes_has_the_aspect_of_the_projected_country(name):
+    """The map is drawn in LAEA metres with equal axes: the box of the axes has the height over width of the frame."""
     canvas, _ = _build(name)
     canvas.fig.canvas.draw()
     bb = canvas.ax.get_window_extent()
-    assert bb.height / bb.width == pytest.approx(ms.map_height_over_width(canvas.extent), rel=2e-3)
-    assert canvas.ax.get_aspect() == pytest.approx(ms.geographic_aspect(canvas.extent))
+    assert bb.height / bb.width == pytest.approx(canvas.frame.ratio, rel=2e-3)
+    assert canvas.ax.get_aspect() == 1.0
+    geographic = ms.map_height_over_width(canvas.extent)
+    assert canvas.frame.ratio == pytest.approx(geographic, rel=0.25)  # the two views of the same country agree
 
 
 def test_fonts_have_the_print_sizes():

@@ -248,7 +248,7 @@ def _check(label: str, got: float, expected: float) -> dict[str, float | bool]:
 
 UNIT_CAPACITY_DENSITY, UNIT_ENERGY_DENSITY = "MW per km²", "GWh per km² per year"
 UNIT_CIRCLE_CAPACITY, UNIT_CIRCLE_ENERGY = "Capacity (GW)", "Energy (TWh per year)"
-NO_POTENTIAL_LABEL = "no potential"
+NO_POTENTIAL_LABEL = ms.NO_DATA_LABEL
 SUBTITLE_CLIMATE = "reference climate"
 NATURAL_EARTH_FILE = "ne_50m_admin_0_countries.shp"
 logger = logging.getLogger("geofrea.technical_potential.absolute_maps")
@@ -391,25 +391,14 @@ def compose_cell_density_map(
         neighbours=ctx.neighbours,
         extent=ctx.extent,
         contiguous=False,
+        no_data_label=NO_POTENTIAL_LABEL,
     )
-    aspect = ms.geographic_aspect(canvas.extent)
     grey = np.zeros(grid.shape + (4,))
     grey[in_country & ~positive] = matplotlib.colors.to_rgba(ms.NO_DATA_COLOUR)
-    canvas.ax.imshow(
-        grey, extent=extent_grid, origin="upper", interpolation="nearest", zorder=1.5, aspect=aspect
+    canvas.draw_raster(grey, extent_grid, zorder=1.5)
+    image = canvas.draw_raster(
+        np.ma.masked_invalid(data), extent_grid, cmap=ms.colormap_for(kind, tech), norm=info.norm
     )
-    image = canvas.ax.imshow(
-        np.ma.masked_invalid(data),
-        extent=extent_grid,
-        origin="upper",
-        cmap=ms.colormap_for(kind, tech),
-        norm=info.norm,
-        interpolation="nearest",
-        zorder=2,
-        aspect=aspect,
-    )
-    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
-    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
     ms.add_colorbar(canvas, image, label, info.extend)
     return canvas, {
         "unit": label,
@@ -569,16 +558,7 @@ def draw_classed_cell_map(
         legend_side_mm=side,
         legend_below_mm=below,
     )
-    canvas.ax.imshow(
-        image,
-        extent=extent_grid,
-        origin="upper",
-        interpolation="nearest",
-        zorder=2,
-        aspect=ms.geographic_aspect(canvas.extent),
-    )
-    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
-    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
+    canvas.draw_raster(image, extent_grid)
     ms.draw_classed_legend(canvas, spec)
     return ms.save_png(canvas, path)
 

@@ -6,10 +6,14 @@ extent must ignore, plus a smooth skewed field. Nothing here is a result.
 
 from __future__ import annotations
 
+import itertools
+import math
 from dataclasses import dataclass
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+from matplotlib.colors import to_rgba
 from shapely import affinity
 from shapely.geometry import Point, box
 
@@ -71,3 +75,241 @@ def _contains(polygon, xx: np.ndarray, yy: np.ndarray) -> np.ndarray:
     import shapely
 
     return shapely.contains_xy(polygon, xx.ravel(), yy.ravel()).reshape(xx.shape)
+
+
+# ----------------------------------------------------------------------------------------------------------- country archetypes (COMMAND 67)
+# Real, simplified geometries (tests/fixtures/archetypes, `scripts/make_archetype_fixtures.py`) with synthetic data on a 0.05 degree grid:
+# the same figure code is tried on a tall and narrow country, a very tall one, a wide one, a compact one, a fragmented one and a tiny one.
+
+FIGURE_KINDS = ("density", "capacity_factor", "forcing", "eligibility", "state")
+ARCHETYPE_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "archetypes"
+
+
+def _load_archetypes() -> dict[str, tuple[str, bool]]:
+    """ISO3 -> (shape, only the contiguous territory is mapped), from `tests/fixtures/archetypes/archetypes.yaml` (the code names no country)."""
+    import yaml
+
+    data = yaml.safe_load((ARCHETYPE_DIR / "archetypes.yaml").read_text(encoding="utf-8"))
+    return {iso: (v["shape"], bool(v["contiguous"])) for iso, v in data.items()}
+
+
+ARCHETYPES = _load_archetypes()
+EXAMPLE_MARK = "EXAMPLE, synthetic data"
+
+
+@dataclass(frozen=True)
+class ArchetypeCountry:
+    iso: str
+    name: str
+    shape: str
+    geometry: object  # the country in lon/lat (all its parts)
+    contiguous: bool
+    neighbours: gpd.GeoDataFrame
+    grid: (
+        np.ndarray
+    )  # a smooth skewed positive field on the 0.05 degree grid, NaN outside the country
+    grid_extent: Extent
+    cf: np.ndarray  # capacity factor, 0.08 to 0.38
+    change: np.ndarray  # change of the resource in percent, from -4 to +9
+    classes: np.ndarray  # dominant exclusion 0-4 and 5 = none, -1 outside
+    units: gpd.GeoDataFrame  # synthetic "states": admin1_id, density, total
+
+
+def archetype_country(iso: str, cell_deg: float = 0.05, seed: int = 67) -> ArchetypeCountry:
+    """The archetype `iso` with synthetic data. The data are invented: smooth trends and noise, nothing computed from a result."""
+    import shapely
+
+    from geofrea.viz.mapstyle import contiguous_geometry, country_name
+
+    shape, contiguous = ARCHETYPES[iso]
+    frame = gpd.read_file(ARCHETYPE_DIR / f"{iso}.geojson")
+    geometry = frame[frame["role"] == "country"].geometry.iloc[0]
+    neighbours = frame[frame["role"] == "neighbour"][["geometry"]].reset_index(drop=True)
+    mapped = contiguous_geometry(geometry) if contiguous else geometry
+    w, s, e, n = mapped.bounds
+    west, east = math.floor(w / cell_deg) * cell_deg, math.ceil(e / cell_deg) * cell_deg
+    south, north = math.floor(s / cell_deg) * cell_deg, math.ceil(n / cell_deg) * cell_deg
+    nx, ny = round((east - west) / cell_deg), round((north - south) / cell_deg)
+    xs = west + (np.arange(nx) + 0.5) * cell_deg
+    ys = north - (np.arange(ny) + 0.5) * cell_deg
+    xx, yy = np.meshgrid(xs, ys)
+    inside = shapely.contains_xy(mapped, xx.ravel(), yy.ravel()).reshape(xx.shape)
+    rng = np.random.default_rng(seed)
+    u = (xx - west) / max(east - west, 1e-9)
+    v = (yy - south) / max(north - south, 1e-9)
+    smooth = np.sin(2.5 * u + 1.0) * np.cos(2.0 * v) + 0.6 * np.exp(
+        -(((u - 0.35) / 0.2) ** 2 + ((v - 0.6) / 0.2) ** 2)
+    )
+    field = np.exp(0.9 * smooth + 0.25 * rng.standard_normal(xx.shape))
+    grid = np.where(inside, field, np.nan)
+    unit = (smooth - smooth[inside].min()) / (np.ptp(smooth[inside]) or 1.0)
+    jitter = 0.04 * rng.standard_normal(xx.shape)
+    cf = np.where(inside, 0.08 + 0.30 * np.clip(unit + jitter, 0, 1), np.nan)
+    change = np.where(inside, -4.0 + 13.0 * np.clip(0.7 * v + 0.3 * unit + jitter, 0, 1), np.nan)
+    noisy = unit * 5.5 + 0.8 * rng.standard_normal(xx.shape)
+    classes = np.where(inside, np.clip(noisy.astype(int), 0, 5), -1)
+    return ArchetypeCountry(
+        iso,
+        country_name(iso),
+        shape,
+        geometry,
+        contiguous,
+        gpd.GeoDataFrame(neighbours, crs="EPSG:4326"),
+        grid,
+        (west, east, south, north),
+        cf,
+        change,
+        classes,
+        _synthetic_units(mapped, inside, xx, yy, rng),
+    )
+
+
+def _synthetic_units(mapped, inside, xx, yy, rng, count: int = 6) -> gpd.GeoDataFrame:
+    """Invented administrative units: the Voronoi cells of random points of the country, cut to it, with a density and a total each."""
+    import shapely
+
+    cells = np.flatnonzero(inside.ravel())
+    k = min(count, max(len(cells) // 2, 2))
+    pick = rng.choice(cells, size=k, replace=False)
+    points = shapely.MultiPoint(list(zip(xx.ravel()[pick], yy.ravel()[pick], strict=True)))
+    parts = shapely.voronoi_polygons(points, extend_to=mapped.envelope.buffer(1.0))
+    polygons = [g.intersection(mapped) for g in parts.geoms]
+    polygons = [g for g in polygons if not g.is_empty]
+    density = np.sort(rng.uniform(0.2, 4.0, len(polygons)))[rng.permutation(len(polygons))]
+    area = np.array([g.area for g in polygons])
+    return gpd.GeoDataFrame(
+        {
+            "admin1_id": [f"U{i}" for i in range(len(polygons))],
+            "density": density,
+            "total": density * area * 100.0,
+        },
+        geometry=polygons,
+        crs="EPSG:4326",
+    )
+
+
+def archetype_figure(country: ArchetypeCountry, kind: str, preset: str = "thesis"):
+    """One figure of the kind `kind` (one of `FIGURE_KINDS`) of the archetype, drawn by `MapFigure` with its synthetic data."""
+    from geofrea.viz import mapstyle as ms
+
+    common = {"iso": country.iso, "preset": preset, "neighbours": country.neighbours}
+    note = ms.resolution_note(cell_deg=0.05)
+    if kind in ("density", "capacity_factor", "forcing"):
+        technology, variable, label, vkind, tech, scenario, climate, grid = {
+            "density": (
+                "Solar PV",
+                "Capacity density",
+                "MW/km²",
+                "density",
+                "solar",
+                "Central",
+                "Reference climate",
+                country.grid,
+            ),
+            "capacity_factor": (
+                "Onshore wind",
+                "Capacity factor",
+                "Capacity factor",
+                "capacity_factor",
+                "wind",
+                "Central",
+                "Reference climate",
+                country.cf,
+            ),
+            "forcing": (
+                "Solar PV",
+                "Change of the resource",
+                "Change (%)",
+                "delta",
+                "solar",
+                "SSP3-7.0",
+                "2071-2100 vs 1995-2014",
+                country.change,
+            ),
+        }[kind]
+        return ms.raster_map(
+            grid,
+            country.grid_extent,
+            country.geometry,
+            technology=technology,
+            variable=variable,
+            label=label,
+            kind=vkind,
+            tech=tech,
+            scenario=scenario,
+            climate=f"{climate} · {EXAMPLE_MARK}",
+            resolution=note,
+            unit={"density": None, "capacity_factor": "", "forcing": "%"}[kind],
+            total_text=EXAMPLE_MARK,
+            no_data_label=ms.NO_DATA_LABEL if kind != "forcing" else None,
+            contiguous=country.contiguous,
+            **common,
+        )
+    if kind == "eligibility":
+        spec = ms.qualitative_legend(
+            "Dominant exclusion",
+            ["E1 protected", "E2 water", "E3 riparian", "E4 slope", "E5 land cover"],
+            none_label="None",
+        )
+        side, below = ms.legend_space(spec)
+        canvas = ms.new_map(
+            country.geometry,
+            technology="Solar PV",
+            variable="Dominant exclusion",
+            subtitle=ms.format_subtitle("Central", note, EXAMPLE_MARK),
+            legend_side_mm=side,
+            legend_below_mm=below,
+            contiguous=country.contiguous,
+            **common,
+        )
+        colours = np.array(
+            [[1.0, 1.0, 1.0, 0.0]]
+            + [list(to_rgba(c)) for c in ms.class_colours(5)]
+            + [list(to_rgba(ms.CLASS_NONE_COLOUR))]
+        )
+        canvas.draw_raster(colours[country.classes + 1], country.grid_extent)
+        ms.draw_classed_legend(canvas, spec)
+        canvas.meta["resolution"] = note
+        return canvas
+    if kind == "state":
+        units = country.units
+        edges = np.quantile(units["density"], [0.2, 0.4, 0.6, 0.8])
+        classes = np.searchsorted(edges, units["density"].to_numpy())
+        cmap = ms.colormap_for("density", "wind")
+        colours = [cmap(0.15 + 0.85 * i / 4) for i in range(5)]
+        labels = (
+            [f"< {edges[0]:.2g}"]
+            + [f"{a:.2g} to {b:.2g}" for a, b in itertools.pairwise(edges)]
+            + [f"> {edges[-1]:.2g}"]
+        )
+        reference = float(units["total"].max())
+        spec = ms.ClassedLegend(
+            title="Capacity density (MW/km²)",
+            labels=tuple(labels),
+            colours=tuple(colours),
+            no_value_label=ms.NO_DATA_LABEL,
+            circle_title="Capacity (GW)",
+            circles=tuple(
+                (f"{v:g}", ms.circle_radius_mm(v, reference, ms.CIRCLE_MAX_MM))
+                for v in ms.nice_values_below(reference)
+            ),
+        )
+        side, below = ms.legend_space(spec)
+        canvas = ms.new_map(
+            country.geometry,
+            technology="Onshore wind",
+            variable="Capacity density by state",
+            subtitle=ms.format_subtitle("Central", EXAMPLE_MARK),
+            total_text=EXAMPLE_MARK,
+            legend_side_mm=side,
+            legend_below_mm=below,
+            contiguous=country.contiguous,
+            **common,
+        )
+        ms.draw_choropleth(canvas, units, [colours[c] for c in classes])
+        anchors = units.geometry.representative_point()
+        radii = [ms.circle_radius_mm(float(t), reference, ms.CIRCLE_MAX_MM) for t in units["total"]]
+        ms.draw_circles(canvas, anchors.x, anchors.y, radii)
+        ms.draw_classed_legend(canvas, spec)
+        return canvas
+    raise ValueError(f"unknown figure kind {kind!r}; one of {FIGURE_KINDS}")
