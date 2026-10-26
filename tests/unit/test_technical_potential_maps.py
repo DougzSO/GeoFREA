@@ -3,6 +3,7 @@
 # ruff: noqa: F401, F811  (the F5 pipeline test module owns the fixtures; they are imported by name for pytest)
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -29,9 +30,46 @@ REPO = Path(__file__).resolve().parents[2]
 SETTINGS = REPO / "config" / "settings.yaml"
 
 
+def _members_yaml(folder):
+    """The `members.yaml` of F4 for the climate members of the test world (a GCM, an SSP and a window each)."""
+    import yaml
+
+    entries = [{"member": "m0"}]
+    for member in MEMBERS[1:]:
+        _, gcm, ssp, window = member.split("_")
+        ssp = {"ssp245": "SSP2-4.5", "ssp585": "SSP5-8.5"}[ssp]
+        entries.append(
+            {
+                "member": member,
+                "gcm": gcm,
+                "ssp": ssp,
+                "window": window,
+                "native_grid": {"lat_resolution_deg": 1.0, "lon_resolution_deg": 1.0},
+            }
+        )
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "members.yaml"
+    path.write_text(yaml.safe_dump({"members": entries}), encoding="utf-8")
+    return path
+
+
+def _land(out, folder):
+    """The cell tables of the test world for the three land scenarios (the world has the central one; the others repeat it, which is enough for the
+    figures of the questions, that read the areas only)."""
+    land = out.parent / "in" / "land"
+    folder.mkdir(parents=True, exist_ok=True)
+    for tech in ("solar", "wind"):
+        for scenario in ("restrictive", "central", "permissive"):
+            shutil.copy(
+                land / f"cells_{tech}__central.parquet",
+                folder / f"cells_{tech}__{scenario}.parquet",
+            )
+    return folder
+
+
 def _maps(run_ok, tmp_path, mode):
     _, out = run_ok
-    land = out.parent / "in" / "land"
+    land = _land(out, tmp_path / "land")
     return build_potential_maps(
         "ZZZ",
         ["solar", "wind"],
@@ -39,6 +77,7 @@ def _maps(run_ok, tmp_path, mode):
         potential_dir=out,
         cells_dir=land,
         figures_dir=tmp_path / "figures",
+        members_yaml=_members_yaml(tmp_path / "f4"),
     )
 
 
@@ -105,9 +144,15 @@ def test_a_technology_without_candidates_gets_an_all_nodata_raster_and_no_figure
     pd.read_parquet(out / "potential_solar__central.parquet").iloc[0:0].to_parquet(
         empty / "potential_solar__central.parquet"
     )
+    for other in (
+        "potential_solar__restrictive.parquet",
+        "potential_solar__permissive.parquet",
+        "potential_aggregates_solar.parquet",
+    ):  # the figures of the questions read the three scenarios; the empty central one leaves the technology out of them
+        shutil.copy(out / other, empty / other)
     mapped = build_potential_maps(
-        "ZZZ", ["solar"], "all", potential_dir=empty, cells_dir=out.parent / "in" / "land",
-        figures_dir=tmp_path / "f",
+        "ZZZ", ["solar"], "all", potential_dir=empty, cells_dir=_land(out, tmp_path / "land"),
+        figures_dir=tmp_path / "f", members_yaml=_members_yaml(tmp_path / "f4"),
     )  # fmt: skip
     with rasterio.open(mapped.rasters["capacity_factor_solar"]) as src:
         assert (src.read(1) == NODATA_FLOAT).all()

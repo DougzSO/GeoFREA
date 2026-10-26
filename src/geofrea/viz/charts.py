@@ -363,14 +363,17 @@ def curves(
     styles: dict[str, str] | None = None,
     xlim: tuple[float, float] | None = None,
     invert_x: bool = False,
+    meanings: dict[str, str] | None = None,
+    legend: Sequence[str] | None = None,
     ax=None,
 ) -> list:
     """Several lines on one axes (a cumulative curve per land scenario or per country), each with its colour, its width and its line style, and a
-    legend entry under the axis."""
+    legend entry under the axis (`legend`: the names that get one, default all).
+    `meanings` gives a line the meaning of its colour when several lines share it (the three land scenarios of a country)."""
     ax, pre = ax or chart.ax, chart.preset
     lines: list = []
     for name, (x, y) in series.items():
-        chart.use_colour(colours[name], name)
+        chart.use_colour(colours[name], (meanings or {}).get(name, name))
         lines += ax.plot(
             np.asarray(x, dtype="float64"),
             np.asarray(y, dtype="float64"),
@@ -387,7 +390,8 @@ def curves(
     ax.margins(y=0.04)
     chart.artists.setdefault("curves", []).extend(lines)
     if "legend" not in chart.artists:
-        _legend(chart, list(series), [colours[n] for n in series])
+        shown = list(series) if legend is None else list(legend)
+        _legend(chart, shown, [colours[n] for n in shown])
     return lines
 
 
@@ -400,10 +404,12 @@ def interval_rows(
     xlabel: str,
     xlim: tuple[float, float] | None = None,
     zero_line: bool = False,
+    notes: Sequence[str] | None = None,
     ax=None,
 ) -> list:
     """Rows of interval bars: one row per label, one series per colour; a series is `(centre, low, high)` per row, drawn as a line from `low` to
-    `high` with a dot at `centre`. The series of a row are offset so that they do not overlap. A NaN centre leaves the row of that series empty."""
+    `high` with a dot at `centre`. The series of a row are offset so that they do not overlap. A NaN centre leaves the row of that series empty.
+    `notes` is one text per row, written just after the end of the interval of the first series (the axis grows to the right to give it room)."""
     ax, pre = ax or chart.ax, chart.preset
     y = np.arange(len(labels))[::-1].astype("float64")
     n = len(series)
@@ -433,6 +439,23 @@ def interval_rows(
     ax.set_ylim(-0.6, len(labels) - 0.4)
     if xlim is not None:
         ax.set_xlim(*xlim)
+    if notes is not None:
+        first_high = np.asarray(next(iter(series.values()))[2], dtype="float64")
+        lo_x, hi_x = ax.get_xlim()
+        if xlim is None:
+            hi_x = max(hi_x, float(np.nanmax(first_high))) + 0.45 * (hi_x - lo_x)
+            ax.set_xlim(lo_x, hi_x)
+        for yi, hx, note in zip(y, first_high, notes, strict=True):
+            if np.isfinite(hx):
+                ax.text(
+                    hx + 0.02 * (hi_x - lo_x),
+                    yi,
+                    note,
+                    ha="left",
+                    va="center",
+                    fontsize=pre.legend_pt,
+                    color="#333333",
+                )
     ax.set_xlabel(xlabel, fontsize=pre.legend_pt)
     chart.artists.setdefault("intervals", []).extend(artists)
     if n > 1 and "legend" not in chart.artists:

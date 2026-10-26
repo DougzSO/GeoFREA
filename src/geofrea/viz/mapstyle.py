@@ -981,6 +981,21 @@ def _scale_bar_length_mm(
     )
 
 
+def scale_bar_spec(
+    extent: Extent | None, map_w_mm: float, pt: float, width_km: float | None = None
+) -> tuple[float, float]:
+    """(length in km, length in mm) of the scale bar of a map `map_w_mm` wide: the rounded length closest to a fifth of the map, made longer (the
+    next 1, 2 or 5) while the bar is too short for its two end labels, which happens on the narrow maps of a sheet with many panels."""
+    km = scale_bar_length_km(extent, width_km=width_km)
+    mm_per_km = _scale_bar_length_mm(extent, map_w_mm, width_km) / km
+    for _ in range(6):
+        room = (_text_width_mm("0", pt) + _text_width_mm(f"{km:g} km", pt)) / 2.0 + 1.0
+        if km * mm_per_km >= room:
+            break
+        km = nice_length_km(km * 1.6)
+    return km, km * mm_per_km
+
+
 @dataclass(frozen=True)
 class Furniture:
     """An element of the figure outside the map: its name, the box it occupies (padding included) and the strip it sits in."""
@@ -1000,13 +1015,11 @@ def footer_item_sizes(
 ) -> dict[str, tuple[float, float]]:
     """Size in mm (padding included) of what the footer holds, in reading order: scale bar, box of totals, source."""
     pt = preset.legend_pt
-    label = _text_width_mm(f"{scale_bar_length_km(extent, width_km=width_km):g} km", pt)
+    km, bar_mm = scale_bar_spec(extent, map_w_mm, pt, width_km)
+    label = _text_width_mm(f"{km:g} km", pt)
     sizes = {
         "scale_bar": (
-            _scale_bar_length_mm(extent, map_w_mm, width_km)
-            + _text_width_mm("0", pt) / 2.0
-            + label / 2.0
-            + 2 * PAD_MM,
+            bar_mm + _text_width_mm("0", pt) / 2.0 + label / 2.0 + 2 * PAD_MM,
             1.8 + 1.0 + pt * PT_MM + 2 * PAD_MM,
         )
     }
@@ -1113,8 +1126,7 @@ def draw_scale_bar(
 ) -> list:
     """Four alternating segments labelled 0, half and full length in km, calculated at the central latitude (craei-brazil `scale_bar`)."""
     pt = preset.legend_pt
-    km = scale_bar_length_km(extent, width_km=width_km)
-    length = _scale_bar_length_mm(extent, map_w_mm, width_km)
+    km, length = scale_bar_spec(extent, map_w_mm, pt, width_km)
     seg = length / 4.0
     x0 = (
         box[0] + PAD_MM + _text_width_mm("0", pt) / 2.0
