@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import functools
 import math
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -903,9 +904,125 @@ class MapFigure:
 MapCanvas = MapFigure  # the name before COMMAND 66
 
 
+COUNTRY_NAMES = {  # the name of a country in a title, by language: the scope of the thesis and the archetypes of the tests
+    "en": {
+        "BRA": "Brazil",
+        "PRT": "Portugal",
+        "IND": "India",
+        "CHL": "Chile",
+        "CHE": "Switzerland",
+        "IDN": "Indonesia",
+        "LUX": "Luxembourg",
+    },
+    "pt": {
+        "BRA": "Brasil",
+        "PRT": "Portugal",
+        "IND": "Índia",
+        "CHL": "Chile",
+        "CHE": "Suíça",
+        "IDN": "Indonésia",
+        "LUX": "Luxemburgo",
+    },
+}
+
+LABELS = {  # the words the module writes itself, by language (`en` is the default, `pt` the other one the thesis may use)
+    "en": {
+        "total": "Total",
+        "energy_unit": "TWh/yr",
+        "mean_cf": "mean CF",
+        "eligible_area": "eligible area",
+        "source": "Boundaries: GADM 4.1, illustrative",
+    },
+    "pt": {
+        "total": "Total",
+        "energy_unit": "TWh/ano",
+        "mean_cf": "FC médio",
+        "eligible_area": "área elegível",
+        "source": "Limites: GADM 4.1, ilustrativo",
+    },
+}
+
+
+def country_name(iso: str, lang: str = "en") -> str:
+    """The name of the country for a title (never the ISO3 code), from `COUNTRY_NAMES`: the countries of the thesis and the test archetypes.
+
+    A country that is not in the table needs its name (`country=` of `new_map`) and, to be listed, an entry in the table.
+    """
+    if lang not in LABELS:
+        raise ValueError(f"language {lang!r} is not one of {sorted(LABELS)}")
+    name = COUNTRY_NAMES[lang].get(iso) or COUNTRY_NAMES["en"].get(iso)
+    if name is None:
+        raise ValueError(f"no name for {iso!r}: give `country=` or add it to COUNTRY_NAMES")
+    return name
+
+
+# What may not appear in a title, a subtitle or a label: identifiers of the project, raw model names, counts of cells.
+FORBIDDEN_IN_LABELS = (
+    (r"\bOQ-?\d+", "open question"),
+    (r"\b(?:L|A|U|V|M)-\d{2,}\b", "limitation or method item"),
+    (r"\b[A-Za-z]-[A-Za-z0-9]+-\d{2,}\b", "decision id"),
+    (r"(?i)\bcommand\s+\d+", "command number"),
+    (r"\bm_[a-z0-9_]+\b", "member id"),
+    (r"\bssp\d{3}\b", "raw scenario code (write SSP3-7.0)"),
+    (r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b", "snake_case identifier"),
+    (r"\d[\d,.]*\s+(?:grid\s+)?cells?\b", "cell count"),
+)
+LABEL_TYPOS = (  # misspellings that were found in labels; the test greps the sources for them too
+    "elgible",
+    "eligble",
+    "elegible",
+    "capcity",
+    "capaciy",
+    "densitiy",
+    "temprature",
+    "potental",
+    "scnenario",
+    "enviroment",
+)
+TYPO_PATTERN = r"(?i)\b(?:" + "|".join(LABEL_TYPOS) + r")"
+
+
+def validate_label(text: str, what: str = "label") -> str:
+    """The text itself when it is clean; ValueError when it holds an internal id, a raw model name, a cell count or a known typo."""
+    for pattern, reason in FORBIDDEN_IN_LABELS:
+        found = re.search(pattern, text)
+        if found:
+            raise ValueError(f"the {what} {text!r} holds a {reason}: {found.group(0)!r}")
+    typo = re.search(TYPO_PATTERN, text)
+    if typo:
+        raise ValueError(f"the {what} {text!r} holds a typo: {typo.group(0)!r}")
+    return text
+
+
 def format_title(country: str, technology: str, variable: str) -> str:
-    """The short title: `<Country> · <Technology> · <Variable>` (the technology is left out for a map that has none)."""
-    return " · ".join(p for p in (country, technology, variable) if p)
+    """The short title: `<Country> · <Technology> · <Variable>` (the technology is left out for a map that has none).
+
+    The first part is the name of the country, never its ISO3 code, and the title is checked by `validate_label`.
+    """
+    if re.fullmatch(r"[A-Z]{3}", country):
+        raise ValueError(f"the title needs the name of the country, not the code {country!r}")
+    return validate_label(" · ".join(p for p in (country, technology, variable) if p), "title")
+
+
+def totals_text(
+    capacity_gw: float | None = None,
+    energy_twh: float | None = None,
+    mean_cf: float | None = None,
+    eligible_km2: float | None = None,
+    lang: str = "en",
+) -> str:
+    """The box of totals: `Total: X GW · Y TWh/yr · mean CF Z% · eligible area W km²` (the parts that are given)."""
+    words = LABELS[lang]
+    parts = []
+    if capacity_gw is not None:
+        parts.append(f"{capacity_gw:,.1f} GW")
+    if energy_twh is not None:
+        parts.append(f"{energy_twh:,.1f} {words['energy_unit']}")
+    if mean_cf is not None:
+        parts.append(f"{words['mean_cf']} {100 * mean_cf:.1f}%")
+    if eligible_km2 is not None:
+        parts.append(f"{words['eligible_area']} {eligible_km2:,.0f} km²")
+    return f"{words['total']}: " + " · ".join(parts)
 
 
 def new_map(
@@ -925,6 +1042,7 @@ def new_map(
     legend_below_mm: float | None = None,
     country: str | None = None,
     source: str | None = DEFAULT_SOURCE,
+    lang: str = "en",
 ) -> MapFigure:
     """Axes, legend slot, title and furniture of a map of the country `geometry` (lon/lat), ready to receive the data.
 
@@ -936,7 +1054,13 @@ def new_map(
     width_mm = pre.width_mm if width_mm is None else width_mm
     polygon = contiguous_geometry(geometry) if contiguous else _as_geometry(geometry)
     extent = extent or country_extent(polygon, contiguous=False)
-    title = format_title(country or iso, technology, variable)
+    title = format_title(country or country_name(iso, lang), technology, variable)
+    validate_label(subtitle, "subtitle")
+    if source == DEFAULT_SOURCE:
+        source = LABELS[lang]["source"]
+    for text in (total_text, source):
+        if text:
+            validate_label(text, "footer text")
     if total_text:
         total_text = wrap_total_text(
             total_text, width_mm - LEFT_MM - RIGHT_MM - 2 * PAD_MM - 4.0, pre.legend_pt
@@ -1080,6 +1204,7 @@ def add_colorbar(canvas: MapFigure, mappable, label: str, extend: str = "neither
     """The colour bar in the legend slot: vertical to the right of a tall map, horizontal below a wide one."""
     orientation = "vertical" if canvas.layout.legend == "right" else "horizontal"
     pt = canvas.preset.legend_pt
+    validate_label(label, "colour bar label")
     canvas.use_cmap(mappable.get_cmap(), label)
     with plt.rc_context(_rc(canvas.preset)):
         bar = canvas.fig.colorbar(mappable, cax=canvas.cax, orientation=orientation, extend=extend)
@@ -1115,6 +1240,7 @@ def raster_map(
     scale: ScaleSpec | None = None,
     shared: tuple[float, float] | None = None,
     unit: str | None = None,
+    lang: str = "en",
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
@@ -1140,6 +1266,7 @@ def raster_map(
         preset=preset,
         neighbours=neighbours,
         country=country,
+        lang=lang,
     )
     image = canvas.ax.imshow(
         data,
@@ -1277,6 +1404,8 @@ def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, lis
     pieces: list = []
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
     colours = list(spec.colours) + ([NO_DATA_COLOUR] if spec.no_value_label else [])
+    for text in (spec.title, spec.circle_title or "", *labels):
+        validate_label(text, "legend text")
     for text, colour in zip(labels, colours, strict=True):
         canvas.use_colour(colour, text)
     line_mm = pt * PT_MM * 1.3
