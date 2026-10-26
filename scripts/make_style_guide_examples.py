@@ -1,124 +1,53 @@
-"""Draw the synthetic examples of `docs/figures/style_guide.md` with `geofrea.viz.mapstyle` (tall, wide and small country; solar and wind
-families; a classed map).
+"""Draw the examples of `docs/figures/style_guide.md` with `geofrea.viz.mapstyle`: real (simplified) geometries of six countries with
+synthetic data, marked "EXAMPLE, synthetic data" in the subtitle and in the box of totals, one kind of figure each.
 
 usage: python scripts/make_style_guide_examples.py
-Writes `docs/figures/examples/XXX_example_*.png` (invented country "Examplia", marked EXAMPLE, no result) and `figures_index.json`.
-Nothing under GEOFREA_DATA_DIR is read or written.
+Writes `docs/figures/examples/<ISO3>_example_*.png` and `figures_index.json`. The geometry is `tests/fixtures/archetypes`; the data are
+invented (`geofrea.viz.examples.archetype_country`); nothing under GEOFREA_DATA_DIR is read or written, and no result is drawn.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-from matplotlib.colors import to_rgba
-
 from geofrea.viz import mapstyle as ms
-from geofrea.viz.examples import synthetic_country
+from geofrea.viz.examples import archetype_country, archetype_figure
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "figures" / "examples"
-MARK = "EXAMPLE – synthetic data"
-# file name: (shape, preset, technology key, kind, variable, label)
-RASTERS = {
-    ms.figure_filename("XXX", "example", "capacity-density", "solar", "central", "ref"): (
-        "tall",
-        "thesis",
-        "solar",
-        "density",
-        "Capacity density",
-        "MW/km²",
-    ),
-    ms.figure_filename("XXX", "example", "capacity-density", "wind", "central", "ref"): (
-        "wide",
-        "thesis",
-        "wind",
-        "density",
-        "Capacity density",
-        "MW/km²",
-    ),
-    ms.figure_filename("XXX", "example", "capacity-factor", "solar", "central", "ref"): (
-        "small",
-        "article_single",
-        "solar",
-        "capacity_factor",
-        "Capacity factor",
-        "Capacity factor",
-    ),
+# the pieces of the file name of each kind of figure: variable, technology, scenario, climate
+NAMES = {
+    "density": ("capacity-density", "solar", "central", "ref"),
+    "capacity_factor": ("capacity-factor", "wind", "central", "ref"),
+    "forcing": ("forcing", "solar", "SSP3-7.0", "2071-2100"),
+    "eligibility": ("dominant-exclusion", "solar", "central", None),
+    "state": ("capacity-density-state", "wind", "central", None),
 }
-CLASSES_FILE = ms.figure_filename("XXX", "example", "dominant-exclusion", "solar", "central")
-TECHNOLOGY = {"solar": "Solar PV", "wind": "Onshore wind"}
+# ISO3: (kind of figure, preset)
+EXAMPLES = {
+    "PRT": ("density", "thesis"),
+    "BRA": ("capacity_factor", "thesis"),
+    "CHE": ("forcing", "article_single"),
+    "CHL": ("eligibility", "thesis"),
+    "IDN": ("state", "thesis"),
+    "LUX": ("density", "article_single"),
+}
+
+
+def example_name(iso: str, kind: str) -> str:
+    variable, tech, scenario, climate = NAMES[kind]
+    return ms.figure_filename(iso, "example", variable, tech, scenario, climate)
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, (shape, preset, tech, kind, variable, label) in RASTERS.items():
-        country = synthetic_country(shape)
-        grid = country.grid
-        if (
-            kind == "capacity_factor"
-        ):  # a skewed field is a density; rescale it to a plausible capacity factor
-            finite = np.isfinite(grid)
-            grid = np.where(finite, 0.08 + 0.2 * grid / np.nanmax(grid), np.nan)
-        canvas = ms.raster_map(
-            grid,
-            country.grid_extent,
-            country.geometry,
-            iso="XXX",
-            country="Examplia",
-            technology=TECHNOLOGY[tech],
-            variable=variable,
-            label=label,
-            kind=kind,
-            tech=tech,
-            scenario="Central",
-            climate="Reference climate",
-            total_text=MARK,
-            preset=preset,
-            neighbours=country.neighbours,
+    for iso, (kind, preset) in EXAMPLES.items():
+        canvas = archetype_figure(archetype_country(iso), kind, preset)
+        path = ms.save_png(
+            canvas,
+            OUT / example_name(iso, kind),
+            {"grid": "0.05 degree analysis grid", "data_source": "EXAMPLE, synthetic data"},
         )
-        print(name, ms.save_png(canvas, OUT / name, {"grid": "synthetic", "data_source": MARK}))
-
-    country = synthetic_country("tall")
-    spec = ms.qualitative_legend(
-        "Dominant exclusion",
-        ["E1 protected", "E2 water", "E3 riparian", "E4 slope", "E5 land cover"],
-        none_label="None",
-    )
-    side, below = ms.legend_space(spec)
-    canvas = ms.new_map(
-        country.geometry,
-        iso="XXX",
-        country="Examplia",
-        technology="Solar PV",
-        variable="Dominant exclusion",
-        subtitle=ms.format_subtitle("Central", MARK),
-        neighbours=country.neighbours,
-        legend_side_mm=side,
-        legend_below_mm=below,
-    )
-    rng = np.random.default_rng(66)
-    classes = np.where(np.isfinite(country.grid), rng.integers(0, 6, country.grid.shape), -1)
-    colours = np.array(
-        [[1.0, 1.0, 1.0, 0.0]]
-        + [list(to_rgba(c)) for c in ms.class_colours(5)]
-        + [list(to_rgba(ms.CLASS_NONE_COLOUR))]
-    )
-    image = colours[np.where(classes < 0, 0, classes + 1)]
-    canvas.ax.imshow(
-        image,
-        extent=country.grid_extent,
-        origin="upper",
-        interpolation="nearest",
-        zorder=2,
-        aspect=ms.geographic_aspect(canvas.extent),
-    )
-    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
-    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
-    ms.draw_classed_legend(canvas, spec)
-    print(
-        CLASSES_FILE,
-        ms.save_png(canvas, OUT / CLASSES_FILE, {"grid": "synthetic", "data_source": MARK}),
-    )
+        print(path.name)
     print(ms.write_figures_index(OUT))
 
 

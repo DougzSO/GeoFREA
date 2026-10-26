@@ -81,16 +81,19 @@ def _contains(polygon, xx: np.ndarray, yy: np.ndarray) -> np.ndarray:
 # Real, simplified geometries (tests/fixtures/archetypes, `scripts/make_archetype_fixtures.py`) with synthetic data on a 0.05 degree grid:
 # the same figure code is tried on a tall and narrow country, a very tall one, a wide one, a compact one, a fragmented one and a tiny one.
 
-ARCHETYPES = {  # ISO3: (shape, only the contiguous territory is mapped)
-    "PRT": ("tall and narrow", True),
-    "CHL": ("very tall and narrow", True),
-    "BRA": ("wide", True),
-    "CHE": ("compact", True),
-    "IDN": ("fragmented", False),
-    "LUX": ("tiny", True),
-}
 FIGURE_KINDS = ("density", "capacity_factor", "forcing", "eligibility", "state")
 ARCHETYPE_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "archetypes"
+
+
+def _load_archetypes() -> dict[str, tuple[str, bool]]:
+    """ISO3 -> (shape, only the contiguous territory is mapped), from `tests/fixtures/archetypes/archetypes.yaml` (the code names no country)."""
+    import yaml
+
+    data = yaml.safe_load((ARCHETYPE_DIR / "archetypes.yaml").read_text(encoding="utf-8"))
+    return {iso: (v["shape"], bool(v["contiguous"])) for iso, v in data.items()}
+
+
+ARCHETYPES = _load_archetypes()
 EXAMPLE_MARK = "EXAMPLE, synthetic data"
 
 
@@ -236,6 +239,7 @@ def archetype_figure(country: ArchetypeCountry, kind: str, preset: str = "thesis
             scenario=scenario,
             climate=f"{climate} · {EXAMPLE_MARK}",
             resolution=note,
+            unit={"density": None, "capacity_factor": "", "forcing": "%"}[kind],
             total_text=EXAMPLE_MARK,
             no_data_label=ms.NO_DATA_LABEL if kind != "forcing" else None,
             contiguous=country.contiguous,

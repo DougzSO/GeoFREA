@@ -1,0 +1,8 @@
+# The country archetypes of the figure tests (spec v2, T-13): the shape each one stands for and whether only its contiguous territory is mapped.
+# The code names no country (METHODOLOGY A-05): src/geofrea/viz/examples.py reads this file.
+PRT: {shape: "tall and narrow", contiguous: true}
+CHL: {shape: "very tall and narrow", contiguous: true}
+BRA: {shape: "wide", contiguous: true}
+CHE: {shape: "compact", contiguous: true}
+IDN: {shape: "fragmented", contiguous: false}
+LUX: {shape: "tiny", contiguous: true}

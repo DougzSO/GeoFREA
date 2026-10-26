@@ -1,129 +1,138 @@
 {
  "figures": [
   {
-   "file": "example_small.png",
-   "size_px": [
-    1062,
-    1068
-   ],
-   "sha256": "7fe0c6e4ca91c8b5cc94dfa213c7a2d7d4c260e789581bdf784bc9fa51cdd4e0",
-   "title": "",
-   "subtitle": "",
-   "metadata": {}
-  },
-  {
-   "file": "example_tall.png",
+   "file": "BRA_example_capacity-factor_wind_central_ref.png",
    "size_px": [
     2244,
-    2716
+    2683
    ],
-   "sha256": "70a24bd4fe88a9116f33c9d619d08903377bc9992c981b061cc517926a2d50a0",
-   "title": "",
-   "subtitle": "",
-   "metadata": {}
-  },
-  {
-   "file": "example_wide.png",
-   "size_px": [
-    2244,
-    1446
-   ],
-   "sha256": "773924c989a78c8b5ce3c2cb7536dada8bca133f532c0100e8d6dead5f2e7657",
-   "title": "",
-   "subtitle": "",
-   "metadata": {}
-  },
-  {
-   "file": "XXX_example_capacity-density_solar_central_ref.png",
-   "size_px": [
-    2244,
-    2716
-   ],
-   "sha256": "34e155e5fbfbe93cc2586fd28718e774d934fb7aec22cb9c979056a2e85a9b39",
-   "title": "Examplia · Solar PV · Capacity density",
-   "subtitle": "Central · Reference climate · scale clipped to 0.263 to 4.21 MW/km² (percentile, this country)",
+   "sha256": "24f92f59132d672517fb45dd87fc0a4ef363dfae854fc0be74d59e585e16aa25",
+   "title": "Brazil · Onshore wind · Capacity factor",
+   "subtitle": "Central · Reference climate · EXAMPLE, synthetic data · 0.05° analysis grid",
    "metadata": {
-    "geofrea_commit": "2cbf1cffd436",
+    "geofrea_commit": "ae2f8604f368",
     "geofrea_config_hash": "681b59291f7f",
-    "geofrea_data_source": "EXAMPLE – synthetic data",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
     "geofrea_date": "2026-10-26",
-    "geofrea_grid": "synthetic",
+    "geofrea_grid": "0.05 degree analysis grid",
     "geofrea_preset": "thesis",
-    "geofrea_scale_extend": "both",
-    "geofrea_scale_limits": "0.262823,4.21401",
-    "geofrea_scale_mode": "percentile",
-    "geofrea_scale_norm": "linear",
-    "geofrea_scale_scope": "per_country"
-   }
-  },
-  {
-   "file": "XXX_example_capacity-density_wind_central_ref.png",
-   "size_px": [
-    2244,
-    1663
-   ],
-   "sha256": "1ba303233429a78692b30f055eb5bbd8c4d2881903fb9f5692ded9c70f90d1b0",
-   "title": "Examplia · Onshore wind · Capacity density",
-   "subtitle": "Central · Reference climate · scale clipped to 0.254 to 4.42 MW/km² (percentile, this country)",
-   "metadata": {
-    "geofrea_commit": "2cbf1cffd436",
-    "geofrea_config_hash": "681b59291f7f",
-    "geofrea_data_source": "EXAMPLE – synthetic data",
-    "geofrea_date": "2026-10-26",
-    "geofrea_grid": "synthetic",
-    "geofrea_preset": "thesis",
-    "geofrea_scale_extend": "both",
-    "geofrea_scale_limits": "0.253734,4.42018",
-    "geofrea_scale_mode": "percentile",
-    "geofrea_scale_norm": "linear",
-    "geofrea_scale_scope": "per_country"
-   }
-  },
-  {
-   "file": "XXX_example_capacity-factor_solar_central_ref.png",
-   "size_px": [
-    1062,
-    1134
-   ],
-   "sha256": "2600d1f07ddcc70b4823aea39170b93444d4d5e00dd7908f535a6a0f9e27edc6",
-   "title": "Examplia · Solar PV · Capacity factor",
-   "subtitle": "Central · Reference climate · scale clipped to 0.1 to 0.25 Capacity factor (fixed, shared across countries)",
-   "metadata": {
-    "geofrea_commit": "2cbf1cffd436",
-    "geofrea_config_hash": "681b59291f7f",
-    "geofrea_data_source": "EXAMPLE – synthetic data",
-    "geofrea_date": "2026-10-26",
-    "geofrea_grid": "synthetic",
-    "geofrea_preset": "article_single",
-    "geofrea_scale_extend": "both",
-    "geofrea_scale_limits": "0.1,0.25",
+    "geofrea_resolution": "0.05° analysis grid",
+    "geofrea_scale_extend": "neither",
+    "geofrea_scale_limits": "0,0.6",
     "geofrea_scale_mode": "fixed",
     "geofrea_scale_norm": "linear",
     "geofrea_scale_scope": "shared_across_countries"
    }
   },
   {
-   "file": "XXX_example_dominant-exclusion_solar_central.png",
+   "file": "CHE_example_forcing_solar_SSP3-7.0_2071-2100.png",
    "size_px": [
-    2244,
+    1062,
+    1238
+   ],
+   "sha256": "e9bc0db8f6c0d37b68468c216e3494fcc36926c5d1cb6c78c2ecbb2f92b2d5b8",
+   "title": "Switzerland · Solar PV · Change of the resource",
+   "subtitle": "SSP3-7.0 · 2071-2100 vs 1995-2014 · EXAMPLE, synthetic data · 0.05° analysis grid · scale truncated at 5.47 % (percentile, this country)",
+   "metadata": {
+    "geofrea_commit": "ae2f8604f368",
+    "geofrea_config_hash": "681b59291f7f",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
+    "geofrea_date": "2026-10-26",
+    "geofrea_grid": "0.05 degree analysis grid",
+    "geofrea_preset": "article_single",
+    "geofrea_resolution": "0.05° analysis grid",
+    "geofrea_scale_extend": "max",
+    "geofrea_scale_limits": "-5.4679,5.4679",
+    "geofrea_scale_mode": "percentile",
+    "geofrea_scale_norm": "diverging",
+    "geofrea_scale_scope": "per_country"
+   }
+  },
+  {
+   "file": "CHL_example_dominant-exclusion_solar_central.png",
+   "size_px": [
+    1054,
     2716
    ],
-   "sha256": "500ebc3b58555037b51b2035c058b1e2c54122987a7aa6539d4a76d9e54fcf34",
-   "title": "Examplia · Solar PV · Dominant exclusion",
-   "subtitle": "Central · EXAMPLE – synthetic data",
+   "sha256": "7b4fe24f53283edce55ebc3b530b54ae05ef77c662434708a3eb130765262c35",
+   "title": "Chile · Solar PV · Dominant exclusion",
+   "subtitle": "Central · 0.05° analysis grid · EXAMPLE, synthetic data",
    "metadata": {
-    "geofrea_commit": "2cbf1cffd436",
+    "geofrea_commit": "ae2f8604f368",
     "geofrea_config_hash": "681b59291f7f",
-    "geofrea_data_source": "EXAMPLE – synthetic data",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
     "geofrea_date": "2026-10-26",
-    "geofrea_grid": "synthetic",
+    "geofrea_grid": "0.05 degree analysis grid",
+    "geofrea_preset": "thesis",
+    "geofrea_resolution": "0.05° analysis grid"
+   }
+  },
+  {
+   "file": "IDN_example_capacity-density-state_wind_central.png",
+   "size_px": [
+    2244,
+    1715
+   ],
+   "sha256": "72bb3cb4997337151fe4bbbeb39c15d737dbc1c1d995fc9e444fe09646914a33",
+   "title": "Indonesia · Onshore wind · Capacity density by state",
+   "subtitle": "Central · EXAMPLE, synthetic data",
+   "metadata": {
+    "geofrea_commit": "ae2f8604f368",
+    "geofrea_config_hash": "681b59291f7f",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
+    "geofrea_date": "2026-10-26",
+    "geofrea_grid": "0.05 degree analysis grid",
     "geofrea_preset": "thesis"
+   }
+  },
+  {
+   "file": "LUX_example_capacity-density_solar_central_ref.png",
+   "size_px": [
+    1062,
+    1249
+   ],
+   "sha256": "d2a2e30f341f817b0f9ea57e01c9656e6c551c89fce7673e1b70b0562577ccbd",
+   "title": "Luxembourg · Solar PV · Capacity density",
+   "subtitle": "Central · Reference climate · EXAMPLE, synthetic data · 0.05° analysis grid · scale clipped to 0.67 to 3.36 MW/km² (percentile, this country)",
+   "metadata": {
+    "geofrea_commit": "ae2f8604f368",
+    "geofrea_config_hash": "681b59291f7f",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
+    "geofrea_date": "2026-10-26",
+    "geofrea_grid": "0.05 degree analysis grid",
+    "geofrea_preset": "article_single",
+    "geofrea_resolution": "0.05° analysis grid",
+    "geofrea_scale_extend": "both",
+    "geofrea_scale_limits": "0.669774,3.36314",
+    "geofrea_scale_mode": "percentile",
+    "geofrea_scale_norm": "linear",
+    "geofrea_scale_scope": "per_country"
+   }
+  },
+  {
+   "file": "PRT_example_capacity-density_solar_central_ref.png",
+   "size_px": [
+    1685,
+    2716
+   ],
+   "sha256": "5eb73610306834deff87f766833e24ee89ebc2c0343b4cc48cdac3ec15afb42a",
+   "title": "Portugal · Solar PV · Capacity density",
+   "subtitle": "Central · Reference climate · EXAMPLE, synthetic data · 0.05° analysis grid · scale clipped to 0.651 to 3.23 MW/km² (percentile, this country)",
+   "metadata": {
+    "geofrea_commit": "ae2f8604f368",
+    "geofrea_config_hash": "681b59291f7f",
+    "geofrea_data_source": "EXAMPLE, synthetic data",
+    "geofrea_date": "2026-10-26",
+    "geofrea_grid": "0.05 degree analysis grid",
+    "geofrea_preset": "thesis",
+    "geofrea_resolution": "0.05° analysis grid",
+    "geofrea_scale_extend": "both",
+    "geofrea_scale_limits": "0.650608,3.23018",
+    "geofrea_scale_mode": "percentile",
+    "geofrea_scale_norm": "linear",
+    "geofrea_scale_scope": "per_country"
    }
   }
  ],
- "nonconforming": [
-  "example_small.png",
-  "example_tall.png",
-  "example_wide.png"
- ]
+ "nonconforming": []
 }

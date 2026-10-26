@@ -1,10 +1,16 @@
 # Map style guide (COMMANDS 56 and 66)
 
-One module draws every map: `src/geofrea/viz/mapstyle.py`, whose figure is `MapFigure` (`MapCanvas` is the earlier name, kept as an alias). No module of a phase draws a map on its own. The examples below are drawn by `scripts/make_style_guide_examples.py` from an invented country ("Examplia", marked EXAMPLE), not from results. **No figure under `GEOFREA_DATA_DIR/outputs/` was redrawn by COMMAND 66**; the maps of F5 change (palette, subtitle, title, file name) when their phase runs again (`docs/phases/core.md`, D-core-045).
+One module draws every map: `src/geofrea/viz/mapstyle.py`, whose figure is `MapFigure` (`MapCanvas` is the earlier name, kept as an alias). No module of a phase draws a map on its own. The examples below are drawn by `scripts/make_style_guide_examples.py` from real geometries with synthetic data, not from results. **No figure under `GEOFREA_DATA_DIR/outputs/` was redrawn by COMMAND 66**; the maps of F5 change (palette, subtitle, title, file name) when their phase runs again (`docs/phases/core.md`, D-core-045).
 
-| Tall country (thesis) | Wide country (thesis) | Small country (article_single) | Classes (thesis) |
-|---|---|---|---|
-| ![tall](examples/XXX_example_capacity-density_solar_central_ref.png) | ![wide](examples/XXX_example_capacity-density_wind_central_ref.png) | ![small](examples/XXX_example_capacity-factor_solar_central_ref.png) | ![classes](examples/XXX_example_dominant-exclusion_solar_central.png) |
+| Density (PRT, thesis) | Capacity factor (BRA, thesis) | Change of the resource (CHE, article_single) |
+|---|---|---|
+| ![PRT](examples/PRT_example_capacity-density_solar_central_ref.png) | ![BRA](examples/BRA_example_capacity-factor_wind_central_ref.png) | ![CHE](examples/CHE_example_forcing_solar_SSP3-7.0_2071-2100.png) |
+
+| Dominant exclusion (CHL, thesis) | Density by state (IDN, thesis) | Density (LUX, article_single) |
+|---|---|---|
+| ![CHL](examples/CHL_example_dominant-exclusion_solar_central.png) | ![IDN](examples/IDN_example_capacity-density-state_wind_central.png) | ![LUX](examples/LUX_example_capacity-density_solar_central_ref.png) |
+
+The examples are real simplified geometries (`tests/fixtures/archetypes`) with **invented data**, marked `EXAMPLE, synthetic data` in the subtitle and in the box of totals; they say nothing about the countries.
 
 ## Layout: one fixed grid
 
@@ -18,6 +24,21 @@ From the top: **header** (title in bold and subtitle in grey at the left; eight-
 | `slide` | 254 mm | 16 pt | 12 pt | 9 pt |
 
 Fonts are in points at the final print size (the figure has its exact size; an overlay axes with 1 unit = 1 mm carries the furniture). PNG only, 300 dpi, no `bbox_inches="tight"`; one family (DejaVu Sans). The height follows the aspect of the extent (at most 230 mm). Extent from the contiguous territory of the country plus 3%; geographic aspect `1 / cos(central latitude)`; neighbours in very light grey; degrees as `40°S`. Scale bar at the central latitude, rounded to 1, 2 or 5 x 10^n km.
+
+## Projection, clip, context (COMMAND 67)
+
+- **Projection.** The map is drawn in a Lambert azimuthal equal-area projection centred on the centroid of the country (`make_frame`, `pyproj`), for drawing only: the areas of the analysis are computed on the sphere elsewhere. The frame is the projected country plus 3% (or the bounds of a given lon/lat `extent`); the axes are equal, in metres; the scale bar is measured in this projection (`scale_bar_length_km(width_km=...)`), rounded to 1, 2 or 5 x 10^n km; the graticule is in degrees, thin and dotted, labelled where it crosses the left and the bottom edge.
+- **Raster and clip.** `canvas.draw_raster` copies a lon/lat grid into the frame cell by cell (`reproject_nearest`: each pixel takes the cell that contains its centre, nothing is interpolated; `interpolation="nearest"`, rasterised, about 200 dpi on paper) and **clips the image by the polygon of the country**, so the coast and the border are the vector line and never the staircase of the 0.05 degree cells. A cell whose centre is outside the country is simply not there. The test paints a single colour over a grid that reaches beyond Portugal and checks that no coloured pixel is more than 1.5 pixels from the outline, with a control without the clip that fails it.
+- **Context.** Neighbouring countries in light grey (`#e3e3e3`) within 2.5 degrees of the border, the sea white; the part of the country without value in the grey of "no potential" (`#bdbdbd`, `fill_country`), with **its own entry** in the legend (`no_data_label`; beside the colour bar, never over it); footer `Boundaries: GADM 4.1, illustrative`. **Locator inset** (the country among its neighbours within 10 degrees, same projection) only when `locator=True`, which is for the overview figures.
+- **Width.** A very tall country (Chile) gets a narrower figure, not a wide empty band at each side: `fitted_width_mm` (never below 42% of the preset width and 80 mm).
+
+## Resolution (T-06)
+
+The grid of the analysis stays 0.05 degree in every country. Results of the analysis (potential, capacity factor per cell, density) are drawn at that resolution and **the subtitle says so** (`resolution_note(cell_deg=0.05)` gives `0.05° analysis grid`); a descriptive layer that exists at a finer resolution is drawn at its native resolution and says so (`resolution_note(native_m=30)`). The text goes into the PNG too (`geofrea_resolution`). Whether the results change with another cell is **OQ-064**, for after F7 (`docs/OPEN_QUESTIONS.md`).
+
+## Country archetypes (T-13)
+
+`geofrea.viz.examples.archetype_country(iso)` and `archetype_figure(country, kind)` draw the five kinds of figure (`density`, `capacity_factor`, `forcing`, `eligibility`, `state`) on six real geometries, simplified (`tests/fixtures/archetypes/<ISO3>.geojson`, 6 to 104 kB, `scripts/make_archetype_fixtures.py`: GADM 4.1 mainland of PRT and BRA, Natural Earth 1:50m for the others): PRT (tall and narrow), CHL (very tall and narrow), BRA (wide), CHE (compact), IDN (fragmented, all islands), LUX (tiny). The data are synthetic: smooth trends and noise on the 0.05 degree grid and invented states (Voronoi cells). The same code, with no adjustment by country, passes the checks of `tests/unit/test_mapstyle_archetypes.py`.
 
 ## Colour: one place, one meaning
 
@@ -83,7 +104,7 @@ ms.write_figures_index(out)
 
 ## Limits of this version
 
-- One map per figure; the overview and F4 figures with several panels need a panel layout that is not written. Projection (LAEA), the clip of the raster to the coast, the locator inset and the ensemble hatching (spec v2 T-06 to T-09) are not part of this module yet.
+- One map per figure; the overview and F4 figures with several panels need a panel layout that is not written, nor the ensemble mean with the hatching of the agreement of the sign (T-09), the relief shading (T-06.5) and the administrative outlines of a coarse country (T-06.6). The geometry of the archetypes outside GADM is Natural Earth (CHL, CHE, IDN, LUX).
 - The producers of F5 write the old file names until their phase runs again; the grid and data source are not yet passed to `save_png` by the phases.
 - Text widths used to size the furniture before drawing are an estimate (0.62 em per character, 0.68 for the bold title); the tests measure the real boxes.
 - Fonts depend on the DejaVu Sans that ships with matplotlib.
@@ -95,3 +116,5 @@ ms.write_figures_index(out)
 - `tests/unit/test_mapstyle_palette.py`: colormap per variable, no `viridis` for technologies, the colormaps that appear together differ for every vision, class colours without green apart under deuteranopia and protanopia, one colour never with two meanings, fixed, percentile and shared scales, extend, the clip declared in the subtitle and in the metadata.
 - `tests/unit/test_mapstyle_titles.py`: title pattern and country names, refusal of ids, cell counts and typos in every text, totals box, languages, grep of the typos over `src/`.
 - `tests/unit/test_mapstyle_files.py`: file names (the three examples of the spec, no `na`, no empty field, no hash), PNG text chunks, no sidecar, `figures_index.json`.
+- `tests/unit/test_mapstyle_geo.py`: the LAEA frame (centre, round trip, equal area, scale bar in the projection, graticule in degrees), the nearest reprojection copies the cell that contains each pixel, the clip (no data pixel outside the coast, no hole inside, control without clip), no smoothing, the entry and the grey of "no potential", neighbours within the buffer only, the locator inset only when asked, the resolution in the subtitle and the metadata, the narrow figure of a tall country.
+- `tests/unit/test_mapstyle_archetypes.py`: for each of the six archetypes and the five kinds of figure (30 figures): no overlap between the real boxes of the title, legend, colour bar, tick labels, compass, scale bar, totals, source, entry and inset; nothing cut; the country fills its frame; no band between the map and its legend; furniture at the standard place and at the same offsets in all six countries; perceptual-hash golden (`tests/fixtures/archetypes/hashes.json`, refrozen with `GEOFREA_UPDATE_MAPSTYLE_BASELINES=1`); the synthetic Portugal without a staircase on the coast.
