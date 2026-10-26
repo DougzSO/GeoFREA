@@ -8,6 +8,7 @@ invented (`geofrea.viz.examples.archetype_country`); nothing under GEOFREA_DATA_
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from geofrea.viz import mapstyle as ms
@@ -38,16 +39,34 @@ def example_name(iso: str, kind: str) -> str:
     return ms.figure_filename(iso, "example", variable, tech, scenario, climate)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--only", help="comma-separated ISO3 codes to draw (default: all the examples)"
+    )
+    parser.add_argument(
+        "--compare",
+        type=Path,
+        help="also write `<ISO3>_before.png` (the cells as they are: no display layer, no smoothing) and `<ISO3>_after.png` here (COMMAND 67b)",
+    )
+    args = parser.parse_args(argv)
+    chosen = args.only.split(",") if args.only else list(EXAMPLES)
     OUT.mkdir(parents=True, exist_ok=True)
-    for iso, (kind, preset) in EXAMPLES.items():
-        canvas = archetype_figure(archetype_country(iso), kind, preset)
+    for iso in chosen:
+        kind, preset = EXAMPLES[iso]
+        country = archetype_country(iso)
+        canvas = archetype_figure(country, kind, preset)
         path = ms.save_png(
             canvas,
             OUT / example_name(iso, kind),
             {"grid": "0.05 degree analysis grid", "data_source": "EXAMPLE, synthetic data"},
         )
         print(path.name)
+        if args.compare:
+            args.compare.mkdir(parents=True, exist_ok=True)
+            before = archetype_figure(country, kind, preset, fine=False, display_smoothing="off")
+            ms.save_png(before, args.compare / f"{iso}_before.png")
+            ms.save_png(canvas, args.compare / f"{iso}_after.png")
     print(ms.write_figures_index(OUT))
 
 

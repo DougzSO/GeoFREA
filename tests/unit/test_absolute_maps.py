@@ -258,7 +258,11 @@ def test_eight_maps_and_the_limits_file_per_technology_with_sums_that_match_f5(t
         cells["capacity_density"]["unit"] == "MW per km²"
         and cells["energy_density"]["unit"] == "GWh per km² per year"
     )
-    assert cells["capacity_density"]["interpolation"].startswith("none")
+    # the cells as they are, or a declared display smoothing when a cell is more than 4 pixels of the image (COMMAND 67b)
+    assert (
+        cells["capacity_density"]["interpolation"].startswith("none")
+        or cells["capacity_density"]["interpolation"] == "display smoothing"
+    )
 
 
 @pytest.mark.unit

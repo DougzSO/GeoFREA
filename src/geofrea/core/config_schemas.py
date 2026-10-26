@@ -407,6 +407,8 @@ class AbsoluteMapsConfig(BaseModel):
         ge=1, le=4
     )  # the limits are rounded to this many (the last one upwards)
     palette: Literal["viridis", "cividis"]
+    # display only (COMMAND 67b): `auto` interpolates a continuous field whose cell is still a block, `off` never does; no result changes
+    display_smoothing: Literal["auto", "off"] = "auto"
 
 
 class ExperimentsFile(BaseModel):

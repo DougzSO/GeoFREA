@@ -44,6 +44,7 @@ from matplotlib.patches import Rectangle
 
 from geofrea.core.geo_utils import get_contiguous_mainland_gdf
 from geofrea.core.geodesy import wgs84_km_per_degree
+from geofrea.viz import display
 
 Extent = tuple[float, float, float, float]  # (west, east, south, north) in degrees
 BoxMm = tuple[
@@ -203,7 +204,10 @@ def format_degrees(value: float, axis: str) -> str:
 # computed on the sphere, elsewhere). A raster is copied cell by cell into the projected frame (nearest neighbour, nothing interpolated)
 # and clipped by the country polygon, so the coast and the border are the vector line and never the staircase of the cells.
 
-NEIGHBOUR_BUFFER_DEG = 2.5  # neighbouring countries are drawn within this distance of the border
+NEIGHBOUR_BUFFER_DEG = (
+    2.5  # the locator inset (not the map) shows the neighbours within this distance of the border
+)
+BORDER_GAP_M = 8_000.0  # the gap between the borders of two sources that is closed with the colour of the neighbours
 RENDER_DPI = (
     200  # resolution of the reprojected raster on paper; the cells are copied, never smoothed
 )
@@ -353,14 +357,25 @@ def reproject_nearest(
     return out, (xmin, xmin + nx * pixel_m, ymax - ny * pixel_m, ymax)
 
 
-def resolution_note(cell_deg: float | None = None, native_m: float | None = None) -> str:
+def resolution_note(
+    cell_deg: float | None = None, native_m: float | None = None, display_deg: float | None = None
+) -> str:
     """What the subtitle says about the resolution of the data drawn: `0.05° analysis grid` for the results of the analysis, `native ~30 m`
-    for a descriptive layer drawn at the resolution it has."""
-    if (cell_deg is None) == (native_m is None):
-        raise ValueError("give the cell of the analysis grid or the native resolution, not both")
+    for a descriptive layer drawn at the resolution it has, `0.01° display layer` for a finer layer made only to be drawn."""
+    if sum(x is not None for x in (cell_deg, native_m, display_deg)) != 1:
+        raise ValueError(
+            "give one of the cell of the analysis grid, the native resolution or the display layer"
+        )
     if cell_deg is not None:
         return f"{cell_deg:g}° analysis grid"
+    if display_deg is not None:
+        return f"{display_deg:g}° display layer"
     return f"native resolution ~{native_m:g} m"
+
+
+def smoothing_note(source: str | None = None) -> str:
+    """What the subtitle of a smoothed map says: the smoothing and the resolution of the data it came from."""
+    return f"display smoothing (source: {source})" if source else "display smoothing"
 
 
 # --------------------------------------------------------------------------------------------------------------- colour and normalisation
@@ -597,6 +612,7 @@ class NormInfo:
     skew: float  # P98 / P50 (inf when the median is not positive)
     mode: str = "percentile"  # fixed, percentile or shared
     scope: str = "per_country"
+    percentiles: tuple[float, float] = CLIP_PERCENTILES
 
 
 def robust_norm(
@@ -672,7 +688,7 @@ def resolve_scale(
         info = robust_norm(
             arr, diverging=spec.diverging, center=spec.center, percentiles=spec.percentiles
         )
-        return replace(info, mode="percentile", scope=spec.scope)
+        return replace(info, mode="percentile", scope=spec.scope, percentiles=spec.percentiles)
     lo, hi = float(limits[0]), float(limits[1])
     return NormInfo(
         Normalize(lo, hi), _extend(arr, lo, hi), lo, hi, "linear", math.nan, mode, spec.scope
@@ -693,19 +709,24 @@ def _fmt(x: float) -> str:
     return f"{x:.3g}"
 
 
+def _ordinal(p: float) -> str:
+    n = f"{p:g}"
+    if "." in n or n.endswith(("11", "12", "13")):
+        return f"{n}th"
+    return n + {"1": "st", "2": "nd", "3": "rd"}.get(n[-1], "th")
+
+
 def clip_note(info: NormInfo, unit: str = "") -> str:
-    """What the subtitle must say when the colour scale cuts values (empty when nothing is cut): the limit, the mode and the scope."""
+    """What the subtitle must say when the colour scale cuts values (empty when nothing is cut): `Scale: 2nd–98th percentile`,
+    `Scale: fixed` or `Scale: shared`. The numeric limits, the scope and the norm are in the metadata of the PNG (`scale_meta`)."""
     if info.extend == "neither":
         return ""
-    u = f" {unit}" if unit else ""
-    if info.extend == "max":
-        what = f"scale truncated at {_fmt(info.vmax)}{u}"
-    elif info.extend == "min":
-        what = f"scale truncated below {_fmt(info.vmin)}{u}"
-    else:
-        what = f"scale clipped to {_fmt(info.vmin)} to {_fmt(info.vmax)}{u}"
-    scope = "shared across countries" if info.scope == "shared_across_countries" else "this country"
-    return f"{what} ({info.mode}, {scope})"
+    if info.mode == "fixed":
+        return "Scale: fixed"
+    if info.mode == "shared":
+        return "Scale: shared"
+    lo, hi = info.percentiles
+    return f"Scale: {_ordinal(lo)}–{_ordinal(hi)} percentile"
 
 
 def format_subtitle(*parts: str | None) -> str:
@@ -1136,20 +1157,29 @@ class MapFigure:
         norm=None,
         zorder: float = 2.0,
         clip: bool = True,
+        smooth: int | None = None,
     ):
         """Draw a lon/lat grid (row 0 north, `extent_grid` = west, east, south, north; 2-D values, or 3-D RGBA) in the projected frame.
 
-        Each pixel of the map takes the value of the cell that contains it (nearest neighbour, no interpolation, no anti-aliasing, rasterised),
-        and the image is clipped by the polygon of the country, so the coast and the border are the vector line, not the staircase of the cells.
+        Each pixel of the map takes the value of the cell that contains it (nearest neighbour, no anti-aliasing, rasterised), and the image is
+        clipped by the polygon of the country, so the coast and the border are the vector line, not the staircase of the cells.
+        `smooth` (an integer factor, 2-D continuous fields only) first interpolates the field bilinearly with its mask (`display.smooth_masked`);
+        the caller declares it in the subtitle (`smoothing_note`).
         """
         from matplotlib.patches import PathPatch
 
         frame = self.frame
-        map_w_mm = self.layout.map_box[2] - self.layout.map_box[0]
-        pixel_m = frame.width_m / max(map_w_mm / 25.4 * RENDER_DPI, 1.0)
-        array = (
-            np.asarray(data, dtype="float64") if np.ndim(data) == 3 else np.ma.masked_invalid(data)
-        )
+        pixel_m = self.pixel_m()
+        if smooth and np.ndim(data) == 3:
+            raise ValueError("an image of classes or colours is never smoothed")
+        if smooth:
+            array = np.ma.masked_invalid(display.smooth_masked(np.ma.filled(data, np.nan), smooth))
+        else:
+            array = (
+                np.asarray(data, dtype="float64")
+                if np.ndim(data) == 3
+                else np.ma.masked_invalid(data)
+            )
         out, extent_m = reproject_nearest(array, extent_grid, frame, pixel_m)
         if out.ndim == 2:
             out = np.ma.masked_invalid(out)
@@ -1176,6 +1206,16 @@ class MapFigure:
         self.ax.set_xlim(frame.bounds[0], frame.bounds[1])
         self.ax.set_ylim(frame.bounds[2], frame.bounds[3])
         return image
+
+    def pixel_m(self) -> float:
+        """Metres of the map on one pixel of the raster of this figure (`RENDER_DPI` on paper)."""
+        map_w_mm = self.layout.map_box[2] - self.layout.map_box[0]
+        return self.frame.width_m / max(map_w_mm / 25.4 * RENDER_DPI, 1.0)
+
+    def px_per_cell(self, cell_deg: float) -> float:
+        """Image pixels along one side of a cell of `cell_deg` in this figure (the preset, the country and the width decide)."""
+        south, north = self.frame.lonlat_extent[2:]
+        return display.px_per_cell(cell_deg, (south + north) / 2.0, self.pixel_m())
 
     def mm_to_fig(self, box: BoxMm) -> tuple[float, float, float, float]:
         w, h = self.layout.width_mm, self.layout.height_mm
@@ -1359,6 +1399,34 @@ def _draw_graticule(canvas: MapFigure) -> None:
     ax.set_ylim(ymin, ymax)
 
 
+def _neighbours_in_frame(neighbours, frame: MapFrame):
+    """The neighbouring countries in the projection, cut by the rectangle of the map: a straight cut at the frame, not a buffer round the
+    country (which leaves rounded shapes and white wedges)."""
+    import geopandas as gpd
+    import shapely
+
+    west, east, south, north = frame.lonlat_extent
+    pad = 1.0
+    wide = shapely.box(west - pad, south - pad, east + pad, north + pad)
+    near = neighbours.to_crs("EPSG:4326").clip(wide)
+    if not len(near):
+        return near.assign(gap=[])
+    projected = near.to_crs(frame.crs)
+    xmin, xmax, ymin, ymax = frame.bounds
+    # the borders of two sources of geometry never coincide: the gap between the country and its neighbours (not the sea) is closed
+    gap = (
+        projected.geometry.union_all()
+        .buffer(BORDER_GAP_M)
+        .intersection(frame.polygon.buffer(BORDER_GAP_M))
+    )
+    cut = gpd.GeoSeries([*projected.geometry, gap], crs=frame.crs).clip_by_rect(
+        xmin, ymin, xmax, ymax
+    )
+    out = gpd.GeoDataFrame(geometry=cut, crs=frame.crs)
+    out["gap"] = [False] * len(projected) + [True]
+    return out[~out.geometry.is_empty].reset_index(drop=True)
+
+
 def _draw_locator(canvas: MapFigure, box: BoxMm, polygon, neighbours) -> list:
     """The locator inset (overview figures only): the country in dark grey among its neighbours within 10 degrees, in the same projection."""
     import geopandas as gpd
@@ -1428,7 +1496,7 @@ def new_map(
     The map is drawn in a Lambert azimuthal equal-area projection centred on the country (`make_frame`); its frame is the projected country
     plus 3% (far islands out), or the bounds of `extent` (lon/lat) when it is given. `preset` gives the fonts and, unless `width_mm` is given,
     the width (a very tall country gets a narrower figure, `fitted_width_mm`). `neighbours` (a GeoDataFrame) are drawn in light grey within
-    `NEIGHBOUR_BUFFER_DEG` of the border, the sea stays white. `no_data_label` adds the legend entry for the part of the country without
+    the rectangle of the map, the sea stays white. `no_data_label` adds the legend entry for the part of the country without
     value (drawn by `fill_country`), `locator` the inset that says where the country is (overview figures only). Draw the data with
     `canvas.draw_raster` (or `draw_choropleth`) and the colour bar on `canvas.cax` (`add_colorbar`), then save with `save_png`.
     """
@@ -1535,10 +1603,14 @@ def new_map(
         near = None
         if neighbours is not None:
             canvas.use_colour(NEIGHBOUR_COLOUR, "neighbouring countries")
-            near = neighbours.to_crs("EPSG:4326").clip(polygon.buffer(NEIGHBOUR_BUFFER_DEG))
-            if len(near):
-                near.to_crs(frame.crs).plot(
-                    ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.3, zorder=0.5
+            near = _neighbours_in_frame(neighbours, frame)
+            for is_gap, part in near.groupby("gap") if len(near) else ():
+                part.plot(
+                    ax=ax,
+                    color=NEIGHBOUR_COLOUR,
+                    edgecolor="none" if is_gap else "white",
+                    linewidth=0.3,
+                    zorder=0.4 if is_gap else 0.5,
                 )
         gpd.GeoSeries([frame.polygon], crs=frame.crs).boundary.plot(
             ax=ax, color=OUTLINE_COLOUR, linewidth=0.5, zorder=4
@@ -1657,6 +1729,58 @@ def add_colorbar(canvas: MapFigure, mappable, label: str, extend: str = "neither
     return bar
 
 
+@dataclass(frozen=True)
+class DisplayPlan:
+    """What a continuous map draws and says about its resolution: the grid (the analysis grid or a finer display layer), its pixels per cell,
+    the interpolation factor (None: none), the source of the data and the text for the subtitle (`shown`)."""
+
+    grid: np.ndarray
+    extent: Extent
+    px: float
+    source: str | None
+    smooth: bool
+    factor: int | None
+    shown: str | None
+
+
+def plan_display(
+    canvas: MapFigure,
+    grid,
+    extent_grid: Extent,
+    resolution: str | None,
+    layer: display.DisplayLayer | None = None,
+    mode: str = "auto",
+    coarse_source: bool = False,
+) -> DisplayPlan:
+    """Decide, for a continuous field on `canvas`, which grid is drawn and whether it is smoothed (COMMAND 67b).
+
+    The image pixels per cell of `grid` are counted for this figure (preset, country, width). Above `display.MAX_PX_PER_CELL` the finer `layer`
+    is drawn when there is one; if a cell is still a block, or the field comes from a GCM (`coarse_source`), the field is interpolated with its
+    mask unless `mode` is `off`. The caller builds the header with `shown` (the resolution note, with `display smoothing` when it applies).
+    """
+    cell_deg = display.cell_deg_of(np.shape(grid), extent_grid)
+    px = canvas.px_per_cell(cell_deg)
+    drawn, extent, source = grid, extent_grid, resolution
+    if layer is not None and px > display.MAX_PX_PER_CELL:
+        drawn, extent = layer.grid, layer.extent
+        px = canvas.px_per_cell(layer.cell_deg)
+        source = resolution_note(display_deg=layer.cell_deg)
+    smooth = display.needs_smoothing(px, True, mode, coarse_source)
+    factor = display.upsample_factor(px, np.shape(drawn)) if smooth else None
+    return DisplayPlan(
+        drawn, extent, px, source, smooth, factor, smoothing_note(source) if smooth else source
+    )
+
+
+def display_meta(plan: DisplayPlan, mode: str) -> dict[str, str]:
+    """The display resolution of a map as PNG text: pixels per cell drawn, whether it was smoothed, the source."""
+    return {
+        "display_px_per_cell": f"{plan.px:.1f}",
+        "display_smoothing": "applied" if plan.smooth else ("off" if mode == "off" else "none"),
+        "display_source": plan.source or "",
+    }
+
+
 def raster_map(
     grid: np.ndarray,
     extent_grid: Extent,
@@ -1686,6 +1810,9 @@ def raster_map(
     locator: bool = False,
     graticule: bool = True,
     contiguous: bool = True,
+    display_layer: display.DisplayLayer | None = None,
+    display_smoothing: str = "auto",
+    coarse_source: bool = False,
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
@@ -1693,6 +1820,11 @@ def raster_map(
     subtitle is `subtitle` or `Scenario · Climate`, then `resolution` (`resolution_note`), then what the scale cuts (`clip_note`, in `unit`).
     `tech` is `solar` or `wind` (needed by the kinds that take the family of the technology). With `no_data_label` the part of the country
     without value is drawn in the grey of "no potential" and has its own entry in the legend.
+
+    Display resolution (COMMAND 67b): the figure counts the image pixels per cell of `grid`; above `display.MAX_PX_PER_CELL` it draws the finer
+    `display_layer` when there is one (a descriptive layer only, never a result: the colours and the legend still come from `grid`), and when
+    a cell is still a block, or the field comes from a GCM (`coarse_source`), it interpolates the field with its mask (`display_smoothing`
+    `auto`, `off` never does) and says so in the subtitle with the resolution of the source. The analysis grid and its totals are not touched.
     """
     data = np.ma.masked_invalid(grid)
     if kind.startswith("delta") and scale is None:
@@ -1700,33 +1832,51 @@ def raster_map(
     spec = scale or default_scale(kind, tech)
     info = resolve_scale(data.compressed(), spec, shared)
     base = subtitle or format_subtitle(scenario, climate)
-    subtitle = format_subtitle(
-        base, resolution, clip_note(info, unit if unit is not None else label)
+    scale_text = clip_note(info, unit if unit is not None else label)
+
+    def build(resolution_text: str | None) -> MapFigure:
+        return new_map(
+            geometry,
+            iso=iso,
+            technology=technology,
+            variable=variable,
+            subtitle=format_subtitle(base, resolution_text, scale_text),
+            total_text=total_text,
+            width_mm=width_mm,
+            preset=preset,
+            neighbours=neighbours,
+            country=country,
+            lang=lang,
+            no_data_label=no_data_label,
+            locator=locator,
+            graticule=graticule,
+            contiguous=contiguous,
+        )
+
+    canvas = build(resolution)
+    plan = plan_display(
+        canvas, grid, extent_grid, resolution, display_layer, display_smoothing, coarse_source
     )
-    canvas = new_map(
-        geometry,
-        iso=iso,
-        technology=technology,
-        variable=variable,
-        subtitle=subtitle,
-        total_text=total_text,
-        width_mm=width_mm,
-        preset=preset,
-        neighbours=neighbours,
-        country=country,
-        lang=lang,
-        no_data_label=no_data_label,
-        locator=locator,
-        graticule=graticule,
-        contiguous=contiguous,
-    )
+    shown = plan.shown
+    if (
+        shown != resolution
+    ):  # the subtitle changes with the layer and the smoothing: draw the header again
+        plt.close(canvas.fig)
+        canvas = build(shown)
     if no_data_label:
         canvas.fill_country()
-    image = canvas.draw_raster(data, extent_grid, cmap=colormap_for(kind, tech), norm=info.norm)
+    image = canvas.draw_raster(
+        np.ma.masked_invalid(plan.grid),
+        plan.extent,
+        cmap=colormap_for(kind, tech),
+        norm=info.norm,
+        smooth=plan.factor,
+    )
     add_colorbar(canvas, image, label, info.extend)
+    canvas.meta.update(display_meta(plan, display_smoothing))
     canvas.meta.update(scale_meta(info))
-    if resolution:
-        canvas.meta["resolution"] = resolution
+    if shown:
+        canvas.meta["resolution"] = shown
     return canvas
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import geopandas as gpd
@@ -17,6 +17,7 @@ from matplotlib.colors import to_rgba
 from shapely import affinity
 from shapely.geometry import Point, box
 
+from geofrea.viz.display import DisplayLayer
 from geofrea.viz.mapstyle import Extent
 
 # name: (centre lon, centre lat, half width deg, half height deg, rotation)
@@ -113,10 +114,67 @@ class ArchetypeCountry:
     change: np.ndarray  # change of the resource in percent, from -4 to +9
     classes: np.ndarray  # dominant exclusion 0-4 and 5 = none, -1 outside
     units: gpd.GeoDataFrame  # synthetic "states": admin1_id, density, total
+    mapped: object  # the territory that is mapped (the contiguous part, or all of it)
+    field: FieldModel  # the smooth field of the data, defined at any resolution
+
+
+FINE_FACTOR = 5  # a cell of 0.05 degree is 5 x 5 pixels of the 0.01 degree display layer
+MAX_FINE_PIXELS = (
+    6_000_000  # a larger country has no fine layer in the examples (it does not need one)
+)
+NOISE_PIXEL = 0.012  # the independent noise of a pixel, small beside the correlated field
+
+
+@dataclass(frozen=True)
+class FieldModel:
+    """The smooth synthetic field of an archetype, defined for any point: a trend, a correlated noise (random waves, 3 cells and more across)
+    and the constants that scale it to 0-1 over the cells of the country. The coarse and the fine layers are the same field."""
+
+    west: float
+    east: float
+    south: float
+    north: float
+    cell_deg: float
+    waves: np.ndarray  # rows: kx, ky, phase, amplitude
+    lo: float
+    span: float
+
+    def smooth(self, xx: np.ndarray, yy: np.ndarray) -> np.ndarray:
+        u = (xx - self.west) / max(self.east - self.west, 1e-9)
+        v = (yy - self.south) / max(self.north - self.south, 1e-9)
+        trend = np.sin(2.5 * u + 1.0) * np.cos(2.0 * v) + 0.6 * np.exp(
+            -(((u - 0.35) / 0.2) ** 2 + ((v - 0.6) / 0.2) ** 2)
+        )
+        kx, ky, phase, amp = self.waves.T
+        waves = (amp * np.cos(np.multiply.outer(xx, kx) + np.multiply.outer(yy, ky) + phase)).sum(
+            axis=-1
+        )
+        return trend + 0.3 * waves
+
+    def unit(self, xx: np.ndarray, yy: np.ndarray) -> np.ndarray:
+        return (self.smooth(xx, yy) - self.lo) / self.span
+
+
+def _waves(rng, size_deg: float, cell_deg: float, count: int = 24) -> np.ndarray:
+    """Random plane waves with a wavelength from 3 cells (or 4% of the country) to 35% of the country, amplitudes that add up to unit variance."""
+    shortest = max(3.0 * cell_deg, 0.04 * size_deg)
+    longest = max(0.35 * size_deg, 2.0 * shortest)
+    wavelength = rng.uniform(shortest, longest, count)
+    angle = rng.uniform(0.0, 2.0 * math.pi, count)
+    k = 2.0 * math.pi / wavelength
+    return np.column_stack(
+        [
+            k * np.cos(angle),
+            k * np.sin(angle),
+            rng.uniform(0, 2 * math.pi, count),
+            np.full(count, math.sqrt(2.0 / count)),
+        ]
+    )
 
 
 def archetype_country(iso: str, cell_deg: float = 0.05, seed: int = 67) -> ArchetypeCountry:
-    """The archetype `iso` with synthetic data. The data are invented: smooth trends and noise, nothing computed from a result."""
+    """The archetype `iso` with synthetic data. The data are invented: a smooth trend plus a spatially correlated field and a small noise
+    per pixel (never an independent noise per cell), nothing computed from a result."""
     import shapely
 
     from geofrea.viz.mapstyle import contiguous_geometry, country_name
@@ -135,18 +193,26 @@ def archetype_country(iso: str, cell_deg: float = 0.05, seed: int = 67) -> Arche
     xx, yy = np.meshgrid(xs, ys)
     inside = shapely.contains_xy(mapped, xx.ravel(), yy.ravel()).reshape(xx.shape)
     rng = np.random.default_rng(seed)
-    u = (xx - west) / max(east - west, 1e-9)
-    v = (yy - south) / max(north - south, 1e-9)
-    smooth = np.sin(2.5 * u + 1.0) * np.cos(2.0 * v) + 0.6 * np.exp(
-        -(((u - 0.35) / 0.2) ** 2 + ((v - 0.6) / 0.2) ** 2)
+    model = FieldModel(
+        west,
+        east,
+        south,
+        north,
+        cell_deg,
+        _waves(rng, max(east - west, north - south), cell_deg),
+        0.0,
+        1.0,
     )
-    field = np.exp(0.9 * smooth + 0.25 * rng.standard_normal(xx.shape))
+    raw = model.smooth(xx, yy)
+    model = replace(model, lo=float(raw[inside].min()), span=float(np.ptp(raw[inside])) or 1.0)
+    unit = model.unit(xx, yy)
+    v = (yy - south) / max(north - south, 1e-9)
+    jitter = NOISE_PIXEL * rng.standard_normal(xx.shape)
+    field = np.exp(0.9 * raw + 0.04 * rng.standard_normal(xx.shape))
     grid = np.where(inside, field, np.nan)
-    unit = (smooth - smooth[inside].min()) / (np.ptp(smooth[inside]) or 1.0)
-    jitter = 0.04 * rng.standard_normal(xx.shape)
     cf = np.where(inside, 0.08 + 0.30 * np.clip(unit + jitter, 0, 1), np.nan)
     change = np.where(inside, -4.0 + 13.0 * np.clip(0.7 * v + 0.3 * unit + jitter, 0, 1), np.nan)
-    noisy = unit * 5.5 + 0.8 * rng.standard_normal(xx.shape)
+    noisy = unit * 5.5 + 0.35 * rng.standard_normal(xx.shape)
     classes = np.where(inside, np.clip(noisy.astype(int), 0, 5), -1)
     return ArchetypeCountry(
         iso,
@@ -161,6 +227,38 @@ def archetype_country(iso: str, cell_deg: float = 0.05, seed: int = 67) -> Arche
         change,
         classes,
         _synthetic_units(mapped, inside, xx, yy, rng),
+        mapped,
+        model,
+    )
+
+
+def fine_layer(country: ArchetypeCountry, kind: str, seed: int = 68) -> DisplayLayer | None:
+    """The 0.01 degree display layer of `kind` (`density` or `capacity_factor`) of the archetype: the same field as the 0.05 degree grid
+    evaluated on pixels five times finer, with its own small noise; None for a kind with no such layer (a climate delta, classes, states) or a
+    country too large for the examples."""
+    import shapely
+
+    if kind not in ("density", "capacity_factor"):
+        return None
+    west, east, south, north = country.grid_extent
+    k = FINE_FACTOR
+    fine_deg = country.field.cell_deg / k
+    ny, nx = round((north - south) / fine_deg), round((east - west) / fine_deg)
+    if nx * ny > MAX_FINE_PIXELS:
+        return None
+    xs = west + (np.arange(nx) + 0.5) * fine_deg
+    ys = north - (np.arange(ny) + 0.5) * fine_deg
+    xx, yy = np.meshgrid(xs, ys)
+    inside = shapely.contains_xy(country.mapped, xx.ravel(), yy.ravel()).reshape(xx.shape)
+    rng = np.random.default_rng(seed)
+    raw = country.field.smooth(xx, yy)
+    if kind == "density":
+        values = np.exp(0.9 * raw + 0.04 * rng.standard_normal(xx.shape))
+    else:
+        unit = country.field.unit(xx, yy) + NOISE_PIXEL * rng.standard_normal(xx.shape)
+        values = 0.08 + 0.30 * np.clip(unit, 0, 1)
+    return DisplayLayer(
+        f"display_{kind}", np.where(inside, values, np.nan), country.grid_extent, fine_deg
     )
 
 
@@ -188,8 +286,19 @@ def _synthetic_units(mapped, inside, xx, yy, rng, count: int = 6) -> gpd.GeoData
     )
 
 
-def archetype_figure(country: ArchetypeCountry, kind: str, preset: str = "thesis"):
-    """One figure of the kind `kind` (one of `FIGURE_KINDS`) of the archetype, drawn by `MapFigure` with its synthetic data."""
+def archetype_figure(
+    country: ArchetypeCountry,
+    kind: str,
+    preset: str = "thesis",
+    *,
+    display_smoothing: str = "auto",
+    fine: bool = True,
+):
+    """One figure of the kind `kind` (one of `FIGURE_KINDS`) of the archetype, drawn by `MapFigure` with its synthetic data.
+
+    The continuous kinds use the 0.01 degree display layer (`fine_layer`) when the analysis cell would be a block, and are smoothed for
+    display (`display_smoothing`) when a cell is still one; the climate delta always is (it comes from a GCM). The kinds of classes and
+    states are never smoothed. `fine=False` leaves the display layer out."""
     from geofrea.viz import mapstyle as ms
 
     common = {"iso": country.iso, "preset": preset, "neighbours": country.neighbours}
@@ -243,6 +352,9 @@ def archetype_figure(country: ArchetypeCountry, kind: str, preset: str = "thesis
             total_text=EXAMPLE_MARK,
             no_data_label=ms.NO_DATA_LABEL if kind != "forcing" else None,
             contiguous=country.contiguous,
+            display_layer=fine_layer(country, kind) if fine else None,
+            display_smoothing=display_smoothing,
+            coarse_source=kind == "forcing",
             **common,
         )
     if kind == "eligibility":

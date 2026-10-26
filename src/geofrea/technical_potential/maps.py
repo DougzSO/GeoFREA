@@ -37,6 +37,7 @@ from geofrea.technical_potential.absolute_maps import (
     load_neighbours,
     map_context,
 )
+from geofrea.technical_potential.display_layers import load_display_layer
 
 CENTRAL = "central"
 
@@ -137,11 +138,25 @@ def build_potential_maps(
                     subtitle=f"Central scenario · {SUBTITLE_CLIMATE}",
                     total_text=None,
                     path=Path(figures_dir) / f"capacity_factor_{tech}__ref__na__na.png",
+                    display_layer=load_display_layer(artifacts, "capacity-factor", tech),
+                    display_smoothing=(
+                        absolute_maps.display_smoothing if absolute_maps is not None else "auto"
+                    ),
                 )[0]
             )
         if has_values and figures_mode == "summary":
             written, _ = build_cell_density_maps(
-                iso, tech, artifacts, cells_dir, Path(figures_dir), units, neighbours, ctx
+                iso,
+                tech,
+                artifacts,
+                cells_dir,
+                Path(figures_dir),
+                units,
+                neighbours,
+                ctx,
+                display_smoothing=(
+                    absolute_maps.display_smoothing if absolute_maps is not None else "auto"
+                ),
             )
             figures.extend(p for k, p in written.items() if "density" in k)
     absolute_figures: dict[str, Path] = {}

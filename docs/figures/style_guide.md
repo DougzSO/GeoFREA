@@ -34,7 +34,11 @@ Fonts are in points at the final print size (the figure has its exact size; an o
 
 ## Resolution (T-06)
 
-The grid of the analysis stays 0.05 degree in every country. Results of the analysis (potential, capacity factor per cell, density) are drawn at that resolution and **the subtitle says so** (`resolution_note(cell_deg=0.05)` gives `0.05° analysis grid`); a descriptive layer that exists at a finer resolution is drawn at its native resolution and says so (`resolution_note(native_m=30)`). The text goes into the PNG too (`geofrea_resolution`). Whether the results change with another cell is **OQ-064**, for after F7 (`docs/OPEN_QUESTIONS.md`).
+The grid of the analysis stays 0.05 degree in every country. Results of the analysis (potential, capacity factor per cell, density) are drawn at that resolution and **the subtitle says so** (`resolution_note(cell_deg=0.05)` gives `0.05° analysis grid`; a finer display layer says `0.01° display layer`); a descriptive layer that exists at a finer resolution is drawn at its native resolution and says so (`resolution_note(native_m=30)`). The text goes into the PNG too (`geofrea_resolution`). Whether the results change with another cell is **OQ-064**, for after F7 (`docs/OPEN_QUESTIONS.md`).
+
+## Display resolution (COMMAND 67b)
+
+`MapFigure` counts the image pixels per cell (`px_per_cell`; the metadata `display_px_per_cell`). Above 4: (1) the 0.01 degree display layer of the same descriptive quantity is drawn when there is one (`display_layer=`; `0.01° display layer` in the subtitle); (2) if a cell is still above 4 pixels, or the field comes from a GCM (`coarse_source=True`), a continuous field is interpolated bilinearly with its mask (`display_smoothing="auto"`; `"off"` never) and the subtitle says `display smoothing (source: 0.05° analysis grid)`. Classes, categories and states are never smoothed. The scale note is `Scale: 2nd–98th percentile`, `Scale: fixed` or `Scale: shared` and appears only when the scale cuts values; the limits are in `geofrea_scale_limits`. Neighbours are cut by the rectangle of the map. Before and after: `docs/figures/display_resolution_67b.md`.
 
 ## Country archetypes (T-13)
 
