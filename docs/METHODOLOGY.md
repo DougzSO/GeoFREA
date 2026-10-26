@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 15.2.3 |
+| Version | 15.2.4 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-21 |
+| Updated | 2026-10-26 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -478,6 +478,8 @@ Reporting rule for the climate outputs: climate effects on potential are compute
 
 Per-phase maps are diagnostics for inspection and for the future platform, generated under A-08. Minimum set per country and technology: F2b exclusion layers and cost-driver layers; F3 eligible fraction and dominant exclusion; F4 change factors per member; F5 CF and capacity per member; F6 nominal and median LCOE; F7 MR, SR, top-k flags.
 
+**Display resolution.** What a map draws is never what the analysis computes. A map counts the image pixels per cell of the analysis grid (0.05 degree); above 4 it draws, when there is one, the *display layer* of the same descriptive quantity on the 0.01 degree grid of F2a (capacity factor by the F5 model itself, including the air density rule and the retention of the candidate cells; eligible fraction; capacity density; energy density), written by `potential_maps` as `display_*` artifacts with their own fingerprint and checked against the analysis (the capacity factor aggregated to the cell, weighted by the eligible area, within 1% in every cell; the eligible area and the capacity exact). If a cell is still a block, or the field comes from a GCM, a continuous field (capacity factor, densities, climate deltas) is interpolated bilinearly with its mask (no-data weighs nothing and nothing is drawn beyond the edge of the cells) and clipped by the country polygon; the subtitle says `display smoothing` and the resolution of the source, and `experiments.yaml` `absolute_maps.display_smoothing` (`auto` | `off`) controls it. Classes, categories and per-state maps are never smoothed. No total, LCOE, ranking or analysis artifact reads a display layer.
+
 ---
 
 ## 12. Implementation roadmap
@@ -563,6 +565,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 15.2.4 | 2026-10-26 | PATCH (output rule of a diagnostic phase; COMMAND 67b; no result changes): Section 11 states the display resolution of the maps: display layers at 0.01 degree from F2a for the descriptive maps of `potential_maps` (checked against the analysis grid), masked bilinear display smoothing declared in the subtitle for continuous fields still blocky or from a GCM, `absolute_maps.display_smoothing` (`auto` / `off`); classes, categories and per-state maps are never smoothed; no analysis artifact reads a display layer. |
 | 15.2.3 | 2026-10-21 | PATCH (infrastructure; COMMAND 61; no result changes): A-02: the field declarations and validators of the configuration schemas are not part of the code fingerprint of a phase, and the configuration fingerprint holds the section a phase reads as its schema validates it, with the defaults resolved, so a change of a schema reaches only the phases that read that section; every internal cache outside the manifest holds the fingerprint of the code that computes its result in its key (D-core-043). IDs altered: A-02. |
 | 15.2.2 | 2026-10-20 | PATCH (output rule of a diagnostic phase; COMMAND 60; no result changes): M-F5-07 draws the maps of `potential_maps` in the common map style with the densities per cell (MW per km2, GWh per km2 per year) and per state (over the land area of the state) as main maps, circles for the state totals, the same classes in the three land scenarios; the maps of MW and GWh per cell become optional (`absolute_maps.per_cell`, default false); `absolute_maps.dpi` is removed (the style fixes 300 dpi). IDs altered: M-F5-07. |
 | 15.2.1 | 2026-10-20 | PATCH (infrastructure and one data rule; COMMAND 58; closes OQ-062; the results of PRT and BRA do not change, those of IND change only in the wind of the territory added by 15.2.0): (a) A-02: the manifest (schema 2.6) records a code fingerprint per phase and a canonical content hash per artifact; a phase runs again when its code changed and a consumer is stale only when the canonical content of an input changed (D-core-042); (b) M-F1-03: a GWA file that covers less than 99% of the country mask is completed from the files of the neighbours declared in `countries.yaml` (`gwa_neighbours`), cut to the mask (D-F1-030); (c) M-F1b-01: the audit records the mask coverage of the GWA layers and alerts below 99%; (d) M-F1-02: the bundled DEM file is no longer a layer of F1 or F1b. IDs altered: A-02, M-F1-02, M-F1-03, M-F1b-01. |
