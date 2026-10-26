@@ -105,44 +105,6 @@ def test_an_incomplete_period_fails_loud():
 
 
 @pytest.mark.unit
-def test_maps_draw_one_png_per_member_and_show_masked_cells(tmp_path):
-    from geofrea.climate_forcing import maps
-    from geofrea.land_eligibility.cells import cell_id
-
-    rows, cols = np.meshgrid(np.arange(100, 104), np.arange(200, 204), indexing="ij")
-    ids = cell_id(rows.ravel(), cols.ravel())
-    frames = []
-    for member in ("m0", "m_a_ssp126_2041_2070", "m_a_ssp370_2041_2070"):
-        base = 1.0 if member == "m0" else 1.05
-        frames.append(
-            pd.DataFrame(
-                {
-                    "cell_id": ids,
-                    "member": member,
-                    "delta_rsds": base,
-                    "delta_wind": base,
-                    "dT": 0.0 if member == "m0" else 2.0,
-                }
-            )
-        )
-    forcing = pd.concat(frames, ignore_index=True)
-    forcing = forcing[
-        ~((forcing["member"] == "m_a_ssp370_2041_2070") & (forcing["cell_id"] == ids[0]))
-    ]
-    masked = pd.DataFrame(
-        {"cell_id": [ids[0]], "member": ["m_a_ssp370_2041_2070"], "delta_wind": [9.0]}
-    )
-
-    out = maps.plot_all_members(forcing, masked, tmp_path, "ZZZ", {"m_a_ssp370_2041_2070": "note"})
-
-    assert sorted(p.name for p in out) == [
-        "ZZZ_m_a_ssp126_2041_2070.png",
-        "ZZZ_m_a_ssp370_2041_2070.png",
-    ]  # no m0
-    assert all(p.exists() and p.stat().st_size > 5000 for p in out)
-
-
-@pytest.mark.unit
 def test_the_wet_day_threshold_and_the_percentile_are_the_ones_given():
     ref = _daily(1995, 2014, lambda t: float(1 + (t.dayofyear % 20)))
     low = hz.wet_day_percentile(ref, 50.0, 1.0)

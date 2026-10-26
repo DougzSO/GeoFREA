@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import rasterio
+import yaml
 from rasterio.transform import from_origin
 
 from geofrea.overview.figures import ALIGNED_PANELS, build_overview
@@ -70,6 +71,31 @@ def _write_climate(base):
     pd.DataFrame(
         {"cell_id": ids[:2], "member": "m_a_ssp370_2041_2070", "delta_wind": 3.0, "reason": "test"}
     ).to_parquet(art / "forcing_masked.parquet", index=False)
+    grid = {"lat_resolution_deg": 1.0, "lon_resolution_deg": 1.25}
+    (art / "members.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "members": [
+                    {"member": "m0", "window": "1995-2014"},
+                    {
+                        "member": "m_a_ssp126_2041_2070",
+                        "gcm": "GCM-A",
+                        "ssp": "SSP1-2.6",
+                        "window": "2041-2070",
+                        "native_grid": grid,
+                    },
+                    {
+                        "member": "m_a_ssp370_2041_2070",
+                        "gcm": "GCM-A",
+                        "ssp": "SSP3-7.0",
+                        "window": "2041-2070",
+                        "native_grid": grid,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     hazard = pd.concat(
         [
             pd.DataFrame(

@@ -17,6 +17,7 @@ Credit: the 8-triangle compass rose and the alternating-segment scale bar follow
 from __future__ import annotations
 
 import functools
+import hashlib
 import math
 import re
 from collections.abc import Sequence
@@ -280,7 +281,19 @@ def _box_edge(west: float, east: float, south: float, north: float, n: int = 60)
     return xs, ys
 
 
+_FRAMES: dict = {}  # the frames already made, by the polygon and the extent: a country's polygon has hundreds of thousands of vertices
+
+
 def make_frame(polygon, extent: Extent | None = None, margin: float = EXTENT_MARGIN) -> MapFrame:
+    key = (hashlib.blake2b(polygon.wkb, digest_size=16).digest(), extent, margin)
+    if key not in _FRAMES:
+        if len(_FRAMES) >= 8:
+            _FRAMES.pop(next(iter(_FRAMES)))
+        _FRAMES[key] = _make_frame(polygon, extent, margin)
+    return _FRAMES[key]
+
+
+def _make_frame(polygon, extent: Extent | None, margin: float) -> MapFrame:
     """The frame of a country (lon/lat polygon): LAEA centred on its centroid, bounds of the projected polygon plus `margin` of its width
     and height on each side, or the bounds of the lon/lat `extent` (edges sampled) when it is given."""
     from pyproj import Transformer
@@ -1144,7 +1157,9 @@ class MapFigure:
             zorder=zorder,
             transform=self.ax.transData,
         )
-        self.ax.add_patch(patch)
+        self.ax.add_artist(
+            patch
+        )  # not `add_patch`: that walks every vertex of the polygon to update the limits
         self.use_colour(colour, self.no_data_label or NO_DATA_LABEL)
         return patch
 
@@ -1201,7 +1216,7 @@ class MapFigure:
                 edgecolor="none",
                 transform=self.ax.transData,
             )
-            self.ax.add_patch(patch)
+            self.ax.add_artist(patch)
             image.set_clip_path(patch)
         self.ax.set_xlim(frame.bounds[0], frame.bounds[1])
         self.ax.set_ylim(frame.bounds[2], frame.bounds[3])
@@ -1403,32 +1418,46 @@ def _draw_graticule(
     ax.set_ylim(ymin, ymax)
 
 
+_NEIGHBOURS: dict = {}  # the neighbours cut to a frame, kept: the sheets of a country share a frame
+
+
+def _remember(key, value):
+    if len(_NEIGHBOURS) >= 8:
+        _NEIGHBOURS.pop(next(iter(_NEIGHBOURS)))
+    _NEIGHBOURS[key] = value
+    return value
+
+
 def _neighbours_in_frame(neighbours, frame: MapFrame):
     """The neighbouring countries in the projection, cut by the rectangle of the map: a straight cut at the frame, not a buffer round the
     country (which leaves rounded shapes and white wedges)."""
     import geopandas as gpd
     import shapely
 
+    key = (id(neighbours), len(neighbours), frame.bounds, str(frame.crs))
+    if key in _NEIGHBOURS:
+        return _NEIGHBOURS[key]
     west, east, south, north = frame.lonlat_extent
     pad = 1.0
     wide = shapely.box(west - pad, south - pad, east + pad, north + pad)
     near = neighbours.to_crs("EPSG:4326").clip(wide)
     if not len(near):
-        return near.assign(gap=[])
+        return _remember(key, near.assign(gap=[]))
     projected = near.to_crs(frame.crs)
     xmin, xmax, ymin, ymax = frame.bounds
     # the borders of two sources of geometry never coincide: the gap between the country and its neighbours (not the sea) is closed
     gap = (
         projected.geometry.union_all()
-        .buffer(BORDER_GAP_M)
-        .intersection(frame.polygon.buffer(BORDER_GAP_M))
+        .simplify(BORDER_GAP_M / 20)
+        .buffer(BORDER_GAP_M, quad_segs=2)
+        .intersection(frame.polygon.simplify(BORDER_GAP_M / 20).buffer(BORDER_GAP_M, quad_segs=2))
     )
     cut = gpd.GeoSeries([*projected.geometry, gap], crs=frame.crs).clip_by_rect(
         xmin, ymin, xmax, ymax
     )
     out = gpd.GeoDataFrame(geometry=cut, crs=frame.crs)
     out["gap"] = [False] * len(projected) + [True]
-    return out[~out.geometry.is_empty].reset_index(drop=True)
+    return _remember(key, out[~out.geometry.is_empty].reset_index(drop=True))
 
 
 def _draw_locator(canvas: MapFigure, box: BoxMm, polygon, neighbours) -> list:

@@ -531,7 +531,11 @@ def _build_phase_specs(
 
     def climate_maps_run(context: PhaseContext) -> MapsSummary:
         """F4 (J-5): one diagnostic map per member."""
-        result = build_maps(context.country_code, figures)
+        result = build_maps(
+            context.country_code,
+            figures,
+            load_experiments(EXPERIMENTS_YAML).absolute_maps.display_smoothing,
+        )
         _register_json_artifact(context, "climate_maps", result)
         return result
 

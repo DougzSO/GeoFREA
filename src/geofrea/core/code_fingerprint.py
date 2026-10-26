@@ -40,7 +40,7 @@ PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "land_eligibility": ("land_eligibility",),
     "climate_forcing": ("climate_forcing",),
     "hazard_context": ("climate_forcing.hazards", "climate_forcing.pipeline"),
-    "climate_maps": ("climate_forcing.maps", "climate_forcing.pipeline"),
+    "climate_maps": ("climate_forcing.figures", "climate_forcing.pipeline"),
     "technical_potential": ("technical_potential",),
     "lcoe_modeling": ("lcoe_modeling",),
     "sample_size_convergence": ("robustness_analysis.convergence",),

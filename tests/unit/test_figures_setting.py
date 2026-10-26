@@ -131,10 +131,11 @@ def test_overview_none_writes_the_table_only_and_all_adds_the_layer_maps(data_di
 
 
 @pytest.mark.unit
-def test_climate_maps_are_member_level_and_drawn_only_with_all(data_dir):
+def test_climate_maps_are_the_ensemble_sheets_and_the_members_only_with_all(data_dir):
     _write_climate(data_dir)
-    assert build_maps(ISO, "all").n_figures == 2  # m0 is identity and is not drawn
-    for mode in ("summary", "none"):
-        assert build_maps(ISO, mode).n_figures == 0
+    # two members (m0 is identity and is not drawn): the ensemble sheet of each SSP, the three grids and the two supplementary member sheets
+    assert build_maps(ISO, "all").n_figures == 2 + 3 + 2
+    assert build_maps(ISO, "summary").n_figures == 2 + 3
+    assert build_maps(ISO, "none").n_figures == 0
     with pytest.raises(ValueError, match="figures must be"):
         build_maps(ISO, "some")
