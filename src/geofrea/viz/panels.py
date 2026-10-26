@@ -11,6 +11,7 @@ A map, a colour or a colour map keeps one meaning in the whole sheet (`use_colou
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 
@@ -43,9 +44,12 @@ from geofrea.viz.mapstyle import (
 PANEL_GAP_MM = 3.0  # between two maps of a row
 ROW_GAP_MM = 2.0  # between the bottom of a map and the caption of the next row
 TICK_MM = 5.0  # the degrees under the bottom row
-BAR_MM = 11.5  # a horizontal colour bar with its numbers and its name
+BAR_MM = 12.5  # a horizontal colour bar with its numbers and its name, and the space above it
 MAX_SHEET_MM = 250.0
 STIPPLE_MM = 1.8  # the distance between two dots of the stipple, on paper
+SLOT_MIN_MM = (
+    55.0  # a legend under a narrow map may be this wide (the room between two maps allowing)
+)
 STIPPLE_COLOUR = "#111111"
 
 
@@ -114,6 +118,9 @@ class PanelFigure:
         default_factory=list
     )  # the colour bar axes: one for all, or one per panel
     bar_boxes: list[BoxMm] = field(default_factory=list)
+    slot_boxes: list[BoxMm] = field(
+        default_factory=list
+    )  # the room of each legend: the bar, its numbers and its name, or the class patches
     furniture: dict[str, Furniture] = field(default_factory=dict)
     texts: dict[str, object] = field(default_factory=dict)
     artists: dict[str, list] = field(default_factory=dict)
@@ -163,6 +170,45 @@ def panel_sizes(
     return pw, pw * ratio
 
 
+def adaptive_grid(n: int, ratio: float, target: float = 1.0) -> tuple[int, int]:
+    """Rows and columns for `n` maps of a country whose map is `ratio` (height over width) tall: the arrangement whose sheet is closest to
+    `target` times as tall as it is wide, so that a tall country gets a row of narrow maps and a wide one a stack (T-10, T-11).
+
+    Only arrangements without an empty place are considered (`rows x cols == n`).
+    """
+    best = min(
+        ((n // c, c) for c in range(1, n + 1) if n % c == 0),
+        key=lambda rc: (abs(rc[0] * ratio / rc[1] - target), rc[0]),
+    )
+    return best
+
+
+def bar_space(bar: str, n_rows: int, slot_mm: float) -> float:
+    """The height the legend slots take: one slot under all the maps, one under each row, or none."""
+    return {"shared": slot_mm, "each": n_rows * slot_mm}.get(bar, 0.0)
+
+
+def legend_rows(labels: Sequence[str], width_mm: float, preset: Preset) -> list[list[int]]:
+    """The class labels packed into rows of a legend `width_mm` wide (a patch, its label and a gap each): the indices of each row."""
+    rows: list[list[int]] = [[]]
+    used = 0.0
+    for i, label in enumerate(labels):
+        w = ms.SWATCH_W_MM + 1.5 + ms._text_width_mm(label, preset.legend_pt) + 3.0
+        if rows[-1] and used + w > width_mm:
+            rows.append([])
+            used = 0.0
+        rows[-1].append(i)
+        used += w
+    return rows
+
+
+def legend_height_mm(labels: Sequence[str], width_mm: float, preset: Preset) -> float:
+    """The height of a class legend of `labels` in a map `width_mm` wide (0 without labels)."""
+    if not labels:
+        return 0.0
+    return len(legend_rows(labels, width_mm, preset)) * ms.ROW_MM + 3.0
+
+
 def new_panels(
     geometry,
     *,
@@ -185,12 +231,15 @@ def new_panels(
     no_data_label: str | None = None,
     graticule: bool = True,
     bar: str = "shared",
+    legend_labels: Sequence[str] = (),
 ) -> PanelFigure:
     """The axes, the colour bar slots, the title and the furniture of `n_rows x n_cols` maps of the country `geometry` (lon/lat).
 
     `captions` has one text per map, in reading order (left to right, top to bottom); `bar` is `shared` (one horizontal colour bar under
-    all the maps, for maps that share a scale) or `each` (one under each map, a single row, for maps of different variables) or `none`.
-    The rest is as in `mapstyle.new_map`; the projection and the frame are those of `new_map` for the same country.
+    all the maps, for maps that share a scale), `each` (a slot under each map, for maps of different variables: a colour bar, or the patches of
+    a class legend, `add_panel_classes`) or `none`. `legend_labels` are the longest set of labels of a class legend, so that the slot is as tall
+    as that legend needs at the width of a map. The rest is as in `mapstyle.new_map`; the projection and the frame are those of `new_map` for
+    the same country.
     """
     import geopandas as gpd
 
@@ -200,8 +249,6 @@ def new_panels(
         )
     if bar not in ("shared", "each", "none"):
         raise ValueError(f"bar is shared, each or none, got {bar!r}")
-    if bar == "each" and n_rows != 1:
-        raise ValueError("a colour bar under each map needs a single row of maps")
     pre = get_preset(preset)
     polygon = ms.contiguous_geometry(geometry) if contiguous else ms._as_geometry(geometry)
     frame = ms.make_frame(polygon, extent)
@@ -214,7 +261,6 @@ def new_panels(
     if source == ms.DEFAULT_SOURCE:
         source = ms.LABELS[lang]["source"]
     width = pre.width_mm if width_mm is None else width_mm
-    bar_mm = BAR_MM if bar != "none" else 0.0
     title_lines, sub_lines, header_mm = header_text(width, title, subtitle, pre)
     if total_text:
         total_text = ms.wrap_total_text(
@@ -222,35 +268,63 @@ def new_panels(
         )
     cw, ch = ms.compass_size_mm(pre)
 
-    # The footer needs the width of a map for the scale bar, the map needs the height of the footer, and a caption that does not fit the width of
-    # a narrow map takes more lines, which takes height from the map: a few passes settle it.
-    def sizes_for(footer: float, caption_mm: float):
-        pw, ph = panel_sizes(n_rows, n_cols, ratio, width, header_mm, footer, caption_mm, bar_mm)
+    # The footer needs the width of a map for the scale bar, the map needs the height of the footer, and a caption (or a class legend) that does not
+    # fit the width of a narrow map takes more lines, which takes height from the map: a few passes settle it.
+    def sizes_for(footer: float, caption_mm: float, slot_mm: float):
+        pw, ph = panel_sizes(
+            n_rows,
+            n_cols,
+            ratio,
+            width,
+            header_mm,
+            footer,
+            caption_mm,
+            bar_space(bar, n_rows, slot_mm),
+        )
         return pw, ph, footer_item_sizes(None, pw, total_text, source, pre, frame.width_km)
 
-    lines = 1
-    for _ in range(4):
+    # a narrow map (a tall country) leaves the gap that its widest caption word needs, so that two captions never touch
+    word_w = max(ms._text_width_mm(w, pre.label_pt, bold=True) for c in captions for w in c.split())
+    if legend_labels:  # and the widest entry of a class legend (patch, label), which is not broken
+        word_w = max(
+            word_w,
+            *(ms.SWATCH_W_MM + 1.5 + ms._text_width_mm(s, pre.legend_pt) for s in legend_labels),
+        )
+
+    def slot_width(pw: float) -> float:
+        """The room of a legend under a map: its own width, or more when the map is narrow (never into the slot of the next map)."""
+        if n_cols == 1:
+            return min(max(pw, SLOT_MIN_MM), width - LEFT_MM - RIGHT_MM)
+        gap = max(PANEL_GAP_MM, word_w - pw + 1.5)
+        return min(max(pw, SLOT_MIN_MM), pw + gap - 1.0)
+
+    lines, slot_mm = 1, BAR_MM
+    for _ in range(5):
         caption_mm = pre.label_pt * PT_MM * 1.3 * lines + 1.2
-        pw, ph, sizes = sizes_for(0.0, caption_mm)
+        pw, ph, sizes = sizes_for(0.0, caption_mm, slot_mm)
         _, footer = plan_footer(sizes, LEFT_MM, width - RIGHT_MM)
-        pw, ph, sizes = sizes_for(footer, caption_mm)
+        pw, ph, sizes = sizes_for(footer, caption_mm, slot_mm)
         wrapped = [ms._wrap(c, pw - 0.5, pre.label_pt, bold=True) for c in captions]
         need = max(len(w) for w in wrapped)
-        if need == lines:
+        need_slot = (
+            max(BAR_MM, legend_height_mm(legend_labels, slot_width(pw), pre))
+            if bar != "none"
+            else 0.0
+        )
+        if need == lines and abs(need_slot - slot_mm) < 1e-6:
             break
-        lines = need
+        lines, slot_mm = need, need_slot
     boxes, _ = plan_footer(sizes, LEFT_MM, width - RIGHT_MM)
+    bar_total = bar_space(bar, n_rows, slot_mm)
     height = (
         header_mm
         + BOTTOM_MM
         + footer
-        + bar_mm
+        + bar_total
         + TICK_MM
         + n_rows * (caption_mm + ph)
         + (n_rows - 1) * ROW_GAP_MM
     )
-    # a narrow map (a tall country) leaves the gap that its widest caption word needs, so that two captions never touch
-    word_w = max(ms._text_width_mm(w, pre.label_pt, bold=True) for c in captions for w in c.split())
     gap = max(PANEL_GAP_MM, word_w - pw + 1.5)
     grid_w = n_cols * pw + (n_cols - 1) * gap
     x_first = LEFT_MM + (width - LEFT_MM - RIGHT_MM - grid_w) / 2.0
@@ -258,7 +332,24 @@ def new_panels(
     placed = {"compass": Furniture("compass", compass_box, "header")}
     placed.update({n: Furniture(n, b, "footer") for n, b in boxes.items()})
 
-    y_bottom = BOTTOM_MM + footer + bar_mm + TICK_MM  # the bottom of the last row of maps
+    # from the bottom: the footer, the shared slot, then each row (its own slot under it when `each`, the degrees under the last one)
+    y = BOTTOM_MM + footer
+    shared_slot_y = y
+    if bar == "shared":
+        y += slot_mm
+    slot_y: dict[int, float] = {}
+    map_y0: dict[int, float] = {}
+    for r in reversed(range(n_rows)):
+        if bar == "each":
+            slot_y[r] = y
+            y += slot_mm
+        if r == n_rows - 1:
+            y += TICK_MM
+        map_y0[r] = y
+        y += ph + caption_mm
+        if r > 0:
+            y += ROW_GAP_MM
+    y_bottom = map_y0[n_rows - 1]
     with ms.plt.rc_context(ms._rc(pre)):
         fig = ms.plt.figure(figsize=(width / 25.4, height / 25.4), dpi=ms.DPI, facecolor="white")
         overlay = fig.add_axes((0, 0, 1, 1), facecolor="none")
@@ -284,7 +375,7 @@ def new_panels(
         for k, text in enumerate(captions):
             r, c = divmod(k, n_cols)
             x0 = x_first + c * (pw + gap)
-            y0 = y_bottom + (n_rows - 1 - r) * (caption_mm + ph + ROW_GAP_MM)
+            y0 = map_y0[r]
             box = (x0, y0, x0 + pw, y0 + ph)
             ax = fig.add_axes(sheet.mm_to_fig(box))
             ax.set_facecolor(SEA_COLOUR)
@@ -339,31 +430,32 @@ def new_panels(
                 va="bottom",
             )
             sheet.panels.append(panel)
-        sheet.grid_box = (
-            x_first,
-            y_bottom,
-            x_first + grid_w,
-            y_bottom + n_rows * (caption_mm + ph) + (n_rows - 1) * ROW_GAP_MM,
-        )
-        # colour bar slots
-        bar_y = (
-            BOTTOM_MM + footer + 1.0 + (bar_mm - COLORBAR_MM - 8.0)
-        )  # the numbers and the name are under the bar
-        bar_y = BOTTOM_MM + footer + 8.0
+        sheet.grid_box = (x_first, y_bottom, x_first + grid_w, map_y0[0] + ph + caption_mm)
+        # colour bar slots: the bar is at the top of its slot, its numbers and its name under it
         if bar == "shared":
             bw = min(0.6 * grid_w, 90.0)
             bx = x_first + (grid_w - bw) / 2.0
-            sheet.bar_boxes = [(bx, bar_y, bx + bw, bar_y + COLORBAR_MM)]
+            by = shared_slot_y + slot_mm - COLORBAR_MM - 1.0
+            sheet.bar_boxes = [(bx, by, bx + bw, by + COLORBAR_MM)]
+            sheet.slot_boxes = [(x_first, shared_slot_y, x_first + grid_w, shared_slot_y + slot_mm)]
         elif bar == "each":
-            sheet.bar_boxes = [
-                (
-                    p.layout.map_box[0] + 0.1 * pw,
-                    bar_y,
-                    p.layout.map_box[2] - 0.1 * pw,
-                    bar_y + COLORBAR_MM,
+            for k, p in enumerate(sheet.panels):
+                r = k // n_cols
+                by = slot_y[r] + slot_mm - COLORBAR_MM - 1.0
+                sheet.bar_boxes.append(
+                    (
+                        p.layout.map_box[0] + 0.1 * pw,
+                        by,
+                        p.layout.map_box[2] - 0.1 * pw,
+                        by + COLORBAR_MM,
+                    )
                 )
-                for p in sheet.panels
-            ]
+                centre = (p.layout.map_box[0] + p.layout.map_box[2]) / 2.0
+                half = slot_width(pw) / 2.0
+                left = max(centre - half, 2.0)
+                sheet.slot_boxes.append(
+                    (left, slot_y[r], min(left + 2 * half, width - 2.0), slot_y[r] + slot_mm)
+                )
         sheet.bars = [fig.add_axes(sheet.mm_to_fig(b)) for b in sheet.bar_boxes]
         # the header
         top = height - 2.0
@@ -426,6 +518,57 @@ def new_panels(
     if no_data_label:
         sheet.meta["no_data_label"] = no_data_label
     return sheet
+
+
+def add_panel_classes(
+    sheet: PanelFigure,
+    index: int,
+    labels: Sequence[str],
+    colours: Sequence,
+    meaning: str,
+) -> list:
+    """The patches of a class legend (a colour and its label, in rows) in the slot of the map `index`; the colour bar axes of that slot is hidden.
+
+    `meaning` names what the colours stand for in this sheet (a colour keeps one meaning in a sheet)."""
+    from matplotlib.patches import Rectangle
+
+    pre = sheet.preset
+    box = sheet.slot_boxes[index]
+    sheet.bars[index].set_visible(False)
+    rows = legend_rows(labels, box[2] - box[0], pre)
+    artists: list = []
+    y_top = box[3] - 1.5
+    for r, members in enumerate(rows):
+        x = box[0]
+        y = y_top - (r + 1) * ms.ROW_MM + (ms.ROW_MM - ms.SWATCH_H_MM) / 2.0
+        for i in members:
+            sheet.use_colour(colours[i], f"{meaning}: {labels[i]}")
+            artists.append(
+                sheet.overlay.add_patch(
+                    Rectangle(
+                        (x, y),
+                        ms.SWATCH_W_MM,
+                        ms.SWATCH_H_MM,
+                        facecolor=colours[i],
+                        edgecolor="#555555",
+                        linewidth=0.2,
+                    )
+                )
+            )
+            artists.append(
+                sheet.overlay.text(
+                    x + ms.SWATCH_W_MM + 1.5,
+                    y + ms.SWATCH_H_MM / 2.0,
+                    labels[i],
+                    fontsize=pre.legend_pt,
+                    color="#333333",
+                    ha="left",
+                    va="center",
+                )
+            )
+            x += ms.SWATCH_W_MM + 1.5 + ms._text_width_mm(labels[i], pre.legend_pt) + 3.0
+    sheet.artists[f"legend {index}"] = artists
+    return artists
 
 
 def add_panel_colorbar(

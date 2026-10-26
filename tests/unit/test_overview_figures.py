@@ -173,4 +173,7 @@ def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
         art / "cells_0p1deg_solar.parquet", index=False
     )  # must be ignored
     result = build_overview(ISO, "all")
-    assert f"{ISO}_eligibility.png" in [p.name for p in result.figures]
+    names = [p.name for p in result.figures]
+    assert f"{ISO}_F3_land-eligibility_solar_central.png" in names
+    assert f"{ISO}_F3_land-eligibility_wind_central.png" in names
+    assert f"{ISO}_F3_exclusion-contribution_central.png" in names

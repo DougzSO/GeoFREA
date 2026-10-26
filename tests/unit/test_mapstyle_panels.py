@@ -11,7 +11,13 @@ from matplotlib.transforms import Bbox
 
 from geofrea.viz import mapstyle as ms
 from geofrea.viz.examples import ARCHETYPES, archetype_country
-from geofrea.viz.panels import add_panel_colorbar, new_panels, panel_sizes, stipple_note
+from geofrea.viz.panels import (
+    add_panel_classes,
+    add_panel_colorbar,
+    new_panels,
+    panel_sizes,
+    stipple_note,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -78,7 +84,8 @@ def _boxes(sheet):
         out[f"map {i}"] = _mm(p.ax.get_tightbbox(r), sheet)
         out[f"caption {i}"] = _mm(p.caption.get_window_extent(r), sheet)
     for i, b in enumerate(sheet.bars):
-        out[f"bar {i}"] = _mm(b.get_tightbbox(r), sheet)
+        if b.get_visible():
+            out[f"bar {i}"] = _mm(b.get_tightbbox(r), sheet)
     return out
 
 
@@ -141,24 +148,85 @@ def test_every_map_has_the_same_frame_and_size_and_the_stipple_is_inside_the_cou
     sheet.fig.clf()
 
 
-def test_a_sheet_refuses_wrong_captions_and_a_bar_under_each_map_of_several_rows():
+def test_a_sheet_refuses_wrong_captions_and_an_unknown_bar_mode():
     c = archetype_country("LUX")
     with pytest.raises(ValueError, match="captions"):
         new_panels(c.geometry, iso="LUX", variable="V", captions=["a"], n_rows=1, n_cols=2)
-    with pytest.raises(ValueError, match="single row"):
+    with pytest.raises(ValueError, match="bar is"):
         new_panels(
-            c.geometry,
-            iso="LUX",
-            variable="V",
-            captions=list("abcd"),
-            n_rows=2,
-            n_cols=2,
-            bar="each",
+            c.geometry, iso="LUX", variable="V", captions=list("ab"), n_rows=1, n_cols=2, bar="x"
         )
     with pytest.raises(ValueError, match="OQ"):
         new_panels(
             c.geometry, iso="LUX", variable="V (OQ-12)", captions=["a", "b"], n_rows=1, n_cols=2
         )
+
+
+CLASS_LABELS = [
+    "None",
+    "E1 protected",
+    "E2 water",
+    "E3 riparian",
+    "E4 slope",
+    "E5 land cover",
+    "E6 population",
+]
+
+
+@pytest.mark.parametrize("iso", list(ARCHETYPES))
+@pytest.mark.parametrize("rows,cols", [(1, 2), (2, 1), (2, 2)])
+def test_a_bar_and_a_class_legend_under_their_maps_in_several_rows_do_not_overlap(iso, rows, cols):
+    c = archetype_country(iso)
+    caps = [f"Map {i}" for i in range(rows * cols)]
+    sheet = new_panels(
+        c.geometry,
+        iso=iso,
+        variable="Land eligibility",
+        captions=caps,
+        n_rows=rows,
+        n_cols=cols,
+        subtitle="Central scenario · 0.05° analysis grid",
+        neighbours=c.neighbours,
+        contiguous=c.contiguous,
+        bar="each",
+        legend_labels=CLASS_LABELS,
+    )
+    colours = ms.class_colours(6)
+    for i, panel in enumerate(sheet.panels):
+        if i % 2 == 0:
+            image = panel.draw_raster(c.cf, c.grid_extent, cmap="YlGn", norm=Normalize(0, 1))
+            add_panel_colorbar(sheet, image, "Eligible share", "neither", i)
+        else:
+            add_panel_classes(
+                sheet, i, CLASS_LABELS, [ms.CLASS_NONE_COLOUR, *colours], "Dominant exclusion"
+            )
+    sheet.fig.canvas.draw()
+    renderer = sheet.fig.canvas.get_renderer()
+    boxes = _boxes(sheet)
+    legends = {
+        f"legend {i}": _mm(Bbox.union([a.get_window_extent(renderer) for a in arts]), sheet)
+        for i, arts in (
+            (int(k.split()[1]), v) for k, v in sheet.artists.items() if k.startswith("legend")
+        )
+    }
+    boxes.update(legends)
+    names = list(boxes)
+    for i, a in enumerate(names):
+        for b in names[i + 1 :]:
+            assert not _meet(boxes[a], boxes[b]), f"{a} meets {b} ({iso} {rows}x{cols})"
+    w, h = sheet.width_mm, sheet.height_mm
+    for name, box in boxes.items():
+        assert box[0] >= -0.2 and box[1] >= -0.2 and box[2] <= w + 0.2 and box[3] <= h + 0.2, (
+            name,
+            box,
+        )
+    for name, box in legends.items():
+        slot = sheet.slot_boxes[int(name.split()[1])]
+        assert box[0] >= slot[0] - 0.2 and box[2] <= slot[2] + 0.2, f"{name} is wider than its map"
+        assert box[1] >= slot[1] - 0.2 and box[3] <= slot[3] + 0.2, (
+            f"{name} is taller than its slot"
+        )
+    sheet.fig.clf()
 
 
 def test_the_sheet_is_not_taller_than_the_page_and_the_maps_shrink_to_fit():

@@ -53,6 +53,7 @@ from geofrea.viz.context import (  # noqa: F401  (the context moved to viz; the 
     country_geometry,
     load_neighbours,
     map_context,
+    technology_name,
 )
 from geofrea.viz.display import DisplayLayer
 
@@ -258,11 +259,6 @@ UNIT_CIRCLE_CAPACITY, UNIT_CIRCLE_ENERGY = "Capacity (GW)", "Energy (TWh per yea
 NO_POTENTIAL_LABEL = ms.NO_DATA_LABEL
 SUBTITLE_CLIMATE = "reference climate"
 logger = logging.getLogger("geofrea.technical_potential.absolute_maps")
-
-
-def technology_name(tech: str) -> str:
-    """The name in a title: the technology key with the underscores as spaces and capitals (A-04: the code names no technology)."""
-    return tech.replace("_", " ").title()
 
 
 def _palette(name: str, n: int) -> list[tuple[float, ...]]:

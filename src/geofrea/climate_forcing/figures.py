@@ -24,11 +24,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
 from geofrea.core.scale import active_scale
-from geofrea.land_eligibility.cells import row_col_from_id
 from geofrea.viz import mapstyle as ms
-from geofrea.viz.context import MapContext
+from geofrea.viz.context import Lattice, MapContext, lattice_of, to_grid
 from geofrea.viz.panels import PanelFigure, add_panel_colorbar, new_panels, stipple_note
 
 AGREEMENT = 2.0 / 3.0  # the dots: fewer than this share of the models agree on the sign
@@ -67,45 +65,6 @@ BY_KEY = {v.key: v for v in VARIABLES}
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ the grids
-
-
-@dataclass(frozen=True)
-class Lattice:
-    """The cells of the country as a rectangle of the 0.05 degree lattice: first and last row and column."""
-
-    row0: int
-    row1: int
-    col0: int
-    col1: int
-
-    @property
-    def shape(self) -> tuple[int, int]:
-        return self.row1 - self.row0 + 1, self.col1 - self.col0 + 1
-
-    @property
-    def extent(self) -> ms.Extent:
-        cell = active_scale().cell_deg
-        west = CELL_ORIGIN_LON + self.col0 * cell
-        north = CELL_ORIGIN_LAT - self.row0 * cell
-        return (
-            west,
-            west + self.shape[1] * cell,
-            north - self.shape[0] * cell,
-            north,
-        )
-
-
-def lattice_of(cell_ids: np.ndarray) -> Lattice:
-    rows, cols = row_col_from_id(np.asarray(cell_ids))
-    return Lattice(int(rows.min()), int(rows.max()), int(cols.min()), int(cols.max()))
-
-
-def to_grid(cell_ids: np.ndarray, values: np.ndarray, lattice: Lattice) -> np.ndarray:
-    """Values at their cells on the lattice, NaN elsewhere."""
-    rows, cols = row_col_from_id(np.asarray(cell_ids))
-    out = np.full(lattice.shape, np.nan, dtype="float32")
-    out[rows - lattice.row0, cols - lattice.col0] = values
-    return out
 
 
 def drawn_quantity(variable: Variable, raw: np.ndarray) -> np.ndarray:

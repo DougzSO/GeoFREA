@@ -408,7 +408,16 @@ PLAIN_CMAPS = {  # kinds that do not depend on the technology
     "delta": "RdBu",  # climate change of the solar resource (centred on 0 as percent, on 1 as ratio)
     "delta_alt": "BrBG",  # climate change of the wind resource
     "temperature": "YlOrRd",  # change of temperature (sequential)
+    # the aligned layers of F2a (diagnostic figures): one colour map for each kind of layer, so that a colour means one thing in a sheet
+    "distance": "viridis",  # distances to the river, the road, the grid, the lakes (km)
+    "elevation": "cividis",
+    "slope": "magma_r",
+    "population": "Purples",
+    "water": "Blues",
+    "weibull_k": "PuRd",
+    "air_density": "BuPu",
 }
+TRUNCATED_PLAIN = {"population", "water", "weibull_k", "air_density"}  # sequential maps that start at white: cut from 15% like the technologies
 COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
 
 # Qualitative classes (the dominant exclusion E1-E6): the Okabe-Ito colours without green and without the black, and a neutral grey for "none".
@@ -444,6 +453,8 @@ def colormap_for(kind: str, tech: str | None = None) -> Colormap:
         return _truncated(TECH_CMAPS[tech], TRUNCATE_FROM)
     if kind not in PLAIN_CMAPS:
         raise ValueError(f"unknown kind {kind!r}")
+    if kind in TRUNCATED_PLAIN:
+        return _truncated(PLAIN_CMAPS[kind], TRUNCATE_FROM)
     return matplotlib.colormaps[PLAIN_CMAPS[kind]]
 
 
@@ -1846,6 +1857,7 @@ def raster_map(
     display_layer: display.DisplayLayer | None = None,
     display_smoothing: str = "auto",
     coarse_source: bool = False,
+    extent: Extent | None = None,
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
@@ -1884,6 +1896,7 @@ def raster_map(
             locator=locator,
             graticule=graticule,
             contiguous=contiguous,
+            extent=extent,
         )
 
     canvas = build(resolution)

@@ -756,7 +756,11 @@ def _build_phase_specs(
 
     def overview_run(context: PhaseContext) -> OverviewSummary:
         """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
-        result = build_overview(context.country_code, figures)
+        result = build_overview(
+            context.country_code,
+            figures,
+            load_experiments(EXPERIMENTS_YAML).absolute_maps.display_smoothing,
+        )
         _register_json_artifact(context, "overview", result)
         return result
 

@@ -118,3 +118,56 @@ def country_context(iso: str, cell_ids: np.ndarray | None = None) -> MapContext:
     else:
         raise FileNotFoundError(f"the mainland border of {iso} is missing: {path}")
     return map_context(geometry, load_neighbours(iso))
+
+
+def technology_name(tech: str) -> str:
+    """The name in a title: the technology key with the underscores as spaces and capitals (A-04: the code names no technology)."""
+    return tech.replace("_", " ").title()
+
+
+@dataclass(frozen=True)
+class Lattice:
+    """The cells of a country as a rectangle of the lattice of the active scale: first and last row and column."""
+
+    row0: int
+    row1: int
+    col0: int
+    col1: int
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        return self.row1 - self.row0 + 1, self.col1 - self.col0 + 1
+
+    @property
+    def extent(self) -> ms.Extent:
+        cell = active_scale().cell_deg
+        west = CELL_ORIGIN_LON + self.col0 * cell
+        north = CELL_ORIGIN_LAT - self.row0 * cell
+        return (west, west + self.shape[1] * cell, north - self.shape[0] * cell, north)
+
+
+def lattice_of(cell_ids: np.ndarray) -> Lattice:
+    rows, cols = row_col_from_id(np.asarray(cell_ids))
+    return Lattice(int(rows.min()), int(rows.max()), int(cols.min()), int(cols.max()))
+
+
+def to_grid(cell_ids: np.ndarray, values: np.ndarray, lattice: Lattice) -> np.ndarray:
+    """Values at their cells on the lattice, NaN elsewhere."""
+    rows, cols = row_col_from_id(np.asarray(cell_ids))
+    out = np.full(lattice.shape, np.nan, dtype="float32")
+    out[rows - lattice.row0, cols - lattice.col0] = values
+    return out
+
+
+def lattice_of_extent(extent: ms.Extent) -> Lattice:
+    """The lattice rectangle that an extent (west, east, south, north) of whole cells covers."""
+    cell = active_scale().cell_deg
+    west, east, south, north = extent
+    col0 = round((west - CELL_ORIGIN_LON) / cell)
+    row0 = round((CELL_ORIGIN_LAT - north) / cell)
+    return Lattice(
+        row0,
+        row0 + round((north - south) / cell) - 1,
+        col0,
+        col0 + round((east - west) / cell) - 1,
+    )
