@@ -16,9 +16,10 @@ Credit: the 8-triangle compass rose and the alternating-segment scale bar follow
 
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import matplotlib
@@ -27,7 +28,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import ticker
-from matplotlib.colors import LogNorm, Normalize, PowerNorm
+from matplotlib.colors import (
+    Colormap,
+    LinearSegmentedColormap,
+    LogNorm,
+    Normalize,
+    PowerNorm,
+    to_hex,
+    to_rgb,
+)
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.patches import Rectangle
@@ -88,20 +97,13 @@ def get_preset(preset: str | Preset | None) -> Preset:
         raise ValueError(f"unknown preset {preset!r}; one of {sorted(PRESETS)}") from None
 
 
-NEIGHBOUR_COLOUR = "#ececec"
+NEIGHBOUR_COLOUR = "#e3e3e3"
 SEA_COLOUR = "white"
 OUTLINE_COLOUR = "#222222"
 NO_DATA_COLOUR = (
     "#bdbdbd"  # "no potential": a medium grey that is neither the neighbours (#ececec) nor the sea
 )
 
-COLORMAPS = {  # one colormap per kind of variable, the same in every country
-    "potential": "viridis",
-    "energy": "viridis",
-    "capacity_factor": "magma",
-    "delta": "RdBu",
-    "delta_alt": "BrBG",
-}
 SKEW_LIMIT = 20.0  # P98 / P50 above this: logarithmic or power norm
 CLIP_PERCENTILES = (2.0, 98.0)
 
@@ -195,11 +197,225 @@ def format_degrees(value: float, axis: str) -> str:
 
 
 # --------------------------------------------------------------------------------------------------------------- colour and normalisation
+# The semantics of colour and of scale live here and nowhere else: variable -> (colormap, scale, scope). No module of a phase chooses a
+# colormap or colour limits by itself.
+
+SOLAR, WIND = "solar", "wind"
+TRUNCATE_FROM = 0.15  # the sequential maps of the technologies start here, so that the lowest value is not the white of the sea
+
+TECH_CMAPS = {
+    SOLAR: "YlOrBr",
+    WIND: "GnBu",
+}  # warm for the sun, cool for the wind; viridis is for neither
+TECH_KINDS = ("potential", "energy", "density", "capacity_factor", "eligible_share")
+PLAIN_CMAPS = {  # kinds that do not depend on the technology
+    "excluded_share": "Reds",  # diagnostic figures only, never beside a map coloured by technology
+    "delta": "RdBu",  # climate change of the solar resource (centred on 0 as percent, on 1 as ratio)
+    "delta_alt": "BrBG",  # climate change of the wind resource
+    "temperature": "YlOrRd",  # change of temperature (sequential)
+}
+COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
+
+# Qualitative classes (the dominant exclusion E1-E6): the Okabe-Ito colours without green and without the black, and a neutral grey for "none".
+CLASS_COLOURS = ("#E69F00", "#56B4E9", "#0072B2", "#CC79A7", "#F0E442", "#D55E00")
+CLASS_NONE_COLOUR = "#7f7f7f"
+
+MIN_DELTA_E = 8.0  # two colours with different meanings must differ at least this much (CIE76), also under colour-blind simulation
+MIN_DELTA_E_CMAP = 5.0  # a flat colour against the colours a continuous map passes through
 
 
-def colormap_for(kind: str) -> str:
-    """The colormap of a kind of variable (`potential`, `energy`, `capacity_factor`, `delta`, `delta_alt`)."""
-    return COLORMAPS[kind]
+@functools.cache
+def _truncated(name: str, start: float) -> Colormap:
+    base = matplotlib.colormaps[name]
+    cmap = LinearSegmentedColormap.from_list(
+        f"{name}_from{round(start * 100):d}", base(np.linspace(start, 1.0, 256))
+    )
+    matplotlib.colormaps.register(
+        cmap, force=True
+    )  # by name, so that a figure can look it up again
+    return cmap
+
+
+def colormap_for(kind: str, tech: str | None = None) -> Colormap:
+    """The colormap of a kind of variable.
+
+    The kinds in `TECH_KINDS` (`potential`, `energy`, `density`, `capacity_factor`, `eligible_share`) take the family of the technology
+    (`solar`: YlOrBr, `wind`: GnBu, truncated to start at 15%); the others do not depend on it (`excluded_share`: Reds, `delta`: RdBu,
+    `delta_alt`: BrBG, `temperature`: YlOrRd).
+    """
+    if kind in TECH_KINDS:
+        if tech not in TECH_CMAPS:
+            raise ValueError(f"the kind {kind!r} needs a technology, one of {sorted(TECH_CMAPS)}")
+        return _truncated(TECH_CMAPS[tech], TRUNCATE_FROM)
+    if kind not in PLAIN_CMAPS:
+        raise ValueError(f"unknown kind {kind!r}")
+    return matplotlib.colormaps[PLAIN_CMAPS[kind]]
+
+
+def class_colours(n: int) -> list[str]:
+    """The first `n` qualitative class colours (colour-blind safe, no green)."""
+    if not 0 < n <= len(CLASS_COLOURS):
+        raise ValueError(f"at most {len(CLASS_COLOURS)} classes have a colour, asked {n}")
+    return list(CLASS_COLOURS[:n])
+
+
+# --- colour-blind simulation (Machado, Oliveira and Fernandes 2009, severity 1) and CIE76 distance
+
+_CVD = {
+    "deuteranopia": np.array(
+        [
+            [0.367322, 0.860646, -0.227968],
+            [0.280085, 0.672501, 0.047413],
+            [-0.011820, 0.042940, 0.968881],
+        ]
+    ),
+    "protanopia": np.array(
+        [
+            [0.152286, 1.052583, -0.204868],
+            [0.114503, 0.786281, 0.099216],
+            [-0.003882, -0.048116, 1.051998],
+        ]
+    ),
+}
+VISIONS = ("normal", *_CVD)
+
+
+def _to_linear(rgb: np.ndarray) -> np.ndarray:
+    return np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+
+
+def _from_linear(lin: np.ndarray) -> np.ndarray:
+    lin = np.clip(lin, 0.0, 1.0)
+    return np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+
+
+def simulate_vision(colour, vision: str) -> tuple[float, float, float]:
+    """The sRGB colour as seen with `vision` (`normal`, `deuteranopia` or `protanopia`)."""
+    rgb = np.asarray(to_rgb(colour), dtype="float64")
+    if vision == "normal":
+        return tuple(float(x) for x in rgb)
+    out = _from_linear(_CVD[vision] @ _to_linear(rgb))
+    return tuple(float(x) for x in out)
+
+
+def _lab(rgb) -> np.ndarray:
+    lin = _to_linear(np.asarray(rgb, dtype="float64"))
+    xyz = (
+        np.array(
+            [
+                [0.4124564, 0.3575761, 0.1804375],
+                [0.2126729, 0.7151522, 0.0721750],
+                [0.0193339, 0.1191920, 0.9503041],
+            ]
+        )
+        @ lin
+    ) / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 216 / 24389, np.cbrt(xyz), (24389 / 27 * xyz + 16) / 116)
+    return np.array([116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])])
+
+
+def delta_e(colour_a, colour_b, vision: str = "normal") -> float:
+    """CIE76 distance between two colours as seen with `vision`."""
+    a = _lab(simulate_vision(colour_a, vision))
+    b = _lab(simulate_vision(colour_b, vision))
+    return float(np.linalg.norm(a - b))
+
+
+def colour_conflicts(colours: dict[str, str], cmaps: dict[str, str] | None = None) -> list[str]:
+    """What is wrong with the colours of a figure: `colours` maps a flat colour to its meaning and `cmaps` a colormap name to its meaning.
+
+    A conflict is a flat colour that is the same as another with a different meaning, two colormaps with different meanings that
+    are the same one, or two meanings whose colours differ by less than `MIN_DELTA_E` for a normal eye, for deuteranopia or for
+    protanopia (flat against the colours a colormap passes through: `MIN_DELTA_E_CMAP`).
+    """
+    problems: list[str] = []
+    flat = [(to_hex(c).lower(), m) for c, m in colours.items()]
+    for i, (ca, ma) in enumerate(flat):
+        for cb, mb in flat[i + 1 :]:
+            if ma == mb:
+                continue
+            if ca == cb:
+                problems.append(f"{ca} means {ma!r} and {mb!r}")
+                continue
+            for vision in VISIONS:
+                d = delta_e(ca, cb, vision)
+                if d < MIN_DELTA_E:
+                    problems.append(
+                        f"{ma!r} ({ca}) and {mb!r} ({cb}) differ by {d:.1f} for {vision}"
+                    )
+                    break
+    maps = list((cmaps or {}).items())
+    for i, (na, ma) in enumerate(maps):
+        for nb, mb in maps[i + 1 :]:
+            if na == nb and ma != mb:
+                problems.append(f"the colormap {na!r} means {ma!r} and {mb!r}")
+    for colour, meaning in flat:
+        for name, cmap_meaning in maps:
+            if cmap_meaning == meaning:
+                continue
+            cm = matplotlib.colormaps[name]
+            for v in np.linspace(0.0, 1.0, 11):
+                for vision in VISIONS:
+                    if delta_e(colour, cm(v), vision) < MIN_DELTA_E_CMAP:
+                        problems.append(
+                            f"{meaning!r} ({to_hex(colour)}) is almost the colour of {cmap_meaning!r} ({name} at {v:.1f}) for {vision}"
+                        )
+                        break
+                else:
+                    continue
+                break
+    return problems
+
+
+# --- scales (T-03)
+
+SCALE_MODES = ("fixed", "percentile", "shared")
+SCALE_SCOPES = ("per_country", "shared_across_countries")
+
+
+@dataclass(frozen=True)
+class ScaleSpec:
+    """How the colour limits of a variable are chosen.
+
+    `fixed`: the physical limits in `limits`. `percentile`: the percentiles of the values drawn (`percentiles`). `shared`: the limits
+    computed over the values of every map that must be compared (`shared_limits`). `scope` says whether the limits are those of one
+    country or are shared across countries; it goes to the PNG metadata and, when a clip is drawn, to the subtitle.
+    """
+
+    mode: str
+    limits: tuple[float, float] | None = None
+    percentiles: tuple[float, float] = CLIP_PERCENTILES
+    scope: str = "per_country"
+    diverging: bool = False
+    center: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.mode not in SCALE_MODES:
+            raise ValueError(f"scale mode {self.mode!r} is not one of {SCALE_MODES}")
+        if self.scope not in SCALE_SCOPES:
+            raise ValueError(f"scale scope {self.scope!r} is not one of {SCALE_SCOPES}")
+        if self.mode == "fixed" and (self.limits is None or not self.limits[0] < self.limits[1]):
+            raise ValueError("a fixed scale needs limits (low, high) with low < high")
+
+
+FIXED_CF = {
+    SOLAR: (0.10, 0.25),
+    WIND: (0.0, 0.60),
+}  # capacity factor, dimensionless, the same in every country
+
+
+def default_scale(kind: str, tech: str | None = None) -> ScaleSpec:
+    """The default scale of a kind of variable (spec v2, section 4): CF fixed per technology and the same in the three countries; shares
+    fixed at 0-1; changes symmetric about the centre at percentiles of the data; densities at percentiles of each country."""
+    if kind == "capacity_factor":
+        if tech not in FIXED_CF:
+            raise ValueError("the capacity factor needs a technology")
+        return ScaleSpec("fixed", FIXED_CF[tech], scope="shared_across_countries")
+    if kind in ("eligible_share", "excluded_share"):
+        return ScaleSpec("fixed", (0.0, 1.0), scope="shared_across_countries")
+    if kind.startswith("delta"):
+        return ScaleSpec("percentile", diverging=True)
+    return ScaleSpec("percentile")
 
 
 @dataclass(frozen=True)
@@ -212,6 +428,8 @@ class NormInfo:
     vmax: float
     kind: str  # linear, log, power or diverging
     skew: float  # P98 / P50 (inf when the median is not positive)
+    mode: str = "percentile"  # fixed, percentile or shared
+    scope: str = "per_country"
 
 
 def robust_norm(
@@ -252,8 +470,80 @@ def robust_norm(
 
 
 def _extend(arr: np.ndarray, vmin: float, vmax: float) -> str:
+    """The colour bar `extend` that matches the data: an arrow where, and only where, values lie beyond the limits."""
+    arr = arr[np.isfinite(arr)]
     below, above = bool((arr < vmin).any()), bool((arr > vmax).any())
     return "both" if below and above else "min" if below else "max" if above else "neither"
+
+
+def resolve_scale(
+    values, spec: ScaleSpec, shared_limits: tuple[float, float] | None = None
+) -> NormInfo:
+    """The norm of `values` under `spec`; `extend` is always the one the data need against the limits that were used.
+
+    `fixed` uses `spec.limits`. `percentile` uses the percentiles of `values`, unless the scope is `shared_across_countries` and
+    `shared_limits` were given (then they rule and the mode is `shared`). `shared` needs `shared_limits` (or `spec.limits`).
+    """
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        raise ValueError("no finite value to normalise")
+    limits = None
+    mode = spec.mode
+    if mode == "fixed":
+        limits = spec.limits
+    elif mode == "shared" or (
+        spec.scope == "shared_across_countries" and shared_limits is not None
+    ):
+        limits = shared_limits or spec.limits
+        if limits is None:
+            raise ValueError(
+                "a shared scale needs the limits computed over the maps that are compared"
+            )
+        mode = "shared"
+    if limits is None:
+        info = robust_norm(
+            arr, diverging=spec.diverging, center=spec.center, percentiles=spec.percentiles
+        )
+        return replace(info, mode="percentile", scope=spec.scope)
+    lo, hi = float(limits[0]), float(limits[1])
+    return NormInfo(
+        Normalize(lo, hi), _extend(arr, lo, hi), lo, hi, "linear", math.nan, mode, spec.scope
+    )
+
+
+def shared_limits(arrays: Sequence, spec: ScaleSpec) -> tuple[float, float]:
+    """Limits for maps that are compared (scenarios, SSPs, countries): the percentiles of all their values together
+    (symmetric about the centre for a diverging variable), so that the same colour means the same value in every map."""
+    pooled = np.concatenate([np.asarray(a, dtype="float64").ravel() for a in arrays])
+    info = robust_norm(
+        pooled, diverging=spec.diverging, center=spec.center, percentiles=spec.percentiles
+    )
+    return info.vmin, info.vmax
+
+
+def _fmt(x: float) -> str:
+    return f"{x:.3g}"
+
+
+def clip_note(info: NormInfo, unit: str = "") -> str:
+    """What the subtitle must say when the colour scale cuts values (empty when nothing is cut): the limit, the mode and the scope."""
+    if info.extend == "neither":
+        return ""
+    u = f" {unit}" if unit else ""
+    if info.extend == "max":
+        what = f"scale truncated at {_fmt(info.vmax)}{u}"
+    elif info.extend == "min":
+        what = f"scale truncated below {_fmt(info.vmin)}{u}"
+    else:
+        what = f"scale clipped to {_fmt(info.vmin)} to {_fmt(info.vmax)}{u}"
+    scope = "shared across countries" if info.scope == "shared_across_countries" else "this country"
+    return f"{what} ({info.mode}, {scope})"
+
+
+def format_subtitle(*parts: str | None) -> str:
+    """The subtitle `Scenario · Climate (· more)`: the parts that are not empty, joined by ` · `."""
+    return " · ".join(p for p in parts if p)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- layout
@@ -579,10 +869,35 @@ class MapFigure:
         default_factory=dict
     )  # the drawn pieces of each piece of furniture, for measuring
     preset: Preset = THESIS
+    colours: dict[str, str] = field(
+        default_factory=dict
+    )  # flat colour (hex) -> what it means in this figure
+    cmaps: dict[str, str] = field(
+        default_factory=dict
+    )  # colormap name -> what it means in this figure
+    meta: dict[str, str] = field(default_factory=dict)  # what goes into the PNG text chunks
 
     def mm_to_fig(self, box: BoxMm) -> tuple[float, float, float, float]:
         w, h = self.layout.width_mm, self.layout.height_mm
         return box[0] / w, box[1] / h, (box[2] - box[0]) / w, (box[3] - box[1]) / h
+
+    def use_colour(self, colour, meaning: str) -> None:
+        """Record that `colour` means `meaning` here; the same colour with another meaning is an error."""
+        key = to_hex(colour).lower()
+        if self.colours.setdefault(key, meaning) != meaning:
+            raise ValueError(
+                f"{key} means {self.colours[key]!r} and {meaning!r} in the same figure"
+            )
+
+    def use_cmap(self, cmap, meaning: str) -> None:
+        """Record that the colormap `cmap` (name or object) means `meaning` here."""
+        name = cmap if isinstance(cmap, str) else cmap.name
+        if self.cmaps.setdefault(name, meaning) != meaning:
+            raise ValueError(f"the colormap {name!r} means {self.cmaps[name]!r} and {meaning!r}")
+
+    def colour_problems(self) -> list[str]:
+        """Conflicts of the colours of this figure, also under deuteranopia and protanopia (`colour_conflicts`)."""
+        return colour_conflicts(self.colours, self.cmaps)
 
 
 MapCanvas = MapFigure  # the name before COMMAND 66
@@ -686,7 +1001,9 @@ def new_map(
         for spine in ax.spines.values():
             spine.set_linewidth(0.4)
             spine.set_color("#888888")
+        canvas.use_colour(SEA_COLOUR, "sea")
         if neighbours is not None:
+            canvas.use_colour(NEIGHBOUR_COLOUR, "neighbouring countries")
             neighbours.plot(
                 ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.3, zorder=0.5
             )
@@ -763,6 +1080,7 @@ def add_colorbar(canvas: MapFigure, mappable, label: str, extend: str = "neither
     """The colour bar in the legend slot: vertical to the right of a tall map, horizontal below a wide one."""
     orientation = "vertical" if canvas.layout.legend == "right" else "horizontal"
     pt = canvas.preset.legend_pt
+    canvas.use_cmap(mappable.get_cmap(), label)
     with plt.rc_context(_rc(canvas.preset)):
         bar = canvas.fig.colorbar(mappable, cax=canvas.cax, orientation=orientation, extend=extend)
         bar.outline.set_linewidth(0.3)
@@ -784,18 +1102,33 @@ def raster_map(
     variable: str,
     label: str,
     kind: str = "potential",
+    tech: str | None = None,
     subtitle: str = "",
+    scenario: str | None = None,
+    climate: str | None = None,
     total_text: str | None = None,
     width_mm: float | None = None,
     preset: str | Preset | None = "thesis",
     neighbours=None,
     diverging_center: float = 0.0,
     country: str | None = None,
+    scale: ScaleSpec | None = None,
+    shared: tuple[float, float] | None = None,
+    unit: str | None = None,
 ) -> MapFigure:
-    """A continuous raster map in the common style: robust norm, the colormap of `kind`, extend where needed."""
+    """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
+
+    The scale is `scale` or `default_scale(kind, tech)`; `shared` are the limits of `shared_limits` for maps that are compared. The
+    subtitle is `subtitle` or `Scenario · Climate`; when the scale cuts values it ends with what was cut (`clip_note`, in `unit`).
+    `tech` is `solar` or `wind` (needed by the kinds that take the family of the technology).
+    """
     data = np.ma.masked_invalid(grid)
-    diverging = kind.startswith("delta")
-    info = robust_norm(data.compressed(), diverging=diverging, center=diverging_center)
+    if kind.startswith("delta") and scale is None:
+        scale = replace(default_scale(kind, tech), center=diverging_center)
+    spec = scale or default_scale(kind, tech)
+    info = resolve_scale(data.compressed(), spec, shared)
+    base = subtitle or format_subtitle(scenario, climate)
+    subtitle = format_subtitle(base, clip_note(info, unit if unit is not None else label))
     canvas = new_map(
         geometry,
         iso=iso,
@@ -812,7 +1145,7 @@ def raster_map(
         data,
         extent=extent_grid,
         origin="upper",
-        cmap=colormap_for(kind),
+        cmap=colormap_for(kind, tech),
         norm=info.norm,
         interpolation="nearest",
         zorder=2,
@@ -821,7 +1154,19 @@ def raster_map(
     canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
     canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
     add_colorbar(canvas, image, label, info.extend)
+    canvas.meta.update(scale_meta(info))
     return canvas
+
+
+def scale_meta(info: NormInfo) -> dict[str, str]:
+    """The scale of a map as PNG text: the mode (fixed, percentile, shared), the scope, the limits, the norm and the extend."""
+    return {
+        "scale_mode": info.mode,
+        "scale_scope": info.scope,
+        "scale_limits": f"{info.vmin:.6g},{info.vmax:.6g}",
+        "scale_norm": info.kind,
+        "scale_extend": info.extend,
+    }
 
 
 def save_png(canvas_or_fig, path: Path) -> Path:
@@ -885,6 +1230,19 @@ def nice_values_below(maximum: float, n: int = 3) -> list[float]:
     return [top / 10.0**i for i in range(n)]
 
 
+def qualitative_legend(
+    title: str, labels: Sequence[str], none_label: str | None = None
+) -> ClassedLegend:
+    """The legend of a categorical map (dominant exclusion E1-E6, land cover): named patches in the colour-blind safe class colours, and a
+    neutral grey for a class that means "none", never a colour bar."""
+    colours = class_colours(len(labels))
+    labels = list(labels)
+    if none_label:
+        labels.append(none_label)
+        colours.append(CLASS_NONE_COLOUR)
+    return ClassedLegend(title=title, labels=tuple(labels), colours=tuple(colours))
+
+
 def legend_space(spec: ClassedLegend, preset: Preset = THESIS) -> tuple[float, float]:
     """(side, below) space in mm that the legend needs: `side` is the width of the strip right of a tall map, `below` the height under a wide one."""
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
@@ -918,7 +1276,9 @@ def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, lis
     text_kw = {"fontsize": pt, "color": "#333333"}
     pieces: list = []
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
-    colours = list(spec.colours) + (["#d9d9d9"] if spec.no_value_label else [])
+    colours = list(spec.colours) + ([NO_DATA_COLOUR] if spec.no_value_label else [])
+    for text, colour in zip(labels, colours, strict=True):
+        canvas.use_colour(colour, text)
     line_mm = pt * PT_MM * 1.3
 
     def swatch(x, y, w, colour):

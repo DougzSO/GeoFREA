@@ -35,6 +35,7 @@ def _build(
         technology="Solar PV",
         variable="Installable capacity",
         label="MW per cell",
+        tech="solar",
         subtitle="Central scenario · reference climate",
         total_text=total or "National total\n1,234.5 GW",
         width_mm=width or (CASES[name] if preset == "thesis" else None),
@@ -140,9 +141,9 @@ def test_diverging_norm_is_centred():
 
 
 def test_colormaps_by_kind():
-    assert ms.colormap_for("potential") == "viridis" == ms.colormap_for("energy")
-    assert ms.colormap_for("capacity_factor") == "magma"
-    assert ms.colormap_for("delta") == "RdBu" and ms.colormap_for("delta_alt") == "BrBG"
+    assert ms.colormap_for("potential", "solar").name.startswith("YlOrBr")
+    assert ms.colormap_for("energy", "wind").name.startswith("GnBu")
+    assert ms.colormap_for("delta").name == "RdBu" and ms.colormap_for("delta_alt").name == "BrBG"
 
 
 # ---------------------------------------------------------------------------------------------------------------------- scale bar
@@ -395,12 +396,14 @@ def test_synthetic_maps_match_their_baseline(name, tmp_path):
 
 def test_the_hash_notices_a_moved_compass(tmp_path):
     canvas, _ = _build("wide")
-    base = dhash(ms.save_png(canvas, tmp_path / "a.png"))
+    first = ms.save_png(canvas, tmp_path / "a.png")
     other = _build("wide")[0]
     for artist in other.artists["compass"]:
         artist.remove()
-    changed = dhash(ms.save_png(other, tmp_path / "b.png"))
-    assert hamming(base, changed) > 0
+    second = ms.save_png(other, tmp_path / "b.png")
+    with Image.open(first) as a, Image.open(second) as b:
+        assert not np.array_equal(np.asarray(a), np.asarray(b))
+    assert hamming(dhash(first, 32), dhash(second, 32)) > 0
 
 
 def test_synthetic_shapes_are_the_three_documented_ones():
