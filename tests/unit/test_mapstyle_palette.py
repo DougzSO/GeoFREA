@@ -234,11 +234,11 @@ def test_extend_follows_the_data_not_the_percentiles():
 def test_a_clip_is_declared_in_the_subtitle_with_its_limit_mode_and_scope():
     info = ms.resolve_scale(np.array([1.0, 2.0, 30.0]), ms.ScaleSpec("fixed", (0.0, 10.0)))
     note = ms.clip_note(info, "MW/km²")
-    assert "truncated at 10 MW/km²" in note and "fixed" in note and "this country" in note
+    assert (
+        note == "Scale: fixed"
+    )  # the limit, the scope and the norm are in the metadata of the PNG (COMMAND 67b)
     cf = ms.resolve_scale(np.array([0.05, 0.3]), ms.default_scale("capacity_factor", "solar"))
-    assert "clipped to 0.1 to 0.25" in ms.clip_note(
-        cf
-    ) and "shared across countries" in ms.clip_note(cf)
+    assert ms.clip_note(cf) == "Scale: fixed" and cf.scope == "shared_across_countries"
     none = ms.resolve_scale(np.array([1.0, 2.0]), ms.ScaleSpec("fixed", (0.0, 10.0)))
     assert ms.clip_note(none, "x") == ""
     assert (
@@ -265,8 +265,8 @@ def test_a_raster_map_declares_its_clip_and_its_scale_in_subtitle_and_metadata()
         neighbours=country.neighbours,
     )
     text = canvas.texts["subtitle"].get_text().replace("\n", " ")
-    assert text.startswith("Central · Reference climate · scale ")
-    assert "fixed" in text and "shared across countries" in text
+    assert text.startswith("Central · Reference climate")
+    assert text.endswith("Scale: fixed") and "0.1" not in text  # the limits are in the metadata
     assert (
         canvas.meta["scale_mode"] == "fixed"
         and canvas.meta["scale_scope"] == "shared_across_countries"
