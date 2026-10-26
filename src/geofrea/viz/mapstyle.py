@@ -101,6 +101,7 @@ def get_preset(preset: str | Preset | None) -> Preset:
 NEIGHBOUR_COLOUR = "#e3e3e3"
 SEA_COLOUR = "white"
 OUTLINE_COLOUR = "#222222"
+NO_DATA_LABEL = "no potential"
 NO_DATA_COLOUR = (
     "#bdbdbd"  # "no potential": a medium grey that is neither the neighbours (#ececec) nor the sea
 )
@@ -195,6 +196,171 @@ def format_degrees(value: float, axis: str) -> str:
         return "0°"
     hemisphere = ("N" if v > 0 else "S") if axis == "lat" else ("E" if v > 0 else "W")
     return f"{text}°{hemisphere}"
+
+
+# ------------------------------------------------------------------------------------------------------------ projection and clipping (T-06, T-08)
+# The map is drawn in a Lambert azimuthal equal-area projection centred on the country (only for drawing: the areas of the analysis are
+# computed on the sphere, elsewhere). A raster is copied cell by cell into the projected frame (nearest neighbour, nothing interpolated)
+# and clipped by the country polygon, so the coast and the border are the vector line and never the staircase of the cells.
+
+NEIGHBOUR_BUFFER_DEG = 2.5  # neighbouring countries are drawn within this distance of the border
+RENDER_DPI = (
+    200  # resolution of the reprojected raster on paper; the cells are copied, never smoothed
+)
+GRATICULE_COLOUR = "#b0b0b0"
+
+
+def laea_crs(lon0: float, lat0: float):
+    """The Lambert azimuthal equal-area CRS centred on (lon0, lat0), in metres."""
+    from pyproj import CRS
+
+    return CRS.from_proj4(
+        f"+proj=laea +lat_0={lat0:.6f} +lon_0={lon0:.6f} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+    )
+
+
+@dataclass(frozen=True)
+class MapFrame:
+    """The projection of one map: the CRS, the two transformers, the bounds of the drawing in metres and the country in the projection."""
+
+    crs: object
+    forward: object  # lon/lat -> x, y
+    inverse: object  # x, y -> lon/lat
+    bounds: tuple[float, float, float, float]  # xmin, xmax, ymin, ymax in metres
+    polygon: object  # the country, projected
+    lonlat_extent: Extent  # west, east, south, north that contain the frame
+
+    @property
+    def width_m(self) -> float:
+        return self.bounds[1] - self.bounds[0]
+
+    @property
+    def height_m(self) -> float:
+        return self.bounds[3] - self.bounds[2]
+
+    @property
+    def ratio(self) -> float:
+        """Height over width of the map on paper."""
+        return self.height_m / self.width_m
+
+    @property
+    def width_km(self) -> float:
+        return self.width_m / 1000.0
+
+    def to_xy(self, lon, lat):
+        """lon/lat (degrees) to metres in the frame."""
+        return self.forward.transform(
+            np.asarray(lon, dtype="float64"), np.asarray(lat, dtype="float64")
+        )
+
+    def project_geometry(self, geometry):
+        """A shapely geometry in lon/lat in the projection of the frame (edges densified first)."""
+        import shapely
+        from shapely.ops import transform
+
+        return transform(self.forward.transform, shapely.segmentize(geometry, 0.1))
+
+
+def _box_edge(west: float, east: float, south: float, north: float, n: int = 60):
+    xs = np.concatenate(
+        [np.linspace(west, east, n), np.full(n, east), np.linspace(east, west, n), np.full(n, west)]
+    )
+    ys = np.concatenate(
+        [
+            np.full(n, south),
+            np.linspace(south, north, n),
+            np.full(n, north),
+            np.linspace(north, south, n),
+        ]
+    )
+    return xs, ys
+
+
+def make_frame(polygon, extent: Extent | None = None, margin: float = EXTENT_MARGIN) -> MapFrame:
+    """The frame of a country (lon/lat polygon): LAEA centred on its centroid, bounds of the projected polygon plus `margin` of its width
+    and height on each side, or the bounds of the lon/lat `extent` (edges sampled) when it is given."""
+    from pyproj import Transformer
+
+    centre = polygon.centroid
+    crs = laea_crs(centre.x, centre.y)
+    forward = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+    inverse = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+    frame = MapFrame(crs, forward, inverse, (0.0, 1.0, 0.0, 1.0), polygon, (0, 0, 0, 0))
+    poly_xy = frame.project_geometry(polygon)
+    if extent is None:
+        xmin, ymin, xmax, ymax = poly_xy.bounds
+        dx, dy = (xmax - xmin) * margin, (ymax - ymin) * margin
+        bounds = (xmin - dx, xmax + dx, ymin - dy, ymax + dy)
+    else:
+        x, y = forward.transform(*_box_edge(*extent))
+        bounds = (float(x.min()), float(x.max()), float(y.min()), float(y.max()))
+    bx, by = _box_edge_xy(bounds)
+    lon, lat = inverse.transform(bx, by)
+    lonlat = (float(lon.min()), float(lon.max()), float(lat.min()), float(lat.max()))
+    return MapFrame(crs, forward, inverse, bounds, poly_xy, lonlat)
+
+
+def _box_edge_xy(bounds, n: int = 60):
+    xmin, xmax, ymin, ymax = bounds
+    return _box_edge(xmin, xmax, ymin, ymax, n)
+
+
+def geometry_path(geometry):
+    """A matplotlib Path (with holes) of a Polygon or MultiPolygon, to clip with."""
+    from matplotlib.path import Path as MplPath
+
+    polygons = [geometry] if geometry.geom_type == "Polygon" else list(geometry.geoms)
+    vertices, codes = [], []
+    for polygon in polygons:
+        for ring in (polygon.exterior, *polygon.interiors):
+            xy = np.asarray(ring.coords)
+            vertices.append(xy)
+            codes += [MplPath.MOVETO] + [MplPath.LINETO] * (len(xy) - 2) + [MplPath.CLOSEPOLY]
+    return MplPath(np.concatenate(vertices), codes)
+
+
+def reproject_nearest(
+    data: np.ndarray, extent_grid: Extent, frame: MapFrame, pixel_m: float
+) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    """The lon/lat grid `data` (row 0 north, `extent_grid` = west, east, south, north; 2-D values or 3-D RGBA) copied into the projected
+    frame: each pixel of the frame takes the value of the cell that contains its centre. Nothing is interpolated.
+
+    Returns the array (NaN, or transparent for RGBA, where the frame is outside the grid) and its extent in metres.
+    """
+    xmin, xmax, ymin, ymax = frame.bounds
+    nx, ny = (
+        max(math.ceil((xmax - xmin) / pixel_m), 1),
+        max(math.ceil((ymax - ymin) / pixel_m), 1),
+    )
+    xs = xmin + (np.arange(nx) + 0.5) * pixel_m
+    ys = ymax - (np.arange(ny) + 0.5) * pixel_m
+    gx, gy = np.meshgrid(xs, ys)
+    lon, lat = frame.inverse.transform(gx.ravel(), gy.ravel())
+    west, east, south, north = extent_grid
+    gny, gnx = data.shape[:2]
+    cols = np.floor((lon - west) / (east - west) * gnx).astype(np.int64)
+    rows = np.floor((north - lat) / (north - south) * gny).astype(np.int64)
+    inside = (cols >= 0) & (cols < gnx) & (rows >= 0) & (rows < gny)
+    if data.ndim == 3:
+        out = np.zeros((ny * nx, data.shape[2]), dtype="float64")
+        out[inside] = data[rows[inside], cols[inside]]
+        out = out.reshape(ny, nx, data.shape[2])
+    else:
+        values = np.ma.filled(np.ma.asarray(data, dtype="float64"), np.nan)
+        out = np.full(ny * nx, np.nan)
+        out[inside] = values[rows[inside], cols[inside]]
+        out = out.reshape(ny, nx)
+    return out, (xmin, xmin + nx * pixel_m, ymax - ny * pixel_m, ymax)
+
+
+def resolution_note(cell_deg: float | None = None, native_m: float | None = None) -> str:
+    """What the subtitle says about the resolution of the data drawn: `0.05° analysis grid` for the results of the analysis, `native ~30 m`
+    for a descriptive layer drawn at the resolution it has."""
+    if (cell_deg is None) == (native_m is None):
+        raise ValueError("give the cell of the analysis grid or the native resolution, not both")
+    if cell_deg is not None:
+        return f"{cell_deg:g}° analysis grid"
+    return f"native resolution ~{native_m:g} m"
 
 
 # --------------------------------------------------------------------------------------------------------------- colour and normalisation
@@ -602,10 +768,14 @@ def compass_size_mm(preset: Preset = THESIS) -> tuple[float, float]:
 
 
 def header_text(
-    width_mm: float, title: str, subtitle: str, preset: Preset = THESIS
+    width_mm: float,
+    title: str,
+    subtitle: str,
+    preset: Preset = THESIS,
+    reserve_mm: float = 0.0,
 ) -> tuple[list[str], list[str], float]:
     """The title and subtitle wrapped to the room the compass rose leaves, and the height of the header that holds them and the rose."""
-    room = width_mm - 2.0 - compass_size_mm(preset)[0] - 3.0
+    room = width_mm - 2.0 - compass_size_mm(preset)[0] - 3.0 - reserve_mm
     title_lines = _wrap(title, room, preset.title_pt, bold=True)
     sub_lines = _wrap(subtitle, room, preset.label_pt) if subtitle else []
     text_h = (
@@ -631,24 +801,47 @@ class Layout:
     legend: str  # right or below
     header_box: BoxMm
     footer_mm: float  # height of the footer strip under everything
+    no_data_box: BoxMm | None = None  # the legend entry of the part of the country without value
+
+
+def fitted_width_mm(
+    ratio: float,
+    width_mm: float,
+    side_mm: float,
+    header_mm: float = HEADER_MM,
+    footer_mm: float = 14.0,
+    max_height_mm: float = MAX_HEIGHT_MM,
+) -> float:
+    """Width of the figure: `width_mm`, or less for a very tall country whose map is limited by the height of the sheet (the figure does
+    not keep a wide empty band on each side of a narrow map). Never below 42% of `width_mm` and 80 mm, where the title and the footer still fit."""
+    if ratio <= 1.0:
+        return width_mm
+    map_w = (max_height_mm - header_mm - BOTTOM_MM - footer_mm) / ratio
+    needed = LEFT_MM + RIGHT_MM + side_mm + map_w
+    return min(width_mm, max(needed, min(width_mm, max(0.42 * width_mm, 80.0))))
 
 
 def compute_layout(
-    extent: Extent,
+    extent: Extent | None,
     width_mm: float = FULL_WIDTH_MM,
     footer_mm: float = 0.0,
     max_height_mm: float = MAX_HEIGHT_MM,
     legend_side_mm: float | None = None,
     legend_below_mm: float | None = None,
     header_mm: float = HEADER_MM,
+    ratio: float | None = None,
+    no_data_mm: float = 0.0,
 ) -> Layout:
-    """Figure size and boxes: the height follows the aspect of the extent; the legend is to the right of a tall map, below a wide one.
+    """Figure size and boxes: the height follows the aspect of the map (`ratio`, or that of the lon/lat `extent`); the legend is to the right
+    of a tall map, below a wide one.
 
-    A very tall country is limited to `max_height_mm`: the map gets narrower and is centred, the figure width stays `width_mm`.
-    The colour bar has the height of the map (right) or 70% of its width (below).
+    A very tall country is limited to `max_height_mm`: the map gets narrower and is centred. The colour bar has the height of the map
+    (right) or 70% of its width (below); `no_data_mm` is the room that the entry "no potential" takes from the bar (its height on the right, its
+    width below), and the entry gets `Layout.no_data_box`.
     """
-    ratio = map_height_over_width(extent)
-    side = legend_position(extent) == "right"
+    if ratio is None:
+        ratio = map_height_over_width(extent)
+    side = ratio > 1.0
     side_mm = (
         LEGEND_SIDE_MM if legend_side_mm is None else legend_side_mm
     )  # a classed legend needs more than a colour bar
@@ -661,15 +854,30 @@ def compute_layout(
     x0 = LEFT_MM + (avail_w - map_w) / 2.0
     y0 = BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
     map_box = (x0, y0, x0 + map_w, y0 + map_h)
+    no_data_box = None
     if side:
         bar_x = x0 + map_w + 4.0
-        legend_box = (bar_x, y0, bar_x + COLORBAR_MM, y0 + map_h)
+        legend_box = (bar_x, y0 + no_data_mm, bar_x + COLORBAR_MM, y0 + map_h)
+        if no_data_mm:
+            no_data_box = (bar_x, y0, bar_x + side_mm - 4.0, y0 + no_data_mm - 1.5)
     else:
         bar_y = footer_mm + 9.0  # under the bar: its tick labels and its name
-        legend_box = (x0 + 0.15 * map_w, bar_y, x0 + 0.85 * map_w, bar_y + COLORBAR_MM)
+        bar_x0, bar_x1 = x0 + 0.15 * map_w, x0 + 0.85 * map_w
+        if no_data_mm:
+            bar_x1 = min(bar_x1, x0 + map_w - no_data_mm - 3.0)
+            bar_x0 = min(bar_x0, bar_x1 - 0.35 * map_w)
+            no_data_box = (x0 + map_w - no_data_mm, bar_y, x0 + map_w, bar_y + COLORBAR_MM)
+        legend_box = (bar_x0, bar_y, bar_x1, bar_y + COLORBAR_MM)
     header_box = (0.0, height - header_mm, width_mm, height)
     return Layout(
-        width_mm, height, map_box, legend_box, "right" if side else "below", header_box, footer_mm
+        width_mm,
+        height,
+        map_box,
+        legend_box,
+        "right" if side else "below",
+        header_box,
+        footer_mm,
+        no_data_box,
     )
 
 
@@ -685,16 +893,30 @@ def nice_length_km(target_km: float) -> float:
     return min(candidates, key=lambda c: abs(math.log(c / target_km)))
 
 
-def scale_bar_length_km(extent: Extent, share: float = 0.20) -> float:
-    """Rounded length (1, 2 or 5 x 10^n km) closest to `share` of the map width, measured at the central latitude."""
+def _scale_width_km(extent: Extent | None, width_km: float | None) -> float:
+    """The width of the map in km: given (projected maps), or measured at the central latitude of the lon/lat `extent`."""
+    if width_km is not None:
+        return width_km
     _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-    width_km = (extent[1] - extent[0]) * float(lon_km[0])
-    return nice_length_km(share * width_km)
+    return (extent[1] - extent[0]) * float(lon_km[0])
 
 
-def _scale_bar_length_mm(extent: Extent, map_w_mm: float) -> float:
-    _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-    return scale_bar_length_km(extent) / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
+def scale_bar_length_km(
+    extent: Extent | None, share: float = 0.20, width_km: float | None = None
+) -> float:
+    """Rounded length (1, 2 or 5 x 10^n km) closest to `share` of the map width (`width_km` in the projection of the map, or the width of
+    the lon/lat `extent` at its central latitude)."""
+    return nice_length_km(share * _scale_width_km(extent, width_km))
+
+
+def _scale_bar_length_mm(
+    extent: Extent | None, map_w_mm: float, width_km: float | None = None
+) -> float:
+    return (
+        scale_bar_length_km(extent, width_km=width_km)
+        / _scale_width_km(extent, width_km)
+        * map_w_mm
+    )
 
 
 @dataclass(frozen=True)
@@ -707,18 +929,19 @@ class Furniture:
 
 
 def footer_item_sizes(
-    extent: Extent,
+    extent: Extent | None,
     map_w_mm: float,
     total_text: str | None,
     source: str | None,
     preset: Preset = THESIS,
+    width_km: float | None = None,
 ) -> dict[str, tuple[float, float]]:
     """Size in mm (padding included) of what the footer holds, in reading order: scale bar, box of totals, source."""
     pt = preset.legend_pt
-    label = _text_width_mm(f"{scale_bar_length_km(extent):g} km", pt)
+    label = _text_width_mm(f"{scale_bar_length_km(extent, width_km=width_km):g} km", pt)
     sizes = {
         "scale_bar": (
-            _scale_bar_length_mm(extent, map_w_mm)
+            _scale_bar_length_mm(extent, map_w_mm, width_km)
             + _text_width_mm("0", pt) / 2.0
             + label / 2.0
             + 2 * PAD_MM,
@@ -819,12 +1042,17 @@ def draw_compass(overlay, box: BoxMm, preset: Preset = THESIS) -> list:
 
 
 def draw_scale_bar(
-    overlay, box: BoxMm, extent: Extent, map_w_mm: float, preset: Preset = THESIS
+    overlay,
+    box: BoxMm,
+    extent: Extent | None,
+    map_w_mm: float,
+    preset: Preset = THESIS,
+    width_km: float | None = None,
 ) -> list:
     """Four alternating segments labelled 0, half and full length in km, calculated at the central latitude (craei-brazil `scale_bar`)."""
     pt = preset.legend_pt
-    km = scale_bar_length_km(extent)
-    length = _scale_bar_length_mm(extent, map_w_mm)
+    km = scale_bar_length_km(extent, width_km=width_km)
+    length = _scale_bar_length_mm(extent, map_w_mm, width_km)
     seg = length / 4.0
     x0 = (
         box[0] + PAD_MM + _text_width_mm("0", pt) / 2.0
@@ -877,6 +1105,77 @@ class MapFigure:
         default_factory=dict
     )  # colormap name -> what it means in this figure
     meta: dict[str, str] = field(default_factory=dict)  # what goes into the PNG text chunks
+    frame: MapFrame | None = None  # the projection of the map (LAEA centred on the country)
+    no_data_label: str | None = None
+
+    def to_xy(self, lon, lat):
+        """lon/lat (degrees) to the metres of the map frame."""
+        return self.frame.to_xy(lon, lat)
+
+    def fill_country(self, colour=NO_DATA_COLOUR, zorder: float = 1.5):
+        """Paint the country in the grey of "no potential" under the data: what the data do not cover stays grey and has its legend entry."""
+        from matplotlib.patches import PathPatch
+
+        patch = PathPatch(
+            geometry_path(self.frame.polygon),
+            facecolor=colour,
+            edgecolor="none",
+            zorder=zorder,
+            transform=self.ax.transData,
+        )
+        self.ax.add_patch(patch)
+        self.use_colour(colour, self.no_data_label or NO_DATA_LABEL)
+        return patch
+
+    def draw_raster(
+        self,
+        data,
+        extent_grid: Extent,
+        *,
+        cmap=None,
+        norm=None,
+        zorder: float = 2.0,
+        clip: bool = True,
+    ):
+        """Draw a lon/lat grid (row 0 north, `extent_grid` = west, east, south, north; 2-D values, or 3-D RGBA) in the projected frame.
+
+        Each pixel of the map takes the value of the cell that contains it (nearest neighbour, no interpolation, no anti-aliasing, rasterised),
+        and the image is clipped by the polygon of the country, so the coast and the border are the vector line, not the staircase of the cells.
+        """
+        from matplotlib.patches import PathPatch
+
+        frame = self.frame
+        map_w_mm = self.layout.map_box[2] - self.layout.map_box[0]
+        pixel_m = frame.width_m / max(map_w_mm / 25.4 * RENDER_DPI, 1.0)
+        array = (
+            np.asarray(data, dtype="float64") if np.ndim(data) == 3 else np.ma.masked_invalid(data)
+        )
+        out, extent_m = reproject_nearest(array, extent_grid, frame, pixel_m)
+        if out.ndim == 2:
+            out = np.ma.masked_invalid(out)
+        image = self.ax.imshow(
+            out,
+            extent=extent_m,
+            origin="upper",
+            cmap=cmap,
+            norm=norm,
+            interpolation="nearest",
+            zorder=zorder,
+            aspect="equal",
+            rasterized=True,
+        )
+        if clip:
+            patch = PathPatch(
+                geometry_path(frame.polygon),
+                facecolor="none",
+                edgecolor="none",
+                transform=self.ax.transData,
+            )
+            self.ax.add_patch(patch)
+            image.set_clip_path(patch)
+        self.ax.set_xlim(frame.bounds[0], frame.bounds[1])
+        self.ax.set_ylim(frame.bounds[2], frame.bounds[3])
+        return image
 
     def mm_to_fig(self, box: BoxMm) -> tuple[float, float, float, float]:
         w, h = self.layout.width_mm, self.layout.height_mm
@@ -1017,6 +1316,91 @@ def totals_text(
     return f"{words['total']}: " + " · ".join(parts)
 
 
+def _draw_graticule(canvas: MapFigure) -> None:
+    """Meridians and parallels in thin light lines, labelled in degrees where they cross the left and the bottom edge of the map."""
+    frame, ax = canvas.frame, canvas.ax
+    xmin, xmax, ymin, ymax = frame.bounds
+    west, east, south, north = frame.lonlat_extent
+    lon_ticks = [
+        t
+        for t in ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]).tick_values(west, east)
+        if west < t < east
+    ]
+    lat_ticks = [
+        t
+        for t in ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]).tick_values(south, north)
+        if south < t < north
+    ]
+    style = {"color": GRATICULE_COLOUR, "linewidth": 0.3, "linestyle": (0, (1.5, 2.0)), "zorder": 3}
+    xt, xl, yt, yl = [], [], [], []
+    sweep_lon = np.linspace(west, east, 240)
+    sweep_lat = np.linspace(south, north, 240)
+    for lat in lat_ticks:
+        x, y = frame.to_xy(sweep_lon, np.full_like(sweep_lon, lat))
+        ax.plot(x, y, scalex=False, scaley=False, **style)
+        order = np.argsort(x)
+        if x.min() <= xmin <= x.max():
+            y_edge = float(np.interp(xmin, x[order], y[order]))
+            if ymin < y_edge < ymax:
+                yt.append(y_edge)
+                yl.append(format_degrees(lat, "lat"))
+    for lon in lon_ticks:
+        x, y = frame.to_xy(np.full_like(sweep_lat, lon), sweep_lat)
+        ax.plot(x, y, scalex=False, scaley=False, **style)
+        order = np.argsort(y)
+        if y.min() <= ymin <= y.max():
+            x_edge = float(np.interp(ymin, y[order], x[order]))
+            if xmin < x_edge < xmax:
+                xt.append(x_edge)
+                xl.append(format_degrees(lon, "lon"))
+    ax.set_xticks(xt, xl)
+    ax.set_yticks(yt, yl)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+
+
+def _draw_locator(canvas: MapFigure, box: BoxMm, polygon, neighbours) -> list:
+    """The locator inset (overview figures only): the country in dark grey among its neighbours within 10 degrees, in the same projection."""
+    import geopandas as gpd
+
+    frame = make_frame(polygon, extent=None, margin=0.0)
+    wide = polygon.buffer(10.0)
+    ax = canvas.fig.add_axes(canvas.mm_to_fig(box))
+    ax.set_facecolor(SEA_COLOUR)
+    xmin, ymin, xmax, ymax = frame.project_geometry(wide).bounds
+    target = (box[2] - box[0]) / (
+        box[3] - box[1]
+    )  # the limits get the shape of the inset, so that nothing is stretched or dropped
+    cx, cy = (xmin + xmax) / 2.0, (ymin + ymax) / 2.0
+    half_w, half_h = (xmax - xmin) / 2.0, (ymax - ymin) / 2.0
+    if half_w / half_h < target:
+        half_w = half_h * target
+    else:
+        half_h = half_w / target
+    xmin, xmax, ymin, ymax = cx - half_w, cx + half_w, cy - half_h, cy + half_h
+    if neighbours is not None:
+        near = neighbours.to_crs("EPSG:4326").clip(wide)
+        if len(near):
+            near.to_crs(frame.crs).plot(
+                ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.2, zorder=1
+            )
+    gpd.GeoSeries([frame.polygon], crs=frame.crs).plot(ax=ax, color=LOCATOR_COLOUR, zorder=3)
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for spine in ax.spines.values():
+        spine.set_linewidth(0.4)
+        spine.set_color("#888888")
+    canvas.use_colour(LOCATOR_COLOUR, "this country (locator)")
+    return [ax]
+
+
+LOCATOR_COLOUR = "#4d4d4d"
+LOCATOR_W_MM = 24.0  # width of the inset in mm; its height is that of the compass box
+
+
 def new_map(
     geometry,
     *,
@@ -1035,53 +1419,77 @@ def new_map(
     country: str | None = None,
     source: str | None = DEFAULT_SOURCE,
     lang: str = "en",
+    no_data_label: str | None = None,
+    locator: bool = False,
+    graticule: bool = True,
 ) -> MapFigure:
     """Axes, legend slot, title and furniture of a map of the country `geometry` (lon/lat), ready to receive the data.
 
-    The extent comes from the country geometry (+3% margin, far islands out) unless given. `preset` gives the fonts and, unless
-    `width_mm` is given, the width. `neighbours` is a GeoDataFrame drawn in very light grey under everything; the sea stays white. Draw the
-    data on `canvas.ax` and the colour bar on `canvas.cax` (`add_colorbar`), then save with `save_png`.
+    The map is drawn in a Lambert azimuthal equal-area projection centred on the country (`make_frame`); its frame is the projected country
+    plus 3% (far islands out), or the bounds of `extent` (lon/lat) when it is given. `preset` gives the fonts and, unless `width_mm` is given,
+    the width (a very tall country gets a narrower figure, `fitted_width_mm`). `neighbours` (a GeoDataFrame) are drawn in light grey within
+    `NEIGHBOUR_BUFFER_DEG` of the border, the sea stays white. `no_data_label` adds the legend entry for the part of the country without
+    value (drawn by `fill_country`), `locator` the inset that says where the country is (overview figures only). Draw the data with
+    `canvas.draw_raster` (or `draw_choropleth`) and the colour bar on `canvas.cax` (`add_colorbar`), then save with `save_png`.
     """
+    import geopandas as gpd
+
     pre = get_preset(preset)
-    width_mm = pre.width_mm if width_mm is None else width_mm
     polygon = contiguous_geometry(geometry) if contiguous else _as_geometry(geometry)
-    extent = extent or country_extent(polygon, contiguous=False)
+    frame = make_frame(polygon, extent)
+    ratio = frame.ratio
     title = format_title(country or country_name(iso, lang), technology, variable)
     validate_label(subtitle, "subtitle")
     if source == DEFAULT_SOURCE:
         source = LABELS[lang]["source"]
-    for text in (total_text, source):
+    for text in (total_text, source, no_data_label):
         if text:
             validate_label(text, "footer text")
+    side_mm = LEGEND_SIDE_MM if legend_side_mm is None else legend_side_mm
+    no_data_mm = 0.0
+    if no_data_label:
+        entry_w = SWATCH_W_MM + 2.0 + _text_width_mm(no_data_label, pre.legend_pt)
+        if ratio > 1.0:
+            side_mm = max(side_mm, 4.0 + entry_w + 3.0)
+            no_data_mm = ROW_MM + 1.5
+        else:
+            no_data_mm = entry_w + 1.0
+    base_width = pre.width_mm if width_mm is None else width_mm
+    width_mm = fitted_width_mm(ratio, base_width, side_mm)
     if total_text:
         total_text = wrap_total_text(
             total_text, width_mm - LEFT_MM - RIGHT_MM - 2 * PAD_MM - 4.0, pre.legend_pt
         )
-    title_lines, sub_lines, header_mm = header_text(width_mm, title, subtitle, pre)
+    cw, ch = compass_size_mm(pre)
+    locator_w = LOCATOR_W_MM if locator else 0.0
+    title_lines, sub_lines, header_mm = header_text(
+        width_mm, title, subtitle, pre, reserve_mm=locator_w + (3.0 if locator else 0.0)
+    )
 
     def layout_for(footer: float) -> Layout:
         return compute_layout(
-            extent,
+            None,
             width_mm,
             footer_mm=footer,
-            legend_side_mm=legend_side_mm,
+            legend_side_mm=side_mm,
             legend_below_mm=legend_below_mm,
             header_mm=header_mm,
+            ratio=ratio,
+            no_data_mm=no_data_mm,
         )
 
     # The footer height depends on the width of the scale bar, which depends on the map width, which depends on the footer height when the
     # map is limited by the height of the sheet. The footer only shrinks the map, so the second pass cannot need more room than the first.
     layout = layout_for(0.0)
     sizes = footer_item_sizes(
-        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+        None, layout.map_box[2] - layout.map_box[0], total_text, source, pre, frame.width_km
     )
     _, footer = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
     layout = layout_for(footer)
     sizes = footer_item_sizes(
-        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+        None, layout.map_box[2] - layout.map_box[0], total_text, source, pre, frame.width_km
     )
     boxes, _ = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
-    cw, ch = compass_size_mm(pre)
     compass_box = (
         width_mm - 1.0 - cw,
         layout.height_mm - 1.0 - ch,
@@ -1089,13 +1497,23 @@ def new_map(
         layout.height_mm - 1.0,
     )
     placed = {"compass": Furniture("compass", compass_box, "header")}
+    if locator:
+        lbox = (
+            compass_box[0] - 3.0 - locator_w,
+            compass_box[1] + PAD_MM,
+            compass_box[0] - 3.0,
+            compass_box[3] - PAD_MM,
+        )
+        placed["locator"] = Furniture("locator", lbox, "header")
     placed.update({n: Furniture(n, b, "footer") for n, b in boxes.items()})
 
     with plt.rc_context(_rc(pre)):
         fig = plt.figure(
             figsize=(layout.width_mm / 25.4, layout.height_mm / 25.4), dpi=DPI, facecolor="white"
         )
-        canvas = MapFigure(fig, None, None, None, layout, extent, placed, preset=pre)
+        canvas = MapFigure(
+            fig, None, None, None, layout, frame.lonlat_extent, placed, preset=pre, frame=frame
+        )
         ax = fig.add_axes(canvas.mm_to_fig(layout.map_box))
         ax.set_facecolor(SEA_COLOUR)
         cax = fig.add_axes(canvas.mm_to_fig(layout.legend_box))
@@ -1106,30 +1524,32 @@ def new_map(
         overlay.set_zorder(5)
         canvas.ax, canvas.cax, canvas.overlay = ax, cax, overlay
 
-        ax.set_xlim(extent[0], extent[1])
-        ax.set_ylim(extent[2], extent[3])
-        ax.set_aspect(geographic_aspect(extent))
-        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]))
-        ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]))
-        ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lon")))
-        ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lat")))
+        ax.set_xlim(frame.bounds[0], frame.bounds[1])
+        ax.set_ylim(frame.bounds[2], frame.bounds[3])
+        ax.set_aspect("equal")
         ax.tick_params(labelsize=pre.label_pt, pad=1.5)
         for spine in ax.spines.values():
             spine.set_linewidth(0.4)
             spine.set_color("#888888")
         canvas.use_colour(SEA_COLOUR, "sea")
+        near = None
         if neighbours is not None:
             canvas.use_colour(NEIGHBOUR_COLOUR, "neighbouring countries")
-            neighbours.plot(
-                ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.3, zorder=0.5
-            )
-        import geopandas as gpd
-
-        gpd.GeoSeries([polygon], crs="EPSG:4326").boundary.plot(
+            near = neighbours.to_crs("EPSG:4326").clip(polygon.buffer(NEIGHBOUR_BUFFER_DEG))
+            if len(near):
+                near.to_crs(frame.crs).plot(
+                    ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.3, zorder=0.5
+                )
+        gpd.GeoSeries([frame.polygon], crs=frame.crs).boundary.plot(
             ax=ax, color=OUTLINE_COLOUR, linewidth=0.5, zorder=4
         )
-        ax.set_xlim(extent[0], extent[1])
-        ax.set_ylim(extent[2], extent[3])
+        if graticule:
+            _draw_graticule(canvas)
+        else:
+            ax.set_xticks([])
+            ax.set_yticks([])
+        ax.set_xlim(frame.bounds[0], frame.bounds[1])
+        ax.set_ylim(frame.bounds[2], frame.bounds[3])
 
         top = layout.height_mm - 2.0
         canvas.texts["title"] = overlay.text(
@@ -1153,9 +1573,37 @@ def new_map(
             )
         map_w = layout.map_box[2] - layout.map_box[0]
         canvas.artists["scale_bar"] = draw_scale_bar(
-            overlay, placed["scale_bar"].box, extent, map_w, pre
+            overlay, placed["scale_bar"].box, None, map_w, pre, frame.width_km
         )
         canvas.artists["compass"] = draw_compass(overlay, placed["compass"].box, pre)
+        if locator:
+            canvas.artists["locator"] = _draw_locator(
+                canvas, placed["locator"].box, polygon, neighbours
+            )
+        if no_data_label and layout.no_data_box is not None:
+            canvas.no_data_label = no_data_label
+            box = layout.no_data_box
+            canvas.use_colour(NO_DATA_COLOUR, no_data_label)
+            swatch = overlay.add_patch(
+                Rectangle(
+                    (box[0], box[1] + (box[3] - box[1] - SWATCH_H_MM) / 2),
+                    SWATCH_W_MM,
+                    SWATCH_H_MM,
+                    facecolor=NO_DATA_COLOUR,
+                    edgecolor="#555555",
+                    linewidth=0.2,
+                )
+            )
+            text_artist = overlay.text(
+                box[0] + SWATCH_W_MM + 2.0,
+                (box[1] + box[3]) / 2,
+                no_data_label,
+                fontsize=pre.legend_pt,
+                color="#333333",
+                ha="left",
+                va="center",
+            )
+            canvas.artists["no_data"] = [swatch, text_artist]
         if total_text:
             box = placed["total"].box
             total_artist = overlay.text(
@@ -1233,12 +1681,17 @@ def raster_map(
     shared: tuple[float, float] | None = None,
     unit: str | None = None,
     lang: str = "en",
+    resolution: str | None = None,
+    no_data_label: str | None = None,
+    locator: bool = False,
+    graticule: bool = True,
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
     The scale is `scale` or `default_scale(kind, tech)`; `shared` are the limits of `shared_limits` for maps that are compared. The
-    subtitle is `subtitle` or `Scenario · Climate`; when the scale cuts values it ends with what was cut (`clip_note`, in `unit`).
-    `tech` is `solar` or `wind` (needed by the kinds that take the family of the technology).
+    subtitle is `subtitle` or `Scenario · Climate`, then `resolution` (`resolution_note`), then what the scale cuts (`clip_note`, in `unit`).
+    `tech` is `solar` or `wind` (needed by the kinds that take the family of the technology). With `no_data_label` the part of the country
+    without value is drawn in the grey of "no potential" and has its own entry in the legend.
     """
     data = np.ma.masked_invalid(grid)
     if kind.startswith("delta") and scale is None:
@@ -1246,7 +1699,9 @@ def raster_map(
     spec = scale or default_scale(kind, tech)
     info = resolve_scale(data.compressed(), spec, shared)
     base = subtitle or format_subtitle(scenario, climate)
-    subtitle = format_subtitle(base, clip_note(info, unit if unit is not None else label))
+    subtitle = format_subtitle(
+        base, resolution, clip_note(info, unit if unit is not None else label)
+    )
     canvas = new_map(
         geometry,
         iso=iso,
@@ -1259,21 +1714,17 @@ def raster_map(
         neighbours=neighbours,
         country=country,
         lang=lang,
+        no_data_label=no_data_label,
+        locator=locator,
+        graticule=graticule,
     )
-    image = canvas.ax.imshow(
-        data,
-        extent=extent_grid,
-        origin="upper",
-        cmap=colormap_for(kind, tech),
-        norm=info.norm,
-        interpolation="nearest",
-        zorder=2,
-        aspect=geographic_aspect(canvas.extent),
-    )
-    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
-    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
+    if no_data_label:
+        canvas.fill_country()
+    image = canvas.draw_raster(data, extent_grid, cmap=colormap_for(kind, tech), norm=info.norm)
     add_colorbar(canvas, image, label, info.extend)
     canvas.meta.update(scale_meta(info))
+    if resolution:
+        canvas.meta["resolution"] = resolution
     return canvas
 
 
@@ -1719,12 +2170,14 @@ def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, lis
 def draw_choropleth(
     canvas: MapFigure, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
 ) -> None:
-    """Fill the units (GeoDataFrame in lon/lat) with `facecolors` (one per row, RGBA or names) on the map axes."""
-    units.plot(
+    """Fill the units (GeoDataFrame, lon/lat unless it has a CRS) with `facecolors` (one per row, RGBA or names), projected like the map."""
+    if units.crs is None:
+        units = units.set_crs("EPSG:4326")
+    units.to_crs(canvas.frame.crs).plot(
         ax=canvas.ax, color=list(facecolors), edgecolor=edgecolor, linewidth=linewidth, zorder=2
     )
-    canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
-    canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
+    canvas.ax.set_xlim(canvas.frame.bounds[0], canvas.frame.bounds[1])
+    canvas.ax.set_ylim(canvas.frame.bounds[2], canvas.frame.bounds[3])
 
 
 def draw_circles(canvas: MapFigure, lon, lat, radii_mm) -> object:
@@ -1732,9 +2185,12 @@ def draw_circles(canvas: MapFigure, lon, lat, radii_mm) -> object:
     radii = np.asarray(radii_mm, dtype="float64")
     order = np.argsort(-radii)
     diameter_pt = 2.0 * radii[order] / PT_MM
+    x, y = canvas.to_xy(
+        np.asarray(lon, dtype="float64")[order], np.asarray(lat, dtype="float64")[order]
+    )
     return canvas.ax.scatter(
-        np.asarray(lon, dtype="float64")[order],
-        np.asarray(lat, dtype="float64")[order],
+        x,
+        y,
         s=diameter_pt**2,
         facecolors=CIRCLE_FACE,
         edgecolors=CIRCLE_EDGE,
@@ -1746,9 +2202,11 @@ def draw_circles(canvas: MapFigure, lon, lat, radii_mm) -> object:
 __all__: Sequence[str] = (
     "FULL_WIDTH_MM",
     "HALF_WIDTH_MM",
+    "NO_DATA_LABEL",
     "ClassedLegend",
     "MapCanvas",
     "MapFigure",
+    "MapFrame",
     "circle_radius_mm",
     "colormap_for",
     "country_extent",
@@ -1757,9 +2215,11 @@ __all__: Sequence[str] = (
     "draw_classed_legend",
     "geographic_aspect",
     "legend_space",
+    "make_frame",
     "new_map",
     "nice_values_below",
     "raster_map",
+    "resolution_note",
     "robust_norm",
     "save_png",
 )
