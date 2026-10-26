@@ -22,31 +22,35 @@ BASELINES = Path(__file__).resolve().parents[1] / "fixtures" / "mapstyle" / "has
 CASES = {"tall": ms.FULL_WIDTH_MM, "wide": ms.FULL_WIDTH_MM, "small": ms.HALF_WIDTH_MM}
 
 
-def _build(name: str, width: float | None = None) -> tuple[ms.MapCanvas, object]:
+def _build(
+    name: str, width: float | None = None, preset: str = "thesis", total: str | None = None
+) -> tuple[ms.MapFigure, object]:
     country = synthetic_country(name)
     canvas = ms.raster_map(
         country.grid,
         country.grid_extent,
         country.geometry,
         iso="XXX",
+        country="Examplia",
         technology="Solar PV",
         variable="Installable capacity",
         label="MW per cell",
         subtitle="Central scenario · reference climate",
-        total_text="National total\n1,234.5 GW",
-        width_mm=width or CASES[name],
+        total_text=total or "National total\n1,234.5 GW",
+        width_mm=width or (CASES[name] if preset == "thesis" else None),
+        preset=preset,
         neighbours=country.neighbours,
     )
     return canvas, country
 
 
-def _px_to_mm(box_px, canvas: ms.MapCanvas) -> tuple[float, float, float, float]:
+def _px_to_mm(box_px, canvas: ms.MapFigure) -> tuple[float, float, float, float]:
     """A pixel box (display, origin lower left) as millimetres on the figure."""
     k = 25.4 / canvas.fig.dpi
     return box_px.x0 * k, box_px.y0 * k, box_px.x1 * k, box_px.y1 * k
 
 
-def _measured(canvas: ms.MapCanvas, artists) -> tuple[float, float, float, float]:
+def _measured(canvas: ms.MapFigure, artists) -> tuple[float, float, float, float]:
     canvas.fig.canvas.draw()
     renderer = canvas.fig.canvas.get_renderer()
     boxes = []
@@ -221,100 +225,128 @@ def test_fonts_have_the_print_sizes():
     assert canvas.texts["title"].get_fontsize() == ms.TITLE_PT == 10.0
     assert canvas.texts["subtitle"].get_fontsize() == ms.LABEL_PT == 8.0
     assert canvas.texts["total"].get_fontsize() == ms.LEGEND_PT == 8.0
-    assert canvas.texts["title"].get_text() == "XXX · Solar PV · Installable capacity"
+    assert canvas.texts["source"].get_fontsize() == ms.THESIS.footer_pt
+    assert canvas.texts["title"].get_text() == "Examplia · Solar PV · Installable capacity"
     assert canvas.ax.get_xticklabels()[0].get_fontsize() == 8.0
     assert {t.get_fontfamily()[0] for t in (canvas.texts["title"], canvas.texts["total"])} == {
         ms.FONT_FAMILY
     }
 
 
-# ------------------------------------------------------------------------------------------------------------ no overlap (step 4)
+# ------------------------------------------------------------------------------------------------------------ fixed layout, no overlap
 
 
-def _data_under(canvas: ms.MapCanvas, country, box_mm) -> float:
-    """Share of data pixels and of country polygon under a figure box that lies inside the map."""
-    return ms.occupancy(
-        box_mm,
-        canvas.layout.map_box,
-        canvas.extent,
-        data_mask=ms.mask_on_extent(~np.isnan(country.grid), country.grid_extent, canvas.extent),
-        polygon=country.mainland,
-    )
-
-
-@pytest.mark.parametrize("name", list(CASES))
-def test_compass_and_scale_bar_do_not_touch_data_title_legend_or_each_other(name):
-    canvas, country = _build(name)
-    boxes = {k: _measured(canvas, v) for k, v in canvas.artists.items()}
+def _boxes(canvas: ms.MapFigure) -> dict[str, tuple[float, float, float, float]]:
+    """Real boxes in mm of the title block, the legend, the tick labels and every piece of furniture."""
     canvas.fig.canvas.draw()
     renderer = canvas.fig.canvas.get_renderer()
-    title = _measured(canvas, [canvas.texts["title"], canvas.texts["subtitle"]])
-    legend = _px_to_mm(canvas.cax.get_tightbbox(renderer), canvas)
-    layout = canvas.layout
+    out = {k: _measured(canvas, v) for k, v in canvas.artists.items() if k != "legend"}
+    out["title"] = _measured(canvas, [canvas.texts["title"], canvas.texts["subtitle"]])
+    out["legend"] = _px_to_mm(canvas.cax.get_tightbbox(renderer), canvas)
+    out["axes"] = _px_to_mm(canvas.ax.get_tightbbox(renderer), canvas)  # map and its tick labels
+    return out
+
+
+PRESET_CASES = [(n, p) for p in ms.PRESETS for n in CASES]
+
+
+@pytest.mark.parametrize("name,preset", PRESET_CASES)
+def test_nothing_overlaps_in_any_preset(name, preset):
+    canvas, _ = _build(name, preset=preset)
+    boxes = _boxes(canvas)
     names = list(boxes)
     for i, a in enumerate(names):
-        assert not _intersect(boxes[a], title), f"{a} meets the title"
-        assert not _intersect(boxes[a], legend), f"{a} meets the legend"
         for b in names[i + 1 :]:
-            assert not _intersect(boxes[a], boxes[b]), f"{a} meets {b}"
-        inside_map = _intersect(boxes[a], layout.map_box)
-        if inside_map:  # placed over the map: nothing of the country or the data may be under it
-            assert _data_under(canvas, country, boxes[a]) <= ms.OCCUPANCY_TOLERANCE, (
-                f"{a} covers the country"
-            )
-    # the map's own tick labels do not meet the furniture either
-    ticks = _px_to_mm(canvas.ax.get_tightbbox(renderer), canvas)
-    for a in names:
-        if not _intersect(boxes[a], layout.map_box):
-            continue
-        assert boxes[a][0] >= layout.map_box[0] - 1e-6 and boxes[a][2] <= layout.map_box[2] + 1e-6
-    assert ticks[0] >= -1e-6 and ticks[1] >= -1e-6, "tick labels leave the figure"
-    assert (
-        title[1] >= 0
-        and boxes
-        and all(b[3] <= layout.height_mm + 1e-6 and b[1] >= -1e-6 for b in boxes.values())
-    )
-
-
-@pytest.mark.parametrize("name", list(CASES))
-def test_everything_stays_inside_the_figure(name):
-    canvas, _ = _build(name)
-    canvas.fig.canvas.draw()
-    renderer = canvas.fig.canvas.get_renderer()
-    for artist in (canvas.cax, canvas.ax):
-        bb = _px_to_mm(artist.get_tightbbox(renderer), canvas)
+            if {a, b} == {"legend", "axes"}:
+                continue  # the colour bar is inside the tight box of its own neighbour only by the label pad
+            assert not _intersect(boxes[a], boxes[b]), f"{a} meets {b} ({name}, {preset})"
         assert (
-            bb[0] >= -0.2
-            and bb[1] >= -0.2
-            and bb[2] <= canvas.layout.width_mm + 0.2
-            and bb[3] <= canvas.layout.height_mm + 0.2
+            boxes[a][0] >= -0.2
+            and boxes[a][1] >= -0.2
+            and boxes[a][2] <= canvas.layout.width_mm + 0.2
+            and boxes[a][3] <= canvas.layout.height_mm + 0.2
+        ), f"{a} leaves the figure ({name}, {preset})"
+    for a in ("compass", "scale_bar", "total", "source"):  # the furniture is never over the map
+        assert not _intersect(boxes[a], canvas.layout.map_box), f"{a} is over the map"
+
+
+def test_furniture_has_the_same_place_in_every_country():
+    """Compass at the upper right of the header, scale bar at the left of the footer, source at the right: the same offsets for a
+    tall, a wide and a small country."""
+    offsets = []
+    for name in CASES:
+        canvas, _ = _build(name, width=ms.FULL_WIDTH_MM)
+        boxes = _boxes(canvas)
+        w, h = canvas.layout.width_mm, canvas.layout.height_mm
+        offsets.append(
+            (
+                w - boxes["compass"][2],
+                h - boxes["compass"][3],
+                boxes["scale_bar"][0],
+                w - boxes["source"][2],
+                boxes["source"][1],
+            )
         )
+        assert boxes["compass"][1] > canvas.layout.map_box[3], "the compass is in the header"
+        assert boxes["scale_bar"][3] < canvas.layout.map_box[1], "the scale bar is in the footer"
+    for k in range(5):
+        values = [o[k] for o in offsets]
+        assert max(values) - min(values) < 0.3, f"offset {k} differs between countries: {values}"
 
 
-def test_elements_choose_the_emptiest_corner_by_data_and_polygon():
-    """A country that fills the lower left and the upper right leaves the other two corners for the furniture."""
-    layout = ms.compute_layout((0.0, 10.0, 0.0, 10.0))
-    extent = (0.0, 10.0, 0.0, 10.0)
-    from shapely.geometry import box
-
-    polygon = box(0, 0, 4, 4).union(box(6, 6, 10, 10)).union(box(3, 3, 7, 7))
-    placed = ms.place_furniture(layout, extent, data_mask=None, polygon=polygon, total_text=None)
-    assert {placed["scale_bar"].where, placed["compass"].where} <= {"upper left", "lower right"}
-    mask = np.zeros((100, 100), dtype=bool)
-    mask[:, :50] = True  # data on the left half only
-    placed = ms.place_furniture(layout, extent, data_mask=mask, polygon=None, total_text=None)
-    assert "right" in placed["scale_bar"].where and "right" in placed["compass"].where
+def test_header_holds_the_title_and_the_compass_without_meeting():
+    canvas, _ = _build("small", preset="article_single")
+    boxes = _boxes(canvas)
+    assert boxes["title"][2] < boxes["compass"][0]
 
 
-def test_a_full_map_sends_the_furniture_outside():
-    from shapely.geometry import box
+def test_colour_bar_has_the_height_of_the_map_when_it_is_on_the_right():
+    canvas, _ = _build("tall")
+    assert canvas.layout.legend == "right"
+    assert canvas.layout.legend_box[1] == pytest.approx(canvas.layout.map_box[1])
+    assert canvas.layout.legend_box[3] == pytest.approx(canvas.layout.map_box[3])
 
-    extent = (0.0, 10.0, 0.0, 10.0)
-    layout = ms.compute_layout(extent)
-    placed = ms.place_furniture(
-        layout, extent, data_mask=None, polygon=box(-1, -1, 11, 11), total_text="x"
-    )
-    assert {p.where for p in placed.values()} == {"outside"}
+
+def test_presets_fix_the_width_and_the_fonts_in_points():
+    assert {n: p.width_mm for n, p in ms.PRESETS.items()} == {
+        "thesis": 190.0,
+        "article_single": 90.0,
+        "article_double": 180.0,
+        "slide": 254.0,
+    }
+    for name, preset in ms.PRESETS.items():
+        canvas, _ = _build("wide", preset=name)
+        assert canvas.layout.width_mm == preset.width_mm
+        assert canvas.texts["title"].get_fontsize() == preset.title_pt
+        assert canvas.texts["subtitle"].get_fontsize() == preset.label_pt
+        assert canvas.texts["total"].get_fontsize() == preset.legend_pt
+        assert canvas.texts["source"].get_fontsize() == preset.footer_pt
+    with pytest.raises(ValueError):
+        ms.get_preset("poster")
+
+
+def test_footer_goes_to_a_second_row_when_it_does_not_fit_one():
+    sizes = {"scale_bar": (30.0, 9.0), "total": (50.0, 8.0), "source": (45.0, 4.0)}
+    one, h1 = ms.plan_footer(sizes, 14.0, 187.0)
+    assert one["scale_bar"][1] == one["total"][1] == one["source"][1]  # a single row
+    assert one["scale_bar"][0] == 14.0 and one["source"][2] == 187.0
+    assert one["scale_bar"][2] < one["total"][0] < one["total"][2] < one["source"][0]
+    two, h2 = ms.plan_footer(sizes, 14.0, 90.0)
+    assert h2 > h1
+    boxes = list(two.values())
+    for i, a in enumerate(boxes):
+        assert a[0] >= 14.0 - 1e-9 and a[2] <= 90.0 + 1e-9
+        for b in boxes[i + 1 :]:
+            assert not _intersect(a, b)
+
+
+def test_a_long_total_text_still_fits_a_half_column():
+    text = "Total: 19,188.34 GW · 31,068.30 TWh/yr · mean CF 18.5% · eligible area 1,540,000 km²"
+    canvas, _ = _build("small", preset="article_single", total=text)
+    boxes = _boxes(canvas)
+    assert boxes["total"][0] >= -0.2 and boxes["total"][2] <= canvas.layout.width_mm + 0.2
+    assert not _intersect(boxes["total"], boxes["scale_bar"])
+    assert not _intersect(boxes["total"], boxes["source"])
 
 
 def test_colour_bar_has_extend_arrows_when_values_fall_outside():

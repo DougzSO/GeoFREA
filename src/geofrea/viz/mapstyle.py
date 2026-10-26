@@ -1,8 +1,11 @@
-"""One cartographic style for every GeoFREA map (COMMAND 56): print sizes in mm, fonts at print size, geographic aspect, extent from the
-country geometry, compass rose and scale bar placed where the map is emptiest, neighbours in light grey, one colormap per kind of
-variable, robust colour limits, PNG at 300 dpi.
+"""One cartographic style for every GeoFREA map (COMMANDS 56 and 66): `MapFigure`, the single module of figure.
 
-Nothing here computes a result and no existing figure uses it yet (`docs/figures/inventory.md` lists what will move to it).
+A fixed grid of layout, the same for every country: header (title and subtitle at the left, eight-point compass rose at the right),
+map, legend (colour bar or patches; right of a tall map, below a wide one) and footer (scale bar, box of totals, source). Presets
+(`thesis`, `article_single`, `article_double`, `slide`) fix the width in mm and the fonts in pt. Neighbours in light grey, geographic
+aspect, extent from the country geometry, PNG at 300 dpi.
+
+Nothing here computes a result. The modules of the phases call it; none draws a map on its own.
 
 Everything is laid out in millimetres on a figure whose size is exact: an overlay axes covers the figure with 1 unit = 1 mm, so the
 fonts (pt) and the furniture (compass, scale bar, text box) have their true print size and their boxes can be tested.
@@ -28,7 +31,6 @@ from matplotlib.colors import LogNorm, Normalize, PowerNorm
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.patches import Rectangle
-from shapely.geometry import box as shapely_box
 
 from geofrea.core.geo_utils import get_contiguous_mainland_gdf
 from geofrea.core.geodesy import wgs84_km_per_degree
@@ -40,20 +42,58 @@ BoxMm = tuple[
 
 # ------------------------------------------------------------------------------------------------------------------------- constants
 
-FULL_WIDTH_MM = 190.0
-HALF_WIDTH_MM = 90.0
-MAX_HEIGHT_MM = 230.0
 DPI = 300
 EXTENT_MARGIN = 0.03
 PT_MM = 25.4 / 72.0
+MAX_HEIGHT_MM = 230.0
 
 FONT_FAMILY = "DejaVu Sans"
-TITLE_PT, LABEL_PT, LEGEND_PT = 10.0, 8.0, 8.0
+
+
+@dataclass(frozen=True)
+class Preset:
+    """A destination of the figure: its width in millimetres and the fonts in points at that print size."""
+
+    name: str
+    width_mm: float
+    title_pt: float
+    label_pt: float
+    legend_pt: float
+    footer_pt: float
+    compass_mm: float
+
+
+PRESETS: dict[str, Preset] = {
+    "thesis": Preset("thesis", 190.0, 10.0, 8.0, 8.0, 6.5, 10.0),
+    "article_single": Preset("article_single", 90.0, 8.0, 6.5, 6.5, 5.5, 8.0),
+    "article_double": Preset("article_double", 180.0, 9.0, 7.0, 7.0, 6.0, 9.0),
+    "slide": Preset("slide", 254.0, 16.0, 12.0, 12.0, 9.0, 14.0),
+}
+THESIS = PRESETS["thesis"]
+FULL_WIDTH_MM = THESIS.width_mm
+HALF_WIDTH_MM = PRESETS["article_single"].width_mm
+TITLE_PT, LABEL_PT, LEGEND_PT = THESIS.title_pt, THESIS.label_pt, THESIS.legend_pt
+COMPASS_MM = THESIS.compass_mm
+
+
+def get_preset(preset: str | Preset | None) -> Preset:
+    """The preset by name (`thesis`, `article_single`, `article_double`, `slide`); a `Preset` is returned as is, None is `thesis`."""
+    if preset is None:
+        return THESIS
+    if isinstance(preset, Preset):
+        return preset
+    try:
+        return PRESETS[preset]
+    except KeyError:
+        raise ValueError(f"unknown preset {preset!r}; one of {sorted(PRESETS)}") from None
+
 
 NEIGHBOUR_COLOUR = "#ececec"
 SEA_COLOUR = "white"
 OUTLINE_COLOUR = "#222222"
-NO_DATA_COLOUR = "#d9d9d9"
+NO_DATA_COLOUR = (
+    "#bdbdbd"  # "no potential": a medium grey that is neither the neighbours (#ececec) nor the sea
+)
 
 COLORMAPS = {  # one colormap per kind of variable, the same in every country
     "potential": "viridis",
@@ -65,30 +105,33 @@ COLORMAPS = {  # one colormap per kind of variable, the same in every country
 SKEW_LIMIT = 20.0  # P98 / P50 above this: logarithmic or power norm
 CLIP_PERCENTILES = (2.0, 98.0)
 
-LEFT_MM, RIGHT_MM, HEADER_MM, BOTTOM_MM = 14.0, 3.0, 13.0, 8.0
+LEFT_MM, RIGHT_MM, BOTTOM_MM = 14.0, 3.0, 8.0
 LEGEND_SIDE_MM, LEGEND_BELOW_MM = 26.0, 15.5
 COLORBAR_MM = 3.5
-PAD_MM = 2.0  # clear space around a placed element
-OCCUPANCY_TOLERANCE = 0.01  # a corner with more occupied share than this is not free
-COMPASS_MM = 10.0
-CORNERS = ("lower left", "upper right", "lower right", "upper left")  # order of preference on ties
+PAD_MM = 2.0  # clear space around a furniture element
+FOOTER_GAP_MM = 3.0  # horizontal gap between the elements of a footer row
 
-_RC = {
-    "font.family": FONT_FAMILY,
-    "font.size": LABEL_PT,
-    "axes.titlesize": TITLE_PT,
-    "axes.labelsize": LABEL_PT,
-    "xtick.labelsize": LABEL_PT,
-    "ytick.labelsize": LABEL_PT,
-    "legend.fontsize": LEGEND_PT,
-    "axes.linewidth": 0.4,
-    "xtick.major.width": 0.4,
-    "ytick.major.width": 0.4,
-    "xtick.major.size": 2.0,
-    "ytick.major.size": 2.0,
-    "savefig.dpi": DPI,
-    "figure.dpi": DPI,
-}
+
+def _rc(preset: Preset) -> dict:
+    return {
+        "font.family": FONT_FAMILY,
+        "font.size": preset.label_pt,
+        "axes.titlesize": preset.title_pt,
+        "axes.labelsize": preset.label_pt,
+        "xtick.labelsize": preset.label_pt,
+        "ytick.labelsize": preset.label_pt,
+        "legend.fontsize": preset.legend_pt,
+        "axes.linewidth": 0.4,
+        "xtick.major.width": 0.4,
+        "ytick.major.width": 0.4,
+        "xtick.major.size": 2.0,
+        "ytick.major.size": 2.0,
+        "savefig.dpi": DPI,
+        "figure.dpi": DPI,
+    }
+
+
+_RC = _rc(THESIS)
 
 
 # ------------------------------------------------------------------------------------------------------------------- extent and aspect
@@ -214,6 +257,76 @@ def _extend(arr: np.ndarray, vmin: float, vmax: float) -> str:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- layout
+# The figure is a fixed grid, from the top: header (title and subtitle at the left, compass rose at the right), map with its legend
+# (colour bar or patches) to the right of a tall map and below a wide one, footer (scale bar at the left, box of totals in the middle or at
+# the right, source at the right). No element is placed by looking for an empty corner: the same grid serves every country.
+
+DEFAULT_SOURCE = "Boundaries: GADM 4.1, illustrative"
+
+
+def _text_width_mm(text: str, pt: float, bold: bool = False) -> float:
+    """Estimated width of `text` (the widest line) in mm: the average advance of the sans family; the tests measure the real boxes."""
+    em = 0.68 if bold else 0.62
+    return max((len(line) for line in text.split("\n")), default=0) * pt * PT_MM * em
+
+
+def _wrap(text: str, width_mm: float, pt: float, bold: bool = False) -> list[str]:
+    """Words of `text` on lines no wider than `width_mm` by the same width estimate as the furniture."""
+    lines, current = [], ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if current and _text_width_mm(trial, pt, bold) > width_mm:
+            lines.append(current)
+            current = word
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def wrap_total_text(text: str, width_mm: float, pt: float) -> str:
+    """The text of the box of totals on lines no wider than `width_mm`: breaks first at the ` · ` between the figures, then at spaces."""
+    out: list[str] = []
+    for line in text.split("\n"):
+        current = ""
+        for part in line.split(" · "):
+            trial = f"{current} · {part}" if current else part
+            if current and _text_width_mm(trial, pt) > width_mm:
+                out.append(current)
+                current = part
+            else:
+                current = trial
+        if current:
+            out.extend(_wrap(current, width_mm, pt))
+    return "\n".join(out)
+
+
+def compass_size_mm(preset: Preset = THESIS) -> tuple[float, float]:
+    """Width and height of the box of the compass rose (arms, the N above and the padding)."""
+    return (
+        preset.compass_mm + 2 * PAD_MM,
+        preset.compass_mm + 0.6 + preset.legend_pt * PT_MM * 1.3 + 2 * PAD_MM,
+    )
+
+
+def header_text(
+    width_mm: float, title: str, subtitle: str, preset: Preset = THESIS
+) -> tuple[list[str], list[str], float]:
+    """The title and subtitle wrapped to the room the compass rose leaves, and the height of the header that holds them and the rose."""
+    room = width_mm - 2.0 - compass_size_mm(preset)[0] - 3.0
+    title_lines = _wrap(title, room, preset.title_pt, bold=True)
+    sub_lines = _wrap(subtitle, room, preset.label_pt) if subtitle else []
+    text_h = (
+        2.0
+        + len(title_lines) * preset.title_pt * PT_MM * 1.35
+        + len(sub_lines) * preset.label_pt * PT_MM * 1.35
+        + 1.5
+    )
+    return title_lines, sub_lines, max(text_h, compass_size_mm(preset)[1] + 2.0)
+
+
+HEADER_MM = header_text(FULL_WIDTH_MM, "T", "S")[2]  # the header of a one-line title and subtitle
 
 
 @dataclass(frozen=True)
@@ -226,7 +339,7 @@ class Layout:
     legend_box: BoxMm
     legend: str  # right or below
     header_box: BoxMm
-    footer_mm: float  # extra strip under the map for furniture that found no free corner
+    footer_mm: float  # height of the footer strip under everything
 
 
 def compute_layout(
@@ -236,10 +349,12 @@ def compute_layout(
     max_height_mm: float = MAX_HEIGHT_MM,
     legend_side_mm: float | None = None,
     legend_below_mm: float | None = None,
+    header_mm: float = HEADER_MM,
 ) -> Layout:
     """Figure size and boxes: the height follows the aspect of the extent; the legend is to the right of a tall map, below a wide one.
 
     A very tall country is limited to `max_height_mm`: the map gets narrower and is centred, the figure width stays `width_mm`.
+    The colour bar has the height of the map (right) or 70% of its width (below).
     """
     ratio = map_height_over_width(extent)
     side = legend_position(extent) == "right"
@@ -248,7 +363,7 @@ def compute_layout(
     )  # a classed legend needs more than a colour bar
     below_mm = LEGEND_BELOW_MM if legend_below_mm is None else legend_below_mm
     avail_w = width_mm - LEFT_MM - RIGHT_MM - (side_mm if side else 0.0)
-    fixed_h = HEADER_MM + BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
+    fixed_h = header_mm + BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
     map_w = min(avail_w, (max_height_mm - fixed_h) / ratio)
     map_h = map_w * ratio
     height = fixed_h + map_h
@@ -257,11 +372,11 @@ def compute_layout(
     map_box = (x0, y0, x0 + map_w, y0 + map_h)
     if side:
         bar_x = x0 + map_w + 4.0
-        legend_box = (bar_x, y0 + 0.1 * map_h, bar_x + COLORBAR_MM, y0 + 0.9 * map_h)
+        legend_box = (bar_x, y0, bar_x + COLORBAR_MM, y0 + map_h)
     else:
         bar_y = footer_mm + 9.0  # under the bar: its tick labels and its name
         legend_box = (x0 + 0.15 * map_w, bar_y, x0 + 0.85 * map_w, bar_y + COLORBAR_MM)
-    header_box = (0.0, height - HEADER_MM, width_mm, height)
+    header_box = (0.0, height - header_mm, width_mm, height)
     return Layout(
         width_mm, height, map_box, legend_box, "right" if side else "below", header_box, footer_mm
     )
@@ -286,161 +401,101 @@ def scale_bar_length_km(extent: Extent, share: float = 0.20) -> float:
     return nice_length_km(share * width_km)
 
 
-def _text_width_mm(text: str, pt: float) -> float:
-    return (
-        len(text) * pt * PT_MM * 0.62
-    )  # average advance of the sans family; the tests measure the real box
+def _scale_bar_length_mm(extent: Extent, map_w_mm: float) -> float:
+    _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
+    return scale_bar_length_km(extent) / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
 
 
 @dataclass(frozen=True)
 class Furniture:
-    """An element of the map placed in the figure: its name, the box it occupies (padding included) and where it sits."""
+    """An element of the figure outside the map: its name, the box it occupies (padding included) and the strip it sits in."""
 
     name: str
     box: BoxMm
-    where: str  # a corner name, or `outside`
+    where: str  # header or footer
 
 
-def _element_size_mm(
-    name: str, map_w_mm: float, extent: Extent, total_text: str | None
-) -> tuple[float, float]:
-    if name == "compass":
-        return COMPASS_MM + 2 * PAD_MM, COMPASS_MM + 3.5 + 2 * PAD_MM  # arms plus the "N" above
-    if name == "scale_bar":
-        km = scale_bar_length_km(extent)
-        _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-        length = km / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
-        label = _text_width_mm(f"{km:g} km", LEGEND_PT)
-        return (
-            length + label / 2.0 + label / 2.0 + 2 * PAD_MM,
-            1.8 + 1.0 + LEGEND_PT * PT_MM + 2 * PAD_MM,
-        )
-    text = total_text or ""
-    lines = text.split("\n")
-    return max(_text_width_mm(s, LEGEND_PT) for s in lines) + 4.0 + 2 * PAD_MM, len(
-        lines
-    ) * LEGEND_PT * PT_MM * 1.25 + 2.0 + 2 * PAD_MM
-
-
-def corner_box(
-    corner: str, size_mm: tuple[float, float], map_box: BoxMm, inset_mm: float = 1.0
-) -> BoxMm:
-    """The box of an element of `size_mm` in `corner` of the map (figure millimetres)."""
-    x0, y0, x1, y1 = map_box
-    w, h = size_mm
-    left = x0 + inset_mm if "left" in corner else x1 - inset_mm - w
-    bottom = y0 + inset_mm if "lower" in corner else y1 - inset_mm - h
-    return (left, bottom, left + w, bottom + h)
-
-
-def occupancy(
-    box: BoxMm,
-    map_box: BoxMm,
+def footer_item_sizes(
     extent: Extent,
-    *,
-    data_mask: np.ndarray | None = None,
-    polygon=None,
-) -> float:
-    """Share of `box` that holds data or country: the larger of the data-pixel share and the polygon share.
-
-    `data_mask` is a boolean grid over `extent` (row 0 north) that is True where a pixel has data; `polygon` is the country in lon/lat.
-    """
-    mx0, my0, mx1, my1 = map_box
-    west, east, south, north = extent
-    fx0, fx1 = (box[0] - mx0) / (mx1 - mx0), (box[2] - mx0) / (mx1 - mx0)
-    fy0, fy1 = (box[1] - my0) / (my1 - my0), (box[3] - my0) / (my1 - my0)
-    shares = [0.0]
-    if data_mask is not None and data_mask.size:
-        ny, nx = data_mask.shape
-        c0, c1 = math.floor(max(fx0, 0.0) * nx), math.ceil(min(fx1, 1.0) * nx)
-        r0, r1 = math.floor((1 - min(fy1, 1.0)) * ny), math.ceil((1 - max(fy0, 0.0)) * ny)
-        sub = data_mask[r0:r1, c0:c1]
-        if sub.size:
-            shares.append(float(sub.mean()))
-    if polygon is not None:
-        window = shapely_box(
-            west + fx0 * (east - west),
-            south + fy0 * (north - south),
-            west + fx1 * (east - west),
-            south + fy1 * (north - south),
-        )
-        shares.append(float(polygon.intersection(window).area / window.area))
-    return max(shares)
-
-
-def place_furniture(
-    layout: Layout,
-    extent: Extent,
-    *,
-    data_mask: np.ndarray | None,
-    polygon,
+    map_w_mm: float,
     total_text: str | None,
-) -> dict[str, Furniture]:
-    """Put the scale bar, the compass rose and (if given) the total box each in the free corner with the least occupancy.
+    source: str | None,
+    preset: Preset = THESIS,
+) -> dict[str, tuple[float, float]]:
+    """Size in mm (padding included) of what the footer holds, in reading order: scale bar, box of totals, source."""
+    pt = preset.legend_pt
+    label = _text_width_mm(f"{scale_bar_length_km(extent):g} km", pt)
+    sizes = {
+        "scale_bar": (
+            _scale_bar_length_mm(extent, map_w_mm)
+            + _text_width_mm("0", pt) / 2.0
+            + label / 2.0
+            + 2 * PAD_MM,
+            1.8 + 1.0 + pt * PT_MM + 2 * PAD_MM,
+        )
+    }
+    if total_text:
+        lines = total_text.split("\n")
+        sizes["total"] = (
+            _text_width_mm(total_text, pt) + 4.0 + 2 * PAD_MM,
+            len(lines) * pt * PT_MM * 1.25 + 2.0 + 2 * PAD_MM,
+        )
+    if source:
+        sizes["source"] = (
+            _text_width_mm(source, preset.footer_pt) + 2 * PAD_MM,
+            preset.footer_pt * PT_MM * 1.3 + 1.0,
+        )
+    return sizes
 
-    The corners are tried by the occupancy of the box the element actually fills (data pixels and country polygon). Elements go to the free corner with the least stacked, largest first, and may share a corner by stacking; when the best corner is not free (above `OCCUPANCY_TOLERANCE`) it goes outside the map: the compass in
-    the header, the others in the footer strip, which the layout then reserves.
+
+def plan_footer(
+    sizes: dict[str, tuple[float, float]], x_left: float, x_right: float, y0: float = 0.5
+) -> tuple[dict[str, BoxMm], float]:
+    """Boxes of the footer elements and the height of the strip.
+
+    The elements go in reading order on one row; when the row would be wider than `x_right - x_left` the next element starts a new row
+    below. In a row the scale bar is at the left, the source at the right and the box of totals in the middle between them (at the right
+    when the source is not in its row).
     """
-    map_w = layout.map_box[2] - layout.map_box[0]
-    names = ["scale_bar", "compass"] + (["total"] if total_text else [])
-    stacked: dict[
-        str, float
-    ] = {}  # height already used in each corner, so that elements can share a free corner
-    placed: dict[str, Furniture] = {}
-    for name in names:
-        size = _element_size_mm(name, map_w, extent, total_text)
-        scored = []
-        for order, corner in enumerate(CORNERS):
-            used = stacked.get(corner, 0.0)
-            box = corner_box(corner, size, layout.map_box)
-            shift = used if "lower" in corner else -used
-            box = (box[0], box[1] + shift, box[2], box[3] + shift)
-            if box[1] < layout.map_box[1] or box[3] > layout.map_box[3]:
-                continue
-            scored.append(
-                (
-                    occupancy(box, layout.map_box, extent, data_mask=data_mask, polygon=polygon),
-                    used,
-                    order,
-                    corner,
-                    box,
-                )
-            )
-        scored.sort(key=lambda s: (s[0] > OCCUPANCY_TOLERANCE, s[1], s[0], s[2]))
-        if scored and scored[0][0] <= OCCUPANCY_TOLERANCE:
-            _, used, _, corner, box = scored[0]
-            stacked[corner] = used + size[1]
-            placed[name] = Furniture(name, box, corner)
-        else:
-            placed[name] = Furniture(name, (0.0, 0.0, size[0], size[1]), "outside")
-    return placed
+    rows: list[list[str]] = [[]]
+    used = 0.0
+    for name, (w, _) in sizes.items():
+        need = w + (FOOTER_GAP_MM if rows[-1] else 0.0)
+        if rows[-1] and used + need > x_right - x_left:
+            rows.append([])
+            used, need = 0.0, w
+        rows[-1].append(name)
+        used += need
+    boxes: dict[str, BoxMm] = {}
+    y = y0
+    for row in reversed(rows):  # the first row is the top one
+        height = max(sizes[n][1] for n in row)
+        left = x_left
+        right = x_right
+        if "scale_bar" in row:
+            w = sizes["scale_bar"][0]
+            boxes["scale_bar"] = (left, y, left + w, y + sizes["scale_bar"][1])
+            left += w + FOOTER_GAP_MM
+        if "source" in row:
+            w = sizes["source"][0]
+            boxes["source"] = (right - w, y, right, y + sizes["source"][1])
+            right -= w + FOOTER_GAP_MM
+        if "total" in row:
+            w = sizes["total"][0]
+            x = (left + right - w) / 2.0 if "source" in row else x_right - w
+            x = min(max(x, left), right - w)
+            boxes["total"] = (x, y, x + w, y + sizes["total"][1])
+        y += height + 1.0
+    return boxes, (y if sizes else 0.0)
 
 
-def _outside_boxes(placed: dict[str, Furniture], layout: Layout) -> dict[str, Furniture]:
-    """Final boxes of the elements that sit outside the map: the compass at the right end of the header, the rest left to right in the footer."""
-    out = dict(placed)
-    x_footer = layout.map_box[0]
-    for name, el in placed.items():
-        if el.where != "outside":
-            continue
-        w, h = el.box[2] - el.box[0], el.box[3] - el.box[1]
-        if name == "compass":
-            x1 = layout.width_mm - 1.0
-            box = (x1 - w, layout.height_mm - h - 1.0, x1, layout.height_mm - 1.0)
-        else:
-            box = (x_footer, 0.5, x_footer + w, 0.5 + h)
-            x_footer += w + 2.0
-        out[name] = Furniture(name, box, "outside")
-    return out
-
-
-def draw_compass(overlay, box: BoxMm) -> list:
+def draw_compass(overlay, box: BoxMm, preset: Preset = THESIS) -> list:
     """Eight-triangle compass rose (cardinal points, each split into a dark and a light half) with an N above, inside `box`.
 
     Logic of `compass` in craei-brazil `scripts/article_map_utils.py`; the size here is millimetres, not a share of the extent.
     """
     x0, y0, x1, _ = box
-    h = COMPASS_MM / 2.0
+    h = preset.compass_mm / 2.0
     d = h * 0.35
     cx, cy = (x0 + x1) / 2.0, y0 + PAD_MM + h
     polys = [
@@ -462,7 +517,7 @@ def draw_compass(overlay, box: BoxMm) -> list:
             cx,
             cy + h + 0.6,
             "N",
-            fontsize=LEGEND_PT,
+            fontsize=preset.legend_pt,
             weight="bold",
             ha="center",
             va="bottom",
@@ -472,21 +527,25 @@ def draw_compass(overlay, box: BoxMm) -> list:
     return artists
 
 
-def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list:
+def draw_scale_bar(
+    overlay, box: BoxMm, extent: Extent, map_w_mm: float, preset: Preset = THESIS
+) -> list:
     """Four alternating segments labelled 0, half and full length in km, calculated at the central latitude (craei-brazil `scale_bar`)."""
+    pt = preset.legend_pt
     km = scale_bar_length_km(extent)
-    _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-    length = km / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
+    length = _scale_bar_length_mm(extent, map_w_mm)
     seg = length / 4.0
-    x0 = box[0] + PAD_MM + _text_width_mm(f"{km:g} km", LEGEND_PT) / 2.0
-    y0 = box[1] + PAD_MM + LEGEND_PT * PT_MM + 1.0
+    x0 = (
+        box[0] + PAD_MM + _text_width_mm("0", pt) / 2.0
+    )  # the bar always starts at the same distance from the left of its box
+    y0 = box[1] + PAD_MM + pt * PT_MM + 1.0
     artists: list = [
         overlay.add_patch(
             Rectangle((x0 + i * seg, y0), seg, 1.8, fc=fc, ec="black", lw=0.4, zorder=10)
         )
         for i, fc in enumerate(["black", "white", "black", "white"])
     ]
-    label_w = _text_width_mm(f"{km:g} km", LEGEND_PT)
+    label_w = _text_width_mm(f"{km:g} km", pt)
     labels = [(0.0, "0"), (1.0, f"{km:g} km")]
     if (
         length / 2.0 >= 1.2 * label_w
@@ -495,13 +554,7 @@ def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list
     for frac, text in labels:
         artists.append(
             overlay.text(
-                x0 + frac * length,
-                y0 - 0.6,
-                text,
-                fontsize=LEGEND_PT,
-                ha="center",
-                va="top",
-                zorder=10,
+                x0 + frac * length, y0 - 0.6, text, fontsize=pt, ha="center", va="top", zorder=10
             )
         )
     return artists
@@ -511,7 +564,7 @@ def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list
 
 
 @dataclass
-class MapCanvas:
+class MapFigure:
     """A map figure under construction: `ax` for the data, `cax` for the legend, `overlay` (1 unit = 1 mm) for title and furniture."""
 
     fig: Figure
@@ -525,15 +578,19 @@ class MapCanvas:
     artists: dict[str, list] = field(
         default_factory=dict
     )  # the drawn pieces of each piece of furniture, for measuring
+    preset: Preset = THESIS
 
     def mm_to_fig(self, box: BoxMm) -> tuple[float, float, float, float]:
         w, h = self.layout.width_mm, self.layout.height_mm
         return box[0] / w, box[1] / h, (box[2] - box[0]) / w, (box[3] - box[1]) / h
 
 
-def format_title(iso: str, technology: str, variable: str) -> str:
-    """The short title: `<ISO> · <Technology> · <Variable>`."""
-    return f"{iso} · {technology} · {variable}"
+MapCanvas = MapFigure  # the name before COMMAND 66
+
+
+def format_title(country: str, technology: str, variable: str) -> str:
+    """The short title: `<Country> · <Technology> · <Variable>` (the technology is left out for a map that has none)."""
+    return " · ".join(p for p in (country, technology, variable) if p)
 
 
 def new_map(
@@ -544,58 +601,70 @@ def new_map(
     variable: str,
     subtitle: str = "",
     total_text: str | None = None,
-    width_mm: float = FULL_WIDTH_MM,
+    width_mm: float | None = None,
+    preset: str | Preset | None = "thesis",
     neighbours=None,
-    data_mask: np.ndarray | None = None,
     extent: Extent | None = None,
     contiguous: bool = True,
-    grid_mask: tuple[np.ndarray, Extent] | None = None,
     legend_side_mm: float | None = None,
     legend_below_mm: float | None = None,
-) -> MapCanvas:
+    country: str | None = None,
+    source: str | None = DEFAULT_SOURCE,
+) -> MapFigure:
     """Axes, legend slot, title and furniture of a map of the country `geometry` (lon/lat), ready to receive the data.
 
-    The extent comes from the country geometry (+3% margin, far islands out) unless given. `neighbours` is a GeoDataFrame drawn in very
-    light grey under everything; the sea stays white. `data_mask` (True where a pixel has data, over `extent`, row 0 north; or `grid_mask` = (mask, its extent) to have it resampled) and the
-    country polygon decide the free corner of the compass and the scale bar. Draw the data on `canvas.ax` and the colour bar on
-    `canvas.cax` (`add_colorbar`), then save with `save_png`.
+    The extent comes from the country geometry (+3% margin, far islands out) unless given. `preset` gives the fonts and, unless
+    `width_mm` is given, the width. `neighbours` is a GeoDataFrame drawn in very light grey under everything; the sea stays white. Draw the
+    data on `canvas.ax` and the colour bar on `canvas.cax` (`add_colorbar`), then save with `save_png`.
     """
+    pre = get_preset(preset)
+    width_mm = pre.width_mm if width_mm is None else width_mm
     polygon = contiguous_geometry(geometry) if contiguous else _as_geometry(geometry)
     extent = extent or country_extent(polygon, contiguous=False)
-    if grid_mask is not None:
-        data_mask = mask_on_extent(grid_mask[0], grid_mask[1], extent)
-    # The furniture is placed on the layout it will be drawn on. A footer strip for an element that found no free corner shrinks a map that is
-    # limited by the height of the sheet, so the placement is repeated on the new layout until the strip no longer grows.
-    footer = 0.0
-    for _ in range(4):
-        layout = compute_layout(
+    title = format_title(country or iso, technology, variable)
+    if total_text:
+        total_text = wrap_total_text(
+            total_text, width_mm - LEFT_MM - RIGHT_MM - 2 * PAD_MM - 4.0, pre.legend_pt
+        )
+    title_lines, sub_lines, header_mm = header_text(width_mm, title, subtitle, pre)
+
+    def layout_for(footer: float) -> Layout:
+        return compute_layout(
             extent,
             width_mm,
             footer_mm=footer,
             legend_side_mm=legend_side_mm,
             legend_below_mm=legend_below_mm,
+            header_mm=header_mm,
         )
-        placed = place_furniture(
-            layout, extent, data_mask=data_mask, polygon=polygon, total_text=total_text
-        )
-        needed = max(
-            (
-                el.box[3] - el.box[1] + 1.0
-                for n, el in placed.items()
-                if el.where == "outside" and n != "compass"
-            ),
-            default=0.0,
-        )
-        if needed <= footer + 1e-9:
-            break
-        footer = needed
-    placed = _outside_boxes(placed, layout)
 
-    with plt.rc_context(_RC):
+    # The footer height depends on the width of the scale bar, which depends on the map width, which depends on the footer height when the
+    # map is limited by the height of the sheet. The footer only shrinks the map, so the second pass cannot need more room than the first.
+    layout = layout_for(0.0)
+    sizes = footer_item_sizes(
+        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+    )
+    _, footer = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
+    layout = layout_for(footer)
+    sizes = footer_item_sizes(
+        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+    )
+    boxes, _ = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
+    cw, ch = compass_size_mm(pre)
+    compass_box = (
+        width_mm - 1.0 - cw,
+        layout.height_mm - 1.0 - ch,
+        width_mm - 1.0,
+        layout.height_mm - 1.0,
+    )
+    placed = {"compass": Furniture("compass", compass_box, "header")}
+    placed.update({n: Furniture(n, b, "footer") for n, b in boxes.items()})
+
+    with plt.rc_context(_rc(pre)):
         fig = plt.figure(
             figsize=(layout.width_mm / 25.4, layout.height_mm / 25.4), dpi=DPI, facecolor="white"
         )
-        canvas = MapCanvas(fig, None, None, None, layout, extent, placed)
+        canvas = MapFigure(fig, None, None, None, layout, extent, placed, preset=pre)
         ax = fig.add_axes(canvas.mm_to_fig(layout.map_box))
         ax.set_facecolor(SEA_COLOUR)
         cax = fig.add_axes(canvas.mm_to_fig(layout.legend_box))
@@ -613,7 +682,7 @@ def new_map(
         ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]))
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lon")))
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lat")))
-        ax.tick_params(labelsize=LABEL_PT, pad=1.5)
+        ax.tick_params(labelsize=pre.label_pt, pad=1.5)
         for spine in ax.spines.values():
             spine.set_linewidth(0.4)
             spine.set_color("#888888")
@@ -629,11 +698,12 @@ def new_map(
         ax.set_xlim(extent[0], extent[1])
         ax.set_ylim(extent[2], extent[3])
 
+        top = layout.height_mm - 2.0
         canvas.texts["title"] = overlay.text(
             2.0,
-            layout.height_mm - 2.0,
-            format_title(iso, technology, variable),
-            fontsize=TITLE_PT,
+            top,
+            "\n".join(title_lines),
+            fontsize=pre.title_pt,
             fontweight="bold",
             ha="left",
             va="top",
@@ -641,25 +711,25 @@ def new_map(
         if subtitle:
             canvas.texts["subtitle"] = overlay.text(
                 2.0,
-                layout.height_mm - 2.0 - TITLE_PT * PT_MM * 1.35,
-                subtitle,
-                fontsize=LABEL_PT,
+                top - len(title_lines) * pre.title_pt * PT_MM * 1.35,
+                "\n".join(sub_lines),
+                fontsize=pre.label_pt,
                 color="#444444",
                 ha="left",
                 va="top",
             )
         map_w = layout.map_box[2] - layout.map_box[0]
         canvas.artists["scale_bar"] = draw_scale_bar(
-            overlay, placed["scale_bar"].box, extent, map_w
+            overlay, placed["scale_bar"].box, extent, map_w, pre
         )
-        canvas.artists["compass"] = draw_compass(overlay, placed["compass"].box)
+        canvas.artists["compass"] = draw_compass(overlay, placed["compass"].box, pre)
         if total_text:
             box = placed["total"].box
             total_artist = overlay.text(
                 box[0] + PAD_MM + 1.0,
                 box[1] + PAD_MM + 1.0,
                 total_text,
-                fontsize=LEGEND_PT,
+                fontsize=pre.legend_pt,
                 color="#333333",
                 ha="left",
                 va="bottom",
@@ -673,20 +743,34 @@ def new_map(
             )
             canvas.texts["total"] = total_artist
             canvas.artists["total"] = [total_artist]
+        if source:
+            box = placed["source"].box
+            source_artist = overlay.text(
+                box[2] - PAD_MM,
+                box[1] + 0.5,
+                source,
+                fontsize=pre.footer_pt,
+                color="#666666",
+                ha="right",
+                va="bottom",
+            )
+            canvas.texts["source"] = source_artist
+            canvas.artists["source"] = [source_artist]
     return canvas
 
 
-def add_colorbar(canvas: MapCanvas, mappable, label: str, extend: str = "neither"):
+def add_colorbar(canvas: MapFigure, mappable, label: str, extend: str = "neither"):
     """The colour bar in the legend slot: vertical to the right of a tall map, horizontal below a wide one."""
     orientation = "vertical" if canvas.layout.legend == "right" else "horizontal"
-    with plt.rc_context(_RC):
+    pt = canvas.preset.legend_pt
+    with plt.rc_context(_rc(canvas.preset)):
         bar = canvas.fig.colorbar(mappable, cax=canvas.cax, orientation=orientation, extend=extend)
         bar.outline.set_linewidth(0.3)
-        bar.ax.tick_params(labelsize=LEGEND_PT, width=0.4, length=2.0)
+        bar.ax.tick_params(labelsize=pt, width=0.4, length=2.0)
         if orientation == "vertical":
-            bar.set_label(label, fontsize=LEGEND_PT)
+            bar.set_label(label, fontsize=pt)
         else:
-            bar.set_label(label, fontsize=LEGEND_PT, labelpad=1.0)
+            bar.set_label(label, fontsize=pt, labelpad=1.0)
     return bar
 
 
@@ -702,11 +786,13 @@ def raster_map(
     kind: str = "potential",
     subtitle: str = "",
     total_text: str | None = None,
-    width_mm: float = FULL_WIDTH_MM,
+    width_mm: float | None = None,
+    preset: str | Preset | None = "thesis",
     neighbours=None,
     diverging_center: float = 0.0,
-) -> MapCanvas:
-    """A continuous raster map in the common style: robust norm, the colormap of `kind`, extend where needed, furniture in free corners."""
+    country: str | None = None,
+) -> MapFigure:
+    """A continuous raster map in the common style: robust norm, the colormap of `kind`, extend where needed."""
     data = np.ma.masked_invalid(grid)
     diverging = kind.startswith("delta")
     info = robust_norm(data.compressed(), diverging=diverging, center=diverging_center)
@@ -718,9 +804,9 @@ def raster_map(
         subtitle=subtitle,
         total_text=total_text,
         width_mm=width_mm,
+        preset=preset,
         neighbours=neighbours,
-        data_mask=None,
-        grid_mask=(~np.ma.getmaskarray(data), extent_grid),
+        country=country,
     )
     image = canvas.ax.imshow(
         data,
@@ -738,29 +824,12 @@ def raster_map(
     return canvas
 
 
-def mask_on_extent(
-    mask: np.ndarray, grid_extent: Extent, map_extent: Extent, size: int = 300
-) -> np.ndarray:
-    """The data mask of a grid sampled over the map extent (row 0 north); False where the map reaches beyond the grid."""
-    gw, ge, gs, gn = grid_extent
-    mw, me, ms, mn = map_extent
-    ny, nx = mask.shape
-    xs = mw + (np.arange(size) + 0.5) / size * (me - mw)
-    ys = mn - (np.arange(size) + 0.5) / size * (mn - ms)
-    cols = np.floor((xs - gw) / (ge - gw) * nx).astype(int)
-    rows = np.floor((gn - ys) / (gn - gs) * ny).astype(int)
-    inside = ((rows >= 0) & (rows < ny))[:, None] & ((cols >= 0) & (cols < nx))[None, :]
-    out = np.zeros((size, size), dtype=bool)
-    out[inside] = mask[np.clip(rows, 0, ny - 1)[:, None], np.clip(cols, 0, nx - 1)[None, :]][inside]
-    return out
-
-
 def save_png(canvas_or_fig, path: Path) -> Path:
     """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written."""
     path = Path(path)
     if path.suffix.lower() != ".png":
         raise ValueError(f"maps are written as PNG only, got {path.suffix!r}")
-    fig = canvas_or_fig.fig if isinstance(canvas_or_fig, MapCanvas) else canvas_or_fig
+    fig = canvas_or_fig.fig if isinstance(canvas_or_fig, MapFigure) else canvas_or_fig
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=DPI, facecolor="white", metadata={"Software": None})
     plt.close(fig)
@@ -816,31 +885,16 @@ def nice_values_below(maximum: float, n: int = 3) -> list[float]:
     return [top / 10.0**i for i in range(n)]
 
 
-def _wrap(text: str, width_mm: float, pt: float) -> list[str]:
-    """Words of `text` on lines no wider than `width_mm` by the same width estimate as the furniture."""
-    lines, current = [], ""
-    for word in text.split():
-        trial = f"{current} {word}".strip()
-        if current and _text_width_mm(trial, pt) > width_mm:
-            lines.append(current)
-            current = word
-        else:
-            current = trial
-    if current:
-        lines.append(current)
-    return lines or [""]
-
-
-def legend_space(spec: ClassedLegend) -> tuple[float, float]:
+def legend_space(spec: ClassedLegend, preset: Preset = THESIS) -> tuple[float, float]:
     """(side, below) space in mm that the legend needs: `side` is the width of the strip right of a tall map, `below` the height under a wide one."""
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
-    widest = max(_text_width_mm(t, LEGEND_PT) for t in labels)
+    widest = max(_text_width_mm(t, preset.legend_pt) for t in labels)
     circle_w = max(
-        (2 * r + 2.0 + _text_width_mm(t, LEGEND_PT) for t, r in spec.circles), default=0.0
+        (2 * r + 2.0 + _text_width_mm(t, preset.legend_pt) for t, r in spec.circles), default=0.0
     )
     title_w = max(
         (
-            _text_width_mm(w, LEGEND_PT)
+            _text_width_mm(w, preset.legend_pt)
             for w in (spec.title + " " + (spec.circle_title or "")).split()
         ),
         default=0.0,
@@ -851,7 +905,7 @@ def legend_space(spec: ClassedLegend) -> tuple[float, float]:
     return side, below
 
 
-def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, list]:
+def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, list]:
     """Draw the legend of a classed map in the strip the layout reserved (right of a tall map, below a wide one).
 
     The colour-bar axes of the canvas is hidden. The drawn pieces are kept in `canvas.artists["legend"]` for the overlap tests.
@@ -859,12 +913,13 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
     from matplotlib.patches import Circle
 
     layout, overlay = canvas.layout, canvas.overlay
+    pt = canvas.preset.legend_pt
     canvas.cax.set_visible(False)
-    text_kw = {"fontsize": LEGEND_PT, "color": "#333333"}
+    text_kw = {"fontsize": pt, "color": "#333333"}
     pieces: list = []
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
     colours = list(spec.colours) + (["#d9d9d9"] if spec.no_value_label else [])
-    line_mm = LEGEND_PT * PT_MM * 1.3
+    line_mm = pt * PT_MM * 1.3
 
     def swatch(x, y, w, colour):
         return overlay.add_patch(
@@ -882,7 +937,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
         x0 = layout.map_box[2] + 4.0
         avail = layout.width_mm - RIGHT_MM - x0
         y = layout.map_box[3]
-        for line in _wrap(spec.title, avail, LEGEND_PT):
+        for line in _wrap(spec.title, avail, pt):
             pieces.append(
                 overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
             )
@@ -903,7 +958,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
             y -= ROW_MM
         if spec.circles:
             y -= 2.5
-            for line in _wrap(spec.circle_title or "", avail, LEGEND_PT):
+            for line in _wrap(spec.circle_title or "", avail, pt):
                 pieces.append(
                     overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
                 )
@@ -935,7 +990,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
         width = layout.map_box[2] - layout.map_box[0]
         slot = width / max(n, 1)
         y = layout.map_box[1] - 4.0
-        for line in _wrap(spec.title, width, LEGEND_PT):
+        for line in _wrap(spec.title, width, pt):
             pieces.append(
                 overlay.text(x_start, y, line, va="top", ha="left", fontweight="bold", **text_kw)
             )
@@ -962,7 +1017,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
                     x, y, spec.circle_title or "", va="top", ha="left", fontweight="bold", **text_kw
                 )
             )
-            x += _text_width_mm(spec.circle_title or "", LEGEND_PT) + 6.0
+            x += _text_width_mm(spec.circle_title or "", pt) + 6.0
             cy = y - biggest - 1.0
             for text, r in spec.circles:
                 pieces.append(
@@ -979,13 +1034,13 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
                 pieces.append(
                     overlay.text(x + 2 * r + 1.5, cy, text, va="center", ha="left", **text_kw)
                 )
-                x += 2 * r + 1.5 + _text_width_mm(text, LEGEND_PT) + 6.0
+                x += 2 * r + 1.5 + _text_width_mm(text, pt) + 6.0
     canvas.artists["legend"] = pieces
     return {"legend": pieces}
 
 
 def draw_choropleth(
-    canvas: MapCanvas, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
+    canvas: MapFigure, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
 ) -> None:
     """Fill the units (GeoDataFrame in lon/lat) with `facecolors` (one per row, RGBA or names) on the map axes."""
     units.plot(
@@ -995,7 +1050,7 @@ def draw_choropleth(
     canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
 
 
-def draw_circles(canvas: MapCanvas, lon, lat, radii_mm) -> object:
+def draw_circles(canvas: MapFigure, lon, lat, radii_mm) -> object:
     """Circles of the given radii (mm on paper) centred on (lon, lat) over the map, largest first so that the small ones stay visible."""
     radii = np.asarray(radii_mm, dtype="float64")
     order = np.argsort(-radii)
@@ -1016,6 +1071,7 @@ __all__: Sequence[str] = (
     "HALF_WIDTH_MM",
     "ClassedLegend",
     "MapCanvas",
+    "MapFigure",
     "circle_radius_mm",
     "colormap_for",
     "country_extent",

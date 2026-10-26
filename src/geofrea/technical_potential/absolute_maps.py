@@ -388,7 +388,6 @@ def compose_cell_density_map(
         subtitle=subtitle,
         total_text=total_text,
         neighbours=ctx.neighbours,
-        grid_mask=(in_country, extent_grid),
         extent=ctx.extent,
         contiguous=False,
     )
@@ -564,7 +563,6 @@ def draw_classed_cell_map(
         neighbours=ctx.neighbours,
         extent=ctx.extent,
         contiguous=False,
-        grid_mask=(in_country, extent_grid),
         legend_side_mm=side,
         legend_below_mm=below,
     )
