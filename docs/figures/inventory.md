@@ -63,3 +63,7 @@ Types: **raster** = continuous raster, **classes** = classified raster or chorop
 Items 1-5, 7-9, 11 and 12 of section 1 draw one map on one axes and can move to `mapstyle.raster_map` or `mapstyle.new_map`; items 2-4 and 12 have several panels and need a panel layout that `mapstyle` does not have yet (COMMAND 56 does not migrate any figure). Items 6 and 10 are outside `src/`. The class-based legends of items 8-9 will use the legend slot of the canvas (`canvas.cax`) with a patch legend instead of a colour bar.
 
 **COMMAND 66.** `mapstyle.py` is now `MapFigure` with a fixed layout, presets, the semantic palette and scales, title rules, file names and PNG metadata (`docs/figures/style_guide.md`, D-core-045). The figures listed above were not redrawn.
+
+## 6. After COMMAND 68
+
+Every figure of sections 1 and 2 except the thesis figures of F8 (item 12) and the audit charts of `scripts/audit_potential.py` now goes through `viz/` (`MapFigure`, `PanelFigure`, `charts`); items 2-9 and 11 were moved by family, one commit each, and the three real countries were redrawn. The old files are in `GEOFREA_DATA_DIR/archive/figures_20261026/`. The static test `tests/unit/test_no_maps_outside_mapfigure.py` keeps `matplotlib.pyplot` inside `viz/` and in those two places. What was drawn, per country and phase, with one before/after pair per family, is in `docs/figures/migration_68.md`.

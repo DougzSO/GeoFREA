@@ -93,3 +93,5 @@ Recorded before any code (Douglas's verdicts of 2026-10-08 on `docs/_audit/2026-
 - 2026-10-19 (D-F5-030, COMMAND 54): per-state limits from the central scenario, last class open.
 - 2026-10-19: F1 to F5 run again in PRT, IND and BRA with the contiguous mask and the GLO-30 elevation (D-F5-031).
 - 2026-10-20 (D-F5-032, COMMAND 60): maps of `potential_maps` in the common style, densities with circles, `docs/phases/F5/potential_maps_v2.md`.
+
+- **D-F5-033 — Figures in the MapFigure standard (2026-10-26, COMMAND 68).** The state maps are one sheet per technology and quantity with the three land scenarios side by side on classes shared by the three, the circle legend derived from the data and the denominator declared; the states are also drawn as ranked bars with the range of the scenarios (`technical_potential/state_figures.py`, at least two admin units). Standard file names (`<ISO3>_F5_...`). BRA, PRT and IND were redrawn and the 80 hashes of `run_real_hashes.json` are unchanged.
