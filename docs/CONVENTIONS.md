@@ -81,8 +81,8 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 
 - Rasters: Cloud Optimized GeoTIFF, EPSG:4326. Tables: parquet with a Pydantic schema and `schema_version`.
 - Layout and file naming follow METHODOLOGY A-08. Paths are resolved via `src/geofrea/core/paths.py`, the only module that reads data-location environment variables.
-- Map file names: `<map>__<window>__<ssp>__<gcm>.png`, using `ref` for the reference climate and `na` for non-applicable fields.
-- One map per file. Figures respect `settings.yaml` `figures`.
+- Map file names: `{ISO3}_{phase}_{variable}_{technology}_{scenario}_{climate}.png` (`mapstyle.figure_filename`): fields that do not apply are left out, never written as `na`; the ISO3 code is always there. Files written before COMMAND 66 keep the old pattern (`<map>__ref__na__na.png`) until their phase runs again.
+- One map per file. Figures respect `settings.yaml` `figures`. The metadata of a figure is in the text chunks of its PNG; a folder has one `figures_index.json`, no sidecar per figure.
 - Map style: new maps are drawn with `src/geofrea/viz/mapstyle.py` (`docs/figures/style_guide.md`); the figures that exist today are listed in `docs/figures/inventory.md` and move to it one at a time.
 - Thesis outputs are produced only by F8 into `GEOFREA_DATA_DIR/outputs/thesis/`, named by their T-ID (`T-R4_max_regret_BRA_solar.png`).
 

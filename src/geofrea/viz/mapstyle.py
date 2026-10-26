@@ -1,8 +1,11 @@
-"""One cartographic style for every GeoFREA map (COMMAND 56): print sizes in mm, fonts at print size, geographic aspect, extent from the
-country geometry, compass rose and scale bar placed where the map is emptiest, neighbours in light grey, one colormap per kind of
-variable, robust colour limits, PNG at 300 dpi.
+"""One cartographic style for every GeoFREA map (COMMANDS 56 and 66): `MapFigure`, the single module of figure.
 
-Nothing here computes a result and no existing figure uses it yet (`docs/figures/inventory.md` lists what will move to it).
+A fixed grid of layout, the same for every country: header (title and subtitle at the left, eight-point compass rose at the right),
+map, legend (colour bar or patches; right of a tall map, below a wide one) and footer (scale bar, box of totals, source). Presets
+(`thesis`, `article_single`, `article_double`, `slide`) fix the width in mm and the fonts in pt. Neighbours in light grey, geographic
+aspect, extent from the country geometry, PNG at 300 dpi.
+
+Nothing here computes a result. The modules of the phases call it; none draws a map on its own.
 
 Everything is laid out in millimetres on a figure whose size is exact: an overlay axes covers the figure with 1 unit = 1 mm, so the
 fonts (pt) and the furniture (compass, scale bar, text box) have their true print size and their boxes can be tested.
@@ -13,9 +16,11 @@ Credit: the 8-triangle compass rose and the alternating-segment scale bar follow
 
 from __future__ import annotations
 
+import functools
 import math
+import re
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import matplotlib
@@ -24,11 +29,18 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import ticker
-from matplotlib.colors import LogNorm, Normalize, PowerNorm
+from matplotlib.colors import (
+    Colormap,
+    LinearSegmentedColormap,
+    LogNorm,
+    Normalize,
+    PowerNorm,
+    to_hex,
+    to_rgb,
+)
 from matplotlib.figure import Figure
 from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.patches import Rectangle
-from shapely.geometry import box as shapely_box
 
 from geofrea.core.geo_utils import get_contiguous_mainland_gdf
 from geofrea.core.geodesy import wgs84_km_per_degree
@@ -40,55 +52,89 @@ BoxMm = tuple[
 
 # ------------------------------------------------------------------------------------------------------------------------- constants
 
-FULL_WIDTH_MM = 190.0
-HALF_WIDTH_MM = 90.0
-MAX_HEIGHT_MM = 230.0
 DPI = 300
 EXTENT_MARGIN = 0.03
 PT_MM = 25.4 / 72.0
+MAX_HEIGHT_MM = 230.0
 
 FONT_FAMILY = "DejaVu Sans"
-TITLE_PT, LABEL_PT, LEGEND_PT = 10.0, 8.0, 8.0
 
-NEIGHBOUR_COLOUR = "#ececec"
+
+@dataclass(frozen=True)
+class Preset:
+    """A destination of the figure: its width in millimetres and the fonts in points at that print size."""
+
+    name: str
+    width_mm: float
+    title_pt: float
+    label_pt: float
+    legend_pt: float
+    footer_pt: float
+    compass_mm: float
+
+
+PRESETS: dict[str, Preset] = {
+    "thesis": Preset("thesis", 190.0, 10.0, 8.0, 8.0, 6.5, 10.0),
+    "article_single": Preset("article_single", 90.0, 8.0, 6.5, 6.5, 5.5, 8.0),
+    "article_double": Preset("article_double", 180.0, 9.0, 7.0, 7.0, 6.0, 9.0),
+    "slide": Preset("slide", 254.0, 16.0, 12.0, 12.0, 9.0, 14.0),
+}
+THESIS = PRESETS["thesis"]
+FULL_WIDTH_MM = THESIS.width_mm
+HALF_WIDTH_MM = PRESETS["article_single"].width_mm
+TITLE_PT, LABEL_PT, LEGEND_PT = THESIS.title_pt, THESIS.label_pt, THESIS.legend_pt
+COMPASS_MM = THESIS.compass_mm
+
+
+def get_preset(preset: str | Preset | None) -> Preset:
+    """The preset by name (`thesis`, `article_single`, `article_double`, `slide`); a `Preset` is returned as is, None is `thesis`."""
+    if preset is None:
+        return THESIS
+    if isinstance(preset, Preset):
+        return preset
+    try:
+        return PRESETS[preset]
+    except KeyError:
+        raise ValueError(f"unknown preset {preset!r}; one of {sorted(PRESETS)}") from None
+
+
+NEIGHBOUR_COLOUR = "#e3e3e3"
 SEA_COLOUR = "white"
 OUTLINE_COLOUR = "#222222"
-NO_DATA_COLOUR = "#d9d9d9"
+NO_DATA_COLOUR = (
+    "#bdbdbd"  # "no potential": a medium grey that is neither the neighbours (#ececec) nor the sea
+)
 
-COLORMAPS = {  # one colormap per kind of variable, the same in every country
-    "potential": "viridis",
-    "energy": "viridis",
-    "capacity_factor": "magma",
-    "delta": "RdBu",
-    "delta_alt": "BrBG",
-}
 SKEW_LIMIT = 20.0  # P98 / P50 above this: logarithmic or power norm
 CLIP_PERCENTILES = (2.0, 98.0)
 
-LEFT_MM, RIGHT_MM, HEADER_MM, BOTTOM_MM = 14.0, 3.0, 13.0, 8.0
+LEFT_MM, RIGHT_MM, BOTTOM_MM = 14.0, 3.0, 8.0
 LEGEND_SIDE_MM, LEGEND_BELOW_MM = 26.0, 15.5
 COLORBAR_MM = 3.5
-PAD_MM = 2.0  # clear space around a placed element
-OCCUPANCY_TOLERANCE = 0.01  # a corner with more occupied share than this is not free
-COMPASS_MM = 10.0
-CORNERS = ("lower left", "upper right", "lower right", "upper left")  # order of preference on ties
+PAD_MM = 2.0  # clear space around a furniture element
+FOOTER_GAP_MM = 3.0  # horizontal gap between the elements of a footer row
 
-_RC = {
-    "font.family": FONT_FAMILY,
-    "font.size": LABEL_PT,
-    "axes.titlesize": TITLE_PT,
-    "axes.labelsize": LABEL_PT,
-    "xtick.labelsize": LABEL_PT,
-    "ytick.labelsize": LABEL_PT,
-    "legend.fontsize": LEGEND_PT,
-    "axes.linewidth": 0.4,
-    "xtick.major.width": 0.4,
-    "ytick.major.width": 0.4,
-    "xtick.major.size": 2.0,
-    "ytick.major.size": 2.0,
-    "savefig.dpi": DPI,
-    "figure.dpi": DPI,
-}
+
+def _rc(preset: Preset) -> dict:
+    return {
+        "font.family": FONT_FAMILY,
+        "font.size": preset.label_pt,
+        "axes.titlesize": preset.title_pt,
+        "axes.labelsize": preset.label_pt,
+        "xtick.labelsize": preset.label_pt,
+        "ytick.labelsize": preset.label_pt,
+        "legend.fontsize": preset.legend_pt,
+        "axes.linewidth": 0.4,
+        "xtick.major.width": 0.4,
+        "ytick.major.width": 0.4,
+        "xtick.major.size": 2.0,
+        "ytick.major.size": 2.0,
+        "savefig.dpi": DPI,
+        "figure.dpi": DPI,
+    }
+
+
+_RC = _rc(THESIS)
 
 
 # ------------------------------------------------------------------------------------------------------------------- extent and aspect
@@ -152,11 +198,225 @@ def format_degrees(value: float, axis: str) -> str:
 
 
 # --------------------------------------------------------------------------------------------------------------- colour and normalisation
+# The semantics of colour and of scale live here and nowhere else: variable -> (colormap, scale, scope). No module of a phase chooses a
+# colormap or colour limits by itself.
+
+SOLAR, WIND = "solar", "wind"
+TRUNCATE_FROM = 0.15  # the sequential maps of the technologies start here, so that the lowest value is not the white of the sea
+
+TECH_CMAPS = {
+    SOLAR: "YlOrBr",
+    WIND: "GnBu",
+}  # warm for the sun, cool for the wind; viridis is for neither
+TECH_KINDS = ("potential", "energy", "density", "capacity_factor", "eligible_share")
+PLAIN_CMAPS = {  # kinds that do not depend on the technology
+    "excluded_share": "Reds",  # diagnostic figures only, never beside a map coloured by technology
+    "delta": "RdBu",  # climate change of the solar resource (centred on 0 as percent, on 1 as ratio)
+    "delta_alt": "BrBG",  # climate change of the wind resource
+    "temperature": "YlOrRd",  # change of temperature (sequential)
+}
+COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
+
+# Qualitative classes (the dominant exclusion E1-E6): the Okabe-Ito colours without green and without the black, and a neutral grey for "none".
+CLASS_COLOURS = ("#E69F00", "#56B4E9", "#0072B2", "#CC79A7", "#F0E442", "#D55E00")
+CLASS_NONE_COLOUR = "#7f7f7f"
+
+MIN_DELTA_E = 8.0  # two colours with different meanings must differ at least this much (CIE76), also under colour-blind simulation
+MIN_DELTA_E_CMAP = 5.0  # a flat colour against the colours a continuous map passes through
 
 
-def colormap_for(kind: str) -> str:
-    """The colormap of a kind of variable (`potential`, `energy`, `capacity_factor`, `delta`, `delta_alt`)."""
-    return COLORMAPS[kind]
+@functools.cache
+def _truncated(name: str, start: float) -> Colormap:
+    base = matplotlib.colormaps[name]
+    cmap = LinearSegmentedColormap.from_list(
+        f"{name}_from{round(start * 100):d}", base(np.linspace(start, 1.0, 256))
+    )
+    matplotlib.colormaps.register(
+        cmap, force=True
+    )  # by name, so that a figure can look it up again
+    return cmap
+
+
+def colormap_for(kind: str, tech: str | None = None) -> Colormap:
+    """The colormap of a kind of variable.
+
+    The kinds in `TECH_KINDS` (`potential`, `energy`, `density`, `capacity_factor`, `eligible_share`) take the family of the technology
+    (`solar`: YlOrBr, `wind`: GnBu, truncated to start at 15%); the others do not depend on it (`excluded_share`: Reds, `delta`: RdBu,
+    `delta_alt`: BrBG, `temperature`: YlOrRd).
+    """
+    if kind in TECH_KINDS:
+        if tech not in TECH_CMAPS:
+            raise ValueError(f"the kind {kind!r} needs a technology, one of {sorted(TECH_CMAPS)}")
+        return _truncated(TECH_CMAPS[tech], TRUNCATE_FROM)
+    if kind not in PLAIN_CMAPS:
+        raise ValueError(f"unknown kind {kind!r}")
+    return matplotlib.colormaps[PLAIN_CMAPS[kind]]
+
+
+def class_colours(n: int) -> list[str]:
+    """The first `n` qualitative class colours (colour-blind safe, no green)."""
+    if not 0 < n <= len(CLASS_COLOURS):
+        raise ValueError(f"at most {len(CLASS_COLOURS)} classes have a colour, asked {n}")
+    return list(CLASS_COLOURS[:n])
+
+
+# --- colour-blind simulation (Machado, Oliveira and Fernandes 2009, severity 1) and CIE76 distance
+
+_CVD = {
+    "deuteranopia": np.array(
+        [
+            [0.367322, 0.860646, -0.227968],
+            [0.280085, 0.672501, 0.047413],
+            [-0.011820, 0.042940, 0.968881],
+        ]
+    ),
+    "protanopia": np.array(
+        [
+            [0.152286, 1.052583, -0.204868],
+            [0.114503, 0.786281, 0.099216],
+            [-0.003882, -0.048116, 1.051998],
+        ]
+    ),
+}
+VISIONS = ("normal", *_CVD)
+
+
+def _to_linear(rgb: np.ndarray) -> np.ndarray:
+    return np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+
+
+def _from_linear(lin: np.ndarray) -> np.ndarray:
+    lin = np.clip(lin, 0.0, 1.0)
+    return np.where(lin <= 0.0031308, lin * 12.92, 1.055 * lin ** (1 / 2.4) - 0.055)
+
+
+def simulate_vision(colour, vision: str) -> tuple[float, float, float]:
+    """The sRGB colour as seen with `vision` (`normal`, `deuteranopia` or `protanopia`)."""
+    rgb = np.asarray(to_rgb(colour), dtype="float64")
+    if vision == "normal":
+        return tuple(float(x) for x in rgb)
+    out = _from_linear(_CVD[vision] @ _to_linear(rgb))
+    return tuple(float(x) for x in out)
+
+
+def _lab(rgb) -> np.ndarray:
+    lin = _to_linear(np.asarray(rgb, dtype="float64"))
+    xyz = (
+        np.array(
+            [
+                [0.4124564, 0.3575761, 0.1804375],
+                [0.2126729, 0.7151522, 0.0721750],
+                [0.0193339, 0.1191920, 0.9503041],
+            ]
+        )
+        @ lin
+    ) / np.array([0.95047, 1.0, 1.08883])
+    f = np.where(xyz > 216 / 24389, np.cbrt(xyz), (24389 / 27 * xyz + 16) / 116)
+    return np.array([116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])])
+
+
+def delta_e(colour_a, colour_b, vision: str = "normal") -> float:
+    """CIE76 distance between two colours as seen with `vision`."""
+    a = _lab(simulate_vision(colour_a, vision))
+    b = _lab(simulate_vision(colour_b, vision))
+    return float(np.linalg.norm(a - b))
+
+
+def colour_conflicts(colours: dict[str, str], cmaps: dict[str, str] | None = None) -> list[str]:
+    """What is wrong with the colours of a figure: `colours` maps a flat colour to its meaning and `cmaps` a colormap name to its meaning.
+
+    A conflict is a flat colour that is the same as another with a different meaning, two colormaps with different meanings that
+    are the same one, or two meanings whose colours differ by less than `MIN_DELTA_E` for a normal eye, for deuteranopia or for
+    protanopia (flat against the colours a colormap passes through: `MIN_DELTA_E_CMAP`).
+    """
+    problems: list[str] = []
+    flat = [(to_hex(c).lower(), m) for c, m in colours.items()]
+    for i, (ca, ma) in enumerate(flat):
+        for cb, mb in flat[i + 1 :]:
+            if ma == mb:
+                continue
+            if ca == cb:
+                problems.append(f"{ca} means {ma!r} and {mb!r}")
+                continue
+            for vision in VISIONS:
+                d = delta_e(ca, cb, vision)
+                if d < MIN_DELTA_E:
+                    problems.append(
+                        f"{ma!r} ({ca}) and {mb!r} ({cb}) differ by {d:.1f} for {vision}"
+                    )
+                    break
+    maps = list((cmaps or {}).items())
+    for i, (na, ma) in enumerate(maps):
+        for nb, mb in maps[i + 1 :]:
+            if na == nb and ma != mb:
+                problems.append(f"the colormap {na!r} means {ma!r} and {mb!r}")
+    for colour, meaning in flat:
+        for name, cmap_meaning in maps:
+            if cmap_meaning == meaning:
+                continue
+            cm = matplotlib.colormaps[name]
+            for v in np.linspace(0.0, 1.0, 11):
+                for vision in VISIONS:
+                    if delta_e(colour, cm(v), vision) < MIN_DELTA_E_CMAP:
+                        problems.append(
+                            f"{meaning!r} ({to_hex(colour)}) is almost the colour of {cmap_meaning!r} ({name} at {v:.1f}) for {vision}"
+                        )
+                        break
+                else:
+                    continue
+                break
+    return problems
+
+
+# --- scales (T-03)
+
+SCALE_MODES = ("fixed", "percentile", "shared")
+SCALE_SCOPES = ("per_country", "shared_across_countries")
+
+
+@dataclass(frozen=True)
+class ScaleSpec:
+    """How the colour limits of a variable are chosen.
+
+    `fixed`: the physical limits in `limits`. `percentile`: the percentiles of the values drawn (`percentiles`). `shared`: the limits
+    computed over the values of every map that must be compared (`shared_limits`). `scope` says whether the limits are those of one
+    country or are shared across countries; it goes to the PNG metadata and, when a clip is drawn, to the subtitle.
+    """
+
+    mode: str
+    limits: tuple[float, float] | None = None
+    percentiles: tuple[float, float] = CLIP_PERCENTILES
+    scope: str = "per_country"
+    diverging: bool = False
+    center: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.mode not in SCALE_MODES:
+            raise ValueError(f"scale mode {self.mode!r} is not one of {SCALE_MODES}")
+        if self.scope not in SCALE_SCOPES:
+            raise ValueError(f"scale scope {self.scope!r} is not one of {SCALE_SCOPES}")
+        if self.mode == "fixed" and (self.limits is None or not self.limits[0] < self.limits[1]):
+            raise ValueError("a fixed scale needs limits (low, high) with low < high")
+
+
+FIXED_CF = {
+    SOLAR: (0.10, 0.25),
+    WIND: (0.0, 0.60),
+}  # capacity factor, dimensionless, the same in every country
+
+
+def default_scale(kind: str, tech: str | None = None) -> ScaleSpec:
+    """The default scale of a kind of variable (spec v2, section 4): CF fixed per technology and the same in the three countries; shares
+    fixed at 0-1; changes symmetric about the centre at percentiles of the data; densities at percentiles of each country."""
+    if kind == "capacity_factor":
+        if tech not in FIXED_CF:
+            raise ValueError("the capacity factor needs a technology")
+        return ScaleSpec("fixed", FIXED_CF[tech], scope="shared_across_countries")
+    if kind in ("eligible_share", "excluded_share"):
+        return ScaleSpec("fixed", (0.0, 1.0), scope="shared_across_countries")
+    if kind.startswith("delta"):
+        return ScaleSpec("percentile", diverging=True)
+    return ScaleSpec("percentile")
 
 
 @dataclass(frozen=True)
@@ -169,6 +429,8 @@ class NormInfo:
     vmax: float
     kind: str  # linear, log, power or diverging
     skew: float  # P98 / P50 (inf when the median is not positive)
+    mode: str = "percentile"  # fixed, percentile or shared
+    scope: str = "per_country"
 
 
 def robust_norm(
@@ -209,11 +471,153 @@ def robust_norm(
 
 
 def _extend(arr: np.ndarray, vmin: float, vmax: float) -> str:
+    """The colour bar `extend` that matches the data: an arrow where, and only where, values lie beyond the limits."""
+    arr = arr[np.isfinite(arr)]
     below, above = bool((arr < vmin).any()), bool((arr > vmax).any())
     return "both" if below and above else "min" if below else "max" if above else "neither"
 
 
+def resolve_scale(
+    values, spec: ScaleSpec, shared_limits: tuple[float, float] | None = None
+) -> NormInfo:
+    """The norm of `values` under `spec`; `extend` is always the one the data need against the limits that were used.
+
+    `fixed` uses `spec.limits`. `percentile` uses the percentiles of `values`, unless the scope is `shared_across_countries` and
+    `shared_limits` were given (then they rule and the mode is `shared`). `shared` needs `shared_limits` (or `spec.limits`).
+    """
+    arr = np.asarray(values, dtype="float64")
+    arr = arr[np.isfinite(arr)]
+    if arr.size == 0:
+        raise ValueError("no finite value to normalise")
+    limits = None
+    mode = spec.mode
+    if mode == "fixed":
+        limits = spec.limits
+    elif mode == "shared" or (
+        spec.scope == "shared_across_countries" and shared_limits is not None
+    ):
+        limits = shared_limits or spec.limits
+        if limits is None:
+            raise ValueError(
+                "a shared scale needs the limits computed over the maps that are compared"
+            )
+        mode = "shared"
+    if limits is None:
+        info = robust_norm(
+            arr, diverging=spec.diverging, center=spec.center, percentiles=spec.percentiles
+        )
+        return replace(info, mode="percentile", scope=spec.scope)
+    lo, hi = float(limits[0]), float(limits[1])
+    return NormInfo(
+        Normalize(lo, hi), _extend(arr, lo, hi), lo, hi, "linear", math.nan, mode, spec.scope
+    )
+
+
+def shared_limits(arrays: Sequence, spec: ScaleSpec) -> tuple[float, float]:
+    """Limits for maps that are compared (scenarios, SSPs, countries): the percentiles of all their values together
+    (symmetric about the centre for a diverging variable), so that the same colour means the same value in every map."""
+    pooled = np.concatenate([np.asarray(a, dtype="float64").ravel() for a in arrays])
+    info = robust_norm(
+        pooled, diverging=spec.diverging, center=spec.center, percentiles=spec.percentiles
+    )
+    return info.vmin, info.vmax
+
+
+def _fmt(x: float) -> str:
+    return f"{x:.3g}"
+
+
+def clip_note(info: NormInfo, unit: str = "") -> str:
+    """What the subtitle must say when the colour scale cuts values (empty when nothing is cut): the limit, the mode and the scope."""
+    if info.extend == "neither":
+        return ""
+    u = f" {unit}" if unit else ""
+    if info.extend == "max":
+        what = f"scale truncated at {_fmt(info.vmax)}{u}"
+    elif info.extend == "min":
+        what = f"scale truncated below {_fmt(info.vmin)}{u}"
+    else:
+        what = f"scale clipped to {_fmt(info.vmin)} to {_fmt(info.vmax)}{u}"
+    scope = "shared across countries" if info.scope == "shared_across_countries" else "this country"
+    return f"{what} ({info.mode}, {scope})"
+
+
+def format_subtitle(*parts: str | None) -> str:
+    """The subtitle `Scenario · Climate (· more)`: the parts that are not empty, joined by ` · `."""
+    return " · ".join(p for p in parts if p)
+
+
 # ---------------------------------------------------------------------------------------------------------------------------- layout
+# The figure is a fixed grid, from the top: header (title and subtitle at the left, compass rose at the right), map with its legend
+# (colour bar or patches) to the right of a tall map and below a wide one, footer (scale bar at the left, box of totals in the middle or at
+# the right, source at the right). No element is placed by looking for an empty corner: the same grid serves every country.
+
+DEFAULT_SOURCE = "Boundaries: GADM 4.1, illustrative"
+
+
+def _text_width_mm(text: str, pt: float, bold: bool = False) -> float:
+    """Estimated width of `text` (the widest line) in mm: the average advance of the sans family; the tests measure the real boxes."""
+    em = 0.68 if bold else 0.62
+    return max((len(line) for line in text.split("\n")), default=0) * pt * PT_MM * em
+
+
+def _wrap(text: str, width_mm: float, pt: float, bold: bool = False) -> list[str]:
+    """Words of `text` on lines no wider than `width_mm` by the same width estimate as the furniture."""
+    lines, current = [], ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if current and _text_width_mm(trial, pt, bold) > width_mm:
+            lines.append(current)
+            current = word
+        else:
+            current = trial
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
+def wrap_total_text(text: str, width_mm: float, pt: float) -> str:
+    """The text of the box of totals on lines no wider than `width_mm`: breaks first at the ` · ` between the figures, then at spaces."""
+    out: list[str] = []
+    for line in text.split("\n"):
+        current = ""
+        for part in line.split(" · "):
+            trial = f"{current} · {part}" if current else part
+            if current and _text_width_mm(trial, pt) > width_mm:
+                out.append(current)
+                current = part
+            else:
+                current = trial
+        if current:
+            out.extend(_wrap(current, width_mm, pt))
+    return "\n".join(out)
+
+
+def compass_size_mm(preset: Preset = THESIS) -> tuple[float, float]:
+    """Width and height of the box of the compass rose (arms, the N above and the padding)."""
+    return (
+        preset.compass_mm + 2 * PAD_MM,
+        preset.compass_mm + 0.6 + preset.legend_pt * PT_MM * 1.3 + 2 * PAD_MM,
+    )
+
+
+def header_text(
+    width_mm: float, title: str, subtitle: str, preset: Preset = THESIS
+) -> tuple[list[str], list[str], float]:
+    """The title and subtitle wrapped to the room the compass rose leaves, and the height of the header that holds them and the rose."""
+    room = width_mm - 2.0 - compass_size_mm(preset)[0] - 3.0
+    title_lines = _wrap(title, room, preset.title_pt, bold=True)
+    sub_lines = _wrap(subtitle, room, preset.label_pt) if subtitle else []
+    text_h = (
+        2.0
+        + len(title_lines) * preset.title_pt * PT_MM * 1.35
+        + len(sub_lines) * preset.label_pt * PT_MM * 1.35
+        + 1.5
+    )
+    return title_lines, sub_lines, max(text_h, compass_size_mm(preset)[1] + 2.0)
+
+
+HEADER_MM = header_text(FULL_WIDTH_MM, "T", "S")[2]  # the header of a one-line title and subtitle
 
 
 @dataclass(frozen=True)
@@ -226,7 +630,7 @@ class Layout:
     legend_box: BoxMm
     legend: str  # right or below
     header_box: BoxMm
-    footer_mm: float  # extra strip under the map for furniture that found no free corner
+    footer_mm: float  # height of the footer strip under everything
 
 
 def compute_layout(
@@ -236,10 +640,12 @@ def compute_layout(
     max_height_mm: float = MAX_HEIGHT_MM,
     legend_side_mm: float | None = None,
     legend_below_mm: float | None = None,
+    header_mm: float = HEADER_MM,
 ) -> Layout:
     """Figure size and boxes: the height follows the aspect of the extent; the legend is to the right of a tall map, below a wide one.
 
     A very tall country is limited to `max_height_mm`: the map gets narrower and is centred, the figure width stays `width_mm`.
+    The colour bar has the height of the map (right) or 70% of its width (below).
     """
     ratio = map_height_over_width(extent)
     side = legend_position(extent) == "right"
@@ -248,7 +654,7 @@ def compute_layout(
     )  # a classed legend needs more than a colour bar
     below_mm = LEGEND_BELOW_MM if legend_below_mm is None else legend_below_mm
     avail_w = width_mm - LEFT_MM - RIGHT_MM - (side_mm if side else 0.0)
-    fixed_h = HEADER_MM + BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
+    fixed_h = header_mm + BOTTOM_MM + footer_mm + (0.0 if side else below_mm)
     map_w = min(avail_w, (max_height_mm - fixed_h) / ratio)
     map_h = map_w * ratio
     height = fixed_h + map_h
@@ -257,11 +663,11 @@ def compute_layout(
     map_box = (x0, y0, x0 + map_w, y0 + map_h)
     if side:
         bar_x = x0 + map_w + 4.0
-        legend_box = (bar_x, y0 + 0.1 * map_h, bar_x + COLORBAR_MM, y0 + 0.9 * map_h)
+        legend_box = (bar_x, y0, bar_x + COLORBAR_MM, y0 + map_h)
     else:
         bar_y = footer_mm + 9.0  # under the bar: its tick labels and its name
         legend_box = (x0 + 0.15 * map_w, bar_y, x0 + 0.85 * map_w, bar_y + COLORBAR_MM)
-    header_box = (0.0, height - HEADER_MM, width_mm, height)
+    header_box = (0.0, height - header_mm, width_mm, height)
     return Layout(
         width_mm, height, map_box, legend_box, "right" if side else "below", header_box, footer_mm
     )
@@ -286,161 +692,101 @@ def scale_bar_length_km(extent: Extent, share: float = 0.20) -> float:
     return nice_length_km(share * width_km)
 
 
-def _text_width_mm(text: str, pt: float) -> float:
-    return (
-        len(text) * pt * PT_MM * 0.62
-    )  # average advance of the sans family; the tests measure the real box
+def _scale_bar_length_mm(extent: Extent, map_w_mm: float) -> float:
+    _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
+    return scale_bar_length_km(extent) / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
 
 
 @dataclass(frozen=True)
 class Furniture:
-    """An element of the map placed in the figure: its name, the box it occupies (padding included) and where it sits."""
+    """An element of the figure outside the map: its name, the box it occupies (padding included) and the strip it sits in."""
 
     name: str
     box: BoxMm
-    where: str  # a corner name, or `outside`
+    where: str  # header or footer
 
 
-def _element_size_mm(
-    name: str, map_w_mm: float, extent: Extent, total_text: str | None
-) -> tuple[float, float]:
-    if name == "compass":
-        return COMPASS_MM + 2 * PAD_MM, COMPASS_MM + 3.5 + 2 * PAD_MM  # arms plus the "N" above
-    if name == "scale_bar":
-        km = scale_bar_length_km(extent)
-        _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-        length = km / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
-        label = _text_width_mm(f"{km:g} km", LEGEND_PT)
-        return (
-            length + label / 2.0 + label / 2.0 + 2 * PAD_MM,
-            1.8 + 1.0 + LEGEND_PT * PT_MM + 2 * PAD_MM,
-        )
-    text = total_text or ""
-    lines = text.split("\n")
-    return max(_text_width_mm(s, LEGEND_PT) for s in lines) + 4.0 + 2 * PAD_MM, len(
-        lines
-    ) * LEGEND_PT * PT_MM * 1.25 + 2.0 + 2 * PAD_MM
-
-
-def corner_box(
-    corner: str, size_mm: tuple[float, float], map_box: BoxMm, inset_mm: float = 1.0
-) -> BoxMm:
-    """The box of an element of `size_mm` in `corner` of the map (figure millimetres)."""
-    x0, y0, x1, y1 = map_box
-    w, h = size_mm
-    left = x0 + inset_mm if "left" in corner else x1 - inset_mm - w
-    bottom = y0 + inset_mm if "lower" in corner else y1 - inset_mm - h
-    return (left, bottom, left + w, bottom + h)
-
-
-def occupancy(
-    box: BoxMm,
-    map_box: BoxMm,
+def footer_item_sizes(
     extent: Extent,
-    *,
-    data_mask: np.ndarray | None = None,
-    polygon=None,
-) -> float:
-    """Share of `box` that holds data or country: the larger of the data-pixel share and the polygon share.
-
-    `data_mask` is a boolean grid over `extent` (row 0 north) that is True where a pixel has data; `polygon` is the country in lon/lat.
-    """
-    mx0, my0, mx1, my1 = map_box
-    west, east, south, north = extent
-    fx0, fx1 = (box[0] - mx0) / (mx1 - mx0), (box[2] - mx0) / (mx1 - mx0)
-    fy0, fy1 = (box[1] - my0) / (my1 - my0), (box[3] - my0) / (my1 - my0)
-    shares = [0.0]
-    if data_mask is not None and data_mask.size:
-        ny, nx = data_mask.shape
-        c0, c1 = math.floor(max(fx0, 0.0) * nx), math.ceil(min(fx1, 1.0) * nx)
-        r0, r1 = math.floor((1 - min(fy1, 1.0)) * ny), math.ceil((1 - max(fy0, 0.0)) * ny)
-        sub = data_mask[r0:r1, c0:c1]
-        if sub.size:
-            shares.append(float(sub.mean()))
-    if polygon is not None:
-        window = shapely_box(
-            west + fx0 * (east - west),
-            south + fy0 * (north - south),
-            west + fx1 * (east - west),
-            south + fy1 * (north - south),
-        )
-        shares.append(float(polygon.intersection(window).area / window.area))
-    return max(shares)
-
-
-def place_furniture(
-    layout: Layout,
-    extent: Extent,
-    *,
-    data_mask: np.ndarray | None,
-    polygon,
+    map_w_mm: float,
     total_text: str | None,
-) -> dict[str, Furniture]:
-    """Put the scale bar, the compass rose and (if given) the total box each in the free corner with the least occupancy.
+    source: str | None,
+    preset: Preset = THESIS,
+) -> dict[str, tuple[float, float]]:
+    """Size in mm (padding included) of what the footer holds, in reading order: scale bar, box of totals, source."""
+    pt = preset.legend_pt
+    label = _text_width_mm(f"{scale_bar_length_km(extent):g} km", pt)
+    sizes = {
+        "scale_bar": (
+            _scale_bar_length_mm(extent, map_w_mm)
+            + _text_width_mm("0", pt) / 2.0
+            + label / 2.0
+            + 2 * PAD_MM,
+            1.8 + 1.0 + pt * PT_MM + 2 * PAD_MM,
+        )
+    }
+    if total_text:
+        lines = total_text.split("\n")
+        sizes["total"] = (
+            _text_width_mm(total_text, pt) + 4.0 + 2 * PAD_MM,
+            len(lines) * pt * PT_MM * 1.25 + 2.0 + 2 * PAD_MM,
+        )
+    if source:
+        sizes["source"] = (
+            _text_width_mm(source, preset.footer_pt) + 2 * PAD_MM,
+            preset.footer_pt * PT_MM * 1.3 + 1.0,
+        )
+    return sizes
 
-    The corners are tried by the occupancy of the box the element actually fills (data pixels and country polygon). Elements go to the free corner with the least stacked, largest first, and may share a corner by stacking; when the best corner is not free (above `OCCUPANCY_TOLERANCE`) it goes outside the map: the compass in
-    the header, the others in the footer strip, which the layout then reserves.
+
+def plan_footer(
+    sizes: dict[str, tuple[float, float]], x_left: float, x_right: float, y0: float = 0.5
+) -> tuple[dict[str, BoxMm], float]:
+    """Boxes of the footer elements and the height of the strip.
+
+    The elements go in reading order on one row; when the row would be wider than `x_right - x_left` the next element starts a new row
+    below. In a row the scale bar is at the left, the source at the right and the box of totals in the middle between them (at the right
+    when the source is not in its row).
     """
-    map_w = layout.map_box[2] - layout.map_box[0]
-    names = ["scale_bar", "compass"] + (["total"] if total_text else [])
-    stacked: dict[
-        str, float
-    ] = {}  # height already used in each corner, so that elements can share a free corner
-    placed: dict[str, Furniture] = {}
-    for name in names:
-        size = _element_size_mm(name, map_w, extent, total_text)
-        scored = []
-        for order, corner in enumerate(CORNERS):
-            used = stacked.get(corner, 0.0)
-            box = corner_box(corner, size, layout.map_box)
-            shift = used if "lower" in corner else -used
-            box = (box[0], box[1] + shift, box[2], box[3] + shift)
-            if box[1] < layout.map_box[1] or box[3] > layout.map_box[3]:
-                continue
-            scored.append(
-                (
-                    occupancy(box, layout.map_box, extent, data_mask=data_mask, polygon=polygon),
-                    used,
-                    order,
-                    corner,
-                    box,
-                )
-            )
-        scored.sort(key=lambda s: (s[0] > OCCUPANCY_TOLERANCE, s[1], s[0], s[2]))
-        if scored and scored[0][0] <= OCCUPANCY_TOLERANCE:
-            _, used, _, corner, box = scored[0]
-            stacked[corner] = used + size[1]
-            placed[name] = Furniture(name, box, corner)
-        else:
-            placed[name] = Furniture(name, (0.0, 0.0, size[0], size[1]), "outside")
-    return placed
+    rows: list[list[str]] = [[]]
+    used = 0.0
+    for name, (w, _) in sizes.items():
+        need = w + (FOOTER_GAP_MM if rows[-1] else 0.0)
+        if rows[-1] and used + need > x_right - x_left:
+            rows.append([])
+            used, need = 0.0, w
+        rows[-1].append(name)
+        used += need
+    boxes: dict[str, BoxMm] = {}
+    y = y0
+    for row in reversed(rows):  # the first row is the top one
+        height = max(sizes[n][1] for n in row)
+        left = x_left
+        right = x_right
+        if "scale_bar" in row:
+            w = sizes["scale_bar"][0]
+            boxes["scale_bar"] = (left, y, left + w, y + sizes["scale_bar"][1])
+            left += w + FOOTER_GAP_MM
+        if "source" in row:
+            w = sizes["source"][0]
+            boxes["source"] = (right - w, y, right, y + sizes["source"][1])
+            right -= w + FOOTER_GAP_MM
+        if "total" in row:
+            w = sizes["total"][0]
+            x = (left + right - w) / 2.0 if "source" in row else x_right - w
+            x = min(max(x, left), right - w)
+            boxes["total"] = (x, y, x + w, y + sizes["total"][1])
+        y += height + 1.0
+    return boxes, (y if sizes else 0.0)
 
 
-def _outside_boxes(placed: dict[str, Furniture], layout: Layout) -> dict[str, Furniture]:
-    """Final boxes of the elements that sit outside the map: the compass at the right end of the header, the rest left to right in the footer."""
-    out = dict(placed)
-    x_footer = layout.map_box[0]
-    for name, el in placed.items():
-        if el.where != "outside":
-            continue
-        w, h = el.box[2] - el.box[0], el.box[3] - el.box[1]
-        if name == "compass":
-            x1 = layout.width_mm - 1.0
-            box = (x1 - w, layout.height_mm - h - 1.0, x1, layout.height_mm - 1.0)
-        else:
-            box = (x_footer, 0.5, x_footer + w, 0.5 + h)
-            x_footer += w + 2.0
-        out[name] = Furniture(name, box, "outside")
-    return out
-
-
-def draw_compass(overlay, box: BoxMm) -> list:
+def draw_compass(overlay, box: BoxMm, preset: Preset = THESIS) -> list:
     """Eight-triangle compass rose (cardinal points, each split into a dark and a light half) with an N above, inside `box`.
 
     Logic of `compass` in craei-brazil `scripts/article_map_utils.py`; the size here is millimetres, not a share of the extent.
     """
     x0, y0, x1, _ = box
-    h = COMPASS_MM / 2.0
+    h = preset.compass_mm / 2.0
     d = h * 0.35
     cx, cy = (x0 + x1) / 2.0, y0 + PAD_MM + h
     polys = [
@@ -462,7 +808,7 @@ def draw_compass(overlay, box: BoxMm) -> list:
             cx,
             cy + h + 0.6,
             "N",
-            fontsize=LEGEND_PT,
+            fontsize=preset.legend_pt,
             weight="bold",
             ha="center",
             va="bottom",
@@ -472,21 +818,25 @@ def draw_compass(overlay, box: BoxMm) -> list:
     return artists
 
 
-def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list:
+def draw_scale_bar(
+    overlay, box: BoxMm, extent: Extent, map_w_mm: float, preset: Preset = THESIS
+) -> list:
     """Four alternating segments labelled 0, half and full length in km, calculated at the central latitude (craei-brazil `scale_bar`)."""
+    pt = preset.legend_pt
     km = scale_bar_length_km(extent)
-    _, lon_km = wgs84_km_per_degree(np.array([0.5 * (extent[2] + extent[3])]))
-    length = km / ((extent[1] - extent[0]) * float(lon_km[0])) * map_w_mm
+    length = _scale_bar_length_mm(extent, map_w_mm)
     seg = length / 4.0
-    x0 = box[0] + PAD_MM + _text_width_mm(f"{km:g} km", LEGEND_PT) / 2.0
-    y0 = box[1] + PAD_MM + LEGEND_PT * PT_MM + 1.0
+    x0 = (
+        box[0] + PAD_MM + _text_width_mm("0", pt) / 2.0
+    )  # the bar always starts at the same distance from the left of its box
+    y0 = box[1] + PAD_MM + pt * PT_MM + 1.0
     artists: list = [
         overlay.add_patch(
             Rectangle((x0 + i * seg, y0), seg, 1.8, fc=fc, ec="black", lw=0.4, zorder=10)
         )
         for i, fc in enumerate(["black", "white", "black", "white"])
     ]
-    label_w = _text_width_mm(f"{km:g} km", LEGEND_PT)
+    label_w = _text_width_mm(f"{km:g} km", pt)
     labels = [(0.0, "0"), (1.0, f"{km:g} km")]
     if (
         length / 2.0 >= 1.2 * label_w
@@ -495,13 +845,7 @@ def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list
     for frac, text in labels:
         artists.append(
             overlay.text(
-                x0 + frac * length,
-                y0 - 0.6,
-                text,
-                fontsize=LEGEND_PT,
-                ha="center",
-                va="top",
-                zorder=10,
+                x0 + frac * length, y0 - 0.6, text, fontsize=pt, ha="center", va="top", zorder=10
             )
         )
     return artists
@@ -511,7 +855,7 @@ def draw_scale_bar(overlay, box: BoxMm, extent: Extent, map_w_mm: float) -> list
 
 
 @dataclass
-class MapCanvas:
+class MapFigure:
     """A map figure under construction: `ax` for the data, `cax` for the legend, `overlay` (1 unit = 1 mm) for title and furniture."""
 
     fig: Figure
@@ -525,15 +869,152 @@ class MapCanvas:
     artists: dict[str, list] = field(
         default_factory=dict
     )  # the drawn pieces of each piece of furniture, for measuring
+    preset: Preset = THESIS
+    colours: dict[str, str] = field(
+        default_factory=dict
+    )  # flat colour (hex) -> what it means in this figure
+    cmaps: dict[str, str] = field(
+        default_factory=dict
+    )  # colormap name -> what it means in this figure
+    meta: dict[str, str] = field(default_factory=dict)  # what goes into the PNG text chunks
 
     def mm_to_fig(self, box: BoxMm) -> tuple[float, float, float, float]:
         w, h = self.layout.width_mm, self.layout.height_mm
         return box[0] / w, box[1] / h, (box[2] - box[0]) / w, (box[3] - box[1]) / h
 
+    def use_colour(self, colour, meaning: str) -> None:
+        """Record that `colour` means `meaning` here; the same colour with another meaning is an error."""
+        key = to_hex(colour).lower()
+        if self.colours.setdefault(key, meaning) != meaning:
+            raise ValueError(
+                f"{key} means {self.colours[key]!r} and {meaning!r} in the same figure"
+            )
 
-def format_title(iso: str, technology: str, variable: str) -> str:
-    """The short title: `<ISO> · <Technology> · <Variable>`."""
-    return f"{iso} · {technology} · {variable}"
+    def use_cmap(self, cmap, meaning: str) -> None:
+        """Record that the colormap `cmap` (name or object) means `meaning` here."""
+        name = cmap if isinstance(cmap, str) else cmap.name
+        if self.cmaps.setdefault(name, meaning) != meaning:
+            raise ValueError(f"the colormap {name!r} means {self.cmaps[name]!r} and {meaning!r}")
+
+    def colour_problems(self) -> list[str]:
+        """Conflicts of the colours of this figure, also under deuteranopia and protanopia (`colour_conflicts`)."""
+        return colour_conflicts(self.colours, self.cmaps)
+
+
+MapCanvas = MapFigure  # the name before COMMAND 66
+
+
+def _load_country_names() -> dict[str, dict[str, str]]:
+    """`config/country_names.yaml`: the name of a country in a title, by language (the code names no country, A-05)."""
+    import yaml
+
+    path = Path(__file__).resolve().parents[3] / "config" / "country_names.yaml"
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError:
+        return {"en": {}, "pt": {}}
+
+
+COUNTRY_NAMES = _load_country_names()
+
+LABELS = {  # the words the module writes itself, by language (`en` is the default, `pt` the other one the thesis may use)
+    "en": {
+        "total": "Total",
+        "energy_unit": "TWh/yr",
+        "mean_cf": "mean CF",
+        "eligible_area": "eligible area",
+        "source": "Boundaries: GADM 4.1, illustrative",
+    },
+    "pt": {
+        "total": "Total",
+        "energy_unit": "TWh/ano",
+        "mean_cf": "FC médio",
+        "eligible_area": "área elegível",
+        "source": "Limites: GADM 4.1, ilustrativo",
+    },
+}
+
+
+def country_name(iso: str, lang: str = "en") -> str:
+    """The name of the country for a title (never the ISO3 code), from `COUNTRY_NAMES`: the countries of the thesis and the test archetypes.
+
+    A country that is not in the table needs its name (`country=` of `new_map`) and, to be listed, an entry in the table.
+    """
+    if lang not in LABELS:
+        raise ValueError(f"language {lang!r} is not one of {sorted(LABELS)}")
+    name = COUNTRY_NAMES[lang].get(iso) or COUNTRY_NAMES["en"].get(iso)
+    if name is None:
+        raise ValueError(f"no name for {iso!r}: give `country=` or add it to COUNTRY_NAMES")
+    return name
+
+
+# What may not appear in a title, a subtitle or a label: identifiers of the project, raw model names, counts of cells.
+FORBIDDEN_IN_LABELS = (
+    (r"\bOQ-?\d+", "open question"),
+    (r"\b(?:L|A|U|V|M)-\d{2,}\b", "limitation or method item"),
+    (r"\b[A-Za-z]-[A-Za-z0-9]+-\d{2,}\b", "decision id"),
+    (r"(?i)\bcommand\s+\d+", "command number"),
+    (r"\bm_[a-z0-9_]+\b", "member id"),
+    (r"\bssp\d{3}\b", "raw scenario code (write SSP3-7.0)"),
+    (r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b", "snake_case identifier"),
+    (r"\d[\d,.]*\s+(?:grid\s+)?cells?\b", "cell count"),
+)
+LABEL_TYPOS = (  # misspellings that were found in labels; the test greps the sources for them too
+    "elgible",
+    "eligble",
+    "elegible",
+    "capcity",
+    "capaciy",
+    "densitiy",
+    "temprature",
+    "potental",
+    "scnenario",
+    "enviroment",
+)
+TYPO_PATTERN = r"(?i)\b(?:" + "|".join(LABEL_TYPOS) + r")"
+
+
+def validate_label(text: str, what: str = "label") -> str:
+    """The text itself when it is clean; ValueError when it holds an internal id, a raw model name, a cell count or a known typo."""
+    for pattern, reason in FORBIDDEN_IN_LABELS:
+        found = re.search(pattern, text)
+        if found:
+            raise ValueError(f"the {what} {text!r} holds a {reason}: {found.group(0)!r}")
+    typo = re.search(TYPO_PATTERN, text)
+    if typo:
+        raise ValueError(f"the {what} {text!r} holds a typo: {typo.group(0)!r}")
+    return text
+
+
+def format_title(country: str, technology: str, variable: str) -> str:
+    """The short title: `<Country> · <Technology> · <Variable>` (the technology is left out for a map that has none).
+
+    The first part is the name of the country, never its ISO3 code, and the title is checked by `validate_label`.
+    """
+    if re.fullmatch(r"[A-Z]{3}", country):
+        raise ValueError(f"the title needs the name of the country, not the code {country!r}")
+    return validate_label(" · ".join(p for p in (country, technology, variable) if p), "title")
+
+
+def totals_text(
+    capacity_gw: float | None = None,
+    energy_twh: float | None = None,
+    mean_cf: float | None = None,
+    eligible_km2: float | None = None,
+    lang: str = "en",
+) -> str:
+    """The box of totals: `Total: X GW · Y TWh/yr · mean CF Z% · eligible area W km²` (the parts that are given)."""
+    words = LABELS[lang]
+    parts = []
+    if capacity_gw is not None:
+        parts.append(f"{capacity_gw:,.1f} GW")
+    if energy_twh is not None:
+        parts.append(f"{energy_twh:,.1f} {words['energy_unit']}")
+    if mean_cf is not None:
+        parts.append(f"{words['mean_cf']} {100 * mean_cf:.1f}%")
+    if eligible_km2 is not None:
+        parts.append(f"{words['eligible_area']} {eligible_km2:,.0f} km²")
+    return f"{words['total']}: " + " · ".join(parts)
 
 
 def new_map(
@@ -544,58 +1025,77 @@ def new_map(
     variable: str,
     subtitle: str = "",
     total_text: str | None = None,
-    width_mm: float = FULL_WIDTH_MM,
+    width_mm: float | None = None,
+    preset: str | Preset | None = "thesis",
     neighbours=None,
-    data_mask: np.ndarray | None = None,
     extent: Extent | None = None,
     contiguous: bool = True,
-    grid_mask: tuple[np.ndarray, Extent] | None = None,
     legend_side_mm: float | None = None,
     legend_below_mm: float | None = None,
-) -> MapCanvas:
+    country: str | None = None,
+    source: str | None = DEFAULT_SOURCE,
+    lang: str = "en",
+) -> MapFigure:
     """Axes, legend slot, title and furniture of a map of the country `geometry` (lon/lat), ready to receive the data.
 
-    The extent comes from the country geometry (+3% margin, far islands out) unless given. `neighbours` is a GeoDataFrame drawn in very
-    light grey under everything; the sea stays white. `data_mask` (True where a pixel has data, over `extent`, row 0 north; or `grid_mask` = (mask, its extent) to have it resampled) and the
-    country polygon decide the free corner of the compass and the scale bar. Draw the data on `canvas.ax` and the colour bar on
-    `canvas.cax` (`add_colorbar`), then save with `save_png`.
+    The extent comes from the country geometry (+3% margin, far islands out) unless given. `preset` gives the fonts and, unless
+    `width_mm` is given, the width. `neighbours` is a GeoDataFrame drawn in very light grey under everything; the sea stays white. Draw the
+    data on `canvas.ax` and the colour bar on `canvas.cax` (`add_colorbar`), then save with `save_png`.
     """
+    pre = get_preset(preset)
+    width_mm = pre.width_mm if width_mm is None else width_mm
     polygon = contiguous_geometry(geometry) if contiguous else _as_geometry(geometry)
     extent = extent or country_extent(polygon, contiguous=False)
-    if grid_mask is not None:
-        data_mask = mask_on_extent(grid_mask[0], grid_mask[1], extent)
-    # The furniture is placed on the layout it will be drawn on. A footer strip for an element that found no free corner shrinks a map that is
-    # limited by the height of the sheet, so the placement is repeated on the new layout until the strip no longer grows.
-    footer = 0.0
-    for _ in range(4):
-        layout = compute_layout(
+    title = format_title(country or country_name(iso, lang), technology, variable)
+    validate_label(subtitle, "subtitle")
+    if source == DEFAULT_SOURCE:
+        source = LABELS[lang]["source"]
+    for text in (total_text, source):
+        if text:
+            validate_label(text, "footer text")
+    if total_text:
+        total_text = wrap_total_text(
+            total_text, width_mm - LEFT_MM - RIGHT_MM - 2 * PAD_MM - 4.0, pre.legend_pt
+        )
+    title_lines, sub_lines, header_mm = header_text(width_mm, title, subtitle, pre)
+
+    def layout_for(footer: float) -> Layout:
+        return compute_layout(
             extent,
             width_mm,
             footer_mm=footer,
             legend_side_mm=legend_side_mm,
             legend_below_mm=legend_below_mm,
+            header_mm=header_mm,
         )
-        placed = place_furniture(
-            layout, extent, data_mask=data_mask, polygon=polygon, total_text=total_text
-        )
-        needed = max(
-            (
-                el.box[3] - el.box[1] + 1.0
-                for n, el in placed.items()
-                if el.where == "outside" and n != "compass"
-            ),
-            default=0.0,
-        )
-        if needed <= footer + 1e-9:
-            break
-        footer = needed
-    placed = _outside_boxes(placed, layout)
 
-    with plt.rc_context(_RC):
+    # The footer height depends on the width of the scale bar, which depends on the map width, which depends on the footer height when the
+    # map is limited by the height of the sheet. The footer only shrinks the map, so the second pass cannot need more room than the first.
+    layout = layout_for(0.0)
+    sizes = footer_item_sizes(
+        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+    )
+    _, footer = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
+    layout = layout_for(footer)
+    sizes = footer_item_sizes(
+        extent, layout.map_box[2] - layout.map_box[0], total_text, source, pre
+    )
+    boxes, _ = plan_footer(sizes, LEFT_MM, width_mm - RIGHT_MM)
+    cw, ch = compass_size_mm(pre)
+    compass_box = (
+        width_mm - 1.0 - cw,
+        layout.height_mm - 1.0 - ch,
+        width_mm - 1.0,
+        layout.height_mm - 1.0,
+    )
+    placed = {"compass": Furniture("compass", compass_box, "header")}
+    placed.update({n: Furniture(n, b, "footer") for n, b in boxes.items()})
+
+    with plt.rc_context(_rc(pre)):
         fig = plt.figure(
             figsize=(layout.width_mm / 25.4, layout.height_mm / 25.4), dpi=DPI, facecolor="white"
         )
-        canvas = MapCanvas(fig, None, None, None, layout, extent, placed)
+        canvas = MapFigure(fig, None, None, None, layout, extent, placed, preset=pre)
         ax = fig.add_axes(canvas.mm_to_fig(layout.map_box))
         ax.set_facecolor(SEA_COLOUR)
         cax = fig.add_axes(canvas.mm_to_fig(layout.legend_box))
@@ -613,11 +1113,13 @@ def new_map(
         ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=4, steps=[1, 2, 5, 10]))
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lon")))
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: format_degrees(v, "lat")))
-        ax.tick_params(labelsize=LABEL_PT, pad=1.5)
+        ax.tick_params(labelsize=pre.label_pt, pad=1.5)
         for spine in ax.spines.values():
             spine.set_linewidth(0.4)
             spine.set_color("#888888")
+        canvas.use_colour(SEA_COLOUR, "sea")
         if neighbours is not None:
+            canvas.use_colour(NEIGHBOUR_COLOUR, "neighbouring countries")
             neighbours.plot(
                 ax=ax, color=NEIGHBOUR_COLOUR, edgecolor="white", linewidth=0.3, zorder=0.5
             )
@@ -629,11 +1131,12 @@ def new_map(
         ax.set_xlim(extent[0], extent[1])
         ax.set_ylim(extent[2], extent[3])
 
+        top = layout.height_mm - 2.0
         canvas.texts["title"] = overlay.text(
             2.0,
-            layout.height_mm - 2.0,
-            format_title(iso, technology, variable),
-            fontsize=TITLE_PT,
+            top,
+            "\n".join(title_lines),
+            fontsize=pre.title_pt,
             fontweight="bold",
             ha="left",
             va="top",
@@ -641,25 +1144,25 @@ def new_map(
         if subtitle:
             canvas.texts["subtitle"] = overlay.text(
                 2.0,
-                layout.height_mm - 2.0 - TITLE_PT * PT_MM * 1.35,
-                subtitle,
-                fontsize=LABEL_PT,
+                top - len(title_lines) * pre.title_pt * PT_MM * 1.35,
+                "\n".join(sub_lines),
+                fontsize=pre.label_pt,
                 color="#444444",
                 ha="left",
                 va="top",
             )
         map_w = layout.map_box[2] - layout.map_box[0]
         canvas.artists["scale_bar"] = draw_scale_bar(
-            overlay, placed["scale_bar"].box, extent, map_w
+            overlay, placed["scale_bar"].box, extent, map_w, pre
         )
-        canvas.artists["compass"] = draw_compass(overlay, placed["compass"].box)
+        canvas.artists["compass"] = draw_compass(overlay, placed["compass"].box, pre)
         if total_text:
             box = placed["total"].box
             total_artist = overlay.text(
                 box[0] + PAD_MM + 1.0,
                 box[1] + PAD_MM + 1.0,
                 total_text,
-                fontsize=LEGEND_PT,
+                fontsize=pre.legend_pt,
                 color="#333333",
                 ha="left",
                 va="bottom",
@@ -673,20 +1176,36 @@ def new_map(
             )
             canvas.texts["total"] = total_artist
             canvas.artists["total"] = [total_artist]
+        if source:
+            box = placed["source"].box
+            source_artist = overlay.text(
+                box[2] - PAD_MM,
+                box[1] + 0.5,
+                source,
+                fontsize=pre.footer_pt,
+                color="#666666",
+                ha="right",
+                va="bottom",
+            )
+            canvas.texts["source"] = source_artist
+            canvas.artists["source"] = [source_artist]
     return canvas
 
 
-def add_colorbar(canvas: MapCanvas, mappable, label: str, extend: str = "neither"):
+def add_colorbar(canvas: MapFigure, mappable, label: str, extend: str = "neither"):
     """The colour bar in the legend slot: vertical to the right of a tall map, horizontal below a wide one."""
     orientation = "vertical" if canvas.layout.legend == "right" else "horizontal"
-    with plt.rc_context(_RC):
+    pt = canvas.preset.legend_pt
+    validate_label(label, "colour bar label")
+    canvas.use_cmap(mappable.get_cmap(), label)
+    with plt.rc_context(_rc(canvas.preset)):
         bar = canvas.fig.colorbar(mappable, cax=canvas.cax, orientation=orientation, extend=extend)
         bar.outline.set_linewidth(0.3)
-        bar.ax.tick_params(labelsize=LEGEND_PT, width=0.4, length=2.0)
+        bar.ax.tick_params(labelsize=pt, width=0.4, length=2.0)
         if orientation == "vertical":
-            bar.set_label(label, fontsize=LEGEND_PT)
+            bar.set_label(label, fontsize=pt)
         else:
-            bar.set_label(label, fontsize=LEGEND_PT, labelpad=1.0)
+            bar.set_label(label, fontsize=pt, labelpad=1.0)
     return bar
 
 
@@ -700,16 +1219,34 @@ def raster_map(
     variable: str,
     label: str,
     kind: str = "potential",
+    tech: str | None = None,
     subtitle: str = "",
+    scenario: str | None = None,
+    climate: str | None = None,
     total_text: str | None = None,
-    width_mm: float = FULL_WIDTH_MM,
+    width_mm: float | None = None,
+    preset: str | Preset | None = "thesis",
     neighbours=None,
     diverging_center: float = 0.0,
-) -> MapCanvas:
-    """A continuous raster map in the common style: robust norm, the colormap of `kind`, extend where needed, furniture in free corners."""
+    country: str | None = None,
+    scale: ScaleSpec | None = None,
+    shared: tuple[float, float] | None = None,
+    unit: str | None = None,
+    lang: str = "en",
+) -> MapFigure:
+    """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
+
+    The scale is `scale` or `default_scale(kind, tech)`; `shared` are the limits of `shared_limits` for maps that are compared. The
+    subtitle is `subtitle` or `Scenario · Climate`; when the scale cuts values it ends with what was cut (`clip_note`, in `unit`).
+    `tech` is `solar` or `wind` (needed by the kinds that take the family of the technology).
+    """
     data = np.ma.masked_invalid(grid)
-    diverging = kind.startswith("delta")
-    info = robust_norm(data.compressed(), diverging=diverging, center=diverging_center)
+    if kind.startswith("delta") and scale is None:
+        scale = replace(default_scale(kind, tech), center=diverging_center)
+    spec = scale or default_scale(kind, tech)
+    info = resolve_scale(data.compressed(), spec, shared)
+    base = subtitle or format_subtitle(scenario, climate)
+    subtitle = format_subtitle(base, clip_note(info, unit if unit is not None else label))
     canvas = new_map(
         geometry,
         iso=iso,
@@ -718,15 +1255,16 @@ def raster_map(
         subtitle=subtitle,
         total_text=total_text,
         width_mm=width_mm,
+        preset=preset,
         neighbours=neighbours,
-        data_mask=None,
-        grid_mask=(~np.ma.getmaskarray(data), extent_grid),
+        country=country,
+        lang=lang,
     )
     image = canvas.ax.imshow(
         data,
         extent=extent_grid,
         origin="upper",
-        cmap=colormap_for(kind),
+        cmap=colormap_for(kind, tech),
         norm=info.norm,
         interpolation="nearest",
         zorder=2,
@@ -735,36 +1273,227 @@ def raster_map(
     canvas.ax.set_xlim(canvas.extent[0], canvas.extent[1])
     canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
     add_colorbar(canvas, image, label, info.extend)
+    canvas.meta.update(scale_meta(info))
     return canvas
 
 
-def mask_on_extent(
-    mask: np.ndarray, grid_extent: Extent, map_extent: Extent, size: int = 300
-) -> np.ndarray:
-    """The data mask of a grid sampled over the map extent (row 0 north); False where the map reaches beyond the grid."""
-    gw, ge, gs, gn = grid_extent
-    mw, me, ms, mn = map_extent
-    ny, nx = mask.shape
-    xs = mw + (np.arange(size) + 0.5) / size * (me - mw)
-    ys = mn - (np.arange(size) + 0.5) / size * (mn - ms)
-    cols = np.floor((xs - gw) / (ge - gw) * nx).astype(int)
-    rows = np.floor((gn - ys) / (gn - gs) * ny).astype(int)
-    inside = ((rows >= 0) & (rows < ny))[:, None] & ((cols >= 0) & (cols < nx))[None, :]
-    out = np.zeros((size, size), dtype=bool)
-    out[inside] = mask[np.clip(rows, 0, ny - 1)[:, None], np.clip(cols, 0, nx - 1)[None, :]][inside]
-    return out
+def scale_meta(info: NormInfo) -> dict[str, str]:
+    """The scale of a map as PNG text: the mode (fixed, percentile, shared), the scope, the limits, the norm and the extend."""
+    return {
+        "scale_mode": info.mode,
+        "scale_scope": info.scope,
+        "scale_limits": f"{info.vmin:.6g},{info.vmax:.6g}",
+        "scale_norm": info.kind,
+        "scale_extend": info.extend,
+    }
 
 
-def save_png(canvas_or_fig, path: Path) -> Path:
-    """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written."""
+# ------------------------------------------------------------------------------------------------------ file names, metadata and index (T-05)
+
+NOT_APPLICABLE = {
+    "na",
+    "n-a",
+    "none",
+    "nan",
+    "null",
+    "nil",
+}  # a field that does not apply is left out, never written like this
+FILENAME_RE = re.compile(r"^[A-Z]{3}_[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9][A-Za-z0-9.\-]*)+\.png$")
+META_PREFIX = "geofrea_"
+
+
+def slug(text: str) -> str:
+    """A readable piece of a file name: letters, digits, `.` and `-`; spaces, underscores and slashes become `-`. The case is kept
+    (`ACCESS-CM2`, `SSP3-7.0`, `E5-land-cover`)."""
+    out = re.sub(r"[\s_/\\]+", "-", str(text).strip())
+    out = re.sub(r"[^A-Za-z0-9.\-]", "", out)
+    return re.sub(r"-{2,}", "-", out).strip("-.")
+
+
+def _pieces(field_value) -> list[str]:
+    if field_value is None:
+        return []
+    items = [field_value] if isinstance(field_value, str) else list(field_value)
+    return [p for p in (slug(i) for i in items if i is not None) if p]
+
+
+def figure_filename(
+    iso: str,
+    phase: str,
+    variable: str | Sequence[str],
+    technology: str | Sequence[str] | None = None,
+    scenario: str | Sequence[str] | None = None,
+    climate: str | Sequence[str] | None = None,
+) -> str:
+    """`{ISO3}_{phase}_{variable}_{technology}_{scenario}_{climate}.png`, with the fields that do not apply left out.
+
+    Examples: `BRA_F3_excluded-share_E5-land-cover_wind.png` (variable given as two pieces),
+    `BRA_F4_forcing_ACCESS-CM2_SSP3-7.0_2041-2070.png` (climate as three pieces), `PRT_F5_capacity-factor_wind_central_ref.png`.
+    The code of the country is always there (three countries never write the same name), no field is empty or `na`, no hash.
+    """
+    if not re.fullmatch(r"[A-Z]{3}", iso):
+        raise ValueError(f"the file name starts with the ISO3 code of the country, got {iso!r}")
+    parts = [iso, slug(phase)]
+    if not parts[1]:
+        raise ValueError("the file name needs the phase")
+    named = {
+        "variable": variable,
+        "technology": technology,
+        "scenario": scenario,
+        "climate": climate,
+    }
+    for field_name, value in named.items():
+        pieces = _pieces(value)
+        if field_name == "variable" and not pieces:
+            raise ValueError("the file name needs the variable")
+        parts += pieces
+    for piece in parts:
+        if piece.lower() in NOT_APPLICABLE:
+            raise ValueError(
+                f"a field that does not apply is left out of the file name, not written as {piece!r}"
+            )
+    name = "_".join(parts) + ".png"
+    validate_filename(name)
+    return name
+
+
+def validate_filename(name: str) -> str:
+    """The name itself when it follows the standard; ValueError otherwise (no ISO3 first, an empty field, `na`, a hash-like tail)."""
+    if not FILENAME_RE.match(name):
+        raise ValueError(f"{name!r} does not follow {{ISO3}}_{{phase}}_{{variable}}[_...].png")
+    stem = name[:-4]
+    for piece in stem.split("_"):
+        if piece.lower() in NOT_APPLICABLE:
+            raise ValueError(f"{name!r} has a field written as {piece!r}")
+    if re.search(r"(?:^|_)[0-9a-f]{6,}$", stem) and not re.search(r"[A-Z]", stem.split("_")[-1]):
+        raise ValueError(f"{name!r} ends with what looks like a hash: use a readable slug")
+    return name
+
+
+@functools.cache
+def repo_commit() -> str:
+    """The short commit of the code that draws (`GEOFREA_GIT_COMMIT` if set), or `unknown` outside a repository."""
+    import os
+    import subprocess
+
+    if os.environ.get("GEOFREA_GIT_COMMIT"):
+        return os.environ["GEOFREA_GIT_COMMIT"]
+    root = Path(__file__).resolve().parents[3]
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+        return out.stdout.strip() or "unknown"
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+@functools.cache
+def config_hash() -> str:
+    """The first 12 hex digits of the SHA-256 of `config/parameters.json` (or `unknown`)."""
+    import hashlib
+
+    path = Path(__file__).resolve().parents[3] / "config" / "parameters.json"
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return "unknown"
+
+
+def png_metadata(canvas: MapFigure, extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The text chunks of the PNG: title and subtitle, commit, hash of the config, date, preset, the scale (mode, scope, limits) and
+    whatever the caller adds (`grid` for the grid and resolution, `data_source`). Keys of the project start with `geofrea_`."""
+    from datetime import UTC, datetime
+
+    meta = {
+        "Title": canvas.texts["title"].get_text().replace("\n", " "),
+        "geofrea_commit": repo_commit(),
+        "geofrea_config_hash": config_hash(),
+        "geofrea_date": datetime.now(UTC).strftime("%Y-%m-%d"),
+        "geofrea_preset": canvas.preset.name,
+    }
+    if "subtitle" in canvas.texts:
+        meta["Description"] = canvas.texts["subtitle"].get_text().replace("\n", " ")
+    meta.update({f"{META_PREFIX}{k}": str(v) for k, v in canvas.meta.items()})
+    for key, value in (extra or {}).items():
+        meta[
+            key
+            if key in {"Title", "Description"}
+            else f"{META_PREFIX}{key.removeprefix(META_PREFIX)}"
+        ] = str(value)
+    return meta
+
+
+def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) -> Path:
+    """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written.
+
+    A `MapFigure` carries its metadata in the text chunks of the file (`png_metadata`): there is no sidecar file per figure.
+    `metadata` adds fields, e.g. `{"grid": "0.05 degree analysis grid", "data_source": "F5 potential_wind__central"}`.
+    """
     path = Path(path)
     if path.suffix.lower() != ".png":
         raise ValueError(f"maps are written as PNG only, got {path.suffix!r}")
-    fig = canvas_or_fig.fig if isinstance(canvas_or_fig, MapCanvas) else canvas_or_fig
+    is_map = isinstance(canvas_or_fig, MapFigure)
+    fig = canvas_or_fig.fig if is_map else canvas_or_fig
+    text = {"Software": None}
+    if is_map:
+        text.update(png_metadata(canvas_or_fig, metadata))
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=DPI, facecolor="white", metadata={"Software": None})
+    fig.savefig(path, dpi=DPI, facecolor="white", metadata=text)
     plt.close(fig)
     return path
+
+
+def read_png_metadata(path: Path) -> dict[str, str]:
+    """The text chunks of a PNG."""
+    from PIL import Image
+
+    with Image.open(path) as im:
+        return {str(k): str(v) for k, v in im.text.items()}
+
+
+def write_figures_index(folder: Path) -> Path:
+    """`figures_index.json` of a folder: for each PNG its file name, size, SHA-256 and the `geofrea_*` text of the file, and the list
+    of the files whose name does not follow the standard. One index per folder, the only file besides the figures."""
+    import hashlib
+    import json
+
+    from PIL import Image
+
+    folder = Path(folder)
+    entries, nonconforming = [], []
+    for png in sorted(folder.glob("*.png")):
+        try:
+            validate_filename(png.name)
+        except ValueError:
+            nonconforming.append(png.name)
+        with Image.open(png) as im:
+            size = list(im.size)
+            text = {str(k): str(v) for k, v in im.text.items()}
+        entries.append(
+            {
+                "file": png.name,
+                "size_px": size,
+                "sha256": hashlib.sha256(png.read_bytes()).hexdigest(),
+                "title": text.get("Title", ""),
+                "subtitle": text.get("Description", ""),
+                "metadata": {k: v for k, v in sorted(text.items()) if k.startswith(META_PREFIX)},
+            }
+        )
+    out = folder / "figures_index.json"
+    out.write_text(
+        json.dumps(
+            {"figures": entries, "nonconforming": nonconforming}, indent=1, ensure_ascii=False
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return out
 
 
 # ------------------------------------------------------------------------------------------------- classed maps and proportional circles
@@ -816,31 +1545,29 @@ def nice_values_below(maximum: float, n: int = 3) -> list[float]:
     return [top / 10.0**i for i in range(n)]
 
 
-def _wrap(text: str, width_mm: float, pt: float) -> list[str]:
-    """Words of `text` on lines no wider than `width_mm` by the same width estimate as the furniture."""
-    lines, current = [], ""
-    for word in text.split():
-        trial = f"{current} {word}".strip()
-        if current and _text_width_mm(trial, pt) > width_mm:
-            lines.append(current)
-            current = word
-        else:
-            current = trial
-    if current:
-        lines.append(current)
-    return lines or [""]
+def qualitative_legend(
+    title: str, labels: Sequence[str], none_label: str | None = None
+) -> ClassedLegend:
+    """The legend of a categorical map (dominant exclusion E1-E6, land cover): named patches in the colour-blind safe class colours, and a
+    neutral grey for a class that means "none", never a colour bar."""
+    colours = class_colours(len(labels))
+    labels = list(labels)
+    if none_label:
+        labels.append(none_label)
+        colours.append(CLASS_NONE_COLOUR)
+    return ClassedLegend(title=title, labels=tuple(labels), colours=tuple(colours))
 
 
-def legend_space(spec: ClassedLegend) -> tuple[float, float]:
+def legend_space(spec: ClassedLegend, preset: Preset = THESIS) -> tuple[float, float]:
     """(side, below) space in mm that the legend needs: `side` is the width of the strip right of a tall map, `below` the height under a wide one."""
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
-    widest = max(_text_width_mm(t, LEGEND_PT) for t in labels)
+    widest = max(_text_width_mm(t, preset.legend_pt) for t in labels)
     circle_w = max(
-        (2 * r + 2.0 + _text_width_mm(t, LEGEND_PT) for t, r in spec.circles), default=0.0
+        (2 * r + 2.0 + _text_width_mm(t, preset.legend_pt) for t, r in spec.circles), default=0.0
     )
     title_w = max(
         (
-            _text_width_mm(w, LEGEND_PT)
+            _text_width_mm(w, preset.legend_pt)
             for w in (spec.title + " " + (spec.circle_title or "")).split()
         ),
         default=0.0,
@@ -851,7 +1578,7 @@ def legend_space(spec: ClassedLegend) -> tuple[float, float]:
     return side, below
 
 
-def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, list]:
+def draw_classed_legend(canvas: MapFigure, spec: ClassedLegend) -> dict[str, list]:
     """Draw the legend of a classed map in the strip the layout reserved (right of a tall map, below a wide one).
 
     The colour-bar axes of the canvas is hidden. The drawn pieces are kept in `canvas.artists["legend"]` for the overlap tests.
@@ -859,12 +1586,17 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
     from matplotlib.patches import Circle
 
     layout, overlay = canvas.layout, canvas.overlay
+    pt = canvas.preset.legend_pt
     canvas.cax.set_visible(False)
-    text_kw = {"fontsize": LEGEND_PT, "color": "#333333"}
+    text_kw = {"fontsize": pt, "color": "#333333"}
     pieces: list = []
     labels = list(spec.labels) + ([spec.no_value_label] if spec.no_value_label else [])
-    colours = list(spec.colours) + (["#d9d9d9"] if spec.no_value_label else [])
-    line_mm = LEGEND_PT * PT_MM * 1.3
+    colours = list(spec.colours) + ([NO_DATA_COLOUR] if spec.no_value_label else [])
+    for text in (spec.title, spec.circle_title or "", *labels):
+        validate_label(text, "legend text")
+    for text, colour in zip(labels, colours, strict=True):
+        canvas.use_colour(colour, text)
+    line_mm = pt * PT_MM * 1.3
 
     def swatch(x, y, w, colour):
         return overlay.add_patch(
@@ -882,7 +1614,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
         x0 = layout.map_box[2] + 4.0
         avail = layout.width_mm - RIGHT_MM - x0
         y = layout.map_box[3]
-        for line in _wrap(spec.title, avail, LEGEND_PT):
+        for line in _wrap(spec.title, avail, pt):
             pieces.append(
                 overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
             )
@@ -903,7 +1635,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
             y -= ROW_MM
         if spec.circles:
             y -= 2.5
-            for line in _wrap(spec.circle_title or "", avail, LEGEND_PT):
+            for line in _wrap(spec.circle_title or "", avail, pt):
                 pieces.append(
                     overlay.text(x0, y, line, va="top", ha="left", fontweight="bold", **text_kw)
                 )
@@ -935,7 +1667,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
         width = layout.map_box[2] - layout.map_box[0]
         slot = width / max(n, 1)
         y = layout.map_box[1] - 4.0
-        for line in _wrap(spec.title, width, LEGEND_PT):
+        for line in _wrap(spec.title, width, pt):
             pieces.append(
                 overlay.text(x_start, y, line, va="top", ha="left", fontweight="bold", **text_kw)
             )
@@ -962,7 +1694,7 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
                     x, y, spec.circle_title or "", va="top", ha="left", fontweight="bold", **text_kw
                 )
             )
-            x += _text_width_mm(spec.circle_title or "", LEGEND_PT) + 6.0
+            x += _text_width_mm(spec.circle_title or "", pt) + 6.0
             cy = y - biggest - 1.0
             for text, r in spec.circles:
                 pieces.append(
@@ -979,13 +1711,13 @@ def draw_classed_legend(canvas: MapCanvas, spec: ClassedLegend) -> dict[str, lis
                 pieces.append(
                     overlay.text(x + 2 * r + 1.5, cy, text, va="center", ha="left", **text_kw)
                 )
-                x += 2 * r + 1.5 + _text_width_mm(text, LEGEND_PT) + 6.0
+                x += 2 * r + 1.5 + _text_width_mm(text, pt) + 6.0
     canvas.artists["legend"] = pieces
     return {"legend": pieces}
 
 
 def draw_choropleth(
-    canvas: MapCanvas, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
+    canvas: MapFigure, units, facecolors, *, edgecolor: str = "#555555", linewidth: float = 0.25
 ) -> None:
     """Fill the units (GeoDataFrame in lon/lat) with `facecolors` (one per row, RGBA or names) on the map axes."""
     units.plot(
@@ -995,7 +1727,7 @@ def draw_choropleth(
     canvas.ax.set_ylim(canvas.extent[2], canvas.extent[3])
 
 
-def draw_circles(canvas: MapCanvas, lon, lat, radii_mm) -> object:
+def draw_circles(canvas: MapFigure, lon, lat, radii_mm) -> object:
     """Circles of the given radii (mm on paper) centred on (lon, lat) over the map, largest first so that the small ones stay visible."""
     radii = np.asarray(radii_mm, dtype="float64")
     order = np.argsort(-radii)
@@ -1016,6 +1748,7 @@ __all__: Sequence[str] = (
     "HALF_WIDTH_MM",
     "ClassedLegend",
     "MapCanvas",
+    "MapFigure",
     "circle_radius_mm",
     "colormap_for",
     "country_extent",

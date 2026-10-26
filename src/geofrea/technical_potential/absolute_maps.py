@@ -379,7 +379,8 @@ def compose_cell_density_map(
     in_country = _in_country(cell_ids, row0, col0, grid.shape)
     positive = np.isfinite(grid) & (grid > 0)
     data = np.where(positive, grid, np.nan)
-    info = ms.robust_norm(grid[positive])
+    info = ms.resolve_scale(grid[positive], ms.default_scale(kind, tech))
+    subtitle = ms.format_subtitle(subtitle, ms.clip_note(info, label))
     canvas = ms.new_map(
         ctx.polygon,
         iso=iso,
@@ -388,7 +389,6 @@ def compose_cell_density_map(
         subtitle=subtitle,
         total_text=total_text,
         neighbours=ctx.neighbours,
-        grid_mask=(in_country, extent_grid),
         extent=ctx.extent,
         contiguous=False,
     )
@@ -402,7 +402,7 @@ def compose_cell_density_map(
         np.ma.masked_invalid(data),
         extent=extent_grid,
         origin="upper",
-        cmap=ms.colormap_for(kind),
+        cmap=ms.colormap_for(kind, tech),
         norm=info.norm,
         interpolation="nearest",
         zorder=2,
@@ -415,6 +415,8 @@ def compose_cell_density_map(
         "unit": label,
         "norm": info.kind,
         "colour_limits": [info.vmin, info.vmax],
+        "scale_mode": info.mode,
+        "scale_scope": info.scope,
         "percentiles": list(ms.CLIP_PERCENTILES),
         "extend": info.extend,
         "p98_over_p50": None if not math.isfinite(info.skew) else info.skew,
@@ -564,7 +566,6 @@ def draw_classed_cell_map(
         neighbours=ctx.neighbours,
         extent=ctx.extent,
         contiguous=False,
-        grid_mask=(in_country, extent_grid),
         legend_side_mm=side,
         legend_below_mm=below,
     )

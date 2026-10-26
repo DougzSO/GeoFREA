@@ -38,3 +38,17 @@ def mock_geofrea_data_dir(tmp_path):
     """
     with mock.patch.dict(os.environ, {"GEOFREA_DATA_DIR": str(tmp_path)}):
         yield tmp_path
+
+
+@pytest.fixture(autouse=True, scope="session")
+def synthetic_country_names():
+    """The invented countries of the map tests (ISO codes that are not countries) get a name, as a title needs one."""
+    from geofrea.viz import mapstyle
+
+    added = {"XXX": "Examplia", "ZZZ": "Examplia"}
+    for names in mapstyle.COUNTRY_NAMES.values():
+        names.update(added)
+    yield
+    for names in mapstyle.COUNTRY_NAMES.values():
+        for code in added:
+            names.pop(code, None)
