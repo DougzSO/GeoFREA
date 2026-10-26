@@ -1356,8 +1356,12 @@ def totals_text(
     return f"{words['total']}: " + " · ".join(parts)
 
 
-def _draw_graticule(canvas: MapFigure) -> None:
-    """Meridians and parallels in thin light lines, labelled in degrees where they cross the left and the bottom edge of the map."""
+def _draw_graticule(
+    canvas, left_labels: bool = True, bottom_labels: bool = True, keep_inside_m: float = 0.0
+) -> None:
+    """Meridians and parallels in thin light lines, labelled in degrees where they cross the left and the bottom edge of the map
+    (`left_labels` and `bottom_labels` leave the numbers out, for the inner maps of a sheet; `keep_inside_m` drops a longitude label
+    whose text would run out of the map by being closer than that to its sides)."""
     frame, ax = canvas.frame, canvas.ax
     xmin, xmax, ymin, ymax = frame.bounds
     west, east, south, north = frame.lonlat_extent
@@ -1390,11 +1394,11 @@ def _draw_graticule(canvas: MapFigure) -> None:
         order = np.argsort(y)
         if y.min() <= ymin <= y.max():
             x_edge = float(np.interp(ymin, y[order], x[order]))
-            if xmin < x_edge < xmax:
+            if xmin + keep_inside_m < x_edge < xmax - keep_inside_m:
                 xt.append(x_edge)
                 xl.append(format_degrees(lon, "lon"))
-    ax.set_xticks(xt, xl)
-    ax.set_yticks(yt, yl)
+    ax.set_xticks(xt if bottom_labels else [], xl if bottom_labels else [])
+    ax.set_yticks(yt if left_labels else [], yl if left_labels else [])
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
 
@@ -2041,7 +2045,9 @@ def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) 
     path = Path(path)
     if path.suffix.lower() != ".png":
         raise ValueError(f"maps are written as PNG only, got {path.suffix!r}")
-    is_map = isinstance(canvas_or_fig, MapFigure)
+    is_map = isinstance(canvas_or_fig, MapFigure) or (
+        hasattr(canvas_or_fig, "texts") and hasattr(canvas_or_fig, "fig")
+    )  # a MapFigure or a PanelFigure
     fig = canvas_or_fig.fig if is_map else canvas_or_fig
     text = {"Software": None}
     if is_map:
