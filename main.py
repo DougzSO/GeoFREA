@@ -165,7 +165,7 @@ from geofrea.robustness_analysis.maps import RobustnessMapsSummary, build_robust
 from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
-from geofrea.technical_potential.absolute_maps import absolute_map_names
+from geofrea.technical_potential.absolute_maps import absolute_map_keys
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
 from geofrea.technical_potential.table_schemas import (
@@ -531,7 +531,11 @@ def _build_phase_specs(
 
     def climate_maps_run(context: PhaseContext) -> MapsSummary:
         """F4 (J-5): one diagnostic map per member."""
-        result = build_maps(context.country_code, figures)
+        result = build_maps(
+            context.country_code,
+            figures,
+            load_experiments(EXPERIMENTS_YAML).absolute_maps.display_smoothing,
+        )
         _register_json_artifact(context, "climate_maps", result)
         return result
 
@@ -752,7 +756,11 @@ def _build_phase_specs(
 
     def overview_run(context: PhaseContext) -> OverviewSummary:
         """Overview figures and tables of the country's pipeline state (visual QC, no new result)."""
-        result = build_overview(context.country_code, figures)
+        result = build_overview(
+            context.country_code,
+            figures,
+            load_experiments(EXPERIMENTS_YAML).absolute_maps.display_smoothing,
+        )
         _register_json_artifact(context, "overview", result)
         return result
 
@@ -1046,7 +1054,7 @@ def _build_phase_specs(
                 key
                 for tech in technologies
                 if figures == "all"
-                for key in absolute_map_names(
+                for key in absolute_map_keys(
                     tech, load_experiments(EXPERIMENTS_YAML).absolute_maps.per_cell
                 )
             },

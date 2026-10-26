@@ -10,19 +10,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
-from matplotlib.colors import BoundaryNorm, ListedColormap
-from matplotlib.patches import Patch
+from matplotlib.colors import to_rgba
 
 from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON, NODATA_FLOAT
 from geofrea.core.raster_io import safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.land_eligibility.cells import row_col_from_id
+from geofrea.viz import mapstyle as ms
+from geofrea.viz.context import country_context
 
 FIGURE_MODES = ("all", "summary", "none")
 
@@ -67,41 +64,70 @@ def write_cog(path: Path, grid: np.ndarray, row0: int, col0: int) -> Path:
     return path
 
 
-def plot_grid(
+def draw_grid(
     grid: np.ndarray,
     row0: int,
     col0: int,
-    title: str,
-    label: str,
-    cmap: str,
-    path: Path,
     *,
+    iso: str,
+    variable: str,
+    label: str,
+    kind: str,
+    path: Path,
+    technology: str = "",
+    tech: str | None = None,
+    subtitle: str = "",
     categories: Mapping[int, str] | None = None,
 ) -> Path:
-    """A PNG of `grid`; with `categories` (value -> name) the values are drawn as classes with a legend instead of a colour bar."""
+    """A PNG of `grid` (a map of the cells of F3 to F7) in the common map style (`viz/mapstyle.py`): the colours and the scale of `kind`, the
+    title of the form `Country · Technology · Variable`, the compass, the scale bar and the neighbours. These maps are diagnostics of a phase
+    (A-08). With `categories` (value -> name) the values are drawn as classes with a legend of the patches instead of a colour bar."""
     cell = active_scale().cell_deg
     west = CELL_ORIGIN_LON + col0 * cell
     north = CELL_ORIGIN_LAT - row0 * cell
     extent = (west, west + grid.shape[1] * cell, north - grid.shape[0] * cell, north)
-    fig, ax = plt.subplots(figsize=(7, 6))
-    masked = np.ma.masked_invalid(grid)
+    cells = np.flatnonzero(np.isfinite(grid).ravel())
+    rows, cols = np.divmod(cells, grid.shape[1])
+    ids = (rows + row0) * active_scale().n_cols + cols + col0
+    ctx = country_context(iso, ids)
+    common = {
+        "iso": iso,
+        "technology": technology,
+        "variable": variable,
+        "neighbours": ctx.neighbours,
+        "extent": ctx.extent,
+        "contiguous": False,
+    }
     if categories:
         codes = sorted(categories)
-        colors = plt.get_cmap("tab10")(np.arange(len(codes)))
-        norm = BoundaryNorm([c - 0.5 for c in codes] + [codes[-1] + 0.5], len(codes))
-        ax.imshow(masked, extent=extent, origin="upper", cmap=ListedColormap(colors), norm=norm)
-        ax.legend(
-            handles=[Patch(color=colors[i], label=categories[c]) for i, c in enumerate(codes)],
-            loc="lower left",
-            fontsize=7,
+        colours = ms.class_colours(len(codes))
+        spec = ms.ClassedLegend(
+            title=label, labels=tuple(categories[c] for c in codes), colours=tuple(colours)
         )
+        side, below = ms.legend_space(spec)
+        canvas = ms.new_map(
+            ctx.polygon,
+            subtitle=ms.format_subtitle(subtitle, ms.resolution_note(cell_deg=cell)),
+            legend_side_mm=side,
+            legend_below_mm=below,
+            **common,
+        )
+        rgba = np.zeros(grid.shape + (4,))
+        for code, colour in zip(codes, colours, strict=True):
+            rgba[grid == code] = to_rgba(colour)
+        canvas.draw_raster(rgba, extent)
+        ms.draw_classed_legend(canvas, spec)
     else:
-        image = ax.imshow(masked, extent=extent, origin="upper", cmap=cmap)
-        fig.colorbar(image, ax=ax, label=label, shrink=0.8)
-    ax.set_title(title, fontsize=10)
-    ax.set_xlabel("Longitude (deg)")
-    ax.set_ylabel("Latitude (deg)")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    return path
+        canvas = ms.raster_map(
+            grid,
+            extent,
+            ctx.polygon,
+            label=label,
+            kind=kind,
+            tech=tech,
+            subtitle=subtitle,
+            resolution=ms.resolution_note(cell_deg=cell),
+            **common,
+        )
+    canvas.meta["status"] = "diagnostic"
+    return ms.save_png(canvas, path)

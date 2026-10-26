@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import rasterio
+import yaml
 from rasterio.transform import from_origin
 
 from geofrea.overview.figures import ALIGNED_PANELS, build_overview
@@ -29,6 +30,8 @@ def _write_aligned(base, skip=None):
         if stem == skip:
             continue
         data = rng.uniform(1, 10, (20, 30)).astype("float32")
+        if stem == "land_cover":  # classes of the ESA product
+            data = rng.choice([10, 30, 40, 80], size=(20, 30)).astype("float32")
         data[0, 0] = -9999.0
         with rasterio.open(
             art / f"{ISO}_{stem}_aligned.tif",
@@ -70,6 +73,31 @@ def _write_climate(base):
     pd.DataFrame(
         {"cell_id": ids[:2], "member": "m_a_ssp370_2041_2070", "delta_wind": 3.0, "reason": "test"}
     ).to_parquet(art / "forcing_masked.parquet", index=False)
+    grid = {"lat_resolution_deg": 1.0, "lon_resolution_deg": 1.25}
+    (art / "members.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "members": [
+                    {"member": "m0", "window": "1995-2014"},
+                    {
+                        "member": "m_a_ssp126_2041_2070",
+                        "gcm": "GCM-A",
+                        "ssp": "SSP1-2.6",
+                        "window": "2041-2070",
+                        "native_grid": grid,
+                    },
+                    {
+                        "member": "m_a_ssp370_2041_2070",
+                        "gcm": "GCM-A",
+                        "ssp": "SSP3-7.0",
+                        "window": "2041-2070",
+                        "native_grid": grid,
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     hazard = pd.concat(
         [
             pd.DataFrame(
@@ -104,8 +132,11 @@ def test_overview_writes_two_figures_and_a_table(data_dir):
     _write_climate(data_dir)
     result = build_overview(ISO, "all")
     assert [p.name for p in result.figures] == [
-        f"{ISO}_aligned_layers.png",
-        f"{ISO}_hazard_context.png",
+        f"{ISO}_F2a_aligned-layers_terrain-and-land.png",
+        f"{ISO}_F2a_aligned-layers_distances.png",
+        f"{ISO}_F2a_aligned-layers_resource.png",
+        f"{ISO}_F2a_land-cover.png",
+        f"{ISO}_F4_hazard-context.png",
     ]
     assert all(p.exists() and p.stat().st_size > 5000 for p in result.figures)
     text = result.table.read_text(encoding="utf-8")
@@ -147,4 +178,7 @@ def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
         art / "cells_0p1deg_solar.parquet", index=False
     )  # must be ignored
     result = build_overview(ISO, "all")
-    assert f"{ISO}_eligibility.png" in [p.name for p in result.figures]
+    names = [p.name for p in result.figures]
+    assert f"{ISO}_F3_land-eligibility_solar_central.png" in names
+    assert f"{ISO}_F3_land-eligibility_wind_central.png" in names
+    assert f"{ISO}_F3_exclusion-contribution_central.png" in names

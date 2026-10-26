@@ -17,6 +17,7 @@ Credit: the 8-triangle compass rose and the alternating-segment scale bar follow
 from __future__ import annotations
 
 import functools
+import hashlib
 import math
 import re
 from collections.abc import Sequence
@@ -280,7 +281,19 @@ def _box_edge(west: float, east: float, south: float, north: float, n: int = 60)
     return xs, ys
 
 
+_FRAMES: dict = {}  # the frames already made, by the polygon and the extent: a country's polygon has hundreds of thousands of vertices
+
+
 def make_frame(polygon, extent: Extent | None = None, margin: float = EXTENT_MARGIN) -> MapFrame:
+    key = (hashlib.blake2b(polygon.wkb, digest_size=16).digest(), extent, margin)
+    if key not in _FRAMES:
+        if len(_FRAMES) >= 8:
+            _FRAMES.pop(next(iter(_FRAMES)))
+        _FRAMES[key] = _make_frame(polygon, extent, margin)
+    return _FRAMES[key]
+
+
+def _make_frame(polygon, extent: Extent | None, margin: float) -> MapFrame:
     """The frame of a country (lon/lat polygon): LAEA centred on its centroid, bounds of the projected polygon plus `margin` of its width
     and height on each side, or the bounds of the lon/lat `extent` (edges sampled) when it is given."""
     from pyproj import Transformer
@@ -395,7 +408,28 @@ PLAIN_CMAPS = {  # kinds that do not depend on the technology
     "delta": "RdBu",  # climate change of the solar resource (centred on 0 as percent, on 1 as ratio)
     "delta_alt": "BrBG",  # climate change of the wind resource
     "temperature": "YlOrRd",  # change of temperature (sequential)
+    # the aligned layers of F2a (diagnostic figures): one colour map for each kind of layer, so that a colour means one thing in a sheet
+    "distance": "viridis",  # distances to the river, the road, the grid, the lakes (km)
+    "elevation": "cividis",
+    "slope": "magma_r",
+    "population": "Purples",
+    "water": "Blues",
+    "weibull_k": "PuRd",
+    "air_density": "BuPu",
+    "frequency": "PuBu",  # a share of days
+    # the maps of F6 and F7 (diagnostic): the cost, the regret, the satisficing share and a count
+    "lcoe": "viridis_r",
+    "regret": "magma_r",
+    "satisficing": "viridis",
+    "count": "Reds",
 }
+TRUNCATED_PLAIN = {
+    "population",
+    "water",
+    "weibull_k",
+    "air_density",
+    "frequency",
+}  # sequential maps that start at white: cut from 15% like the technologies
 COLORMAPS = {**{k: None for k in TECH_KINDS}, **PLAIN_CMAPS}
 
 # Qualitative classes (the dominant exclusion E1-E6): the Okabe-Ito colours without green and without the black, and a neutral grey for "none".
@@ -418,6 +452,11 @@ def _truncated(name: str, start: float) -> Colormap:
     return cmap
 
 
+def family_of(tech: str) -> str:
+    """The family of colours of a technology: a variant of a technology takes the family of its name."""
+    return WIND if WIND in tech else SOLAR
+
+
 def colormap_for(kind: str, tech: str | None = None) -> Colormap:
     """The colormap of a kind of variable.
 
@@ -431,6 +470,8 @@ def colormap_for(kind: str, tech: str | None = None) -> Colormap:
         return _truncated(TECH_CMAPS[tech], TRUNCATE_FROM)
     if kind not in PLAIN_CMAPS:
         raise ValueError(f"unknown kind {kind!r}")
+    if kind in TRUNCATED_PLAIN:
+        return _truncated(PLAIN_CMAPS[kind], TRUNCATE_FROM)
     return matplotlib.colormaps[PLAIN_CMAPS[kind]]
 
 
@@ -1144,7 +1185,9 @@ class MapFigure:
             zorder=zorder,
             transform=self.ax.transData,
         )
-        self.ax.add_patch(patch)
+        self.ax.add_artist(
+            patch
+        )  # not `add_patch`: that walks every vertex of the polygon to update the limits
         self.use_colour(colour, self.no_data_label or NO_DATA_LABEL)
         return patch
 
@@ -1201,7 +1244,7 @@ class MapFigure:
                 edgecolor="none",
                 transform=self.ax.transData,
             )
-            self.ax.add_patch(patch)
+            self.ax.add_artist(patch)
             image.set_clip_path(patch)
         self.ax.set_xlim(frame.bounds[0], frame.bounds[1])
         self.ax.set_ylim(frame.bounds[2], frame.bounds[3])
@@ -1356,8 +1399,12 @@ def totals_text(
     return f"{words['total']}: " + " · ".join(parts)
 
 
-def _draw_graticule(canvas: MapFigure) -> None:
-    """Meridians and parallels in thin light lines, labelled in degrees where they cross the left and the bottom edge of the map."""
+def _draw_graticule(
+    canvas, left_labels: bool = True, bottom_labels: bool = True, keep_inside_m: float = 0.0
+) -> None:
+    """Meridians and parallels in thin light lines, labelled in degrees where they cross the left and the bottom edge of the map
+    (`left_labels` and `bottom_labels` leave the numbers out, for the inner maps of a sheet; `keep_inside_m` drops a longitude label
+    whose text would run out of the map by being closer than that to its sides)."""
     frame, ax = canvas.frame, canvas.ax
     xmin, xmax, ymin, ymax = frame.bounds
     west, east, south, north = frame.lonlat_extent
@@ -1390,13 +1437,23 @@ def _draw_graticule(canvas: MapFigure) -> None:
         order = np.argsort(y)
         if y.min() <= ymin <= y.max():
             x_edge = float(np.interp(ymin, y[order], x[order]))
-            if xmin < x_edge < xmax:
+            if xmin + keep_inside_m < x_edge < xmax - keep_inside_m:
                 xt.append(x_edge)
                 xl.append(format_degrees(lon, "lon"))
-    ax.set_xticks(xt, xl)
-    ax.set_yticks(yt, yl)
+    ax.set_xticks(xt if bottom_labels else [], xl if bottom_labels else [])
+    ax.set_yticks(yt if left_labels else [], yl if left_labels else [])
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
+
+
+_NEIGHBOURS: dict = {}  # the neighbours cut to a frame, kept: the sheets of a country share a frame
+
+
+def _remember(key, value):
+    if len(_NEIGHBOURS) >= 8:
+        _NEIGHBOURS.pop(next(iter(_NEIGHBOURS)))
+    _NEIGHBOURS[key] = value
+    return value
 
 
 def _neighbours_in_frame(neighbours, frame: MapFrame):
@@ -1405,26 +1462,33 @@ def _neighbours_in_frame(neighbours, frame: MapFrame):
     import geopandas as gpd
     import shapely
 
+    key = (id(neighbours), len(neighbours), frame.bounds, str(frame.crs))
+    if key in _NEIGHBOURS:
+        return _NEIGHBOURS[key]
     west, east, south, north = frame.lonlat_extent
     pad = 1.0
     wide = shapely.box(west - pad, south - pad, east + pad, north + pad)
     near = neighbours.to_crs("EPSG:4326").clip(wide)
     if not len(near):
-        return near.assign(gap=[])
+        return _remember(key, near.assign(gap=[]))
     projected = near.to_crs(frame.crs)
     xmin, xmax, ymin, ymax = frame.bounds
     # the borders of two sources of geometry never coincide: the gap between the country and its neighbours (not the sea) is closed
     gap = (
         projected.geometry.union_all()
-        .buffer(BORDER_GAP_M)
-        .intersection(frame.polygon.buffer(BORDER_GAP_M))
+        .simplify(BORDER_GAP_M / 20)
+        .buffer(BORDER_GAP_M, quad_segs=2)
+        .intersection(frame.polygon.simplify(BORDER_GAP_M / 20).buffer(BORDER_GAP_M, quad_segs=2))
+        .difference(
+            frame.polygon
+        )  # only the sliver outside the country: inside it the map has its own colours
     )
     cut = gpd.GeoSeries([*projected.geometry, gap], crs=frame.crs).clip_by_rect(
         xmin, ymin, xmax, ymax
     )
     out = gpd.GeoDataFrame(geometry=cut, crs=frame.crs)
     out["gap"] = [False] * len(projected) + [True]
-    return out[~out.geometry.is_empty].reset_index(drop=True)
+    return _remember(key, out[~out.geometry.is_empty].reset_index(drop=True))
 
 
 def _draw_locator(canvas: MapFigure, box: BoxMm, polygon, neighbours) -> list:
@@ -1813,6 +1877,7 @@ def raster_map(
     display_layer: display.DisplayLayer | None = None,
     display_smoothing: str = "auto",
     coarse_source: bool = False,
+    extent: Extent | None = None,
 ) -> MapFigure:
     """A continuous raster map in the common style: the colormap and the scale of `kind` (and `tech`), extend where needed.
 
@@ -1851,6 +1916,7 @@ def raster_map(
             locator=locator,
             graticule=graticule,
             contiguous=contiguous,
+            extent=extent,
         )
 
     canvas = build(resolution)
@@ -2032,6 +2098,11 @@ def png_metadata(canvas: MapFigure, extra: dict[str, str] | None = None) -> dict
     return meta
 
 
+def close_figure(figure) -> None:
+    """Close a figure that will not be saved (a header that is drawn again): the `Figure` itself, or a map or sheet that holds one."""
+    plt.close(getattr(figure, "fig", figure))
+
+
 def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) -> Path:
     """Write the figure as PNG at 300 dpi and its exact print size, with no software tag. Only PNG is written.
 
@@ -2041,7 +2112,9 @@ def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) 
     path = Path(path)
     if path.suffix.lower() != ".png":
         raise ValueError(f"maps are written as PNG only, got {path.suffix!r}")
-    is_map = isinstance(canvas_or_fig, MapFigure)
+    is_map = isinstance(canvas_or_fig, MapFigure) or (
+        hasattr(canvas_or_fig, "texts") and hasattr(canvas_or_fig, "fig")
+    )  # a MapFigure or a PanelFigure
     fig = canvas_or_fig.fig if is_map else canvas_or_fig
     text = {"Software": None}
     if is_map:

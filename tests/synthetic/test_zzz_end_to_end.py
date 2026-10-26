@@ -486,9 +486,9 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
         "wind",
         "solar",
     ):  # COMMAND 60: the density maps of the cells, the capacity factor, in the common style
-        assert (figures / f"potential_capacity_density_{tech}_central__ref__na__na.png").is_file()
-        assert (figures / f"potential_energy_density_{tech}_central__ref__na__na.png").is_file()
-        assert (figures / f"capacity_factor_{tech}__ref__na__na.png").is_file()
+        assert (figures / f"ZZZ_F5_capacity-density_{tech}_central_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_energy-density_{tech}_central_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_capacity-factor_{tech}_central_ref.png").is_file()
 
 
 @pytest.mark.synthetic
@@ -1530,9 +1530,9 @@ def test_the_lcoe_map_of_the_reference_member_equals_the_f6_table_cell_by_cell(z
     rows, cols = rasterio.transform.rowcol(transform, lon, lat)
     np.testing.assert_allclose(raster[rows, cols], reference.to_numpy(), rtol=1e-6)
     figures = {p.name for p in (_phase(zzz, "lcoe_modeling", "figures")).glob("*.png")}
-    assert f"lcoe_nominal_{tech}__ref__na__na.png" in figures
-    assert f"supply_curve_{tech}__ref__na__na.png" in figures
-    assert {f"lcoe_nominal_{tech}__2041-2070__ssp126__na.png"} <= figures
+    assert f"ZZZ_F6_lcoe-nominal_{tech}_central_ref.png" in figures
+    assert f"ZZZ_F6_supply-curve_{tech}_central_ref.png" in figures
+    assert {f"ZZZ_F6_lcoe-nominal_{tech}_SSP1-2.6_2041-2070.png"} <= figures
 
 
 @pytest.mark.synthetic
@@ -1559,7 +1559,7 @@ def test_the_robustness_maps_are_written_for_both_windows_and_the_max_regret_mat
         assert (got[~finite] == nodata).all()
     window = "2041-2070"
     figures = {p.name for p in _phase(zzz, "robustness_analysis", "figures").glob("*.png")}
-    assert f"cell_class_{tech}__{window}__na__na.png" in figures
+    assert f"ZZZ_F7_cell-class_{tech}_central_{window}.png" in figures
 
 
 # -- deterministic artifacts (COMMAND 24, A-02) ----------------------------------------------------------

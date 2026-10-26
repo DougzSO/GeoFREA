@@ -1,15 +1,17 @@
 """Overview figures and tables of one country's pipeline state (visual QC; no new method, no new numbers).
 
-Everything here is read from outputs of earlier phases and drawn, never recomputed into a result: a layer that looks
-displaced, clipped or implausible is visible at a glance before F3 builds on it.
+Everything here is read from outputs of earlier phases and drawn, never recomputed into a result: a layer that looks displaced, clipped or
+implausible is visible at a glance before F3 builds on it. The figures are in the common map style (`overview/diagnostic.py`,
+`land_eligibility/figures.py`) and the diagnostic ones say so.
 
 Written under `outputs/<ISO3>/overview/`:
-  - `figures/<ISO3>_aligned_layers.png`: the 12 F2a layers that F2b/F3 read (elevation, slope, land cover, population,
-    distances to lakes/rivers/roads/grid in km, PVOUT, wind speed, Weibull k and air density at 100 m);
-  - `figures/<ISO3>_eligibility.png`: F3 eligible share of each 0.05 degree cell and its dominant exclusion, per technology;
-  - `figures/<ISO3>_hazard_context.png`: ISIMIP3b/ERA5 context indicators, mean over the hazard members, with changes;
-  - `tables/<ISO3>_overview.md`: per-layer statistics, per-member change-factor ranges and masked counts, per-member
-    hazard means.
+  - `figures/<ISO3>_F2a_aligned-layers_<theme>.png`: the F2a layers that F2b/F3 read in three sheets (terrain and land, distances, resource), and
+    `<ISO3>_F2a_land-cover.png`;
+  - `figures/<ISO3>_F3_land-eligibility_<tech>_central.png` and `<ISO3>_F3_exclusion-contribution_central.png`: F3 eligible share, dominant
+    exclusion and the share of each exclusion;
+  - `figures/<ISO3>_F4_hazard-context.png`: ISIMIP3b/ERA5 context indicators, mean over the hazard members, with changes;
+  - `figures/layers/`: one map of each exclusion and technology (F3) and the distances to the grid and to the road (F2b), diagnostics;
+  - `tables/<ISO3>_overview.md`: per-layer statistics, per-member change-factor ranges and masked counts, per-member hazard means.
 The existing-plant trackers are NOT drawn here (V-06): `scripts/plot_plants_over_grid.py` does that outside the pipeline.
 """
 
@@ -17,47 +19,40 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import rasterio
 from pydantic import BaseModel, ConfigDict
 
 from geofrea.core import paths as core_paths
-from geofrea.core.constants import CELL_ORIGIN_LAT, CELL_ORIGIN_LON
-from geofrea.core.scale import active_scale
-from geofrea.land_eligibility.cells import row_col_from_id
-from geofrea.overview import style
-from geofrea.overview.layer_maps import build_layer_maps
-
-MAX_PIXELS = 700  # longest side of a drawn raster
-
-# (file stem under grid_alignment/artifacts, title, colormap, kind) ; kind: "linear" | "log" | "categorical"
-ALIGNED_PANELS = (
-    ("elevation", "Elevation (m)", "terrain", "linear"),
-    ("slope", "Slope (degrees)", "magma", "linear"),
-    ("land_cover", "Land cover (ESA class)", "tab20", "categorical"),
-    ("population", "Population (log10 per pixel)", "viridis", "log"),
-    ("lakes", "Lakes (1 = water)", "Blues", "linear"),
-    ("rivers", "Distance to river (km)", "YlGnBu", "linear"),
-    ("roads", "Distance to road (km)", "YlOrBr", "linear"),
-    ("grid", "Distance to grid (km, uncapped)", "YlOrRd", "linear"),
-    ("solar", "PVOUT (kWh/kWp/day)", "YlOrRd", "linear"),
-    ("wind_wind_speed_100m", "Wind speed 100 m (m/s)", "viridis", "linear"),
-    ("wind_weibull_k_100m", "Weibull k 100 m", "cividis", "linear"),
-    ("wind_air_density_100m", "Air density 100 m (kg/m3)", "plasma", "linear"),
+from geofrea.land_eligibility.figures import draw_country as eligibility_figures
+from geofrea.land_eligibility.figures import read_cell_tables
+from geofrea.overview import diagnostic as dg
+from geofrea.overview.diagnostic import (  # noqa: F401  (read_layer is the reader of the scripts)
+    layer_stats,
+    read_layer,
 )
+from geofrea.viz import mapstyle as ms
+from geofrea.viz.context import country_context
 
-HAZARD_PANELS = (
-    ("tx35_days", "TX35: days >= 35 C per year (mean of members)", "YlOrRd"),
-    ("tx35_change", "TX35 change vs 1995-2014 (days)", "RdBu_r"),
-    ("rx5day_mm", "Rx5day (mm, mean of members)", "Blues"),
-    ("rx5day_change", "Rx5day change vs 1995-2014 (mm)", "RdBu"),
-    ("wet_p95_exceed_freq", "Wet days above baseline P95 (share)", "PuBu"),
-    ("gust_mean_annual_max_ms", "ERA5 gust, mean annual maximum (m/s)", "viridis"),
+# (file stem under grid_alignment/artifacts, title in the table of the overview, kind of colour) in the order of the table
+ALIGNED_PANELS = (
+    ("elevation", dg.BY_STEM["elevation"].table_title, "elevation", ""),
+    ("slope", dg.BY_STEM["slope"].table_title, "slope", ""),
+    (dg.LAND_COVER_STEM, dg.LAND_COVER_TITLE, "categorical", ""),
+    *(
+        (s, dg.BY_STEM[s].table_title, dg.BY_STEM[s].kind, "")
+        for s in (
+            "population",
+            "lakes",
+            "rivers",
+            "roads",
+            "grid",
+            "solar",
+            "wind_wind_speed_100m",
+            "wind_weibull_k_100m",
+            "wind_air_density_100m",
+        )
+    ),
 )
 
 
@@ -74,226 +69,7 @@ def overview_dir(iso: str) -> Path:
 
 
 def _aligned_path(iso: str, stem: str) -> Path:
-    return core_paths.phase_dir(iso, "grid_alignment", "artifacts") / f"{iso}_{stem}_aligned.tif"
-
-
-def read_layer(
-    path: Path, max_pixels: int = MAX_PIXELS
-) -> tuple[np.ndarray, tuple[float, float, float, float]]:
-    """Band 1 as float32 with nodata -> NaN, downsampled so its longest side is `max_pixels`; and (W, E, S, N)."""
-    with rasterio.open(path) as src:
-        scale = max(1, int(np.ceil(max(src.height, src.width) / max_pixels)))
-        shape = (max(1, src.height // scale), max(1, src.width // scale))
-        arr = src.read(1, out_shape=shape).astype("float32")
-        nodata = src.nodata
-        b = src.bounds
-    if nodata is not None:
-        arr[arr == nodata] = np.nan
-    arr[~np.isfinite(arr)] = np.nan
-    return arr, (b.left, b.right, b.bottom, b.top)
-
-
-def layer_stats(path: Path) -> dict:
-    """Valid-pixel count and min / median / max of the full-resolution layer."""
-    with rasterio.open(path) as src:
-        arr = src.read(1).astype("float64")
-        nodata = src.nodata
-    valid = np.isfinite(arr) if nodata is None else (np.isfinite(arr) & (arr != nodata))
-    v = arr[valid]
-    if v.size == 0:
-        return {"n_valid": 0, "min": None, "median": None, "max": None}
-    return {
-        "n_valid": int(v.size),
-        "min": float(v.min()),
-        "median": float(np.median(v)),
-        "max": float(v.max()),
-    }
-
-
-def plot_aligned_layers(iso: str, out_path: Path) -> Path:
-    fig, axes = plt.subplots(3, 4, figsize=(18, 13), constrained_layout=True)
-    loaded = style.load_relief(_aligned_path(iso, "elevation"))
-    relief = loaded[0] if loaded else None
-    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
-    for ax, (stem, title, cmap, kind) in zip(axes.ravel(), ALIGNED_PANELS, strict=True):
-        path = _aligned_path(iso, stem)
-        ax.set_title(title, fontsize=10)
-        if not path.exists():
-            ax.text(
-                0.5, 0.5, f"missing\n{path.name}", ha="center", va="center", transform=ax.transAxes
-            )
-            ax.set_axis_off()
-            continue
-        arr, extent = read_layer(path)
-        kwargs: dict = {"cmap": cmap, "interpolation": "nearest", "extent": extent}
-        if relief is not None and stem != "elevation":
-            style.draw_backdrop(ax, relief, extent)
-            kwargs.update(alpha=0.78, zorder=1)
-        if kind == "log":
-            arr = np.log10(np.where(arr > 0, arr, np.nan))
-        elif kind == "categorical":
-            kwargs["cmap"] = "tab20"
-        if np.isfinite(arr).any():
-            lo, hi = (
-                np.nanpercentile(arr, [1, 99])
-                if kind == "linear"
-                else (np.nanmin(arr), np.nanmax(arr))
-            )
-            if hi > lo:
-                kwargs.update(vmin=lo, vmax=hi)
-        im = ax.imshow(arr, **kwargs)
-        if stem == "elevation" and relief is not None:  # terrain colours shaded by the relief
-            ax.imshow(
-                relief,
-                extent=extent,
-                cmap="Greys_r",
-                vmin=0.0,
-                vmax=1.0,
-                alpha=0.35,
-                interpolation="bilinear",
-                zorder=2,
-            )
-        style.draw_overlay(ax, outline, rivers, extent)
-        fig.colorbar(im, ax=ax, shrink=0.75)
-        ax.tick_params(labelsize=7)
-    fig.suptitle(
-        f"{iso}: F2a aligned layers (colour limits at the 1st-99th percentile)", fontsize=13
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=100)
-    plt.close(fig)
-    return out_path
-
-
-EXCLUSION_LABELS = (
-    "none",
-    "E1 protected",
-    "E2 water",
-    "E3 riparian",
-    "E4 slope",
-    "E5 land cover",
-    "E6 population",
-)
-
-
-def plot_eligibility(iso: str, cell_tables: dict[str, pd.DataFrame], out_path: Path) -> Path:
-    """One column per technology: eligible share of each cell (top) and the dominant exclusion (bottom)."""
-    from matplotlib.colors import BoundaryNorm, ListedColormap
-
-    techs = sorted(cell_tables)
-    all_rows = np.concatenate([cell_tables[t]["row"].to_numpy() for t in techs])
-    all_cols = np.concatenate([cell_tables[t]["col"].to_numpy() for t in techs])
-    r0, r1, c0, c1 = (
-        int(all_rows.min()),
-        int(all_rows.max()),
-        int(all_cols.min()),
-        int(all_cols.max()),
-    )
-    extent = (
-        CELL_ORIGIN_LON + c0 * active_scale().cell_deg,
-        CELL_ORIGIN_LON + (c1 + 1) * active_scale().cell_deg,
-        CELL_ORIGIN_LAT - (r1 + 1) * active_scale().cell_deg,
-        CELL_ORIGIN_LAT - r0 * active_scale().cell_deg,
-    )
-    colors = ["#f0f0f0", "#1b9e77", "#1f78b4", "#6baed6", "#a65628", "#e6ab02", "#d95f02"]
-    cmap, norm = ListedColormap(colors), BoundaryNorm(np.arange(-0.5, 7.5), len(colors))
-    fig, axes = plt.subplots(
-        2, len(techs), figsize=(7 * len(techs), 13), constrained_layout=True, squeeze=False
-    )
-    loaded = style.load_relief(_aligned_path(iso, "elevation"))
-    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
-    codes = {name: i + 1 for i, name in enumerate(("E1", "E2", "E3", "E4", "E5", "E6"))}
-    for j, tech in enumerate(techs):
-        cells = cell_tables[tech]
-        rows, cols = cells["row"].to_numpy() - r0, cells["col"].to_numpy() - c0
-        share = np.full((r1 - r0 + 1, c1 - c0 + 1), np.nan, dtype=np.float32)
-        share[rows, cols] = (cells["eligible_area_km2"] / cells["cell_area_km2"]).to_numpy()
-        dom = np.full(share.shape, np.nan, dtype=np.float32)
-        dom[rows, cols] = cells["dominant_exclusion"].map(codes).fillna(0).to_numpy()
-        for k in (0, 1):
-            if loaded:
-                style.draw_backdrop(axes[k, j], loaded[0], loaded[1])
-        im = axes[0, j].imshow(
-            share,
-            extent=extent,
-            cmap="YlGn",
-            vmin=0,
-            vmax=1,
-            interpolation="nearest",
-            alpha=0.8,
-            zorder=1,
-        )
-        fig.colorbar(im, ax=axes[0, j], shrink=0.7, label="eligible share of the cell")
-        axes[0, j].set_title(
-            f"{tech}: eligible share ({100 * cells['eligible_area_km2'].sum() / cells['cell_area_km2'].sum():.1f}% of the land)"
-        )
-        im2 = axes[1, j].imshow(
-            dom, extent=extent, cmap=cmap, norm=norm, interpolation="nearest", alpha=0.85, zorder=1
-        )
-        for k in (0, 1):
-            style.draw_overlay(axes[k, j], outline, rivers, extent)
-        cb = fig.colorbar(im2, ax=axes[1, j], shrink=0.7, ticks=range(7))
-        cb.ax.set_yticklabels(EXCLUSION_LABELS)
-        axes[1, j].set_title(f"{tech}: dominant exclusion per cell")
-    fig.suptitle(
-        f"{iso}: F3 land eligibility, central parameters (open questions OQ-046 to OQ-049)",
-        fontsize=13,
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=100)
-    plt.close(fig)
-    return out_path
-
-
-def _hazard_means(hazard: pd.DataFrame) -> pd.DataFrame:
-    h = hazard.copy()
-    h["tx35_change"] = h["tx35_days"] - h["tx35_days_ref"]
-    h["rx5day_change"] = h["rx5day_mm"] - h["rx5day_mm_ref"]
-    cols = [c for c, *_ in HAZARD_PANELS]
-    return h.groupby("cell_id", observed=True)[cols].mean().reset_index()
-
-
-def plot_hazard_context(iso: str, hazard: pd.DataFrame, out_path: Path) -> Path:
-    means = _hazard_means(hazard)
-    rows, cols = row_col_from_id(means["cell_id"].to_numpy())
-    r0, r1, c0, c1 = int(rows.min()), int(rows.max()), int(cols.min()), int(cols.max())
-    extent = (
-        CELL_ORIGIN_LON + c0 * active_scale().cell_deg,
-        CELL_ORIGIN_LON + (c1 + 1) * active_scale().cell_deg,
-        CELL_ORIGIN_LAT - (r1 + 1) * active_scale().cell_deg,
-        CELL_ORIGIN_LAT - r0 * active_scale().cell_deg,
-    )
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10), constrained_layout=True)
-    loaded = style.load_relief(_aligned_path(iso, "elevation"))
-    outline, rivers = style.country_outline(iso), style.major_rivers(iso)
-    for ax, (col, title, cmap) in zip(axes.ravel(), HAZARD_PANELS, strict=True):
-        if loaded:
-            style.draw_backdrop(ax, loaded[0], loaded[1])
-        img = np.full((r1 - r0 + 1, c1 - c0 + 1), np.nan, dtype=np.float32)
-        img[rows - r0, cols - c0] = means[col].to_numpy()
-        vals = img[np.isfinite(img)]
-        kwargs: dict = {
-            "cmap": cmap,
-            "extent": extent,
-            "interpolation": "nearest",
-            "alpha": 0.85,
-            "zorder": 1,
-        }
-        if "change" in col and vals.size:
-            half = float(np.nanmax(np.abs(np.nanpercentile(vals, [1, 99])))) or 1.0
-            kwargs.update(vmin=-half, vmax=half)
-        im = ax.imshow(img, **kwargs)
-        style.draw_overlay(ax, outline, rivers, extent)
-        ax.set_title(title, fontsize=10)
-        fig.colorbar(im, ax=ax, shrink=0.8)
-    n = hazard["member"].nunique()
-    fig.suptitle(
-        f"{iso}: hazard context, mean over {n} members (context only, OQ-007)", fontsize=13
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=100)
-    plt.close(fig)
-    return out_path
+    return dg.aligned_path(iso, stem)
 
 
 def _md(df: pd.DataFrame) -> str:
@@ -390,8 +166,9 @@ def build_tables(
     return "\n".join(parts)
 
 
-def build_overview(iso: str, figures_mode: str) -> OverviewSummary:
-    """Overview figures and table. `figures_mode` is `settings.yaml` `figures` (A-08): `none` writes the table only."""
+def build_overview(iso: str, figures_mode: str, display_smoothing: str = "auto") -> OverviewSummary:
+    """Overview figures and table. `figures_mode` is `settings.yaml` `figures` (A-08): `none` writes the table only; `summary` draws the sheets and
+    the chart (aligned layers, hazard context, F3), `all` also the diagnostic map of each exclusion and the cost drivers."""
     if figures_mode not in ("all", "summary", "none"):
         raise ValueError(f"figures must be all, summary or none, got {figures_mode!r}")
     art = core_paths.phase_dir(iso, "climate_forcing", "artifacts")
@@ -399,25 +176,56 @@ def build_overview(iso: str, figures_mode: str) -> OverviewSummary:
     masked = pd.read_parquet(art / "forcing_masked.parquet")
     hazard = pd.read_parquet(art / "hazard_context.parquet")
     out = overview_dir(iso)
-    figures = []
+    figures: list[Path] = []
     if figures_mode != "none":
-        figures = [
-            plot_aligned_layers(iso, out / "figures" / f"{iso}_aligned_layers.png"),
-            plot_hazard_context(iso, hazard, out / "figures" / f"{iso}_hazard_context.png"),
-        ]
-    eligibility_dir = core_paths.phase_dir(iso, "land_eligibility", "artifacts")
-    cell_tables = {
-        p.stem.removeprefix("cells_").removesuffix("__central"): pd.read_parquet(p)
-        for p in sorted(eligibility_dir.glob("cells_*__central.parquet"))
-    }
-    if cell_tables and figures_mode != "none":
-        figures.append(
-            plot_eligibility(iso, cell_tables, out / "figures" / f"{iso}_eligibility.png")
-        )
-    figures += build_layer_maps(
-        iso, figures_mode
-    )  # one map per file for the exclusion and cost layers (H-5)
+        figures += draw_diagnostics(iso, hazard, forcing, out / "figures", figures_mode == "all")
+        eligibility_dir = core_paths.phase_dir(iso, "land_eligibility", "artifacts")
+        cell_tables = read_cell_tables(eligibility_dir)
+        if cell_tables:
+            ctx = country_context(
+                iso, np.concatenate([c["cell_id"].to_numpy() for c in cell_tables.values()])
+            )
+            figures += eligibility_figures(
+                iso,
+                cell_tables,
+                ctx,
+                out / "figures",
+                eligibility_dir,
+                display_smoothing=display_smoothing,
+                with_layers=figures_mode == "all",
+            )
     table = out / "tables" / f"{iso}_overview.md"
     table.parent.mkdir(parents=True, exist_ok=True)
     table.write_text(build_tables(iso, forcing, masked, hazard), encoding="utf-8")
     return OverviewSummary(country_code=iso, figures=figures, table=table)
+
+
+def draw_diagnostics(
+    iso: str, hazard: pd.DataFrame, forcing: pd.DataFrame, out_dir: Path, with_layers: bool
+) -> list[Path]:
+    """The diagnostic sheets of the inputs (F2a layers, land cover, hazard context) and, with `with_layers`, the cost-driver maps of F2b."""
+    ctx = country_context(iso, forcing["cell_id"].to_numpy())
+    written: list[Path] = []
+    for key, title, stems in dg.SHEETS:
+        sheet = dg.aligned_sheet(ctx, iso, key, title, stems)
+        if sheet is not None:
+            written.append(ms.save_png(sheet, out_dir / dg.aligned_name(iso, key)))
+    land_cover = dg.land_cover_map(ctx, iso)
+    if land_cover is not None:
+        written.append(ms.save_png(land_cover, out_dir / dg.land_cover_name(iso)))
+    written.append(ms.save_png(dg.hazard_sheet(ctx, iso, hazard), out_dir / dg.hazard_name(iso)))
+    if with_layers:
+        siting = core_paths.phase_dir(iso, "siting_layers", "artifacts")
+        for stem, what, variable in (
+            ("dist_grid_km", "grid", "Distance to the transmission grid"),
+            ("dist_road_km", "road", "Distance to the nearest road"),
+        ):
+            raster = Path(siting) / f"{stem}.tif"
+            if not raster.is_file():
+                continue
+            canvas = dg.cost_driver_map(ctx, iso, raster, variable)
+            written.append(ms.save_png(canvas, out_dir / "layers" / dg.cost_driver_name(iso, what)))
+        if (out_dir / "layers").is_dir():
+            ms.write_figures_index(out_dir / "layers")
+    ms.write_figures_index(out_dir)
+    return written

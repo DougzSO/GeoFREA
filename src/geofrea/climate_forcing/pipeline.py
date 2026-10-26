@@ -13,6 +13,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
 
+from geofrea.climate_forcing.figures import draw_country, read_members
 from geofrea.climate_forcing.forcing import country_cells, forcing_frames, write_forcing
 from geofrea.climate_forcing.hazards import (
     HazardDataError,
@@ -20,7 +21,6 @@ from geofrea.climate_forcing.hazards import (
     hazard_fields,
     hazard_frame,
 )
-from geofrea.climate_forcing.maps import plot_all_members
 from geofrea.climate_forcing.members import (
     has_hazard_channel,
     load_ensemble,
@@ -36,6 +36,7 @@ from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_experiments
 from geofrea.core.tables import write_table
 from geofrea.data_acquisition.cmip6_registry import Cmip6Registry
+from geofrea.viz.context import country_context
 
 ISIMIP_MAX_DISTANCE_DEG = 0.4  # half the 0.5 degree diagonal (0.354) plus a margin
 
@@ -250,35 +251,30 @@ def build_hazard_context(iso: str, experiments_yaml: Path) -> HazardSummary:
     )
 
 
-def build_maps(iso: str, figures_mode: str) -> MapsSummary:
-    """J-5: one PNG per member under `figures/`, from forcing.parquet and forcing_masked.parquet.
+def build_maps(iso: str, figures_mode: str, display_smoothing: str = "auto") -> MapsSummary:
+    """J-5: the figures of the climate forcing under `figures/` (`climate_forcing/figures.py`, spec v2 T-09), from forcing.parquet and members.yaml.
 
     Args:
         iso: Country code.
-        figures_mode: `settings.yaml` `figures` (A-08). Member-level maps are drawn only with `all`; `summary` and `none`
-            draw none (F4 has no summary-level map).
+        figures_mode: `settings.yaml` `figures` (A-08). `all` draws the ensemble sheets (one per SSP and window), the three summary grids and the
+            supplementary sheets of the members under `figures/members/`; `summary` the ensemble sheets and the grids; `none` nothing.
+        display_smoothing: `auto` or `off` (`experiments.yaml` `absolute_maps.display_smoothing`).
     """
     if figures_mode not in ("all", "summary", "none"):
         raise ValueError(f"figures must be all, summary or none, got {figures_mode!r}")
-    if figures_mode != "all":
+    if figures_mode == "none":
         return MapsSummary(country_code=iso, n_figures=0, figures=[])
     art = artifacts_dir(iso)
     forcing = pd.read_parquet(art / "forcing.parquet")
-    masked = pd.read_parquet(art / "forcing_masked.parquet")
-    notes = {
-        m: "OQ-042: grey cells have no valid wind factor for this member (masked, not zero change; solar keeps the cell)"
-        for m in masked["member"].astype(str).unique()
-    }
-    no_wind = (
-        forcing.assign(member=forcing["member"].astype(str))
-        .groupby("member")["delta_wind"]
-        .apply(lambda v: bool(v.isna().all()))
-    )
-    for m in no_wind[no_wind].index:
-        notes[m] = (
-            "no wind channel (M-F4-02 item 6): the wind panel is empty by declaration, not masked"
-        )
-    figures = plot_all_members(
-        forcing, masked, core_paths.phase_dir(iso, "climate_forcing", "figures"), iso, notes
+    members = read_members(art / "members.yaml")
+    ctx = country_context(iso, forcing["cell_id"].to_numpy())
+    figures = draw_country(
+        iso,
+        forcing,
+        members,
+        ctx,
+        core_paths.phase_dir(iso, "climate_forcing", "figures"),
+        display_smoothing=display_smoothing,
+        with_members=figures_mode == "all",
     )
     return MapsSummary(country_code=iso, n_figures=len(figures), figures=figures)

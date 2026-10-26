@@ -21,14 +21,12 @@ def check_absolute_maps(data: Path, iso: str, tech: str) -> dict:
     figures = out / "technical_potential" / "figures"
     artifacts = out / "technical_potential" / "artifacts"
     land = out / "land_eligibility" / "artifacts"
-    names = absolute_map_names(tech)
-    assert (
-        len(names) == 9
-    )  # 2 densities per cell + 6 per state + the limits file (the maps per cell are off by default)
+    names = absolute_map_names(iso, tech)
+    assert len(names) == 7  # 2 densities per cell, 2 sheets by state, 2 rankings and the limits file (the maps per cell are off by default)
     for name in names.values():
         assert (figures / name).is_file() and (figures / name).stat().st_size > 0, name
     pngs = [n for n in names.values() if n.endswith(".png")]
-    assert len(pngs) == 8
+    assert len(pngs) == 6
     from PIL import Image
 
     for name in pngs:

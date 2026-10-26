@@ -227,12 +227,14 @@ def test_eight_maps_and_the_limits_file_per_technology_with_sums_that_match_f5(t
     pot, land, units = _world(tmp_path)
     figures = tmp_path / "figures"
     written, content = build_absolute_maps("ZZZ", tech, pot, land, figures, units, CFG)
-    names = absolute_map_names(tech)
-    assert set(written) == set(names) and len(names) == 9
+    names = absolute_map_names("ZZZ", tech)
+    assert set(written) == set(names) and len(names) == 7
     for key, name in names.items():
         assert written[key] == figures / name and (figures / name).stat().st_size > 0
     pngs = [n for n in names.values() if n.endswith(".png")]
-    assert len(pngs) == 8  # 2 densities per cell + 6 per state
+    assert (
+        len(pngs) == 6
+    )  # 2 densities per cell, 2 sheets of the three land scenarios, 2 rankings of the states
     assert not any(
         "_cell_" in n for n in pngs
     )  # the maps of MW and GWh per cell are off by default
@@ -268,15 +270,13 @@ def test_eight_maps_and_the_limits_file_per_technology_with_sums_that_match_f5(t
 @pytest.mark.unit
 def test_the_per_cell_maps_are_drawn_only_when_the_configuration_asks_for_them(tmp_path):
     pot, land, units = _world(tmp_path)
-    assert len(absolute_map_names("solar")) == 9
-    assert len(absolute_map_names("solar", per_cell=True)) == 11
+    assert len(absolute_map_names("ZZZ", "solar")) == 7
+    assert len(absolute_map_names("ZZZ", "solar", per_cell=True)) == 9
     written, content = build_absolute_maps(
         "ZZZ", "solar", pot, land, tmp_path / "f", units, CFG_WITH_CELLS
     )
     assert {"potential_capacity_cell_solar", "potential_energy_cell_solar"} <= set(written)
-    assert (
-        tmp_path / "f" / "potential_capacity_mw_cell_solar_central__ref__na__na.png"
-    ).stat().st_size > 0
+    assert (tmp_path / "f" / "ZZZ_F5_capacity-per-cell_solar_central_ref.png").stat().st_size > 0
     cell = content["per_cell_classed"]
     assert cell["capacity"]["method"] == "quantile" and not cell["capacity"]["last_class_open"]
 

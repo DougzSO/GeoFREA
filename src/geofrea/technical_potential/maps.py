@@ -32,6 +32,7 @@ from geofrea.technical_potential.absolute_maps import (
     SUBTITLE_CLIMATE,
     build_absolute_maps,
     build_cell_density_maps,
+    capacity_factor_name,
     country_geometry,
     draw_cell_density_map,
     load_neighbours,
@@ -137,7 +138,8 @@ def build_potential_maps(
                     kind="capacity_factor",
                     subtitle=f"Central scenario · {SUBTITLE_CLIMATE}",
                     total_text=None,
-                    path=Path(figures_dir) / f"capacity_factor_{tech}__ref__na__na.png",
+                    path=Path(figures_dir) / capacity_factor_name(iso, tech),
+                    data_source=f"F5 potential_{tech}__{CENTRAL}, member m0",
                     display_layer=load_display_layer(artifacts, "capacity-factor", tech),
                     display_smoothing=(
                         absolute_maps.display_smoothing if absolute_maps is not None else "auto"
