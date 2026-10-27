@@ -266,6 +266,25 @@ def test_eligible_area_never_exceeds_the_cell_area(zzz, tech, scenario):
 
 @pytest.mark.synthetic
 @pytest.mark.parametrize("tech", ["solar", "wind"])
+@pytest.mark.parametrize("scenario", SCENARIOS)
+def test_the_pixel_fraction_of_every_scenario_adds_up_to_the_eligible_area_of_each_cell(zzz, tech, scenario):
+    """D-F5-038: F5 weights the pixel capacity factors of a scenario with the eligible fraction of that scenario, so each cell must reproduce its area."""
+    from geofrea.land_eligibility.cells import eligible_fraction_file, lattice_window
+
+    art = _phase(zzz, "land_eligibility")
+    with rasterio.open(art / eligible_fraction_file(tech, scenario)) as src:
+        fraction = np.ma.filled(src.read(1, masked=True).astype("float64"), 0.0)
+        area = fraction * pixel_row_area_km2(src.transform, src.height)[:, None]
+        window = lattice_window(src.transform, src.height, src.width)
+    k = window.k
+    per_cell = area.reshape(window.n_rows, k, window.n_cols, k).sum(axis=(1, 3))
+    cells = _eligibility(zzz, tech, scenario)
+    got = per_cell[cells["row"] - window.row0, cells["col"] - window.col0]
+    np.testing.assert_allclose(got, cells["eligible_area_km2"], rtol=1e-5, atol=1e-9)
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
 def test_the_sum_of_cell_eligible_areas_equals_the_pixel_total(zzz, tech):
     """Independent of F3's own check: read the eligible-fraction raster and weight each pixel by its geodesic area."""
     art = _phase(zzz, "land_eligibility")
@@ -2337,7 +2356,7 @@ def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_pea
     eligibility = {k for k in artifacts if k.startswith("eligibility/")}
     files_on_disk = {p.stem for p in _phase(zzz, "land_eligibility").iterdir() if p.is_file()}
     assert eligibility == {f"eligibility/{stem}" for stem in files_on_disk}
-    assert len(eligibility) == 23
+    assert len(eligibility) == 27  # 23 and the pixel eligible fraction of the restrictive and permissive scenarios of the two technologies
 
     for key in siting | eligibility:
         assert artifacts[key]["content_sha256"], key

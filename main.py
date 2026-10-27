@@ -145,6 +145,7 @@ from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from geofrea.grid_alignment.reference_grid import write_reference_grid_artifact
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult
 from geofrea.land_eligibility.admin1 import read_units
+from geofrea.land_eligibility.cells import eligible_fraction_file
 from geofrea.land_eligibility.pipeline import (
     EligibilitySummary,
     MissingRequiredLayerError,
@@ -262,6 +263,11 @@ def eligibility_artifact_files(
         files.update({f"eligibility/{stem}": f"{stem}.parquet" for stem in stems})
         for raster in ("eligible_fraction", "eligible_area_km2", "dominant_exclusion"):
             files[f"eligibility/{raster}_{tech}"] = f"{raster}_{tech}.tif"
+        for scenario in LAND_SCENARIOS:
+            if scenario != "central":
+                files[f"eligibility/eligible_fraction_{tech}__{scenario}"] = eligible_fraction_file(
+                    tech, scenario
+                )
     return files
 
 
@@ -952,7 +958,7 @@ def _build_phase_specs(
             name="technical_potential",
             output_model=PotentialSummary,
             run=technical_potential_run,
-            requires=eligibility_keys | {"forcing", "forcing_masked", "members"},
+            requires=eligibility_keys | siting_keys | {"forcing", "forcing_masked", "members"},
             produces=frozenset({"technical_potential"})
             | {
                 f"potential_{tech}__{scenario}"

@@ -885,3 +885,17 @@ def test_external_validation_is_a_sink_whose_tables_no_other_phase_requires():
     assert (
         f7b.produces <= specs["results_synthesis"].requires
     )  # the synthesis phase reads them (T-R9)
+
+
+@pytest.mark.unit
+def test_f3_registers_the_pixel_fraction_of_every_scenario_and_f5_requires_the_f2b_layers():
+    files = main.eligibility_artifact_files(("solar", "wind"), default_scale=True)
+    assert len(files) == 27
+    for tech in ("solar", "wind"):
+        assert files[f"eligibility/eligible_fraction_{tech}"] == f"eligible_fraction_{tech}.tif"
+        for scenario in ("restrictive", "permissive"):
+            assert (
+                files[f"eligibility/eligible_fraction_{tech}__{scenario}"]
+                == f"eligible_fraction_{tech}__{scenario}.tif"
+            )
+    assert "eligibility/eligible_fraction_wind__central" not in files
