@@ -988,8 +988,12 @@ def test_inspect_raster_reports_the_share_of_the_mask_that_holds_a_valid_value(t
     assert result["mask_coverage_pct"] == pytest.approx(50.0, abs=1.0)
     full = tmp_path / "full.tif"
     _write_raster(full, np.full((_SIZE, _SIZE), 1.0, dtype=np.float32), nodata=-9999.0)
-    assert inspect_raster(full, country_gdf=_covering_gdf())["mask_coverage_pct"] == pytest.approx(100.0)
-    assert inspect_raster(full, country_gdf=None)["mask_coverage_pct"] is None  # no mask, nothing to measure
+    assert inspect_raster(full, country_gdf=_covering_gdf())["mask_coverage_pct"] == pytest.approx(
+        100.0
+    )
+    assert (
+        inspect_raster(full, country_gdf=None)["mask_coverage_pct"] is None
+    )  # no mask, nothing to measure
 
 
 @pytest.mark.unit
@@ -1003,3 +1007,37 @@ def test_a_wind_layer_below_99_percent_of_the_mask_raises_an_alert_and_other_lay
     alerts, _ = diagnose_consistency(raster_meta, {}, 0.1)
     low = [a for a in alerts if a.startswith("LOW MASK COVERAGE")]
     assert len(low) == 1 and "[wind]" in low[0] and "96.7%" in low[0]
+
+
+@pytest.mark.unit
+def test_inspect_raster_cached_skips_an_unchanged_input_and_measures_a_changed_one(
+    tmp_path, monkeypatch
+):
+    """R71-22: the statistics of a layer are not computed again while its content, the polygon and the code are the stored ones."""
+    from geofrea.data_quality_audit import raster_inspection
+
+    path = tmp_path / "layer.tif"
+    _write_raster(path, np.arange(_SIZE * _SIZE, dtype="float32").reshape(_SIZE, _SIZE))
+    cache = tmp_path / "cache"
+    gdf = _covering_gdf()
+    calls = []
+    real = raster_inspection.inspect_raster
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(raster_inspection, "inspect_raster", counting)
+
+    first = raster_inspection.inspect_raster_cached(path, gdf, cache_dir=cache)
+    again = raster_inspection.inspect_raster_cached(path, gdf, cache_dir=cache)
+    assert len(calls) == 1 and again == first
+    assert first == raster_inspection.inspect_raster_cached(path, gdf, cache_dir=None)
+
+    other_polygon = gpd.GeoDataFrame(geometry=[box(*gdf.total_bounds * 0.5)], crs="EPSG:4326")
+    raster_inspection.inspect_raster_cached(path, other_polygon, cache_dir=cache)
+    assert len(calls) == 3  # one for the new polygon, one for the uncached call above
+
+    _write_raster(path, np.ones((_SIZE, _SIZE), dtype="float32"))  # another content
+    changed = raster_inspection.inspect_raster_cached(path, gdf, cache_dir=cache)
+    assert len(calls) == 4 and changed != first

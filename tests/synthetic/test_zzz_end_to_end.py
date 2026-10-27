@@ -32,6 +32,8 @@ import yaml
 from geofrea.core.config_loader import load_audit_config, load_settings
 from geofrea.land_eligibility.cells import pixel_row_area_km2
 
+pytestmark = pytest.mark.slow  # the module builds the synthetic world once (minutes)
+
 REPO = Path(__file__).resolve().parents[2]
 CURVES = REPO / "tests" / "fixtures" / "power_curves"
 PHASES = [
@@ -160,7 +162,7 @@ def zzz(tmp_path_factory):
             None,
             tuple(settings.run.technologies),
             False,
-            settings.figures,
+            "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
             settings.memory.max_batch_gb,
         )
         assert ok, {k: v.status for k, v in results.items()}
@@ -201,7 +203,7 @@ def zzz_fine(zzz):
         None,
         tuple(settings.run.technologies),
         False,
-        settings.figures,
+        "all",  # as the world fixture: the tests read the figures of `all`
         settings.memory.max_batch_gb,
         "0p1deg",
     )
@@ -1500,7 +1502,7 @@ def test_v06_f5_to_f7_do_not_change_when_the_plant_inventory_is_absent(zzz_fine,
             None,
             tuple(settings.run.technologies),
             False,
-            settings.figures,
+            "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
             settings.memory.max_batch_gb,
             "0p1deg",
         )
@@ -1649,7 +1651,7 @@ def test_the_audit_report_has_the_same_hash_when_f1b_runs_twice(zzz, monkeypatch
             None,
             tuple(settings.run.technologies),
             False,
-            settings.figures,
+            "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
             settings.memory.max_batch_gb,
         )
         assert ok
@@ -2317,3 +2319,31 @@ def test_f8_t_r3_share_in_agreement_equals_the_share_recomputed_from_the_potenti
         assert table.loc[ssp, "n_cells_in_agreement"] == int(marked[valid].sum())
         assert table.loc[ssp, "share_in_agreement"] == pytest.approx(float(marked[valid].mean()))
         assert Fraction(table.loc[ssp, "min_share"]) == Fraction(2, 3)
+
+
+@pytest.mark.synthetic
+def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_peak_memory(zzz):
+    """COMMAND 73 (R71-07, R71-08): one artifact per layer of F2b and per file of F3, each with its canonical content hash; a peak per phase."""
+    import json
+
+    manifest = json.loads((zzz[0] / "outputs" / "ZZZ" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == "2.7"
+    artifacts = manifest["artifacts"]
+
+    siting = {k for k in artifacts if k.startswith("siting/")}
+    assert siting == {f"siting/{p.stem}" for p in _phase(zzz, "siting_layers").glob("*.tif")}
+    assert len(siting) == 12
+
+    eligibility = {k for k in artifacts if k.startswith("eligibility/")}
+    files_on_disk = {p.stem for p in _phase(zzz, "land_eligibility").iterdir() if p.is_file()}
+    assert eligibility == {f"eligibility/{stem}" for stem in files_on_disk}
+    assert len(eligibility) == 23
+
+    for key in siting | eligibility:
+        assert artifacts[key]["content_sha256"], key
+        assert artifacts[key]["phase"] in {"siting_layers", "land_eligibility"}
+
+    executed = {name: e for name, e in manifest["phases"].items() if e["wall_s"] is not None}
+    assert executed
+    for name, entry in executed.items():
+        assert entry["peak_rss_mb"] is not None and entry["peak_rss_mb"] > 0, name

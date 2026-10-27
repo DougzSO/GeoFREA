@@ -30,6 +30,7 @@ import pandas as pd
 import rasterio
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.core.raster_io import safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.technical_potential.cf_models import CfModel, CfSettings
 from geofrea.viz import display
@@ -207,7 +208,7 @@ def build_display_layers(
 
 
 def write_display_layers(directory: Path, tech: str, build: DisplayBuild) -> dict[str, Path]:
-    """The layers as GeoTIFFs (EPSG:4326, float32, NaN as nodata) and `display_layers_<tech>.json` with the fingerprint and the checks."""
+    """The layers as Cloud Optimized GeoTIFFs by the writer of every other raster (A-07; EPSG:4326, float32, NaN as nodata) and `display_layers_<tech>.json` with the fingerprint and the checks."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     written: dict[str, Path] = {}
@@ -219,9 +220,8 @@ def write_display_layers(directory: Path, tech: str, build: DisplayBuild) -> dic
         )
         path = display_path(directory, name, tech)
         data = np.where(np.isfinite(layer.grid), layer.grid, NODATA).astype("float32")
-        with rasterio.open(
+        with safe_raster_write(
             path,
-            "w",
             driver="GTiff",
             height=height,
             width=width,
@@ -230,7 +230,6 @@ def write_display_layers(directory: Path, tech: str, build: DisplayBuild) -> dic
             crs="EPSG:4326",
             transform=transform,
             nodata=NODATA,
-            compress="deflate",
         ) as dst:
             dst.write(data, 1)
         written[name] = path

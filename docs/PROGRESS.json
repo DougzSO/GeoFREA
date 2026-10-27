@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "15.2.5",
+  "methodology_version": "15.2.6",
   "last_updated": "2026-10-27",
   "current_milestone": "MS-6",
   "milestones": [
@@ -23,7 +23,7 @@
       "module": "core",
       "status": "built_pending_conformance",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-05/A-08/A-09/A-11/U-05 (schema)/U-07 (field) implemented; A-04, A-06, A-10, A-11, A-12, U-01 to U-06, V-02 to V-08 and Section 9 pass (loaders for technologies.yaml and experiments.yaml; seeds recorded in the manifest; ZZZ runs F1 to F8 in CI; batching under memory.max_batch_gb); A-07 implemented (48 of 48 rasters of IND and BRA and 48 of 54 of PRT are COG, checked 2026-10-27; the 6 display layers of COMMAND 70 are plain GeoTIFF, derived and outside every total; Parquet tables carry schema_version); A-13 partial (143 Implements lines). A-02 will record the METHODOLOGY version per phase entry (D-core-022, V15). OQ-032 closed (D-core-018). CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned."
+      "summary": "A-01/A-02/A-03/A-05/A-08/A-09/A-11/U-05 (schema)/U-07 (field) implemented; A-04, A-06, A-10, A-11, A-12, U-01 to U-06, V-02 to V-08 and Section 9 pass (loaders for technologies.yaml and experiments.yaml; seeds recorded in the manifest; ZZZ runs F1 to F8 in CI; batching under memory.max_batch_gb); A-07 implemented (every raster is COG; the 0.01 degree display layers of COMMAND 70 are written by the same writer since COMMAND 73; Parquet tables carry schema_version); A-13 partial (143 Implements lines). A-02 records the METHODOLOGY version, the times, the fingerprints and, since manifest 2.7 (D-core-048), the peak memory per phase and the files of F2b and F3 one by one. OQ-032 closed (D-core-018). CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned."
     },
     {
       "id": "F1",

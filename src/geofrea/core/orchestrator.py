@@ -38,6 +38,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from geofrea.core.content_hash import content_hash
 from geofrea.core.paths import StoredPath, to_stored_path
+from geofrea.core.peak_memory import PhasePeak
 from geofrea.core.scale import manifest_file_name
 from geofrea.core.schemas import CountryParams
 
@@ -49,7 +50,10 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.6"
+_MANIFEST_SCHEMA_VERSION = "2.7"
+# 2.7 (COMMAND 73, A-02): every PhaseManifestEntry records `peak_rss_mb`, the peak resident memory of the process during the phase
+# (`core.peak_memory`), and the files of F2b (`siting/<layer>`) and F3 (`eligibility/<file>`) are registered one by one, each with its
+# canonical content hash, as the other phases already do. Entries written before 2.7 have no peak (None).
 # 2.6 (COMMAND 58, A-02): every successful PhaseManifestEntry records `code_fingerprint` (`core.code_fingerprint`: the normalised source of the
 # modules the phase runs), and a phase is executed again when it differs from the current one; every ArtifactEntry records
 # `content_sha256` (`core.content_hash`: the data of the artifact without file metadata), and a consumer is marked stale only when that hash
@@ -69,7 +73,7 @@ _MANIFEST_SCHEMA_VERSION = "2.6"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -249,6 +253,7 @@ class PhaseResult(BaseModel, Generic[T]):
         finished_at: ISO-8601 UTC timestamp.
         wall_s: Wall-clock seconds of the execution (None for a phase that was resumed or not attempted).
         cpu_s: CPU seconds of the process during the execution (None as `wall_s`).
+        peak_rss_mb: Peak resident memory of the process during the execution, MB (None as `wall_s`; `core.peak_memory`).
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -261,6 +266,7 @@ class PhaseResult(BaseModel, Generic[T]):
     finished_at: str
     wall_s: float | None = None
     cpu_s: float | None = None
+    peak_rss_mb: float | None = None
 
 
 class PhaseManifestEntry(BaseModel):
@@ -291,6 +297,8 @@ class PhaseManifestEntry(BaseModel):
         code_fingerprint: For a "success" entry, the fingerprint of the source of the modules the phase runs
             (`PhaseSpec.code_fingerprint` at the time it ran); a phase whose recorded fingerprint differs from the current one is
             executed again. None for entries written before manifest schema 2.6 and for phases whose spec declares none.
+        peak_rss_mb: Peak resident memory of the process while the phase ran, MB (`core.peak_memory`). None for entries written before
+            manifest schema 2.7 and for a phase that was resumed, not executed.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -309,6 +317,7 @@ class PhaseManifestEntry(BaseModel):
     cpu_s: float | None = None
     config_fingerprint: str | None = None
     code_fingerprint: str | None = None
+    peak_rss_mb: float | None = None
 
 
 class ArtifactEntry(BaseModel):
@@ -359,7 +368,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.6"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.7"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -1079,9 +1088,11 @@ class Orchestrator:
             started_at = _now_iso()
             start_monotonic = time.monotonic()
             start_cpu = time.process_time()
+            peak = PhasePeak()
 
             try:
-                output = spec.run(context)
+                with peak:
+                    output = spec.run(context)
 
                 registered_keys = set(context._artifact_sink.keys())
                 missing = spec.produces - registered_keys
@@ -1171,6 +1182,7 @@ class Orchestrator:
                     finished_at=finished_at,
                     wall_s=time.monotonic() - start_monotonic,
                     cpu_s=time.process_time() - start_cpu,
+                    peak_rss_mb=peak.peak_rss_mb,
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
@@ -1209,6 +1221,7 @@ class Orchestrator:
                 finished_at=finished_at,
                 wall_s=time.monotonic() - start_monotonic,
                 cpu_s=time.process_time() - start_cpu,
+                peak_rss_mb=peak.peak_rss_mb,
             )
             results[spec.name] = result
             consumed_run_ids = {
@@ -1227,6 +1240,7 @@ class Orchestrator:
                 methodology_version=self.methodology_version,
                 wall_s=result.wall_s,
                 cpu_s=result.cpu_s,
+                peak_rss_mb=result.peak_rss_mb,
                 config_fingerprint=spec.config_fingerprint,
                 code_fingerprint=spec.code_fingerprint,
             )
@@ -1275,11 +1289,12 @@ class Orchestrator:
             if spec.summarize is not None:
                 summary_line = f"\n  summary: {spec.summarize(output)}"
             logger.info(
-                "Phase '%s' [%s] completed in %.1fs (CPU %.1fs)\n  artifacts:\n%s%s",
+                "Phase '%s' [%s] completed in %.1fs (CPU %.1fs, peak RSS %.0f MB)\n  artifacts:\n%s%s",
                 spec.name,
                 self.country_code,
                 elapsed_s,
                 cpu_s,
+                peak.peak_rss_mb or 0.0,
                 artifact_lines if artifact_lines else "    (none)",
                 summary_line,
             )

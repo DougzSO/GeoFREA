@@ -2,7 +2,7 @@
 
 Orientation document. It holds no decisions of its own: the method is defined only in `docs/METHODOLOGY.md` (cited by item ID below), open items live only in `docs/OPEN_QUESTIONS.md`, limitations only in `docs/LIMITATIONS.md`, and status only in `docs/PROGRESS.json`. If this file disagrees with any of them, they win and this file is corrected.
 
-Summarizes METHODOLOGY version: 15.2.5
+Summarizes METHODOLOGY version: 15.2.6
 
 ## What GeoFREA is
 

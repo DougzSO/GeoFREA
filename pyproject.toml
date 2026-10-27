@@ -27,6 +27,7 @@ dependencies = [
     "dask>=2026.8.0",
     "h5netcdf>=1.8.1",
     "netCDF4>=1.7.4",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +53,7 @@ markers = [
     "unit: fast tests with no external data dependency",
     "regression: V-01 frozen regression on the synthetic ZZZ country (tests/fixtures/v01)",
     "synthetic: F1 to F5 end to end on the synthetic ZZZ country with no network (A-06, V-08)",
+    "slow: builds a synthetic world (minutes); deselect with -m \"not slow\" for the fast loop and the unit job of CI",
 ]
 
 [tool.ruff]

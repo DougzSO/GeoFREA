@@ -480,3 +480,33 @@ def test_a_refusal_is_recorded_and_removes_the_rasters(tmp_path):
     dl.write_refusal(tmp_path, "t", "why", 11.8)
     assert dl.load_display_layer(tmp_path, "capacity-factor", "t") is None
     assert json.loads(dl.meta_path(tmp_path, "t").read_text(encoding="utf-8"))["refused"] == "why"
+
+
+def test_the_display_layers_are_written_as_cloud_optimized_geotiffs(tmp_path):
+    """R71-25: the display layers use the writer of every other raster, so they are COG (A-07) and keep their values."""
+    import numpy as np
+    import rasterio
+
+    from geofrea.technical_potential.display_layers import (
+        DisplayBuild,
+        display_path,
+        write_display_layers,
+    )
+    from geofrea.viz.display import DisplayLayer
+
+    grid = np.full((300, 400), np.nan)
+    grid[10:200, 20:300] = np.linspace(0.1, 0.4, 280)[None, :]
+    layer = DisplayLayer("capacity-factor", grid, (-9.0, -5.0, 37.0, 40.0), 0.01)
+    written = write_display_layers(
+        tmp_path, "wind", DisplayBuild({"capacity-factor": layer}, [], "abc123")
+    )
+    path = display_path(tmp_path, "capacity-factor", "wind")
+    assert written["capacity-factor"] == path
+    with rasterio.open(path) as src:
+        assert src.profile["tiled"]
+        assert src.tags(ns="IMAGE_STRUCTURE").get("LAYOUT") == "COG"
+        back = src.read(1)
+        assert src.nodata == -9999.0
+    np.testing.assert_allclose(
+        np.where(back == -9999.0, np.nan, back), grid.astype("float32"), equal_nan=True
+    )

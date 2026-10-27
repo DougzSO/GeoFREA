@@ -1,0 +1,38 @@
+name: Unit tests and lint
+
+# R71-27 (audit 71, COMMAND 73): the unit suite and ruff run on every push and pull request, on the two Python versions the project meets:
+# 3.11 (the development machine, `target-version` of ruff) and 3.12 (the other workflows). The synthetic worlds are the job of
+# synthetic_fixture.yml and regression.yml; `-m "not slow"` keeps them out of this one.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      GEOFREA_DATA_DIR: ${{ github.workspace }}/.geofrea_data
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install GeoFREA (editable, dev extras)
+        run: pip install -e ".[dev]"
+
+      - name: Ruff (lint)
+        run: ruff check src tests scripts main.py
+
+      - name: Unit tests
+        run: pytest tests/unit -m "not slow" -p no:cacheprovider -q

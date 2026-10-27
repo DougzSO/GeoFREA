@@ -64,6 +64,7 @@ import logging
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -147,9 +148,11 @@ from geofrea.land_eligibility.admin1 import read_units
 from geofrea.land_eligibility.pipeline import (
     EligibilitySummary,
     MissingRequiredLayerError,
+    artifacts_dir,
     build_eligibility,
 )
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
+from geofrea.land_eligibility.table_schemas import LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION
 from geofrea.lcoe_modeling.maps import LcoeMapsSummary, build_lcoe_maps
 from geofrea.lcoe_modeling.maps import slug as ssp_slug
 from geofrea.lcoe_modeling.pipeline import LcoeSummary, build_lcoe
@@ -164,7 +167,11 @@ from geofrea.robustness_analysis.maps import (
 from geofrea.robustness_analysis.maps import RobustnessMapsSummary, build_robustness_maps
 from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
-from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
+from geofrea.siting_layers.physical_layers import (
+    LAYER_SPECS,
+    SitingLayersResult,
+    build_physical_layers,
+)
 from geofrea.technical_potential.absolute_maps import absolute_map_keys
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import (
@@ -231,6 +238,41 @@ def _register_json_artifact(
         dump_artifact(output), encoding="utf-8"
     )  # deterministic: the volatile fields stay in the manifest entry
     context.register_artifact(key, path, schema_version)
+
+
+def siting_artifact_keys() -> frozenset[str]:
+    """Keys of the F2b files, one per physical-unit layer (`siting/<layer>`), registered with their canonical content hash (manifest 2.7)."""
+    return frozenset(f"siting/{spec.name}" for spec in LAYER_SPECS)
+
+
+def eligibility_artifact_files(
+    technologies: Iterable[str], *, default_scale: bool
+) -> dict[str, str]:
+    """Key -> file name under the F3 artifacts directory, for every file F3 writes (`eligibility/<stem>`), manifest 2.7.
+
+    The 0.1 degree check tables exist only at the default scale (`land_eligibility/pipeline.py`).
+    """
+    files = {"eligibility/admin1_units": "admin1_units.parquet"}
+    for tech in sorted(technologies):
+        stems = [f"candidate_stability_{tech}"]
+        for scenario in LAND_SCENARIOS:
+            stems += [f"cells_{tech}__{scenario}", f"candidates_{tech}__{scenario}"]
+        if default_scale:
+            stems.append(f"cells_0p1deg_{tech}")
+        files.update({f"eligibility/{stem}": f"{stem}.parquet" for stem in stems})
+        for raster in ("eligible_fraction", "eligible_area_km2", "dominant_exclusion"):
+            files[f"eligibility/{raster}_{tech}"] = f"{raster}_{tech}.tif"
+    return files
+
+
+def eligibility_artifact_keys(
+    technologies: Iterable[str], *, default_scale: bool
+) -> frozenset[str]:
+    """Keys of the F3 files, with the summary `land_eligibility`: what a consumer of F3 requires."""
+    return (
+        frozenset({"land_eligibility"})
+        | eligibility_artifact_files(technologies, default_scale=default_scale).keys()
+    )
 
 
 def _summarize_acquisition(output: AcquisitionResult) -> str:
@@ -473,6 +515,14 @@ def _build_phase_specs(
         for tech, cfg in load_technologies(TECHNOLOGIES_YAML).technologies.items()
     }
 
+    # F2b and F3 register their files one by one (manifest 2.7); a consumer requires the files it reads, so that a changed layer or table
+    # marks it stale by the canonical content hash, not only the summary of the phase
+    siting_keys = frozenset({"siting_layers"}) | siting_artifact_keys()
+    eligibility_keys = eligibility_artifact_keys(
+        sorted(load_land_availability(EXPERIMENTS_YAML).technologies),
+        default_scale=active_scale().is_default,
+    )
+
     def data_quality_audit_run(context: PhaseContext) -> AuditResult:
         return _audit_run(context, audit_config)
 
@@ -491,6 +541,8 @@ def _build_phase_specs(
             grid_output, phase_dir(context.country_code, "siting_layers", "artifacts")
         )
         result = SitingLayersResult(country_code=context.country_code, layers=layers)
+        for name, path in layers.items():
+            context.register_artifact(f"siting/{name}", path, "1.0")
         _register_json_artifact(context, "siting_layers", result)
         return result
 
@@ -514,6 +566,18 @@ def _build_phase_specs(
             resolved_path(layers.get("rivers")),
             resolved_path(layers.get("admin1")),
         )
+        out_dir = artifacts_dir(context.country_code)
+        for key, name in eligibility_artifact_files(
+            result.technologies, default_scale=active_scale().is_default
+        ).items():
+            path = out_dir / name
+            if not path.is_file():
+                raise MissingRequiredLayerError(f"land_eligibility did not write {path}")
+            context.register_artifact(
+                key,
+                path,
+                LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION if name.endswith(".parquet") else "1.0",
+            )
         _register_json_artifact(context, "land_eligibility", result)
         return result
 
@@ -849,27 +913,25 @@ def _build_phase_specs(
                     for h in (100, 150, 200)
                 }
             ),
-            produces=frozenset({"siting_layers"}),
+            produces=siting_keys,
             summarize=lambda out: f"{len(out.layers)} physical-unit layers",
         ),
         PhaseSpec(
             name="land_eligibility",
             output_model=EligibilitySummary,
             run=land_eligibility_run,
-            requires=frozenset(
-                {
-                    "siting_layers",
-                    "layer_registry",
-                    "audit_report",
-                    "aligned/land_cover_counts",
-                    "aligned/slope_counts",
-                    "aligned/population",
-                    "aligned/grid",
-                    "aligned/grid_distance_capped",
-                    "aligned/roads_distance_capped",
-                }
-            ),
-            produces=frozenset({"land_eligibility"}),
+            requires=siting_keys
+            | {
+                "layer_registry",
+                "audit_report",
+                "aligned/land_cover_counts",
+                "aligned/slope_counts",
+                "aligned/population",
+                "aligned/grid",
+                "aligned/grid_distance_capped",
+                "aligned/roads_distance_capped",
+            },
+            produces=eligibility_keys,
             summarize=lambda out: "; ".join(
                 f"{t}: {s.n_candidates:,} candidate cells, {100 * s.eligible_share:.1f}% of the land eligible"
                 for t, s in out.technologies.items()
@@ -890,7 +952,7 @@ def _build_phase_specs(
             name="technical_potential",
             output_model=PotentialSummary,
             run=technical_potential_run,
-            requires=frozenset({"land_eligibility", "forcing", "forcing_masked", "members"}),
+            requires=eligibility_keys | {"forcing", "forcing_masked", "members"},
             produces=frozenset({"technical_potential"})
             | {
                 f"potential_{tech}__{scenario}"
@@ -914,7 +976,8 @@ def _build_phase_specs(
             name="lcoe_modeling",
             output_model=LcoeSummary,
             run=lcoe_modeling_run,
-            requires=frozenset({"land_eligibility", "forcing", "members"})
+            requires=eligibility_keys
+            | {"forcing", "members"}
             | {
                 f"potential_{tech}__{scenario}"
                 for tech in technologies
@@ -946,7 +1009,8 @@ def _build_phase_specs(
             name="sample_size_convergence",
             output_model=ConvergenceSummary,
             run=sample_size_convergence_run,
-            requires=frozenset({"land_eligibility", "forcing", "members"})
+            requires=eligibility_keys
+            | {"forcing", "members"}
             | {f"potential_{tech}__central" for tech in technologies},
             produces=frozenset({"sample_size_convergence"})
             | {f"sample_size_convergence_{tech}" for tech in technologies},
@@ -965,7 +1029,8 @@ def _build_phase_specs(
             name="robustness_analysis",
             output_model=RobustnessSummary,
             run=robustness_analysis_run,
-            requires=frozenset({"land_eligibility", "forcing", "members", "hazard_context"})
+            requires=eligibility_keys
+            | {"forcing", "members", "hazard_context"}
             | {
                 f"potential_{tech}__{scenario}"
                 for tech in technologies
@@ -1004,17 +1069,15 @@ def _build_phase_specs(
             name="external_validation",
             output_model=ValidationSummary,
             run=external_validation_run,
-            requires=frozenset(
-                {
-                    "land_eligibility",
-                    "siting_layers",
-                    "layer_registry",
-                    "aligned/land_cover_counts",
-                    "aligned/slope_counts",
-                    "aligned/population",
-                    "aligned/grid",
-                }
-            )
+            requires=eligibility_keys
+            | siting_keys
+            | {
+                "layer_registry",
+                "aligned/land_cover_counts",
+                "aligned/slope_counts",
+                "aligned/population",
+                "aligned/grid",
+            }
             | {
                 f"potential_{tech}__{scenario}"
                 for tech in technologies
@@ -1031,7 +1094,8 @@ def _build_phase_specs(
             name="lcoe_maps",
             output_model=LcoeMapsSummary,
             run=lcoe_maps_run,
-            requires=frozenset({"members", "land_eligibility"})
+            requires=eligibility_keys
+            | {"members"}
             | {f"lcoe_summary_{tech}" for tech in technologies}
             | {f"supply_curve_{tech}" for tech in technologies},
             produces=frozenset({"lcoe_maps"})
@@ -1070,7 +1134,8 @@ def _build_phase_specs(
             name="potential_maps",
             output_model=PotentialMapsSummary,
             run=potential_maps_run,
-            requires=frozenset({"layer_registry", "land_eligibility"})
+            requires=eligibility_keys
+            | {"layer_registry"}
             | {
                 f"potential_{tech}__{scenario}"
                 for tech in technologies
@@ -1147,16 +1212,9 @@ def _build_phase_specs(
             name="overview",
             output_model=OverviewSummary,
             run=overview_run,
-            requires=frozenset(
-                {
-                    "aligned_rasters",
-                    "siting_layers",
-                    "land_eligibility",
-                    "forcing",
-                    "forcing_masked",
-                    "hazard_context",
-                }
-            ),
+            requires=siting_keys
+            | eligibility_keys
+            | {"aligned_rasters", "forcing", "forcing_masked", "hazard_context"},
             produces=frozenset({"overview"}),
             summarize=lambda out: f"{len(out.figures)} figures and 1 table",
         ),
@@ -1538,6 +1596,7 @@ def _main(argv: list[str] | None = None) -> int:
                     "phase": phase_name,
                     "status": result.status,
                     "elapsed_s": elapsed_s,
+                    "peak_rss_mb": result.peak_rss_mb,
                     "artifact_count": artifact_count,
                 }
             )

@@ -639,7 +639,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.6"
+    assert orchestrator.manifest.schema_version == "2.7"
 
 
 @pytest.mark.unit
@@ -653,7 +653,7 @@ def test_manifest_records_methodology_version(tmp_path):
     orchestrator.run([ok, bad])
 
     on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == "2.6"
+    assert on_disk["schema_version"] == "2.7"
     assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
         "phase_ok": "test-1.0.0",
         "phase_bad": "test-1.0.0",
@@ -960,6 +960,44 @@ def test_a_manifest_of_schema_2_3_is_readable_and_its_phases_have_no_times(tmp_p
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.6"
+    assert reloaded.manifest.schema_version == "2.7"
     assert reloaded.manifest.phases["phase_a"].wall_s is None
     assert reloaded.manifest.phases["phase_a"].cpu_s is None
+
+
+@pytest.mark.unit
+def test_manifest_2_7_records_the_peak_memory_of_an_executed_phase_and_not_of_a_resumed_one(
+    tmp_path,
+):
+    """R71-08: `peak_rss_mb` is in the entry of an executed phase, failed ones included; a resumed phase keeps the recorded value."""
+    call_log: list[str] = []
+    ok = _make_spec("phase_ok", call_log, produces=frozenset({"ok_key"}))
+    bad = _make_spec("phase_bad", call_log, fail=True)
+    first = _orchestrator(tmp_path, ["phase_ok", "phase_bad"])
+    first.run([ok, bad])
+    on_disk = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    for name in ("phase_ok", "phase_bad"):
+        assert on_disk["phases"][name]["peak_rss_mb"] > 0
+    recorded = on_disk["phases"]["phase_ok"]["peak_rss_mb"]
+
+    resumed = _orchestrator(tmp_path, ["phase_ok"])
+    resumed.run([ok])
+    assert resumed.manifest.phases["phase_ok"].peak_rss_mb == recorded
+
+
+@pytest.mark.unit
+def test_a_manifest_of_schema_2_6_is_readable_and_has_no_peak_memory(tmp_path):
+    call_log: list[str] = []
+    spec = _make_spec("phase_a", call_log, produces=frozenset({"a_out"}))
+    first = _orchestrator(tmp_path, ["phase_a"])
+    first.run([spec])
+    data = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    data["schema_version"] = "2.6"
+    for entry in data["phases"].values():
+        entry.pop("peak_rss_mb", None)
+    first.manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    reloaded = _orchestrator(tmp_path, ["phase_a"])
+
+    assert reloaded.manifest.schema_version == "2.7"
+    assert reloaded.manifest.phases["phase_a"].peak_rss_mb is None

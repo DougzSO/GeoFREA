@@ -152,20 +152,22 @@ def render_run_table(rows: Sequence[dict], run_id: str) -> str:
 
     Args:
         rows: One dict per (country, phase) attempted, each with keys
-            "country", "phase", "status", "elapsed_s", "artifact_count".
+            "country", "phase", "status", "elapsed_s", "artifact_count" and, optionally,
+            "peak_rss_mb" (MB, None or absent for a phase that was not executed: shown as "-").
         run_id: This run's identifier, printed once below the table.
 
     Returns:
         A plain-text table, ready to log or print — fixed-width columns,
         no external table-formatting dependency.
     """
-    headers = ("country", "phase", "status", "elapsed_s", "artifacts")
+    headers = ("country", "phase", "status", "elapsed_s", "peak_rss_mb", "artifacts")
     str_rows = [
         (
             row["country"],
             row["phase"],
             row["status"],
             f"{row['elapsed_s']:.1f}",
+            "-" if row.get("peak_rss_mb") is None else f"{row['peak_rss_mb']:.0f}",
             str(row["artifact_count"]),
         )
         for row in rows

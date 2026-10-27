@@ -143,7 +143,7 @@ def test_a_key_f3_does_not_read_leaves_f3_unchanged(config_copy):
 @pytest.mark.unit
 def test_other_file_keys_reach_only_the_phases_that_read_them(config_copy):
     before = _fingerprints(config_copy)
-    _edit(config_copy, "settings.yaml", "figures: all", "figures: none")
+    _edit(config_copy, "settings.yaml", "figures: summary", "figures: none")
     assert _changed(before, _fingerprints(config_copy)) >= {"potential_maps", "overview"}
     assert "land_eligibility" not in _changed(before, _fingerprints(config_copy))
     (config_copy / TURBINES / "iea_3.4_130.csv").write_text("0,0\n", encoding="utf-8")

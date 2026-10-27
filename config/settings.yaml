@@ -94,4 +94,6 @@ memory:
 #            exclusion and cost layer, the potential density and capacity-factor maps
 #   summary  no member-level climate maps; the overview figures and the eligible share per technology; the potential density map
 #   none     no PNG at all (the overview table is still written)
-figures: all
+# `summary` is the setting of the development rounds (the member-level maps and the per-layer maps cost most of the time of the map phases);
+# `all` is set for the build of the thesis, and only then. Changing it reruns the map phases and no other.
+figures: summary

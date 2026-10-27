@@ -32,6 +32,8 @@ import pandas as pd
 import pytest
 import yaml
 
+pytestmark = pytest.mark.slow  # the module builds the synthetic world once (minutes)
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(Path(__file__).parent))
@@ -118,7 +120,7 @@ def zzz2(tmp_path_factory):
             None,
             tuple(settings.run.technologies),
             False,
-            settings.figures,
+            "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
             settings.memory.max_batch_gb,
         )
         assert ok, {k: v.status for k, v in results.items()}

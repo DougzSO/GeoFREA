@@ -54,7 +54,7 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_quality_audit.raster_inspection import (
     diagnose_consistency,
     inspect_land_cover_tiles,
-    inspect_raster,
+    inspect_raster_cached,
     timer,
 )
 from geofrea.data_quality_audit.schemas import (
@@ -210,10 +210,12 @@ def run_audit_phase(
     for layer, path in raster_map.items():
         if path and Path(path).exists():
             with timer(layer, timings):
-                meta = inspect_raster(
+                meta = inspect_raster_cached(
                     Path(path),
                     country_gdf=inputs.country_gdf,
                     assume_crs_from=_crs_reference_by_layer.get(layer),
+                    cache_dir=core_paths.interim(context.country_code, "data_quality_audit")
+                    / "raster_audit_cache",
                 )
                 rasters[layer] = meta
 
