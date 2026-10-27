@@ -18,3 +18,28 @@ Items not in the order of COMMAND 72 were not executed: 4 (the branches `feat/ca
 | 9 | `.pytest_cache` unreadable (ACL) | none | **not done**: `takeown`, `icacls` and `Remove-Item` answer "access denied" from this session; needs an elevated shell (`takeown /F .pytest_cache /R /D Y`, then `icacls .pytest_cache /grant %USERNAME%:(OI)(CI)F /T`, then remove). The suite ran with `-p no:cacheprovider` |
 | R71-29 | `.gitignore`: `data/` became `/data/`; the line `!/docs/data/` is no longer needed and was removed. `docs/data/` is still tracked and no other `data` or `outputs` folder exists outside `.venv` | none | done |
 | R71-19 | `is_complete_download` of `fetchers/era5.py` and `fetchers/cmip6.py` (identical; only tests called it) became `core/downloads.py`; the two tests became one (`tests/unit/test_core_downloads.py`) | 30 lines | done |
+
+## Data `D:\Douglas\DOUTORADO\GeoFREA_data` (outside git; the machine log is `GeoFREA_data/archive/_cleanup_72_data_log.json`)
+
+Nothing was written or removed in `D:\Douglas\DOUTORADO\database\raw`. The manifests, the artifacts and the caches of F1 to F5 were not touched.
+
+| Item | Action | Size (B) | Destination |
+|---|---|---|---|
+| 10 | Deleted `interim/BRA/grid_alignment/BRA_slope_native.tif` | 323,317,267 | none (no reader in `src/`, `tests/`, `scripts/` or `main.py`) |
+| 10 | Deleted `interim/IND/grid_alignment/IND_slope_native.tif` | 147,827,050 | none |
+| 10 | Deleted `interim/PRT/grid_alignment/PRT_slope_native.tif` | 3,513,466 | none |
+| 11 | Deleted `raw/gadm/BRA/superseded_largest_polygon_v1/` | 21,659,500 | none |
+| 11 | Deleted `raw/gadm/IND/superseded_largest_polygon_v1/` | 13,223,716 | none |
+| 11 | Deleted `raw/gadm/PRT/superseded_largest_polygon_v1/` | 8,218,983 | none |
+| 12 | Deleted `raw/era5/IND/IND_fg10_annual_max.before_cell_patch.nc` | 1,024,914 | none |
+| 12 | Deleted `raw/era5/IND/IND_fg10_annual_max.before_extension.nc` | 933,663 | none |
+| 13 | Deleted `outputs/BRA/manifest.json.before_stamp` | 159,368 | none |
+| 13 | Deleted `outputs/IND/manifest.json.before_stamp` | 161,426 | none |
+| 13 | Deleted `outputs/PRT/manifest.json.before_stamp` | 146,205 | none |
+| 14 | Deleted `outputs/ZZZ/` | 136,045 | none |
+| 14 | Deleted `interim/ZZZ/` | 393,415 | none |
+| 15 | Moved `raw/elevation/` (bundled DEMs of BRA, IND and PRT, read by no phase) | 345,675,010 | `D:\Douglas\DOUTORADO\database\unused\elevation\` (new folder) |
+| 17 | Moved `logs/BRA/legacy_manifests`, `logs/BRA/legacy_runs`, `logs/PRT/legacy_manifests`, `logs/PRT/legacy_runs`, `logs/_snapshots`, `logs/_moves` | 2,182,108 | `GeoFREA_data/archive/logs_legacy_20261027/` (same relative paths) |
+| 18 | Pruned the keys of `D:\Douglas\DOUTORADO\database\raw\...` from the hash memos: `interim/_clip_source_sha256.json` (15 of 49 keys), `interim/BRA/grid_alignment/input_sha256.json` (116 of 1,063), `interim/IND/...` (58 of 602), `interim/PRT/...` (10 of 53). No phase reads that folder, so the keys were never looked up | about 0.37 MB of text | the four files as they were: `GeoFREA_data/archive/hash_memos_20261027/` |
+
+Totals: 520,715,018 B deleted (0.52 GB), 345,675,010 B moved out of `GeoFREA_data` (0.35 GB), 2,182,108 B archived inside it. Together with the repository folder (the tarball of 0.38 GB and five worktrees of 0.09 GB) the cleanup frees about 1.34 GB on `D:\Douglas\DOUTORADO\GeoFREA*`; the 1.1 GB the audit listed under the author's verdict (item 16 and the rest of item 4) is untouched.
