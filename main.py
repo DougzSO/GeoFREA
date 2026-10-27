@@ -167,7 +167,11 @@ from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VE
 from geofrea.siting_layers.physical_layers import SitingLayersResult, build_physical_layers
 from geofrea.technical_potential.absolute_maps import absolute_map_keys
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
-from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
+from geofrea.technical_potential.pipeline import (
+    PotentialSummary,
+    build_potential,
+    resolve_technology,
+)
 from geofrea.technical_potential.question_figures import (
     build_comparison,
     question_figure_keys,
@@ -732,12 +736,30 @@ def _build_phase_specs(
                     f"potential_maps requires a resolved 'admin1' layer for {context.country_code!r}"
                 )
             units = read_units(gpd.read_file(str(admin1)))
+        resolved = None
+        if (
+            figures == "all"
+        ):  # the F5 parameters of the run decide the 0.01 degree display layers (COMMAND 70)
+            registry = load_technologies(TECHNOLOGIES_YAML)
+            country_params = context.require_country_params("technologies")
+            resolved = {
+                tech: resolve_technology(
+                    context.country_code,
+                    tech,
+                    registry.technologies[tech],
+                    getattr(country_params.technologies, tech),
+                    POWER_CURVES_DIR,
+                    production,
+                )
+                for tech in technologies
+            }
         result = build_potential_maps(
             context.country_code,
             technologies,
             figures,
             units=units,
             absolute_maps=load_experiments(EXPERIMENTS_YAML).absolute_maps,
+            resolved=resolved,
         )
         for key, path in {
             **result.rasters,

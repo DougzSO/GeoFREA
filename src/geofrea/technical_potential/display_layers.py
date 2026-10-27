@@ -20,20 +20,32 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import rasterio
 
+from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.core.scale import active_scale
 from geofrea.technical_potential.cf_models import CfModel, CfSettings
 from geofrea.viz import display
+from geofrea.viz import mapstyle as ms
 from geofrea.viz.display import AggregationCheck, DisplayLayer
+
+logger = logging.getLogger(__name__)
 
 LAYERS = ("capacity-factor", "eligible-fraction", "capacity-density", "energy-density")
 FINE_PER_CELL = 5  # 0.01 degree pixels along one side of a 0.05 degree cell
+# the layers that stop being a faithful picture of the analysis when a check fails
+DEPENDS_ON = {
+    "capacity-factor": ("capacity-factor", "energy-density"),
+    "eligible-area": LAYERS,  # the retained pixels and their weights come from the eligible area: nothing is drawn if it fails
+    "capacity-density": ("capacity-density", "energy-density"),
+}
 EXACT_TOLERANCE = (
     1e-6  # float32 precision of the stored analysis rasters (an eligible area, a capacity): "exact"
 )
@@ -50,6 +62,9 @@ class DisplayBuild:
     layers: dict[str, DisplayLayer]
     checks: list[AggregationCheck]
     fingerprint: str
+    refused: dict[str, str] = field(
+        default_factory=dict
+    )  # layer -> the check it depends on and failed (only with `partial`)
 
 
 def display_path(directory: Path, layer: str, tech: str) -> Path:
@@ -109,12 +124,14 @@ def build_display_layers(
     cell_area_km2: np.ndarray,
     k: int = FINE_PER_CELL,
     cf_tolerance: float = display.CF_TOLERANCE,
+    partial: bool = False,
 ) -> DisplayBuild:
     """The four display layers of a technology from the pixels of F2a/F3, and their checks against the analysis grid.
 
     Pixel arrays (`resources`, `eligible_fraction`, `pixel_area_km2`) are `k` times finer than the analysis arrays (`analysis_cf`, the eligible area
     of F3, the capacity density `P_MW / cell_area_km2` and the land `cell_area_km2` of the cell, NaN where F5 retained no cell). Only the pixels of a
-    retained cell with eligible area are drawn (the retention of F5). Raises `DisplayLayerError` if a check fails.
+    retained cell with eligible area are drawn (the retention of F5). Raises `DisplayLayerError` if a check fails; with `partial` only the layers
+    that depend on a failed check are refused (`DisplayBuild.refused`) and the others are kept, and it raises only when none is left.
     """
     fine_shape = eligible_fraction.shape
     if tuple(s // k for s in fine_shape) != analysis_cf.shape or any(s % k for s in fine_shape):
@@ -162,13 +179,17 @@ def build_display_layers(
         ),
     ]
     failed = [c for c in checks if not c.ok]
-    if failed:
+    reasons = {
+        c.name: f"{c.name} differs by {c.max_rel_diff:.3g} (limit {c.tolerance:g})" for c in failed
+    }
+    refused = {
+        layer: reasons[c.name] for c in failed for layer in DEPENDS_ON.get(c.name, tuple(LAYERS))
+    }
+    if failed and (not partial or len(refused) == len(out)):
         raise DisplayLayerError(
-            "a display layer does not reproduce the analysis: "
-            + "; ".join(
-                f"{c.name} differs by {c.max_rel_diff:.3g} (limit {c.tolerance:g})" for c in failed
-            )
+            "a display layer does not reproduce the analysis: " + "; ".join(reasons.values())
         )
+    out = {name: layer for name, layer in out.items() if name not in refused}
     fingerprint = _fingerprint(
         {
             "layers": LAYERS,
@@ -182,7 +203,7 @@ def build_display_layers(
             "analysis": [_array_hash(analysis_cf), _array_hash(analysis_eligible_area_km2)],
         }
     )
-    return DisplayBuild(out, checks, fingerprint)
+    return DisplayBuild(out, checks, fingerprint, refused)
 
 
 def write_display_layers(directory: Path, tech: str, build: DisplayBuild) -> dict[str, Path]:
@@ -219,6 +240,7 @@ def write_display_layers(directory: Path, tech: str, build: DisplayBuild) -> dic
                 "fingerprint": build.fingerprint,
                 "display_only": True,
                 "layers": list(build.layers),
+                "refused": build.refused,
                 "checks": [
                     {
                         "name": c.name,
@@ -252,3 +274,136 @@ def load_display_layer(directory: Path, layer: str, tech: str) -> DisplayLayer |
         cell = abs(src.transform.a)
     grid[grid == NODATA] = np.nan
     return DisplayLayer(layer, grid, (b.left, b.right, b.bottom, b.top), cell)
+
+
+def _read_pixels(path: Path) -> tuple[np.ndarray, rasterio.Affine]:
+    with rasterio.open(path) as src:
+        data = src.read(1, masked=True).astype("float64").filled(np.nan)
+        return data, src.transform
+
+
+def country_needs_fine_layer(ctx, iso: str, cell_deg: float) -> tuple[bool, float]:
+    """Whether an analysis cell would be drawn with more pixels than `display.MAX_PX_PER_CELL` on the thesis map of this country, and how many."""
+    canvas = ms.new_map(
+        ctx.polygon,
+        iso=iso,
+        technology="display rule",
+        variable="display rule",
+        neighbours=ctx.neighbours,
+        extent=ctx.extent,
+        contiguous=False,
+    )
+    try:
+        px = canvas.px_per_cell(cell_deg)
+    finally:
+        ms.close_figure(canvas)
+    return px > display.MAX_PX_PER_CELL, px
+
+
+def write_refusal(directory: Path, tech: str, reason: str, px: float) -> None:
+    """Record that the layers of `tech` were refused (`display_layers_<tech>.json` without a fingerprint) and remove the stale rasters."""
+    directory = Path(directory)
+    for name in LAYERS:
+        display_path(directory, name, tech).unlink(missing_ok=True)
+    meta_path(directory, tech).write_text(
+        json.dumps({"fingerprint": None, "refused": reason, "px_per_cell": round(px, 1)}, indent=1)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def ensure_display_layers(
+    iso: str,
+    tech: str,
+    resolved,
+    ctx,
+    *,
+    potential_dir: Path,
+    cells_dir: Path,
+    siting_dir: Path,
+    scenario: str = "central",
+) -> str:
+    """Build the 0.01 degree display layers of `tech` when the thesis map needs them (px per cell rule), check them against the analysis and write them.
+
+    The pixels are the F2b resource rasters (`resolved.settings.resource_layers`), the F3 eligible fraction (`eligible_fraction_<tech>.tif`) and the
+    F5 parameters of the run (`resolved`: the model, the settings, the capacity density of the scenario). The analysis side is the F3 cell table and the
+    F5 table of the reference member. Returns `not needed`, `built` or `refused: <why>`; a refused layer is removed and the map draws the cells
+    with the declared smoothing.
+    """
+    from geofrea.land_eligibility.cells import lattice_window, pixel_row_area_km2
+
+    cell_deg = active_scale().cell_deg
+    needed, px = country_needs_fine_layer(ctx, iso, cell_deg)
+    potential_dir, cells_dir = Path(potential_dir), Path(cells_dir)
+    if not needed:
+        for name in LAYERS:
+            display_path(potential_dir, name, tech).unlink(missing_ok=True)
+        meta_path(potential_dir, tech).unlink(missing_ok=True)
+        return "not needed"
+    fraction_path = cells_dir / f"eligible_fraction_{tech}.tif"
+    paths = {name: Path(siting_dir) / f"{name}.tif" for name in resolved.settings.resource_layers}
+    missing = [p.name for p in (fraction_path, *paths.values()) if not p.is_file()]
+    if missing:
+        reason = f"missing pixel inputs {missing}"
+        write_refusal(potential_dir, tech, reason, px)
+        return f"refused: {reason}"
+    fraction, transform = _read_pixels(fraction_path)
+    resources = {name: _read_pixels(p)[0] for name, p in paths.items()}
+    height, width = fraction.shape
+    window = lattice_window(transform, height, width)
+    cells = pd.read_parquet(
+        cells_dir / f"cells_{tech}__{scenario}.parquet",
+        columns=["cell_id", "row", "col", "cell_area_km2", "eligible_area_km2"],
+    )
+    table = pd.read_parquet(potential_dir / f"potential_{tech}__{scenario}.parquet")
+    reference = table[table["member"].astype(str) == REFERENCE_MEMBER_ID]
+    merged = cells.merge(reference[["cell_id", "P_MW", "CF"]], on="cell_id", how="left")
+    shape = (window.n_rows, window.n_cols)
+    where = (merged["row"].to_numpy() - window.row0, merged["col"].to_numpy() - window.col0)
+
+    def on_window(values: np.ndarray, fill: float = np.nan) -> np.ndarray:
+        grid = np.full(shape, fill)
+        grid[where] = values
+        return grid
+
+    retained = merged["P_MW"].notna().to_numpy()
+    analysis_cf = on_window(np.where(retained, merged["CF"].to_numpy(), np.nan))
+    eligible_area = on_window(np.where(retained, merged["eligible_area_km2"].to_numpy(), np.nan))
+    cell_area = on_window(merged["cell_area_km2"].to_numpy())
+    capacity_density = on_window(
+        np.where(retained, merged["P_MW"].to_numpy() / merged["cell_area_km2"].to_numpy(), np.nan)
+    )
+    pixel_area = np.repeat(pixel_row_area_km2(transform, height)[:, None], width, axis=1)
+    density = float(
+        resolved.scenario_parameters["luf"][scenario]
+        * resolved.scenario_parameters["power_density_mw_per_km2"][scenario]
+    )
+    west, north = transform.c, transform.f
+    extent = (west, west + width * transform.a, north + height * transform.e, north)
+    try:
+        build = build_display_layers(
+            model=resolved.model,
+            settings=resolved.settings,
+            resources=resources,
+            eligible_fraction=fraction,
+            pixel_area_km2=pixel_area,
+            extent=extent,
+            analysis_cf=analysis_cf,
+            analysis_eligible_area_km2=eligible_area,
+            analysis_capacity_density=capacity_density,
+            capacity_density_mw_km2=density,
+            cell_area_km2=cell_area,
+            k=round(cell_deg / abs(transform.a)),
+            partial=True,
+        )
+    except DisplayLayerError as exc:
+        write_refusal(potential_dir, tech, str(exc), px)
+        logger.warning("%s %s: display layers refused (%s)", iso, tech, exc)
+        return f"refused: {exc}"
+    for name in LAYERS:  # a layer refused now must not survive from an earlier build
+        display_path(potential_dir, name, tech).unlink(missing_ok=True)
+    write_display_layers(potential_dir, tech, build)
+    if build.refused:
+        logger.warning("%s %s: display layers refused: %s", iso, tech, build.refused)
+        return "built, refused " + ", ".join(sorted(build.refused))
+    return "built"
