@@ -45,6 +45,8 @@ The CF of a cell in F5 is the model applied to the eligible-area-weighted *mean*
 | `docs/figures/migration_68/` | 8 | 68 |
 | `docs/figures/display_layers_70/` | 4 | 70 (this report) |
 
+The first five folders were archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_<folder>/` and removed from the repository; the other three stay (style guide and reports of the standard in force).
+
 ## Pending items (recorded in PROGRESS.json and the inventory)
 
 - Migration of the F8 thesis figures (`results_synthesis`) and of the audit charts (`scripts/audit_potential.py`) to `viz/`.

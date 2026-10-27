@@ -1,5 +1,7 @@
 # Numerical audit of the technical potential (T-14, COMMAND 65)
 
+Images archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_audit_potential_65/` and removed from the repository, as for `display_resolution_67b.md`; the text names each file. 3 image link(s) in this report became text.
+
 Written for Douglas. Read-only audit of the F3, F4 and F5 artifacts of the final round (2026-10-21/22) of PRT, IND and BRA, with `scripts/audit_potential.py` (outside the pipeline: it reads the artifacts and `config/parameters.json` and writes only here). Items 1 to 6 of T-14 of `docs/figures/GEOFREA_figuras_spec_v2.md`. Nothing in the pipeline was changed. **No bug was found, so no open question was opened.** Numbers: `audit_potential_65/<ISO3>.json`; curves: `audit_potential_65/<ISO3>_supply_curves.png`.
 
 Run: one country at a time, free commit memory 6.9 GB before each (the first run of BRA stopped at once with a read error of pyarrow `OSError: Invalid argument` and passed when repeated; nothing in the artifacts changed). The artifacts are those of the central/restrictive/permissive land scenarios and of the 37 members of F4 (`m0` plus 6 GCMs x 3 SSPs x 2 windows). The F5 hashes of PRT and BRA are in `run_real_hashes.json` (final round); the IND ones are of the same F5 run and are recorded there after the ERA5 extension.
@@ -118,11 +120,11 @@ Total with and without weighting (central scenario, reference member; `GW`):
 
 Cells with potential, sorted from the highest CF down, cumulative GW and TWh against CF; three land scenarios, reference member. Nothing was cut or added: the totals of the curves are the totals of F5. (No LCOE axis: F6 has not run.)
 
-![PRT supply curves](audit_potential_65/PRT_supply_curves.png)
+[PRT supply curves: image archived as `PRT_supply_curves.png`]
 
-![IND supply curves](audit_potential_65/IND_supply_curves.png)
+[IND supply curves: image archived as `IND_supply_curves.png`]
 
-![BRA supply curves](audit_potential_65/BRA_supply_curves.png)
+[BRA supply curves: image archived as `BRA_supply_curves.png`]
 
 ### Bands of CF, solar
 

@@ -1,0 +1,20 @@
+# Cleanup of audit 71 (COMMAND 72), log
+
+Written for Douglas. Every action of the cleanup list of `docs/_audit/2026-10_general_audit_71.md`, in the order executed: path, size, destination. Date of the actions: 2026-10-27. Sizes from `os.stat` and `du -sk` taken before the action.
+
+Items not in the order of COMMAND 72 were not executed: 4 (the branches `feat/cache-restamp` and `backup-before-split`), 16 (`data_quality_audit` caches) and the script `place_w5e5_tasmax.py` of item 7 (kept until OQ-051).
+
+## Repository `D:\Douglas\DOUTORADO\GeoFREA` (commits on `chore/audit71-docs`)
+
+| Item | Action | Size | Result |
+|---|---|---|---|
+| 1 | Deleted `regression-fixtures.tar.gz` (ignored by git, workflow retired on 2026-10-06) | 380,498,564 B (363 MiB) | done |
+| 2 | `git worktree remove` of `GeoFREA_wt58c` (20,120 KB), `GeoFREA_wt59` (20,216 KB), `GeoFREA_wt60` (15,692 KB), `GeoFREA_wt61` (22,703 KB), `GeoFREA_wt63` (15,800 KB), each with a clean `git status` first | 94,531 KB | done |
+| 3 | `git branch -d` of the 21 merged branches: `docs/coverage-54`, `docs/geometry-dem-55`, `feat/display-layers-wiring`, `feat/display-resolution`, `feat/final-round-62`, `feat/fingerprint-granularity`, `feat/mapfigure`, `feat/mapfigure-geo`, `feat/mapstyle`, `feat/potential-maps-absolute`, `feat/potential-maps-v2`, `fix/coverage-59`, `fix/era5-first-year`, `fix/geometry-dem`, `fix/manifest-config`, `fix/oq060`, `fix/resume-integrity`, `fix/state-classes`, `stage-r/fix-46`, `stage-r/groups1-2`, `stage-r/oq053` | negligible | done (`-d` refuses an unmerged branch; none refused) |
+| 5 | Six dead symbols deleted (`land_eligibility/figures.py:_resolution`, `overview/style.py:country_outline`, `major_rivers`, `load_relief`, `technical_potential/absolute_maps.py:CountryUnits`, `core/run_logging.py:PeriodicProgress.track`) and the six imports that became unused | 80 lines | done; commit `72252fd` |
+| 6 | The two unread keys of `thresholds:` in `config/experiments.yaml` (`satisficing_lcoe_usd_per_mwh`, `capacity_factor_min`); `regret_quantile`, which `robustness_analysis/decision.py:74` reads, stays | 18 lines | done; the audit named the whole block, `regret_quantile` is read |
+| 7 | Deleted 10 one-shot scripts (`archive_geofrea_data.py` 287 lines, `migrate_clip_cache_keys.py` 75, `patch_era5_cells.py` 151, `place_local_inputs.py` 121, `register_isimip3b_from_copy_log.py` 69, `qc_plants_vs_grid.py` 118, `plot_plants_over_grid.py` 88, `extend_era5_gust.py` 279, `era5_status.py` 134, `era5_ext_queue.py` 456) and `tests/unit/test_era5_ext_queue.py` (154 lines, the 8 tests of `era5_ext_queue`). They stay in the git history (last commit that holds them: `72252fd`) | 1,778 lines of scripts + 154 of tests | done |
+| 8 | Moved the PNG files of five report folders to `GeoFREA_data/archive/docs_figures_<folder>/`: `2026-10_data_diagnostics_figures` (9 files, 2,077,336 B), `coverage_alignment_54` (12 files, 1,038,150 B), `potential_maps_v2` (8 files, 2,277,638 B), `potential_maps_absolute` (2 files, 724,822 B), `audit_potential_65` (3 PNG, 444,644 B; its three JSON files stay). The image links of the five reports became text naming the file; a note under each title says where the images are. File list: `GeoFREA_data/archive/_docs_figures_move_log_72.json` | 6,562,590 B | done; no markdown image link of the repository points to a missing file (checked) |
+| 9 | `.pytest_cache` unreadable (ACL) | none | **not done**: `takeown`, `icacls` and `Remove-Item` answer "access denied" from this session; needs an elevated shell (`takeown /F .pytest_cache /R /D Y`, then `icacls .pytest_cache /grant %USERNAME%:(OI)(CI)F /T`, then remove). The suite ran with `-p no:cacheprovider` |
+| R71-29 | `.gitignore`: `data/` became `/data/`; the line `!/docs/data/` is no longer needed and was removed. `docs/data/` is still tracked and no other `data` or `outputs` folder exists outside `.venv` | none | done |
+| R71-19 | `is_complete_download` of `fetchers/era5.py` and `fetchers/cmip6.py` (identical; only tests called it) became `core/downloads.py`; the two tests became one (`tests/unit/test_core_downloads.py`) | 30 lines | done |
