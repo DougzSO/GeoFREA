@@ -489,6 +489,12 @@ def test_potential_maps_write_cog_rasters_and_the_figures_the_setting_allows(zzz
         assert (figures / f"ZZZ_F5_capacity-density_{tech}_central_ref.png").is_file()
         assert (figures / f"ZZZ_F5_energy-density_{tech}_central_ref.png").is_file()
         assert (figures / f"ZZZ_F5_capacity-factor_{tech}_central_ref.png").is_file()
+        # COMMAND 69 (T-15): the figures that answer the questions of the thesis, drawn by the phase and registered as its artifacts
+        assert (figures / f"ZZZ_F5_supply-curve-capacity_{tech}_land-scenarios_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_supply-curve-energy_{tech}_land-scenarios_ref.png").is_file()
+        assert (figures / f"ZZZ_F5_change-capacity-factor_{tech}_central_ssp-window.png").is_file()
+    assert (figures / "ZZZ_F5_land-availability_land-scenarios_ref.png").is_file()
+    assert (figures / "ZZZ_F5_change-energy_central_ssp-window.png").is_file()
 
 
 @pytest.mark.synthetic

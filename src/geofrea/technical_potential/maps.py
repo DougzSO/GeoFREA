@@ -39,6 +39,8 @@ from geofrea.technical_potential.absolute_maps import (
     map_context,
 )
 from geofrea.technical_potential.display_layers import load_display_layer
+from geofrea.technical_potential.question_figures import build_question_figures
+from geofrea.viz.context import country_context
 
 CENTRAL = "central"
 
@@ -58,6 +60,8 @@ class PotentialMapsSummary(BaseModel):
     # of each technology (the cells and the states against the F5 national total); empty when `figures` is not `all` or no admin1 units were given
     absolute_figures: dict[str, Path] = {}
     absolute_checks: dict[str, Any] = {}
+    # COMMAND 69 (spec v2 T-15): the supply curves, the interval of land availability and the change by SSP and window, by artifact key
+    question_figures: dict[str, Path] = {}
 
 
 def build_potential_maps(
@@ -70,6 +74,7 @@ def build_potential_maps(
     figures_dir: Path | None = None,
     units: gpd.GeoDataFrame | None = None,
     absolute_maps: AbsoluteMapsConfig | None = None,
+    members_yaml: Path | None = None,
 ) -> PotentialMapsSummary:
     """COG rasters and PNG maps of `P_MW / cell_area_km2` and `CF` at `m0`, central land scenario.
 
@@ -85,6 +90,7 @@ def build_potential_maps(
         units: The admin1 units of the country (`read_units` of the F3 admin1 layer); with `absolute_maps` and `figures_mode == "all"` the state
             maps are drawn (D-F5-029); without them the territory is the union of the cells.
         absolute_maps: Classification of those maps (`experiments.yaml` `absolute_maps`).
+        members_yaml: The `members.yaml` of F4 (default: the F4 artifacts directory), read by the figures of the questions of the thesis (`all`).
 
     Raises:
         PotentialMapsError: unknown `figures_mode`, a missing table, or potential rows for cells the F3 table lacks.
@@ -179,6 +185,25 @@ def build_potential_maps(
             )
             absolute_figures.update(written)
             absolute_checks[tech] = content["sum_checks"]
+    question_figures: dict[str, Path] = {}
+    if figures_mode == "all":
+        if ctx is None:
+            ids = pd.read_parquet(
+                Path(cells_dir) / f"cells_{technologies[0]}__{CENTRAL}.parquet", columns=["cell_id"]
+            )["cell_id"].to_numpy()
+            ctx = country_context(iso, ids)
+        question_figures = build_question_figures(
+            iso,
+            technologies,
+            ctx,
+            Path(figures_dir),
+            potential_dir=Path(artifacts),
+            cells_dir=Path(cells_dir),
+            members_yaml=members_yaml,
+            display_smoothing=(
+                absolute_maps.display_smoothing if absolute_maps is not None else "auto"
+            ),
+        )
     return PotentialMapsSummary(
         country_code=iso,
         figures_mode=figures_mode,
@@ -186,4 +211,5 @@ def build_potential_maps(
         figures=figures,
         absolute_figures=absolute_figures,
         absolute_checks=absolute_checks,
+        question_figures=question_figures,
     )

@@ -168,6 +168,10 @@ from geofrea.siting_layers.physical_layers import SitingLayersResult, build_phys
 from geofrea.technical_potential.absolute_maps import absolute_map_keys
 from geofrea.technical_potential.maps import PotentialMapsSummary, build_potential_maps
 from geofrea.technical_potential.pipeline import PotentialSummary, build_potential
+from geofrea.technical_potential.question_figures import (
+    build_comparison,
+    question_figure_keys,
+)
 from geofrea.technical_potential.table_schemas import (
     CLASS_FLAG_TABLE_SCHEMA_VERSION,
     POTENTIAL_TABLE_SCHEMA_VERSION,
@@ -735,7 +739,11 @@ def _build_phase_specs(
             units=units,
             absolute_maps=load_experiments(EXPERIMENTS_YAML).absolute_maps,
         )
-        for key, path in {**result.rasters, **result.absolute_figures}.items():
+        for key, path in {
+            **result.rasters,
+            **result.absolute_figures,
+            **result.question_figures,
+        }.items():
             context.register_artifact(key, path, "1.0")
         _register_json_artifact(context, "potential_maps", result)
         return result
@@ -1057,7 +1065,8 @@ def _build_phase_specs(
                 for key in absolute_map_keys(
                     tech, load_experiments(EXPERIMENTS_YAML).absolute_maps.per_cell
                 )
-            },
+            }
+            | (set(question_figure_keys(technologies)) if figures == "all" else set()),
             summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
         ),
         PhaseSpec(
@@ -1465,6 +1474,7 @@ def _main(argv: list[str] | None = None) -> int:
     all_ok = True
     table_rows: list[dict] = []
     f7_done = False
+    potential_maps_done = False
     thesis_done: list[str] = []
     for country_code in countries:
         ok, orchestrator, results = run_geofrea(
@@ -1486,6 +1496,9 @@ def _main(argv: list[str] | None = None) -> int:
         all_ok = all_ok and ok
         f7_done = f7_done or (
             "robustness_analysis" in results and results["robustness_analysis"].status == "success"
+        )
+        potential_maps_done = potential_maps_done or (
+            "potential_maps" in results and results["potential_maps"].status == "success"
         )
         if "results_synthesis" in results and results["results_synthesis"].status == "success":
             thesis_done.append(country_code)
@@ -1511,6 +1524,20 @@ def _main(argv: list[str] | None = None) -> int:
     # country, plus the run id — COMMAND ADJ-7 action 6. Logged (not
     # print()ed) so it lands in both the console and the run's log file.
     logger.info("Run summary:\n%s", render_run_table(table_rows, run_id))
+
+    # the comparison figures of the countries (spec v2 T-15 item 2, COMMAND 69): they read the tables of F3, F4 and F5 of every country that has them,
+    # so they are redrawn after the countries of this run, whichever of them ran now (a country without the tables is left out and the log says so)
+    if potential_maps_done and settings.figures == "all" and args.scale == DEFAULT_SCALE.scale_id:
+        compared = (
+            countries
+            if any(countries_config.get(c, {}).get("synthetic_fixture_root") for c in countries)
+            else default_countries
+        )
+        try:
+            build_comparison(compared, tuple(settings.run.technologies))
+        except Exception:
+            logger.exception("the comparison of the countries failed for %s", compared)
+            all_ok = False
 
     # the support phase cross_country_h4 (METHODOLOGY 4.1): the verdict of H4 needs the profiles of all the countries, so it runs once, here;
     # F8 then builds the thesis outputs of the countries again, because T-R6 and T-R7 read its tables (D-F8-012)
