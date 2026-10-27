@@ -414,7 +414,7 @@ def load_mainland_boundary(path: str | Path) -> gpd.GeoDataFrame:
     or lie less than MAINLAND_MAX_GAP_KM from it, COMMAND 55; before it was the largest polygon alone).
 
     Mechanical read + get_mainland_gdf() only — no None-handling, no
-    fallback. Extracted 2026-09-08 (see docs/DECISIONS.md same date,
+    fallback. Extracted 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date,
     grid_alignment orchestrator wiring) from
     data_acquisition/adapter.py's `_load_mainland_boundary()`, which
     grid_alignment/adapter.py now also needs — the two callers differ

@@ -2,7 +2,7 @@
 
 Data: 2026-09-15. Escopo: leitura somente, sem alterações. Objetivo: dimensionar a migração para a nova estrutura de registro. Nenhum commit foi feito.
 
-Anexos consultados: `CLAUDE.md`, `docs/DECISIONS.md` (1571 linhas), `docs/CONVENTIONS.md`, `docs/PROGRESS.json`.
+Anexos consultados: `CLAUDE.md`, `docs/_archive/2026-09/DECISIONS.md` (1571 linhas), `docs/CONVENTIONS.md`, `docs/PROGRESS.json`.
 
 ---
 
@@ -169,7 +169,7 @@ Estrutura observada no arquivo atual (não um JSON Schema formal — o arquivo n
 |---|---|---|
 | `fase_atual` | string | Marco de reconstrução do projeto (`"0"`, `"0.5"`, ou rótulo de fase do pipeline em construção, ex. `"2b"`) — eixo separado da numeração de fase do pipeline. |
 | `ultima_atualizacao` | string (data ISO) | Data da última atualização do arquivo. |
-| `contradicoes_pendentes` | array de objeto | Cada item: `id` (string, slug), `descricao` (string), `referencia` (string, aponta para `docs/DECISIONS.md`/`docs/architecture/*.md`), `status` (string: `"resolvido"`, `"resolvido_ver_decisions_md"`, ou pendente). |
+| `contradicoes_pendentes` | array de objeto | Cada item: `id` (string, slug), `descricao` (string), `referencia` (string, aponta para `docs/_archive/2026-09/DECISIONS.md`/`docs/_archive/2026-09/architecture/*.md`), `status` (string: `"resolvido"`, `"resolvido_ver_decisions_md"`, ou pendente). |
 | `baseline` | objeto, chaveado por código de país (`"PRT"`, `"BRA"`) | Cada valor: `status` (string), `commit` (string, SHA do legado), `observacao` (string). |
 | `modulos` | array de objeto | Cada item: `nome` (string, nome do pacote `src/geofrea/<nome>/`), `fase_legado` (int ou `null`), `status` (string: `"construido"` \| `"documentado_nao_construido"` \| `"parcialmente_implementado"`), `observacao` (string, narrativa longa), `referencia` (string, opcional — aponta para entradas de `DECISIONS.md`), `regression_ci` (string, opcional — presente só em `suitability_criteria` nesta versão do arquivo). |
 | `excluded_modules` | array de objeto | Cada item: `nome`, `fase_legado`, `status` (ex. `"excluido_permanente"`), `referencia`. |
@@ -180,4 +180,4 @@ Não há um arquivo `.schema.json` associado nem validação Pydantic para `PROG
 
 ---
 
-**Critério de conclusão**: tabela fase × tipo (Seção 2) soma 58, igual ao total de entradas contado no item 2 (Seção 1) ✓. Único arquivo criado é este (`docs/_audit/2026-09_records.md`); nenhum arquivo de `docs/DECISIONS.md`, `docs/CONVENTIONS.md` ou `docs/PROGRESS.json` foi modificado.
+**Critério de conclusão**: tabela fase × tipo (Seção 2) soma 58, igual ao total de entradas contado no item 2 (Seção 1) ✓. Único arquivo criado é este (`docs/_audit/2026-09_records.md`); nenhum arquivo de `docs/_archive/2026-09/DECISIONS.md`, `docs/CONVENTIONS.md` ou `docs/PROGRESS.json` foi modificado.

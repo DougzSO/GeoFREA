@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
 (`_reproject_to_grid()` L196-261, `_mosaic_land_cover()` L458-543)
-with no logic changes — see docs/DECISIONS.md 2026-09-08,
+with no logic changes — see docs/_archive/2026-09/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3.
 
 Wind products are aligned per height by `reproject_to_grid()` (M-F2a-04); the legacy AHP combination across heights
@@ -91,6 +91,8 @@ def reproject_to_grid(
 
     Returns:
         Path to the reprojected output raster.
+
+    Implements: M-F2a-05 (with `Resampling.sum` for the layers that hold counts).
     """
     if dtype_out == "uint8":
         data_out = np.zeros((grid.height, grid.width), dtype=np.uint8)
@@ -111,7 +113,7 @@ def reproject_to_grid(
         src_res = max(abs(src.transform.a), 1e-12)
         pad_px = int(np.ceil(abs(grid.transform.a) / src_res)) + 4
 
-        # Data-integrity guard (docs/DECISIONS.md 2026-09-11, "elevation
+        # Data-integrity guard (docs/_archive/2026-09/DECISIONS.md 2026-09-11, "elevation
         # NaN leak"): some source rasters declare a finite nodata
         # sentinel (e.g. -9999) but actually encode nodata as literal
         # IEEE NaN cells instead -- a mismatch between the file's own
@@ -203,7 +205,7 @@ def derive_slope_from_dem(dem_path, out_path):
     elevation — see run_grid_alignment_phase(). Computing slope on the
     native DEM and then resampling (rather than resampling the DEM first
     and computing slope on the target grid) is the legacy's deliberate
-    order; kept as STRUCTURAL_PRESERVE (docs/DECISIONS.md 2026-09-11).
+    order; kept as STRUCTURAL_PRESERVE (docs/_archive/2026-09/DECISIONS.md 2026-09-11).
 
     Method (STRUCTURAL_PRESERVE except the pixel spacing, see G-1 below):
       - central-difference gradient via numpy.gradient, NOT the Horn
@@ -223,7 +225,7 @@ def derive_slope_from_dem(dem_path, out_path):
 
     Data-integrity correction (DELIBERATE DIVERGENCE from legacy — same
     class of fix applied this session to solar_pvout_weight and
-    biomass_resource's land_cover==255; see docs/DECISIONS.md 2026-09-11):
+    biomass_resource's land_cover==255; see docs/_archive/2026-09/DECISIONS.md 2026-09-11):
     the legacy fed the raw nodata sentinel (-9999) into numpy.gradient as
     if it were a real elevation, so every VALID pixel adjacent to a
     nodata pixel got a garbage-contaminated slope. Here the DEM's nodata
@@ -460,6 +462,8 @@ def elevation_and_slope_from_glo30(
     centre exactly as in `slope_class_counts`, so the elevation has a value wherever the slope has one (a pixel that has a sample has an
     elevation; the slope also needs the stencil) and neither is displaced against the other. A pixel with no valid sample, and every pixel
     outside the country mask, is `nodata_out`. Returns (elevation path, slope path), or (None, None) if no sample was valid.
+
+    Implements: M-F2a-08.
     """
     index = _glo30_tile_index(dem_tiles)
     sp = (
@@ -533,6 +537,8 @@ def slope_class_counts(
     has all bands zero. Because the slope is kept as a distribution, the share above any threshold can be read later, which is
     what lets the slope maximum be a range. Pixels outside the country are SLOPE_COUNT_NODATA. Returns the output path, or
     None if no sample was valid.
+
+    Implements: M-F2a-07.
     """
     index = _glo30_tile_index(dem_tiles)
     sp = (
@@ -734,7 +740,7 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
     country are skipped without being opened for reprojection.
 
     A tile that fails to open/read/reproject (corrupted file) is a
-    different matter (docs/DECISIONS.md 2026-09-11, "mosaic_land_cover
+    different matter (docs/_archive/2026-09/DECISIONS.md 2026-09-11, "mosaic_land_cover
     fail-loud on in-country gaps" — same fail-loud policy as the WDPA
     data-integrity check): if its footprint overlaps the country being
     processed, this raises rather than silently leaving that area at

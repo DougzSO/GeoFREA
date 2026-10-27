@@ -2,7 +2,7 @@
 
 One module for both layers because they are the same source (HydroSHEDS,
 data.hydrosheds.org) — the point of organizing fetchers by source, not
-by layer or by auth pattern (see docs/DECISIONS.md 2026-08-25 "real
+by layer or by auth pattern (see docs/_archive/2026-09/DECISIONS.md 2026-08-25 "real
 fetchers for power_plants/wind/lakes/rivers", its "Por que fetch por
 FONTE" section). Both verified live 2026-08-24/25, no auth, no
 registration.
@@ -31,7 +31,7 @@ unmapped country is intentional (see fetch_rivers()'s docstring).
 
 Zip internal layout — discovered live 2026-08-25 while validating
 clip_vector_to_country() against real downloaded data (see
-docs/DECISIONS.md same date, "data_acquisition activation"), NOT
+docs/_archive/2026-09/DECISIONS.md same date, "data_acquisition activation"), NOT
 something the earlier curl-only verification could have caught: both
 zips nest their shapefile one directory level deep (e.g.
 "HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp") alongside unrelated

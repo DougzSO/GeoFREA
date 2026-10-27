@@ -17,12 +17,12 @@ it. Unlike elevation/population/grid it is not country-split; the
 country_code argument is accepted only for a uniform handler signature.
 
 Phase 1 of "wire das 5 camadas restantes a partir do banco local" (see
-docs/DECISIONS.md, same title) — elevation/population/grid/land_cover.
+docs/_archive/2026-09/DECISIONS.md, same title) — elevation/population/grid/land_cover.
 `roads` (the 5th remaining layer) is deliberately NOT covered here; see
 that DECISIONS.md entry for why it was split into its own stage.
 
 land_cover provenance change is a REVERT, not a bug fix: the original
-skeleton (docs/DECISIONS.md 2026-08-24 "data_acquisition skeleton")
+skeleton (docs/_archive/2026-09/DECISIONS.md 2026-08-24 "data_acquisition skeleton")
 deliberately set land_cover to provenance="fetched"/auth_required=True
 because Terrascope (the only source geoworld_framework's DataFetcher
 ever used for it) requires credentials. This stage reverses that
@@ -84,7 +84,7 @@ country requires adding its directory name to both tables (elevation
 and land_cover independently, since they don't share a convention).
 
 roads (added 2026-09-08, Fase 2 of "wire das 5 camadas restantes a
-partir do banco local" — see docs/DECISIONS.md same date): resolves to
+partir do banco local" — see docs/_archive/2026-09/DECISIONS.md same date): resolves to
 the GRIP4 (Global Roads Inventory Project) regional shapefile covering
 one country, UNCLIPPED — unlike elevation/population/grid/land_cover
 above, this file spans many countries (GRIP4's own continental region

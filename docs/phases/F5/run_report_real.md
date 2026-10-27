@@ -298,7 +298,7 @@ The difference also includes the 36 central cells without elevation (2.7% of the
 
 ## 7. Artifacts
 
-In `GEOFREA_DATA_DIR\outputs\<ISO3>\technical_potential\`: `artifacts\` (potential tables, aggregates, class-flag tables, `weibull_distribution_wind.csv`, COG rasters), `sensitivity_150m\`, `sensitivity_above3000m\` (IND), `figures_run_report\` (one map per potential file). Hashes of every file: `docs/phases/F5/run_real_hashes.json`.
+In `GEOFREA_DATA_DIR\outputs\<ISO3>\technical_potential\`: `artifacts\` (potential tables, aggregates, class-flag tables, `weibull_distribution_wind.csv`, COG rasters), `sensitivity_150m\`, `sensitivity_above3000m\` (IND), `figures_run_report\` (one map per potential file). Hashes of every file: the content hashes of the manifest (D-core-042; the file of byte hashes `run_real_hashes.json` was removed on 2026-10-27).
 
 | Country | Map files (one per potential file) |
 |---|---|

@@ -1,7 +1,7 @@
 """ERA5 gust acquisition from the Copernicus CDS (M-F1-05).
 
 Built fresh: CRAEI's own D12 decided against ERA5 gust entirely, so
-there is nothing to adapt (docs/DECISIONS.md, docs/METHODS_SPEC.md;
+there is nothing to adapt (docs/_archive/2026-09/DECISIONS.md, docs/METHODS_SPEC.md;
 confirmed against CRAEI_BASELINE_DIR, COMMAND F4-1) — no A-11 header
 anywhere in this module.
 

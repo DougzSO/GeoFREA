@@ -146,7 +146,7 @@ def test_reproject_to_grid_uint8_dtype_uses_zero_nodata_default(tmp_path):
 
 @pytest.mark.unit
 def test_reproject_to_grid_sanitizes_literal_nan_despite_finite_declared_nodata(tmp_path):
-    # Reproduces BRA_elevation.tif in production (docs/DECISIONS.md
+    # Reproduces BRA_elevation.tif in production (docs/_archive/2026-09/DECISIONS.md
     # 2026-09-11, "elevation NaN leak"): the file declares a finite
     # nodata sentinel (-9999) but 0 cells actually equal it -- its real
     # nodata cells are literal NaN instead, a metadata/data mismatch in
@@ -280,7 +280,7 @@ def test_mosaic_land_cover_skips_corrupted_tile_without_crashing(tmp_path):
 
 @pytest.mark.unit
 def test_mosaic_land_cover_raises_when_corrupted_tile_overlaps_country(tmp_path):
-    # docs/DECISIONS.md 2026-09-11, "mosaic_land_cover fail-loud on
+    # docs/_archive/2026-09/DECISIONS.md 2026-09-11, "mosaic_land_cover fail-loud on
     # in-country gaps": a tile that can't be opened has unreadable real
     # bounds, so the overlap check falls back to its NOMINAL ESA
     # WorldCover bounds parsed from the filename. This tile's id

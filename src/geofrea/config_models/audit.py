@@ -124,7 +124,7 @@ class AuditInputs(BaseModel):
     """Raw, already-resolved geodata paths/objects the audit phase inspects.
 
     Mirrors DataAuditor.run()'s parameter list exactly (see
-    docs/architecture/data_quality_audit.md sec a). GeoFREA has no data
+    docs/_archive/2026-09/architecture/data_quality_audit.md sec a). GeoFREA has no data
     acquisition layer yet (legacy's DataFetcher/DataManager/DataOrchestrator
     are not ported — out of scope for this stage), so main.py currently
     has no way to populate these with real values; every field left at
@@ -180,8 +180,8 @@ class AuditInputs(BaseModel):
             this is a NEW AuditInputs field with no AuditResult
             consumer beyond `vectors["protected"]`'s own inspection —
             it does not feed a suitability/exclusion calculation here
-            (see DECISIONS.md 2026-08-24 "protected (WDPA): decisão de
-            onde entra no GeoFREA fica pendente").
+            (see DECISIONS.md 2026-08-24, entry on protected areas (WDPA):
+            where they enter GeoFREA was left to a later decision).
         borders_path: Raw country-boundary vector path (all polygons —
             mainland, islands, enclaves), inspected as-is, NOT clipped
             (already scoped to one country at the source). Distinct

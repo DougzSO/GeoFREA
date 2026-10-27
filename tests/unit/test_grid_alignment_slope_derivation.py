@@ -3,7 +3,7 @@
 Slope parity is checked against an INDEPENDENT analytic reference (a
 planar DEM has a closed-form slope), NOT against the legacy's
 `*_slope_aligned.tif` — we cannot confirm that file was produced by the
-same origin pipeline (see docs/DECISIONS.md 2026-09-11).
+same origin pipeline (see docs/_archive/2026-09/DECISIONS.md 2026-09-11).
 
 The nodata-adjacency test is the point of the data-integrity correction:
 it FAILS against a naive port of the legacy (which feeds -9999 into

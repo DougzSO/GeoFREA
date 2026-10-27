@@ -19,7 +19,7 @@ The folder of F5 of each country now has 22 PNG files (14 of COMMAND 68 and the 
 
 ## How it was run
 
-`main.py <ISO3> --phases potential_maps` for PRT, IND and BRA, one at a time. The 80 hashes of `docs/phases/F5/run_real_hashes.json` are unchanged after the three runs (no number was touched). Time of the phase `potential_maps` in the last run: PRT 88 s, IND 264 s, BRA 313 s.
+`main.py <ISO3> --phases potential_maps` for PRT, IND and BRA, one at a time. The content hashes of the manifest (D-core-042; the file of byte hashes `run_real_hashes.json` was removed on 2026-10-27) are unchanged after the three runs (no number was touched). Time of the phase `potential_maps` in the last run: PRT 88 s, IND 264 s, BRA 313 s.
 
 ## What the first figures show (PRT, read from the figures)
 

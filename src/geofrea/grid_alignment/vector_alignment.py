@@ -3,7 +3,7 @@
 Ported from geoworld_framework's src/processors/grid_aligner.py
 (`_calculate_wgs84_isotropic_distance()` L550-594, `_align_linear_features()`
 L597-681, `_align_lakes()` L684-739, `_align_rivers()` L742-800,
-`_align_plants()` L803-879) — see docs/DECISIONS.md 2026-09-08,
+`_align_plants()` L803-879) — see docs/_archive/2026-09/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3.
 
 Load/clip split from legacy (per Passo 1's design correction, same
@@ -51,7 +51,7 @@ and still fully exhibits the original-scale asymmetry. This was true
 in legacy before this port and is not a numeric parameter — it is a
 structural difference between two functions that happened to diverge —
 so it is called out here rather than silently ported without comment,
-but NOT changed (out of scope for this stage; see docs/DECISIONS.md
+but NOT changed (out of scope for this stage; see docs/_archive/2026-09/DECISIONS.md
 2026-09-08, grid_alignment Passo 4, for the numerically-hardcoded parts
 of this same asymmetry — the 50km vs. 100km distance cap — which ARE
 flagged there as pending).
@@ -126,11 +126,11 @@ def calculate_wgs84_isotropic_distance(
 
     Converts a pixel-space distance transform to kilometres using
     core.geodesy.wgs84_km_per_degree() at the grid's centroid latitude
-    — centralized 2026-09-09 (see docs/DECISIONS.md same date,
+    — centralized 2026-09-09 (see docs/_archive/2026-09/DECISIONS.md same date,
     grid_alignment Passo 4 item 1; this function previously carried its
     own 3-term-truncated copy of the same Bowring-series formula, one
     of three independently-truncated variants found across the
-    codebase — see docs/architecture/grid_alignment.md sec b).
+    codebase — see docs/_archive/2026-09/architecture/grid_alignment.md sec b).
 
     Args:
         feature_mask_inv: Binary array, 0=feature, 1=background.
@@ -307,7 +307,7 @@ def align_rivers(
     Deliberately NOT unified with rasterize_linear_distance() on the
     STRtree-prefilter/country-mask structural asymmetry — see module
     docstring for that. The distance CAP, however, was unified 2026-09-09
-    (see docs/DECISIONS.md same date, grid_alignment Passo 4 item 2):
+    (see docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 2):
     this used to hardcode a separate 50km inline, diverging from roads/
     grid's 100km with no documented reason; callers now pass the same
     value used for roads/grid, same "explicit, no default" convention

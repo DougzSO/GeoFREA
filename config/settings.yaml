@@ -33,9 +33,9 @@ run:
   # F2b siting_layers (physical-unit layers), F4 climate_forcing (change factors, members.yaml),
   # F4 hazard_context, F4 climate_maps (diagnostic maps), F3 land_eligibility, overview, F5 technical_potential and
   # potential_maps. F5 is registered but not listed below: it fails loudly (MissingParameterError) when
-  # LUF, power density, gamma, eta_loss, hub height or power curves (OQ-004, OQ-005, OQ-023); name it with
-  # `python main.py <ISO3> --phases technical_potential,potential_maps` once those values are entered. F6 lcoe_modeling is
-  # registered and needs the same F5 values plus the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019, OQ-022); F7 robustness_analysis, F7b external_validation and
+  # LUF, power density, gamma, eta_loss, hub height or power curves have no value; name it with
+  # `python main.py <ISO3> --phases technical_potential,potential_maps`. F6 lcoe_modeling is
+  # registered and needs the same F5 values plus the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019); F7 robustness_analysis, F7b external_validation and
   # the map phases are registered the same way. Phase and country status is recorded only in docs/PROGRESS.json.
   # The legacy `suitability_criteria` phase was retired (V16).
   target_phases:
@@ -67,7 +67,7 @@ run:
   rerun_phases: []
 
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
-# docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
+# docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 3).
 geospatial:
   # Threshold of the `distance_capped` QC flag raster beside the distance-to-grid/roads/rivers
   # rasters (M-F2a-03, OQ-040). It NEVER truncates a distance: rasters store the real geodesic
@@ -76,9 +76,10 @@ geospatial:
   distance_cap_km: 100.0
 
   resolutions:
-    # Fixed analysis-grid resolution, degrees (M-F2a-01). 0.01 (~1 km) is the value that generated the
-    # frozen PRT/BRA baseline (docs/architecture/baseline-manifest.md). The grid is snapped so 0.05 degree
-    # cells (S-06) nest exactly 5 x 5. The legacy "adaptive" mode was removed in G-3 (2026-10-06).
+    # Pixel size of the aligned layers of F2a, degrees (M-F2a-01). The key keeps its legacy name `suitability`; it is the
+    # 0.01 degree (~1 km) pixel, not the analysis cell. The analysis cell is 0.05 degree (S-06, OQ-064) and nests exactly
+    # 5 x 5 pixels, because the grid is snapped to it. The value generated the retired legacy PRT/BRA baseline
+    # (docs/_archive/2026-09/architecture/baseline-manifest.md). The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
 
 # Memory budget of the batch phases (METHODOLOGY A-10, D-F6-005). F6 sizes its blocks of cells so that the live

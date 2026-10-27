@@ -1,55 +1,22 @@
 # GeoFREA
 
-GeoFREA is a from-scratch reconstruction of the **GeoWorld Framework**, a
-9-phase geospatial pipeline for renewable-energy siting suitability
-(solar, wind, biomass). The goal is not a line-by-line port of the legacy
-code, but a clean rebuild of the underlying scientific logic — preserving
-validated behavior where it holds up, and deliberately revising it where
-it doesn't, with every such decision logged in [`docs/DECISIONS.md`](docs/DECISIONS.md).
+GeoFREA is a spatially explicit, open-data framework that estimates the technical potential and site-level LCOE of utility-scale solar PV and onshore wind on a 0.05 degree cell grid in Brazil, Portugal and India, and ranks cells by how well their economic ranking holds across climate futures and techno-economic uncertainty (PhD thesis, Douglas).
 
-## Legacy reference
+## Phases
 
-`geoworld_framework/` (a sibling directory on disk, path configured via
-`GEOWORLD_BASELINE_DIR` in `.env`) is the legacy pipeline. It is a
-**read-only** source of scientific/architectural knowledge: formulas,
-parameter values, known issues, and regression baselines. It is never
-modified as part of GeoFREA's development.
+F1 data acquisition, F1b data quality audit, F2a grid alignment, F2b siting layers, F3 land eligibility, F4 climate forcing, F5 technical potential, F6 LCOE modeling, F7 robustness analysis, F7b external validation, F8 results synthesis. Each phase is a package under `src/geofrea/` and writes its artifacts to the per-country manifest.
 
-## Setup
+## Run
 
-1. Copy `.env.example` to `.env` and fill in the values (raw/processed/
-   output data directories, and `GEOWORLD_BASELINE_DIR` pointing at the
-   legacy repository).
-2. Install the package in editable mode with dev dependencies:
-   ```
-   pip install -e ".[dev]"
-   ```
+1. Copy `.env.example` to `.env` and set the data directories.
+2. `pip install -e ".[dev]"`
+3. `python main.py PRT` (one country, every phase in `config/settings.yaml`), or `python main.py BRA --phases technical_potential`; upstream phases that are stale are added automatically. `python main.py --help` lists the options.
+4. `pytest` runs the suite (about 30 minutes; close other applications).
 
-## Running tests
+## Where things are
 
-```
-pytest tests/unit/
-pytest tests/regression/
-```
-
-Regression tests compare GeoFREA outputs against the frozen legacy
-baselines documented in `docs/architecture/baseline-manifest.md`.
-
-## Project documentation
-
-- [`docs/architecture/`](docs/architecture/) — per-module documentation of the legacy
-  pipeline's science, parameters, and known issues, module-by-module.
-- [`docs/architecture/module-mapping.md`](docs/architecture/module-mapping.md) — traceability anchor between legacy
-  phases and GeoFREA modules.
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — append-only log of structural/methodological
-  decisions made during the reconstruction.
-- [`CLAUDE.md`](CLAUDE.md) — project conventions and session workflow for AI-assisted
-  development.
-- [`docs/PROGRESS.json`](docs/PROGRESS.json) — machine-readable snapshot of what has been
-  built, documented, or still needs a decision.
-
-## Status
-
-Early scaffolding. No production code yet — only the package skeleton,
-project conventions, and the architecture/decision documentation carried
-over from the audit of the legacy pipeline.
+- Method: [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md), the only place the method is defined; overview in [`docs/PROJECT_SUMMARY.md`](docs/PROJECT_SUMMARY.md).
+- Status per phase and country: [`docs/PROGRESS.json`](docs/PROGRESS.json); open items in [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md); limits in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md); decisions per phase in `docs/phases/`.
+- Conventions: [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) and [`CLAUDE.md`](CLAUDE.md).
+- Data and outputs live outside the repository, in `GeoFREA_data/` (`raw`, `interim`, `outputs`, `logs`, `archive`).
+- The legacy port documents of September 2026 are kept in [`docs/_archive/2026-09/`](docs/_archive/2026-09/).

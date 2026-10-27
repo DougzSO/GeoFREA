@@ -8,7 +8,7 @@ OpenTopography fallback) shares this exact retry/backoff shape,
 independent of which source it's fetching from. WorldPop (FTP) and
 Terrascope's catalogue client each need their own retry loop because
 they're a different transport entirely — not because of a different
-auth pattern. See docs/DECISIONS.md 2026-08-25 "real fetchers for
+auth pattern. See docs/_archive/2026-09/DECISIONS.md 2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" (its "Por que fetch por FONTE"
 section) for the full (a)-vs-(b) rationale, which is why this lives
 here as one shared HTTP-transport utility rather than duplicated per

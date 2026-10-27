@@ -1,13 +1,13 @@
 """Pydantic schemas for the grid_alignment phase.
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
-(`GridAligner.run()`, 1213 lines — see docs/architecture/grid_alignment.md).
+(`GridAligner.run()`, 1213 lines — see docs/_archive/2026-09/architecture/grid_alignment.md).
 This phase reprojects every raw layer data_acquisition resolved onto a
 single reference grid (same CRS/transform/dimensions), a prerequisite
 for siting_layers (F2b) — see module-mapping.md.
 
 Design corrected from the legacy shape during the read-only audit that
-preceded this schema (2026-09-08, see docs/DECISIONS.md same date —
+preceded this schema (2026-09-08, see docs/_archive/2026-09/DECISIONS.md same date —
 grid_alignment contract, roads_source/grid_source vs. data_quality_audit's
 cache_path): GridAlignmentInputs.roads_source/grid_source are always
 the RAW, unclipped acquisition source — the same AcquiredLayer.path
@@ -128,9 +128,8 @@ class GridMetadata(BaseModel):
             build_reference_grid(), not derived from any input layer).
         resolution_deg: Effective resolution used to build the grid —
             either the fixed configured value or the adaptive result.
-            The adaptive knobs themselves are a pending methodological
-            decision, not part of GridAlignmentInputs yet — see module
-            docstring.
+            The adaptive knobs themselves are not part of
+            GridAlignmentInputs — see module docstring.
         width: Grid width, in pixels.
         height: Grid height, in pixels.
         transform: Affine transform coefficients (a, b, c, d, e, f) —

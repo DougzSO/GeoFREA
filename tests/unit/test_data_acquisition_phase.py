@@ -2,7 +2,7 @@
 
 As of 2026-09-11 (2026-08-25 "real fetchers for power_plants/wind/
 lakes/rivers" + 2026-08-26 "real fetcher for borders/admin1" +
-2026-09-11 "protected_planet API activation", all docs/DECISIONS.md),
+2026-09-11 "protected_planet API activation", all docs/_archive/2026-09/DECISIONS.md),
 run_acquisition_phase() calls real fetcher functions for 7 layers —
 every test in this file must NOT hit the real network. The
 `_no_network_fetchers` autouse fixture below monkeypatches all 7
@@ -17,7 +17,7 @@ the other 6 in that it can also *raise*
 (ProtectedPlanetTokenMissingError when no API token is configured) —
 see test_run_acquisition_phase_protected_token_missing_propagates below.
 
-2026-09-08 (see docs/DECISIONS.md same date, "wire das 5 camadas
+2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date, "wire das 5 camadas
 restantes a partir do banco local, Fase 1"): run_acquisition_phase()
 also resolves elevation/population/grid/land_cover from the local
 database (local_layers.py) unconditionally on every call. The
@@ -167,7 +167,7 @@ def test_run_acquisition_phase_slope_is_not_in_the_registry(tmp_path):
 def test_run_acquisition_phase_only_protected_requires_auth_2026_09_11(tmp_path):
     # Until 2026-09-08, land_cover was the one layer with
     # auth_required=True (Terrascope). It reverted to local_only that
-    # stage (see docs/DECISIONS.md 2026-09-08, "wire das 5 camadas
+    # stage (see docs/_archive/2026-09/DECISIONS.md 2026-09-08, "wire das 5 camadas
     # restantes a partir do banco local, Fase 1") — the local ESA
     # WorldCover tiles need no credentials, so no layer required auth
     # for a few days. 2026-09-11 (see DECISIONS.md same date,
@@ -258,7 +258,7 @@ def test_run_acquisition_phase_fetch_status_split_2026_09_11(tmp_path):
     # fetch_status (AcquiredLayer, schemas.py — a computed field, not
     # stored) answers "is there real fetch code wired in today", which
     # provenance deliberately does not (see the test above and
-    # docs/DECISIONS.md 2026-08-26, "fetch_status computed field").
+    # docs/_archive/2026-09/DECISIONS.md 2026-08-26, "fetch_status computed field").
     # implemented: the 7 layers with a real handler in
     # _FETCHED_LAYER_HANDLERS (borders/admin1 added 2026-08-26, protected
     # added 2026-09-11 — see DECISIONS.md same dates).
@@ -523,7 +523,7 @@ def test_run_acquisition_phase_local_layers_resolve_to_none_without_raw_data_dir
 
 @pytest.mark.unit
 def test_acquired_layer_round_trips_through_dumped_fetch_status():
-    # Regression test for the bug fixed 2026-09-11 (see docs/DECISIONS.md
+    # Regression test for the bug fixed 2026-09-11 (see docs/_archive/2026-09/DECISIONS.md
     # same date, "fetch_status manifest resume bug"): fetch_status is a
     # @computed_field, so model_dump(mode="json") — exactly what
     # Orchestrator._write_manifest() calls — includes it. Feeding that

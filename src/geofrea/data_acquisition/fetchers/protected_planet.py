@@ -1,6 +1,6 @@
 """Protected Planet (WDPA) fetcher — activated 2026-09-11.
 
-Verified live 2026-08-24/25 (see docs/DECISIONS.md same dates): unlike
+Verified live 2026-08-24/25 (see docs/_archive/2026-09/DECISIONS.md same dates): unlike
 what geoworld_framework's own README claimed ("no public bulk API"),
 a real API exists at api.protectedplanet.net (v3 archived, v4
 current) — confirmed by an unauthenticated request returning
@@ -12,7 +12,7 @@ filtered per country, not a single-file dump.
 
 `protected`'s provenance in _LAYER_REGISTRY (phase.py) moved
 "local_only" -> "fetched" 2026-09-11, once a real API token was placed
-in `.env` (PROTECTED_PLANET_API_KEY — see docs/DECISIONS.md same date,
+in `.env` (PROTECTED_PLANET_API_KEY — see docs/_archive/2026-09/DECISIONS.md same date,
 "protected_planet API activation"). The only thing that had blocked
 activation was the manual, one-time step external to this codebase (a
 human getting a token from UNEP-WCMC); that step is now done.
@@ -43,7 +43,7 @@ from geofrea.core.http_retry import get_with_retry
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.protected_planet")
 
 # Matches the key name Douglas placed in .env (not hardcoded — see
-# docs/DECISIONS.md 2026-09-11, "protected_planet API activation").
+# docs/_archive/2026-09/DECISIONS.md 2026-09-11, "protected_planet API activation").
 # The var name previously read PROTECTED_PLANET_API_TOKEN; renamed to
 # match .env rather than asking for a second env var with the same
 # secret under a different name.

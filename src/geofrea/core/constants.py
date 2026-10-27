@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/core/constants.py — only the subset
 actually used so far (data_quality_audit's raster inspection, and, as
-of 2026-09-08, grid_alignment — see docs/DECISIONS.md same date). Not a
+of 2026-09-08, grid_alignment — see docs/_archive/2026-09/DECISIONS.md same date). Not a
 full port of the legacy constants module: MCDA/LCOE/criteria constants
 belong to the phases that use them and are ported when those phases are
 built, not pre-emptively (see docs/CONVENTIONS.md, "Parameters" — no

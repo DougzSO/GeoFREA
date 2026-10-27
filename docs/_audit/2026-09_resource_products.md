@@ -4,7 +4,7 @@ Data: 2026-09-15. Escopo: verificação de rede real (requisições HEAD/metadad
 
 Anexos consultados: `CLAUDE.md`, `docs/_audit/2026-09_F1-F2b.md` (auditoria anterior desta mesma série).
 
-**⚠️ Ponto a validar — identificação de "D10(3)"**: busca em todo `docs/` não encontrou nenhum item rotulado literalmente `D10` com um subitem `(3)` que trate de eólica/CF/GWA. O único `D10` existente no repositório é `docs/architecture/suitability_criteria_audit.md` §7 (linha 203: "`os.environ` mutado em import-time"), que é sobre um achado de auditoria do legado sem relação com produtos GWA/CF eólico. Não assumi correspondência — prossegui com o conteúdo literal das Ações 2-4, autocontidas.
+**⚠️ Ponto a validar — identificação de "D10(3)"**: busca em todo `docs/` não encontrou nenhum item rotulado literalmente `D10` com um subitem `(3)` que trate de eólica/CF/GWA. O único `D10` existente no repositório é `docs/_archive/2026-09/architecture/suitability_criteria_audit.md` §7 (linha 203: "`os.environ` mutado em import-time"), que é sobre um achado de auditoria do legado sem relação com produtos GWA/CF eólico. Não assumi correspondência — prossegui com o conteúdo literal das Ações 2-4, autocontidas.
 
 ---
 

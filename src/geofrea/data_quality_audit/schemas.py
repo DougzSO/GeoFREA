@@ -1,7 +1,7 @@
 """Pydantic schemas for the data_quality_audit phase.
 
 Replaces geoworld_framework's DataAuditor.run(), which returned an ad
-hoc dict (see docs/architecture/data_quality_audit.md sec a). AuditResult
+hoc dict (see docs/_archive/2026-09/architecture/data_quality_audit.md sec a). AuditResult
 is this phase's output_model, validated by the orchestrator like every
 other phase — see DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit
 phase.
@@ -22,7 +22,7 @@ from geofrea.core.schemas import GeometryRepairSummary
 class RasterInspection(BaseModel):
     """Metadata and statistics for a single inspected raster layer.
 
-    See docs/architecture/data_quality_audit.md sec b for the geodetic
+    See docs/_archive/2026-09/architecture/data_quality_audit.md sec b for the geodetic
     area formula and sec c for the PVOUT unit sanity-check bounds.
     """
 
@@ -220,7 +220,7 @@ class SlopeThresholdCheck(BaseModel):
 
     Each technology now carries its own slope_threshold_deg
     (CountryParams.technologies.<tech>.slope_threshold_deg, see
-    docs/DECISIONS.md 2026-08-20 - slope_threshold_deg moved to
+    docs/_archive/2026-09/DECISIONS.md 2026-08-20 - slope_threshold_deg moved to
     parameters.json) — there is no single per-country threshold
     anymore, so this check runs once per technology, not once per
     country.
@@ -245,7 +245,7 @@ class SlopeThresholdCheck(BaseModel):
 class AuditResult(BaseModel):
     """Root output model for the data_quality_audit phase.
 
-    Replaces the legacy `audit` dict (docs/architecture/data_quality_audit.md
+    Replaces the legacy `audit` dict (docs/_archive/2026-09/architecture/data_quality_audit.md
     sec a). `land_cover` is always present as a structured
     LandCoverInspection (skipped=True when skip_land_cover was set),
     unlike legacy's dict which sometimes held just {"skipped": True}.

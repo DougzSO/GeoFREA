@@ -2,7 +2,7 @@
 
 Mirrors data_acquisition/adapter.py::acquisition_result_to_audit_inputs()
 — same shape, same source type (AcquisitionResult), same local-file glue
-(no HTTP, no SDK). See docs/DECISIONS.md 2026-09-08, grid_alignment
+(no HTTP, no SDK). See docs/_archive/2026-09/DECISIONS.md 2026-09-08, grid_alignment
 orchestrator wiring.
 
 Deliberately depends ONLY on AcquisitionResult, never on AuditResult —
@@ -119,7 +119,7 @@ def acquisition_result_to_grid_alignment_inputs(
     Args:
         result: The data_acquisition phase's output for one country.
         resolutions: settings.yaml's `geospatial.resolutions` (see
-            docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
+            docs/_archive/2026-09/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
         distance_cap_km: settings.yaml's `geospatial.distance_cap_km`, the threshold of
             the `distance_capped` flag rasters (M-F2a-03, OQ-040).
 

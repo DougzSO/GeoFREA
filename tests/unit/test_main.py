@@ -4,7 +4,7 @@ main.py lives at the repo root (not under src/geofrea/) — imported
 here the same way pytest already resolves it for collection.
 
 UnwiredPhasesError (and the guard that raised it) was removed
-2026-08-25 — see docs/DECISIONS.md same date, "data_acquisition
+2026-08-25 — see docs/_archive/2026-09/DECISIONS.md same date, "data_acquisition
 activation" for why: real wiring makes the guard's original
 justification ("audit would silently run against nothing") no longer
 true. These tests replace the old

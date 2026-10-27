@@ -1,6 +1,6 @@
 """Global Wind Atlas fetcher.
 
-Verified live 2026-08-24 (see docs/DECISIONS.md same date): a plain
+Verified live 2026-08-24 (see docs/_archive/2026-09/DECISIONS.md same date): a plain
 unauthenticated GET against a country-scoped API endpoint returns a
 302 redirect to a CDN-hosted per-country GeoTIFF. Tested successfully
 for both PRT and BRA — GeoFREA's two current countries — before this

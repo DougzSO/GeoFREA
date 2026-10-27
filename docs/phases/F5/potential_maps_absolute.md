@@ -71,7 +71,7 @@ Per-state limits are computed on the central scenario and shared by the three sc
 
 ## 5. Sum checks
 
-National totals of F5 (`m0`, all present cells) and the largest relative difference found between them and the sum of the cells and the sum of the states, over the three scenarios and the two quantities (the tolerance is 0.1%):
+National totals of F5 as of the round of 2026-10-19 (`m0`, all present cells; the totals of the final round of 2026-10-26 differ by less than 0.1%, for example PRT solar 264.46 GW / 424.63 TWh, `audit_potential_65.md`) and the largest relative difference found between them and the sum of the cells and the sum of the states, over the three scenarios and the two quantities (the tolerance is 0.1%):
 
 | Country | Technology | Central | Restrictive | Permissive | Largest relative difference |
 |---|---|---|---|---|---|

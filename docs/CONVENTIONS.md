@@ -47,6 +47,10 @@ The status of a phase, of a country run and of a milestone lives only in `docs/P
 - Phase records (`docs/phases/`) record decisions, their reasons and their tests, not the current status of the phase.
 - `test_status_lives_only_in_progress` enforces this for METHODOLOGY Section 12 and the config files.
 
+## Decision records
+
+A decision is recorded once, in the record of its phase (`docs/phases/<phase>.md`), as one bullet that starts `- **D-<phase>-<number> — Title (date, command).**`, or as a table row that starts `| D-<phase>-<number> |`. A later paragraph about the same decision is a continuation of that bullet or cites the ID without starting with it. IDs rise in the order of the file. `scripts/find_decision.py D-<phase>-<number>` prints the defining lines of an ID.
+
 ## Docstrings
 
 Google style. Cover purpose, `Args`, `Returns`, `Raises` when relevant. Geospatial functions state units and CRS for every spatial input and output; a geospatial function without units and CRS is incomplete. Functions that implement a methodology item cite it:

@@ -1,6 +1,6 @@
 """Unit tests for geofrea.core.geodesy — centralized Bowring-series WGS84 scale factors.
 
-See docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 1: this
+See docs/_archive/2026-09/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 1: this
 function replaces three previously independently-truncated copies of
 the same formula (data_quality_audit/raster_inspection.py::row_area_km2(),
 grid_alignment/vector_alignment.py::calculate_wgs84_isotropic_distance(),
