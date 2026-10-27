@@ -127,7 +127,7 @@ def test_lcoe_modeling_reads_the_potential_of_every_land_scenario_forcing_and_me
     f6 = specs["lcoe_modeling"]
     assert f6.requires == frozenset(
         {
-            "land_eligibility",
+            *main.eligibility_artifact_keys(("solar", "wind"), default_scale=True),
             "forcing",
             "members",
             *(
@@ -151,9 +151,12 @@ def test_lcoe_modeling_reads_the_potential_of_every_land_scenario_forcing_and_me
         }
         # no altitude sensitivity: the cells above 3000 m are not candidates (OQ-058, COMMAND 46), so there is no `__below` curve
     )
-    assert f6.requires <= specs["technical_potential"].produces | specs[
-        "climate_forcing"
-    ].produces | {"land_eligibility"}
+    assert (
+        f6.requires
+        <= specs["technical_potential"].produces
+        | specs["climate_forcing"].produces
+        | specs["land_eligibility"].produces
+    )
 
 
 @pytest.mark.unit
@@ -168,7 +171,7 @@ def test_sample_size_convergence_is_a_support_phase_with_its_own_artifacts_and_n
     phase = specs["sample_size_convergence"]
     assert phase.requires == frozenset(
         {
-            "land_eligibility",
+            *main.eligibility_artifact_keys(("solar", "wind"), default_scale=True),
             "forcing",
             "members",
             "potential_solar__central",
@@ -811,7 +814,7 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
     f7 = specs["robustness_analysis"]
     assert f7.requires == frozenset(
         {
-            "land_eligibility",
+            *main.eligibility_artifact_keys(("solar", "wind"), default_scale=True),
             "forcing",
             "members",
             "hazard_context",
@@ -834,7 +837,7 @@ def test_robustness_analysis_reads_the_central_potential_the_f6_summaries_forcin
         | specs["technical_potential"].produces
         | specs["climate_forcing"].produces
         | specs["hazard_context"].produces
-        | {"land_eligibility"}
+        | specs["land_eligibility"].produces
     )
     assert f7.produces == frozenset(
         {"robustness_analysis"}

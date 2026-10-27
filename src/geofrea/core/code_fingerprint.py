@@ -30,6 +30,31 @@ from pathlib import Path
 PACKAGE = "geofrea"
 SRC_ROOT = Path(__file__).resolve().parents[1]  # .../src/geofrea
 
+# the modules of `technical_potential`, split between the phase that writes the potential tables and the phase that draws them
+TECHNICAL_POTENTIAL_NUMERIC_MODULES = (
+    "aggregates",
+    "capacity",
+    "cf_models",
+    "density_check",
+    "iec_class",
+    "input_ranges",
+    "pipeline",
+    "power_curve",
+    "rescale",
+    "solar",
+    "table_schemas",
+    "weibull_cf",
+    "weibull_report",
+    "wind_profile",
+)
+TECHNICAL_POTENTIAL_FIGURE_MODULES = (
+    "absolute_maps",
+    "display_layers",
+    "maps",
+    "question_figures",
+    "state_figures",
+)
+
 # phase -> packages (all their files) or modules (one file) that start its closure, as dotted names under `geofrea`
 PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "data_acquisition": ("data_acquisition",),
@@ -41,14 +66,16 @@ PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "climate_forcing": ("climate_forcing",),
     "hazard_context": ("climate_forcing.hazards", "climate_forcing.pipeline"),
     "climate_maps": ("climate_forcing.figures", "climate_forcing.pipeline"),
-    "technical_potential": ("technical_potential",),
+    # the numeric modules only: the tables of the potential. The figure modules (`maps`, `absolute_maps`, `display_layers`, `state_figures`,
+    # `question_figures`) belong to `potential_maps`, so an edit of a figure does not invalidate F5 (COMMAND 73, R71-06)
+    "technical_potential": tuple(f"technical_potential.{m}" for m in TECHNICAL_POTENTIAL_NUMERIC_MODULES),
     "lcoe_modeling": ("lcoe_modeling",),
     "sample_size_convergence": ("robustness_analysis.convergence",),
     "robustness_analysis": ("robustness_analysis",),
     "external_validation": ("external_validation",),
     "lcoe_maps": ("lcoe_modeling.maps",),
     "robustness_maps": ("robustness_analysis.maps",),
-    "potential_maps": ("technical_potential.maps", "technical_potential.absolute_maps"),
+    "potential_maps": tuple(f"technical_potential.{m}" for m in TECHNICAL_POTENTIAL_FIGURE_MODULES),
     "results_synthesis": ("results_synthesis",),
     "overview": ("overview",),
 }
@@ -74,6 +101,7 @@ INFRASTRUCTURE_MODULES = frozenset(
         "core.cache_key",
         "core.content_hash",
         "core.run_logging",
+        "core.peak_memory",
         "core.power",
     }
 )
