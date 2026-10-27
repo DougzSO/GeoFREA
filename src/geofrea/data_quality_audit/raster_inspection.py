@@ -37,7 +37,7 @@ from rasterio.windows import from_bounds as window_from_bounds
 from shapely.geometry import box, mapping
 
 from geofrea.core.cache_code import cache_code
-from geofrea.core.cache_key import cache_key
+from geofrea.core.cache_key import FileHashMemo, cache_key
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.run_logging import PeriodicProgress
@@ -915,6 +915,80 @@ def inspect_land_cover_tiles(
         "total_area_km2": round(total_area, 1),
         "errors": errors,
     }
+
+
+# Version of the statistics `inspect_raster` writes, part of the key of its per-layer result.
+RASTER_AUDIT_ALGORITHM_VERSION = 1
+
+
+def _json_default(value: Any) -> Any:
+    """JSON form of the numpy scalars and arrays and the paths that `inspect_raster` can hold."""
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return str(value)
+
+
+def _as_json(meta: dict[str, Any]) -> dict[str, Any]:
+    """`meta` as the JSON document it is stored and reported as (tuples become lists), so a cached and a fresh result are the same."""
+    return json.loads(json.dumps(meta, default=_json_default))
+
+
+def inspect_raster_cached(
+    path: Path,
+    country_gdf: gpd.GeoDataFrame | None = None,
+    assume_crs_from: Path | None = None,
+    cache_dir: Path | None = None,
+) -> dict[str, Any]:
+    """`inspect_raster`, skipped when the input, the country polygon and the code that computes the statistics are those of the stored result.
+
+    The audit is a report and never blocks (M-F1b-02); what it measures of a layer depends on the content of the file (SHA-256, memoised by
+    size and mtime), the polygon that masks it and the code of `raster_inspection`, which is the key of the stored result (the same code
+    fingerprint as the per-tile land-cover cache). Without `cache_dir` nothing is stored. The result is the JSON form of the statistics, fresh or
+    stored.
+
+    Args:
+        path: The raster.
+        country_gdf: Country polygon for masking.
+        assume_crs_from: Raster whose CRS a CRS-less `path` borrows (an input of the key as well).
+        cache_dir: Directory of the stored results (`<file stem>.json` and the hash memo); None disables the cache.
+
+    Returns:
+        The `inspect_raster` dictionary.
+    """
+    if cache_dir is None:
+        return _as_json(inspect_raster(path, country_gdf, assume_crs_from))
+    polygon = (
+        _land_cover_geom_fingerprint(country_gdf.geometry.union_all())
+        if country_gdf is not None
+        else "none"
+    )
+    memo = FileHashMemo(Path(cache_dir) / "input_sha256.json")
+    key = cache_key(
+        RASTER_AUDIT_ALGORITHM_VERSION,
+        [path, assume_crs_from],
+        {"country_polygon_fingerprint": polygon, "layer_file": Path(path).name},
+        memo,
+        code=cache_code("land_cover_tiles"),
+    )
+    cache_file = Path(cache_dir) / f"{Path(path).stem}.json"
+    if cache_file.exists():
+        try:
+            stored = json.loads(cache_file.read_text(encoding="utf-8"))
+            if stored.get("cache_key") == key:
+                logger.info("  [%s] unchanged input, stored result reused", Path(path).stem)
+                return stored["meta"]
+        except (OSError, ValueError) as exc:
+            logger.warning("Failed to read raster audit cache %s: %s", cache_file, exc)
+    meta = _as_json(inspect_raster(path, country_gdf, assume_crs_from))
+    if not meta.get("error"):  # a failed inspection is never stored
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps({"cache_key": key, "meta": meta}), encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Failed to write raster audit cache for %s: %s", Path(path).name, exc)
+    return meta
 
 
 MASK_COVERAGE_WARN_PCT = 99.0  # a wind layer with a valid value in fewer than this share of the country mask raises an alert
