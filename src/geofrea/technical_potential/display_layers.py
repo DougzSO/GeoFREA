@@ -12,8 +12,10 @@ F2a (0.01 degree, 5 x 5 pixels per cell). A *display layer* is the same descript
 Nothing here replaces an analysis artifact: the layers are `display_<layer>_<tech>.tif` under the artifacts of F5 with `display_layers_<tech>.json`
 (their own fingerprint: the inputs, the parameters and the checks). They are used only by `potential_maps` to draw descriptive maps; no total, no
 LCOE and no ranking reads them. Every layer is checked against the analysis when it is built (`check_aggregation`): the capacity factor
-aggregated back to the 0.05 degree cell (weighted by the eligible area, as F3 does) is within 1% of the value of the analysis in every cell, and the
-eligible area and the capacity are exact.
+aggregated back to the 0.05 degree cell (weighted by the eligible area, as F3 does) is the value of the analysis in every cell, and so are the
+eligible area and the capacity. For wind the identity is exact by construction (F5 evaluates the same model on the same pixels and aggregates them
+with the same weights, D-F5-038; tolerance 1e-9); for a model evaluated on the cell means (solar, linear in the resource) it holds to the float32
+precision of the stored rasters (1e-6).
 """
 
 from __future__ import annotations
@@ -50,6 +52,9 @@ DEPENDS_ON = {
 EXACT_TOLERANCE = (
     1e-6  # float32 precision of the stored analysis rasters (an eligible area, a capacity): "exact"
 )
+# the capacity factor of a model evaluated per pixel (wind, D-F5-038) is the eligible-area-weighted mean of the very pixel values drawn here, computed by
+# the same function with the same weights: the two sides differ by the order of a sum (1e-15)
+PIXEL_IDENTITY_TOLERANCE = 1e-9
 NODATA = -9999.0
 HOURS_PER_YEAR = 8760.0
 
@@ -124,7 +129,7 @@ def build_display_layers(
     capacity_density_mw_km2: float,
     cell_area_km2: np.ndarray,
     k: int = FINE_PER_CELL,
-    cf_tolerance: float = display.CF_TOLERANCE,
+    cf_tolerance: float | None = None,
     partial: bool = False,
 ) -> DisplayBuild:
     """The four display layers of a technology from the pixels of F2a/F3, and their checks against the analysis grid.
@@ -134,6 +139,10 @@ def build_display_layers(
     retained cell with eligible area are drawn (the retention of F5). Raises `DisplayLayerError` if a check fails; with `partial` only the layers
     that depend on a failed check are refused (`DisplayBuild.refused`) and the others are kept, and it raises only when none is left.
     """
+    if cf_tolerance is None:
+        cf_tolerance = (
+            PIXEL_IDENTITY_TOLERANCE if model.aggregation == "pixel" else EXACT_TOLERANCE
+        )
     fine_shape = eligible_fraction.shape
     if tuple(s // k for s in fine_shape) != analysis_cf.shape or any(s % k for s in fine_shape):
         raise DisplayLayerError(
