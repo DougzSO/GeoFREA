@@ -5,15 +5,15 @@ files don't hold conflicting/duplicated data under the same key.
 settings.yaml's run.countries is a subset *selector* referencing
 parameters.json's countries key by code — not a redeclaration of any
 per-country data — so there's no precedence rule to test, just a
-(currently unenforced) cross-file reference. See docs/DECISIONS.md
+(currently unenforced) cross-file reference. See docs/_archive/2026-09/DECISIONS.md
 2026-08-20 - settings.yaml phase toggles.
 
 Legacy-value comparison scope (acceptance criterion 5): only
 capex_usd_per_kw and lifetime_years for biomass have a direct legacy
 equivalent to compare against — geoworld_framework's
 lcoe_calculator.py::DEFAULT_LCOE_PARAMS["biomass"], as documented in
-docs/DECISIONS.md 2026-08-19 (capex=2720, opex=109 flat, lifetime=20,
-dr=0.07). Note: docs/architecture/module-mapping.md itself does not
+docs/_archive/2026-09/DECISIONS.md 2026-08-19 (capex=2720, opex=109 flat, lifetime=20,
+dr=0.07). Note: docs/_archive/2026-09/architecture/module-mapping.md itself does not
 carry these per-technology numeric legacy values (it only records that
 DEFAULT_LCOE_PARAMS exists as a hardcoded fallback — see
 lcoe_modeling.md sec c.1); the biomass numbers used below trace back to
@@ -25,7 +25,7 @@ opex has no like-for-like legacy comparison: the legacy value was a
 single flat USD/kW/yr figure, while GeoFREA's IRENA-2025-sourced value
 is structurally split into opex_fixed_frac (dimensionless
 fraction) and opex_var_usd_per_mwh (USD/MWh) - different units,
-not just different numbers, per docs/DECISIONS.md 2026-08-20.
+not just different numbers, per docs/_archive/2026-09/DECISIONS.md 2026-08-20.
 
 capacity_factor and discount_rate_increment are NEW parameters with no
 legacy equivalent at all (capacity_factor didn't exist as a per-country
@@ -47,7 +47,7 @@ SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 
 # Legacy hardcoded biomass values, geoworld_framework's
 # lcoe_calculator.py::DEFAULT_LCOE_PARAMS["biomass"], as recorded in
-# docs/DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback
+# docs/_archive/2026-09/DECISIONS.md 2026-08-19 - biomass CAPEX/OPEX/lifetime fallback
 # values.
 _LEGACY_BIOMASS_CAPEX_USD_KW = 2720.0
 _LEGACY_BIOMASS_LIFETIME_YEARS = 20

@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
 (`GridContext`, `build_reference_grid()`, L64-134) with no logic
-changes — see docs/DECISIONS.md 2026-09-08, grid_alignment Passo 3.
+changes — see docs/_archive/2026-09/DECISIONS.md 2026-09-08, grid_alignment Passo 3.
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ solar_fetch_per_country_nao_confirmado → ambas referências (linhas 359, 395) 
 seismic_fonte_nao_identificada → ambas referências (linhas 373, 387) batem
 protected_pendente_fase → referências batem (título com pequena variação, ver abaixo)
 ⚠️ Inconsistências encontradas
-iucn_categorias (PROGRESS.json linha 9) → status é "resolvido_ver_decisions_md", mas o campo referencia (linha 8) aponta para GeoFREA/docs/architecture/suitability_criteria.md secao e.1 — não para DECISIONS.md. A entrada que de fato resolve isso existe (DECISIONS.md linha 17, [2026-08-19] - protected_areas / IUCN exclusion categories), mas PROGRESS.json não cita esse caminho. Rótulo do status e conteúdo do campo divergem.
+iucn_categorias (PROGRESS.json linha 9) → status é "resolvido_ver_decisions_md", mas o campo referencia (linha 8) aponta para GeoFREA/docs/_archive/2026-09/architecture/suitability_criteria.md secao e.1 — não para DECISIONS.md. A entrada que de fato resolve isso existe (DECISIONS.md linha 17, [2026-08-19] - protected_areas / IUCN exclusion categories), mas PROGRESS.json não cita esse caminho. Rótulo do status e conteúdo do campo divergem.
 capex_opex_fallback_fase8 (PROGRESS.json linha 15) → mesmo defeito: status "resolvido_ver_decisions_md", referência (linha 14) aponta para sensitivity_analysis.md secao c, não para DECISIONS.md. A entrada correta existe (linha 26, [2026-08-19] - biomass CAPEX/OPEX/lifetime fallback values), mas não é citada.
 protected_pendente_fase (PROGRESS.json linha 20) cita "2026-09-11 - protected_planet API activation"; o header real em DECISIONS.md (linha 1354) é [2026-09-11] - data_acquisition: protected_planet API activation. Título truncado/parcial, localizável mas não literal.
 2. COERÊNCIA PROGRESS.json

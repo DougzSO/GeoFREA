@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
 (`GridAligner.__init__()`/`run()` L898-1145, `_save_grid_metadata()`
-L1147-1172, `_verify_alignment()` L1174-1212) — see docs/DECISIONS.md
+L1147-1172, `_verify_alignment()` L1174-1212) — see docs/_archive/2026-09/DECISIONS.md
 2026-09-08, grid_alignment Passo 3.
 
 Per-layer clip source (see schemas.py's module docstring and Passo 1's
@@ -40,7 +40,7 @@ country_gdf (not the raw multi-polygon borders), there is no
 meaningful input here to run that check against — calling it on an
 already-single-polygon GeoDataFrame would be vacuous. Not invoked here.
 
-Resolution (DECIDED 2026-09-09, see docs/DECISIONS.md same date,
+Resolution (DECIDED 2026-09-09, see docs/_archive/2026-09/DECISIONS.md same date,
 grid_alignment Passo 4 item 3): `inputs.resolution_deg` (populated by
 the adapter from settings.yaml's new `geospatial.resolutions.
 suitability` — "adaptive" or a fixed degree value, config_loader.py/
@@ -48,7 +48,7 @@ schemas.py's ResolutionsConfig) drives this, not a hardcoded value.
 Default is 0.01 fixed (~1km), matching legacy's own actual configured
 value ("~1 km, consistent with global climate datasets") — the one
 that generated the frozen PRT/BRA baseline
-(docs/architecture/baseline-manifest.md). Legacy's "adaptive" code path
+(docs/_archive/2026-09/architecture/baseline-manifest.md). Legacy's "adaptive" code path
 existed but was never the value legacy's real settings.yaml used;
 GeoFREA had ported that unused code path as its only, hardcoded
 behavior until this fix — measured divergence from the baseline before
@@ -62,7 +62,7 @@ adaptive_pixel_ceiling_deg — this ceiling field's old name was renamed
 cell), not the default.
 
 land_cover cache filename mismatch (FIXED 2026-09-09, see
-docs/DECISIONS.md same date — Passo 6 land_cover cache fix): legacy's
+docs/_archive/2026-09/DECISIONS.md same date — Passo 6 land_cover cache fix): legacy's
 land_cover step had a filename mismatch between GridAligner.run()'s own
 cache-check and the path it actually wrote to —
 `_execute_or_load("land_cover", ...)` checks for
@@ -229,12 +229,12 @@ def _verify_alignment(aligned: dict[str, Path | None], grid: GridContext) -> Non
     Raises:
         RuntimeError: If any raster's dimensions don't match the grid.
             Deliberately NOT caught anywhere in this module — see
-            docs/DECISIONS.md 2026-09-08, grid_alignment Passo 3: a
+            docs/_archive/2026-09/DECISIONS.md 2026-09-08, grid_alignment Passo 3: a
             topology mismatch must propagate to the orchestrator as
             a failed phase, the same as any other unhandled
             exception from a phase's run() (DECISIONS.md 2026-08-20 -
-            orchestrator + data_quality_audit phase, "try/except único
-            no orchestrator").
+            orchestrator + data_quality_audit phase, a single try/except
+            in the orchestrator).
     """
     for name, path in aligned.items():
         if path and Path(path).exists():
@@ -551,7 +551,7 @@ def run_grid_alignment_phase(
     grid_metadata = _save_grid_metadata(context.country_code, out_dir, grid, resolution_deg)
 
     # Deliberately NOT wrapped in try/except — see _verify_alignment()'s
-    # own docstring and docs/DECISIONS.md 2026-09-08, grid_alignment
+    # own docstring and docs/_archive/2026-09/DECISIONS.md 2026-09-08, grid_alignment
     # Passo 3, item 2. A RuntimeError here propagates uncaught out of
     # run_grid_alignment_phase(), to the orchestrator's single
     # try/except, becoming a failed phase.

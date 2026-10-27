@@ -1,5 +1,7 @@
 # Maps of the technical potential in capacity and energy (D-F5-029 and D-F5-030, 2026-10-19)
 
+Images archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_potential_maps_absolute/` and removed from the repository, as for `display_resolution_67b.md`; the text names each file. 2 image link(s) in this report became text.
+
 > **Superseded on 2026-10-20 (COMMAND 60, D-F5-032).** The maps described here (MW and GWh per cell and GW and TWh per state, in classes) are no longer the main maps of the phase; the set is now described in `potential_maps_v2.md`. The per-cell maps remain available with `absolute_maps.per_cell: true`. This file is kept as the record of the version of 2026-10-19.
 
 Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.2.0 (M-F5-07). Results are those of the real run of 2026-10-19 (F1 to F5 run again with the contiguous mask and the GLO-30 elevation, COMMAND 55; reference climate `m0`).
@@ -71,7 +73,7 @@ Per-state limits are computed on the central scenario and shared by the three sc
 
 ## 5. Sum checks
 
-National totals of F5 (`m0`, all present cells) and the largest relative difference found between them and the sum of the cells and the sum of the states, over the three scenarios and the two quantities (the tolerance is 0.1%):
+National totals of F5 as of the round of 2026-10-19 (`m0`, all present cells; the totals of the final round of 2026-10-26 differ by less than 0.1%, for example PRT solar 264.46 GW / 424.63 TWh, `audit_potential_65.md`) and the largest relative difference found between them and the sum of the cells and the sum of the states, over the three scenarios and the two quantities (the tolerance is 0.1%):
 
 | Country | Technology | Central | Restrictive | Permissive | Largest relative difference |
 |---|---|---|---|---|---|
@@ -88,11 +90,11 @@ All 12 combinations pass (differences of the order of 1e-16, the rounding of the
 
 BRA, solar, central scenario, capacity per state (Fisher-Jenks of the central scenario, 6 classes, the last open, shared by the three scenarios):
 
-![BRA solar, capacity per state, central](potential_maps_absolute/BRA_potential_capacity_gw_state_solar_central__ref__na__na.png)
+[BRA solar, capacity per state, central: image archived as `BRA_potential_capacity_gw_state_solar_central__ref__na__na.png`]
 
 IND, wind, central scenario, annual energy per cell (7 quantile classes of the cells above zero):
 
-![IND wind, energy per cell, central](potential_maps_absolute/IND_potential_energy_gwh_cell_wind_central__ref__na__na.png)
+[IND wind, energy per cell, central: image archived as `IND_potential_energy_gwh_cell_wind_central__ref__na__na.png`]
 
 There are no white areas inside the outline any more: the outline and the mask are one geometry (METHODOLOGY 15.2.0; in the earlier round the north and the north-east of IND were white because the mask was the largest polygon, `docs/phases/core/coverage_alignment_54.md`). Cells of the country without potential are grey. The north block of IND appears with its cells; its wind cells are grey because the GWA wind file of IND has almost no values there (L-047).
 

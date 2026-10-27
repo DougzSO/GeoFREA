@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/utils/utils.py
 (safe_raster_open/safe_raster_write) and src/utils/logging_utils.py
-(gdal_quiet) for grid_alignment (see docs/DECISIONS.md 2026-09-08,
+(gdal_quiet) for grid_alignment (see docs/_archive/2026-09/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3). data_quality_audit does not use these: it
 only ever reads rasters (plain rasterio.open() in raster_inspection.py)
 and never writes one, so there was nothing to port before now.

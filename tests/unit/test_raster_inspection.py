@@ -566,7 +566,7 @@ def test_stats_chunked_matches_expected_stats_across_multiple_chunks(tmp_path, m
 @pytest.mark.unit
 def test_stats_chunked_returns_zero_stats_when_polygon_does_not_overlap(tmp_path):
     # total_px == 0 here, not _SIZE * _SIZE — changed 2026-09-08 (see
-    # docs/DECISIONS.md same date and _stats_chunked()'s own docstring,
+    # docs/_archive/2026-09/DECISIONS.md same date and _stats_chunked()'s own docstring,
     # "total_px scoping fixed"): total_px now reflects the country-bbox
     # window's own pixel count (zero, since there is no overlap at all),
     # not the full raster's, matching _mask_raster_by_polygon()'s
@@ -595,7 +595,7 @@ def test_stats_chunked_returns_zero_stats_when_polygon_does_not_overlap(tmp_path
 
 @pytest.mark.unit
 def test_stats_chunked_total_px_scoped_to_country_window_not_full_raster(tmp_path, monkeypatch):
-    # The real bug (see docs/DECISIONS.md 2026-09-08 and
+    # The real bug (see docs/_archive/2026-09/DECISIONS.md 2026-09-08 and
     # _stats_chunked()'s own docstring, "total_px scoping fixed"): a
     # raster file bigger than the country's own bbox used to make
     # total_px (and therefore valid_pct) reflect the WHOLE file, not
@@ -653,7 +653,7 @@ def test_stats_chunked_returns_none_when_country_gdf_has_no_crs(tmp_path):
 
 # ===========================================================================
 # _country_window — single source of truth for the country-bbox window,
-# extracted 2026-09-08 (see docs/DECISIONS.md same date) after
+# extracted 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date) after
 # _mask_raster_by_polygon() and _stats_chunked() were found to have
 # silently diverged on this exact computation (the total_px bug above).
 # ===========================================================================

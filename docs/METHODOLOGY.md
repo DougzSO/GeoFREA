@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 15.2.4 |
+| Version | 15.2.5 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-10-26 |
+| Updated | 2026-10-27 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -187,7 +187,7 @@ Critical transitions:
 
 ### F2a grid_alignment
 
-- **M-F2a-01.** Analysis grid: EPSG:4326, fixed 0.01 degree resolution, snapped so that 0.05 degree cells nest exactly (5 x 5 pixels). The country mask is the **contiguous territory** of GADM 4.1 level 0: the largest polygon plus every polygon that touches a kept polygon or lies less than 1 km from one (transitively); islands and exclaves farther away are discarded (`mainland_only`, `core/geo_utils.get_contiguous_mainland_gdf`, constant `MAINLAND_MAX_GAP_KM`). The mask, the drawn outline of the maps and the admin1 units are one geometry: the admin1 units that touch the territory are clipped to it. The boundary is GADM 4.1 as published (L-045); no choice about a disputed border is made by the code. (D-F2a-021, D-F1-027.)
+- **M-F2a-01.** Analysis grid: EPSG:4326, fixed 0.01 degree resolution, snapped so that 0.05 degree cells nest exactly (5 x 5 pixels). The country mask is the **contiguous territory** of GADM 4.1 level 0: the largest polygon plus every polygon that touches a kept polygon or lies less than 1 km from one (transitively); islands and exclaves farther away are discarded (`mainland_only`, `core/geo_utils.get_contiguous_mainland_gdf`, constant `MAINLAND_MAX_GAP_KM`). The mask, the drawn outline of the maps and the admin1 units are one geometry: the admin1 units that touch the territory are clipped to it. The boundary is GADM 4.1 as published (L-047); no choice about a disputed border is made by the code. (D-F2a-021, D-F1-027.)
 - **M-F2a-02.** All distances and areas are geodesic (`core/geodesy.py`), including slope derivation from the DEM.
 - **M-F2a-03.** Distance rasters to transmission grid, roads, and rivers store the **uncapped geodesic distance**. `distance_cap_km` (parameter, `geospatial.distance_cap_km` in `settings.yaml`) is only the threshold of a `distance_capped` flag raster written beside each distance raster (uint8, 1 where the distance exceeds the threshold): a quality indicator. No stored distance is truncated, because the connection-cost model (M-F6-01) bills the real distance (OQ-040; evidence in `docs/_audit/2026-10_distance_connection_cost_evidence.md`).
 - **M-F2a-04.** Wind products are aligned per height; no combination across heights happens in F2a.
@@ -565,6 +565,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 15.2.5 | 2026-10-27 | PATCH (wording; COMMAND 72; no result changes): M-F2a-01 cites L-047 (the boundary question), not the retired L-045. IDs altered: M-F2a-01. |
 | 15.2.4 | 2026-10-26 | PATCH (output rule of a diagnostic phase; COMMAND 67b; no result changes): Section 11 states the display resolution of the maps: display layers at 0.01 degree from F2a for the descriptive maps of `potential_maps` (checked against the analysis grid), masked bilinear display smoothing declared in the subtitle for continuous fields still blocky or from a GCM, `absolute_maps.display_smoothing` (`auto` / `off`); classes, categories and per-state maps are never smoothed; no analysis artifact reads a display layer. |
 | 15.2.3 | 2026-10-21 | PATCH (infrastructure; COMMAND 61; no result changes): A-02: the field declarations and validators of the configuration schemas are not part of the code fingerprint of a phase, and the configuration fingerprint holds the section a phase reads as its schema validates it, with the defaults resolved, so a change of a schema reaches only the phases that read that section; every internal cache outside the manifest holds the fingerprint of the code that computes its result in its key (D-core-043). IDs altered: A-02. |
 | 15.2.2 | 2026-10-20 | PATCH (output rule of a diagnostic phase; COMMAND 60; no result changes): M-F5-07 draws the maps of `potential_maps` in the common map style with the densities per cell (MW per km2, GWh per km2 per year) and per state (over the land area of the state) as main maps, circles for the state totals, the same classes in the three land scenarios; the maps of MW and GWh per cell become optional (`absolute_maps.per_cell`, default false); `absolute_maps.dpi` is removed (the style fixes 300 dpi). IDs altered: M-F5-07. |

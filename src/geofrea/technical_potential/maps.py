@@ -83,7 +83,7 @@ def build_potential_maps(
 ) -> PotentialMapsSummary:
     """COG rasters and PNG maps of `P_MW / cell_area_km2` and `CF` at `m0`, central land scenario.
 
-    Implements: T-R1 (F5 diagnostic figure; the thesis output is made by F8).
+    Implements: T-R1 (F5 diagnostic figure; the thesis output is made by F8), M-F5-07.
 
     Args:
         iso: Country code.

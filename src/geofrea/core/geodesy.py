@@ -7,15 +7,15 @@ lat_km, 3 in lon_km — the most complete of the three, kept here as the
 one true precision level), grid_alignment/vector_alignment.py::
 calculate_wgs84_isotropic_distance() (3 terms in lat_km, missing
 cos(6*phi)), and grid_alignment/alignment.py's adaptive-resolution
-calculation (2 terms in each). See docs/DECISIONS.md 2026-09-09,
+calculation (2 terms in each). See docs/_archive/2026-09/DECISIONS.md 2026-09-09,
 grid_alignment Passo 4 item 1.
 
 Measured error from using the two more-truncated variants instead of
 this one, at PRT (~39.5N) and BRA (~-10 to -30) latitudes: ~1e-6%
 (vector_alignment's former 3-term lat_km) to ~1e-3% (alignment.py's
 former 2-term lat_km/lon_km) — scientifically negligible either way.
-Centralized to remove the duplication itself (Douglas: "mesmo padrão
-de _country_window(), MULTI_FILE_LAYER_NAMES"), not because any of the
+Centralized to remove the duplication itself (Douglas: the same
+pattern as _country_window() and MULTI_FILE_LAYER_NAMES), not because any of the
 three was numerically wrong.
 """
 

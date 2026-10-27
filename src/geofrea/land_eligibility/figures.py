@@ -123,14 +123,6 @@ def check_fraction_layer(
     )
 
 
-def _resolution(layer_used: display.DisplayLayer | None) -> str:
-    return (
-        ms.resolution_note(display_deg=layer_used.cell_deg)
-        if layer_used
-        else ms.resolution_note(cell_deg=0.05)
-    )
-
-
 def eligibility_sheet(
     ctx: MapContext,
     iso: str,

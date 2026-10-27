@@ -2,7 +2,7 @@
 
 Organized by source/provider (GADM, WRI, Global Wind Atlas, HydroSHEDS,
 Protected Planet, ...), not by authentication pattern — a deliberate
-architectural decision, not a default. See docs/DECISIONS.md 2026-08-25
+architectural decision, not a default. See docs/_archive/2026-09/DECISIONS.md 2026-08-25
 "real fetchers for power_plants/wind/lakes/rivers" (its "Por que fetch
 por FONTE" section) for the full (a) vs (b) rationale, summarizing the
 research conducted earlier the same session.

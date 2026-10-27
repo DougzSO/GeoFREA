@@ -7,11 +7,11 @@ local_layers.py). History (2026-08-25 "real fetchers for
 power_plants/wind/lakes/rivers" + 2026-08-26 "real fetcher for
 borders/admin1" + 2026-09-08 "wire das 5 camadas restantes a partir do
 banco local" (Fase 1 + Fase 2) + 2026-09-11 "protected_planet API
-activation", all docs/DECISIONS.md), each of the 13 AcquiredLayer
+activation", all docs/_archive/2026-09/DECISIONS.md), each of the 13 AcquiredLayer
 entries run_acquisition_phase() produces can have a real `path`/`paths`
 — 7 via a real fetcher (power_plants, wind, lakes, rivers, borders,
 admin1, protected) and 6 via local-database resolution (elevation,
-population, grid, roads, land_cover, solar). See docs/DECISIONS.md
+population, grid, roads, land_cover, solar). See docs/_archive/2026-09/DECISIONS.md
 2026-08-24 (data_acquisition skeleton) for the original rationale and
 the gaps flagged below.
 
@@ -43,7 +43,7 @@ stage's instructions — do not improvise past what was asked):
   - "slope" is deliberately NOT in the layer registry (see phase.py):
     it is neither fetched nor bundled. GeoFREA derives it inside
     grid_alignment (raster_alignment.derive_slope_from_dem(), 2026-09-11
-    — see docs/DECISIONS.md), from the aligned-phase's elevation input,
+    — see docs/_archive/2026-09/DECISIONS.md), from the aligned-phase's elevation input,
     at the DEM's native resolution and then reprojected onto the grid.
     That is a change from where the legacy did it (its own main.py, glue
     code between acquisition and alignment); data_acquisition has no part
@@ -111,7 +111,7 @@ IMPLEMENTED_FETCH_LAYER_NAMES: frozenset[str] = frozenset(
 # (fetchers/protected_planet.py) was complete and tested but
 # deliberately not wired into _FETCHED_LAYER_HANDLERS — gated behind a
 # manual API token, not a missing implementation (see that module's
-# docstring and docs/DECISIONS.md 2026-08-25). Activated 2026-09-11
+# docstring and docs/_archive/2026-09/DECISIONS.md 2026-08-25). Activated 2026-09-11
 # once a real token was placed in .env (see DECISIONS.md same date,
 # "protected_planet API activation") — "protected" moved to
 # IMPLEMENTED_FETCH_LAYER_NAMES above, so this set is empty for now.
@@ -240,7 +240,7 @@ class AcquiredLayer(BaseModel):
             says whether that fetch actually happens today. A computed
             property rather than a constructor field so existing
             AcquiredLayer(...) call sites (tests, adapter.py) don't need
-            to pass it — see docs/DECISIONS.md 2026-08-26 "fetch_status
+            to pass it — see docs/_archive/2026-09/DECISIONS.md 2026-08-26 "fetch_status
             computed field". BUG FIX 2026-09-11 (see DECISIONS.md same
             date, "fetch_status manifest resume bug"): being computed
             means it is also emitted by model_dump(mode="json") — so a

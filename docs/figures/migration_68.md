@@ -101,7 +101,7 @@ The real display layers (0.01 degree) are still not built by a phase (`build_dis
 ## 5. Checks
 
 - Full suite green on every commit of the branch (one worktree run per commit).
-- The 80 files listed in `docs/phases/F5/run_real_hashes.json` hash as before for the three countries: only figures were redrawn.
+- The 80 files of the round, in the content hashes of the manifest (D-core-042; the file of byte hashes `run_real_hashes.json` was removed on 2026-10-27) hash as before for the three countries: only figures were redrawn.
 - PNG files carry the metadata of the figure (country, phase, variable, status), and `figures_index.json` lists them per folder.
 
 ## 6. Limits

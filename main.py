@@ -320,7 +320,7 @@ def _build_grid_alignment_inputs(
         context: The grid_alignment phase's PhaseContext, as passed by
             Orchestrator.run().
         resolutions: settings.yaml's `geospatial.resolutions` (see
-            docs/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
+            docs/_archive/2026-09/DECISIONS.md 2026-09-09, grid_alignment Passo 4 item 3).
 
     Returns:
         Real GridAlignmentInputs adapted from data_acquisition's output.
@@ -451,7 +451,7 @@ def _build_phase_specs(
     Args:
         resolutions: settings.yaml's `geospatial.resolutions`, closed
             over by grid_alignment's run closure (2026-09-09, see
-            docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
+            docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 3).
         audit_config: config/audit.yaml, closed over by
             data_quality_audit's run closure (M-F1b-01).
         technologies: settings.yaml's `run.technologies`, closed over by technical_potential

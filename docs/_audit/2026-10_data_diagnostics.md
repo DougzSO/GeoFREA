@@ -1,5 +1,7 @@
 # Data diagnostics, October 2026: MIROC6 wind (B-1), wind candidates at altitude and with k < 1 (B-3), negative dT (8-2), reference heat days (8-3) and the F4 run time of India
 
+Images archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_2026-10_data_diagnostics_figures/` and removed from the repository, as for `display_resolution_67b.md`; the text names each file. 8 image link(s) in this report became text.
+
 Read-only. Nothing in `GeoFREA_data`, `config/` or `src/` was changed; every number below is computed in memory from outputs and raw files already on disk, by the scripts in `2026-10_data_diagnostics_scripts/` (caches go to a scratch directory outside the repository). The figures are in `2026-10_data_diagnostics_figures/`. The audit this follows is `2026-10_pre_research_audit.md` (sections 8 and 9).
 
 ## 0. Summary
@@ -31,7 +33,7 @@ Method notes. (1) "Native land cell" means a native cell whose centre lies insid
 
 ### 2.1 Reference-period mean `sfcWind` on the native grids
 
-![Reference wind, six GCMs, ERA5 gust and GWA](2026-10_data_diagnostics_figures/b1_reference_wind_maps.png)
+[Reference wind, six GCMs, ERA5 gust and GWA: image archived as `b1_reference_wind_maps.png`]
 
 Native land cells of Brazil (centre inside the polygon), 1995-2014 annual mean:
 
@@ -69,7 +71,7 @@ MIROC6 reproduces the spatial pattern about as well as the others (rank correlat
 
 MIROC6 over its calm cells is below the median of the other five by a factor of about 17 (0.07 against 1.2 m/s). Its ratio to the median of the other five over all land cells has p5 0.00, median 0.28 and p95 1.40. The pairwise correlation of the reference fields shows MIROC6 closest to CNRM-CM6-1 (0.87) and farthest from ACCESS-CM2 (0.62); a bias of level, not of pattern.
 
-![MIROC6 distribution, comparison with the Atlas and masked cells](2026-10_data_diagnostics_figures/b1_miroc6_distribution_and_mask.png)
+[MIROC6 distribution, comparison with the Atlas and masked cells: image archived as `b1_miroc6_distribution_and_mask.png`]
 
 ### 2.3 What the output mask lets through
 
@@ -86,11 +88,11 @@ The mask tests only the ratio of the window to the reference. With the 3 x 3 nei
 
 Of MIROC6's 122,195 cells with a reference below 0.5 m/s, 122,160 (SSP1-2.6), 89,690 (SSP3-7.0) and 113,082 (SSP5-8.5) pass the mask in the core window. Where they pass, the factor is 1.07 to 1.18 against 1.01 to 1.05 for the median of the other five (median absolute difference 0.07 to 0.15). So the mask removes the explosive tail (rejected values: median 4.2, maximum 78.2, all above 1.5, none below 0.5), and the rest still divides by a tiny reference. The ratio is applied to the Weibull scale of the Global Wind Atlas (about 2.6 to 4 m/s there), which the GCM reference does not describe.
 
-![MIROC6 ratio against its own reference](2026-10_data_diagnostics_figures/b1_miroc6_ratio_vs_reference.png)
+[MIROC6 ratio against its own reference: image archived as `b1_miroc6_ratio_vs_reference.png`]
 
 ### 2.4 Where the masked cells are
 
-![Masked cells and candidates](2026-10_data_diagnostics_figures/b1_masked_cells_candidates.png)
+[Masked cells and candidates: image archived as `b1_masked_cells_candidates.png`]
 
 Cells with at least one masked member, all 36 members: 68,276 of 285,999 (23.9%): 18,541 wind candidates, 18,244 solar candidates and 49,735 that are neither. Core window only: 40,271 cells, of which 9,027 wind and 8,838 solar candidates. The cells have a median of one masked member (maximum four). They form three groups: the north-west (Acre, Amazonas, Roraima, Rondônia), a patch in the south (Paraná, São Paulo, Santa Catarina) and smaller patches in Minas Gerais; with both windows a Pará patch (3,570 wind candidates) is added. MIROC6 alone masks 38,948 of the 40,271 core cells; GFDL-ESM4 masks 1,323 (6 wind and 6 solar candidates); ACCESS-CM2, IPSL-CM6A-LR, CNRM-CM6-1 and MRI-ESM2-0 mask none in the core window.
 
@@ -185,7 +187,7 @@ Total 6,264 cell-members of 10,295,964 (0.06%).
 - **MIROC6 SSP1-2.6, 2041-2070: a cooling patch of the model.** Six adjacent native cells (centres between 16.1 S and 20.3 S, 40.8 W and 42.2 W: the Atlantic side of Minas Gerais, Espirito Santo and southern Bahia) are between -0.04 and -0.31 K while the model's global mean warms by 0.85 K. It is a coherent patch of a size consistent with regional variability in a weak-forcing scenario and a single realization (r1i1p1f1).
 - **MRI-ESM2-0: isolated native cells.** Its negative cells are single native cells in central Brazil (10.7 S 47.2 W; 12.9 S 56.2 W and 49.5 W; 8.4 S 49.5 W and others) and the native field shows isolated cells that depart strongly from their neighbours, in both directions (the warm ones reach about +2 K above the cells around them): 22 native land cells deviate by more than 1 K from the median of their neighbours across the six MRI-ESM2-0 members (maximum 2.1 K), against **zero** for the other five GCMs (maximum deviation 0.4 to 0.8 K). I did not diagnose the cause (a feature of that model's land cells or of the processing); the data say only that it is isolated and specific to MRI-ESM2-0.
 
-![Negative dT members](2026-10_data_diagnostics_figures/dT_negative_members.png)
+[Negative dT members: image archived as `dT_negative_members.png`]
 
 Consequence for a solar cell: the energy factor is `(1 + gamma dT)`. The real `gamma` is not set in `parameters.json`; with the ZZZ test value of -0.005 per K, a `dT` of -1 K raises a cell's output by 0.5%, which is small against the spread of the resource, and a positive spike of +3 K lowers it by 1.5%, so the spikes are not one-sided.
 
@@ -229,7 +231,7 @@ This is expected and is **not an independent check**: all three are bias-adjuste
 
 Brazil's median cell already has 30 hot days a year in the reference, so on many more days its daily maximum is just below 35 C, and +1.5 to +2 K moves 80 to 110 more days across the threshold; shifting the reference series reproduces the window count (Brazil: 142 against 142, 128 against 131, 109 against 112). For Portugal the pure shift underestimates and the variance-scaled version reproduces the window (22.2 against 21.8, 19.1 against 19.0, 20.5 against 20.7): the days at the threshold are also driven by a wider daily distribution there. In India the window count is below the shifted one for GFDL-ESM4 (128 against 136) and MRI-ESM2-0 (136 against 140). So the jump of the median is not a processing error. (The numbers in section 8 of the audit, 30 to 110 days, were medians over the 0.05 degree lattice of the nine members and are consistent with these.)
 
-![Reference heat days and the shift check](2026-10_data_diagnostics_figures/heat_days_reference_and_shift.png)
+[Reference heat days and the shift check: image archived as `heat_days_reference_and_shift.png`]
 
 What remains unknown is the **level** of the reference (whether 30 days is the right median for Brazil). That needs an observation-based `Tmax`.
 
@@ -246,7 +248,7 @@ What remains unknown is the **level** of the reference (whether 30 days is the r
 
 Altitude is the mean of the 5 x 5 pixels of the aligned 30 m DEM in each 0.05 degree cell. Maximum cell altitude among wind candidates: BRA 1,747 m, PRT 1,350 m, IND 6,179 m; p99: 1,097, 956 and 4,645 m. Air density at 100 m and altitude are tightly tied (correlation -0.93 BRA, -0.99 PRT, -0.99 IND), so the two criteria select nearly the same cells.
 
-![Altitude, density and k](2026-10_data_diagnostics_figures/altitude_density_k_candidates.png)
+[Altitude, density and k: image archived as `altitude_density_k_candidates.png`]
 
 ### 5.1 Wind candidates by altitude (counts for BRA and PRT are zero at every threshold)
 
@@ -367,7 +369,7 @@ All scripts are in `2026-10_data_diagnostics_scripts/`; they read `GeoFREA_data`
 
 (The per-GCM rows are in the output of the script; the largest median difference of any single GCM is 5.3 days, MRI-ESM2-0 over BRA at 35 C, and MRI-ESM2-0 over IND at 40 C has a median bias of -2.0 days.)
 
-![ISIMIP3b against W5E5 v2.0 heat days](2026-10_data_diagnostics_figures/w5e5_vs_isimip3b_heat_days.png)
+[ISIMIP3b against W5E5 v2.0 heat days: image archived as `w5e5_vs_isimip3b_heat_days.png`]
 
 **Reading.** The spatial pattern of the reference heat days is the one of the data set the GCMs were adjusted to (r of 0.96 to 0.997 at 35 C in every country and GCM). The level agrees within a few days in Portugal and India. Brazil is the one with a bias: at 35 C the GCMs have fewer hot days than W5E5 (median cell difference -3.2 days, mean -6.0; 52 % of the cells within 5 days, p95 of the absolute difference 22 days), the same sign for each of the three GCMs. A bias adjustment fits the distribution of the daily series, not the count of days above a threshold in the tail, and Brazil's median cell sits near the threshold (about 38 days at or above 35 C), where a small shift of the distribution moves many days. At 40 C the counts are zero or near zero in Brazil and Portugal, so the correlation there is not informative; India's 40 C count agrees (median 30 against 29). This closes V-83: the reference level of the hazard channel is consistent with its own reference data set, with one documented bias (BRA, 35 C, about -3 days in the median cell) that does not change the ranking of the cells. Nothing in the pipeline was changed.
 

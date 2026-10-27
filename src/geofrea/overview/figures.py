@@ -12,7 +12,7 @@ Written under `outputs/<ISO3>/overview/`:
   - `figures/<ISO3>_F4_hazard-context.png`: ISIMIP3b/ERA5 context indicators, mean over the hazard members, with changes;
   - `figures/layers/`: one map of each exclusion and technology (F3) and the distances to the grid and to the road (F2b), diagnostics;
   - `tables/<ISO3>_overview.md`: per-layer statistics, per-member change-factor ranges and masked counts, per-member hazard means.
-The existing-plant trackers are NOT drawn here (V-06): `scripts/plot_plants_over_grid.py` does that outside the pipeline.
+The existing-plant trackers are NOT drawn here (V-06): a one-off script did that outside the pipeline (`scripts/plot_plants_over_grid.py`, removed from `main` on 2026-10-27; it stays in the git history).
 """
 
 from __future__ import annotations

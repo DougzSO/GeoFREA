@@ -1,5 +1,7 @@
 # Maps of the technical potential, version 2 (D-F5-032, COMMAND 60)
 
+Images archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_potential_maps_v2/` and removed from the repository, as for `display_resolution_67b.md`; the text names each file. 6 image link(s) in this report became text.
+
 Written for Douglas. Phase `potential_maps`, METHODOLOGY 15.2.2 (M-F5-07). Results are those of the real run of 2026-10-20 (F1 to F5 of PRT, IND and BRA with the code of COMMAND 58, 59 and 60; reference climate `m0`). It replaces the maps of `potential_maps_absolute.md` (D-F5-029 and D-F5-030), which stay in that file as the record of the earlier version.
 
 ## 1. Resolution of what the maps draw (action 1)
@@ -59,7 +61,7 @@ The "before" figures are those the phase wrote at the start of this command (the
 
 | Before: `potential_density_wind` (MW per km2 of cell, own colours, 150 dpi, no neighbours, scale or compass) | After: `potential_energy_density_wind_central` (GWh per km2 per year) |
 |---|---|
-| ![before](potential_maps_v2/PRT_wind_before.png) | ![after](potential_maps_v2/PRT_wind_after_energy_density.png) |
+| [before: image archived as `PRT_wind_before.png`] | [after: image archived as `PRT_wind_after_energy_density.png`] |
 
 The capacity density, `potential_maps_v2/PRT_wind_after_capacity_density.png`, has the same pattern in MW per km2. The pixelation is the resolution of the cell, as before; what changed is the density in the units of the thesis (GWh per km2 per year), the robust colour limits (the old map used the minimum and the maximum, so a few cells with a high value flattened the rest; the new limits are 0.017 to 1.658 GWh per km2 per year), the grey of the cells without potential and the furniture.
 
@@ -67,7 +69,7 @@ The capacity density, `potential_maps_v2/PRT_wind_after_capacity_density.png`, h
 
 | Before: `potential_capacity_gw_state_solar_central` (GW per state, six Fisher-Jenks classes of the totals; the size of the state decides the colour) | After: `potential_energy_density_state_solar_central` (GWh per km2 per year, circles: TWh per year) |
 |---|---|
-| ![before](potential_maps_v2/BRA_solar_state_before.png) | ![after](potential_maps_v2/BRA_solar_state_after_energy_density.png) |
+| [before: image archived as `BRA_solar_state_before.png`] | [after: image archived as `BRA_solar_state_after_energy_density.png`] |
 
 In the old map the three largest states are the darkest because they are the largest. In the new one the colour is the density: the north-east (above 6.5 GWh per km2 per year, the coastal states of the semi-arid region above 9) is the highest, the Amazon states are the lowest (below 1), and the size of the circle says where the large totals are (Bahia, Mato Grosso, Minas Gerais, Para). The map of the capacity density by state is `potential_maps_v2/BRA_solar_state_after_capacity_density.png`. The extent has no oceanic island: the map reaches 75.2 W to 33.6 W, the easternmost point of the mainland is at 34.8 W and Fernando de Noronha (32.4 W) and Trindade (29.3 W) are out.
 
@@ -75,7 +77,7 @@ In the old map the three largest states are the darkest because they are the lar
 
 | Before: `potential_density_solar` | After: `potential_capacity_density_solar_central` |
 |---|---|
-| ![before](potential_maps_v2/IND_solar_before.png) | ![after](potential_maps_v2/IND_solar_after_capacity_density.png) |
+| [before: image archived as `IND_solar_before.png`] | [after: image archived as `IND_solar_after_capacity_density.png`] |
 
 The territory is the contiguous one of METHODOLOGY 15.2.0 (the north block and Arunachal Pradesh are in the map; where the layers have no data they are grey: the wind of those blocks, OQ-062 closed in D-F1-030, and the solar potential, which is there). Capacity density 0.021 to 3.257 MW per km2 (limits of the colour scale), energy density 0.032 to 5.596 GWh per km2 per year.
 

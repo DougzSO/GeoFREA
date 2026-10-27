@@ -39,8 +39,8 @@ criteria_builder.py::compute_protected_areas() uses (IUCN_CAT/
 iucn_cat/IUCN/DESIGNATION) — not reinvented. Only descriptive stats
 (count/area/pct per category) are computed here; the IUCN_SCORES
 suitability-score mapping itself belongs to a later phase
-phase, not this audit (see DECISIONS.md 2026-08-24 "protected (WDPA):
-decisão de onde entra no GeoFREA fica pendente"). Category values are
+phase, not this audit (see DECISIONS.md 2026-08-24 entry on
+protected areas (WDPA), where they enter GeoFREA was left to a later decision). Category values are
 normalized with `.str.lower().str.strip()` before grouping, replicating
 compute_protected_areas()'s own normalization — see
 _iucn_category_breakdown()'s docstring for the "Not Reported"/"Not
@@ -112,7 +112,7 @@ class ClipRequiresCountryGdfError(ValueError):
     per-file data problem — it must fail loudly (propagate out of this
     function), not degrade into result["error"] like a corrupt file
     would, so it cannot be silently ignored in a JSON blob. See
-    docs/DECISIONS.md 2026-08-26 for the full incident writeup.
+    docs/_archive/2026-09/DECISIONS.md 2026-08-26 for the full incident writeup.
     """
 
 

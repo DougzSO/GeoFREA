@@ -2,7 +2,7 @@
 
 Ported near-verbatim from geoworld_framework's
 src/processors/data_auditor.py (module-level functions, L79-837 — see
-docs/architecture/data_quality_audit.md for the formulas and their exact
+docs/_archive/2026-09/architecture/data_quality_audit.md for the formulas and their exact
 legacy line numbers). Each function still returns a plain dict, matching
 the legacy signatures; audit.py is the boundary that validates the
 assembled dict against this phase's Pydantic schemas (AuditResult and
@@ -46,7 +46,7 @@ logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 
 _CHUNK_ROWS = 4_000
 
-# Real incident, 2026-09-08 (see docs/DECISIONS.md same date, "wire das 5
+# Real incident, 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date, "wire das 5
 # camadas restantes a partir do banco local, Fase 2 - roads", RAM finding):
 # running the real end-to-end pipeline for BRA, _mask_raster_by_polygon()'s
 # single float32 read of the country-bbox window for `population`
@@ -115,7 +115,7 @@ def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarr
     Returns a 1D array (height,) rather than a full 2D grid to avoid
     memory issues with large tiles. WGS84 scale factors come from
     core.geodesy.wgs84_km_per_degree() — centralized 2026-09-09 (see
-    docs/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
+    docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
     was the most complete of three previously-divergent truncations,
     now the shared one).
     """
@@ -144,7 +144,7 @@ def _country_window(
     """Compute the raster window covering a country's bbox, clipped to the raster's own extent.
 
     Single source of truth for this computation, added 2026-09-08 (see
-    docs/DECISIONS.md same date) after _mask_raster_by_polygon() and
+    docs/_archive/2026-09/DECISIONS.md same date) after _mask_raster_by_polygon() and
     _stats_chunked() were found to have silently diverged: each
     computed this window independently (or, for _stats_chunked(),
     didn't compute it at all — it used to chunk over the FULL raster
@@ -312,7 +312,7 @@ def _stats_chunked(
     Fallback for rasters too large to mask in one windowed read (e.g. a
     ~3.4 GB WorldPop 100m tile for Brazil).
 
-    total_px scoping fixed 2026-09-08 (see docs/DECISIONS.md same date):
+    total_px scoping fixed 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date):
     this function used to chunk over the FULL raster extent
     (src.height/src.width) regardless of country_gdf, while
     _mask_raster_by_polygon() (the windowed-read strategy this falls

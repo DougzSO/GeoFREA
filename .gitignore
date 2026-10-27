@@ -2,14 +2,13 @@
 .env
 
 # Dados e outputs (vivem fora do repo)
-data/
-!/docs/data/
+/data/
 outputs/
 outputs_baseline_fc7b43d/
 GeoFREA_data/
 
 # Fixture de regressao empacotado para o GitHub Release (regression-fixtures-v1)
-# — binario grande, nunca commitado, ver docs/DECISIONS.md 2026-09-14
+# — binario grande, nunca commitado, ver docs/_archive/2026-09/DECISIONS.md 2026-09-14
 /regression-fixtures.tar.gz
 
 # Python

@@ -1,5 +1,7 @@
 # Coverage of the outline and alignment of elevation and slope (COMMAND 54, 2026-10-19)
 
+Images archived on 2026-10-27 (COMMAND 72) in `GeoFREA_data/archive/docs_figures_coverage_alignment_54/` and removed from the repository, as for `display_resolution_67b.md`; the text names each file. 4 image link(s) in this report became text.
+
 Written for Douglas. Everything here was measured read only on the outputs of 2026-10-18 and the raw files; nothing in the pipeline or in `GEOFREA_DATA_DIR` was changed by the diagnostics. The scripts are in the scratch directory of the session (not in the repository). The change of step 3 (classes of the per-state maps) is a separate commit (`436902d`, METHODOLOGY 15.1.1, D-F5-030).
 
 ## 1. White areas of the maps of India
@@ -15,7 +17,7 @@ A cell exists in the F3 tables if and only if it holds a pixel of the F2a countr
 
 The **outline drawn** on the maps (D-F5-029) is a different geometry: the GADM 4.1 level-1 units that touch the mainland polygon, **whole** (`gadm41_<ISO>_1_mainland.shp`, `_mainland_level1` of the GADM fetcher). A unit keeps all its polygons, including the ones the "largest polygon" rule removed from level 0. The white areas are the parts of those units that are outside the mask polygon.
 
-![IND: outline, mask and parts without a cell](coverage_alignment_54/coverage_IND_outline_mask_and_missing_parts.png)
+[IND: outline, mask and parts without a cell: image archived as `coverage_IND_outline_mask_and_missing_parts.png`]
 
 ### 1.2 Area without cells, per country and per region (km2, geodesic, on a 0.005 degree lattice)
 
@@ -57,7 +59,7 @@ Share of 1,500 random points of each region that have a value (read from the raw
 
 Maps of the footprint of each layer over the same frame (orange: outline without a cell; red: mask polygon): [land cover](coverage_alignment_54/coverage_IND_layer_land_cover_tiles.png), [elevation file](coverage_alignment_54/coverage_IND_layer_elevation_raw.png), [GLO-30 tiles of the slope](coverage_alignment_54/coverage_IND_layer_slope_glo30_tiles.png), [population](coverage_alignment_54/coverage_IND_layer_population.png), [protected areas](coverage_alignment_54/coverage_IND_layer_protected.png), [wind](coverage_alignment_54/coverage_IND_layer_wind_gwa.png). The wind layer is the clearest: the Global Wind Atlas file stops at the mask polygon on land (it also covers the sea around the peninsula, which is not used).
 
-![IND wind layer](coverage_alignment_54/coverage_IND_layer_wind_gwa.png)
+[IND wind layer: image archived as `coverage_IND_layer_wind_gwa.png`]
 
 The missing GLO-30 and land-cover tiles and the empty wind raster are consequences of the same polygon: F1 selects the tiles that overlap the mainland polygon and the Global Wind Atlas file is downloaded for it. The layers do not remove cells; the polygon does.
 
@@ -106,7 +108,7 @@ So the slope is **not** derived from the aligned DEM: it comes from the 30 m til
 
 In all of them GLO-30 has data (1,296 samples per pixel, the same as elsewhere), and no pixel has elevation without slope. They are **straight lines one raw pixel (0.005 degree) wide**, seams of the file: in IND horizontal lines at latitude 24.62 (1,932 pixels), 22.65 (1,929), 12.76 (538) and 10.77 (393), vertical lines at longitude 76.90 (2,229, from north to south across the country), 84.80 (787) and 92.68 (499), and a few short ones in the Sundarbans; in BRA a horizontal line at latitude -8.38 (3,853 pixels) and vertical lines at -64.19 (1,495) and -68.11 (1,274). Only 6 patches (IND) and 3 (BRA) of connected pixels, none of one pixel. Maps: [IND](coverage_alignment_54/elevation_gaps_IND.png), [BRA](coverage_alignment_54/elevation_gaps_BRA.png).
 
-![IND elevation gaps](coverage_alignment_54/elevation_gaps_IND.png)
+[IND elevation gaps: image archived as `elevation_gaps_IND.png`]
 
 A cell has no elevation when all its eligible pixels are on such a line (OQ-060, D-F3-018: 36 central wind cells and 14 solar cells in IND).
 
@@ -122,7 +124,7 @@ Method: random cells with eligible area, at least 80% valid pixels in a 13 x 13 
 | Aligned elevation against GLO-30 on the aligned lattice (pixels of 0.01 degree) | 0.00 / 0.00 | **0.12 south, 0.18 east** | **0.12 south, 0.18 east** |
 | Share of windows with zero integer shift (last row) | 99% | 96% | 98% |
 
-![Displacement of the raw elevation file](coverage_alignment_54/elevation_displacement_against_glo30.png)
+[Displacement of the raw elevation file: image archived as `elevation_displacement_against_glo30.png`]
 
 Reading: the raw elevation files of IND and BRA are displaced by about **0.35 to 0.56 of a 0.005 degree pixel (190-290 m) to the north-west** against GLO-30, the product they are said to come from; the file of PRT is not. The alignment to the 0.01 degree grid adds nothing (12-15 m). The size, close to half a pixel, is what a pixel-is-point against pixel-is-area registration error would give; that is a conjecture, not verified. The 30 m slope of the same cells has the right position (it is built on GLO-30 directly).
 

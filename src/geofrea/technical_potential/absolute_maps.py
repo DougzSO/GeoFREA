@@ -201,13 +201,6 @@ def format_limit(x: float) -> str:
 # ------------------------------------------------------------------------------------------------------------------- the data
 
 
-@dataclass(frozen=True)
-class CountryUnits:
-    """The admin1 units of the country as drawn: `admin1_id`, `admin1_name`, geometry in degrees."""
-
-    units: gpd.GeoDataFrame
-
-
 def _scenario_table(
     potential_dir: Path, cells_dir: Path, tech: str, scenario: str, *, with_admin1: bool = True
 ) -> pd.DataFrame:

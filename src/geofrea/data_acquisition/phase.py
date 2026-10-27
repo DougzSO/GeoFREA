@@ -3,7 +3,7 @@
 Registers the same way data_quality_audit does: a plain function
 matching PhaseSpec.run's signature (Callable[[PhaseContext], BaseModel]),
 constructed into a PhaseSpec by main.py's _build_phase_specs(). See
-docs/DECISIONS.md 2026-08-24 (data_acquisition skeleton).
+docs/_archive/2026-09/DECISIONS.md 2026-08-24 (data_acquisition skeleton).
 
 Unlike data_quality_audit's run_audit_phase(context, inputs), this
 phase takes ONLY a PhaseContext: it has no phase-specific raw inputs to
@@ -19,7 +19,7 @@ GeoFREA derives it inside grid_alignment
 (raster_alignment.derive_slope_from_dem(), 2026-09-11), from that
 phase's elevation input — not here.
 
-Real fetch logic: 2026-08-25 (see docs/DECISIONS.md same date — "real
+Real fetch logic: 2026-08-25 (see docs/_archive/2026-09/DECISIONS.md same date — "real
 fetchers for power_plants/wind/lakes/rivers") wired 4 of the 14 layers
 (power_plants, wind, lakes, rivers) to a real fetcher instead of always
 leaving path=None. 2026-08-26 (see DECISIONS.md same date) added
@@ -27,7 +27,7 @@ borders + admin1 (fetchers/gadm.py) — 6 of 14 now call a real fetcher.
 _FETCHED_LAYER_HANDLERS below is the only place this phase knows about
 individual fetcher modules.
 
-Local-database resolution: 2026-09-08 Fase 1 (see docs/DECISIONS.md same
+Local-database resolution: 2026-09-08 Fase 1 (see docs/_archive/2026-09/DECISIONS.md same
 date — "wire das 5 camadas restantes a partir do banco local, Fase 1")
 wired elevation/population/grid/land_cover to resolve a pre-placed path
 from the local database (local_layers.py) instead of always leaving
