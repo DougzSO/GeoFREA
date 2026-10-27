@@ -69,7 +69,6 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import dask
 import geopandas as gpd
@@ -177,22 +176,6 @@ def bbox_from_polygon(country_polygon_path: Path, margin_deg: float = 0.5) -> li
     """
     country = gpd.read_file(country_polygon_path)
     return cds_area(acquisition_bbox(country.total_bounds, margin_deg))
-
-
-def is_complete_download(
-    final_path: Path, tmp_path: Path
-) -> Literal["complete", "partial", "absent"]:
-    """Distinguish a finished download from a crashed/partial one.
-
-    Same pattern as `cmip6.py::is_complete_download()`: a live download
-    always writes to `tmp_path` first, renamed to `final_path` only
-    after the CDS call returns successfully.
-    """
-    if final_path.exists():
-        return "complete"
-    if tmp_path.exists():
-        return "partial"
-    return "absent"
 
 
 def _request_for_year(variable: str, year: int, bbox: list[float]) -> dict:

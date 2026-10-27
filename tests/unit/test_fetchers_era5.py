@@ -106,18 +106,6 @@ def test_build_country_mask_keeps_regular_axis_across_a_gap_between_polygons(tmp
     assert n_rows > mask.sub_mask.any(axis=1).sum()  # empty interior rows kept, to be NaN
 
 
-@pytest.mark.unit
-def test_is_complete_download_distinguishes_partial_from_complete(tmp_path):
-    final_path = tmp_path / "a.nc"
-    tmp_download_path = tmp_path / "a.part.nc"
-
-    assert era5.is_complete_download(final_path, tmp_download_path) == "absent"
-    tmp_download_path.write_bytes(b"partial-bytes")
-    assert era5.is_complete_download(final_path, tmp_download_path) == "partial"
-    tmp_download_path.rename(final_path)
-    assert era5.is_complete_download(final_path, tmp_download_path) == "complete"
-
-
 class _FakeClient:
     """Stand-in for cdsapi.Client(): writes a tiny valid NetCDF to `target`."""
 

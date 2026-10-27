@@ -22,7 +22,6 @@ import shutil
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import geopandas as gpd
 import numpy as np
@@ -207,23 +206,6 @@ def read_native_grid(path: Path) -> NativeGrid:
         )
 
 
-def is_complete_download(
-    final_path: Path, tmp_path: Path
-) -> Literal["complete", "partial", "absent"]:
-    """Distinguish a finished download from a crashed/partial one.
-
-    A live download always writes to `tmp_path` (suffix `.part.nc`) and is
-    renamed to `final_path` only after `download_global()` returns
-    successfully. A `.part.nc` left on disk (process killed mid-transfer)
-    is never treated as complete and is never registered.
-    """
-    if final_path.exists():
-        return "complete"
-    if tmp_path.exists():
-        return "partial"
-    return "absent"
-
-
 class IncompleteTemporalCoverageError(OSError):
     """A downloaded file does not hold every month of the requested years (A-09: fail loud, never register)."""
 
@@ -283,7 +265,7 @@ def download_global(client, job: Cmip6Job, out_dir: Path) -> Path:
     Writes directly to its destination (no staging area, F3-1). The live
     write goes to a `.part.nc` name; only a fully-returned `client.retrieve`
     call gets renamed to the final name, so a partial file is always
-    distinguishable from a complete one (see `is_complete_download`).
+    distinguishable from a complete one (see `core.downloads.is_complete_download`).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     final_path = out_dir / f"{job.model}_{job.experiment}_{job.variable}.nc"

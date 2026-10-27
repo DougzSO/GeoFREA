@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TypeVar
 
@@ -145,12 +145,6 @@ class PeriodicProgress:
                 "%s: %d/%d done, elapsed %.1fs", self._label, self._done, self._total, elapsed
             )
             self._last_logged_at = now
-
-    def track(self, iterable: Iterable[T]) -> Iterator[T]:
-        """Yield each item of `iterable`, calling `step()` after it is produced."""
-        for item in iterable:
-            yield item
-            self.step()
 
 
 def render_run_table(rows: Sequence[dict], run_id: str) -> str:

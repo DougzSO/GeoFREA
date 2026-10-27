@@ -252,28 +252,10 @@ land_availability:
         status: sourced
         note: "The ia_ib level has no source (candidate)."
 
-# Output thresholds (M-F7-04, M-F7-05)
+# Output thresholds. The satisficing LCOE threshold `tau` (M-F7-04, OQ-008), the minimum capacity factor `CF_min` (M-F7-01) and the top-k share
+# `p_k` (M-F7-05, OQ-021) are per country and technology, in parameters.json (`tau_lcoe_usd_per_mwh`, `cf_min`, `top_k_percent`); the capacity
+# target (OQ-010) has one source, `national_targets` below.
 thresholds:
-  # Satisficing LCOE threshold (M-F7-04)
-  # tau[country, tech] = maximum acceptable LCOE for satisficing robustness
-  # OQ-008: per-country and technology thresholds
-  satisficing_lcoe_usd_per_mwh:
-    # Format: {country: {technology: threshold_value}}
-    # Example:
-    # PRT:
-    #   solar: 50  # USD/MWh
-    #   wind: 60
-
-  # The top-k share p_k (M-F7-05, OQ-021) is per country and technology, in parameters.json (top_k_percent); read by F7 and by
-  # sample_size_convergence. The capacity target (OQ-010) has one source, `national_targets` below.
-
-  # Feasibility threshold (M-F7-01)
-  # Capacity factor minimum for a cell to be feasible
-  # OQ-008: Per-technology CF_min
-  capacity_factor_min:
-    # solar: null  # Set by OQ-008
-    # wind: null
-
   # Regret quantile (M-F7-02)
   # q_ref for the "optimal" LCOE definition (default 0 = minimum)
   # OQ-020: Decision on q_ref

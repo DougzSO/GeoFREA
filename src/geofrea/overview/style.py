@@ -7,15 +7,11 @@ detail); layers are drawn over it with some transparency. Nothing here computes 
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import geopandas as gpd
 import numpy as np
-import rasterio
 from matplotlib.colors import LightSource
 from matplotlib.patches import Rectangle
 
-from geofrea.core import paths as core_paths
 from geofrea.core.geodesy import wgs84_km_per_degree
 
 HILLSHADE_AZIMUTH_DEG = 315.0
@@ -38,23 +34,6 @@ def hillshade(elevation_m: np.ndarray, extent: Extent) -> np.ndarray:
     light = LightSource(azdeg=HILLSHADE_AZIMUTH_DEG, altdeg=HILLSHADE_ALTITUDE_DEG)
     shade = light.hillshade(filled, vert_exag=VERTICAL_EXAGGERATION, dx=dx, dy=dy)
     return np.where(finite, shade, np.nan)
-
-
-def country_outline(iso: str) -> gpd.GeoDataFrame | None:
-    """The mainland border for drawing, or None if the file is absent (the outline is cosmetic, the layers are not)."""
-    path = core_paths.fetched_raw("gadm", iso) / f"gadm41_{iso}_0_mainland.shp"
-    return gpd.read_file(path) if path.exists() else None
-
-
-def major_rivers(iso: str) -> gpd.GeoDataFrame | None:
-    """The country's largest streams (HydroRIVERS `DIS_AV_CMS` above RIVER_QUANTILE), or None if no clipped river file exists."""
-    path = core_paths.interim(iso, "data_quality_audit") / "rivers_clipped.gpkg"
-    if not path.exists():
-        return None
-    rivers = gpd.read_file(path)
-    if "DIS_AV_CMS" not in rivers.columns or rivers.empty:
-        return None
-    return rivers[rivers["DIS_AV_CMS"] >= rivers["DIS_AV_CMS"].quantile(RIVER_QUANTILE)]
 
 
 def draw_backdrop(ax, relief: np.ndarray | None, extent: Extent) -> None:
@@ -125,19 +104,3 @@ def _scale_bar(ax, extent: Extent) -> None:
         zorder=6,
         bbox={"facecolor": "white", "alpha": 0.6, "pad": 1, "edgecolor": "none"},
     )
-
-
-def load_relief(elevation_path: Path, max_pixels: int = 700) -> tuple[np.ndarray, Extent] | None:
-    """Hillshade and extent from the aligned elevation raster (downsampled like the layers drawn on it), or None if absent."""
-    if not Path(elevation_path).exists():
-        return None
-    with rasterio.open(elevation_path) as src:
-        scale = max(1, int(np.ceil(max(src.height, src.width) / max_pixels)))
-        shape = (max(1, src.height // scale), max(1, src.width // scale))
-        arr = src.read(1, out_shape=shape).astype("float32")
-        nodata, b = src.nodata, src.bounds
-    if nodata is not None:
-        arr[arr == nodata] = np.nan
-    arr[~np.isfinite(arr)] = np.nan
-    extent = (b.left, b.right, b.bottom, b.top)
-    return hillshade(arr, extent), extent
