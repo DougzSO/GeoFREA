@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -22,6 +22,7 @@ from geofrea.core.production import (
 from geofrea.core.schemas import ParameterRange, VerifiedValue
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_MAX_TEXT_BYTES = 5_000_000
 PARAMETERS = REPO_ROOT / "config" / "parameters.json"
 TECHNOLOGIES = REPO_ROOT / "config" / "technologies.yaml"
 EXPERIMENTS = REPO_ROOT / "config" / "experiments.yaml"
@@ -133,13 +134,15 @@ def test_required_f5_parameters_block_production_while_null():
             for key in ("luf", "power_density_mw_per_km2", "gamma", "eta_loss", "hub_height_m"):
                 assert not any(f"{iso} {tech} {key}:" in e for e in audit.errors), (iso, tech, key)
         wind = _patched(parameters, iso, "wind", "hub_height_m", value=None)
-        assert f"{iso} wind hub_height_m: required parameter has no value" in audit_parameters(
-            wind, technologies, [iso], ["wind"]
-        ).errors
+        assert (
+            f"{iso} wind hub_height_m: required parameter has no value"
+            in audit_parameters(wind, technologies, [iso], ["wind"]).errors
+        )
         solar = _patched(parameters, iso, "solar", "luf", value=None, scenario_values=None)
-        assert f"{iso} solar luf: required parameter has no value" in audit_parameters(
-            solar, technologies, [iso], ["solar"]
-        ).errors
+        assert (
+            f"{iso} solar luf: required parameter has no value"
+            in audit_parameters(solar, technologies, [iso], ["solar"]).errors
+        )
     assert "hub_height_m" in technologies.technologies["wind"].required_parameters
     # the synthetic country carries test values for every required parameter
     zzz = audit_parameters(parameters, technologies, ["ZZZ"], ["solar", "wind"])
@@ -159,32 +162,32 @@ def test_main_refuses_a_production_run_before_any_phase_starts(monkeypatch):
 
 @pytest.mark.unit
 def test_no_legacy_opex_names():
-    """V7: the fixed O&M is `opex_fixed_frac` everywhere except the archive and dated audit records."""
-    skip_dirs = {
-        ".git",
-        "__pycache__",
-        ".pytest_cache",
-        ".ruff_cache",
-        ".venv",
-        "node_modules",
-        "geofrea.egg-info",
-        "_archive",
-    }
+    """V7: the fixed O&M is `opex_fixed_frac` everywhere except the archive and dated audit records.
+
+    Reads the files git tracks (and the new ones it does not ignore), never a whole folder: the repository folder can hold ignored archives
+    of hundreds of MB, and decoding one is the MemoryError of COMMAND 70 (R71-09).
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
     hits = []
-    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
-        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
-        rel = Path(dirpath).relative_to(REPO_ROOT).as_posix()
-        for name in filenames:
-            if name.endswith((".pyc", ".tif", ".parquet", ".npz", ".png", ".gpkg")):
-                continue
-            if rel == "docs/_audit" and name[:4].isdigit() and name[4] == "-":
-                continue  # dated audit records are historical
-            try:
-                text = (Path(dirpath) / name).read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            if _LEGACY_NAME in text:
-                hits.append(f"{rel}/{name}")
+    for rel_path in filter(None, listed.split("\0")):
+        path = REPO_ROOT / rel_path
+        parts = Path(rel_path).parts
+        if "_archive" in parts or not path.is_file():
+            continue
+        if path.name.endswith((".pyc", ".tif", ".parquet", ".npz", ".png", ".gpkg", ".gz", ".nc")):
+            continue
+        if parts[:2] == ("docs", "_audit") and path.name[:4].isdigit() and path.name[4] == "-":
+            continue  # dated audit records are historical
+        if path.stat().st_size > _MAX_TEXT_BYTES:
+            continue  # a text file of the repository is far below this; a larger one is data
+        if _LEGACY_NAME in path.read_text(encoding="utf-8", errors="ignore"):
+            hits.append(rel_path)
     assert hits == []
 
 
