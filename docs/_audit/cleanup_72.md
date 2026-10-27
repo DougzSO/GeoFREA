@@ -43,3 +43,11 @@ Nothing was written or removed in `D:\Douglas\DOUTORADO\database\raw`. The manif
 | 18 | Pruned the keys of `D:\Douglas\DOUTORADO\database\raw\...` from the hash memos: `interim/_clip_source_sha256.json` (15 of 49 keys), `interim/BRA/grid_alignment/input_sha256.json` (116 of 1,063), `interim/IND/...` (58 of 602), `interim/PRT/...` (10 of 53). No phase reads that folder, so the keys were never looked up | about 0.37 MB of text | the four files as they were: `GeoFREA_data/archive/hash_memos_20261027/` |
 
 Totals: 520,715,018 B deleted (0.52 GB), 345,675,010 B moved out of `GeoFREA_data` (0.35 GB), 2,182,108 B archived inside it. Together with the repository folder (the tarball of 0.38 GB and five worktrees of 0.09 GB) the cleanup frees about 1.34 GB on `D:\Douglas\DOUTORADO\GeoFREA*`; the 1.1 GB the audit listed under the author's verdict (item 16 and the rest of item 4) is untouched.
+
+## Checks
+
+- Full suite on `main` after the merge (`6b6d3eb`): 1,841 passed, 0 failed, 27 min 56 s (1,850 before; 8 tests of the deleted `era5_ext_queue.py` and one duplicate of `is_complete_download` left, one test of `core/downloads.py` entered).
+- `ruff check src tests scripts`: clean. `ruff format` was run only over the files changed; three files that were unformatted before this command still are.
+- Code fingerprints of the phases against the values before the command: F1 (`data_acquisition`), F3, F5, `overview`, `potential_maps` and `results_synthesis` change (the dead symbols and the helper are in their closures); F1b, F2a, F2b, F4 and the others are identical. No manifest or artifact was written, so the next run of those phases re-executes them; COMMAND 73 reruns them anyway.
+- `config/experiments.yaml` `thresholds:` lost two null keys, so the configuration fingerprint of `sample_size_convergence` and `robustness_analysis` (never run on a real country) changes; F1 to F5 read no `thresholds`.
+- Remaining citations of `docs/DECISIONS.md` or `docs/architecture/` outside `docs/_archive/`: only the audit report itself, which names them as the finding. The string literals of the F1 closure that cite them were none (the 105 citations were in comments and docstrings).
