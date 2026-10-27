@@ -16,6 +16,7 @@ artifacts and are always written. A cell without a `m0` row cannot occur (the re
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,7 @@ from geofrea.technical_potential.absolute_maps import (
     load_neighbours,
     map_context,
 )
-from geofrea.technical_potential.display_layers import load_display_layer
+from geofrea.technical_potential.display_layers import ensure_display_layers, load_display_layer
 from geofrea.technical_potential.question_figures import build_question_figures
 from geofrea.viz.context import country_context
 
@@ -62,6 +63,8 @@ class PotentialMapsSummary(BaseModel):
     absolute_checks: dict[str, Any] = {}
     # COMMAND 69 (spec v2 T-15): the supply curves, the interval of land availability and the change by SSP and window, by artifact key
     question_figures: dict[str, Path] = {}
+    # COMMAND 70: what was done with the 0.01 degree display layers of each technology (`not needed`, `built`, `refused: <why>`)
+    display_layers: dict[str, str] = {}
 
 
 def build_potential_maps(
@@ -75,6 +78,8 @@ def build_potential_maps(
     units: gpd.GeoDataFrame | None = None,
     absolute_maps: AbsoluteMapsConfig | None = None,
     members_yaml: Path | None = None,
+    resolved: Mapping[str, Any] | None = None,
+    siting_dir: Path | None = None,
 ) -> PotentialMapsSummary:
     """COG rasters and PNG maps of `P_MW / cell_area_km2` and `CF` at `m0`, central land scenario.
 
@@ -91,6 +96,9 @@ def build_potential_maps(
             maps are drawn (D-F5-029); without them the territory is the union of the cells.
         absolute_maps: Classification of those maps (`experiments.yaml` `absolute_maps`).
         members_yaml: The `members.yaml` of F4 (default: the F4 artifacts directory), read by the figures of the questions of the thesis (`all`).
+        resolved: The F5 `ResolvedTechnology` of each technology of the run; with it, and `figures_mode == "all"`, the 0.01 degree display layers are
+            built when the px-per-cell rule asks for them (COMMAND 70), checked against the analysis, and a layer that fails is refused.
+        siting_dir: The F2b resource rasters (default: the siting_layers artifacts directory).
 
     Raises:
         PotentialMapsError: unknown `figures_mode`, a missing table, or potential rows for cells the F3 table lacks.
@@ -102,6 +110,7 @@ def build_potential_maps(
     figures_dir = figures_dir or core_paths.phase_dir(iso, "technical_potential", "figures")
     rasters: dict[str, Path] = {}
     figures: list[Path] = []
+    display_layers: dict[str, str] = {}
     neighbours = load_neighbours(iso) if figures_mode != "none" else None
     ctx = None  # the contiguous territory, the extent and the neighbours cut to it: found once per country, used by every map
     for tech in technologies:
@@ -132,6 +141,17 @@ def build_potential_maps(
         )
         if has_values and figures_mode == "all":
             ctx = ctx or map_context(country_geometry(units, cell_ids), neighbours)
+            if resolved is not None and tech in resolved:
+                display_layers[tech] = ensure_display_layers(
+                    iso,
+                    tech,
+                    resolved[tech],
+                    ctx,
+                    potential_dir=Path(artifacts),
+                    cells_dir=Path(cells_dir),
+                    siting_dir=siting_dir
+                    or core_paths.phase_dir(iso, "siting_layers", "artifacts"),
+                )
             figures.append(
                 draw_cell_density_map(
                     cell_ids,
@@ -212,4 +232,5 @@ def build_potential_maps(
         absolute_figures=absolute_figures,
         absolute_checks=absolute_checks,
         question_figures=question_figures,
+        display_layers=display_layers,
     )

@@ -67,3 +67,7 @@ Items 1-5, 7-9, 11 and 12 of section 1 draw one map on one axes and can move to 
 ## 6. After COMMAND 68
 
 Every figure of sections 1 and 2 except the thesis figures of F8 (item 12) and the audit charts of `scripts/audit_potential.py` now goes through `viz/` (`MapFigure`, `PanelFigure`, `charts`); items 2-9 and 11 were moved by family, one commit each, and the three real countries were redrawn. The old files are in `GEOFREA_DATA_DIR/archive/figures_20261026/`. The static test `tests/unit/test_no_maps_outside_mapfigure.py` keeps `matplotlib.pyplot` inside `viz/` and in those two places. What was drawn, per country and phase, with one before/after pair per family, is in `docs/figures/migration_68.md`.
+
+## 7. After COMMAND 70
+
+The 0.01° display layers are built by `potential_maps` for the countries whose cell would be drawn with more than 4 pixels (PRT; BRA and IND not). Still pending: migration of the F8 thesis figures and of the audit charts of `scripts/audit_potential.py` to `viz/`; the figures of F6 and F7 to check on their first real run; the supply curve against LCOE after F6. Details: `docs/figures/display_layers_70.md`.

@@ -443,3 +443,40 @@ def test_pixels_per_cell_follow_the_latitude_and_the_pixel():
     assert display.upsample_factor(0.5, (10, 10)) == 2
     assert display.upsample_factor(7.2, (10, 10)) == 8
     assert display.upsample_factor(40.0, (4000, 4000)) < 40
+
+
+def test_with_partial_only_the_layers_that_depend_on_a_failed_check_are_refused(tmp_path):
+    wrong_cf = _inputs()
+    wrong_cf["analysis_cf"] = wrong_cf["analysis_cf"] * 1.05
+    build = dl.build_display_layers(**wrong_cf, partial=True)
+    assert set(build.refused) == {"capacity-factor", "energy-density"}
+    assert set(build.layers) == {"eligible-fraction", "capacity-density"}
+    dl.write_display_layers(tmp_path, "t", build)
+    record = json.loads(dl.meta_path(tmp_path, "t").read_text(encoding="utf-8"))
+    assert set(record["refused"]) == {"capacity-factor", "energy-density"}
+    assert dl.load_display_layer(tmp_path, "capacity-factor", "t") is None
+    assert dl.load_display_layer(tmp_path, "capacity-density", "t") is not None
+    wrong_area = _inputs()
+    wrong_area["analysis_eligible_area_km2"] = wrong_area["analysis_eligible_area_km2"] * 1.01
+    with pytest.raises(dl.DisplayLayerError):  # nothing is left
+        dl.build_display_layers(**wrong_area, partial=True)
+
+
+def test_a_country_that_does_not_need_the_fine_layer_leaves_no_stale_layer(tmp_path, monkeypatch):
+    build = dl.build_display_layers(**_inputs())
+    dl.write_display_layers(tmp_path, "t", build)
+    monkeypatch.setattr(dl, "country_needs_fine_layer", lambda ctx, iso, cell_deg: (False, 1.6))
+    assert (
+        dl.ensure_display_layers(
+            "ZZZ", "t", None, None, potential_dir=tmp_path, cells_dir=tmp_path, siting_dir=tmp_path
+        )
+        == "not needed"
+    )
+    assert dl.load_display_layer(tmp_path, "capacity-factor", "t") is None
+
+
+def test_a_refusal_is_recorded_and_removes_the_rasters(tmp_path):
+    dl.write_display_layers(tmp_path, "t", dl.build_display_layers(**_inputs()))
+    dl.write_refusal(tmp_path, "t", "why", 11.8)
+    assert dl.load_display_layer(tmp_path, "capacity-factor", "t") is None
+    assert json.loads(dl.meta_path(tmp_path, "t").read_text(encoding="utf-8"))["refused"] == "why"

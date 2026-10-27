@@ -15,14 +15,16 @@ Branch `feat/display-resolution`. Decision record: D-core-047. Method: METHODOLO
 
 ## Before and after (synthetic data, the same field)
 
+Images archived in `GeoFREA_data/archive/docs_figures_67b` (before and after of PRT, LUX, CHE and BRA).
+
 "Before" is the 0.05° cells as they are (`fine=False`, `display_smoothing="off"`); "after" is what the figure draws now.
 
 | | Before | After | What was done |
 |---|---|---|---|
-| PRT, thesis | ![](display_resolution_67b/PRT_before.png) | ![](display_resolution_67b/PRT_after.png) | 11.7 px per cell → the 0.01° display layer (2.3 px): no smoothing needed |
-| LUX, article_single | ![](display_resolution_67b/LUX_before.png) | ![](display_resolution_67b/LUX_after.png) | 25.8 px per cell → 0.01° layer (5.2 px, still above 4) → display smoothing |
-| CHE, article_single | ![](display_resolution_67b/CHE_before.png) | ![](display_resolution_67b/CHE_after.png) | climate delta (a GCM field, no fine layer) → display smoothing from the 0.05° grid |
-| BRA, thesis | ![](display_resolution_67b/BRA_before.png) | ![](display_resolution_67b/BRA_after.png) | 1.6 px per cell: nothing to do, identical |
+| PRT, thesis | `PRT_before.png` | `PRT_after.png` | 11.7 px per cell → the 0.01° display layer (2.3 px): no smoothing needed |
+| LUX, article_single | `LUX_before.png` | `LUX_after.png` | 25.8 px per cell → 0.01° layer (5.2 px, still above 4) → display smoothing |
+| CHE, article_single | `CHE_before.png` | `CHE_after.png` | climate delta (a GCM field, no fine layer) → display smoothing from the 0.05° grid |
+| BRA, thesis | `BRA_before.png` | `BRA_after.png` | 1.6 px per cell: nothing to do, identical |
 
 The four examples of `docs/figures/examples/` were regenerated; CHL and IDN (classes and states, never smoothed) were not, as asked.
 
@@ -40,7 +42,7 @@ The four examples of `docs/figures/examples/` were regenerated; CHL and IDN (cla
 
 ## Limits (stated, not hidden)
 
-- **The display layers of the real countries are not built.** `build_display_layers` and `write_display_layers` are tested on synthetic pixels with the real `PvoutWithTemperature` model, and `potential_maps` reads the layers when they exist, but no phase calls the builder yet: it needs the F2a resource layers, the F3 eligible fraction and the F5 registry settings of a real run, which this command did not run. Until then the real F5 maps draw the cells (with `display smoothing` when a cell is above 4 pixels). Wiring the builder into the phase is a follow-up.
+- **Wired in COMMAND 70.** `potential_maps` builds the layers when the px-per-cell rule asks for them (PRT) and refuses, by layer, one that fails the aggregation check. See `docs/figures/display_layers_70.md`.
 - The smoothing keeps the border of the data at the edge of the cells, so a thin strip of a coastal cell whose centre is outside the polygon stays empty (white, or the grey of "no potential").
 - The gap between neighbours and country is closed up to 8 km; a larger mismatch of two border sources still shows white. The archetype fixtures have no Liechtenstein, so a small white sliver remains in the example of CHE.
 - The real F5 PNGs keep their old look until the phase is rerun; no file in `outputs/` was touched.
