@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "methodology_version": "15.2.4",
-  "last_updated": "2026-10-26",
+  "last_updated": "2026-10-27",
   "current_milestone": "MS-4",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -68,6 +68,7 @@
     "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_with_issues", "F6": "ran_clean", "F7": "ran_with_issues", "F7b": "ran_with_issues"}
   },
+  "pending_figures": ["COMMAND 70: migrate the F8 thesis figures (results_synthesis) and the audit charts (scripts/audit_potential.py) to viz", "F6 and F7 figures: check on the first real run", "Supply curve against LCOE after F6", "Wind CF display layer of PRT refused by the 1% aggregation check (16 of 3500 cells, max 1.96%): decide the tolerance, see docs/figures/display_layers_70.md"],
   "regression": {
     "workflow": ".github/workflows/regression.yml",
     "fixtures": "tests/fixtures/v01/zzz.npz",
