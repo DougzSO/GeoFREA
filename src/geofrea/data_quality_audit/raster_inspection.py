@@ -18,7 +18,6 @@ line every N tiles reads the same in a terminal and in a file.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import math
@@ -34,13 +33,19 @@ import rasterio
 from rasterio.errors import WindowError
 from rasterio.features import geometry_mask
 from rasterio.windows import from_bounds as window_from_bounds
-from shapely.geometry import box, mapping
+from shapely.geometry import mapping
 
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_key
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
-from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.run_logging import PeriodicProgress
+from geofrea.data_quality_audit.land_cover_tiles import (
+    _land_cover_geom_fingerprint,
+    _load_land_cover_tile_cache,
+    _save_land_cover_tile_cache,
+    row_area_km2,
+    score_land_cover_tile,
+)
 
 logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 
@@ -107,32 +112,6 @@ def _nodata_mask(data: np.ndarray, nodata) -> np.ndarray:
         return finite
 
     return finite & (data != nodata_typed)
-
-
-def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarray:
-    """Compute geodetic area per pixel row in km², corrected by latitude.
-
-    Returns a 1D array (height,) rather than a full 2D grid to avoid
-    memory issues with large tiles. WGS84 scale factors come from
-    core.geodesy.wgs84_km_per_degree() — centralized 2026-09-09 (see
-    docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
-    was the most complete of three previously-divergent truncations,
-    now the shared one).
-    """
-    height, _ = shape
-    res_x = abs(transform.a)
-    res_y = abs(transform.e)
-
-    rows = np.arange(height)
-    y_top = transform.f + rows * transform.e
-    y_bottom = transform.f + (rows + 1) * transform.e
-    lat_mid = (y_top + y_bottom) / 2.0
-
-    lat_km, lon_km = wgs84_km_per_degree(lat_mid)
-
-    km_x = res_x * lon_km
-    km_y = res_y * lat_km
-    return (km_x * km_y).astype(np.float64)
 
 
 def _country_window(
@@ -677,66 +656,6 @@ def inspect_raster(
     return result
 
 
-# Version of the per-tile class-area computation, part of every tile cache key (OQ-026). Bump it by hand when the logic of
-# `inspect_land_cover_tiles` changes (masking, area weights, class handling), or old cache entries would be reused.
-LAND_COVER_TILE_ALGORITHM_VERSION = 1
-_LAND_COVER_WINDOW_PX = 8192
-
-
-def _land_cover_geom_fingerprint(country_geom) -> str:
-    """Short hash of the country polygon actually used to mask tiles.
-
-    Included in every per-tile cache key so a changed island-filtering
-    rule or a different country_gdf invalidates cached results instead
-    of silently reusing areas computed against a stale polygon.
-    """
-    return hashlib.sha256(country_geom.wkb).hexdigest()[:16]
-
-
-def _land_cover_tile_cache_key(tile: Path, geom_fingerprint: str) -> str:
-    """Cache key for one tile (OQ-026): the algorithm version, the tile's SHA-256 and the config values that change the result.
-
-    The inputs are the tile (by content, so a re-fetch of identical bytes still hits) and the config is the masking polygon's
-    fingerprint and the window size of the scan. Any of the three changing, or `LAND_COVER_TILE_ALGORITHM_VERSION`, misses.
-    """
-    return cache_key(
-        LAND_COVER_TILE_ALGORITHM_VERSION,
-        [tile],
-        {"country_polygon_fingerprint": geom_fingerprint, "window_px": _LAND_COVER_WINDOW_PX},
-        code=cache_code("land_cover_tiles"),
-    )
-
-
-def _load_land_cover_tile_cache(
-    cache_dir: Path, tile: Path, geom_fingerprint: str
-) -> dict[str, Any] | None:
-    cache_file = cache_dir / f"{tile.stem}.json"
-    if not cache_file.exists():
-        return None
-    try:
-        cached = json.loads(cache_file.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        logger.warning("[land_cover] Failed to read tile cache %s: %s", cache_file, exc)
-        return None
-    if cached.get("cache_key") != _land_cover_tile_cache_key(tile, geom_fingerprint):
-        return None
-    return cached
-
-
-def _save_land_cover_tile_cache(
-    cache_dir: Path, tile: Path, geom_fingerprint: str, payload: dict[str, Any]
-) -> None:
-    try:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        payload_with_key = {
-            **payload,
-            "cache_key": _land_cover_tile_cache_key(tile, geom_fingerprint),
-        }
-        (cache_dir / f"{tile.stem}.json").write_text(json.dumps(payload_with_key), encoding="utf-8")
-    except OSError as exc:
-        logger.warning("[land_cover] Failed to write tile cache for %s: %s", tile.name, exc)
-
-
 def inspect_land_cover_tiles(
     tile_paths: list[Path],
     country_gdf: gpd.GeoDataFrame | None = None,
@@ -803,92 +722,27 @@ def inspect_land_cover_tiles(
                     continue
 
             try:
-                with rasterio.open(str(tile)) as src:
-                    t_bounds = src.bounds
-
-                    if (
-                        t_bounds[2] < country_bounds[0]
-                        or t_bounds[0] > country_bounds[2]
-                        or t_bounds[3] < country_bounds[1]
-                        or t_bounds[1] > country_bounds[3]
-                    ):
-                        tiles_skip += 1
-                        continue
-
-                    tile_box_geom = box(*t_bounds)
-                    intersected_geom = country_geom.intersection(tile_box_geom)
-
-                    if intersected_geom.is_empty:
-                        tiles_skip += 1
-                        continue
-
-                    tile_crs = str(src.crs)
-                    tile_res = round(abs(src.res[0]), 8)
-                    crs_set.add(tile_crs)
-                    res_set.add(tile_res)
-                    tiles_used += 1
-
-                    row_areas_global = row_area_km2((src.height, src.width), src.transform)
-                    tile_class_areas: dict[int, float] = {}
-
-                    step = _LAND_COVER_WINDOW_PX
-                    for r in range(0, src.height, step):
-                        for c in range(0, src.width, step):
-                            window = rasterio.windows.Window(
-                                c, r, min(step, src.width - c), min(step, src.height - r)
-                            )
-
-                            w_bounds = src.window_bounds(window)
-                            if not box(*w_bounds).intersects(intersected_geom):
-                                continue
-
-                            data_block = src.read(1, window=window)
-                            if not np.any(data_block > 0):
-                                continue
-
-                            win_transform = src.window_transform(window)
-                            block_mask = geometry_mask(
-                                [intersected_geom],
-                                out_shape=data_block.shape,
-                                transform=win_transform,
-                                invert=True,
-                            )
-
-                            valid_mask = (data_block > 0) & block_mask
-                            if not np.any(valid_mask):
-                                continue
-
-                            row_areas_win = row_areas_global[
-                                window.row_off : window.row_off + window.height
-                            ]
-                            unique_classes = np.unique(data_block[valid_mask])
-
-                            for cls in unique_classes:
-                                cls_mask = (data_block == cls) & block_mask
-                                cls_per_row = cls_mask.sum(axis=1)
-                                area = float((row_areas_win * cls_per_row).sum())
-                                cls_int = int(cls)
-                                tile_class_areas[cls_int] = (
-                                    tile_class_areas.get(cls_int, 0.0) + area
-                                )
-
-                    del row_areas_global
-
-                    for cls_int, area in tile_class_areas.items():
-                        class_areas[cls_int] = class_areas.get(cls_int, 0.0) + area
-                        total_area += area
-
-                    if cache_dir is not None:
-                        _save_land_cover_tile_cache(
-                            cache_dir,
-                            tile,
-                            geom_fingerprint,
-                            {
-                                "crs": tile_crs,
-                                "res": tile_res,
-                                "class_areas": {str(k): v for k, v in tile_class_areas.items()},
-                            },
-                        )
+                scored = score_land_cover_tile(tile, country_geom, country_bounds)
+                if scored is None:
+                    tiles_skip += 1
+                    continue
+                crs_set.add(scored["crs"])
+                res_set.add(scored["res"])
+                tiles_used += 1
+                for cls_int, area in scored["class_areas"].items():
+                    class_areas[cls_int] = class_areas.get(cls_int, 0.0) + area
+                    total_area += area
+                if cache_dir is not None:
+                    _save_land_cover_tile_cache(
+                        cache_dir,
+                        tile,
+                        geom_fingerprint,
+                        {
+                            "crs": scored["crs"],
+                            "res": scored["res"],
+                            "class_areas": {str(k): v for k, v in scored["class_areas"].items()},
+                        },
+                    )
 
             except Exception as exc:  # noqa: BLE001 — one bad tile must not abort the whole scan
                 errors.append(f"{tile.name}: {exc}")
@@ -944,8 +798,7 @@ def inspect_raster_cached(
     """`inspect_raster`, skipped when the input, the country polygon and the code that computes the statistics are those of the stored result.
 
     The audit is a report and never blocks (M-F1b-02); what it measures of a layer depends on the content of the file (SHA-256, memoised by
-    size and mtime), the polygon that masks it and the code of `raster_inspection`, which is the key of the stored result (the same code
-    fingerprint as the per-tile land-cover cache). Without `cache_dir` nothing is stored. The result is the JSON form of the statistics, fresh or
+    size and mtime), the polygon that masks it and the code of `raster_inspection` (cache `raster_audit`), which is the key of the stored result. Without `cache_dir` nothing is stored. The result is the JSON form of the statistics, fresh or
     stored.
 
     Args:
@@ -970,7 +823,7 @@ def inspect_raster_cached(
         [path, assume_crs_from],
         {"country_polygon_fingerprint": polygon, "layer_file": Path(path).name},
         memo,
-        code=cache_code("land_cover_tiles"),
+        code=cache_code("raster_audit"),
     )
     cache_file = Path(cache_dir) / f"{Path(path).stem}.json"
     if cache_file.exists():

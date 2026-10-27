@@ -22,7 +22,7 @@ from geofrea.core.cache_key import (
     key_path,
     write_cache_key,
 )
-from geofrea.data_quality_audit import raster_inspection
+from geofrea.data_quality_audit import land_cover_tiles
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from tests.unit.test_grid_alignment_alignment import (  # noqa: F401  (_data_dir is an autouse fixture)
     _context,
@@ -219,16 +219,16 @@ def test_the_list_of_land_cover_tiles_is_part_of_the_key(tmp_path):
 
 def test_the_land_cover_tile_key_has_every_component(tmp_path, monkeypatch):
     tile = _file(tmp_path / "tile.tif", "bytes")
-    key = raster_inspection._land_cover_tile_cache_key
+    key = land_cover_tiles._land_cover_tile_cache_key
     base = key(tile, "polygon-a")
     assert base == key(tile, "polygon-a")
 
     assert key(tile, "polygon-b") != base  # config: the masking polygon
     with monkeypatch.context() as m:
-        m.setattr(raster_inspection, "_LAND_COVER_WINDOW_PX", 4096)  # config: the scan window
+        m.setattr(land_cover_tiles, "_LAND_COVER_WINDOW_PX", 4096)  # config: the scan window
         assert key(tile, "polygon-a") != base
     with monkeypatch.context() as m:
-        m.setattr(raster_inspection, "LAND_COVER_TILE_ALGORITHM_VERSION", 2)  # algorithm version
+        m.setattr(land_cover_tiles, "LAND_COVER_TILE_ALGORITHM_VERSION", 2)  # algorithm version
         assert key(tile, "polygon-a") != base
     _file(tmp_path / "tile.tif", "other bytes")  # input content
     assert key(tile, "polygon-a") != base
@@ -238,7 +238,7 @@ def test_a_saved_tile_entry_is_a_miss_after_the_algorithm_version_changes(tmp_pa
     tile = _file(tmp_path / "tile.tif", "bytes")
     cache_dir = tmp_path / "cache"
     payload = {"crs": "EPSG:4326", "res": 0.1, "class_areas": {"10": 1.0}}
-    raster_inspection._save_land_cover_tile_cache(cache_dir, tile, "fp", payload)
-    assert raster_inspection._load_land_cover_tile_cache(cache_dir, tile, "fp") is not None
-    monkeypatch.setattr(raster_inspection, "LAND_COVER_TILE_ALGORITHM_VERSION", 2)
-    assert raster_inspection._load_land_cover_tile_cache(cache_dir, tile, "fp") is None
+    land_cover_tiles._save_land_cover_tile_cache(cache_dir, tile, "fp", payload)
+    assert land_cover_tiles._load_land_cover_tile_cache(cache_dir, tile, "fp") is not None
+    monkeypatch.setattr(land_cover_tiles, "LAND_COVER_TILE_ALGORITHM_VERSION", 2)
+    assert land_cover_tiles._load_land_cover_tile_cache(cache_dir, tile, "fp") is None

@@ -17,7 +17,8 @@ from geofrea.core.code_fingerprint import cached_closure_fingerprint
 CACHE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "clip": ("core.geo_utils",),
     "aligned_layers": ("grid_alignment",),
-    "land_cover_tiles": ("data_quality_audit.raster_inspection",),
+    "land_cover_tiles": ("data_quality_audit.land_cover_tiles",),
+    "raster_audit": ("data_quality_audit.raster_inspection",),
     "subpixel_shares": ("land_eligibility.fractions",),
     "dem30_extremes": ("siting_layers.sanity",),
     "era5_reduction": ("data_acquisition.fetchers.era5",),

@@ -35,7 +35,8 @@ SRC = Path(geofrea.__file__).resolve().parent
 TARGET = {
     "clip": "core/geo_utils.py",
     "aligned_layers": "grid_alignment/raster_alignment.py",
-    "land_cover_tiles": "data_quality_audit/raster_inspection.py",
+    "land_cover_tiles": "data_quality_audit/land_cover_tiles.py",
+    "raster_audit": "data_quality_audit/raster_inspection.py",
     "subpixel_shares": "land_eligibility/fractions.py",
     "dem30_extremes": "siting_layers/sanity.py",
     "era5_reduction": "data_acquisition/fetchers/era5.py",
@@ -118,9 +119,28 @@ def _probe_tiles(tmp: Path):
     tile.write_bytes(b"tile")
 
     def probe() -> str:
-        from geofrea.data_quality_audit.raster_inspection import _land_cover_tile_cache_key
+        from geofrea.data_quality_audit.land_cover_tiles import _land_cover_tile_cache_key
 
         return _land_cover_tile_cache_key(tile, "polygon")
+
+    return probe
+
+
+def _probe_raster_audit(tmp: Path):
+    path = tmp / "layer.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", height=4, width=4, count=1, dtype="float32",
+        crs="EPSG:4326", transform=from_origin(0, 4, 1, 1),
+    ) as dst:  # fmt: skip
+        dst.write(np.ones((4, 4), dtype="float32"), 1)
+    cache_dir = tmp / "raster_audit_cache"
+
+    def probe() -> str:
+        from geofrea.data_quality_audit.raster_inspection import inspect_raster_cached
+
+        mask = gpd.GeoDataFrame(geometry=[box(0, 0, 4, 4)], crs="EPSG:4326")
+        inspect_raster_cached(path, mask, cache_dir=cache_dir)
+        return json.loads((cache_dir / "layer.json").read_text(encoding="utf-8"))["cache_key"]
 
     return probe
 
@@ -205,6 +225,7 @@ PROBES = {
     "clip": _probe_clip,
     "aligned_layers": _probe_aligned,
     "land_cover_tiles": _probe_tiles,
+    "raster_audit": _probe_raster_audit,
     "subpixel_shares": _probe_shares,
     "dem30_extremes": _probe_dem30,
     "era5_reduction": _probe_era5,
