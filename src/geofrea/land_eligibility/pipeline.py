@@ -631,6 +631,8 @@ def build_eligibility(
                     "cells": cells,
                     "candidates": candidates,
                 }
+            else:  # only the central scenario keeps its pixel arrays: the others are on disk (COMMAND 75)
+                eligible = excl = None
             logger.info(
                 "%s %s [%s]: %d cells, %d candidates, %.1f%% of the land eligible",
                 iso,
