@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
@@ -86,27 +87,33 @@ def artifacts_dir(iso: str) -> Path:
     return path
 
 
+def _member_codes(column: pd.Series) -> tuple[np.ndarray, list[str]]:
+    """Integer code of each row's member and the member ids: the ids are looked at once each, not as ten million strings (COMMAND 75)."""
+    codes, uniques = pd.factorize(column)
+    return codes, [str(u) for u in uniques]
+
+
 def _ratio_qc(forcing_path: Path) -> dict:
     df = pd.read_parquet(forcing_path, columns=["member", "delta_rsds", "delta_wind"])
-    df["member"] = df["member"].astype(str)
-    df = df[df["member"] != "m0"]
-    df["gcm"] = df["member"].str.extract(r"^m_(.+)_ssp")[0]
-    return {
-        gcm: {
-            col: {"min": float(g[col].min()), "max": float(g[col].max())}
+    codes, members = _member_codes(df["member"])
+    gcm_of = {i: m for i, m in enumerate(members)}
+    gcms = pd.Series(members).str.extract(r"^m_(.+)_ssp")[0]  # NaN for m0 and for any id that is not a GCM member
+    out: dict = {}
+    for gcm in sorted(g for g in gcms.dropna().unique()):
+        rows = np.isin(codes, [i for i in gcm_of if gcms[i] == gcm])
+        out[gcm] = {
+            col: {"min": float(df[col][rows].min()), "max": float(df[col][rows].max())}
             for col in ("delta_rsds", "delta_wind")
         }
-        for gcm, g in df.groupby("gcm")
-    }
+    return out
 
 
 def _isolated_counts(forcing_path: Path) -> dict[str, int]:
     """Cell-members per member whose cell is interpolated from an isolated native dT cell (V-82); members with none are omitted."""
     df = pd.read_parquet(forcing_path, columns=["member", "dT_isolated_native_cell"])
-    df["member"] = df["member"].astype(str)
-    return {
-        k: int(v) for k, v in df.groupby("member")["dT_isolated_native_cell"].sum().items() if v
-    }
+    codes, members = _member_codes(df["member"])
+    counts = np.bincount(codes[df["dT_isolated_native_cell"].to_numpy(dtype=bool)], minlength=len(members))
+    return {m: int(n) for m, n in sorted(zip(members, counts, strict=True)) if n}
 
 
 def build_forcing(
