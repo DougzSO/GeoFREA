@@ -128,8 +128,8 @@ def _calls_of_reproject(inputs, context):
     """Calls of the elevation and slope pass (F2a reads the GLO-30 tiles, D-F2a-021)."""
     with patch.object(
         alignment_module,
-        "elevation_and_slope_from_glo30",
-        wraps=alignment_module.elevation_and_slope_from_glo30,
+        "glo30_aligned_outputs",
+        wraps=alignment_module.glo30_aligned_outputs,
     ) as spy:
         run_grid_alignment_phase(context, inputs)
     return spy.call_count

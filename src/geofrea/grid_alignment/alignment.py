@@ -111,11 +111,10 @@ from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
-    elevation_and_slope_from_glo30,
+    glo30_aligned_outputs,
     land_cover_class_counts,
     mosaic_land_cover,
     reproject_to_grid,
-    slope_class_counts,
 )
 from geofrea.grid_alignment.reference_grid import GridContext, build_reference_grid
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult, GridMetadata
@@ -394,24 +393,34 @@ def run_grid_alignment_phase(
     # inside each pixel (METHODOLOGY 15.2.0, M-F2a-02). There is no other DEM input (the bundled `<ISO>_elevation.tif` is not read).
     dem_tiles = list(inputs.slope_dem_tiles)
 
-    def _elevation_and_slope() -> tuple[Path | None, Path | None]:
-        outputs = elevation_and_slope_from_glo30(
-            dem_tiles, _path("elevation"), _path("slope"), grid
-        )
-        if (
-            outputs[1] is not None
-        ):  # both rasters come from one pass: the slope is as current as the elevation
-            write_cache_key(outputs[1], _key(dem_tiles))
-        return outputs
+    glo30: dict[str, Path | None] = {}
+
+    def _glo30_pass() -> dict[str, Path | None]:
+        """One pass over the GLO-30 tiles writes the elevation, the slope and the slope bins (COMMAND 75): the first of the three steps that is
+        stale runs it and the other two find their raster current, with the key of the same source."""
+        if not glo30:
+            glo30.update(
+                glo30_aligned_outputs(
+                    dem_tiles,
+                    grid,
+                    elevation_out=_path("elevation"),
+                    slope_out=_path("slope"),
+                    counts_out=_path("slope_counts"),
+                )
+            )
+            for written in glo30.values():  # every raster comes from one pass over one source: each is as current as the others
+                if written is not None:
+                    write_cache_key(written, _key(dem_tiles))
+        return glo30
 
     with timer("elevation", timings), gdal_quiet():
         aligned["elevation"] = _execute_or_load(
-            "elevation", lambda: _elevation_and_slope()[0], bool(dem_tiles), files=dem_tiles
+            "elevation", lambda: _glo30_pass()["elevation"], bool(dem_tiles), files=dem_tiles
         )
 
     with timer("slope", timings), gdal_quiet():
         aligned["slope"] = _execute_or_load(
-            "slope", lambda: _elevation_and_slope()[1], bool(dem_tiles), files=dem_tiles
+            "slope", lambda: _glo30_pass()["slope"], bool(dem_tiles), files=dem_tiles
         )
 
     with timer("solar", timings), gdal_quiet():
@@ -471,7 +480,7 @@ def run_grid_alignment_phase(
     with timer("slope_counts", timings):
         aligned["slope_counts"] = _execute_or_load(
             "slope_counts",
-            lambda: slope_class_counts(inputs.slope_dem_tiles, _path("slope_counts"), grid),
+            lambda: _glo30_pass()["slope_counts"],
             bool(inputs.slope_dem_tiles),
             files=inputs.slope_dem_tiles,
         )
