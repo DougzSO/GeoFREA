@@ -90,6 +90,9 @@ def pixel_area_km2(lat_south: float, lat_north: float, dlon_deg: float) -> float
     return inner * math.radians(dlon_deg) / 1e6
 
 
+CELL_PIXELS: list[tuple[float, float, float]] = []  # (lon, lat, eligible area in km2) of the pixels of the cell checked, for the wind CF per pixel
+
+
 def validate_f3() -> pd.Series:
     cand = table(f"land_eligibility/artifacts/candidates_{TECH}__central.parquet")
     cell = cand.loc[cand["eligible_area_km2"].idxmax()]
@@ -108,9 +111,10 @@ def validate_f3() -> pd.Series:
                     a = pixel_area_km2(lat - PIXEL_DEG / 2, lat + PIXEL_DEG / 2, PIXEL_DEG)
                     total_area += a
                     f = data[r, c]
-                    total_elig += (
-                        0.0 if (nodata is not None and f == nodata) or not np.isfinite(f) else f * a
-                    )
+                    w = 0.0 if (nodata is not None and f == nodata) or not np.isfinite(f) else f * a
+                    total_elig += w
+                    if w > 0:
+                        CELL_PIXELS.append((lon, lat, w))
     check(
         f"F3 cell {int(cell['cell_id'])}: cell_area_km2 (sum of 25 geodesic pixel areas)",
         total_area,
@@ -237,6 +241,29 @@ def wind_cf(cell: pd.Series, delta_wind: float, curve: dict, d_t: float = 0.0) -
     return val("wind", "eta_loss") * weibull_integral(delta_wind * a_eq, k_h, curve)
 
 
+def wind_cf_pixels(delta_wind: float, curve: dict, d_t: float) -> float:
+    """METHODOLOGY 15.3.0 (M-F5-03): the CF of the cell is the mean of the pixel CFs weighted by the eligible area of each pixel (pixels without a value of a layer are left out)."""
+    h = val("wind", "hub_height_m")
+    heights = (100, 150) if h <= 150 else (150, 200)
+    names = [f"{p}_{z}m" for p in ("weibull_a", "weibull_k", "air_density") for z in heights]
+    sources = {n: rasterio.open(OUT / f"siting_layers/artifacts/{n}.tif") for n in names}
+    try:
+        total = weighted = 0.0
+        for lon, lat, w in CELL_PIXELS:
+            values = {}
+            for n, src in sources.items():
+                v = float(next(src.sample([(lon, lat)]))[0])
+                values[n] = np.nan if (src.nodata is not None and v == src.nodata) else v
+            if not all(np.isfinite(v) for v in values.values()):
+                continue
+            weighted += w * wind_cf(pd.Series(values), delta_wind, curve, d_t)
+            total += w
+        return weighted / total
+    finally:
+        for src in sources.values():
+            src.close()
+
+
 def validate_f5(cell: pd.Series) -> dict:
     forcing = table("climate_forcing/artifacts/forcing.parquet")
     pot = table(f"technical_potential/artifacts/potential_{TECH}__central.parquet")
@@ -260,10 +287,10 @@ def validate_f5(cell: pd.Series) -> dict:
             d_t = float(
                 forcing[(forcing["cell_id"] == cid) & (forcing["member"] == m)]["dT"].iloc[0]
             )
-            cf = wind_cf(cell, dw, curve, d_t)
+            cf = wind_cf_pixels(dw, curve, d_t)
             row = pot[(pot["cell_id"] == cid) & (pot["member"] == m)].iloc[0]
             check(
-                f"F5 wind cell {cid} {m}: CF (Weibull x power curve, numerical quadrature)",
+                f"F5 wind cell {cid} {m}: CF (Weibull x power curve, numerical quadrature, eligible-area mean of the 25 pixels)",
                 cf,
                 float(row["CF"]),
                 1e-6,

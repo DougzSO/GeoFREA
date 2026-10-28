@@ -15,15 +15,24 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 import pytest
+import rasterio
 import yaml
 
 from geofrea.climate_forcing.forcing import ForcingContractError
 from geofrea.core.config_loader import load_audit_config, load_parameters, load_technologies
 from geofrea.core.config_schemas import ClassFlagRule, TechnologyConfig
-from geofrea.core.constants import HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
+from geofrea.core.constants import (
+    CELL_DEG,
+    CELL_NESTING_PIXELS,
+    CELL_ORIGIN_LAT,
+    CELL_ORIGIN_LON,
+    HOURS_PER_YEAR,
+    ISA_T0_K,
+    RHO0_KG_M3,
+)
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import read_schema_version
-from geofrea.land_eligibility.cells import cell_id
+from geofrea.land_eligibility.cells import cell_id, eligible_fraction_file, pixel_row_area_km2
 from geofrea.land_eligibility.pipeline import WIND_HEIGHTS_M
 from geofrea.siting_layers.sanity import CountryGeometry
 from geofrea.technical_potential.aggregates import aggregate_scenario
@@ -40,6 +49,7 @@ from geofrea.technical_potential.input_ranges import (
     validate_candidates,
 )
 from geofrea.technical_potential.pipeline import PROVENANCE_KEY, build_potential
+from geofrea.technical_potential.pixel_inputs import PixelInputError
 from geofrea.technical_potential.power_curve import SyntheticCurveError, load_power_curve
 from geofrea.technical_potential.table_schemas import POTENTIAL_TABLE_SCHEMA_VERSION
 from geofrea.technical_potential.weibull_cf import weibull_mean_speed, wind_cf_member
@@ -99,6 +109,86 @@ ELEVATION = np.linspace(
     100.0, 3500.0, N_CELLS
 )  # the last two cells are above the 3000 m of the wind sensitivity (OQ-058)
 
+# The pixels of the 8 cells (D-F5-038): 5 x 5 pixels per cell on the lattice, the same eligible fraction in every pixel of a cell (so that the
+# pixel weights add up to the eligible area of the table), and a spread of the resources across the five columns of a cell that averages to the
+# cell value in every row (the weight is the same along a row): the cell means of the tables are the true means of the pixels, and the capacity
+# factor of a cell is not the capacity factor of its means.
+K_PIX = CELL_NESTING_PIXELS
+PIXEL_DEG = CELL_DEG / K_PIX
+SPREAD = np.array([-2.0, -1.0, 0.0, 1.0, 2.0])
+SPREAD_BY_PRODUCT = {"weibull_a": 0.06, "weibull_k": 0.04, "air_density": 0.01}
+PIXEL_TRANSFORM = rasterio.Affine(
+    PIXEL_DEG,
+    0.0,
+    CELL_ORIGIN_LON + 2000 * CELL_DEG,
+    0.0,
+    -PIXEL_DEG,
+    CELL_ORIGIN_LAT - 1000 * CELL_DEG,
+)
+CELL_VALUES = {
+    "weibull_a": {100: A100, 150: A150, 200: A200},
+    "weibull_k": {100: K100, 150: K150, 200: K200},
+    "air_density": {100: RHO100, 150: RHO150, 200: RHO200},
+}
+
+
+def _pixel_resource(product: str, height_m: int) -> np.ndarray:
+    """(5, 40) pixels of one wind layer: the value of the cell times `1 + spread * [-2, -1, 0, 1, 2]` along the columns of each cell."""
+    factor = 1.0 + SPREAD_BY_PRODUCT[product] * np.tile(SPREAD, N_CELLS)
+    return np.tile(np.repeat(CELL_VALUES[product][height_m], K_PIX) * factor, (K_PIX, 1))
+
+
+def _pixel_fraction(scenario: str) -> np.ndarray:
+    area = pixel_row_area_km2(PIXEL_TRANSFORM, K_PIX)
+    per_cell = np.array(SCENARIO_AREAS[scenario]) / area.sum() / K_PIX
+    return np.tile(np.repeat(per_cell, K_PIX), (K_PIX, 1))
+
+
+def _write_pixels(land: Path) -> None:
+    def write(path: Path, grid: np.ndarray) -> None:
+        with rasterio.open(
+            path, "w", driver="GTiff", dtype="float32", count=1, nodata=-9999.0, crs="EPSG:4326",
+            transform=PIXEL_TRANSFORM, height=grid.shape[0], width=grid.shape[1],
+        ) as dst:  # fmt: skip
+            dst.write(grid.astype("float32"), 1)
+
+    for scenario in SCENARIO_AREAS:
+        write(land / eligible_fraction_file("wind", scenario), _pixel_fraction(scenario))
+    for product, by_height in CELL_VALUES.items():
+        for height in by_height:
+            write(land / f"{product}_{height}m.tif", _pixel_resource(product, height))
+
+
+def _expected_wind_cf(
+    scenario: str, d_t: float, delta_wind: float, params: CountryParams
+) -> np.ndarray:
+    """Capacity factor of the 8 cells computed here, outside the pipeline: the model on each pixel, then the eligible-area-weighted mean."""
+    eta = params.technologies.wind.eta_loss.value
+    hub = params.technologies.wind.hub_height_m.value
+    curve = load_power_curve(FIXTURE_CURVES / "synthetic_curve.yaml")
+    layers = {
+        product: {
+            h: _pixel_resource(product, h).astype("float32").astype("float64").ravel()
+            for h in (100, 150, 200)
+        }
+        for product in CELL_VALUES
+    }
+    a_h, k_h, rho_h = resource_at_hub_height(
+        layers["weibull_a"], layers["weibull_k"], layers["air_density"], hub
+    )
+    n = a_h.size
+    cf = wind_cf_member(
+        a_h, k_h, rho_h, np.full(n, d_t), np.full(n, delta_wind), curve, eta, RHO0_KG_M3, ISA_T0_K
+    )
+    weight = (
+        _pixel_fraction(scenario).astype("float32").astype("float64")
+        * pixel_row_area_km2(PIXEL_TRANSFORM, K_PIX)[:, None]
+    ).ravel()
+    cell_of = np.tile(np.repeat(np.arange(N_CELLS), K_PIX), K_PIX)
+    return np.bincount(cell_of, weights=weight * cf, minlength=N_CELLS) / np.bincount(
+        cell_of, weights=weight, minlength=N_CELLS
+    )
+
 
 def _candidates(scenario: str, technology_columns: dict[str, np.ndarray]) -> pd.DataFrame:
     area = np.array(SCENARIO_AREAS[scenario])
@@ -134,6 +224,7 @@ def _write_inputs(
     """Candidate tables of the three scenarios for both technologies, forcing, forcing_masked and members.yaml."""
     land, climate = root / "land", root / "climate"
     land.mkdir(parents=True), climate.mkdir(parents=True)
+    _write_pixels(land)
     solar_cols = {"pvout_kwh_kwp_day": PVOUT}
     wind_cols = {}
     for h, a, k, rho in (
@@ -250,6 +341,7 @@ def _run(
         production=production,
         **RANGE_ARGS,
         candidates_dir=land,
+        siting_dir=land,
         climate_dir=climate,
         out_dir=out,
     )
@@ -305,8 +397,27 @@ def test_solar_values_follow_the_method(run_ok, synthetic_params):
 
 @pytest.mark.unit
 def test_wind_values_follow_the_method(run_ok, synthetic_params):
+    """M-F5-03, D-F5-038: the model on every pixel, the cell value the eligible-area-weighted mean of the pixel values."""
     _, out = run_ok
     table = pd.read_parquet(out / "potential_wind__central.parquet")
+    hub = synthetic_params.technologies.wind.hub_height_m.value
+    for member, (_r, d_t, wind) in FACTORS.items():
+        part = table[table["member"].astype(str) == member].sort_values("cell_id")
+        keep = [i for i in range(N_CELLS) if not (member == MEMBERS[2] and i == MASKED_CELL_INDEX)]
+        # the density of the member follows the warming: rho = rho_ref T* / (T* + dT); the output is not rescaled again
+        expected = _expected_wind_cf("central", d_t, wind, synthetic_params)[keep]
+        np.testing.assert_allclose(part["CF"], expected, rtol=1e-12)
+    assert hub == 125.0
+
+
+@pytest.mark.unit
+def test_the_wind_capacity_factor_of_a_cell_is_the_mean_of_its_pixels_and_not_the_factor_of_its_mean(
+    run_ok, synthetic_params
+):
+    """The cell-mean resources (the old input) give another capacity factor: the power curve is not linear on the spread."""
+    _, out = run_ok
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    m0 = table[table["member"].astype(str) == "m0"].sort_values("cell_id")
     eta = synthetic_params.technologies.wind.eta_loss.value
     hub = synthetic_params.technologies.wind.hub_height_m.value
     curve = load_power_curve(FIXTURE_CURVES / "synthetic_curve.yaml")
@@ -316,17 +427,43 @@ def test_wind_values_follow_the_method(run_ok, synthetic_params):
         {100: RHO100, 150: RHO150, 200: RHO200},
         hub,
     )
-    for member, (_r, d_t, wind) in FACTORS.items():
-        part = table[table["member"].astype(str) == member].sort_values("cell_id")
-        keep = [i for i in range(N_CELLS) if not (member == MEMBERS[2] and i == MASKED_CELL_INDEX)]
-        n = len(keep)
-        # the density of the member follows the warming: rho = rho_ref T* / (T* + dT); the output is not rescaled again
-        expected = wind_cf_member(
-            a_h[keep], k_h[keep], rho_h[keep], np.full(n, d_t), np.full(n, wind), curve, eta,
-            RHO0_KG_M3, ISA_T0_K,
+    of_means = wind_cf_member(
+        a_h, k_h, rho_h, np.zeros(N_CELLS), np.ones(N_CELLS), curve, eta, RHO0_KG_M3, ISA_T0_K
+    )
+    relative = np.abs(m0["CF"].to_numpy() - of_means) / of_means
+    assert relative.max() > 1e-3  # the spread moves the capacity factor of the cells
+    assert relative.max() < 0.2  # and not into another regime
+
+
+@pytest.mark.unit
+def test_every_land_scenario_aggregates_with_its_own_pixel_weights(run_ok, synthetic_params):
+    _, out = run_ok
+    for scenario in SCENARIO_AREAS:
+        table = pd.read_parquet(out / f"potential_wind__{scenario}.parquet")
+        m0 = table[table["member"].astype(str) == "m0"].sort_values("cell_id")
+        np.testing.assert_allclose(
+            m0["CF"], _expected_wind_cf(scenario, 0.0, 1.0, synthetic_params), rtol=1e-12
+        )
+
+
+@pytest.mark.unit
+def test_the_provenance_of_the_table_records_the_aggregation_of_each_technology(run_ok):
+    _, out = run_ok
+    for tech, aggregation in (("solar", "cell"), ("wind", "pixel")):
+        meta = pq.read_metadata(out / f"potential_{tech}__central.parquet").metadata
+        assert json.loads(meta[PROVENANCE_KEY.encode()])["cf_aggregation"] == aggregation
+
+
+@pytest.mark.unit
+def test_a_pixel_raster_of_another_scenario_is_refused(tmp_path, registry, synthetic_params):
+    land, climate = _write_inputs(tmp_path / "in")
+    other = land / eligible_fraction_file("wind", "permissive")
+    (land / eligible_fraction_file("wind", "restrictive")).write_bytes(other.read_bytes())
+    with pytest.raises(PixelInputError, match="differ from the eligible area"):
+        build_potential(
+            "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
-        np.testing.assert_allclose(part["CF"], expected, rtol=1e-13)
-    assert hub == 125.0
 
 
 @pytest.mark.unit
@@ -470,13 +607,13 @@ def test_wind_factor_out_of_range_in_a_candidate_cell_raises_for_wind_and_not_fo
     with pytest.raises(ForcingContractError, match="outside"):
         build_potential(
             "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
     assert not (tmp_path / "out").exists() or not list((tmp_path / "out").iterdir())
     # solar never reads the wind ratio: the same forcing is usable (V-B1)
     summary = build_potential(
         "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
-        candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out_solar", **RANGE_ARGS,
+        candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out_solar", **RANGE_ARGS,
     )  # fmt: skip
     assert set(summary.technologies) == {"solar"}
 
@@ -530,7 +667,7 @@ def test_a_capacity_factor_above_one_raises(tmp_path, registry, synthetic_params
     with pytest.raises(CfModelError, match="outside \\[0, 1\\]"):
         build_potential(
             "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out",
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out",
             audit_config=wide, geometry=GEOMETRY,
         )  # fmt: skip
 
@@ -651,7 +788,7 @@ def test_a_missing_curve_file_is_reported_as_missing(tmp_path, registry, synthet
     with pytest.raises(MissingParameterError, match="absent_curve.csv"):
         build_potential(
             "ZZZ", reg, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
 
 
@@ -774,7 +911,7 @@ def test_a_technology_without_candidate_cells_gives_empty_tables_and_zero_totals
     out = tmp_path / "out"
     summary = build_potential(
         "ZZZ", registry, synthetic_params, ["solar"], EXPERIMENTS, FIXTURE_CURVES,
-        candidates_dir=land, climate_dir=climate, out_dir=out, **RANGE_ARGS,
+        candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=out, **RANGE_ARGS,
     )  # fmt: skip
     assert summary.technologies["solar"].scenarios["central"].n_rows == 0
     assert len(pd.read_parquet(out / "potential_solar__central.parquet")) == 0
@@ -822,7 +959,7 @@ def test_an_input_outside_its_sanity_range_raises_a_named_error_and_writes_nothi
     with pytest.raises(InputRangeError) as caught:
         build_potential(
             "ZZZ", registry, synthetic_params, [tech], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
     message = str(caught.value)
     assert column in message and "2 of 8 candidate cells" in message
@@ -842,7 +979,7 @@ def test_every_layer_outside_its_range_is_listed_in_one_error(tmp_path, registry
     with pytest.raises(InputRangeError) as caught:
         build_potential(
             "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
     assert "air_density_100m" in str(caught.value) and "dist_grid_km" in str(caught.value)
 
@@ -853,7 +990,7 @@ def _run_wind_with(tmp_path, registry, synthetic_params, caplog, column, value, 
     with caplog.at_level("INFO", logger="geofrea.technical_potential"):
         return build_potential(
             "ZZZ", registry, synthetic_params, ["wind"], EXPERIMENTS, FIXTURE_CURVES,
-            candidates_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
+            candidates_dir=land, siting_dir=land, climate_dir=climate, out_dir=tmp_path / "out", **RANGE_ARGS,
         )  # fmt: skip
 
 

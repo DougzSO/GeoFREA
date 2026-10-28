@@ -59,6 +59,7 @@ from geofrea.land_eligibility.admin1 import assign_admin1, read_units
 from geofrea.land_eligibility.cells import (
     aggregate_to_cells,
     coarse_cell_id,
+    eligible_fraction_file,
     pixel_row_area_km2,
 )
 from geofrea.land_eligibility.eligibility import (
@@ -583,6 +584,8 @@ def build_eligibility(
                 schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
                 row_model=CellRow,
             )
+            if scenario != "central":  # the central one is written with the other rasters below
+                _pixel_raster(out / eligible_fraction_file(tech, scenario), eligible, grid_ref)
             cells_by_scenario[scenario] = cells
             scenario_summaries[scenario] = ScenarioSummary(
                 scenario=scenario,

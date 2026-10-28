@@ -39,6 +39,7 @@ TECHNICAL_POTENTIAL_NUMERIC_MODULES = (
     "iec_class",
     "input_ranges",
     "pipeline",
+    "pixel_inputs",
     "power_curve",
     "rescale",
     "solar",

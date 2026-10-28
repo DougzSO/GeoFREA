@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 from matplotlib.colors import ListedColormap, Normalize
 from pydantic import ValidationError
@@ -336,6 +338,90 @@ def test_the_display_layers_aggregate_back_to_the_analysis_cell():
     cap = build.layers["capacity-density"].grid
     ok = np.isfinite(energy)
     assert np.allclose(energy[ok], cap[ok] * cf[ok] * 8.76)
+
+
+def _wind_inputs(k=5, rows=4, cols=5, seed=11):
+    """Wind pixels and the analysis side computed by the F5 route (`prepare_pixels`: the model per pixel, then the eligible-area mean)."""
+    from geofrea.core.constants import ISA_T0_K, RHO0_KG_M3
+    from geofrea.technical_potential.cf_models import WeibullWithAirDensity
+    from geofrea.technical_potential.pixel_inputs import CellPixels
+    from geofrea.technical_potential.power_curve import load_power_curve
+
+    curve = load_power_curve(
+        Path(__file__).resolve().parents[1] / "fixtures" / "power_curves" / "synthetic_curve.yaml"
+    )
+    rng = np.random.default_rng(seed)
+    fine = (rows * k, cols * k)
+    layers = {}
+    for h, f in ((100, 1.0), (150, 1.06), (200, 1.1)):
+        layers[f"weibull_a_{h}m"] = f * (7.5 + 2.5 * rng.random(fine))
+        layers[f"weibull_k_{h}m"] = 1.8 + 0.8 * rng.random(fine)
+        layers[f"air_density_{h}m"] = 1.2 - 0.12 * rng.random(fine)
+    fraction = np.clip(rng.uniform(0.0, 1.0, fine) * (rng.uniform(size=fine) > 0.2), 0, 1)
+    area = np.full(fine, 0.9)
+    settings = CfSettings(
+        {"eta_loss": 0.85, "hub_height_m": 125.0}, curve, None, list(layers), RHO0_KG_M3, ISA_T0_K, 24.0
+    )
+    weight = area * fraction
+    def blocks(a):
+        return a.reshape(rows, k, cols, k).transpose(0, 2, 1, 3).reshape(rows * cols, k * k)
+
+    w, usable = blocks(weight), blocks(weight) > 0
+    has = usable.any(axis=1)
+    pixels = CellPixels(
+        offsets=np.concatenate([[0], np.cumsum(usable[has].sum(axis=1))]).astype("int64"),
+        weight_km2=w[has][usable[has]],
+        resources={n: blocks(g)[has][usable[has]] for n, g in layers.items()},
+    )
+    candidates = pd.DataFrame(index=np.arange(int(has.sum())))
+    for name, grid in layers.items():  # cell means, as F3 writes them (they feed the flags only)
+        candidates[name] = (blocks(grid)[has] * w[has]).sum(axis=1) / w[has].sum(axis=1)
+    model = WeibullWithAirDensity()
+    prepared = model.prepare_pixels(candidates, settings, pixels)
+    n = len(candidates)
+    cell_cf = prepared.member(np.arange(n), np.ones(n), np.zeros(n), np.ones(n))
+    analysis_cf = np.full(rows * cols, np.nan)
+    analysis_cf[has] = cell_cf
+    analysis_cf = analysis_cf.reshape(rows, cols)
+    elig = display.block_sum(weight, k)
+    cell_area = display.block_sum(area, k)
+    return {
+        "model": model,
+        "settings": settings,
+        "resources": layers,
+        "eligible_fraction": fraction,
+        "pixel_area_km2": area,
+        "extent": (-8.0, -7.75, 40.0, 40.2),
+        "analysis_cf": analysis_cf,
+        "analysis_eligible_area_km2": np.where(np.isfinite(analysis_cf), elig, np.nan),
+        "analysis_capacity_density": np.where(np.isfinite(analysis_cf), 80.0 * elig / cell_area, np.nan),
+        "capacity_density_mw_km2": 80.0,
+        "cell_area_km2": cell_area,
+        "k": k,
+    }
+
+
+def test_the_wind_capacity_factor_of_the_display_layer_aggregates_to_the_cell_exactly():
+    """D-F5-038: F5 and the display evaluate the same model on the same pixels and weight them the same way, so the check is an identity."""
+    build = dl.build_display_layers(**_wind_inputs())
+    check = {c.name: c for c in build.checks}["capacity-factor"]
+    assert check.ok and check.tolerance == dl.PIXEL_IDENTITY_TOLERANCE
+    assert check.max_rel_diff < 1e-12
+
+
+def test_a_wind_cell_that_is_half_a_percent_off_the_pixel_mean_is_refused_where_one_percent_used_to_pass():
+    inputs = _wind_inputs()
+    cf = inputs["analysis_cf"].copy()
+    cf[1, 2] *= 1.005
+    inputs["analysis_cf"] = cf
+    with pytest.raises(dl.DisplayLayerError, match="capacity-factor"):
+        dl.build_display_layers(**inputs)
+
+
+def test_a_model_evaluated_on_the_cell_means_keeps_the_float32_tolerance():
+    build = dl.build_display_layers(**_inputs())
+    check = {c.name: c for c in build.checks}["capacity-factor"]
+    assert check.tolerance == dl.EXACT_TOLERANCE
 
 
 def test_a_layer_that_does_not_reproduce_the_analysis_is_refused():

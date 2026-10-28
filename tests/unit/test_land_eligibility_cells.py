@@ -159,3 +159,12 @@ def test_resources_are_eligible_area_weighted_means_and_flags_are_eligible_share
     assert np.isnan(empty.dist_grid_km) and np.isnan(
         empty.distance_capped
     )  # no eligible area: undefined, not 0
+
+
+@pytest.mark.unit
+def test_the_pixel_fraction_file_of_the_central_scenario_keeps_its_name_and_the_others_carry_the_scenario():
+    from geofrea.land_eligibility.cells import eligible_fraction_file
+
+    assert eligible_fraction_file("wind", "central") == "eligible_fraction_wind.tif"
+    assert eligible_fraction_file("wind", "restrictive") == "eligible_fraction_wind__restrictive.tif"
+    assert eligible_fraction_file("solar", "permissive") == "eligible_fraction_solar__permissive.tif"

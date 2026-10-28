@@ -39,6 +39,7 @@ from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
 from geofrea.core.tables import write_table
+from geofrea.land_eligibility.cells import eligible_fraction_file
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
 from geofrea.technical_potential.aggregates import aggregate_scenario
@@ -64,6 +65,7 @@ from geofrea.technical_potential.input_ranges import (
     validate_candidates,
     warn_unranged,
 )
+from geofrea.technical_potential.pixel_inputs import read_cell_pixels
 from geofrea.technical_potential.power_curve import (
     PowerCurve,
     assert_curve_usable,
@@ -333,6 +335,7 @@ def _provenance(
         "t_star_k": ISA_T0_K,
         "hours_per_year": HOURS_PER_YEAR,
         "integration": INTEGRATION_METHOD,
+        "cf_aggregation": resolved.model.aggregation,
         "c2_applied": False,
         "production": production,
         "absent_cell_members": {m: n for m, n in absent_by_member.items() if n},
@@ -354,6 +357,8 @@ def build_technology_potential(
     production: bool = False,
     member_channels: Mapping[str, Mapping[str, bool]] | None = None,
     elevation_sensitivity_m: float | None = None,
+    eligibility_dir: Path | None = None,
+    siting_dir: Path | None = None,
 ) -> TechPotential:
     """Tables and aggregates of one technology for the given land scenarios.
 
@@ -362,6 +367,9 @@ def build_technology_potential(
     The members of the technology are those whose `members.yaml` channels include the ones its capacity-factor model reads (`member_channels`;
     a member that declares no entry carries every channel). A member without the channel is absent by declaration, not masked (M-F4-06), and
     a technology that does not read the wind ratio keeps a cell-member whose wind ratio is masked.
+
+    A model with `aggregation == "pixel"` (wind, D-F5-038) reads the pixel eligible fraction of each scenario from `eligibility_dir` and the
+    resource rasters from `siting_dir`, and the capacity factor of a cell is the eligible-area-weighted mean of its pixel capacity factors.
 
     Raises:
         InputRangeError: a resource or distance value of a candidate cell is outside its sanity range (V-04); raised before any output.
@@ -418,7 +426,24 @@ def build_technology_potential(
         luf = resolved.scenario_parameters["luf"][scenario]
         power_density = resolved.scenario_parameters["power_density_mw_per_km2"][scenario]
         p_mw = capacity_mw(area, luf, power_density)
-        prepared = resolved.model.prepare(frame, resolved.settings)
+        if resolved.model.aggregation == "pixel":
+            if eligibility_dir is None or siting_dir is None:
+                raise CfModelError(
+                    f"the {resolved.cf_model_name!r} model is evaluated per pixel: the directories of the pixel fractions (F3) and of the "
+                    "resource rasters (F2b) are required"
+                )
+            pixels = read_cell_pixels(
+                frame,
+                Path(eligibility_dir) / eligible_fraction_file(tech, scenario),
+                {
+                    name: Path(siting_dir) / f"{name}.tif"
+                    for name in resolved.settings.resource_layers
+                },
+            )
+            prepared = resolved.model.prepare_pixels(frame, resolved.settings, pixels)
+            del pixels
+        else:
+            prepared = resolved.model.prepare(frame, resolved.settings)
         qc = _wind_input_flags(
             iso,
             tech,
@@ -618,6 +643,7 @@ def build_potential(
     candidates_dir: Path | None = None,
     climate_dir: Path | None = None,
     out_dir: Path | None = None,
+    siting_dir: Path | None = None,
 ) -> PotentialSummary:
     """F5 for `iso` and the technologies of the run, in the three land scenarios.
 
@@ -651,6 +677,7 @@ def build_potential(
         raise CfModelError("experiments.yaml has no wind_factor_valid_range (M-F4-07)")
     candidates_dir = candidates_dir or core_paths.phase_dir(iso, "land_eligibility", "artifacts")
     climate_dir = climate_dir or core_paths.phase_dir(iso, "climate_forcing", "artifacts")
+    siting_dir = siting_dir or core_paths.phase_dir(iso, "siting_layers", "artifacts")
     out_dir = out_dir or potential_dir(iso)
     members_file = Path(climate_dir) / "members.yaml"
     for needed in (
@@ -692,5 +719,7 @@ def build_potential(
             production=production,
             member_channels=member_channels,
             elevation_sensitivity_m=elevation_sensitivity_m(land_availability, tech),
+            eligibility_dir=Path(candidates_dir),
+            siting_dir=Path(siting_dir),
         )
     return PotentialSummary(country_code=iso, technologies=result)

@@ -18,6 +18,7 @@ import pandas as pd
 
 from geofrea.core.config_schemas import ClassFlagRule
 from geofrea.technical_potential.iec_class import exceeds_class
+from geofrea.technical_potential.pixel_inputs import CellPixels
 from geofrea.technical_potential.power_curve import PowerCurve
 from geofrea.technical_potential.rescale import solar_rescale_terms, wind_rescale_terms
 from geofrea.technical_potential.solar import solar_cf_member, solar_cf_reference
@@ -72,10 +73,19 @@ class PreparedCf(Protocol):
 class CfModel(Protocol):
     parameter_keys: tuple[str, ...]
     needs_curves: bool
+    # "cell": the model is evaluated on the cell-mean resources; "pixel": on every eligible 0.01 degree pixel, aggregated to the cell by the
+    # eligible area of the pixel (`prepare_pixels`, D-F5-038)
+    aggregation: str
     # the uncertain parameter that scales the stored energy in F6 (D-F6-012)
     sampled_parameter_key: str
 
     def prepare(self, candidates: pd.DataFrame, settings: CfSettings) -> PreparedCf: ...
+
+    def prepare_pixels(
+        self, candidates: pd.DataFrame, settings: CfSettings, pixels: CellPixels
+    ) -> PreparedCf:
+        """As `prepare`, with the capacity factor of a cell the eligible-area-weighted mean of the pixel capacity factors."""
+        ...
 
     def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Offset and slope per cell such that the stored energy times `offset + slope * x` is the energy at the value `x` of
@@ -111,7 +121,13 @@ class PvoutWithTemperature:
 
     parameter_keys = ("gamma",)
     needs_curves = False
+    aggregation = "cell"  # the model is linear in the resource, so the cell mean and the pixel mean agree (1e-16)
     sampled_parameter_key = "gamma"
+
+    def prepare_pixels(
+        self, candidates: pd.DataFrame, settings: CfSettings, pixels: CellPixels
+    ) -> PreparedCf:
+        raise CfModelError("the PVOUT model is evaluated on the cell means (aggregation 'cell')")
 
     def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         return solar_rescale_terms(d_t, nominal)
@@ -153,6 +169,61 @@ class _WeibullPrepared:
         )
 
 
+@dataclass(frozen=True)
+class _WeibullPixelPrepared:
+    """Wind capacity factor per eligible pixel, aggregated to the cell by the eligible area of the pixel (M-F5-03, D-F5-038).
+
+    The class flag, the mean speed and the reference density stay those of the cell means (`cell`): they describe the cell and do not
+    enter the capacity factor.
+    """
+
+    cell: _WeibullPrepared
+    offsets: np.ndarray
+    weight_km2: np.ndarray
+    a_h: np.ndarray
+    k_h: np.ndarray
+    rho_pixel: np.ndarray  # pixel air density at hub height, kg/m3
+    class_flag: np.ndarray | None
+    v_ave_ms: np.ndarray | None
+    rho_ref: np.ndarray  # of the cell means, for the density check
+
+    def member(self, rows, delta_rsds, d_t, delta_wind):
+        rows = np.asarray(rows, dtype="int64")
+        d_t = np.asarray(d_t, dtype="float64")
+        delta_wind = np.asarray(delta_wind, dtype="float64")
+        counts = np.diff(self.offsets)[rows]
+        out = np.empty(len(rows))
+        ends = np.cumsum(counts)
+        start = 0
+        while start < len(rows):  # blocks of cells of at most PIXELS_PER_BLOCK pixels: the memory does not grow with the country
+            before = ends[start - 1] if start else 0
+            stop = max(int(np.searchsorted(ends, before + PIXELS_PER_BLOCK, side="right")), start + 1)
+            block = slice(start, stop)
+            n_pix = counts[block]
+            cell_of = np.repeat(np.arange(stop - start), n_pix)
+            first = np.repeat(self.offsets[rows[block]] - (np.cumsum(n_pix) - n_pix), n_pix)
+            pix = first + np.arange(int(n_pix.sum()))
+            cf = wind_cf_member(
+                self.a_h[pix],
+                self.k_h[pix],
+                self.rho_pixel[pix],
+                d_t[block][cell_of],
+                delta_wind[block][cell_of],
+                self.cell.curve,
+                self.cell.eta_loss,
+                self.cell.rho0,
+                self.cell.t_star_k,
+            )
+            weight = self.weight_km2[pix]
+            total = np.bincount(cell_of, weights=weight, minlength=stop - start)
+            out[block] = np.bincount(cell_of, weights=weight * cf, minlength=stop - start) / total
+            start = stop
+        return out
+
+
+# pixels evaluated at once: about 100 MB of working arrays
+PIXELS_PER_BLOCK = 1_000_000
+
 _LAYER = re.compile(r"^(weibull_a|weibull_k|air_density)_(\d+)m$")
 
 
@@ -161,6 +232,7 @@ class WeibullWithAirDensity:
 
     parameter_keys = ("eta_loss", "hub_height_m")
     needs_curves = True
+    aggregation = "pixel"
     sampled_parameter_key = "eta_loss"
 
     def rescale_terms(self, nominal: float, d_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -211,6 +283,42 @@ class WeibullWithAirDensity:
             eta_loss=float(settings.parameters["eta_loss"]),
             class_flag=flag,
             v_ave_ms=v_ave,
+        )
+
+    def prepare_pixels(
+        self, candidates: pd.DataFrame, settings: CfSettings, pixels: CellPixels
+    ) -> PreparedCf:
+        cell = self.prepare(candidates, settings)
+        by_product: dict[str, dict[float, np.ndarray]] = {
+            "weibull_a": {},
+            "weibull_k": {},
+            "air_density": {},
+        }
+        for name in settings.resource_layers:
+            match = _LAYER.match(name)
+            if match is None or name not in pixels.resources:
+                raise CfModelError(f"resource layer {name!r} has no pixel values")
+            by_product[match.group(1)][float(match.group(2))] = np.asarray(
+                pixels.resources[name], dtype="float64"
+            )
+        a_h, k_h, rho_h = resource_at_hub_height(
+            by_product["weibull_a"],
+            by_product["weibull_k"],
+            by_product["air_density"],
+            float(settings.parameters["hub_height_m"]),
+        )
+        if len(pixels.offsets) != len(candidates) + 1:
+            raise CfModelError("the pixels are not those of the candidate table")
+        return _WeibullPixelPrepared(
+            cell=cell,
+            offsets=pixels.offsets,
+            weight_km2=pixels.weight_km2,
+            a_h=a_h,
+            k_h=k_h,
+            rho_pixel=rho_h,
+            class_flag=cell.class_flag,
+            v_ave_ms=cell.v_ave_ms,
+            rho_ref=cell.rho_ref,
         )
 
 

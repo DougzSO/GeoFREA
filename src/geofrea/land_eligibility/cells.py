@@ -165,6 +165,13 @@ def pad_to_window(a: np.ndarray, window: LatticeWindow, fill: float | bool = 0) 
     return out
 
 
+def eligible_fraction_file(tech: str, scenario: str) -> str:
+    """File name of the pixel eligible fraction of a technology in a land scenario: `eligible_fraction_<tech>.tif` for the central one (the
+    raster the maps read) and `eligible_fraction_<tech>__<scenario>.tif` for the others, which F5 reads to aggregate the wind pixel capacity
+    factors with the weights of each scenario (D-F5-038)."""
+    return f"eligible_fraction_{tech}.tif" if scenario == "central" else f"eligible_fraction_{tech}__{scenario}.tif"
+
+
 def _block_sum(a: np.ndarray, k: int) -> np.ndarray:
     h, w = a.shape
     return a.reshape(h // k, k, w // k, k).sum(axis=(1, 3))
