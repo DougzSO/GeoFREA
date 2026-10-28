@@ -759,6 +759,8 @@ def build_eligibility(
             n_cells_excluded_by_elevation=n_excluded_by_elevation,
             candidate_exclusions=exclusions,
         )
+        # the pixel arrays of this technology (BRA wind: 1.3 GB) go before the next technology reads its own (COMMAND 75)
+        del layers, resources, cell_resources, central, eligible, excl
     return EligibilitySummary(country_code=iso, technologies=summaries)
 
 
