@@ -109,3 +109,31 @@ def test_the_cache_code_of_a_revision_is_that_of_its_tree():
     head = adopt.cache_code_at("HEAD")
     assert len(head) == 64 and head != adopt.cache_code_at("38e8da1")
     assert isinstance(cache_code("aligned_layers"), str)
+
+
+def test_the_adoption_needs_a_proof_of_equality_for_exactly_these_two_codes():
+    adopt = _script()
+    good = {"equal": True, "n_equal": 28, "n_artifacts": 28, "sample": "PRT", "old_cache_code": "old", "new_cache_code": "new"}
+    adopt.require_proof(good, "old", "new")
+    with pytest.raises(adopt.AdoptionError, match="27 of 28"):
+        adopt.require_proof({**good, "equal": False, "n_equal": 27}, "old", "new")
+    with pytest.raises(adopt.AdoptionError, match="other code"):
+        adopt.require_proof(good, "old", "newer")
+    with pytest.raises(adopt.AdoptionError, match="other code"):
+        adopt.require_proof(good, "older", "new")
+
+
+def test_the_equivalence_check_compares_the_artifacts_of_the_phase_by_content_hash():
+    check = importlib.util.module_from_spec(importlib.util.spec_from_file_location("check_aligned_equivalence", SCRIPT.with_name("check_aligned_equivalence.py")))
+    check.__spec__.loader.exec_module(check)
+
+    def manifest(**hashes):
+        return {"artifacts": {k: {"phase": "grid_alignment" if not k.startswith("x_") else "other", "sha256": "bytes-" + v, "content_sha256": v or None} for k, v in hashes.items()}}
+
+    same = check.compare_manifests(manifest(a="1", b="2", x_other="3"), manifest(a="1", b="2", x_other="9"))
+    assert same["equal"] and same["n_artifacts"] == 2  # another phase's artifact is not compared
+    differ = check.compare_manifests(manifest(a="1", b="2"), manifest(a="1", b="3"))
+    assert not differ["equal"] and differ["n_equal"] == 1 and differ["artifacts"]["b"]["equal"] is False
+    missing = check.compare_manifests(manifest(a="1", b="2"), manifest(a="1"))
+    assert not missing["equal"] and missing["artifacts"]["b"]["new"] is None
+    assert not check.compare_manifests({"artifacts": {}}, {"artifacts": {}})["equal"]  # nothing compared is not equal

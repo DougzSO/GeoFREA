@@ -1,6 +1,6 @@
 """Adopt the aligned layers of a country under the current code instead of computing them again (COMMAND 75).
 
-usage: python scripts/adopt_aligned_cache_keys.py <ISO3> --revision <git revision>
+usage: python scripts/adopt_aligned_cache_keys.py <ISO3> --revision <git revision> [--proof docs/_audit/aligned_equivalence_PRT.json]
 
 Every aligned layer of F2a has a cache key that holds the fingerprint of the code of `grid_alignment` (`cache_code("aligned_layers")`, A-02).
 A change of that code gives another key, so the next run computes every layer again: for BRA that is about 42,000 s. COMMAND 75 changed the code
@@ -8,6 +8,9 @@ of F2a (the elevation, the slope and the slope bins come from one pass over the 
 (PRT, `docs/_audit/performance_75.md`); the other layers were not touched. This script records that equivalence for a country whose layers were
 made under the code of `--revision` instead of making them again:
 
+0. it reads the proof of equivalence written by `scripts/check_aligned_equivalence.py` (F2a of a sample country run on `--revision` and on the
+   current tree, every aligned artifact compared by content hash) and stops unless it says `equal` for exactly these two code fingerprints:
+   D-core-044 allows an adoption only after an automatic check of both revisions on a sample, never by the operator's statement;
 1. it computes the cache fingerprint of `grid_alignment` on the source of `--revision` (the revision the layers were made with);
 2. it runs the phase `grid_alignment` of the country as `main.py` does, with the key of every layer computed under that old fingerprint, so
    that every layer is found current and none is computed (a layer that would be computed stops the run before it starts: nothing is lost);
@@ -21,6 +24,7 @@ Use it only when the outputs of the changed code are known to equal the earlier 
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -38,6 +42,19 @@ CACHE_NAME = "aligned_layers"
 
 class AdoptionError(RuntimeError):
     """A layer would be computed again, or the old fingerprint is not the one the layers were made with."""
+
+
+def require_proof(proof: dict, old_code: str, new_code: str) -> None:
+    """Stop unless `proof` (the file of `check_aligned_equivalence.py`) says that the aligned layers of the two code fingerprints are equal."""
+    if not proof.get("equal"):
+        raise AdoptionError(
+            f"the equivalence check found {proof.get('n_equal')} of {proof.get('n_artifacts')} aligned artifacts equal on {proof.get('sample')}: no adoption"
+        )
+    if proof.get("old_cache_code") != old_code or proof.get("new_cache_code") != new_code:
+        raise AdoptionError(
+            "the equivalence check was made for other code (its fingerprints are not those of --revision and of the current tree): run "
+            "scripts/check_aligned_equivalence.py again"
+        )
 
 
 def cache_code_at(revision: str) -> str:
@@ -113,12 +130,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("iso", help="country code")
     parser.add_argument("--revision", required=True, help="git revision of the code the aligned layers were made with")
+    parser.add_argument(
+        "--proof",
+        type=Path,
+        default=REPO / "docs" / "_audit" / "aligned_equivalence_PRT.json",
+        help="result of scripts/check_aligned_equivalence.py (default: the PRT sample)",
+    )
     args = parser.parse_args(argv)
 
     import main as pipeline
     from geofrea.core import paths as core_paths
 
     old_code = cache_code_at(args.revision)
+    from geofrea.core.cache_code import cache_code
+
+    require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, cache_code(CACHE_NAME))
     artifacts = core_paths.phase_dir(args.iso, "grid_alignment", "artifacts")
     print(f"aligned-layer cache code at {args.revision}: {old_code[:12]}")
 
