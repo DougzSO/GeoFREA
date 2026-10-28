@@ -66,6 +66,7 @@ from geofrea.land_eligibility.eligibility import (
     EXCLUSION_NAMES,
     EligibilityLayers,
     eligible_fraction,
+    slope_steep_shares,
     valid_pixels,
 )
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
@@ -166,12 +167,13 @@ def artifacts_dir(iso: str) -> Path:
     return path
 
 
-def _read(path: Path | None, name: str) -> np.ndarray:
-    """Band 1 as float64 with nodata and non-finite values -> NaN; a missing file is an error, never 'free'."""
+def _read(path: Path | None, name: str, dtype: str = "float64") -> np.ndarray:
+    """Band 1 as `dtype` (float64; float32 for the resource layers, whose rasters are float32: the values are the same, half the memory) with nodata and
+    non-finite values -> NaN; a missing file is an error, never 'free'."""
     if path is None or not Path(path).exists():
         raise LandEligibilityError(f"required layer {name!r} is missing ({path})")
     with safe_raster_open(path) as src:
-        arr = src.read(1).astype("float64")
+        arr = src.read(1).astype(dtype, copy=False)
         nodata = src.nodata
     if nodata is not None and np.isfinite(nodata):
         arr[arr == nodata] = np.nan
@@ -359,7 +361,8 @@ class SharedLayers:
     shape: tuple[int, int]
     country_mask: np.ndarray
     pixel_area: np.ndarray
-    slope_counts: np.ndarray
+    slope_counts: np.ndarray | None
+    slope_steep: dict[float, np.ndarray]  # E4 share per slope maximum of the scenarios (the bins are dropped after it)
     slope_valid: np.ndarray
     population: np.ndarray
     land_cover_counts: np.ndarray
@@ -391,6 +394,13 @@ def prepare_shared_layers(
         MissingRequiredLayerError: a protected-area, lake or river layer is absent.
     """
     slope_counts, slope_valid = _read_slope_counts(grid_result.slope_counts)
+    slope_maxima = {
+        p.slope_max_deg
+        for t in techs
+        for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
+    }
+    slope_steep = slope_steep_shares(slope_counts, slope_maxima)
+    del slope_counts  # 41 bins of uint16 a pixel (BRA: 1.2 GB) are not needed again
     population = _read(grid_result.population, "population")
     land_cover_counts, land_cover_classes, land_cover_valid, samples_per_pixel = _read_class_counts(
         grid_result.land_cover_counts
@@ -462,7 +472,8 @@ def prepare_shared_layers(
         shape=shape,
         country_mask=country_mask,
         pixel_area=pixel_area,
-        slope_counts=slope_counts,
+        slope_counts=None,
+        slope_steep=slope_steep,
         slope_valid=slope_valid,
         population=population,
         land_cover_counts=land_cover_counts,
@@ -481,11 +492,12 @@ def technology_layers(
 ) -> tuple[EligibilityLayers, dict[str, np.ndarray]]:
     """The eligibility layers of one technology (its resource layers must be valid) and the resource arrays."""
     resource_paths = _required_resources(tech, siting_result.layers)
-    resources = {name: _read(path, name) for name, path in resource_paths.items()}
+    resources = {name: _read(path, name, "float32") for name, path in resource_paths.items()}
     layers = EligibilityLayers(
         country_mask=shared.country_mask,
         pixel_area_km2=shared.pixel_area,
         slope_counts=shared.slope_counts,
+        slope_steep_share=shared.slope_steep,
         slope_valid=shared.slope_valid,
         population_count=shared.population,
         land_cover_counts=shared.land_cover_counts,
@@ -532,7 +544,7 @@ def build_eligibility(
     transform, grid_ref = shared.transform, Path(grid_result.grid)
     country_mask, pixel_area, flags = shared.country_mask, shared.pixel_area, shared.flags
     elevation = _read(
-        grid_result.elevation, "elevation"
+        grid_result.elevation, "elevation", "float32"
     )  # the aligned DEM: the altitude of a cell is its eligible-area-weighted mean (OQ-058)
 
     summaries: dict[str, TechSummary] = {}

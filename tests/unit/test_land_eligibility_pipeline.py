@@ -598,3 +598,56 @@ def test_a_share_cache_is_read_only_under_its_own_key(tmp_path):
     assert pipeline._fraction_cache(path, "key one", lambda: {"a": np.ones(3)})["a"].sum() == 0
     rebuilt = pipeline._fraction_cache(path, "key two", lambda: {"a": np.ones(3)})
     assert rebuilt["a"].sum() == 3
+
+
+# --- COMMAND 75: the slope bins are reduced to the shares of the scenarios, and the resources are read as float32 -----------------------------
+
+
+def test_the_prepared_slope_shares_give_the_same_eligibility_as_the_bins_and_the_bins_need_not_stay():
+    from geofrea.land_eligibility.eligibility import slope_steep_shares
+
+    rng = np.random.default_rng(75)
+    counts = rng.integers(0, 40, (41, 6, 7)).astype(np.uint16)
+    with_bins = _layers((6, 7), slope_counts=counts)
+    prepared = _layers((6, 7), slope_counts=None, slope_steep_share=slope_steep_shares(counts, [8.0, 10.0, 12.5]))
+    for limit in (8.0, 10.0, 12.5):
+        params = ParameterSet(limit, 100.0, 0.5, 0.1, (10,), ("ia",))
+        a, excl_a = eligible_fraction(with_bins, params)
+        b, excl_b = eligible_fraction(prepared, params)
+        np.testing.assert_array_equal(a, b)
+        np.testing.assert_array_equal(excl_a["E4"], excl_b["E4"])
+    with pytest.raises(MissingExclusionLayerError, match="no slope share prepared"):
+        eligible_fraction(prepared, ParameterSet(9.0, 100.0, 0.5, 0.1, (10,), ("ia",)))
+
+
+def test_the_shared_layers_keep_one_slope_share_per_maximum_of_the_scenarios_and_not_the_bins(world, tmp_path):
+    from geofrea.config_models.land_availability import load_land_availability
+    from geofrea.land_eligibility.pipeline import prepare_shared_layers
+    from geofrea.land_eligibility.scenarios import scenario_sets
+
+    la = load_land_availability(EXPERIMENTS)
+    interim = tmp_path / "interim_shared"
+    interim.mkdir()
+    shared = prepare_shared_layers(la, ["solar", "wind"], world.grid_result, world.country, world.protected, world.lakes, world.rivers, interim)
+    assert shared.slope_counts is None
+    maxima = {p.slope_max_deg for t in ("solar", "wind") for p in scenario_sets(la.technologies[t]).values()}
+    assert maxima <= set(shared.slope_steep) and all(a.dtype == np.float32 for a in shared.slope_steep.values())
+
+
+def test_a_resource_read_as_float32_is_the_float64_read_cast_down_and_the_cell_means_do_not_change(tmp_path):
+    from geofrea.land_eligibility.cells import aggregate_to_cells
+    from geofrea.land_eligibility.pipeline import _read
+
+    rng = np.random.default_rng(76)
+    grid = rng.uniform(1, 12, (H, W)).astype("float32")
+    grid[rng.uniform(size=grid.shape) < 0.1] = -9999.0
+    path = _write(tmp_path / "r.tif", grid)
+    wide, narrow = _read(path, "r"), _read(path, "r", "float32")
+    assert narrow.dtype == np.float32 and wide.dtype == np.float64
+    np.testing.assert_array_equal(narrow.astype("float64"), wide)  # the same values, NaN where missing
+    transform = TRANSFORM
+    mask = np.ones(grid.shape, bool)
+    eligible = rng.uniform(0, 1, grid.shape).astype("float32")
+    a = aggregate_to_cells(transform, mask, eligible, {}, resources={"r": wide})
+    b = aggregate_to_cells(transform, mask, eligible, {}, resources={"r": narrow})
+    pd.testing.assert_frame_equal(a, b, check_exact=True)
