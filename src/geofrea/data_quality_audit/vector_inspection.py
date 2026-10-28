@@ -70,6 +70,7 @@ large enough to need it.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -116,33 +117,53 @@ class ClipRequiresCountryGdfError(ValueError):
     """
 
 
+def _stats_path(cache_path: Path) -> Path:
+    return Path(cache_path).with_name(Path(cache_path).name + ".stats.json")
+
+
+def _read_clip_stats(cache_path: Path, key: str) -> tuple[GeometryRepairReport | None, list[str] | None]:
+    """The repair report and the geometry types stored beside the clip when it was made, or (None, None) when absent or from another key."""
+    path = _stats_path(cache_path)
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        if stored.get("key") != key:
+            return None, None
+        return GeometryRepairReport(**stored["repair"]), list(stored["geometry_types"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
+
+
 def _read_clipped_with_cache(
     path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path | None
-) -> tuple[gpd.GeoDataFrame, GeometryRepairReport]:
+) -> tuple[gpd.GeoDataFrame, GeometryRepairReport | None, list[str] | None]:
     """read_clipped_to_country(), backed by an on-disk cache keyed by cache_path.
 
-    See module docstring, "cache_path", for the full rationale. On a
-    cache hit, `path` (the large source file) is never read at all —
-    and no repair report, since read_clipped_to_country() (and its
-    unconditional repair_invalid_geometries() call, see
-    core/geo_utils.py) never runs; the cached file is already clipped
-    and was reported on when it was first written.
+    See module docstring, "cache_path", for the full rationale. On a cache hit, `path` (the large source file) is never read at all. The repair
+    report and the geometry types are measured only when the clip is computed, so they are stored beside the clip (`<cache>.stats.json`, with the key
+    of the clip) and returned from there on a hit (R73-01): a cold and a warm run give the same audit report. A clip that has no such file (made before
+    this) returns `None` for both, which the report states as not measured; the clip itself is never rewritten.
     """
     key = clip_cache_key(path, country_gdf) if cache_path is not None else None
     if cache_path is not None and clip_cache_is_current(cache_path, key):
-        return gpd.read_file(str(cache_path)), _EMPTY_GEOMETRY_REPAIR_REPORT
+        report, types = _read_clip_stats(cache_path, key)
+        return gpd.read_file(str(cache_path)), report, types
 
     clipped, repair_report = read_clipped_to_country(path, country_gdf)
+    types = sorted({str(g) for g in clipped.geom_type.unique()})
 
     if cache_path is not None:
         try:
             Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
             clipped.to_file(cache_path, driver="GPKG")
             write_clip_cache_key(cache_path, key)
+            _stats_path(cache_path).write_text(
+                json.dumps({"key": key, "repair": repair_report._asdict(), "geometry_types": types}),
+                encoding="utf-8",
+            )
         except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail the inspection
             logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
 
-    return clipped, repair_report
+    return clipped, repair_report, types
 
 
 def inspect_vector_layer(
@@ -244,23 +265,24 @@ def inspect_vector_layer(
     # now names which stage failed, `error` still carries the message.
     try:
         if clip and country_gdf is not None:
-            gdf, repair_report = _read_clipped_with_cache(path, country_gdf, cache_path)
+            gdf, repair_report, stored_types = _read_clipped_with_cache(path, country_gdf, cache_path)
             result["clipped_to_country"] = True
         else:
             gdf = gpd.read_file(str(path))
             repair_report = _EMPTY_GEOMETRY_REPAIR_REPORT
+            stored_types = None
     except Exception as exc:  # noqa: BLE001 — one bad vector file must not abort the whole audit
         result["error"] = str(exc)
         result["error_type"] = "read_error"
         logger.warning("Error reading %s: %s", path.name, exc)
         return result
 
-    result["geometry_repair"] = repair_report._asdict()
+    result["geometry_repair"] = repair_report._asdict() if repair_report is not None else None  # None: a clip made before the stats file, not measured
 
     try:
         result["crs"] = str(gdf.crs) if gdf.crs else None
         result["n_features"] = len(gdf)
-        result["geometry_types"] = sorted({str(g) for g in gdf.geom_type.unique()})
+        result["geometry_types"] = stored_types if stored_types is not None else sorted({str(g) for g in gdf.geom_type.unique()})
 
         if not gdf.empty:
             result["bbox"] = tuple(round(float(b), 6) for b in gdf.total_bounds)
