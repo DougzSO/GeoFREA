@@ -49,7 +49,8 @@ from geofrea.data_quality_audit.land_cover_tiles import (
 
 logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 
-_CHUNK_ROWS = 4_000
+_CHUNK_ROWS = 4_000  # at most this many rows in a chunk of `_stats_chunked`
+_CHUNK_PIXELS = 48_000_000  # and at most this many pixels (192 MB as float32): a chunk of a wide raster is cut by rows (COMMAND 75)
 
 # Real incident, 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date, "wire das 5
 # camadas restantes a partir do banco local, Fase 2 - roads", RAM finding):
@@ -427,13 +428,14 @@ def _stats_chunked(
         g_total_px = 0
         g_area_km2 = 0.0
 
-        for chunk_start in range(0, win_height, _CHUNK_ROWS):
-            chunk_end = min(chunk_start + _CHUNK_ROWS, win_height)
+        chunk_rows = min(_CHUNK_ROWS, max(1, _CHUNK_PIXELS // max(win_width, 1)))
+        for chunk_start in range(0, win_height, chunk_rows):
+            chunk_end = min(chunk_start + chunk_rows, win_height)
             chunk_h = chunk_end - chunk_start
 
             window = rasterio.windows.Window(col_off, row_off + chunk_start, win_width, chunk_h)
             win_tf = src.window_transform(window)
-            block = src.read(1, window=window).astype(np.float32)
+            block = src.read(1, window=window).astype(np.float32, copy=False)
 
             poly_mask = geometry_mask(shapes, out_shape=block.shape, transform=win_tf, invert=True)
 
@@ -661,9 +663,10 @@ def inspect_raster(
 
                 if scan is None:
                     logger.info(
-                        "  [%s] large file — using chunked read (%d rows/chunk)",
+                        "  [%s] large file — using chunked read (at most %d rows or %d pixels/chunk)",
                         path.stem,
                         _CHUNK_ROWS,
+                        _CHUNK_PIXELS,
                     )
                     stats, transform = _stats_chunked(src, country_gdf, effective_crs)
                     if stats is None:
