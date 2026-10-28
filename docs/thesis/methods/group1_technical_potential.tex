@@ -229,7 +229,8 @@ Tier 1 (standard \cite{iec6140012025}). Proxy: no.
 \subsubsection{Air-Density Correction}
 
 The reference curve is stated at $\rho_0=1.225$~kg/m$^3$. The reference
-density of cell $i$ is the GWA layer at 100~m, $\rho^{\mathrm{ref}}_i$.
+density of a $0.01^\circ$ pixel $p$ is the GWA layer at 100~m, $\rho^{\mathrm{ref}}_p$ (the unit of
+evaluation is the pixel, Section~\ref{subsec:g1_pixel_aggregation}).
 For climate member $c$, density changes with temperature at constant
 pressure:
 \begin{equation}
@@ -260,6 +261,64 @@ case. Only India has eligible terrain above that elevation.
 
 Tier 1 (ideal-gas law and IEC 61400-12-1 convention
 \cite{iec61400122022}). Proxy: no.
+
+\subsubsection{Aggregation from Pixel to Cell}
+\label{subsec:g1_pixel_aggregation}
+
+The Global Wind Atlas layers, the eligible fraction and the Stage F5 model
+live on the $0.01^\circ$ pixels of Stage F2a, five by five in a
+$0.05^\circ$ analysis cell. The power curve is not linear in the
+Weibull parameters, so the capacity factor of the mean wind is not the mean
+of the capacity factors. Stage F5 therefore evaluates the model of this
+section (hub-height interpolation, density correction, Weibull integral,
+retention) on every eligible pixel $p$ and aggregates to the cell $i$ with
+the eligible area of the pixel as weight:
+\begin{equation}
+    \mathrm{CF}_{i,c} = \frac{\sum_{p\in i} w_p\,\mathrm{CF}_{p,c}}
+      {\sum_{p\in i} w_p},
+    \qquad w_p = f_p\,a_p,
+    \label{eq:g1_wind_pixel_aggregation}
+\end{equation}
+where $f_p$ is the eligible fraction of the pixel in the land scenario and
+$a_p$ its geodesic area. The weights add up to the eligible area of the
+cell, so the energy of the cell,
+$E_{i,c}=P_i\,\mathrm{CF}_{i,c}\,8760$, is the sum of the pixel energies at
+the capacity density of the cell. $\Delta T_{i,c}$ and the wind-speed ratio
+of Stage F4 are those of the cell and are constant over its pixels. Solar
+is not affected: the model is linear in PVOUT and the two routes agree to
+$10^{-16}$.
+
+Before this definition, Stage F5 applied the curve to the eligible-area-weighted means of $A$, $k$ and
+density of the cell. The difference was measured over every candidate cell of the
+three countries in the reference climate
+(Table~\ref{tab:g1_pixel_bias}). The cell value was below the pixel mean in
+88\% to 91\% of the cells of India and Brazil, where wind speed varies
+within a cell on rugged terrain, and symmetric in Portugal. The national energy moves by
+less than 0.14\%, but the capacity factor of 6\% to 7\% of the
+cells of India and Brazil was more than 1\% too low, in a few of them by 29\% to 53\%.
+Because the cost of energy of a cell is inversely proportional to its energy, those cells would
+have been ranked as costlier than they are.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Signed difference of the wind capacity factor computed on the cell means
+    with respect to the eligible-area-weighted mean of the pixel capacity factors,
+    $(\mathrm{CF}_{\mathrm{cell\,mean}}-\mathrm{CF}_{\mathrm{pixel}})/\mathrm{CF}_{\mathrm{pixel}}$,
+    all candidate cells, reference member, central land scenario, before the change.}
+    \label{tab:g1_pixel_bias}
+    \small
+    \begin{tabular}{lrrrrrrr}
+        \toprule
+        Country & Cells & Median & P5 & P95 & Beyond $\pm1\%$ & Largest & Energy \\
+        \midrule
+        Portugal & 3\,500   & $-0.003\%$ & $-0.24\%$ & $+0.26\%$ & 0.46\% & 2.0\%  & $+0.0006\%$ \\
+        India    & 61\,464  & $-0.013\%$ & $-1.25\%$ & $+0.005\%$ & 5.8\% & 53.1\% & $-0.024\%$ \\
+        Brazil   & 181\,306 & $-0.165\%$ & $-1.16\%$ & $+0.030\%$ & 6.8\% & 28.9\% & $-0.133\%$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Tier 1 (definition; exact aggregation). Proxy: no.
 
 \subsubsection{Climate Forcing of the Resource}
 
@@ -410,6 +469,7 @@ single class III turbine is applied everywhere, rated below 2024
 machines; the class flag quantifies the share of potential where a
 stronger turbine would be chosen. The 100~m layer represents a 110~m
 hub. Air density uses annual means and a reanalysis different from the
-wind field. Wind potential above 3,000~m, present only in India, is excluded
+wind field. The climate factors of a wind cell are those of the GCM
+cell and are constant over its pixels. Wind potential above 3,000~m, present only in India, is excluded
 pending OQ-058. Inverter clipping and curtailment are not modeled. The plant
 is a 2024-vintage counterfactual evaluated under mid-century climate.
