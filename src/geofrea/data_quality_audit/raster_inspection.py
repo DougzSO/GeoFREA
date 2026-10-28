@@ -281,6 +281,72 @@ def _mask_raster_by_polygon(
     return data, win_transform
 
 
+_SCAN_BLOCK_PIXELS = 16_000_000  # pixels of one row block of the windowed scan: about 64 MB as float32
+
+
+def _scan_windowed(
+    src: rasterio.DatasetReader,
+    country_gdf: gpd.GeoDataFrame,
+    effective_crs: rasterio.crs.CRS | None = None,
+) -> tuple[tuple[int, int], rasterio.Affine, np.ndarray, np.ndarray, int]:
+    """The valid values of the country window of `src`, read in row blocks (COMMAND 75, F1b memory).
+
+    The result is what the whole-window read produced (`_mask_raster_by_polygon` and the masks of `inspect_raster`) without the window
+    ever being in memory: `(shape, transform, valid_data, valid_per_row)` with `valid_data` the valid float32 values in row-major order
+    (so `min`, `max` and `mean` are those of the same array, bit for bit), `valid_per_row` the number of valid pixels of each row,
+    `shape` and `transform` those of the whole window and `inside_px` the pixels of the window inside the polygon. A block starts at the
+    fractional row offset of the window plus its first row, so every pixel is sampled exactly as in the single read. The polygon is
+    rasterised once for the whole window, as before (a block of its own could decide a pixel centre that lies on the border differently),
+    one byte a pixel. The memory is the valid values, that mask and one block of work arrays, not several copies of the window.
+
+    Raises:
+        MemoryError: the window as float32 is over `_WINDOWED_READ_MAX_BYTES`: the chunked statistics take the raster, as before.
+        rasterio.errors.WindowError: the country bbox does not overlap the raster (as `_mask_raster_by_polygon`).
+    """
+    geom_in_src_crs = country_gdf.to_crs(effective_crs if effective_crs is not None else src.crs)
+    window = _country_window(geom_in_src_crs.total_bounds, src.transform, src.width, src.height)
+    height, width = round(window.height), round(window.width)
+    estimated_bytes = width * height * np.dtype(np.float32).itemsize
+    if estimated_bytes > _WINDOWED_READ_MAX_BYTES:
+        raise MemoryError(
+            f"Windowed read would allocate ~{estimated_bytes / 1e9:.2f} GB "
+            f"(window {height}x{width} px as float32), "
+            f"over the {_WINDOWED_READ_MAX_BYTES / 1e9:.1f} GB budget — "
+            "falling back to a chunked read instead."
+        )
+    shapes = [mapping(geom) for geom in geom_in_src_crs.geometry]
+    inside = geometry_mask(shapes, out_shape=(height, width), transform=src.window_transform(window), invert=True)
+    rows_per_block = max(1, _SCAN_BLOCK_PIXELS // max(width, 1))
+    nodata = src.nodata
+
+    def valid_of(block: np.ndarray) -> np.ndarray:
+        mask = _nodata_mask(block, MASK_FILL)
+        if nodata is not None and nodata != MASK_FILL:
+            mask &= _nodata_mask(block, nodata)
+        return mask
+
+    def masked_block(first_row: int, n_rows: int) -> np.ndarray:
+        win = rasterio.windows.Window(window.col_off, window.row_off + first_row, window.width, n_rows)
+        block = src.read(1, window=win).astype(np.float32, copy=False)
+        block[~inside[first_row : first_row + n_rows]] = MASK_FILL
+        return block
+
+    # pass 1: how many valid values there are, so that the array is allocated once at its final size
+    valid_per_row = np.zeros(height, dtype=np.int64)
+    for first in range(0, height, rows_per_block):
+        n_rows = min(rows_per_block, height - first)
+        valid_per_row[first : first + n_rows] = valid_of(masked_block(first, n_rows)).sum(axis=1)
+    # pass 2: the values
+    valid_data = np.empty(int(valid_per_row.sum()), dtype=np.float32)
+    filled = 0
+    for first in range(0, height, rows_per_block):
+        block = masked_block(first, min(rows_per_block, height - first))
+        picked = block[valid_of(block)]
+        valid_data[filled : filled + picked.size] = picked
+        filled += picked.size
+    return (height, width), src.window_transform(window), valid_data, valid_per_row, int(inside.sum())
+
+
 def _stats_chunked(
     src: rasterio.DatasetReader,
     country_gdf: gpd.GeoDataFrame,
@@ -580,13 +646,13 @@ def inspect_raster(
                 )
 
             if country_gdf is not None:
-                data, transform = None, None
+                scan = None
                 try:
-                    data, transform = _mask_raster_by_polygon(src, country_gdf, effective_crs)
+                    scan = _scan_windowed(src, country_gdf, effective_crs)
                 except MemoryError:
                     pass
 
-                if data is None:
+                if scan is None:
                     logger.info(
                         "  [%s] large file — using chunked read (%d rows/chunk)",
                         path.stem,
@@ -613,25 +679,23 @@ def inspect_raster(
                     return result
 
                 result["masked_by"] = "country polygon (windowed)"
-
+                shape, transform, valid_data, valid_per_row, inside_px = scan
             else:
                 data = src.read(1).astype(np.float32)
                 transform = src.transform
+                shape = data.shape
+                valid_mask = _nodata_mask(data, MASK_FILL)
+                if src.nodata is not None and src.nodata != MASK_FILL:
+                    valid_mask &= _nodata_mask(data, src.nodata)
+                valid_data = data[valid_mask]
+                valid_per_row = valid_mask.sum(axis=1)
+                del data, valid_mask
 
-            result["analysis_shape"] = data.shape
-
-            valid_mask = _nodata_mask(data, MASK_FILL)
-            if src.nodata is not None and src.nodata != MASK_FILL:
-                valid_mask &= _nodata_mask(data, src.nodata)
-
-            valid_data = data[valid_mask]
-            total_px = data.size
+            result["analysis_shape"] = shape
+            total_px = shape[0] * shape[1]
             valid_px = valid_data.size
             if country_gdf is not None and result["masked_by"] == "country polygon (windowed)":
                 # the pixels inside the polygon (the rule of the mask above): what share of them holds a valid value
-                inside_px = _pixels_inside(
-                    country_gdf, effective_crs or src.crs, data.shape, transform
-                )
                 result["mask_coverage_pct"] = (
                     round(100.0 * valid_px / inside_px, 1) if inside_px else None
                 )
@@ -642,8 +706,7 @@ def inspect_raster(
                 result["mean"] = round(float(valid_data.mean()), 4)
                 result["valid_pct"] = round(100.0 * valid_px / total_px, 1)
 
-                row_areas = row_area_km2(data.shape, transform)
-                valid_per_row = valid_mask.sum(axis=1)
+                row_areas = row_area_km2(shape, transform)
                 result["area_km2"] = round(float((row_areas * valid_per_row).sum()), 1)
             else:
                 result["valid_pct"] = 0.0

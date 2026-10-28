@@ -780,7 +780,7 @@ def test_inspect_raster_falls_back_to_chunked_stats_on_memory_error(tmp_path, mo
     def _raise_memory_error(*_args, **_kwargs):
         raise MemoryError("simulated: windowed read too large")
 
-    monkeypatch.setattr(raster_inspection, "_mask_raster_by_polygon", _raise_memory_error)
+    monkeypatch.setattr(raster_inspection, "_scan_windowed", _raise_memory_error)
 
     result = inspect_raster(path, country_gdf=_covering_gdf())
 
@@ -803,7 +803,7 @@ def test_inspect_raster_reports_error_when_both_strategies_fail(tmp_path, monkey
     def _raise_memory_error(*_args, **_kwargs):
         raise MemoryError("simulated")
 
-    monkeypatch.setattr(raster_inspection, "_mask_raster_by_polygon", _raise_memory_error)
+    monkeypatch.setattr(raster_inspection, "_scan_windowed", _raise_memory_error)
     monkeypatch.setattr(raster_inspection, "_stats_chunked", lambda *_a, **_k: (None, None))
 
     result = inspect_raster(path, country_gdf=_covering_gdf())
@@ -1041,3 +1041,62 @@ def test_inspect_raster_cached_skips_an_unchanged_input_and_measures_a_changed_o
     _write_raster(path, np.ones((_SIZE, _SIZE), dtype="float32"))  # another content
     changed = raster_inspection.inspect_raster_cached(path, gdf, cache_dir=cache)
     assert len(calls) == 4 and changed != first
+
+
+# --- COMMAND 75: the windowed statistics are read in row blocks and give what the single read gave --------------------------------
+
+
+def _reference_scan(src, country_gdf):
+    """The whole-window route of before COMMAND 75: `_mask_raster_by_polygon`, then the masks of `inspect_raster`."""
+    data, transform = _mask_raster_by_polygon(src, country_gdf, src.crs)
+    mask = _nodata_mask(data, raster_inspection.MASK_FILL)
+    if src.nodata is not None and src.nodata != raster_inspection.MASK_FILL:
+        mask &= _nodata_mask(data, src.nodata)
+    return data.shape, transform, data[mask], mask.sum(axis=1)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("block_pixels", [1, 7, 23, 10_000_000])
+def test_the_windowed_scan_in_blocks_equals_the_single_read_with_a_fractional_window(tmp_path, monkeypatch, block_pixels):
+    rng = np.random.default_rng(75)
+    size = 61
+    data = rng.normal(5.0, 3.0, (size, size)).astype(np.float32)
+    data[rng.uniform(size=data.shape) < 0.1] = -32768.0  # declared nodata
+    data[10:14, 20:30] = np.nan
+    path = tmp_path / "r.tif"
+    _write_raster(path, data, nodata=-32768.0)
+    # a polygon whose bbox is not on pixel edges (a fractional window) and that is not a rectangle (the mask matters)
+    west, north = _ORIGIN_LON + 0.0437, _ORIGIN_LAT - 0.0291
+    polygon = Polygon([(west, north - 0.30), (west + 0.31, north), (west + 0.47, north - 0.21), (west + 0.40, north - 0.50), (west + 0.05, north - 0.46)])
+    country = gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
+    monkeypatch.setattr(raster_inspection, "_SCAN_BLOCK_PIXELS", block_pixels)
+    with rasterio.open(path) as src:
+        shape, transform, values, per_row = _reference_scan(src, country)
+        got_shape, got_transform, got_values, got_per_row, inside_px = raster_inspection._scan_windowed(src, country, src.crs)
+        assert inside_px == raster_inspection._pixels_inside(country, src.crs, shape, transform)
+    assert got_shape == shape and got_transform == transform
+    np.testing.assert_array_equal(got_values, values)  # the same values in the same order, so min, max and mean are the same numbers
+    np.testing.assert_array_equal(got_per_row, per_row)
+    assert float(got_values.mean()) == float(values.mean())
+
+
+@pytest.mark.unit
+def test_inspect_raster_gives_the_same_report_whatever_the_block_size(tmp_path, monkeypatch):
+    data = np.arange(_SIZE * _SIZE, dtype=np.float32).reshape(_SIZE, _SIZE)
+    data[2:4, 3:6] = -9999.0
+    path = tmp_path / "r.tif"
+    _write_raster(path, data, nodata=-9999.0)
+    whole = inspect_raster(path, country_gdf=_covering_gdf())
+    monkeypatch.setattr(raster_inspection, "_SCAN_BLOCK_PIXELS", 11)
+    assert inspect_raster(path, country_gdf=_covering_gdf()) == whole
+    assert whole["masked_by"] == "country polygon (windowed)" and whole["valid_pct"] < 100.0
+
+
+@pytest.mark.unit
+def test_a_float32_window_is_not_copied_when_it_is_read(tmp_path):
+    """The cause of the 4 GB peak of F1b: `astype(float32)` of a float32 read made a second copy of the window."""
+    path = tmp_path / "r.tif"
+    _write_raster(path, np.ones((_SIZE, _SIZE), dtype=np.float32))
+    with rasterio.open(path) as src:
+        block = src.read(1, window=rasterio.windows.Window(0, 0, _SIZE, _SIZE))
+        assert block.astype(np.float32, copy=False) is block  # the call the scan makes
