@@ -172,34 +172,30 @@ def era5_gust_mean_annual_max(
     return values
 
 
-def load_daily(
-    path: Path, variable: str, start: int, end: int, lat_rows: slice | None = None
-) -> xr.DataArray:
-    """One ISIMIP3b crop, daily, restricted to [start, end] with every year present (and to the latitude rows `lat_rows` when given)."""
+def load_daily(path: Path, variable: str, start: int, end: int) -> xr.DataArray:
+    """One ISIMIP3b crop, daily, restricted to [start, end] with every year present."""
     with xr.open_dataset(path) as ds:
-        field = ds[variable] if lat_rows is None else ds[variable].isel(lat=lat_rows)
-        return _years(field, start, end).load()
+        return _years(ds[variable], start, end).load()
 
 
 LAT_ROWS_PER_BAND = 12  # latitude rows of the native grid processed at once by `hazard_fields`
 
 
 def _hazard_fields_of_rows(
-    historical_tasmax: Path,
-    scenario_tasmax: Path,
-    historical_pr: Path,
-    scenario_pr: Path,
-    window: tuple[int, int],
+    tx_ref_kelvin: xr.DataArray,
+    tx_win_kelvin: xr.DataArray,
+    pr_ref_flux: xr.DataArray,
+    pr_win_flux: xr.DataArray,
     indicators: HazardIndicators,
-    lat_rows: slice | None,
+    lat_rows: slice,
 ) -> dict[str, xr.DataArray]:
     tx35, tx40 = indicators.tx35_days.threshold_c, indicators.tx40_days.threshold_c
     wet = indicators.wet_p95_exceed_freq
     ref0, ref1 = REFERENCE_PERIOD
-    tx_ref = to_celsius(load_daily(historical_tasmax, "tasmax", ref0, ref1, lat_rows))
-    tx_win = to_celsius(load_daily(scenario_tasmax, "tasmax", *window, lat_rows))
-    pr_ref = to_mm_per_day(load_daily(historical_pr, "pr", ref0, ref1, lat_rows))
-    pr_win = to_mm_per_day(load_daily(scenario_pr, "pr", *window, lat_rows))
+    tx_ref = to_celsius(tx_ref_kelvin.isel(lat=lat_rows))
+    tx_win = to_celsius(tx_win_kelvin.isel(lat=lat_rows))
+    pr_ref = to_mm_per_day(pr_ref_flux.isel(lat=lat_rows))
+    pr_win = to_mm_per_day(pr_win_flux.isel(lat=lat_rows))
     p95 = wet_day_percentile(pr_ref, wet.percentile, wet.wet_day_mm)
     n_years_ref = ref1 - ref0 + 1
     return {
@@ -226,28 +222,22 @@ def hazard_fields(
 ) -> dict[str, xr.DataArray]:
     """Native-grid indicator fields (window and reference) for one GCM and scenario, with the definitions of `experiments.yaml` `hazard_indicators`.
 
-    Every indicator of a cell depends on the daily series of that cell only (counts, maxima and quantiles over time), so the grid is processed in
-    bands of `LAT_ROWS_PER_BAND` latitude rows and the bands are joined: the fields are the ones of the whole grid, bit for bit, and the daily
-    series in memory are those of a band (BRA: peak 2.9 GB for the whole crop, COMMAND 75).
+    Every indicator of a cell depends on the daily series of that cell only (counts, maxima and quantiles over time). The four daily crops are read
+    once, as they come from the files (float32), and the grid is processed in bands of `LAT_ROWS_PER_BAND` latitude rows, the conversions and
+    the work arrays of each indicator being those of a band: the fields are the ones of the whole grid, bit for bit, with the transients of a
+    fifth of the grid (BRA: peak 2.9 GB for the whole crop, COMMAND 75).
     """
-    lats = []
-    for path in (historical_tasmax, scenario_tasmax, historical_pr, scenario_pr):
-        with xr.open_dataset(path) as ds:
-            lats.append(ds["lat"].values)
+    ref0, ref1 = REFERENCE_PERIOD
+    tx_ref = load_daily(historical_tasmax, "tasmax", ref0, ref1)
+    tx_win = load_daily(scenario_tasmax, "tasmax", *window)
+    pr_ref = load_daily(historical_pr, "pr", ref0, ref1)
+    pr_win = load_daily(scenario_pr, "pr", *window)
+    lats = [a["lat"].values for a in (tx_ref, tx_win, pr_ref, pr_win)]
     if any(lat.shape != lats[0].shape or not np.array_equal(lat, lats[0]) for lat in lats[1:]):
         raise HazardDataError("the four crops of a member do not share their latitude rows (the bands are taken by position)")
-    n_lat = len(lats[0])
     bands = [
-        _hazard_fields_of_rows(
-            historical_tasmax,
-            scenario_tasmax,
-            historical_pr,
-            scenario_pr,
-            window,
-            indicators,
-            slice(lo, lo + LAT_ROWS_PER_BAND),
-        )
-        for lo in range(0, n_lat, LAT_ROWS_PER_BAND)
+        _hazard_fields_of_rows(tx_ref, tx_win, pr_ref, pr_win, indicators, slice(lo, lo + LAT_ROWS_PER_BAND))
+        for lo in range(0, len(lats[0]), LAT_ROWS_PER_BAND)
     ]
     return {name: xr.concat([band[name] for band in bands], dim="lat") for name in bands[0]}
 
