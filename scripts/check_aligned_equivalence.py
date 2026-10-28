@@ -6,7 +6,7 @@ D-core-044 allows adopting the internal caches of an earlier revision (`scripts/
 than 2 h of rebuild in one country, and then with an automatic equivalence check that runs both revisions on a sample and compares the results,
 never by the operator's statement. This is that check for the aligned layers of F2a:
 
-1. the tree of `--revision` (`main.py`, `config/`, `src/`) is extracted with `git archive` into a temporary directory;
+1. the tree of `--revision` (`main.py`, `config/`, `docs/`, `src/`) is extracted with `git archive` into a temporary directory;
 2. F2a of the sample country runs there and in the current tree, each with its own `GEOFREA_DATA_DIR` (the raw data is shared through a directory
    junction, the interim caches and the outputs are not), so both start with no cache;
 3. every artifact of `grid_alignment` in the two manifests is compared by canonical content hash (`core.content_hash`);
@@ -92,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
 
+    from dotenv import load_dotenv
+
+    load_dotenv(REPO / ".env")  # GEOFREA_DATA_DIR, as main.py reads it
     from geofrea.core import paths as core_paths
 
     real_raw = core_paths.data_root() / "raw"
@@ -102,10 +105,15 @@ def main(argv: list[str] | None = None) -> int:
         old_repo.mkdir()
         tar = tmp_path / "old.tar"
         subprocess.run(
-            ["git", "-C", str(REPO), "archive", "--format=tar", "-o", str(tar), args.revision, "main.py", "config", "src"],
+            ["git", "-C", str(REPO), "archive", "--format=tar", "-o", str(tar), args.revision, "main.py", "config", "docs", "src"],
             check=True,
         )
         subprocess.run(["tar", "-xf", str(tar), "-C", str(old_repo)], check=True)
+        # the run records `git rev-parse HEAD`: the extracted tree needs a commit of its own (its content does not depend on it)
+        git = ["git", "-C", str(old_repo), "-c", "user.name=equiv", "-c", "user.email=equiv@localhost"]
+        subprocess.run([*git, "init", "-q"], check=True)
+        subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+        subprocess.run([*git, "commit", "-q", "-m", f"tree of {args.revision}"], check=True, capture_output=True)
         try:
             old_manifest = _run_f2a(old_repo, tmp_path / "data_old", args.sample, real_raw)
             new_manifest = _run_f2a(REPO, tmp_path / "data_new", args.sample, real_raw)

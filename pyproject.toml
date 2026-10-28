@@ -33,6 +33,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-testmon",
+    "pytest-xdist",
     "ruff",
 ]
 # Soft dependency — raster_inspection.py's inspect_land_cover_tiles()
