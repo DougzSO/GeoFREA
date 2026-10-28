@@ -73,7 +73,7 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
         parameters=[f"countries.{_ISO}"],
         experiments=["gcm_ensemble", "land_availability"],
         audit=["derived_ranges"],
-        settings=["run.technologies", "technical_potential"],
+        settings=["run.technologies", "wind_cf_integral"],
         turbines=[WHOLE],
     ),
     "lcoe_modeling": _scope(
@@ -117,7 +117,7 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
     "robustness_maps": _scope(experiments=["windows"], settings=["figures", "run.technologies"]),
     "potential_maps": _scope(
         experiments=["absolute_maps"],
-        settings=["figures", "run.technologies", "technical_potential"],
+        settings=["figures", "run.technologies", "wind_cf_integral"],
     ),
     "results_synthesis": _scope(
         technologies=[WHOLE],

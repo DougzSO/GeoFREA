@@ -148,9 +148,13 @@ def test_the_cell_value_aggregated_from_the_pixels_agrees_between_the_table_and_
 def test_the_option_of_the_settings_file_is_validated_and_defaults_to_the_exact_integral():
     from pydantic import ValidationError
 
-    from geofrea.core.schemas import TechnicalPotentialConfig
+    from geofrea.core.schemas import SettingsFile
 
-    assert TechnicalPotentialConfig().wind_cf_integral == "exact"
-    assert TechnicalPotentialConfig(wind_cf_integral="table").wind_cf_integral == "table"
+    from geofrea.core.config_loader import load_settings
+
+    settings = load_settings(REPO / "config" / "settings.yaml")
+    assert settings.wind_cf_integral == "table"  # the setting of the runs
+    raw = {"run": settings.run.model_dump(), "geospatial": settings.geospatial.model_dump(), "memory": settings.memory.model_dump(), "figures": "summary"}
+    assert SettingsFile.model_validate(raw).wind_cf_integral == "exact"  # the API default is the closed form
     with pytest.raises(ValidationError):
-        TechnicalPotentialConfig(wind_cf_integral="fast")
+        SettingsFile.model_validate({**raw, "wind_cf_integral": "fast"})

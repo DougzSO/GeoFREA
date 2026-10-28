@@ -1587,7 +1587,7 @@ def _main(argv: list[str] | None = None) -> int:
             settings.figures,
             settings.memory.max_batch_gb,
             args.scale,
-            settings.technical_potential.wind_cf_integral,
+            settings.wind_cf_integral,
         )
         all_ok = all_ok and ok
         f7_done = f7_done or (

@@ -98,9 +98,8 @@ memory:
 # `all` is set for the build of the thesis, and only then. Changing it reruns the map phases and no other.
 figures: summary
 
-# Numerical options of F5 that do not change the method (D-F5-039). `wind_cf_integral`: how the wind capacity factor integral I(A, k) is evaluated:
+# How F5 evaluates the wind capacity factor integral I(A, k) (D-F5-039), a numerical option that does not change the method:
 #   table  the exact integral on a fixed grid (A 0 to 45 m/s every 0.05, k 0.5 to 10 every 0.02), cubic spline; the error against the exact one is
 #          below 1e-5 in the capacity factor (docs/_audit/performance_75.md), and about 150 times faster
 #   exact  the closed form per pixel (the validation mode)
-technical_potential:
-  wind_cf_integral: table
+wind_cf_integral: table
