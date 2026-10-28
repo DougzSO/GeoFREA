@@ -83,6 +83,16 @@ def _fmt(v) -> str:
     return "-" if v is None else f"{v:,.3g}"
 
 
+def _by_member(table: pd.DataFrame, skip: str | None = None):
+    """`(member id, rows of that member)` in the order of the ids as strings, without a copy of the table and without its ten million member
+    ids as strings (BRA overview: 3.3 GB, COMMAND 75); what `table.astype(str).groupby("member")` gave."""
+    codes, uniques = pd.factorize(table["member"])
+    ids = {str(u): i for i, u in enumerate(uniques)}
+    for member in sorted(ids):
+        if member != skip:
+            yield member, table[codes == ids[member]]
+
+
 def build_tables(
     iso: str, forcing: pd.DataFrame, masked: pd.DataFrame, hazard: pd.DataFrame
 ) -> str:
@@ -108,12 +118,9 @@ def build_tables(
             }
         )
 
-    f = forcing.copy()
-    f["member"] = f["member"].astype(str)
-    f = f[f["member"] != "m0"]
     m_counts = masked["member"].astype(str).value_counts()
     member_rows = []
-    for member, g in f.groupby("member"):
+    for member, g in _by_member(forcing, skip="m0"):
         member_rows.append(
             {
                 "member": member,
@@ -133,8 +140,6 @@ def build_tables(
             }
         )
 
-    h = hazard.copy()
-    h["member"] = h["member"].astype(str)
     haz_rows = [
         {
             "member": member,
@@ -145,7 +150,7 @@ def build_tables(
             "Rx5day ref": _fmt(g.rx5day_mm_ref.mean()),
             "wet P95 share": _fmt(g.wet_p95_exceed_freq.mean()),
         }
-        for member, g in h.groupby("member")
+        for member, g in _by_member(hazard)
     ]
     parts = [
         f"# {iso}: pipeline overview\n",

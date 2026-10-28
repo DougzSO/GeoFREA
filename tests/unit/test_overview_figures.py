@@ -182,3 +182,27 @@ def test_eligibility_figure_is_added_when_f3_cell_tables_exist(data_dir):
     assert f"{ISO}_F3_land-eligibility_solar_central.png" in names
     assert f"{ISO}_F3_land-eligibility_wind_central.png" in names
     assert f"{ISO}_F3_exclusion-contribution_central.png" in names
+
+
+# --- COMMAND 75: the tables of the overview group by member without copying the table or turning the member ids into strings -----------------
+
+
+@pytest.mark.parametrize("categorical", [True, False])
+@pytest.mark.parametrize("skip", [None, "m0"])
+def test_by_member_gives_the_groups_of_the_string_version_in_its_order(categorical, skip):
+    from geofrea.overview.figures import _by_member
+
+    rng = np.random.default_rng(75)
+    ids = ["m_z_ssp370", "m0", "m_a_ssp126", "m_b_ssp126"]
+    table = pd.DataFrame({"member": rng.choice(ids, 500), "value": rng.normal(size=500)})
+    if categorical:
+        table["member"] = pd.Categorical(table["member"], categories=ids)  # not in the order of the strings, with every id used
+    reference = table.copy()
+    reference["member"] = reference["member"].astype(str)
+    if skip:
+        reference = reference[reference["member"] != skip]
+    want = [(m, g) for m, g in reference.groupby("member")]
+    got = list(_by_member(table, skip=skip))
+    assert [m for m, _ in got] == [m for m, _ in want]
+    for (_, a), (_, b) in zip(got, want, strict=True):
+        assert a["value"].tolist() == b["value"].tolist()  # the same rows in the same order
