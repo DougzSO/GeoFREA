@@ -294,8 +294,8 @@ def _scan_windowed(
     The result is what the whole-window read produced (`_mask_raster_by_polygon` and the masks of `inspect_raster`) without the window
     ever being in memory: `(shape, transform, valid_data, valid_per_row)` with `valid_data` the valid float32 values in row-major order
     (so `min`, `max` and `mean` are those of the same array, bit for bit), `valid_per_row` the number of valid pixels of each row,
-    `shape` and `transform` those of the whole window and `inside_px` the pixels of the window inside the polygon. A block starts at the
-    fractional row offset of the window plus its first row, so every pixel is sampled exactly as in the single read. The polygon is
+    `shape` and `transform` those of the whole window and `inside_px` the pixels of the window inside the polygon. A block covers the source
+    rows of its own output rows on the scale of the single read, so every pixel is sampled exactly as in it. The polygon is
     rasterised once for the whole window, as before (a block of its own could decide a pixel centre that lies on the border differently),
     one byte a pixel. The memory is the valid values, that mask and one block of work arrays, not several copies of the window.
 
@@ -325,9 +325,16 @@ def _scan_windowed(
             mask &= _nodata_mask(block, nodata)
         return mask
 
+    # The single read maps the (fractional) window onto `height x width` pixels, so a source pixel is `window.height / height` rows tall in
+    # that read (not exactly 1 when the bounds are not on pixel edges). A block takes the source rows of its own output rows on the same
+    # scale, so that every output pixel samples the source pixel it sampled in the single read.
+    row_scale = window.height / height
+
     def masked_block(first_row: int, n_rows: int) -> np.ndarray:
-        win = rasterio.windows.Window(window.col_off, window.row_off + first_row, window.width, n_rows)
-        block = src.read(1, window=win).astype(np.float32, copy=False)
+        win = rasterio.windows.Window(
+            window.col_off, window.row_off + first_row * row_scale, window.width, n_rows * row_scale
+        )
+        block = src.read(1, window=win, out_shape=(n_rows, width)).astype(np.float32, copy=False)
         block[~inside[first_row : first_row + n_rows]] = MASK_FILL
         return block
 
