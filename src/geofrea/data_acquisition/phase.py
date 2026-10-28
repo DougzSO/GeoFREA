@@ -69,7 +69,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import time
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -78,6 +77,7 @@ from typing import NamedTuple
 
 import geopandas as gpd
 
+from geofrea.core.cache_key import FileHashMemo
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.data_acquisition.fetchers.gadm import fetch_admin1, fetch_borders
 from geofrea.data_acquisition.fetchers.hydrosheds import fetch_lakes, fetch_rivers
@@ -247,19 +247,21 @@ assert not set(_LOCAL_MULTI_PATH_HANDLERS) & set(_FETCHED_LAYER_HANDLERS), (
 )
 
 
-# Per-layer hashing budget (docs/phases/core.md D-core-016, resolving
-# OQ-024). Measured 2026-09-23 against every layer already resolved for
-# BRA and PRT (F1-1b action 1): the worst case was BRA's land_cover at
-# ~55.8s (112 tiles, 6.2 GB) and BRA's population at ~30.2s (4.2 GB) —
-# both under this budget, so no layer is skipped for cost today. Not
-# tuned to those two files specifically; it is the "exceeds one minute
-# per country" ceiling the verdict itself specified.
-_HASH_BUDGET_S = 60.0
+# The hash of a layer is a fact about its files and must not depend on how fast the disk is (R73-02, COMMAND 75): there is no time budget
+# (D-core-016 had one of 60 s per layer, which made `layer_registry.json` differ between a fast and a slow run and marked every phase after F1 as
+# stale). Each file is hashed once and then looked up by path, size and mtime in a memo (`FileHashMemo`, the one the caches use).
+#
+# Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single source of truth, ADJ-7).
 
-# Chunk size: geofrea.data_acquisition.schemas.HASH_CHUNK_BYTES (single
-# source of truth, ADJ-7 — this module previously
-# defined its own 1 MiB constant; see that constant's docstring for why
-# 8 MiB was chosen over it).
+
+def _layer_hash_memo() -> FileHashMemo | None:
+    from geofrea.core import paths as core_paths
+    from geofrea.core.paths import MissingPathEnvironmentError
+
+    try:
+        return FileHashMemo(core_paths.data_root() / "interim" / "_layer_registry_sha256.json")
+    except MissingPathEnvironmentError:  # no data directory configured: hash without a memo
+        return None
 
 
 def _sha256_file(path: Path) -> str:
@@ -274,43 +276,27 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _hash_layer_files(files: list[Path]) -> tuple[dict[str, str] | None, str | None]:
-    """Hash every file a layer resolved to, within `_HASH_BUDGET_S` per layer.
+def _hash_layer_files(
+    files: list[Path], memo: FileHashMemo | None = None
+) -> tuple[dict[str, str] | None, str | None]:
+    """Hash every file a layer resolved to, with no time budget.
 
-    A fact about the file, recorded once at resolve time — never a gate
-    (see AcquiredLayer.source_sha256's docstring, schemas.py). Runs
-    inside the same per-layer try/except as fetch/resolve in
-    run_acquisition_phase() below, so a real hashing failure (e.g. the
-    file vanishing between resolve and hash) surfaces as that layer's
-    own resolution_status="failed", same as a fetch/resolve exception —
-    not swallowed here.
+    A fact about the file, recorded once at resolve time, never a gate (see AcquiredLayer.source_sha256's docstring, schemas.py). Runs inside the same
+    per-layer try/except as fetch/resolve in run_acquisition_phase() below, so a real hashing failure (e.g. the file vanishing between resolve and hash)
+    surfaces as that layer's own resolution_status="failed".
 
     Args:
-        files: The layer's resolved file(s) — `[path]` for a
-            single-file layer, `paths` for a multi-file one. Empty if
-            nothing resolved.
+        files: The layer's resolved file(s): `[path]` for a single-file layer, `paths` for a multi-file one. Empty if nothing resolved.
+        memo: Hashes kept by path, size and mtime; without it every file is read.
 
     Returns:
-        (source_sha256, skipped_reason): exactly one is None.
-        source_sha256 is None with no reason when `files` is empty
-        (nothing to hash, nothing to explain); None with a reason when
-        the budget was exceeded partway through; otherwise a full
-        {path_str: hexdigest} dict.
+        (source_sha256, skipped_reason): the reason is always None now (the field stays for the registries written before R73-02); source_sha256 is None
+        only when `files` is empty, otherwise the full {path_str: hexdigest} dict.
     """
     if not files:
         return None, None
-
-    digests: dict[str, str] = {}
-    started = time.perf_counter()
-    for fp in files:
-        digests[str(fp)] = _sha256_file(fp)
-        if time.perf_counter() - started > _HASH_BUDGET_S:
-            return None, (
-                f"hashing {len(files)} file(s) exceeded the {_HASH_BUDGET_S:.0f}s "
-                f"per-layer budget after {len(digests)} file(s) — "
-                "see docs/phases/core.md D-core-016"
-            )
-    return digests, None
+    sha = memo.sha256 if memo is not None else _sha256_file
+    return {str(fp): sha(fp) for fp in files}, None
 
 
 class _LayerSpec(NamedTuple):
@@ -487,6 +473,7 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
     # can't be read; the filter degrades gracefully to
     # excluded_land_cover_tiles-only in that case.
     borders_gdf: gpd.GeoDataFrame | None = None
+    layer_memo = _layer_hash_memo()
     for spec in _LAYER_REGISTRY:
         # MULTI_FILE_LAYER_NAMES (schemas.py) is the single source of
         # truth for path vs. paths (see DECISIONS.md 2026-08-24,
@@ -550,7 +537,7 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 paths = local_multi_handler(context.country_code, borders_gdf)
 
             hashed_files = [path] if (path is not None and not is_multi_file) else paths
-            source_sha256, source_sha256_skipped_reason = _hash_layer_files(hashed_files)
+            source_sha256, source_sha256_skipped_reason = _hash_layer_files(hashed_files, layer_memo)
         except Exception as exc:  # noqa: BLE001 — one layer's failure must not abort the others
             path = None
             paths = []
