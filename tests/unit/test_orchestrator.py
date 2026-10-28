@@ -639,7 +639,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.7"
+    assert orchestrator.manifest.schema_version == "2.8"
 
 
 @pytest.mark.unit
@@ -653,7 +653,7 @@ def test_manifest_records_methodology_version(tmp_path):
     orchestrator.run([ok, bad])
 
     on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == "2.7"
+    assert on_disk["schema_version"] == "2.8"
     assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
         "phase_ok": "test-1.0.0",
         "phase_bad": "test-1.0.0",
@@ -960,7 +960,7 @@ def test_a_manifest_of_schema_2_3_is_readable_and_its_phases_have_no_times(tmp_p
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.7"
+    assert reloaded.manifest.schema_version == "2.8"
     assert reloaded.manifest.phases["phase_a"].wall_s is None
     assert reloaded.manifest.phases["phase_a"].cpu_s is None
 
@@ -999,5 +999,113 @@ def test_a_manifest_of_schema_2_6_is_readable_and_has_no_peak_memory(tmp_path):
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.7"
+    assert reloaded.manifest.schema_version == "2.8"
     assert reloaded.manifest.phases["phase_a"].peak_rss_mb is None
+
+
+# ─── manifest 2.8: the cold figures of a phase (R73-03, COMMAND 75) ───────────────────────────────────────────
+
+
+def _entry(**kw):
+    from geofrea.core.orchestrator import PhaseManifestEntry
+
+    base = dict(phase="p", status="success", output={}, error=None, started_at="t0", finished_at="t1")
+    return PhaseManifestEntry(**{**base, **kw})
+
+
+def _result(wall, cpu=None, rss=None, started="t2"):
+    from geofrea.core.orchestrator import PhaseResult
+
+    return PhaseResult(
+        phase="p", status="success", output=None, error=None, started_at=started, finished_at="t3",
+        wall_s=wall, cpu_s=cpu if cpu is not None else wall * 0.9, peak_rss_mb=rss if rss is not None else 100.0,
+    )  # fmt: skip
+
+
+@pytest.mark.unit
+def test_the_first_execution_is_its_own_cold_figure():
+    from geofrea.core.orchestrator import cold_figures
+
+    cold = cold_figures(None, _result(40.0, cpu=30.0, rss=700.0), "code-a")
+    assert cold == {
+        "cold_wall_s": 40.0, "cold_cpu_s": 30.0, "cold_peak_rss_mb": 700.0, "cold_started_at": "t2", "cold_code_fingerprint": "code-a",
+    }  # fmt: skip
+
+
+@pytest.mark.unit
+def test_a_short_run_with_every_cache_current_does_not_replace_the_cold_figure():
+    """R73-03: the BRA `grid_alignment` of 39 s (caches current) must not hide the 42,176 s of the cold run."""
+    from geofrea.core.orchestrator import cold_figures
+
+    previous = _entry(
+        wall_s=42176.0, cpu_s=30000.0, peak_rss_mb=2000.0, code_fingerprint="code-a",
+        **cold_figures(None, _result(42176.0, cpu=30000.0, rss=2000.0, started="cold-run"), "code-a"),
+    )  # fmt: skip
+    cold = cold_figures(previous, _result(39.0, cpu=30.0, rss=221.0, started="warm-run"), "code-a")
+    assert cold["cold_wall_s"] == 42176.0 and cold["cold_started_at"] == "cold-run" and cold["cold_peak_rss_mb"] == 2000.0
+
+
+@pytest.mark.unit
+def test_a_slower_execution_under_the_same_code_becomes_the_cold_figure():
+    from geofrea.core.orchestrator import cold_figures
+
+    previous = _entry(wall_s=10.0, code_fingerprint="code-a", **cold_figures(None, _result(10.0), "code-a"))
+    assert cold_figures(previous, _result(25.0, started="slow"), "code-a")["cold_started_at"] == "slow"
+
+
+@pytest.mark.unit
+def test_a_change_of_code_starts_the_cold_figures_again_even_with_a_shorter_run():
+    from geofrea.core.orchestrator import cold_figures
+
+    previous = _entry(wall_s=900.0, code_fingerprint="code-a", **cold_figures(None, _result(900.0), "code-a"))
+    cold = cold_figures(previous, _result(60.0, started="new-code"), "code-b")
+    assert cold["cold_wall_s"] == 60.0 and cold["cold_code_fingerprint"] == "code-b"
+
+
+@pytest.mark.unit
+def test_an_entry_of_manifest_2_7_offers_its_last_execution_when_the_code_is_the_same():
+    from geofrea.core.orchestrator import cold_figures
+
+    old = _entry(wall_s=500.0, cpu_s=450.0, peak_rss_mb=900.0, started_at="old-run", code_fingerprint="code-a")
+    assert cold_figures(old, _result(20.0), "code-a")["cold_started_at"] == "old-run"
+    assert cold_figures(old, _result(20.0), "code-b")["cold_started_at"] == "t2"  # another code: the old figure describes another phase
+
+
+@pytest.mark.unit
+def test_the_manifest_keeps_the_cold_figures_through_a_cached_rerun_a_failure_and_a_resume(tmp_path):
+    import time as time_module
+
+    call_log: list[str] = []
+    state = {"sleep": 0.3}
+
+    def slow_then_fast(context):
+        time_module.sleep(state["sleep"])
+        return DummyOutput(value=1)
+
+    spec = PhaseSpec(name="phase_a", output_model=DummyOutput, run=slow_then_fast, requires=frozenset(), produces=frozenset())
+    first = _orchestrator(tmp_path, ["phase_a"])
+    first.run([spec])
+    cold_wall = first.manifest.phases["phase_a"].cold_wall_s
+    assert cold_wall is not None and cold_wall >= 0.25
+    assert first.manifest.phases["phase_a"].wall_s == cold_wall
+
+    state["sleep"] = 0.0  # a run that finds everything current
+    second = _orchestrator(tmp_path, ["phase_a"], rerun_phases=["phase_a"], run_id="run-2")
+    second.run([spec])
+    entry = second.manifest.phases["phase_a"]
+    assert entry.wall_s < cold_wall and entry.cold_wall_s == cold_wall and entry.cold_started_at == first.manifest.phases["phase_a"].started_at
+
+    third = _orchestrator(tmp_path, ["phase_a"], run_id="run-3")  # resumed, not executed
+    third.run([spec])
+    assert third.manifest.phases["phase_a"].cold_wall_s == cold_wall
+    on_disk = json.loads(third.manifest_path.read_text(encoding="utf-8"))
+    assert on_disk["phases"]["phase_a"]["cold_wall_s"] == cold_wall
+
+    def boom(context):
+        raise ValueError("boom")
+
+    failing = PhaseSpec(name="phase_a", output_model=DummyOutput, run=boom, requires=frozenset(), produces=frozenset())
+    fourth = _orchestrator(tmp_path, ["phase_a"], rerun_phases=["phase_a"], run_id="run-4")
+    fourth.run([failing])
+    assert fourth.manifest.phases["phase_a"].status == "failed"
+    assert fourth.manifest.phases["phase_a"].cold_wall_s == cold_wall  # the failure does not erase it

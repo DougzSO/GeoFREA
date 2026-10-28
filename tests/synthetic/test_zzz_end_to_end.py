@@ -2346,7 +2346,7 @@ def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_pea
     import json
 
     manifest = json.loads((zzz[0] / "outputs" / "ZZZ" / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == "2.7"
+    assert manifest["schema_version"] == "2.8"
     artifacts = manifest["artifacts"]
 
     siting = {k for k in artifacts if k.startswith("siting/")}
