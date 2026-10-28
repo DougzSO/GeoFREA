@@ -54,6 +54,9 @@ class EligibilityLayers:
     required_valid: dict[
         str, np.ndarray
     ]  # layer name -> bool (resource layers that must exist for the technology)
+    riparian_share: dict[tuple[float, float], np.ndarray] = field(
+        default_factory=dict
+    )  # E3 share per (setback km, minimum discharge m3/s) of the scenarios, from `riparian_shares` (COMMAND 75)
     slope_steep_share: dict[float, np.ndarray] = field(
         default_factory=dict
     )  # E4 share per slope maximum (deg), prepared from the bins by `slope_steep_shares` (COMMAND 75: the 41 bins need not stay in memory)
@@ -110,6 +113,20 @@ def _steep_share(counts: np.ndarray, threshold_deg: float) -> np.ndarray:
     return np.clip(share, 0.0, 1.0).astype(np.float32)
 
 
+def riparian_shares(
+    shares: dict[tuple[float, float], np.ndarray], pairs
+) -> dict[tuple[float, float], np.ndarray]:
+    """E3 for each (setback km, minimum discharge m3/s) in `pairs`, from the prepared shares: what `exclusion_fractions` would compute (same function).
+
+    F3 prepares a share for every setback and discharge threshold of the configuration (BRA: 12 arrays of 61 MB); the scenarios read three
+    combinations of them, so these are kept and the prepared grid is dropped.
+    """
+    return {
+        (float(t), float(q)): _riparian_for(float(t), float(q), shares).astype(np.float32)
+        for t, q in sorted({(float(t), float(q)) for t, q in pairs})
+    }
+
+
 def slope_steep_shares(counts: np.ndarray, thresholds) -> dict[float, np.ndarray]:
     """E4 for each slope maximum in `thresholds`, from the 1 degree bin counts: what `exclusion_fractions` would compute from `counts` (same function).
 
@@ -139,6 +156,17 @@ def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np
     return np.clip(share, 0.0, 1.0).astype(np.float32)
 
 
+def _riparian_share(layers: EligibilityLayers, params: ParameterSet) -> np.ndarray:
+    prepared = layers.riparian_share.get(
+        (float(params.riparian_setback_km), float(params.riparian_min_discharge_m3s))
+    )
+    if prepared is not None:
+        return prepared
+    return _riparian_for(
+        params.riparian_setback_km, params.riparian_min_discharge_m3s, layers.riparian_fraction
+    ).astype(np.float32)
+
+
 def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict[str, np.ndarray]:
     """E1-E6 excluded shares (float32 in [0, 1]) for one parameter set.
 
@@ -163,9 +191,7 @@ def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict
     return {
         "E1": layers.protected_fraction[key].astype(np.float32),
         "E2": layers.lakes_fraction.astype(np.float32),
-        "E3": _riparian_for(
-            params.riparian_setback_km, params.riparian_min_discharge_m3s, layers.riparian_fraction
-        ).astype(np.float32),
+        "E3": _riparian_share(layers, params),
         "E4": e4,
         "E5": e5,
         "E6": e6,

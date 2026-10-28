@@ -651,3 +651,22 @@ def test_a_resource_read_as_float32_is_the_float64_read_cast_down_and_the_cell_m
     a = aggregate_to_cells(transform, mask, eligible, {}, resources={"r": wide})
     b = aggregate_to_cells(transform, mask, eligible, {}, resources={"r": narrow})
     pd.testing.assert_frame_equal(a, b, check_exact=True)
+
+
+def test_the_prepared_riparian_shares_give_the_same_eligibility_as_the_grid_of_shares_and_the_grid_need_not_stay():
+    from geofrea.land_eligibility.eligibility import riparian_shares
+
+    rng = np.random.default_rng(77)
+    grid = {(q, t): rng.uniform(0, 1, (6, 7)).astype("float32") for q in (0.0, 10.0) for t in (0.25, 0.5, 1.0)}
+    pairs = [(0.5, 0.0), (0.375, 4.0), (1.0, 10.0)]  # exact, interpolated in both axes, exact
+    with_grid = _layers((6, 7), riparian_fraction=grid)
+    prepared = _layers((6, 7), riparian_fraction={}, riparian_share=riparian_shares(grid, pairs))
+    for setback, discharge in pairs:
+        params = ParameterSet(10.0, 100.0, setback, 0.1, (10,), ("ia",), riparian_min_discharge_m3s=discharge)
+        a, excl_a = eligible_fraction(with_grid, params)
+        b, excl_b = eligible_fraction(prepared, params)
+        np.testing.assert_array_equal(a, b)
+        np.testing.assert_array_equal(excl_a["E3"], excl_b["E3"])
+        assert excl_b["E3"].dtype == np.float32
+    with pytest.raises(MissingExclusionLayerError):
+        eligible_fraction(prepared, ParameterSet(10.0, 100.0, 0.7, 0.1, (10,), ("ia",), riparian_min_discharge_m3s=2.0))

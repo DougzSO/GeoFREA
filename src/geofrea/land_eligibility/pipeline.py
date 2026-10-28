@@ -66,6 +66,7 @@ from geofrea.land_eligibility.eligibility import (
     EXCLUSION_NAMES,
     EligibilityLayers,
     eligible_fraction,
+    riparian_shares,
     slope_steep_shares,
     valid_pixels,
 )
@@ -371,7 +372,8 @@ class SharedLayers:
     samples_per_pixel: int
     lakes_fraction: np.ndarray
     protected_fraction: dict[tuple[str, ...], np.ndarray]
-    riparian_fraction: dict[tuple[float, float], np.ndarray]
+    riparian_fraction: dict[tuple[float, float], np.ndarray]  # the prepared grid of (discharge, setback); empty once `riparian_share` is made
+    riparian_share: dict[tuple[float, float], np.ndarray]  # E3 per (setback, discharge) of the scenarios
     flags: dict[str, np.ndarray]
 
 
@@ -459,6 +461,15 @@ def prepare_shared_layers(
         },
     )
     riparian_fraction = {(q, t): rip[f"q{q}_t{t}"] for q in discharges for t in thr}
+    riparian_share = riparian_shares(
+        riparian_fraction,
+        {
+            (p.riparian_setback_km, p.riparian_min_discharge_m3s)
+            for t in techs
+            for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
+        },
+    )
+    del riparian_fraction, rip  # the grid of prepared shares (BRA: 12 arrays of 61 MB) is not needed again
 
     flags = {
         "dist_grid_capped_share": _read(grid_result.grid_distance_capped, "grid_distance_capped")
@@ -482,7 +493,8 @@ def prepare_shared_layers(
         samples_per_pixel=samples_per_pixel,
         lakes_fraction=lakes_fraction,
         protected_fraction=protected_fraction,
-        riparian_fraction=riparian_fraction,
+        riparian_fraction={},
+        riparian_share=riparian_share,
         flags=flags,
     )
 
@@ -507,6 +519,7 @@ def technology_layers(
         lakes_fraction=shared.lakes_fraction,
         protected_fraction=shared.protected_fraction,
         riparian_fraction=shared.riparian_fraction,
+        riparian_share=shared.riparian_share,
         required_valid={name: np.isfinite(a) for name, a in resources.items()},
     )
     return layers, resources
