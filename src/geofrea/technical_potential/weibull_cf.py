@@ -16,6 +16,8 @@ with `Q` the regularized lower incomplete gamma function. No speed step exists. 
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 from scipy.special import gamma as gamma_fn
 from scipy.special import gammainc, gammaincc
@@ -146,6 +148,7 @@ def wind_cf_member(
     eta_loss: float,
     rho0: float,
     t_star_k: float,
+    integral: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None,
 ) -> np.ndarray:
     """Member capacity factor, `CF_m = eta_loss * I(delta_wind_m * A_H * (rho_m / rho0)^(1/3), k_H)`, `rho_m = rho_ref T* / (T* + dT_m)`.
 
@@ -164,6 +167,9 @@ def wind_cf_member(
         eta_loss: Retention factor (wake, availability, electrical, soiling).
         rho0: Air density the curve refers to, kg/m3.
         t_star_k: Reference temperature of the density change, K.
+        integral: `(A, k) -> I`, the exact closed form when omitted; `cf_table.cf_integral` gives the tabulated one (D-F5-039).
     """
     a_eq = equivalent_scale(a_h, member_air_density(rho_ref, d_t, t_star_k), rho0)
-    return eta_loss * weibull_capacity_factor(a_eq * np.asarray(delta_wind), k_h, curve)
+    scale = a_eq * np.asarray(delta_wind)
+    raw = weibull_capacity_factor(scale, k_h, curve) if integral is None else integral(scale, k_h)
+    return eta_loss * raw

@@ -501,6 +501,19 @@ class MemoryConfig(BaseModel):
     max_batch_gb: PositiveFloat
 
 
+class TechnicalPotentialConfig(BaseModel):
+    """Numerical options of F5 that do not change the method (D-F5-039).
+
+    Args:
+        wind_cf_integral: How the wind capacity factor integral `I(A, k)` is evaluated: `table` (the exact integral on a fixed grid, cubic spline,
+            error below 1e-5 in the capacity factor; the setting of the runs) or `exact` (the closed form per pixel, the validation mode).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wind_cf_integral: Literal["table", "exact"] = "exact"
+
+
 class SettingsFile(BaseModel):
     """Root schema for config/settings.yaml.
 
@@ -517,6 +530,7 @@ class SettingsFile(BaseModel):
         figures: Which diagnostic figures a phase draws (A-08): `all`, `summary` (the figure the thesis output
             needs, not the member-level ones) or `none`. Rasters and tables are artifacts and are always written.
             Honoured by climate_maps, overview (with its per-layer maps) and potential_maps.
+        technical_potential: Numerical options of F5 (`wind_cf_integral`).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -525,6 +539,7 @@ class SettingsFile(BaseModel):
     geospatial: GeospatialConfig
     memory: MemoryConfig
     figures: Literal["all", "summary", "none"]
+    technical_potential: TechnicalPotentialConfig = TechnicalPotentialConfig()
 
 
 class GeometryRepairSummary(BaseModel):

@@ -219,6 +219,7 @@ def resolve_technology(
     tech_params: object,
     curves_dir: Path,
     production: bool,
+    wind_cf_integral: str = "exact",
 ) -> ResolvedTechnology:
     """Check every input of a technology and gather them; raise `MissingParameterError` listing what is absent.
 
@@ -231,6 +232,7 @@ def resolve_technology(
         tech_params: Its parameters in `parameters.json` for the country (attributes are `VerifiedValue`).
         curves_dir: Directory of the power-curve files.
         production: A production run refuses a synthetic curve.
+        wind_cf_integral: `table` or `exact` (settings.yaml `technical_potential.wind_cf_integral`, D-F5-039); read by the wind model only.
 
     Raises:
         MissingParameterError: a required parameter has no value, or the curves or the class rule are absent.
@@ -297,6 +299,7 @@ def resolve_technology(
             rho0=RHO0_KG_M3,
             t_star_k=ISA_T0_K,
             hours_per_day=HOURS_PER_DAY,
+            wind_cf_integral=wind_cf_integral,
         ),
         parameters=values,
         scenario_parameters=by_scenario,
@@ -336,6 +339,7 @@ def _provenance(
         "hours_per_year": HOURS_PER_YEAR,
         "integration": INTEGRATION_METHOD,
         "cf_aggregation": resolved.model.aggregation,
+        "wind_cf_integral": resolved.settings.wind_cf_integral if resolved.model.aggregation == "pixel" else None,
         "c2_applied": False,
         "production": production,
         "absent_cell_members": {m: n for m, n in absent_by_member.items() if n},
@@ -644,6 +648,7 @@ def build_potential(
     climate_dir: Path | None = None,
     out_dir: Path | None = None,
     siting_dir: Path | None = None,
+    wind_cf_integral: str = "exact",
 ) -> PotentialSummary:
     """F5 for `iso` and the technologies of the run, in the three land scenarios.
 
@@ -665,6 +670,7 @@ def build_potential(
                 getattr(country_params.technologies, tech),
                 curves_dir,
                 production,
+                wind_cf_integral,
             )
         except MissingParameterError as exc:
             failures.extend(f"{tech}: {item}" for item in exc.missing)

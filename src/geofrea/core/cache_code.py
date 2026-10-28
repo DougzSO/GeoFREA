@@ -24,6 +24,7 @@ CACHE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "era5_reduction": ("data_acquisition.fetchers.era5",),
     "gwa_mask_mosaic": ("data_acquisition.fetchers.wind",),
     "gadm_mainland": ("data_acquisition.fetchers.gadm",),
+    "cf_table": ("technical_potential.cf_table",),
 }
 
 

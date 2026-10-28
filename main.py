@@ -476,6 +476,7 @@ def _build_phase_specs(
     figures: str = "all",
     max_batch_gb: float | None = None,
     country_code: str | None = None,
+    wind_cf_integral: str = "exact",
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -508,6 +509,7 @@ def _build_phase_specs(
         figures: settings.yaml's `figures` (A-08), closed over by potential_maps.
         max_batch_gb: settings.yaml's `memory.max_batch_gb` (A-10), closed over by lcoe_modeling; the phase raises
             if it is absent (no silent default).
+        wind_cf_integral: settings.yaml's `technical_potential.wind_cf_integral` (D-F5-039), closed over by technical_potential and potential_maps.
         country_code: the country of the run; with it every spec carries the fingerprint of the configuration its phase reads
             (`core.config_fingerprint`), so that the manifest resumes a phase only while that configuration is unchanged.
             Without it the specs carry none (the graph alone is wanted).
@@ -628,6 +630,7 @@ def _build_phase_specs(
             POWER_CURVES_DIR,
             audit_config=load_audit_config(AUDIT_YAML),
             production=production,
+            wind_cf_integral=wind_cf_integral,
         )
         for tech, potential in result.technologies.items():
             for scenario, entry in potential.scenarios.items():
@@ -807,9 +810,10 @@ def _build_phase_specs(
                 )
             units = read_units(gpd.read_file(str(admin1)))
         resolved = None
-        if (
-            figures == "all"
-        ):  # the F5 parameters of the run decide the 0.01 degree display layers (COMMAND 70)
+        if figures in (
+            "all",
+            "summary",
+        ):  # the F5 parameters of the run decide the 0.01 degree display layers (COMMAND 70, 75)
             registry = load_technologies(TECHNOLOGIES_YAML)
             country_params = context.require_country_params("technologies")
             resolved = {
@@ -820,6 +824,7 @@ def _build_phase_specs(
                     getattr(country_params.technologies, tech),
                     POWER_CURVES_DIR,
                     production,
+                    wind_cf_integral,
                 )
                 for tech in technologies
             }
@@ -1289,6 +1294,7 @@ def run_geofrea(
     figures: str = "all",
     max_batch_gb: float | None = None,
     scale: str = DEFAULT_SCALE.scale_id,
+    wind_cf_integral: str = "exact",
 ):
     """`_run_geofrea` at the cell scale `scale` (`core.scale`: `0p05deg`, the default, or `0p1deg`; M-F3-06, V-07).
 
@@ -1310,6 +1316,7 @@ def run_geofrea(
             production,
             figures,
             max_batch_gb,
+            wind_cf_integral,
         )
 
 
@@ -1327,6 +1334,7 @@ def _run_geofrea(
     production: bool = False,
     figures: str = "all",
     max_batch_gb: float | None = None,
+    wind_cf_integral: str = "exact",
 ) -> tuple[bool, Orchestrator]:
     """Run the phases needed to satisfy target_phases for a single country.
 
@@ -1400,6 +1408,7 @@ def _run_geofrea(
             figures,
             max_batch_gb,
             country_code,
+            wind_cf_integral,
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)
@@ -1578,6 +1587,7 @@ def _main(argv: list[str] | None = None) -> int:
             settings.figures,
             settings.memory.max_batch_gb,
             args.scale,
+            settings.technical_potential.wind_cf_integral,
         )
         all_ok = all_ok and ok
         f7_done = f7_done or (
