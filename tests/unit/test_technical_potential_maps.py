@@ -196,3 +196,20 @@ def test_unknown_figures_mode_and_missing_inputs_raise(run_ok, tmp_path):
 def test_the_real_settings_file_declares_figures():
     assert load_settings(SETTINGS).figures in ("all", "summary", "none")
     assert MEMBERS  # shared constant imported for the fixtures
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("mode, called", [("none", False), ("summary", True), ("all", True)])
+def test_the_display_layers_follow_the_potential_in_every_mode_that_draws(run_ok, tmp_path, monkeypatch, mode, called):
+    """COMMAND 75: a layer of a previous potential must not survive a run of `figures: summary`."""
+    from geofrea.technical_potential import maps as maps_module
+
+    seen = []
+    monkeypatch.setattr(maps_module, "ensure_display_layers", lambda iso, tech, *a, **k: seen.append(tech) or "built")
+    _, out = run_ok
+    land = _land(out, tmp_path / "land")
+    build_potential_maps(
+        "ZZZ", ["solar", "wind"], mode, potential_dir=out, cells_dir=land, figures_dir=tmp_path / "figures",
+        members_yaml=_members_yaml(tmp_path / "f4"), resolved={"solar": object(), "wind": object()},
+    )  # fmt: skip
+    assert (sorted(seen) == ["solar", "wind"]) is called
