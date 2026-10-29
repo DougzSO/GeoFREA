@@ -110,7 +110,8 @@ from geofrea.core.orchestrator import (
     compute_run_id,
     phase_graph,
 )
-from geofrea.core.paths import log_path, outputs_dir, phase_dir
+from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
+from geofrea.core.paths import interim, log_path, outputs_dir, phase_dir
 from geofrea.core.power import keep_awake
 from geofrea.core.production import (
     ConfigConsistencyError,
@@ -1565,6 +1566,12 @@ def _main(argv: list[str] | None = None) -> int:
     run_id = compute_run_id(
         _resolved_config_json(settings, parameters, args.scale), methodology_version, git_commit
     )
+
+    for country_code in countries:
+        shortfall = cold_start_shortfall(country_code, target_phases, interim)
+        if shortfall:
+            logger.error("%s", shortfall)
+            return EXIT_NOT_STARTED
 
     all_ok = True
     table_rows: list[dict] = []
