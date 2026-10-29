@@ -520,6 +520,26 @@ def test_intersection_keeps_covered_lines_and_cuts_the_others_in_order(monkeypat
 
 
 @pytest.mark.unit
+def test_intersection_cuts_covered_multilines_and_lines_that_touch_themselves(monkeypatch):
+    clip_geom = _square(0.0, 0.0, 5.0)
+    multi = shapely.MultiLineString([[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 2.0)]])
+    ring = shapely.LineString([(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0), (0.0, 0.0)])
+    figure_eight = shapely.LineString([(0.0, 0.0), (2.0, 2.0), (2.0, 0.0), (0.0, 2.0), (0.0, 0.0), (1.0, -1.0)])
+    simple = shapely.LineString([(0.0, 0.0), (1.0, 3.0)])
+    assert not figure_eight.is_simple and ring.is_simple
+    geoms = np.array([multi, figure_eight, simple, ring])
+
+    sent = []
+    real = shapely.intersection
+    monkeypatch.setattr(shapely, "intersection", lambda g, c: sent.append(len(g)) or real(g, c))
+    result = _intersection_threaded(geoms, clip_geom)
+
+    assert sent == [2]  # the multipart and the self-touching line; the simple line and the simple ring are kept
+    assert shapely.equals_exact(result[[2, 3]], geoms[[2, 3]], tolerance=0.0).all()
+    assert shapely.equals_exact(result, shapely.intersection(geoms, clip_geom), tolerance=0.0)[[0, 1]].all()
+
+
+@pytest.mark.unit
 def test_intersection_never_keeps_a_polygon_even_if_covered():
     clip_geom = _square(0.0, 0.0, 5.0)
     small = _square(0.0, 0.0, 1.0)

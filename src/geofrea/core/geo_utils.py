@@ -584,22 +584,24 @@ def _intersection_threaded(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
     return out
 
 
-_LINE_TYPE_IDS = (1, 2, 5)  # LineString, LinearRing, MultiLineString
+_SIMPLE_LINE_TYPE_ID = 1  # LineString; a MultiLineString or a LinearRing always goes through the exact intersection
 
 
 def _not_covered_lines(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
     """Boolean mask of the features whose intersection with `clip_geom` has to be computed.
 
-    A line that `clip_geom` covers wholly intersects it in itself, so the feature is kept as it is (COMMAND 77, item 1a;
-    docs/_audit/profile_76.md C2 measured 0 exact differences in 0.36 million lines, with 99.6% of the roads and 93 to 98% of the
-    rivers covered). Polygons are always intersected: the intersection rewrites their rings, so keeping the input would change the
-    coordinates (and the content hash of the clip) even though the geometry is topologically equal.
+    Only a simple LineString that `clip_geom` covers wholly intersects it in itself, so only that feature is kept as it is (COMMAND 77, item 1a,
+    restricted by COMMAND 79). A line that touches itself is rewritten by GEOS (it is noded at the touch, which turns a closed boundary ring
+    of a protected area into a MultiLineString and drops vertices; measured on IND, 8,705 of 8,707 closed non-simple lines differ and no simple
+    one does), and a multipart line or a polygon is always intersected exactly: the intersection rewrites the rings, so keeping the input would
+    change the coordinates (and the content hash of the clip) even though the geometry is topologically equal.
     """
     todo = np.ones(len(geoms), dtype=bool)
-    lines = np.isin(shapely.get_type_id(geoms), _LINE_TYPE_IDS)
-    if lines.any():
+    lines = np.where(shapely.get_type_id(geoms) == _SIMPLE_LINE_TYPE_ID)[0]
+    if len(lines):
         shapely.prepare(clip_geom)
-        todo[lines] = ~shapely.covers(clip_geom, geoms[lines])
+        candidates = geoms[lines]
+        todo[lines] = ~(shapely.covers(clip_geom, candidates) & shapely.is_simple(candidates))
     return todo
 
 

@@ -1,0 +1,44 @@
+{
+ "iso": "IND",
+ "old": [
+  "lakes=D:/Douglas/DOUTORADO/GeoFREA_data/interim/IND/land_eligibility/lakes_clipped.gpkg",
+  "protected=D:/Douglas/DOUTORADO/GeoFREA_data/interim/IND/land_eligibility/protected_clipped.gpkg",
+  "rivers=D:/Douglas/DOUTORADO/GeoFREA_data/interim/IND/land_eligibility/rivers_clipped.gpkg",
+  "roads=D:/Douglas/DOUTORADO/GeoFREA_data/interim/IND/grid_alignment/roads_clipped.gpkg"
+ ],
+ "layers": {
+  "lakes": {
+   "n_old": 11120,
+   "n_new": 11120,
+   "geometries_differ": 0,
+   "same_columns": true,
+   "attributes_equal": true,
+   "equal": true
+  },
+  "protected": {
+   "n_old": 193089,
+   "n_new": 193089,
+   "geometries_differ": 0,
+   "same_columns": true,
+   "attributes_equal": true,
+   "equal": true
+  },
+  "rivers": {
+   "n_old": 254877,
+   "n_new": 254877,
+   "geometries_differ": 0,
+   "same_columns": true,
+   "attributes_equal": true,
+   "equal": true
+  },
+  "roads": {
+   "n_old": 610665,
+   "n_new": 610665,
+   "geometries_differ": 0,
+   "same_columns": true,
+   "attributes_equal": true,
+   "equal": true
+  }
+ },
+ "equal": true
+}
