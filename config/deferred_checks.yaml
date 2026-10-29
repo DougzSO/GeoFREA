@@ -1,0 +1,53 @@
+# deferred_checks.yaml — content check of a country against a reference manifest (D-core-045; src/geofrea/core/deferred_check.py).
+#
+# COMMANDS 75 to 77 made the pipeline faster without changing what it computes. PRT was proved equal by content hash, artifact by artifact; IND and BRA
+# are proved by this file: the first time the pipeline executes a listed phase for them, the content hash of each artifact of the phase is compared with
+# the manifest saved before the change. A difference that no change of configuration explains stops the run before the next phase and is written, with
+# its probable cause, to outputs/<ISO>/deferred_check.json. A phase that matched is settled and is not compared again. Delete a country to retire its check.
+#
+# baseline: manifest.json of the country as it was before the change, relative to the data root
+#           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
+# phases:   the phases to compare (F1 to F5 and the figure phases that follow)
+# expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
+
+countries:
+  IND:
+    label: "outputs/IND/unattended/20261029_135838/manifest_before.json"
+    baseline: outputs/IND/unattended/20261029_135838/manifest_before.json
+    phases: &phases
+      - data_acquisition
+      - data_quality_audit
+      - grid_alignment
+      - siting_layers
+      - land_eligibility
+      - external_inputs
+      - climate_forcing
+      - hazard_context
+      - climate_maps
+      - overview
+      - technical_potential
+      - potential_maps
+  BRA:
+    label: "outputs/BRA/unattended/20261029_135838/manifest_before.json"
+    baseline: outputs/BRA/unattended/20261029_135838/manifest_before.json
+    phases: *phases
+    expected:
+      # The report of the audit counts the geometry types of the clipped layers. In the unattended round of 2026-10-29 it differed in BRA, and the
+      # reference copy of the file was not kept, so what differs cannot be read back. Nothing computes from it (it is a report). The difference is
+      # accepted and flagged: open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of `geometry_types` changed.
+      audit_report: "report of the audit; the counts of geometry_types of the clipped layers (the reference file was not kept: confirm by hand)"
+
+# probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
+suspects:
+  data_acquisition: "no change of 75 to 77 reaches this phase: the sources changed"
+  data_quality_audit: "clip of the vector layers (item 1a, covered simple LineString shortcut in core/geo_utils.py), mainland cache (item 4), clip cache shared with F2a (item 2)"
+  grid_alignment: "GLO-30 tiles kept open (item 8, grid_alignment/raster_alignment.py), the clip shared with the audit (item 2), the mainland cache (item 4)"
+  siting_layers: "the aligned layers it reads (grid_alignment) or the wind table (item of COMMAND 75, METHODOLOGY 15.3.1)"
+  land_eligibility: "clip of the lakes, protected areas and rivers (item 1a shortcut, item 2 shared clip) and the mainland cache (item 4)"
+  external_inputs: "the sources changed"
+  climate_forcing: "the sources changed"
+  hazard_context: "the aligned layers or the hazard tables it reads"
+  climate_maps: "figures (item h, viz/mapstyle.py quiet_figure) or the tables they draw"
+  overview: "figures (item h, viz/mapstyle.py quiet_figure) or the tables they draw"
+  technical_potential: "the wind capacity-factor table (METHODOLOGY 15.3.1, wind_cf_integral), or the eligibility cells of land_eligibility"
+  potential_maps: "the wind capacity-factor table (METHODOLOGY 15.3.1), figures (item h) or the tables of technical_potential"

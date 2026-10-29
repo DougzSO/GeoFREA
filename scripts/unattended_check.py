@@ -26,35 +26,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "src"))
 
 
-def content_of(entry: dict) -> str:
-    return entry.get("content_sha256") or entry["sha256"]
-
-
-def compare_artifacts(before: dict, after: dict, phases: list[str] | None = None) -> dict:
-    """Per artifact of `phases`: IDENTICO, DIFERENTE, AUSENTE_ANTES or AUSENTE_DEPOIS, and whether the phase's configuration changed."""
-    wanted = set(phases) if phases is not None else None
-    keys = sorted(k for k, e in {**before["artifacts"], **after["artifacts"]}.items() if wanted is None or e["phase"] in wanted)
-    rows = {}
-    for key in keys:
-        old, new = before["artifacts"].get(key), after["artifacts"].get(key)
-        phase = (new or old)["phase"]
-        if old is None:
-            status = "AUSENTE_ANTES"
-        elif new is None:
-            status = "AUSENTE_DEPOIS"
-        else:
-            status = "IDENTICO" if content_of(old) == content_of(new) else "DIFERENTE"
-        rows[key] = {"phase": phase, "status": status, "before": old and content_of(old), "after": new and content_of(new)}
-    config_changed = {
-        p: before["phases"][p].get("config_fingerprint") != after["phases"][p].get("config_fingerprint")
-        for p in {r["phase"] for r in rows.values()}
-        if p in before["phases"] and p in after["phases"]
-    }
-    for row in rows.values():
-        row["config_changed"] = bool(config_changed.get(row["phase"]))
-    return rows
+# the comparison itself is the one the pipeline applies in its deferred check (core/deferred_check.py, D-core-045)
+from geofrea.core.deferred_check import compare_artifacts, content_of  # noqa: E402,F401
 
 
 def _local(stamp: str) -> datetime:

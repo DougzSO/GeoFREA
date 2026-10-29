@@ -105,6 +105,7 @@ INFRASTRUCTURE_MODULES = frozenset(
         "core.config_fingerprint",
         "core.cache_code",
         "core.cache_key",
+        "core.deferred_check",
         "core.content_hash",
         "core.run_logging",
         "core.peak_memory",

@@ -675,6 +675,9 @@ class Orchestrator:
             of the registry leaves it False so entries of the other phases stay untouched.
         revalidate_phases: Phases whose `stale_upstream` entry is declared valid again (see `_revalidate`), for the
             case where their inputs did not change although the lineage says they were invalidated.
+        deferred_check: An object with `after_phase(manifest, phase) -> str | None` (`core.deferred_check.DeferredCheck`), called after each phase that
+            was executed (not resumed) and whose manifest entry is written. A message stops the run: the phases that follow are reported as
+            `skipped_upstream_failed` in the results (their manifest entries are left as they were) and the message is logged as an error.
     """
 
     outputs_dir: Path
@@ -688,6 +691,7 @@ class Orchestrator:
     manifest: RunManifest = field(init=False)
     prune_unregistered: bool = False
     revalidate_phases: Sequence[str] = ()
+    deferred_check: Any = None
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
@@ -1020,8 +1024,20 @@ class Orchestrator:
         attempt_order = [spec for spec in ordered if spec.name in to_attempt]
 
         results: dict[str, PhaseResult[Any]] = {}
+        blocked_by_check: str | None = None
 
         for spec in attempt_order:
+            if blocked_by_check is not None:
+                now = _now_iso()
+                results[spec.name] = PhaseResult(
+                    phase=spec.name,
+                    status="skipped_upstream_failed",
+                    output=None,
+                    error=f"Stopped by the deferred check: {blocked_by_check}",
+                    started_at=now,
+                    finished_at=now,
+                )
+                continue
             failed_deps = [
                 dep_name
                 for dep_name in deps[spec.name]
@@ -1368,6 +1384,10 @@ class Orchestrator:
                 artifact_lines if artifact_lines else "    (none)",
                 summary_line,
             )
+            if self.deferred_check is not None:
+                blocked_by_check = self.deferred_check.after_phase(self.manifest, spec.name)
+                if blocked_by_check is not None:
+                    logger.error("%s", blocked_by_check)
 
         self._write_manifest()  # records this run's run_id and dirty even when every phase resumed
         return results
