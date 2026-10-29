@@ -103,3 +103,8 @@ figures: summary
 #          below 1e-5 in the capacity factor (docs/_audit/performance_75.md), and about 150 times faster
 #   exact  the closed form per pixel (the validation mode)
 wind_cf_integral: table
+
+# Whether main.py asks the operating system not to suspend the computer while a run goes on (SetThreadExecutionState, Windows only; D-core-027, V-T).
+# The schema default is false; it is true here because the run has always been protected this way since 2026-10-14. Set it to false to let the computer
+# sleep as the power plan says (a phase suspended by the system logs hours of wall time that the CPU time of the manifest does not).
+keep_awake: true

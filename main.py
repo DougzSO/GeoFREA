@@ -65,6 +65,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Iterable
+from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -1479,9 +1480,17 @@ def elevation_sensitivities(technologies: tuple[str, ...]) -> dict[str, float | 
     }
 
 
+def _keep_awake_enabled() -> bool:
+    """settings.yaml's `keep_awake`; True when the settings cannot be read (`_main` reports that, and the run stays protected meanwhile)."""
+    try:
+        return load_settings(SETTINGS_YAML).keep_awake
+    except Exception:  # noqa: BLE001 — any unreadable settings are reported by _main
+        return True
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run the pipeline with the computer kept awake (V-T: no suspension in the middle of a phase; nothing on other systems)."""
-    with keep_awake():
+    """Run the pipeline, with the computer kept awake when settings.yaml says `keep_awake` (V-T: no suspension in the middle of a phase; nothing on other systems)."""
+    with keep_awake() if _keep_awake_enabled() else nullcontext():
         return _main(argv)
 
 

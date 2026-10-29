@@ -63,5 +63,6 @@ def test_main_leaves_with_the_not_started_code_before_any_phase(monkeypatch):
 
     monkeypatch.setattr(main, "cold_start_shortfall", lambda *a, **k: "PRT: NOT STARTED. test")
     monkeypatch.setattr(main, "keep_awake", contextlib.nullcontext)
+    monkeypatch.setattr(main, "_keep_awake_enabled", lambda: False)
     monkeypatch.setattr(main, "run_geofrea", lambda *a, **k: pytest.fail("a phase started"))
     assert main.main(["PRT", "--phases", "data_quality_audit,grid_alignment"]) == EXIT_NOT_STARTED
