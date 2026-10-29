@@ -522,14 +522,40 @@ def _intersection_threaded(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
     Returns:
         Array of intersection geometries, same order/length as `geoms`.
     """
-    if len(geoms) < _THREADED_INTERSECTION_MIN_FEATURES:
-        return shapely.intersection(geoms, clip_geom)
+    out = geoms.copy()
+    todo = _not_covered_lines(geoms, clip_geom)
+    if not todo.any():
+        return out
+    rest = geoms[todo]
+    if len(rest) < _THREADED_INTERSECTION_MIN_FEATURES:
+        out[todo] = shapely.intersection(rest, clip_geom)
+        return out
 
     n_workers = min(os.cpu_count() or 1, _MAX_INTERSECTION_WORKERS)
-    chunks = np.array_split(geoms, n_workers)
+    chunks = np.array_split(rest, n_workers)
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         results = list(executor.map(lambda chunk: shapely.intersection(chunk, clip_geom), chunks))
-    return np.concatenate(results)
+    out[todo] = np.concatenate(results)
+    return out
+
+
+_LINE_TYPE_IDS = (1, 2, 5)  # LineString, LinearRing, MultiLineString
+
+
+def _not_covered_lines(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
+    """Boolean mask of the features whose intersection with `clip_geom` has to be computed.
+
+    A line that `clip_geom` covers wholly intersects it in itself, so the feature is kept as it is (COMMAND 77, item 1a;
+    docs/_audit/profile_76.md C2 measured 0 exact differences in 0.36 million lines, with 99.6% of the roads and 93 to 98% of the
+    rivers covered). Polygons are always intersected: the intersection rewrites their rings, so keeping the input would change the
+    coordinates (and the content hash of the clip) even though the geometry is topologically equal.
+    """
+    todo = np.ones(len(geoms), dtype=bool)
+    lines = np.isin(shapely.get_type_id(geoms), _LINE_TYPE_IDS)
+    if lines.any():
+        shapely.prepare(clip_geom)
+        todo[lines] = ~shapely.covers(clip_geom, geoms[lines])
+    return todo
 
 
 def clip_vector_to_country(

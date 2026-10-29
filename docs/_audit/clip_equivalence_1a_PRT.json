@@ -1,0 +1,52 @@
+{
+ "sample": "PRT",
+ "old_src": "D:\\Douglas\\DOUTORADO\\GeoFREA\\src",
+ "layers": {
+  "roads": {
+   "old": {
+    "sha256": "dc214f214d26fd850d23adf4437d4420684993e2233f6e0942c284b9b2ad805e",
+    "n_features": 178986,
+    "wall_s": 117.38,
+    "cpu_s": 109.5
+   },
+   "new": {
+    "sha256": "dc214f214d26fd850d23adf4437d4420684993e2233f6e0942c284b9b2ad805e",
+    "n_features": 178986,
+    "wall_s": 8.99,
+    "cpu_s": 8.84
+   },
+   "equal": true
+  },
+  "rivers": {
+   "old": {
+    "sha256": "00f26cedddffec6e32b11ad8323b6e7c502cfefab641dc8803cb5945e6e9d176",
+    "n_features": 5561,
+    "wall_s": 5.39,
+    "cpu_s": 5.33
+   },
+   "new": {
+    "sha256": "00f26cedddffec6e32b11ad8323b6e7c502cfefab641dc8803cb5945e6e9d176",
+    "n_features": 5561,
+    "wall_s": 2.43,
+    "cpu_s": 2.42
+   },
+   "equal": true
+  },
+  "lakes": {
+   "old": {
+    "sha256": "cf208d20e019be32bbd54818ff9d89b04d8cdad06185c8ee6292a1870f9b6b6f",
+    "n_features": 247,
+    "wall_s": 2.35,
+    "cpu_s": 2.34
+   },
+   "new": {
+    "sha256": "cf208d20e019be32bbd54818ff9d89b04d8cdad06185c8ee6292a1870f9b6b6f",
+    "n_features": 247,
+    "wall_s": 2.37,
+    "cpu_s": 2.34
+   },
+   "equal": true
+  }
+ },
+ "equal": true
+}

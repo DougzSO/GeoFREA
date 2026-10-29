@@ -494,3 +494,43 @@ def test_the_contiguous_territory_is_one_row_with_the_kept_polygons_only():
 def test_a_larger_gap_keeps_the_polygon_beyond_it():
     report = contiguous_mainland_report(_country_with_neighbours(), max_gap_km=3.0)
     assert report["kept"].tolist() == [True, True, True, True, True, False]
+
+
+# ─── _intersection_threaded(): the covered-line fast path (COMMAND 77, item 1a) ───────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_intersection_keeps_covered_lines_and_cuts_the_others_in_order(monkeypatch):
+    clip_geom = _square(0.0, 0.0, 5.0)
+    inside = shapely.LineString([(-1.0, 0.0), (0.0, 1.0), (2.0, 2.0)])
+    crossing = shapely.LineString([(0.0, 0.0), (10.0, 0.0)])
+    outside_part = shapely.MultiLineString([[(1.0, 1.0), (2.0, 1.0)], [(8.0, 8.0), (9.0, 9.0)]])
+    poly = _square(4.0, 0.0, 2.0)
+    geoms = np.array([crossing, inside, poly, outside_part, inside])
+
+    expected = shapely.intersection(geoms, clip_geom)
+    sent = []
+    real = shapely.intersection
+    monkeypatch.setattr(shapely, "intersection", lambda g, c: sent.append(len(g)) or real(g, c))
+
+    result = _intersection_threaded(geoms, clip_geom)
+
+    assert shapely.equals_exact(result, expected, tolerance=0.0).all()  # same coordinates, not just the same shape
+    assert sent == [3]  # the two covered lines were not intersected
+
+
+@pytest.mark.unit
+def test_intersection_never_keeps_a_polygon_even_if_covered():
+    clip_geom = _square(0.0, 0.0, 5.0)
+    small = _square(0.0, 0.0, 1.0)
+    result = _intersection_threaded(np.array([small]), clip_geom)
+    assert result[0] is not small
+    assert shapely.equals_exact(result, shapely.intersection(np.array([small]), clip_geom), tolerance=0.0).all()
+
+
+@pytest.mark.unit
+def test_intersection_handles_empty_input_and_missing_geometries():
+    clip_geom = _square(0.0, 0.0, 5.0)
+    assert len(_intersection_threaded(np.array([], dtype=object), clip_geom)) == 0
+    result = _intersection_threaded(np.array([None, shapely.LineString([(0.0, 0.0), (1.0, 1.0)])], dtype=object), clip_geom)
+    assert result[0] is None and not result[1].is_empty
