@@ -354,7 +354,9 @@ def new_panels(
             y += ROW_GAP_MM
     y_bottom = map_y0[n_rows - 1]
     with ms.plt.rc_context(ms._rc(pre)):
-        fig = ms.plt.figure(figsize=(width / 25.4, height / 25.4), dpi=ms.DPI, facecolor="white")
+        fig = ms.quiet_figure(
+            ms.plt.figure(figsize=(width / 25.4, height / 25.4), dpi=ms.DPI, facecolor="white")
+        )
         overlay = fig.add_axes((0, 0, 1, 1), facecolor="none")
         overlay.set_xlim(0, width)
         overlay.set_ylim(0, height)
