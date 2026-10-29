@@ -11,9 +11,12 @@ Wind products are aligned per height by `reproject_to_grid()` (M-F2a-04); the le
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
+from collections import OrderedDict
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import rasterio
@@ -374,8 +377,39 @@ def _glo30_tile_index(tiles: list) -> dict[tuple[int, int], Path]:
     return index
 
 
+class _TileHandles:
+    """Open GLO-30 datasets kept for the strip loop, at most `limit` at a time, the least recently used closed first (COMMAND 77, item 8).
+
+    Each strip of the grid reads a block of every tile it touches, and the tiles of one strip are the tiles of the next: opening the file
+    again for each block was 55 opens for 19 tiles in PRT (docs/_audit/profile_76.md B.1). The read itself is unchanged, so the samples are too.
+    """
+
+    def __init__(self, limit: int = 12) -> None:
+        self._limit = limit
+        self._open: OrderedDict[Path, Any] = OrderedDict()
+
+    def get(self, path: Path):
+        if path in self._open:
+            self._open.move_to_end(path)
+            return self._open[path]
+        while len(self._open) >= self._limit:
+            self._open.popitem(last=False)[1].close()
+        self._open[path] = rasterio.open(path)
+        return self._open[path]
+
+    def close(self) -> None:
+        while self._open:
+            self._open.popitem(last=False)[1].close()
+
+
 def _read_dem_block(
-    index: dict[tuple[int, int], Path], g0: int, g1: int, c0: int, c1: int, sp: int
+    index: dict[tuple[int, int], Path],
+    g0: int,
+    g1: int,
+    c0: int,
+    c1: int,
+    sp: int,
+    handles: _TileHandles | None = None,
 ) -> np.ndarray:
     """DEM samples for global rows g0..g1-1 and columns c0..c1-1 (NaN where no tile covers them).
 
@@ -396,7 +430,7 @@ def _read_dem_block(
             q0, q1 = max(c0, tc0), min(c1, tc0 + sp)
             if r0 >= r1 or q0 >= q1:
                 continue
-            with rasterio.open(path) as src:
+            with contextlib.nullcontext(handles.get(path)) if handles is not None else rasterio.open(path) as src:
                 if (src.height, src.width) != (sp, sp):
                     raise ValueError(
                         f"{Path(path).name}: expected {sp} x {sp} samples, got {src.height} x {src.width}"
@@ -411,7 +445,12 @@ def _read_dem_block(
 
 
 def _glo30_strip_samples(
-    index: dict[tuple[int, int], Path], grid: GridContext, r0: int, r1: int, sp: int
+    index: dict[tuple[int, int], Path],
+    grid: GridContext,
+    r0: int,
+    r1: int,
+    sp: int,
+    handles: _TileHandles | None = None,
 ):
     """The 30 m samples whose centre lies in grid rows r0..r1-1, or None if no tile covers the strip.
 
@@ -428,7 +467,7 @@ def _glo30_strip_samples(
     c_lo = int(np.floor((g_left + 180) * sp)) - 1
     c_hi = int(np.ceil((g_left + grid.width * res + 180) * sp)) + 1
     z = _read_dem_block(
-        index, g_lo - 1, g_hi + 1, c_lo - 1, c_hi + 1, sp
+        index, g_lo - 1, g_hi + 1, c_lo - 1, c_hi + 1, sp, handles
     )  # one extra sample all round for the stencil
     if not np.isfinite(z).any():
         return None
@@ -485,34 +524,35 @@ def glo30_aligned_outputs(
     progress = PeriodicProgress(
         logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "elevation, slope and slope bins from GLO-30"
     )
-    for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
-        progress.step()
-        r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
-        strip = _glo30_strip_samples(index, grid, r0, r1, sp)
-        if strip is None:
-            continue
-        z, slope, grow, gcol = strip
-        if want_means:
-            pixel = grow[:, None] * grid.width + gcol[None, :]
-            for name, values in (("z", z), ("slope", slope)):
-                ok = np.isfinite(values)
-                if not ok.any():
-                    continue
-                size = (r1 - r0) * grid.width
-                total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
-                count = np.bincount(pixel[ok], minlength=size)
-                sums[name][r0:r1] = total.reshape(r1 - r0, grid.width)
-                n[name][r0:r1] = count.reshape(r1 - r0, grid.width)
-        if want_counts:
-            valid = np.isfinite(slope)
-            if not valid.any():
+    with contextlib.closing(_TileHandles()) as handles:
+        for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
+            progress.step()
+            r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
+            strip = _glo30_strip_samples(index, grid, r0, r1, sp, handles)
+            if strip is None:
                 continue
-            bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
-            key = (grow[:, None] * grid.width + gcol[None, :]) * SLOPE_BINS + bins
-            flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
-            counts[:, r0:r1, :] = (
-                flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
-            )
+            z, slope, grow, gcol = strip
+            if want_means:
+                pixel = grow[:, None] * grid.width + gcol[None, :]
+                for name, values in (("z", z), ("slope", slope)):
+                    ok = np.isfinite(values)
+                    if not ok.any():
+                        continue
+                    size = (r1 - r0) * grid.width
+                    total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
+                    count = np.bincount(pixel[ok], minlength=size)
+                    sums[name][r0:r1] = total.reshape(r1 - r0, grid.width)
+                    n[name][r0:r1] = count.reshape(r1 - r0, grid.width)
+            if want_counts:
+                valid = np.isfinite(slope)
+                if not valid.any():
+                    continue
+                bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
+                key = (grow[:, None] * grid.width + gcol[None, :]) * SLOPE_BINS + bins
+                flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
+                counts[:, r0:r1, :] = (
+                    flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+                )
     written: dict[str, Path | None] = {"elevation": None, "slope": None, "slope_counts": None}
     if want_means and n["z"].any():
         profile = {
