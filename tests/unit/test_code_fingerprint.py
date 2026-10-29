@@ -312,3 +312,51 @@ def test_revalidate_refuses_a_phase_whose_code_changed(tmp_path):
     changed = _specs(outputs, calls, {**code, "technical_potential": "other"})
     with pytest.raises(ValueError, match="code it runs changed"):
         orch._revalidate(next(s for s in changed if s.name == "technical_potential"))
+
+
+# ─── the digests kept between runs (COMMAND 77, item 7) ──────────────────────────────────────────────────────────────────────────────
+
+
+def _fresh_store(monkeypatch, tmp_path):
+    from geofrea.core import code_fingerprint as cf
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(cf, "_store", None)
+    monkeypatch.setattr(cf, "_store_dirty", False)
+    cf._file_digest_cached.cache_clear()
+    return cf
+
+
+def test_the_fingerprint_with_the_store_equals_the_fingerprint_without_it(tmp_path, monkeypatch):
+    from geofrea.core import code_fingerprint as cf
+
+    monkeypatch.delenv("GEOFREA_DATA_DIR", raising=False)
+    monkeypatch.setattr(cf, "_store", None)
+    cf._file_digest_cached.cache_clear()
+    without = cf.closure_fingerprint(("core.geometry_memo",))
+
+    cf = _fresh_store(monkeypatch, tmp_path)
+    cold = cf.closure_fingerprint(("core.geometry_memo",))
+    cf._save_store()
+    assert (tmp_path / "interim" / "_code_digest_cache.json").exists()
+
+    cf = _fresh_store(monkeypatch, tmp_path)  # a new process: empty lru, the file in place
+    monkeypatch.setattr(cf, "normalised_source", lambda *a, **k: (_ for _ in ()).throw(AssertionError("normalised again")))
+    warm = cf.closure_fingerprint(("core.geometry_memo",))
+    assert without == cold == warm
+
+
+def test_a_changed_file_or_a_changed_normalisation_is_not_read_from_the_store(tmp_path, monkeypatch):
+    cf = _fresh_store(monkeypatch, tmp_path)
+    source = tmp_path / "m.py"
+    source.write_text("x = 1\n", encoding="utf-8")
+    first = cf._file_digest_cached(str(source), source.stat().st_mtime_ns, source.stat().st_size, False)
+    cf._save_store()
+    source.write_text("x = 22\n", encoding="utf-8")  # same name, other size
+    cf._file_digest_cached.cache_clear()
+    again = cf._file_digest_cached(str(source), source.stat().st_mtime_ns, source.stat().st_size, False)
+    assert again != first
+
+    cf = _fresh_store(monkeypatch, tmp_path)
+    monkeypatch.setattr(cf, "_store_identity", lambda: "another normalisation")
+    assert cf._load_store()["digest"] == {}

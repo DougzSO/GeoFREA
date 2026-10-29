@@ -23,7 +23,11 @@ The same closure serves the internal caches (`cached_closure_fingerprint`): a ca
 from __future__ import annotations
 
 import ast
+import atexit
 import hashlib
+import json
+import os
+import sys
 from functools import cache, lru_cache
 from pathlib import Path
 
@@ -236,11 +240,87 @@ def normalised_source(source: str, *, schema: bool = False) -> str:
     return ast.dump(tree, annotate_fields=True, include_attributes=False)
 
 
+# ─── the digests kept between runs (COMMAND 77, item 7) ─────────────────────────────────────────────────────────────────────────────
+#
+# Normalising a file (parse, strip, dump the tree) costs about 3.5 s for the import closure of a phase, and every process did it again. The digest
+# of a file (not its imports: a module added later could change what an unchanged file resolves to) is kept in `<data dir>/interim/_code_digest_cache.json`, keyed by path, modification time and size (the
+# same key the per-process `lru_cache` below uses), under a store identity made of the Python version and the bytes of THIS file: the digest is
+# a function of the source and of the normalisation, so a change of the normalisation (this file) or of the interpreter drops the whole store.
+# A file whose mtime or size differ is read and normalised again, as without the store. No data directory, or an unreadable store, means no store.
+
+_STORE_FILE = "_code_digest_cache.json"
+_store: dict | None = None
+_store_dirty = False
+
+
+def _store_identity() -> str:
+    return hashlib.sha256(
+        f"{sys.version_info[:3]}|".encode() + Path(__file__).read_bytes()
+    ).hexdigest()
+
+
+def _store_path() -> Path | None:
+    root = os.environ.get("GEOFREA_DATA_DIR")
+    return Path(root) / "interim" / _STORE_FILE if root else None
+
+
+def _load_store() -> dict:
+    global _store
+    if _store is None:
+        _store = {"identity": _store_identity(), "digest": {}}
+        path = _store_path()
+        try:
+            stored = json.loads(path.read_text(encoding="utf-8")) if path is not None and path.exists() else None
+        except (OSError, ValueError):
+            stored = None
+        if isinstance(stored, dict) and stored.get("identity") == _store["identity"]:
+            _store["digest"] = dict(stored.get("digest", {}))
+    return _store
+
+
+def _still_current(key: str) -> bool:
+    """A stored key `path|mtime_ns|size|...` whose file still has that modification time and size."""
+    path, mtime_ns, size = key.split("|")[:3]
+    try:
+        stat = Path(path).stat()
+    except OSError:
+        return False
+    return stat.st_mtime_ns == int(mtime_ns) and stat.st_size == int(size)
+
+
+def _save_store() -> None:
+    path = _store_path()
+    if not _store_dirty or _store is None or path is None:
+        return
+    keep = {
+        "identity": _store["identity"],
+        "digest": {k: v for k, v in _store["digest"].items() if _still_current(k)},
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(keep), encoding="utf-8")
+        tmp.replace(path)
+    except OSError:
+        pass  # the store is an optimisation only
+
+
+atexit.register(_save_store)
+
+
 @lru_cache(maxsize=4096)
 def _file_digest_cached(path: str, mtime_ns: int, size: int, schema: bool) -> str:
-    return hashlib.sha256(
+    global _store_dirty
+    key = f"{path}|{mtime_ns}|{size}|{int(schema)}"
+    store = _load_store()["digest"]
+    if key in store:
+        return store[key]
+    digest = hashlib.sha256(
         normalised_source(Path(path).read_text(encoding="utf-8"), schema=schema).encode("utf-8")
     ).hexdigest()
+    store[key] = digest
+    _store_dirty = True
+    return digest
 
 
 def _file_digest(path: Path, name: str) -> str:
