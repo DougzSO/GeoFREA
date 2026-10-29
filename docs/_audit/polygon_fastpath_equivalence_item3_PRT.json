@@ -1,0 +1,297 @@
+{
+ "artifacts": {
+  "aligned/elevation": {
+   "equal": true,
+   "new": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7",
+   "old": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7"
+  },
+  "aligned/grid": {
+   "equal": true,
+   "new": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2",
+   "old": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2"
+  },
+  "aligned/grid_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/lakes": {
+   "equal": true,
+   "new": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd",
+   "old": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd"
+  },
+  "aligned/land_cover": {
+   "equal": true,
+   "new": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f",
+   "old": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f"
+  },
+  "aligned/land_cover_counts": {
+   "equal": true,
+   "new": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a",
+   "old": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a"
+  },
+  "aligned/population": {
+   "equal": true,
+   "new": "tif:43f6adca977381471ddf1188cff485582e79576a3ca9737c95c50cd81ef51b60",
+   "old": "tif:43f6adca977381471ddf1188cff485582e79576a3ca9737c95c50cd81ef51b60"
+  },
+  "aligned/rivers": {
+   "equal": true,
+   "new": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c",
+   "old": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c"
+  },
+  "aligned/rivers_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/roads": {
+   "equal": true,
+   "new": "tif:3eecd0e4c173b38e808f34d3eaa4d2d93454fe69bf2de4fc328fa53fee0f5882",
+   "old": "tif:3eecd0e4c173b38e808f34d3eaa4d2d93454fe69bf2de4fc328fa53fee0f5882"
+  },
+  "aligned/roads_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/slope": {
+   "equal": true,
+   "new": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9",
+   "old": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9"
+  },
+  "aligned/slope_counts": {
+   "equal": true,
+   "new": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525",
+   "old": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525"
+  },
+  "aligned/solar": {
+   "equal": true,
+   "new": "tif:7715df82247f7a0744fa3a4921100e33357cefdea4dca2bb818f357251230a48",
+   "old": "tif:7715df82247f7a0744fa3a4921100e33357cefdea4dca2bb818f357251230a48"
+  },
+  "aligned/wind_air_density_100m": {
+   "equal": true,
+   "new": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a",
+   "old": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a"
+  },
+  "aligned/wind_air_density_150m": {
+   "equal": true,
+   "new": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe",
+   "old": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe"
+  },
+  "aligned/wind_air_density_200m": {
+   "equal": true,
+   "new": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205",
+   "old": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205"
+  },
+  "aligned/wind_weibull_a_100m": {
+   "equal": true,
+   "new": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614",
+   "old": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614"
+  },
+  "aligned/wind_weibull_a_150m": {
+   "equal": true,
+   "new": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f",
+   "old": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f"
+  },
+  "aligned/wind_weibull_a_200m": {
+   "equal": true,
+   "new": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa",
+   "old": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa"
+  },
+  "aligned/wind_weibull_k_100m": {
+   "equal": true,
+   "new": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262",
+   "old": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262"
+  },
+  "aligned/wind_weibull_k_150m": {
+   "equal": true,
+   "new": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50",
+   "old": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50"
+  },
+  "aligned/wind_weibull_k_200m": {
+   "equal": true,
+   "new": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6",
+   "old": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6"
+  },
+  "aligned/wind_wind_speed_100m": {
+   "equal": true,
+   "new": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e",
+   "old": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e"
+  },
+  "aligned/wind_wind_speed_150m": {
+   "equal": true,
+   "new": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842",
+   "old": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842"
+  },
+  "aligned/wind_wind_speed_200m": {
+   "equal": true,
+   "new": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d",
+   "old": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d"
+  },
+  "aligned_rasters": {
+   "equal": true,
+   "new": "json:98e37c0721bcfbf659c6faec7dfd9ad436f8b12bfd724928da355a166994949f",
+   "old": "json:98e37c0721bcfbf659c6faec7dfd9ad436f8b12bfd724928da355a166994949f"
+  },
+  "audit_report": {
+   "equal": true,
+   "new": "json:1d071e40627d28747ec52fcccd1a42d5dd159ac0de418097e197156a3a8cbc65",
+   "old": "json:1d071e40627d28747ec52fcccd1a42d5dd159ac0de418097e197156a3a8cbc65"
+  },
+  "eligibility/admin1_units": {
+   "equal": true,
+   "new": "parquet:2610c6626f35d209fbb43d0a563093b4f71a5e87ef22b8a2e2343b1b3ead4e19",
+   "old": "parquet:2610c6626f35d209fbb43d0a563093b4f71a5e87ef22b8a2e2343b1b3ead4e19"
+  },
+  "eligibility/candidate_stability_solar": {
+   "equal": true,
+   "new": "parquet:ad1551d1ad680a0b817163a45b516ec772e492e479e6cd927bd33e07f94716fa",
+   "old": "parquet:ad1551d1ad680a0b817163a45b516ec772e492e479e6cd927bd33e07f94716fa"
+  },
+  "eligibility/candidate_stability_wind": {
+   "equal": true,
+   "new": "parquet:c7b4e5c3a0c82f5931da4d8a78c3992f5cc5618e1ee07ee445bb7acc312a5e73",
+   "old": "parquet:c7b4e5c3a0c82f5931da4d8a78c3992f5cc5618e1ee07ee445bb7acc312a5e73"
+  },
+  "eligibility/candidates_solar__central": {
+   "equal": true,
+   "new": "parquet:d10f00404bed7709d1962a1a993c21666618ea58c44d8ce82d08fa62e2bd689e",
+   "old": "parquet:d10f00404bed7709d1962a1a993c21666618ea58c44d8ce82d08fa62e2bd689e"
+  },
+  "eligibility/candidates_solar__permissive": {
+   "equal": true,
+   "new": "parquet:5b262bf91fc2d261983eb92c32c0211a25469ee290f0cbceb7a841ca6f1273db",
+   "old": "parquet:5b262bf91fc2d261983eb92c32c0211a25469ee290f0cbceb7a841ca6f1273db"
+  },
+  "eligibility/candidates_solar__restrictive": {
+   "equal": true,
+   "new": "parquet:5f890e1cca80cb9013bda12d991e311d47d14852e69139cf2991f328eb2195a5",
+   "old": "parquet:5f890e1cca80cb9013bda12d991e311d47d14852e69139cf2991f328eb2195a5"
+  },
+  "eligibility/candidates_wind__central": {
+   "equal": true,
+   "new": "parquet:cff8303c7eed4eba1e8d446730ae4b9adb310587db9ba0acafd5121dd7eb8292",
+   "old": "parquet:cff8303c7eed4eba1e8d446730ae4b9adb310587db9ba0acafd5121dd7eb8292"
+  },
+  "eligibility/candidates_wind__permissive": {
+   "equal": true,
+   "new": "parquet:d47e268eb93630421e7dd0595c45bd6dc9a51d84ef0f87762b92e8cc8fb5ab2e",
+   "old": "parquet:d47e268eb93630421e7dd0595c45bd6dc9a51d84ef0f87762b92e8cc8fb5ab2e"
+  },
+  "eligibility/candidates_wind__restrictive": {
+   "equal": true,
+   "new": "parquet:a3c0c0d729d55a810a92c83d48152e4bc69fcfb4465f14c0a11bfe305f2814b2",
+   "old": "parquet:a3c0c0d729d55a810a92c83d48152e4bc69fcfb4465f14c0a11bfe305f2814b2"
+  },
+  "eligibility/cells_0p1deg_solar": {
+   "equal": true,
+   "new": "parquet:a75f0be103ba13f36d9df6a8d92ed52fb9e6af3f41254467f165fc0ab45e745b",
+   "old": "parquet:a75f0be103ba13f36d9df6a8d92ed52fb9e6af3f41254467f165fc0ab45e745b"
+  },
+  "eligibility/cells_0p1deg_wind": {
+   "equal": true,
+   "new": "parquet:22a77fe8c7a52d26750dd9ea0b8ae068a2302d41dc16a863dea977eb8a50d8eb",
+   "old": "parquet:22a77fe8c7a52d26750dd9ea0b8ae068a2302d41dc16a863dea977eb8a50d8eb"
+  },
+  "eligibility/cells_solar__central": {
+   "equal": true,
+   "new": "parquet:6ba22b4a1cedf92320c7f0ce65cdae98f0d89712a3f18b3a701422117c146057",
+   "old": "parquet:6ba22b4a1cedf92320c7f0ce65cdae98f0d89712a3f18b3a701422117c146057"
+  },
+  "eligibility/cells_solar__permissive": {
+   "equal": true,
+   "new": "parquet:d6d52e6f4c0bd85c8d98616b1eb6bd1a464a6f92fbf68fb9149f4da488b1558a",
+   "old": "parquet:d6d52e6f4c0bd85c8d98616b1eb6bd1a464a6f92fbf68fb9149f4da488b1558a"
+  },
+  "eligibility/cells_solar__restrictive": {
+   "equal": true,
+   "new": "parquet:27688987d2aae05672a0d3354eac1b01cb6a12c5611798f27f9bc1486bb2ce26",
+   "old": "parquet:27688987d2aae05672a0d3354eac1b01cb6a12c5611798f27f9bc1486bb2ce26"
+  },
+  "eligibility/cells_wind__central": {
+   "equal": true,
+   "new": "parquet:6ed5a4c561b67d6e280262473ece747192b171a5ab58e0af8aa022ac95c17543",
+   "old": "parquet:6ed5a4c561b67d6e280262473ece747192b171a5ab58e0af8aa022ac95c17543"
+  },
+  "eligibility/cells_wind__permissive": {
+   "equal": true,
+   "new": "parquet:aaafa6c261b3f1918429d9ed263315ab2fcf48ef9bb161400de2c662eb6c3df4",
+   "old": "parquet:aaafa6c261b3f1918429d9ed263315ab2fcf48ef9bb161400de2c662eb6c3df4"
+  },
+  "eligibility/cells_wind__restrictive": {
+   "equal": true,
+   "new": "parquet:f70fe396115ea265383924fb99d2a804a86c44e1e8cc727143e8199fb47f0b66",
+   "old": "parquet:f70fe396115ea265383924fb99d2a804a86c44e1e8cc727143e8199fb47f0b66"
+  },
+  "eligibility/dominant_exclusion_solar": {
+   "equal": true,
+   "new": "tif:3f98275645e6d59aebcb3c1d6c639eb0fe558fe668e2594400f4dcfc9e90cf3d",
+   "old": "tif:3f98275645e6d59aebcb3c1d6c639eb0fe558fe668e2594400f4dcfc9e90cf3d"
+  },
+  "eligibility/dominant_exclusion_wind": {
+   "equal": true,
+   "new": "tif:5d273f3cf8e661923eef0950160b67c4d65c17631dca93bc8355b357f98cda1a",
+   "old": "tif:5d273f3cf8e661923eef0950160b67c4d65c17631dca93bc8355b357f98cda1a"
+  },
+  "eligibility/eligible_area_km2_solar": {
+   "equal": true,
+   "new": "tif:55c65df0b71b7789725c67f7fe420c49b2db2bcdbdf0269ca4b0c71323729c5a",
+   "old": "tif:55c65df0b71b7789725c67f7fe420c49b2db2bcdbdf0269ca4b0c71323729c5a"
+  },
+  "eligibility/eligible_area_km2_wind": {
+   "equal": true,
+   "new": "tif:ed8eb6cf024e116fd9212b45cfb86f959c5c015256260f237820bd3dbd46d97f",
+   "old": "tif:ed8eb6cf024e116fd9212b45cfb86f959c5c015256260f237820bd3dbd46d97f"
+  },
+  "eligibility/eligible_fraction_solar": {
+   "equal": true,
+   "new": "tif:d01342212b38a2e05204cf23535787055d1fd3f8fc3463226fff52c0b5567fe4",
+   "old": "tif:d01342212b38a2e05204cf23535787055d1fd3f8fc3463226fff52c0b5567fe4"
+  },
+  "eligibility/eligible_fraction_solar__permissive": {
+   "equal": true,
+   "new": "tif:e53706eb03e61487c74729da3f6f0ecdd195cdc46df31511d61d84b02462e0d6",
+   "old": "tif:e53706eb03e61487c74729da3f6f0ecdd195cdc46df31511d61d84b02462e0d6"
+  },
+  "eligibility/eligible_fraction_solar__restrictive": {
+   "equal": true,
+   "new": "tif:2a846f35e2d1751d28a32ff5649f4ec69c3d21650dc1ee9b1102fbf9284ca620",
+   "old": "tif:2a846f35e2d1751d28a32ff5649f4ec69c3d21650dc1ee9b1102fbf9284ca620"
+  },
+  "eligibility/eligible_fraction_wind": {
+   "equal": true,
+   "new": "tif:f2842358e49cfa7e58aba469683146a3b70929bff8244eb1cd298c502d3106b7",
+   "old": "tif:f2842358e49cfa7e58aba469683146a3b70929bff8244eb1cd298c502d3106b7"
+  },
+  "eligibility/eligible_fraction_wind__permissive": {
+   "equal": true,
+   "new": "tif:5b40085b28005933dc43dd3bd2dda6da2072e04703621c2f31a52d312baea39c",
+   "old": "tif:5b40085b28005933dc43dd3bd2dda6da2072e04703621c2f31a52d312baea39c"
+  },
+  "eligibility/eligible_fraction_wind__restrictive": {
+   "equal": true,
+   "new": "tif:1071759774f86b1d3d10145be3bad4e6badb97465cedb4b3d59d6156298b413e",
+   "old": "tif:1071759774f86b1d3d10145be3bad4e6badb97465cedb4b3d59d6156298b413e"
+  },
+  "land_eligibility": {
+   "equal": true,
+   "new": "json:d9d9114f944bbdcd00f1d068ae2216faa79747c1fd81eb61a690847afbe4e3e8",
+   "old": "json:d9d9114f944bbdcd00f1d068ae2216faa79747c1fd81eb61a690847afbe4e3e8"
+  },
+  "reference_grid": {
+   "equal": true,
+   "new": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e",
+   "old": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e"
+  }
+ },
+ "equal": true,
+ "n_artifacts": 57,
+ "n_equal": 57,
+ "new_cache_code": "dab8f4c803061368e2a20a6844d0b2a2f6c0eec25f0115f0d9c8ebbbdeff8b75",
+ "old_cache_code": "66d86a1ce41ad442a9c3e59b475272fe02ffc44fc6414ff81ac0e92222c371fa",
+ "old_revision": "perf/75-performance",
+ "phase": "data_quality_audit,grid_alignment,land_eligibility",
+ "sample": "PRT"
+}
