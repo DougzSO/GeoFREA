@@ -474,7 +474,7 @@
  "equal": true,
  "n_artifacts": 94,
  "n_equal": 94,
- "new_cache_code": "119e57e4e9f263ec132b11a545ba225f0310c5819d976a4642ae170341d2328d",
+ "new_cache_code": "c147200ba18b05128e29953838bfb6a5d7547e2ac8703d5e7ba028134d0de833",
  "old_cache_code": "66d86a1ce41ad442a9c3e59b475272fe02ffc44fc6414ff81ac0e92222c371fa",
  "old_revision": "perf/75-performance",
  "phase": "data_quality_audit,grid_alignment,siting_layers,land_eligibility,external_inputs,climate_forcing,hazard_context,climate_maps,overview,technical_potential,potential_maps",
