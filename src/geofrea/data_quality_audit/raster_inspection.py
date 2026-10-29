@@ -38,6 +38,7 @@ from shapely.geometry import mapping
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_key
 from geofrea.core.constants import ESA_CLASS_NAMES, MASK_FILL
+from geofrea.core.geometry_memo import country_union
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.data_quality_audit.land_cover_tiles import (
     _land_cover_geom_fingerprint,
@@ -770,7 +771,7 @@ def inspect_land_cover_tiles(
     res_set: set[float] = set()
     errors: list[str] = []
 
-    country_geom = country_gdf.geometry.union_all()
+    country_geom = country_union(country_gdf)
     country_bounds = country_gdf.total_bounds
     geom_fingerprint = _land_cover_geom_fingerprint(country_geom)
 
@@ -886,7 +887,7 @@ def inspect_raster_cached(
     if cache_dir is None:
         return _as_json(inspect_raster(path, country_gdf, assume_crs_from))
     polygon = (
-        _land_cover_geom_fingerprint(country_gdf.geometry.union_all())
+        _land_cover_geom_fingerprint(country_union(country_gdf))
         if country_gdf is not None
         else "none"
     )

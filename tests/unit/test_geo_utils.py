@@ -566,3 +566,57 @@ def test_current_clip_cache_never_returns_a_clip_of_another_source_or_polygon(tm
     _keep_clip(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit")
     assert current_clip_cache(own, "another-key") is None
     assert current_clip_cache(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit") is not None
+
+
+# ─── country_union() and the contiguous-territory cache (COMMAND 77, item 4) ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_country_union_is_the_union_all_of_the_same_coordinates_and_is_computed_once(monkeypatch):
+    from geofrea.core import geometry_memo
+
+    geometry_memo._UNION_MEMO.clear()
+    gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 1.0), _square(5.0, 0.0, 1.0)], crs="EPSG:4326")
+    expected = gdf.geometry.union_all()
+    first = geometry_memo.country_union(gdf)
+    assert first.equals_exact(expected, tolerance=0.0)
+    calls = []
+    monkeypatch.setattr(gpd.GeoSeries, "union_all", lambda self, *a, **k: calls.append(1))
+    assert geometry_memo.country_union(gdf) is first and not calls  # memo hit, no second union
+    other = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 2.0)], crs="EPSG:4326")
+    geometry_memo.country_union(other)
+    assert calls == [1]  # other coordinates, another entry
+
+
+@pytest.mark.unit
+def test_contiguous_mainland_is_kept_between_runs_bit_for_bit(tmp_path, monkeypatch):
+    from geofrea.core.geo_utils import get_contiguous_mainland_gdf
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    main = _square(10.0, 10.0, 1.0)
+    near = _square(10.0, 11.005, 0.004)  # a few hundred metres from the main polygon: contiguous
+    far = _square(30.0, 30.0, 0.5)  # an island far away: dropped
+    gdf = gpd.GeoDataFrame(geometry=[shapely.MultiPolygon([main, near, far])], crs="EPSG:4326")
+
+    first = get_contiguous_mainland_gdf(gdf)
+    files = list((tmp_path / "interim" / "_mainland_cache").glob("*.wkb"))
+    assert len(files) == 1
+    # the second answer comes from the file, not from the calculation
+    monkeypatch.setattr("geofrea.core.geo_utils.contiguous_mainland_report", lambda *a, **k: pytest.fail("recomputed"))
+    second = get_contiguous_mainland_gdf(gdf)
+    assert shapely.equals_exact(first.geometry.iloc[0], second.geometry.iloc[0], tolerance=0.0)
+    assert not second.geometry.iloc[0].intersects(far)
+    assert second.crs == first.crs
+
+
+@pytest.mark.unit
+def test_contiguous_mainland_cache_key_follows_the_coordinates_and_the_gap(tmp_path, monkeypatch):
+    from geofrea.core.geo_utils import get_contiguous_mainland_gdf
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    a = gpd.GeoDataFrame(geometry=[_square(10.0, 10.0, 1.0)], crs="EPSG:4326")
+    b = gpd.GeoDataFrame(geometry=[_square(10.0, 10.0, 1.5)], crs="EPSG:4326")
+    get_contiguous_mainland_gdf(a)
+    get_contiguous_mainland_gdf(b)
+    get_contiguous_mainland_gdf(a, max_gap_km=2.0)
+    assert len(list((tmp_path / "interim" / "_mainland_cache").glob("*.wkb"))) == 3

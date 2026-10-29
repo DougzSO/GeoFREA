@@ -124,6 +124,7 @@ non-Brazil-scale caller and test fixture actually has.
 
 from __future__ import annotations
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -136,6 +137,10 @@ import pyogrio
 import shapely
 from shapely import STRtree
 from shapely.geometry import Point
+
+from geofrea.core.geometry_memo import country_union, geometry_digest
+
+logger = logging.getLogger(__name__)
 
 
 class GeometryRepairReport(NamedTuple):
@@ -357,11 +362,43 @@ def contiguous_mainland_report(
     )
 
 
+def _mainland_cache_file(gdf: gpd.GeoDataFrame, max_gap_km: float) -> Path | None:
+    """Where the contiguous territory of `gdf` is kept between runs: `interim/_mainland_cache/<key>.wkb`, or None without a data directory.
+
+    The key is the SHA-256 of the coordinates (WKB of every feature), the CRS, the gap and the code fingerprint of this module, so a country
+    file with other coordinates or a changed calculation gets another file, and nothing here depends on a path or a country code.
+    """
+    import hashlib
+
+    from geofrea.core import paths as core_paths
+    from geofrea.core.cache_code import cache_code
+
+    try:
+        root = core_paths.data_root() / "interim" / "_mainland_cache"
+    except core_paths.MissingPathEnvironmentError:
+        return None
+    key = hashlib.sha256(
+        "|".join((geometry_digest(gdf.geometry.values), str(gdf.crs), repr(float(max_gap_km)), cache_code("clip"))).encode("utf-8")
+    ).hexdigest()
+    return root / f"{key}.wkb"
+
+
 def get_contiguous_mainland_gdf(
     gdf: gpd.GeoDataFrame, max_gap_km: float = MAINLAND_MAX_GAP_KM
 ) -> gpd.GeoDataFrame:
     """Single-row GeoDataFrame (EPSG:4326) with the contiguous territory of the country: its largest polygon and the polygons that
-    touch it or lie less than `max_gap_km` from it, transitively. Islands and exclaves farther away are dropped."""
+    touch it or lie less than `max_gap_km` from it, transitively. Islands and exclaves farther away are dropped.
+
+    The result is a function of the coordinates of `gdf` alone, so it is kept in `interim/_mainland_cache` under the key of
+    `_mainland_cache_file` (COMMAND 77, item 4): every phase asks for it, and the proximity test (`dwithin`) and the unions behind it
+    took about 20 s of CPU per phase in PRT. The geometry is stored as WKB, which keeps every coordinate bit for bit.
+    """
+    cache_file = _mainland_cache_file(gdf, max_gap_km)
+    if cache_file is not None and cache_file.exists():
+        try:
+            return gpd.GeoDataFrame({"contiguous": [True]}, geometry=[shapely.from_wkb(cache_file.read_bytes())], crs="EPSG:4326")
+        except Exception:  # noqa: BLE001 — a damaged cache file is recomputed, never fatal
+            logger.warning("mainland cache %s is unreadable; recomputing", cache_file)
     parts = gdf.explode(index_parts=False).reset_index(drop=True).to_crs("EPSG:4326")
     report = contiguous_mainland_report(gdf, max_gap_km)
     kept = parts[report["kept"].to_numpy()]
@@ -370,6 +407,14 @@ def get_contiguous_mainland_gdf(
         if hasattr(kept.geometry, "union_all")
         else kept.geometry.unary_union
     )
+    if cache_file is not None:
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = cache_file.with_suffix(".tmp")
+            tmp.write_bytes(shapely.to_wkb(geom))
+            tmp.replace(cache_file)
+        except OSError as exc:
+            logger.warning("Failed to write mainland cache %s: %s", cache_file, exc)
     return gpd.GeoDataFrame({"contiguous": [True]}, geometry=[geom], crs="EPSG:4326")
 
 
@@ -620,11 +665,7 @@ def clip_vector_to_country(
     gdf, feature_repair_report = repair_invalid_geometries(gdf)
 
     country_in_gdf_crs = country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
-    country_geom = (
-        country_in_gdf_crs.geometry.union_all()
-        if hasattr(country_in_gdf_crs.geometry, "union_all")
-        else country_in_gdf_crs.geometry.unary_union
-    )
+    country_geom = country_union(country_in_gdf_crs)
 
     minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
     prefiltered = gdf.cx[minx:maxx, miny:maxy]
