@@ -36,7 +36,7 @@
 [CmdletBinding()]
 param(
     [string[]]$Countries = @('IND', 'BRA'),
-    [string]$Worktree = (Split-Path -Parent $PSScriptRoot),
+    [string]$Worktree = '',
     [string]$Python = '',
     [string]$Phases = 'data_acquisition,data_quality_audit,grid_alignment,siting_layers,land_eligibility,external_inputs,climate_forcing,hazard_context,climate_maps,overview,technical_potential,potential_maps',
     [int]$MinFreeMb = 400,
@@ -105,10 +105,12 @@ function Invoke-Monitored([string[]]$Arguments, [string]$LogFile, [string]$Memor
 }
 
 # ---- the start: resolve everything and check the machine ---------------------------------------------------------------------------------
+if (-not $Worktree) { $Worktree = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path) }
 $Worktree = (Resolve-Path $Worktree).Path
+Set-Location $Worktree   # the scripts below are named relative to the worktree
 if (-not $Python) {
     $common = (& git -C $Worktree rev-parse --git-common-dir).Trim()
-    $mainRepo = Split-Path -Parent (Resolve-Path (Join-Path $Worktree $common)).Path
+    $mainRepo = Split-Path -Parent ([System.IO.Path]::GetFullPath([System.IO.Path]::Combine($Worktree, $common)))
     $Python = Join-Path $mainRepo '.venv\Scripts\python.exe'
 }
 if (-not (Test-Path $Python)) { throw "python.exe not found: $Python" }
@@ -125,7 +127,7 @@ $branch = (& git -C $Worktree rev-parse --abbrev-ref HEAD).Trim()
 $head = (& git -C $Worktree rev-parse HEAD).Trim()
 $dirty = [bool](& git -C $Worktree status --porcelain -- src config main.py)
 $startFree = Get-AvailableMb
-Write-Log "round $Stamp: countries $($Countries -join ', '); worktree $Worktree ($branch @ $($head.Substring(0, 10))$(if ($dirty) { ', UNCOMMITTED CHANGES in src/config/main.py' }))"
+Write-Log "round ${Stamp}: countries $($Countries -join ', '); worktree $Worktree ($branch @ $($head.Substring(0, 10))$(if ($dirty) { ', UNCOMMITTED CHANGES in src/config/main.py' }))"
 Write-Log "available memory at the start: $startFree MB (total $([int]((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB)) MB)"
 $others = @(Get-OtherGeoFreaProcesses)
 if ($others.Count) {
@@ -146,7 +148,7 @@ if ($DryRun) {
 
 # keep the computer awake for the life of this script (the pipeline asks as well: main.py keep_awake)
 Add-Type -Namespace Win32 -Name Power -MemberDefinition '[System.Runtime.InteropServices.DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
-[void][Win32.Power]::SetThreadExecutionState(0x80000001)   # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+[void][Win32.Power]::SetThreadExecutionState([uint32]2147483649)   # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
 
 $roundStart = Get-Date
 $results = @()
@@ -159,30 +161,30 @@ try {
         New-Item -ItemType Directory -Force -Path $runDir | Out-Null
         $mem = Join-Path $runDir 'memory.csv'
         Set-Content -Path $mem -Value 'time,available_mb' -Encoding utf8
-        if (-not (Test-Path $manifest)) { Write-Log "$iso: no manifest, skipped"; $results += @{ country = $iso; verdict = 'SEM_MANIFEST' }; continue }
+        if (-not (Test-Path $manifest)) { Write-Log "${iso}: no manifest, skipped"; $results += @{ country = $iso; verdict = 'SEM_MANIFEST' }; continue }
         Copy-Item $manifest (Join-Path $runDir 'manifest_before.json') -Force
         $started = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         $aborted = $null
         $free = Get-AvailableMb
-        Write-Log "$iso: start; available memory $free MB; manifest saved in $runDir"
+        Write-Log "${iso}: start; available memory $free MB; manifest saved in $runDir"
         if ($free -lt $MinFreeMb) { $aborted = "available memory is $free MB at the start of $iso" }
 
         if (-not $aborted -and -not $SkipAdopt) {
-            Write-Log "$iso: adopting the aligned layers made by $AdoptRevision"
+            Write-Log "${iso}: adopting the aligned layers made by $AdoptRevision"
             $adopt = Invoke-Monitored @('scripts\adopt_aligned_cache_keys.py', $iso, '--revision', $AdoptRevision, '--proof', $AdoptProof) (Join-Path $runDir 'adopt.log.txt') $mem
             if ($adopt.Aborted) { $aborted = $adopt.Aborted }
             elseif ($adopt.ExitCode -ne 0) {
                 $aborted = "the adoption of the aligned layers failed (exit $($adopt.ExitCode), see $runDir\adopt.log.txt): F2a would be computed from the start, so $iso does not run"
-                Write-Log "$iso: $aborted"
+                Write-Log "${iso}: $aborted"
             }
         }
         if (-not $aborted) {
-            Write-Log "$iso: running $Phases"
+            Write-Log "${iso}: running $Phases"
             $run = Invoke-Monitored @('main.py', $iso, '--phases', $Phases, '--rerun', $Phases) (Join-Path $runDir 'run.log.txt') $mem
             if ($run.Aborted) { $aborted = $run.Aborted }
             elseif ($run.ExitCode -eq 75) { $aborted = 'main.py did not start: less than 2 GB available for a cold phase (exit 75)' }
-            elseif ($run.ExitCode -ne 0) { Write-Log "$iso: main.py ended with exit code $($run.ExitCode) (see $runDir\run.log.txt)" }
-            Write-Log "$iso: main.py ended (exit $($run.ExitCode)); minimum available memory $($run.MinFreeMb) MB"
+            elseif ($run.ExitCode -ne 0) { Write-Log "${iso}: main.py ended with exit code $($run.ExitCode) (see $runDir\run.log.txt)" }
+            Write-Log "${iso}: main.py ended (exit $($run.ExitCode)); minimum available memory $($run.MinFreeMb) MB"
         }
 
         $power = Join-Path $runDir 'power_events.json'
@@ -191,7 +193,7 @@ try {
             '--out', (Join-Path $outDir 'unattended_check.json'), '--phases', $Phases, '--power', $power, '--started', $started)
         if ($aborted) { $checkArgs += @('--aborted', $aborted) }
         $summaryLine = & $Python @checkArgs
-        Write-Log "$iso: $summaryLine"
+        Write-Log "${iso}: $summaryLine"
         $check = Get-Content (Join-Path $outDir 'unattended_check.json') -Raw | ConvertFrom-Json
         foreach ($row in $check.phases) {
             Write-Log ('  {0,-20} {1,-8} awake {2,8} s  cpu {3,8} s  peak {4,6} MB' -f $row.phase, $row.status, $row.awake_s, $row.cpu_s, $row.peak_rss_mb)
@@ -199,7 +201,7 @@ try {
         $results += @{ country = $iso; verdict = $check.verdict; aborted = $aborted; different = @($check.different); check = (Join-Path $outDir 'unattended_check.json'); run_dir = $runDir }
     }
 } finally {
-    [void][Win32.Power]::SetThreadExecutionState(0x80000000)   # ES_CONTINUOUS: release
+    [void][Win32.Power]::SetThreadExecutionState([uint32]2147483648)   # ES_CONTINUOUS: release
 }
 
 $summaryFile = Join-Path $Data "unattended_round_$Stamp.json"
