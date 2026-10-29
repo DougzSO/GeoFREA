@@ -137,3 +137,16 @@ def test_the_equivalence_check_compares_the_artifacts_of_the_phase_by_content_ha
     missing = check.compare_manifests(manifest(a="1", b="2"), manifest(a="1"))
     assert not missing["equal"] and missing["artifacts"]["b"]["new"] is None
     assert not check.compare_manifests({"artifacts": {}}, {"artifacts": {}})["equal"]  # nothing compared is not equal
+
+
+@pytest.mark.unit
+def test_restore_before_adopt_puts_back_the_key_of_the_revision(tmp_path):
+    from scripts.adopt_aligned_cache_keys import restore_before_adopt
+
+    (tmp_path / "A_aligned.tif.cachekey").write_text("adopted-key", encoding="utf-8")
+    (tmp_path / "A_aligned.tif.cachekey.before_adopt").write_text("old-key", encoding="utf-8")
+    (tmp_path / "B_aligned.tif.cachekey").write_text("never-adopted", encoding="utf-8")
+
+    assert restore_before_adopt(tmp_path) == ["A_aligned.tif.cachekey"]
+    assert (tmp_path / "A_aligned.tif.cachekey").read_text(encoding="utf-8") == "old-key"
+    assert (tmp_path / "B_aligned.tif.cachekey").read_text(encoding="utf-8") == "never-adopted"

@@ -30,6 +30,8 @@
 .PARAMETER MinStartMb     Available memory that a round needs to start (default 2000, the rule of CONVENTIONS "Memory before a cold round").
 .PARAMETER AdoptRevision  The revision under which the aligned layers of the countries were made (default perf/75-performance).
 .PARAMETER AdoptProof     The equivalence proof the adoption needs, relative to the worktree.
+.PARAMETER BaselineStamp  The round whose saved manifest_before.json is the reference of the comparison (default 20261029_135838, the manifest of before the
+                      first unattended round; '' compares with the manifest at the start of this round).
 .PARAMETER SkipAdopt      Do not adopt (the layers are computed again if their key changed).
 .PARAMETER DryRun         Do the checks of the start and print what would run.
 #>
@@ -44,6 +46,7 @@ param(
     [int]$PollSeconds = 15,
     [string]$AdoptRevision = 'perf/75-performance',
     [string]$AdoptProof = 'docs/_audit/cumulative_equivalence_77_PRT.json',
+    [string]$BaselineStamp = '20261029_135838',
     [switch]$SkipAdopt,
     [switch]$DryRun
 )
@@ -162,7 +165,13 @@ try {
         $mem = Join-Path $runDir 'memory.csv'
         Set-Content -Path $mem -Value 'time,available_mb' -Encoding utf8
         if (-not (Test-Path $manifest)) { Write-Log "${iso}: no manifest, skipped"; $results += @{ country = $iso; verdict = 'SEM_MANIFEST' }; continue }
-        Copy-Item $manifest (Join-Path $runDir 'manifest_before.json') -Force
+        $baseline = Join-Path $outDir "unattended\$BaselineStamp\manifest_before.json"
+        if ($BaselineStamp -and (Test-Path $baseline) -and ($BaselineStamp -ne $Stamp)) {
+            Copy-Item $baseline (Join-Path $runDir 'manifest_before.json') -Force   # the manifest of before the first round: the reference of every hash
+            Write-Log "${iso}: the artifacts are compared with the manifest of the round $BaselineStamp"
+        } else {
+            Copy-Item $manifest (Join-Path $runDir 'manifest_before.json') -Force
+        }
         $started = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
         $aborted = $null
         $free = Get-AvailableMb
