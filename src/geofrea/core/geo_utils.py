@@ -737,5 +737,24 @@ def clip_cache_is_current(cache_path: str | Path, key: str) -> bool:
     return cache_path.exists() and key_path.exists() and key_path.read_text(encoding="utf-8") == key
 
 
+AUDIT_PHASE_DIR = "data_quality_audit"
+
+
+def current_clip_cache(cache_path: str | Path, key: str) -> Path | None:
+    """The clip file to read for `key`: `cache_path`, else the one the audit kept for the same layer, else None (COMMAND 77, item 2).
+
+    The audit (F1b) runs first and keeps `<interim>/<ISO>/data_quality_audit/<layer>_clipped.gpkg`; F2a and F3 clip the same layers of the same
+    country with the same function, and their caches carry the same key when the source file and the polygon are the same. A clip is then
+    made once per country and read by the next phase, not made again. The key decides it, as before: a clip of another source or polygon
+    never matches, so this changes when a clip is computed, not what it contains.
+    """
+    cache_path = Path(cache_path)
+    audit_copy = cache_path.parent.parent / AUDIT_PHASE_DIR / cache_path.name
+    for candidate in (cache_path, audit_copy):
+        if clip_cache_is_current(candidate, key):
+            return candidate
+    return None
+
+
 def write_clip_cache_key(cache_path: str | Path, key: str) -> None:
     Path(cache_path).with_suffix(".key").write_text(key, encoding="utf-8")

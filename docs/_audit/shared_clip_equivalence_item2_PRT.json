@@ -1,0 +1,157 @@
+{
+ "artifacts": {
+  "aligned/elevation": {
+   "equal": true,
+   "new": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7",
+   "old": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7"
+  },
+  "aligned/grid": {
+   "equal": true,
+   "new": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2",
+   "old": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2"
+  },
+  "aligned/grid_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/lakes": {
+   "equal": true,
+   "new": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd",
+   "old": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd"
+  },
+  "aligned/land_cover": {
+   "equal": true,
+   "new": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f",
+   "old": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f"
+  },
+  "aligned/land_cover_counts": {
+   "equal": true,
+   "new": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a",
+   "old": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a"
+  },
+  "aligned/population": {
+   "equal": true,
+   "new": "tif:43f6adca977381471ddf1188cff485582e79576a3ca9737c95c50cd81ef51b60",
+   "old": "tif:43f6adca977381471ddf1188cff485582e79576a3ca9737c95c50cd81ef51b60"
+  },
+  "aligned/rivers": {
+   "equal": true,
+   "new": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c",
+   "old": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c"
+  },
+  "aligned/rivers_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/roads": {
+   "equal": true,
+   "new": "tif:3eecd0e4c173b38e808f34d3eaa4d2d93454fe69bf2de4fc328fa53fee0f5882",
+   "old": "tif:3eecd0e4c173b38e808f34d3eaa4d2d93454fe69bf2de4fc328fa53fee0f5882"
+  },
+  "aligned/roads_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/slope": {
+   "equal": true,
+   "new": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9",
+   "old": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9"
+  },
+  "aligned/slope_counts": {
+   "equal": true,
+   "new": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525",
+   "old": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525"
+  },
+  "aligned/solar": {
+   "equal": true,
+   "new": "tif:7715df82247f7a0744fa3a4921100e33357cefdea4dca2bb818f357251230a48",
+   "old": "tif:7715df82247f7a0744fa3a4921100e33357cefdea4dca2bb818f357251230a48"
+  },
+  "aligned/wind_air_density_100m": {
+   "equal": true,
+   "new": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a",
+   "old": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a"
+  },
+  "aligned/wind_air_density_150m": {
+   "equal": true,
+   "new": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe",
+   "old": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe"
+  },
+  "aligned/wind_air_density_200m": {
+   "equal": true,
+   "new": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205",
+   "old": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205"
+  },
+  "aligned/wind_weibull_a_100m": {
+   "equal": true,
+   "new": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614",
+   "old": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614"
+  },
+  "aligned/wind_weibull_a_150m": {
+   "equal": true,
+   "new": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f",
+   "old": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f"
+  },
+  "aligned/wind_weibull_a_200m": {
+   "equal": true,
+   "new": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa",
+   "old": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa"
+  },
+  "aligned/wind_weibull_k_100m": {
+   "equal": true,
+   "new": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262",
+   "old": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262"
+  },
+  "aligned/wind_weibull_k_150m": {
+   "equal": true,
+   "new": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50",
+   "old": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50"
+  },
+  "aligned/wind_weibull_k_200m": {
+   "equal": true,
+   "new": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6",
+   "old": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6"
+  },
+  "aligned/wind_wind_speed_100m": {
+   "equal": true,
+   "new": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e",
+   "old": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e"
+  },
+  "aligned/wind_wind_speed_150m": {
+   "equal": true,
+   "new": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842",
+   "old": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842"
+  },
+  "aligned/wind_wind_speed_200m": {
+   "equal": true,
+   "new": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d",
+   "old": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d"
+  },
+  "aligned_rasters": {
+   "equal": true,
+   "new": "json:98e37c0721bcfbf659c6faec7dfd9ad436f8b12bfd724928da355a166994949f",
+   "old": "json:98e37c0721bcfbf659c6faec7dfd9ad436f8b12bfd724928da355a166994949f"
+  },
+  "audit_report": {
+   "equal": true,
+   "new": "json:1d071e40627d28747ec52fcccd1a42d5dd159ac0de418097e197156a3a8cbc65",
+   "old": "json:1d071e40627d28747ec52fcccd1a42d5dd159ac0de418097e197156a3a8cbc65"
+  },
+  "reference_grid": {
+   "equal": true,
+   "new": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e",
+   "old": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e"
+  }
+ },
+ "equal": true,
+ "n_artifacts": 29,
+ "n_equal": 29,
+ "new_cache_code": "5fa0aa841d349538afab3cf6f01122347b4ca5de91ff5cf676127f7852d6fe2c",
+ "old_cache_code": "66d86a1ce41ad442a9c3e59b475272fe02ffc44fc6414ff81ac0e92222c371fa",
+ "old_revision": "perf/75-performance",
+ "phase": "data_quality_audit,grid_alignment",
+ "sample": "PRT"
+}

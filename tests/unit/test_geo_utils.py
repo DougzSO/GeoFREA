@@ -534,3 +534,35 @@ def test_intersection_handles_empty_input_and_missing_geometries():
     assert len(_intersection_threaded(np.array([], dtype=object), clip_geom)) == 0
     result = _intersection_threaded(np.array([None, shapely.LineString([(0.0, 0.0), (1.0, 1.0)])], dtype=object), clip_geom)
     assert result[0] is None and not result[1].is_empty
+
+
+# ─── current_clip_cache(): one clip per country shared by the audit, F2a and F3 (COMMAND 77, item 2) ──────────────────────────────────
+
+
+def _keep_clip(path, key):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"gpkg")
+    path.with_suffix(".key").write_text(key, encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_current_clip_cache_prefers_the_phase_own_cache_then_the_audits(tmp_path):
+    from geofrea.core.geo_utils import current_clip_cache
+
+    own = tmp_path / "PRT" / "grid_alignment" / "roads_clipped.gpkg"
+    audit = tmp_path / "PRT" / "data_quality_audit" / "roads_clipped.gpkg"
+    assert current_clip_cache(own, "k1") is None
+    _keep_clip(audit, "k1")
+    assert current_clip_cache(own, "k1") == audit
+    _keep_clip(own, "k1")
+    assert current_clip_cache(own, "k1") == own
+
+
+@pytest.mark.unit
+def test_current_clip_cache_never_returns_a_clip_of_another_source_or_polygon(tmp_path):
+    from geofrea.core.geo_utils import current_clip_cache
+
+    own = tmp_path / "PRT" / "land_eligibility" / "lakes_clipped.gpkg"
+    _keep_clip(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit")
+    assert current_clip_cache(own, "another-key") is None
+    assert current_clip_cache(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit") is not None

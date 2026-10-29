@@ -102,7 +102,7 @@ from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.geo_utils import (
-    clip_cache_is_current,
+    current_clip_cache,
     read_clipped_to_country,
     write_clip_cache_key,
 )
@@ -187,8 +187,9 @@ def _read_clipped_with_cache(
         computed and cached for next time.
     """
     key = _clip_cache_key(path, country_gdf)
-    if clip_cache_is_current(cache_path, key):
-        return gpd.read_file(str(cache_path))
+    current = current_clip_cache(cache_path, key)
+    if current is not None:
+        return gpd.read_file(str(current))
     # No key, or a key for a different source file or country polygon: the cached clip is stale (a cache
     # clipped from another source, e.g. IND roads from the wrong GRIP4 region, is rebuilt, never reused).
 
