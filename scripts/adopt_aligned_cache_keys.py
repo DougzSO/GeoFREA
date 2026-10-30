@@ -130,6 +130,13 @@ def restore_before_adopt(artifacts: Path) -> list[str]:
     return restored
 
 
+def phase_arguments(iso: str) -> list[str]:
+    """The command line of the run that adopts: F2a is named in `--rerun`, so it executes even when its manifest entry is current. Without it a
+    country whose F2a already ran under the current code would resume, no layer key would be computed and the sidecars put back by
+    `restore_before_adopt` would stay on the old key (COMMAND 81)."""
+    return [iso, "--phases", "grid_alignment", "--rerun", "grid_alignment"]
+
+
 def adopt(run: Callable[[], object], old_code: str, artifacts: Path) -> list[str]:
     """Run `run` (the phase) with the keys pinned to `old_code`, then write the keys of the current code; returns the sidecars rewritten."""
     with pinned_to(old_code) as recorded:
@@ -163,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(restored)} sidecars put back to the key of {args.revision} (an earlier adoption under other code)")
 
     def run_phase() -> None:
-        code = pipeline.main([args.iso, "--phases", "grid_alignment"])
+        code = pipeline.main(phase_arguments(args.iso))
         if code not in (0, None):
             raise AdoptionError(f"main.py returned {code}")
 

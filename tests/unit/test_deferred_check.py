@@ -200,3 +200,51 @@ def test_the_shipped_configuration_lists_ind_and_bra_with_the_twelve_phases():
     assert checks["IND"].baseline.as_posix().endswith("outputs/IND/unattended/20261029_135838/manifest_before.json")
     assert list(checks["BRA"].expected) == ["audit_report"] and not checks["IND"].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
+
+
+def test_seed_records_only_the_phases_that_were_identical_and_leaves_the_rest_pending(tmp_path):
+    from geofrea.core.deferred_check import CountryCheck, seed_from_comparison
+
+    check = CountryCheck(iso="IND", baseline=tmp_path / "b.json", baseline_label="b", phases=("a", "b", "c", "d"))
+    comparison = {
+        "phases": [
+            {"phase": "a", "status": "success"},
+            {"phase": "b", "status": "success"},
+            {"phase": "c", "status": "failed"},
+            {"phase": "z", "status": "success"},
+        ],
+        "artifacts": {
+            "a1": {"phase": "a", "status": "IDENTICO"},
+            "a2": {"phase": "a", "status": "IDENTICO"},
+            "b1": {"phase": "b", "status": "IDENTICO"},
+            "b2": {"phase": "b", "status": "DIFERENTE"},
+            "c1": {"phase": "c", "status": "IDENTICO"},
+            "z1": {"phase": "z", "status": "IDENTICO"},
+        },
+    }
+    manifest = {"phases": {"a": {"code_fingerprint": "fp-a"}}}
+    report_path = tmp_path / "IND" / "deferred_check.json"
+
+    assert seed_from_comparison(check, report_path, comparison, manifest, "round X") == ["a"]
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["phases"]["a"]["verdict"] == "IDENTICO" and report["phases"]["a"]["n_artifacts"] == 2
+    assert report["phases"]["a"]["code_fingerprint"] == "fp-a" and report["phases"]["a"]["source"] == "round X"
+    assert report["verdict"] == "PENDENTE" and report["pending"] == ["b", "c", "d"]
+
+
+def test_a_seeded_phase_is_not_compared_again_by_the_pipeline(baseline):
+    from geofrea.core.deferred_check import seed_from_comparison
+
+    data, outputs, _ = baseline
+    check = _check(data, outputs)
+    seed_from_comparison(
+        check.check,
+        check.report_path,
+        {"phases": [{"phase": "b", "status": "success"}], "artifacts": {"b_out": {"phase": "b", "status": "IDENTICO"}}},
+        json.loads((outputs / "ZZZ" / "manifest.json").read_text(encoding="utf-8")),
+        "an earlier round",
+    )
+    results = _orchestrator(outputs, check, rerun=PHASES).run(_specs({"a": 1, "b": 2, "c": 1}, SAME))  # b would differ, but it is settled
+    assert results["c"].status == "success"
+    assert _report(outputs)["phases"]["b"]["source"] == "an earlier round"

@@ -209,6 +209,42 @@ class DeferredCheck:
         logger.info("deferred check %s: %s (pending: %s)", self.check.iso, overall, ", ".join(report["pending"]) or "none")
 
 
+def seed_from_comparison(check: CountryCheck, report_path: Path, comparison: dict, manifest: dict, source: str) -> list[str]:
+    """Record as settled the phases that an earlier comparison with the same reference found IDENTICO, so the pipeline does not compare them again.
+
+    `comparison` is an `unattended_check.json` (`artifacts` with `phase` and `status`, `phases` with `status`) made against the reference of `check`;
+    `manifest` is the manifest of the country after that comparison (it holds the code fingerprint the phase ran with). A phase is recorded only if
+    it is listed in `check`, ended `success` and every one of its artifacts was IDENTICO; the others stay pending. Returns the phases recorded.
+    """
+    guard = DeferredCheck(check, report_path)
+    report = guard._load_report()
+    recorded = []
+    for row in comparison.get("phases", []):
+        phase = row["phase"]
+        if phase not in check.phases or row.get("status") != "success":
+            continue
+        rows = [a for a in comparison["artifacts"].values() if a["phase"] == phase]
+        if not rows or any(a["status"] != "IDENTICO" for a in rows):
+            continue
+        if report["phases"].get(phase, {}).get("verdict") in SETTLED:
+            continue
+        report["phases"][phase] = {
+            "verdict": "IDENTICO",
+            "checked_at": _now(),
+            "code_fingerprint": manifest["phases"][phase].get("code_fingerprint"),
+            "n_artifacts": len(rows),
+            "n_identico": len(rows),
+            "different_with_config_change": [],
+            "different_expected": {},
+            "different_unexplained": {},
+            "new": [],
+            "source": source,
+        }
+        recorded.append(phase)
+    guard._finish(report)
+    return recorded
+
+
 def for_country(iso: str, yaml_path: Path, data_root: Path, outputs_dir: Path) -> DeferredCheck | None:
     """The check of `iso` when `yaml_path` lists it, None otherwise."""
     check = load_checks(yaml_path, data_root).get(iso.upper())

@@ -63,9 +63,9 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "awaiting_content_check_post_77", "F1b": "awaiting_content_check_post_77", "F2a": "awaiting_content_check_post_77", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "ran_clean", "F1b": "awaiting_content_check_post_77", "F2a": "ran_clean", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "IND": {"F1": "awaiting_content_check_post_77", "F1b": "awaiting_content_check_post_77", "F2a": "awaiting_content_check_post_77", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_with_issues", "F6": "ran_clean", "F7": "ran_with_issues", "F7b": "ran_with_issues"}
   },
   "pending_verifications": [
@@ -84,7 +84,7 @@
         "on DIFERENTE: do not use the numbers; the report names the artifact and the probable cause",
         "when both countries are IDENTICO or EXPLICADO, set their F1 to F5 back to ran_clean and delete the countries from config/deferred_checks.yaml"
       ],
-      "evidence_so_far": "PRT 94 of 94 artifacts equal by content hash and 95 of 95 PNG by pixels; IND clips of protected, roads, rivers and lakes equal to those made before COMMAND 77; docs/_audit/performance_75.md and docs/_audit/optimizations_77.md"
+      "evidence_so_far": "IND: data_acquisition, data_quality_audit, grid_alignment and external_inputs IDENTICO (31 of 31 artifacts, deferred check of the unattended round 20261029_205135; the round stopped for low memory in the next phase). BRA: data_acquisition and grid_alignment IDENTICO (the adoption run of 2026-10-29). Pending: IND siting_layers to potential_maps and BRA data_quality_audit to potential_maps. PRT 94 of 94 artifacts equal by content hash and 95 of 95 PNG by pixels; IND clips of protected, roads, rivers and lakes equal to those made before COMMAND 77; docs/_audit/performance_75.md and docs/_audit/optimizations_77.md"
     }
   ],
   "pending_figures": ["COMMAND 70: migrate the F8 thesis figures (results_synthesis) and the audit charts (scripts/audit_potential.py) to viz", "F6 and F7 figures: check on the first real run", "Supply curve against LCOE after F6", "Wind CF display layer of PRT refused by the 1% aggregation check (16 of 3500 cells, max 1.96%): decide the tolerance, see docs/figures/display_layers_70.md"],

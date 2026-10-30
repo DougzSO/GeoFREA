@@ -150,3 +150,11 @@ def test_restore_before_adopt_puts_back_the_key_of_the_revision(tmp_path):
     assert restore_before_adopt(tmp_path) == ["A_aligned.tif.cachekey"]
     assert (tmp_path / "A_aligned.tif.cachekey").read_text(encoding="utf-8") == "old-key"
     assert (tmp_path / "B_aligned.tif.cachekey").read_text(encoding="utf-8") == "never-adopted"
+
+
+@pytest.mark.unit
+def test_the_adopting_run_names_f2a_in_rerun_so_it_executes_when_its_manifest_entry_is_current():
+    from scripts.adopt_aligned_cache_keys import phase_arguments
+
+    args = phase_arguments("IND")
+    assert args[0] == "IND" and args[args.index("--phases") + 1] == "grid_alignment" and args[args.index("--rerun") + 1] == "grid_alignment"
