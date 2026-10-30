@@ -1,6 +1,6 @@
 """Read-only diagnosis of the covered-line clip shortcut (COMMAND 79, step 1).
 
-usage: python scripts/diagnose_clip_shortcut.py ISO [--layers roads rivers lakes protected] [--out file.json]
+usage: python scripts/proofs/diagnose_clip_shortcut.py ISO [--layers roads rivers lakes protected] [--out file.json]
 
 For each layer the features the shortcut would keep (lines wholly covered by the simplified country polygon) are also intersected the exact way, and
 the two geometries are compared with `equals_exact` at tolerance 0. The features that differ are counted by the type of the original geometry and by
@@ -15,7 +15,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 MAX_SAMPLE = 150_000
 TYPE_NAMES = {1: "LineString", 2: "LinearRing", 5: "MultiLineString"}
 

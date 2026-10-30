@@ -1,6 +1,6 @@
 """Prove that the contiguous-territory cache and the union memo give the same geometry as the code they replace (COMMAND 77, item 4).
 
-usage: python scripts/check_mainland_equivalence.py --old-src <dir with the old geofrea/> [--samples PRT IND BRA] [--out file.json]
+usage: python scripts/proofs/check_mainland_equivalence.py --old-src <dir with the old geofrea/> [--samples PRT IND BRA] [--out file.json]
 
 For each country the borders file of the shared data root is read and `load_mainland_boundary` runs in child processes: the old `src` (no cache),
 this tree's `src` with an empty cache directory (cold: computed and written) and again with the file in place (warm: read back). The three WKB
@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 CHILD = "--child"
 
 

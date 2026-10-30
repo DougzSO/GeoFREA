@@ -1,6 +1,6 @@
 """Prove that the clip of whole layers of a country is unchanged by the current code (COMMAND 79, step 3).
 
-usage: python scripts/check_clip_layers_equivalence.py ISO --old layer=path.gpkg [--old layer=path.gpkg ...] [--out file.json]
+usage: python scripts/proofs/check_clip_layers_equivalence.py ISO --old layer=path.gpkg [--old layer=path.gpkg ...] [--out file.json]
 
 Each layer named is clipped from its source in the layer registry with this tree's `read_clipped_to_country` and compared with the clip made before
 (`--old`): the clip is written to a GeoPackage and read back as the pipeline stores it; the same rows in the same order, the same attributes, and every geometry equal with `equals_exact` at tolerance 0. Nothing is written but the JSON.
@@ -14,7 +14,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,6 +1,6 @@
 """Prove that keeping the covered polygons of a clip leaves every raster derived from them unchanged, on a window of a country (COMMAND 77, item 3).
 
-usage: python scripts/check_polygon_derived_equivalence.py --old-src <dir with the old geofrea/> [--window ISO LON0 LAT0 SIZE]... [--out file.json]
+usage: python scripts/proofs/check_polygon_derived_equivalence.py --old-src <dir with the old geofrea/> [--window ISO LON0 LAT0 SIZE]... [--out file.json]
 
 The clip of the lakes and of the protected areas is made in two child processes, one with the old `src` (every feature intersected) and one with this
 tree's (a polygon that the country polygon covers is kept as it is). On the grid of the window the real derived products are computed and hashed:
@@ -20,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 CHILD = "--child"
 DEFAULT_WINDOWS = (("PRT", -8.9, 38.9, 2.0), ("IND", 77.0, 28.0, 1.0), ("BRA", -46.5, -23.5, 1.0))
 

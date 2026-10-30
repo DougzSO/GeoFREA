@@ -124,7 +124,7 @@ def test_the_adoption_needs_a_proof_of_equality_for_exactly_these_two_codes():
 
 
 def test_the_equivalence_check_compares_the_artifacts_of_the_phase_by_content_hash():
-    check = importlib.util.module_from_spec(importlib.util.spec_from_file_location("check_aligned_equivalence", SCRIPT.with_name("check_aligned_equivalence.py")))
+    check = importlib.util.module_from_spec(importlib.util.spec_from_file_location("check_aligned_equivalence", SCRIPT.parent / "proofs" / "check_aligned_equivalence.py"))
     check.__spec__.loader.exec_module(check)
 
     def manifest(**hashes):

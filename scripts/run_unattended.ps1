@@ -20,10 +20,10 @@
        <data>\outputs\<ISO>\unattended_check.json (IDENTICO or DIFERENTE per artifact, and the wall, awake and CPU time and the peak memory of each phase).
   The exit code is 0 only when every country is IDENTICO.
 
-  The round is done when the window prints "ROUND FINISHED" and the file <data>\unattended_round_<stamp>.json exists.
+  The round is done when the window prints "ROUND FINISHED" and the file <data>\logs\unattended_rounds\unattended_round_<stamp>.json exists.
 
 .PARAMETER Countries      Countries to run, in order (default IND, BRA).
-.PARAMETER Worktree       The tree to run (default: the one this script is in; it must be the branch perf/77).
+.PARAMETER Worktree       The tree to run (default: the one this script is in; it must be the merged main).
 .PARAMETER Python         python.exe to use (default: the .venv of the main checkout of the repository).
 .PARAMETER Phases         Comma list of the phases (default: the twelve phases to potential_maps).
 .PARAMETER MinFreeMb      Available memory under which the current country is stopped (default 400).
@@ -45,7 +45,7 @@ param(
     [int]$MinStartMb = 2000,
     [int]$PollSeconds = 15,
     [string]$AdoptRevision = 'adopt-base-75',
-    [string]$AdoptProof = 'docs/_audit/cumulative_equivalence_77_PRT.json',
+    [string]$AdoptProof = 'docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json',
     [string]$BaselineStamp = '20261029_135838',
     [switch]$SkipAdopt,
     [switch]$DryRun
@@ -124,7 +124,9 @@ if (-not $Data -or -not (Test-Path $Data)) { throw "GEOFREA_DATA_DIR is not set 
 $env:GEOFREA_DATA_DIR = $Data
 $env:PYTHONPATH = Join-Path $Worktree 'src'   # the venv is installed from the main checkout; the round runs the code of this worktree
 $env:PYTHONUNBUFFERED = '1'
-$script:RoundLog = Join-Path $Data "unattended_round_$Stamp.log"
+$RoundsDir = Join-Path $Data "logs\unattended_rounds"
+New-Item -ItemType Directory -Force $RoundsDir | Out-Null
+$script:RoundLog = Join-Path $RoundsDir "unattended_round_$Stamp.log"
 
 $branch = (& git -C $Worktree rev-parse --abbrev-ref HEAD).Trim()
 $head = (& git -C $Worktree rev-parse HEAD).Trim()
@@ -213,7 +215,7 @@ try {
     [void][Win32.Power]::SetThreadExecutionState([uint32]2147483648)   # ES_CONTINUOUS: release
 }
 
-$summaryFile = Join-Path $Data "unattended_round_$Stamp.json"
+$summaryFile = Join-Path $RoundsDir "unattended_round_$Stamp.json"
 @{ stamp = $Stamp; branch = $branch; head = $head; dirty = $dirty; start_available_mb = $startFree; results = $results } | ConvertTo-Json -Depth 6 | Set-Content -Path $summaryFile -Encoding utf8
 Write-Log "ROUND FINISHED: $(($results | ForEach-Object { '{0} {1}' -f $_.country, $_.verdict }) -join '; ')  (summary $summaryFile, log $script:RoundLog)"
 if ($results | Where-Object { $_.verdict -ne 'IDENTICO' }) { exit 1 }

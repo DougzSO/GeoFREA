@@ -1,6 +1,6 @@
 """Prove that a change in a raster step of F2a leaves its output unchanged, by content hash, on a window of a country (COMMAND 77, items 8 and 9).
 
-usage: python scripts/check_raster_step_equivalence.py --old-src <dir with the old geofrea/> --step {glo30|population} [--window ISO LON0 LAT0 SIZE]... [--out file.json]
+usage: python scripts/proofs/check_raster_step_equivalence.py --old-src <dir with the old geofrea/> --step {glo30|population} [--window ISO LON0 LAT0 SIZE]... [--out file.json]
 
 The real function of the step runs in two child processes, one with the `src` of the old revision and one with this tree's, on the same grid built over a
 `size`-degree window of the country (the borders cut to the box, 0.01 degree, as F2a builds it), and every raster it writes is hashed with
@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 CHILD = "--child"
 DEFAULT_WINDOWS = (("PRT", -8.9, 38.9, 1.0), ("IND", 77.0, 28.0, 1.0))
 

@@ -1,6 +1,6 @@
 """Compare every PNG under two directories by decoded pixels (COMMAND 77, items 5 and h): same relative paths, same size, same RGBA array.
 
-usage: python scripts/compare_png_dirs.py OLD_DIR NEW_DIR [--out file.json]
+usage: python scripts/proofs/compare_png_dirs.py OLD_DIR NEW_DIR [--out file.json]
 
 The text chunks of a PNG (date, run id) are not compared, only the pixels, as the item asks. Exit code 0 only when every PNG of either side has an
 identical partner on the other.

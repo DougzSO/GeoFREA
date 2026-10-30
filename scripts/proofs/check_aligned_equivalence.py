@@ -1,6 +1,6 @@
 """Run F2a of a sample country on two revisions and compare every aligned artifact by content hash (COMMAND 75; D-core-044).
 
-usage: python scripts/check_aligned_equivalence.py --revision <git revision> [--sample PRT] [--out docs/_audit/aligned_equivalence_<sample>.json]
+usage: python scripts/proofs/check_aligned_equivalence.py --revision <git revision> [--sample PRT] [--out docs/_audit/proofs_75_77/aligned_equivalence_<sample>.json]
 
 D-core-044 allows adopting the internal caches of an earlier revision (`scripts/adopt_aligned_cache_keys.py`) only when the refactor costs more
 than 2 h of rebuild in one country, and then with an automatic equivalence check that runs both revisions on a sample and compares the results,
@@ -25,10 +25,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 
-DEFAULT_PROOF_DIR = REPO / "docs" / "_audit"
+DEFAULT_PROOF_DIR = REPO / "docs" / "_audit" / "proofs_75_77"
 PHASE = "grid_alignment"
 
 

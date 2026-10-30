@@ -1,6 +1,6 @@
 """Measure the peak memory of the population warp for several window sizes and prove that the summed population does not depend on them (COMMAND 77, item 9).
 
-usage: python scripts/check_population_strips.py [--window ISO LON0 LAT0 SIZE]... [--bytes 400000000 200000000 100000000 50000000] [--out file.json]
+usage: python scripts/proofs/check_population_strips.py [--window ISO LON0 LAT0 SIZE]... [--bytes 400000000 200000000 100000000 50000000] [--out file.json]
 
 `reproject_to_grid(..., Resampling.sum)` reads the source in horizontal strips of at most `max_window_bytes`. For each window of a country and each size the warp
 runs in its own process; the result is the content hash of the written raster, the peak working set of the process (`peak_wset`) and the CPU seconds.
@@ -18,7 +18,7 @@ import tempfile
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 CHILD = "--child"
 DEFAULT_WINDOWS = (("PRT", -9.5, 37.0, 3.0), ("IND", 73.0, 20.0, 8.0))
 

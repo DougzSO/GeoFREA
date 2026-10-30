@@ -1,6 +1,6 @@
 """Prove that a change of `core.geo_utils` leaves the clip of a country unchanged, by content hash (COMMAND 77, items 1a and 3).
 
-usage: python scripts/check_clip_equivalence.py --old-src <dir with the old geofrea/> [--sample PRT] [--layers roads rivers lakes] [--out file.json]
+usage: python scripts/proofs/check_clip_equivalence.py --old-src <dir with the old geofrea/> [--sample PRT] [--layers roads rivers lakes] [--out file.json]
 
 The same `read_clipped_to_country` runs in two child processes, one with the `src` of the old revision and one with the `src` of this tree, on the
 raw layers of `--sample` (read from the shared data root, nothing is written there). Each child prints one sha256 per layer, over every feature in
@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 CHILD = "--child"
 
 
