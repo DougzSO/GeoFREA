@@ -1,0 +1,71 @@
+{
+ "windows": {
+  "PRT@-9.5,37.0,3.0": {
+   "runs": {
+    "400000000": {
+     "hash": "tif:f431e52738328adfebefcdf95dd61193bbfa8d4857a0ba62837029988ebd0aac",
+     "cpu_s": 8.8,
+     "wall_s": 9.67,
+     "peak_mb": 2081,
+     "grid_pixels": 79500
+    },
+    "200000000": {
+     "hash": "tif:f431e52738328adfebefcdf95dd61193bbfa8d4857a0ba62837029988ebd0aac",
+     "cpu_s": 8.52,
+     "wall_s": 8.64,
+     "peak_mb": 2080,
+     "grid_pixels": 79500
+    },
+    "100000000": {
+     "hash": "tif:f431e52738328adfebefcdf95dd61193bbfa8d4857a0ba62837029988ebd0aac",
+     "cpu_s": 8.55,
+     "wall_s": 8.71,
+     "peak_mb": 2080,
+     "grid_pixels": 79500
+    },
+    "50000000": {
+     "hash": "tif:f431e52738328adfebefcdf95dd61193bbfa8d4857a0ba62837029988ebd0aac",
+     "cpu_s": 8.48,
+     "wall_s": 8.67,
+     "peak_mb": 2080,
+     "grid_pixels": 79500
+    }
+   },
+   "identical": true
+  },
+  "IND@73.0,20.0,8.0": {
+   "runs": {
+    "400000000": {
+     "hash": "tif:f63d415197ba654596d2e864006cd42aadf3b79205270028be2820be50853abf",
+     "cpu_s": 110.45,
+     "wall_s": 120.48,
+     "peak_mb": 3394,
+     "grid_pixels": 640000
+    },
+    "200000000": {
+     "hash": "tif:ca2f8103a883070ccd5c5a3baf67607d5992e5e90cf619e5fab825f1e427a0f3",
+     "cpu_s": 110.08,
+     "wall_s": 118.11,
+     "peak_mb": 3206,
+     "grid_pixels": 640000
+    },
+    "100000000": {
+     "hash": "tif:06d55c31a3e439e406716769391a538eb850107d33c7f6c8829f8af9fcb1d5fa",
+     "cpu_s": 109.44,
+     "wall_s": 117.15,
+     "peak_mb": 3007,
+     "grid_pixels": 640000
+    },
+    "50000000": {
+     "hash": "tif:e3146ad569cee0a934ad6892a6291d0effdfb0c852793bbdced880f779832d49",
+     "cpu_s": 110.36,
+     "wall_s": 117.68,
+     "peak_mb": 2953,
+     "grid_pixels": 640000
+    }
+   },
+   "identical": false
+  }
+ },
+ "identical": false
+}

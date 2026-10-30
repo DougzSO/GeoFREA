@@ -46,7 +46,7 @@ from geofrea.core.constants import (
     WIND_HEIGHTS_M,
 )
 from geofrea.core.geo_utils import (
-    clip_cache_is_current,
+    current_clip_cache,
     clip_cache_key,
     read_clipped_to_country,
     write_clip_cache_key,
@@ -239,8 +239,9 @@ def _clipped(
         )
     cache = interim / f"{name}_clipped.gpkg"
     key = clip_cache_key(path, country_gdf)
-    if clip_cache_is_current(cache, key):
-        return gpd.read_file(str(cache))
+    current = current_clip_cache(cache, key)
+    if current is not None:
+        return gpd.read_file(str(current))
     gdf, _ = read_clipped_to_country(path, country_gdf)
     if len(gdf):
         interim.mkdir(parents=True, exist_ok=True)

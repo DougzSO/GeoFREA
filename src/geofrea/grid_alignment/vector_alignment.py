@@ -72,6 +72,7 @@ from shapely.strtree import STRtree
 
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.core.geodesy import wgs84_km_per_degree
+from geofrea.core.geometry_memo import country_union
 from geofrea.core.raster_io import safe_raster_write
 from geofrea.grid_alignment.reference_grid import GridContext
 
@@ -225,7 +226,7 @@ def rasterize_linear_distance(
 
     try:
         tree = STRtree(gdf.geometry.values)
-        intersect_indices = tree.query(country_gdf.union_all(), predicate="intersects")
+        intersect_indices = tree.query(country_union(country_gdf), predicate="intersects")
         if len(intersect_indices) == 0:
             return None
 

@@ -1,0 +1,28 @@
+{
+ "iso": "PRT",
+ "layer": "roads",
+ "window": [
+  -15.0,
+  30.0,
+  20.0
+ ],
+ "features_matched": 178986,
+ "clip_vertices": 5648,
+ "current": {
+  "wall_s": 100.575,
+  "cpu_s": 95.297
+ },
+ "fastpath": {
+  "wall_s": 0.508,
+  "cpu_s": 0.5
+ },
+ "covered": 178739,
+ "covered_fraction": 0.9986,
+ "identical_exact": 178986,
+ "differ_exact": 0,
+ "differ_after_normalize": 0,
+ "differ_topologically": 0,
+ "covered_that_differ_exact": 0,
+ "type_changes": 0,
+ "speedup_cpu": 190.59
+}

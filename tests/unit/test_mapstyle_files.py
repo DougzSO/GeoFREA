@@ -98,10 +98,12 @@ def test_names_off_the_standard_are_refused(name):
 
 
 def test_the_png_carries_commit_config_date_grid_source_and_scale(tmp_path):
+    folder = tmp_path / "figures"  # the data directory is tmp_path: drawing a map may fill `interim/` (the territory cache), the folder of figures must not
+    folder.mkdir()
     canvas = _figure()
     path = ms.save_png(
         canvas,
-        tmp_path / "BRA_F5_capacity-factor_wind_central_ref.png",
+        folder / "BRA_F5_capacity-factor_wind_central_ref.png",
         {"grid": "0.05 degree analysis grid", "data_source": "F5 potential_wind central"},
     )
     meta = ms.read_png_metadata(path)
@@ -114,7 +116,7 @@ def test_the_png_carries_commit_config_date_grid_source_and_scale(tmp_path):
     assert meta["geofrea_scale_scope"] == "shared_across_countries"
     assert meta["geofrea_scale_limits"] == "0,0.6"
     assert "Software" not in meta
-    assert [p.name for p in tmp_path.iterdir()] == [path.name], "no sidecar file per figure"
+    assert [p.name for p in folder.iterdir()] == [path.name], "no sidecar file per figure"
 
 
 def test_the_commit_and_the_config_hash_are_read_from_the_repository():

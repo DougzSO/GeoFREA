@@ -494,3 +494,149 @@ def test_the_contiguous_territory_is_one_row_with_the_kept_polygons_only():
 def test_a_larger_gap_keeps_the_polygon_beyond_it():
     report = contiguous_mainland_report(_country_with_neighbours(), max_gap_km=3.0)
     assert report["kept"].tolist() == [True, True, True, True, True, False]
+
+
+# ─── _intersection_threaded(): the covered-line fast path (COMMAND 77, item 1a) ───────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_intersection_keeps_covered_lines_and_cuts_the_others_in_order(monkeypatch):
+    clip_geom = _square(0.0, 0.0, 5.0)
+    inside = shapely.LineString([(-1.0, 0.0), (0.0, 1.0), (2.0, 2.0)])
+    crossing = shapely.LineString([(0.0, 0.0), (10.0, 0.0)])
+    outside_part = shapely.MultiLineString([[(1.0, 1.0), (2.0, 1.0)], [(8.0, 8.0), (9.0, 9.0)]])
+    poly = _square(4.0, 0.0, 2.0)
+    geoms = np.array([crossing, inside, poly, outside_part, inside])
+
+    expected = shapely.intersection(geoms, clip_geom)
+    sent = []
+    real = shapely.intersection
+    monkeypatch.setattr(shapely, "intersection", lambda g, c: sent.append(len(g)) or real(g, c))
+
+    result = _intersection_threaded(geoms, clip_geom)
+
+    assert shapely.equals_exact(result, expected, tolerance=0.0).all()  # same coordinates, not just the same shape
+    assert sent == [3]  # the two covered lines were not intersected
+
+
+@pytest.mark.unit
+def test_intersection_cuts_covered_multilines_and_lines_that_touch_themselves(monkeypatch):
+    clip_geom = _square(0.0, 0.0, 5.0)
+    multi = shapely.MultiLineString([[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 2.0)]])
+    ring = shapely.LineString([(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0), (0.0, 0.0)])
+    figure_eight = shapely.LineString([(0.0, 0.0), (2.0, 2.0), (2.0, 0.0), (0.0, 2.0), (0.0, 0.0), (1.0, -1.0)])
+    simple = shapely.LineString([(0.0, 0.0), (1.0, 3.0)])
+    assert not figure_eight.is_simple and ring.is_simple
+    geoms = np.array([multi, figure_eight, simple, ring])
+
+    sent = []
+    real = shapely.intersection
+    monkeypatch.setattr(shapely, "intersection", lambda g, c: sent.append(len(g)) or real(g, c))
+    result = _intersection_threaded(geoms, clip_geom)
+
+    assert sent == [2]  # the multipart and the self-touching line; the simple line and the simple ring are kept
+    assert shapely.equals_exact(result[[2, 3]], geoms[[2, 3]], tolerance=0.0).all()
+    assert shapely.equals_exact(result, shapely.intersection(geoms, clip_geom), tolerance=0.0)[[0, 1]].all()
+
+
+@pytest.mark.unit
+def test_intersection_never_keeps_a_polygon_even_if_covered():
+    clip_geom = _square(0.0, 0.0, 5.0)
+    small = _square(0.0, 0.0, 1.0)
+    result = _intersection_threaded(np.array([small]), clip_geom)
+    assert result[0] is not small
+    assert shapely.equals_exact(result, shapely.intersection(np.array([small]), clip_geom), tolerance=0.0).all()
+
+
+@pytest.mark.unit
+def test_intersection_handles_empty_input_and_missing_geometries():
+    clip_geom = _square(0.0, 0.0, 5.0)
+    assert len(_intersection_threaded(np.array([], dtype=object), clip_geom)) == 0
+    result = _intersection_threaded(np.array([None, shapely.LineString([(0.0, 0.0), (1.0, 1.0)])], dtype=object), clip_geom)
+    assert result[0] is None and not result[1].is_empty
+
+
+# ─── current_clip_cache(): one clip per country shared by the audit, F2a and F3 (COMMAND 77, item 2) ──────────────────────────────────
+
+
+def _keep_clip(path, key):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"gpkg")
+    path.with_suffix(".key").write_text(key, encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_current_clip_cache_prefers_the_phase_own_cache_then_the_audits(tmp_path):
+    from geofrea.core.geo_utils import current_clip_cache
+
+    own = tmp_path / "PRT" / "grid_alignment" / "roads_clipped.gpkg"
+    audit = tmp_path / "PRT" / "data_quality_audit" / "roads_clipped.gpkg"
+    assert current_clip_cache(own, "k1") is None
+    _keep_clip(audit, "k1")
+    assert current_clip_cache(own, "k1") == audit
+    _keep_clip(own, "k1")
+    assert current_clip_cache(own, "k1") == own
+
+
+@pytest.mark.unit
+def test_current_clip_cache_never_returns_a_clip_of_another_source_or_polygon(tmp_path):
+    from geofrea.core.geo_utils import current_clip_cache
+
+    own = tmp_path / "PRT" / "land_eligibility" / "lakes_clipped.gpkg"
+    _keep_clip(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit")
+    assert current_clip_cache(own, "another-key") is None
+    assert current_clip_cache(tmp_path / "PRT" / "data_quality_audit" / "lakes_clipped.gpkg", "key-of-the-audit") is not None
+
+
+# ─── country_union() and the contiguous-territory cache (COMMAND 77, item 4) ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+def test_country_union_is_the_union_all_of_the_same_coordinates_and_is_computed_once(monkeypatch):
+    from geofrea.core import geometry_memo
+
+    geometry_memo._UNION_MEMO.clear()
+    gdf = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 1.0), _square(5.0, 0.0, 1.0)], crs="EPSG:4326")
+    expected = gdf.geometry.union_all()
+    first = geometry_memo.country_union(gdf)
+    assert first.equals_exact(expected, tolerance=0.0)
+    calls = []
+    monkeypatch.setattr(gpd.GeoSeries, "union_all", lambda self, *a, **k: calls.append(1))
+    assert geometry_memo.country_union(gdf) is first and not calls  # memo hit, no second union
+    other = gpd.GeoDataFrame(geometry=[_square(0.0, 0.0, 2.0)], crs="EPSG:4326")
+    geometry_memo.country_union(other)
+    assert calls == [1]  # other coordinates, another entry
+
+
+@pytest.mark.unit
+def test_contiguous_mainland_is_kept_between_runs_bit_for_bit(tmp_path, monkeypatch):
+    from geofrea.core.geo_utils import get_contiguous_mainland_gdf
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    main = _square(10.0, 10.0, 1.0)
+    near = _square(10.0, 11.005, 0.004)  # a few hundred metres from the main polygon: contiguous
+    far = _square(30.0, 30.0, 0.5)  # an island far away: dropped
+    gdf = gpd.GeoDataFrame(geometry=[shapely.MultiPolygon([main, near, far])], crs="EPSG:4326")
+
+    first = get_contiguous_mainland_gdf(gdf)
+    files = list((tmp_path / "interim" / "_mainland_cache").glob("*.wkb"))
+    assert len(files) == 1
+    # the second answer comes from the file, not from the calculation
+    monkeypatch.setattr("geofrea.core.geo_utils.contiguous_mainland_report", lambda *a, **k: pytest.fail("recomputed"))
+    second = get_contiguous_mainland_gdf(gdf)
+    assert shapely.equals_exact(first.geometry.iloc[0], second.geometry.iloc[0], tolerance=0.0)
+    assert not second.geometry.iloc[0].intersects(far)
+    assert second.crs == first.crs
+
+
+@pytest.mark.unit
+def test_contiguous_mainland_cache_key_follows_the_coordinates_and_the_gap(tmp_path, monkeypatch):
+    from geofrea.core.geo_utils import get_contiguous_mainland_gdf
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    a = gpd.GeoDataFrame(geometry=[_square(10.0, 10.0, 1.0)], crs="EPSG:4326")
+    b = gpd.GeoDataFrame(geometry=[_square(10.0, 10.0, 1.5)], crs="EPSG:4326")
+    get_contiguous_mainland_gdf(a)
+    get_contiguous_mainland_gdf(b)
+    get_contiguous_mainland_gdf(a, max_gap_km=2.0)
+    assert len(list((tmp_path / "interim" / "_mainland_cache").glob("*.wkb"))) == 3

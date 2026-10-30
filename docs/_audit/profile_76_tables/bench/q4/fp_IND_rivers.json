@@ -1,0 +1,28 @@
+{
+ "iso": "IND",
+ "layer": "rivers",
+ "window": [
+  80.0,
+  22.0,
+  3.0
+ ],
+ "features_matched": 6893,
+ "clip_vertices": 5,
+ "current": {
+  "wall_s": 0.309,
+  "cpu_s": 0.281
+ },
+ "fastpath": {
+  "wall_s": 0.008,
+  "cpu_s": 0.016
+ },
+ "covered": 6694,
+ "covered_fraction": 0.9711,
+ "identical_exact": 6893,
+ "differ_exact": 0,
+ "differ_after_normalize": 0,
+ "differ_topologically": 0,
+ "covered_that_differ_exact": 0,
+ "type_changes": 0,
+ "speedup_cpu": 17.56
+}

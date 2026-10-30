@@ -1,0 +1,69 @@
+{
+ "old_src": "D:\\Douglas\\DOUTORADO\\GeoFREA\\src",
+ "samples": {
+  "PRT": {
+   "old": {
+    "mainland_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180",
+    "wall_s": 9.17,
+    "cpu_s": 8.84,
+    "union_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180"
+   },
+   "new_cold": {
+    "mainland_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180",
+    "wall_s": 9.24,
+    "cpu_s": 9.06,
+    "union_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180"
+   },
+   "new_warm": {
+    "mainland_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180",
+    "wall_s": 0.26,
+    "cpu_s": 0.25,
+    "union_sha256": "c87a97c799baa19ce7dc4677e160fb691a7db98f85ec6b5708d69d8a30b48180"
+   },
+   "equal": true
+  },
+  "IND": {
+   "old": {
+    "mainland_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0",
+    "wall_s": 54.97,
+    "cpu_s": 54.34,
+    "union_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0"
+   },
+   "new_cold": {
+    "mainland_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0",
+    "wall_s": 55.53,
+    "cpu_s": 54.5,
+    "union_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0"
+   },
+   "new_warm": {
+    "mainland_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0",
+    "wall_s": 0.35,
+    "cpu_s": 0.28,
+    "union_sha256": "b596ff57722e8bc3dab68a38ebb16eba0efd4c2a984c5adc0322f5ceb88caab0"
+   },
+   "equal": true
+  },
+  "BRA": {
+   "old": {
+    "mainland_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e",
+    "wall_s": 24.62,
+    "cpu_s": 23.98,
+    "union_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e"
+   },
+   "new_cold": {
+    "mainland_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e",
+    "wall_s": 24.74,
+    "cpu_s": 24.33,
+    "union_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e"
+   },
+   "new_warm": {
+    "mainland_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e",
+    "wall_s": 0.32,
+    "cpu_s": 0.3,
+    "union_sha256": "5e001f68fc782737ec1973f2e07508f7803b3eefe7e7995e64e36621c141762e"
+   },
+   "equal": true
+  }
+ },
+ "equal": true
+}

@@ -119,6 +119,17 @@ def rewrite_sidecars(artifacts: Path, recorded: dict[str, str]) -> list[str]:
     return done
 
 
+def restore_before_adopt(artifacts: Path) -> list[str]:
+    """Put back the key a sidecar had before an earlier adoption (the `.before_adopt` copy), so that adopting again, under newer code, starts from the
+    key of the revision the layers were made with. A sidecar without that copy is left as it is."""
+    restored = []
+    for backup in sorted(Path(artifacts).glob("*_aligned.tif.cachekey.before_adopt")):
+        sidecar = backup.with_name(backup.name.removesuffix(".before_adopt"))
+        shutil.copy2(backup, sidecar)
+        restored.append(sidecar.name)
+    return restored
+
+
 def adopt(run: Callable[[], object], old_code: str, artifacts: Path) -> list[str]:
     """Run `run` (the phase) with the keys pinned to `old_code`, then write the keys of the current code; returns the sidecars rewritten."""
     with pinned_to(old_code) as recorded:
@@ -147,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, cache_code(CACHE_NAME))
     artifacts = core_paths.phase_dir(args.iso, "grid_alignment", "artifacts")
     print(f"aligned-layer cache code at {args.revision}: {old_code[:12]}")
+    restored = restore_before_adopt(artifacts)
+    if restored:
+        print(f"{len(restored)} sidecars put back to the key of {args.revision} (an earlier adoption under other code)")
 
     def run_phase() -> None:
         code = pipeline.main([args.iso, "--phases", "grid_alignment"])

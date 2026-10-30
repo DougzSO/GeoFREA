@@ -36,9 +36,10 @@ def proof_path(sample: str, directory: Path = DEFAULT_PROOF_DIR) -> Path:
     return directory / f"aligned_equivalence_{sample}.json"
 
 
-def compare_manifests(old: dict, new: dict, phase: str = PHASE) -> dict:
-    """The artifacts of `phase` in two manifests compared by content hash (the byte hash where an entry has none)."""
-    keys = sorted(k for k, e in {**old["artifacts"], **new["artifacts"]}.items() if e["phase"] == phase)
+def compare_manifests(old: dict, new: dict, phase: str | tuple[str, ...] = PHASE) -> dict:
+    """The artifacts of `phase` (one name or several) in two manifests compared by content hash (the byte hash where an entry has none)."""
+    phases = (phase,) if isinstance(phase, str) else tuple(phase)
+    keys = sorted(k for k, e in {**old["artifacts"], **new["artifacts"]}.items() if e["phase"] in phases)
     rows = {}
     for key in keys:
         a, b = old["artifacts"].get(key), new["artifacts"].get(key)
@@ -61,12 +62,12 @@ def _junction(link: Path, target: Path) -> None:
         link.symlink_to(target, target_is_directory=True)
 
 
-def _run_f2a(repo: Path, data_dir: Path, sample: str, real_raw: Path) -> dict:
-    """F2a of `sample` in the tree `repo` with its own data directory; returns its manifest."""
+def _run_f2a(repo: Path, data_dir: Path, sample: str, real_raw: Path, phases: str = PHASE) -> dict:
+    """The phases (F2a by default; a comma list runs in that order in one process) of `sample` in the tree `repo` with its own data directory; returns its manifest."""
     _junction(data_dir / "raw", real_raw)
     env = {**os.environ, "GEOFREA_DATA_DIR": str(data_dir), "PYTHONPATH": str(repo / "src")}
     done = subprocess.run(
-        [sys.executable, "main.py", sample, "--phases", PHASE],
+        [sys.executable, "main.py", sample, "--phases", phases],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -90,6 +91,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--sample", default="PRT")
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--phases",
+        default=PHASE,
+        help="comma list run in order in each tree (e.g. data_quality_audit,grid_alignment, to prove a cache shared between phases); the artifacts of all of them are compared",
+    )
     args = parser.parse_args(argv)
 
     from dotenv import load_dotenv
@@ -115,19 +121,19 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
         subprocess.run([*git, "commit", "-q", "-m", f"tree of {args.revision}"], check=True, capture_output=True)
         try:
-            old_manifest = _run_f2a(old_repo, tmp_path / "data_old", args.sample, real_raw)
-            new_manifest = _run_f2a(REPO, tmp_path / "data_new", args.sample, real_raw)
+            old_manifest = _run_f2a(old_repo, tmp_path / "data_old", args.sample, real_raw, args.phases)
+            new_manifest = _run_f2a(REPO, tmp_path / "data_new", args.sample, real_raw, args.phases)
         finally:
             # release the junctions before the temporary tree is removed: removing a junction must not touch the real raw data
             for data in ("data_old", "data_new"):
                 link = tmp_path / data / "raw"
                 if link.exists() or link.is_symlink():
                     os.rmdir(link) if os.name == "nt" else link.unlink()
-        verdict = compare_manifests(old_manifest, new_manifest)
+        verdict = compare_manifests(old_manifest, new_manifest, tuple(args.phases.split(",")))
         verdict.update(
             {
                 "sample": args.sample,
-                "phase": PHASE,
+                "phase": args.phases,
                 "old_revision": args.revision,
                 "old_cache_code": cache_code_at(old_repo / "src"),
                 "new_cache_code": cache_code_at(REPO / "src"),
@@ -135,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(verdict, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"{verdict['n_equal']} of {verdict['n_artifacts']} artifacts of {PHASE} equal on {args.sample}: {'equal' if verdict['equal'] else 'DIFFERENT'} -> {out}")
+    print(f"{verdict['n_equal']} of {verdict['n_artifacts']} artifacts of {args.phases} equal on {args.sample}: {'equal' if verdict['equal'] else 'DIFFERENT'} -> {out}")
     return 0 if verdict["equal"] else 1
 
 

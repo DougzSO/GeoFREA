@@ -1,0 +1,236 @@
+{
+ "iso": "PRT",
+ "phase": "land_eligibility",
+ "exit": 0,
+ "wall_s": 52.6,
+ "cpu_s": 23.9,
+ "peak_working_set_mb": 341,
+ "top_own": [
+  {
+   "function": "union_all (set_operations.py:463)",
+   "own_s": 11.219,
+   "cum_s": 11.219,
+   "calls": 4,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "intersection (set_operations.py:112)",
+   "own_s": 5.666,
+   "cum_s": 5.666,
+   "calls": 1,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "<method 'dwithin' of 'shapely.lib.STRtree' objects> (~:0)",
+   "own_s": 5.064,
+   "cum_s": 5.064,
+   "calls": 360,
+   "calls_per_own_s": 71
+  },
+  {
+   "function": "<method 'query' of 'shapely.lib.STRtree' objects> (~:0)",
+   "own_s": 4.576,
+   "cum_s": 4.576,
+   "calls": 1,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "<built-in method io.open> (~:0)",
+   "own_s": 2.05,
+   "cum_s": 2.053,
+   "calls": 467,
+   "calls_per_own_s": 228
+  },
+  {
+   "function": "<built-in method time.sleep> (~:0)",
+   "own_s": 2.002,
+   "cum_s": 2.002,
+   "calls": 1,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 2.001,
+   "cum_s": 2.766,
+   "calls": 376491,
+   "calls_per_own_s": 188177
+  },
+  {
+   "function": "<built-in method builtins.compile> (~:0)",
+   "own_s": 1.539,
+   "cum_s": 1.539,
+   "calls": 331,
+   "calls_per_own_s": 215
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.517,
+   "cum_s": 2.659,
+   "calls": 917160,
+   "calls_per_own_s": 604504
+  },
+  {
+   "function": "<built-in method nt.stat> (~:0)",
+   "own_s": 0.878,
+   "cum_s": 0.91,
+   "calls": 6643,
+   "calls_per_own_s": 7564
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.805,
+   "cum_s": 4.022,
+   "calls": 459057,
+   "calls_per_own_s": 569908
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.802,
+   "cum_s": 0.864,
+   "calls": 238449,
+   "calls_per_own_s": 297197
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.762,
+   "cum_s": 0.98,
+   "calls": 1175897,
+   "calls_per_own_s": 1542750
+  },
+  {
+   "function": "read (raw.py:39)",
+   "own_s": 0.698,
+   "cum_s": 0.699,
+   "calls": 5,
+   "calls_per_own_s": 7
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.695,
+   "cum_s": 0.729,
+   "calls": 2759092,
+   "calls_per_own_s": 3971351
+  }
+ ],
+ "python_loops": [
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 2.001,
+   "cum_s": 2.766,
+   "calls": 376491,
+   "calls_per_own_s": 188177
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.517,
+   "cum_s": 2.659,
+   "calls": 917160,
+   "calls_per_own_s": 604504
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.805,
+   "cum_s": 4.022,
+   "calls": 459057,
+   "calls_per_own_s": 569908
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.802,
+   "cum_s": 0.864,
+   "calls": 238449,
+   "calls_per_own_s": 297197
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.762,
+   "cum_s": 0.98,
+   "calls": 1175897,
+   "calls_per_own_s": 1542750
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.695,
+   "cum_s": 0.729,
+   "calls": 2759092,
+   "calls_per_own_s": 3971351
+  },
+  {
+   "function": "<method 'extend' of 'collections.deque' objects> (~:0)",
+   "own_s": 0.51,
+   "cum_s": 3.169,
+   "calls": 458739,
+   "calls_per_own_s": 899800
+  },
+  {
+   "function": "<built-in method builtins.getattr> (~:0)",
+   "own_s": 0.432,
+   "cum_s": 0.453,
+   "calls": 1124156,
+   "calls_per_own_s": 2603602
+  },
+  {
+   "function": "peek (reader.py:87)",
+   "own_s": 0.313,
+   "cum_s": 0.313,
+   "calls": 468585,
+   "calls_per_own_s": 1495152
+  },
+  {
+   "function": "need_more_tokens (scanner.py:145)",
+   "own_s": 0.226,
+   "cum_s": 0.31,
+   "calls": 107393,
+   "calls_per_own_s": 474603
+  },
+  {
+   "function": "<method 'join' of 'str' objects> (~:0)",
+   "own_s": 0.152,
+   "cum_s": 2.776,
+   "calls": 272442,
+   "calls_per_own_s": 1788791
+  },
+  {
+   "function": "<genexpr> (ast.py:170)",
+   "own_s": 0.134,
+   "cum_s": 2.76,
+   "calls": 103279,
+   "calls_per_own_s": 771514
+  },
+  {
+   "function": "<method 'append' of 'list' objects> (~:0)",
+   "own_s": 0.122,
+   "cum_s": 0.122,
+   "calls": 399487,
+   "calls_per_own_s": 3283956
+  },
+  {
+   "function": "<built-in method builtins.len> (~:0)",
+   "own_s": 0.094,
+   "cum_s": 0.098,
+   "calls": 472001,
+   "calls_per_own_s": 5008282
+  },
+  {
+   "function": "stale_possible_simple_keys (scanner.py:279)",
+   "own_s": 0.061,
+   "cum_s": 0.061,
+   "calls": 112667,
+   "calls_per_own_s": 1838426
+  }
+ ],
+ "opens": {
+  "PRT_grid_aligned.tif": 8,
+  "dist_grid_km.tif": 2,
+  "dist_road_km.tif": 2,
+  "eligible_fraction_solar__restrictive.writing.tif": 2,
+  "PRT_slope_counts_aligned.tif": 1,
+  "PRT_population_aligned.tif": 1,
+  "PRT_land_cover_counts_aligned.tif": 1,
+  "PRT_grid_aligned_capped.tif": 1,
+  "PRT_roads_aligned_capped.tif": 1,
+  "PRT_elevation_aligned.tif": 1
+ },
+ "opens_total": 49,
+ "to_crs_calls": 21
+}

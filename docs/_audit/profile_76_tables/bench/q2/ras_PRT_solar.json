@@ -1,0 +1,48 @@
+{
+ "iso": "PRT",
+ "step": "solar",
+ "window": [
+  -8.9,
+  38.9,
+  1.0
+ ],
+ "grid_pixels": 10000,
+ "grid_shape": [
+  100,
+  100
+ ],
+ "wall_s": 1.13,
+ "cpu_s": 0.109,
+ "top5_own_time": [
+  {
+   "function": "open (__init__.py:111)",
+   "own_s": 0.831,
+   "calls": 2
+  },
+  {
+   "function": "reproject_to_grid (raster_alignment.py:63)",
+   "own_s": 0.165,
+   "calls": 1
+  },
+  {
+   "function": "reproject (warp.py:160)",
+   "own_s": 0.085,
+   "calls": 1
+  },
+  {
+   "function": "wrapper (env.py:442)",
+   "own_s": 0.028,
+   "calls": 3
+  },
+  {
+   "function": "transform_bounds (warp.py:113)",
+   "own_s": 0.005,
+   "calls": 2
+  }
+ ],
+ "opens_per_file": {
+  "PVOUT.tif": 1,
+  "out.writing.tif": 1
+ },
+ "opens_total": 2
+}

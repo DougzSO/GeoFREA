@@ -124,6 +124,7 @@ non-Brazil-scale caller and test fixture actually has.
 
 from __future__ import annotations
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -136,6 +137,10 @@ import pyogrio
 import shapely
 from shapely import STRtree
 from shapely.geometry import Point
+
+from geofrea.core.geometry_memo import country_union, geometry_digest
+
+logger = logging.getLogger(__name__)
 
 
 class GeometryRepairReport(NamedTuple):
@@ -357,11 +362,43 @@ def contiguous_mainland_report(
     )
 
 
+def _mainland_cache_file(gdf: gpd.GeoDataFrame, max_gap_km: float) -> Path | None:
+    """Where the contiguous territory of `gdf` is kept between runs: `interim/_mainland_cache/<key>.wkb`, or None without a data directory.
+
+    The key is the SHA-256 of the coordinates (WKB of every feature), the CRS, the gap and the code fingerprint of this module, so a country
+    file with other coordinates or a changed calculation gets another file, and nothing here depends on a path or a country code.
+    """
+    import hashlib
+
+    from geofrea.core import paths as core_paths
+    from geofrea.core.cache_code import cache_code
+
+    try:
+        root = core_paths.data_root() / "interim" / "_mainland_cache"
+    except core_paths.MissingPathEnvironmentError:
+        return None
+    key = hashlib.sha256(
+        "|".join((geometry_digest(gdf.geometry.values), str(gdf.crs), repr(float(max_gap_km)), cache_code("clip"))).encode("utf-8")
+    ).hexdigest()
+    return root / f"{key}.wkb"
+
+
 def get_contiguous_mainland_gdf(
     gdf: gpd.GeoDataFrame, max_gap_km: float = MAINLAND_MAX_GAP_KM
 ) -> gpd.GeoDataFrame:
     """Single-row GeoDataFrame (EPSG:4326) with the contiguous territory of the country: its largest polygon and the polygons that
-    touch it or lie less than `max_gap_km` from it, transitively. Islands and exclaves farther away are dropped."""
+    touch it or lie less than `max_gap_km` from it, transitively. Islands and exclaves farther away are dropped.
+
+    The result is a function of the coordinates of `gdf` alone, so it is kept in `interim/_mainland_cache` under the key of
+    `_mainland_cache_file` (COMMAND 77, item 4): every phase asks for it, and the proximity test (`dwithin`) and the unions behind it
+    took about 20 s of CPU per phase in PRT. The geometry is stored as WKB, which keeps every coordinate bit for bit.
+    """
+    cache_file = _mainland_cache_file(gdf, max_gap_km)
+    if cache_file is not None and cache_file.exists():
+        try:
+            return gpd.GeoDataFrame({"contiguous": [True]}, geometry=[shapely.from_wkb(cache_file.read_bytes())], crs="EPSG:4326")
+        except Exception:  # noqa: BLE001 — a damaged cache file is recomputed, never fatal
+            logger.warning("mainland cache %s is unreadable; recomputing", cache_file)
     parts = gdf.explode(index_parts=False).reset_index(drop=True).to_crs("EPSG:4326")
     report = contiguous_mainland_report(gdf, max_gap_km)
     kept = parts[report["kept"].to_numpy()]
@@ -370,6 +407,14 @@ def get_contiguous_mainland_gdf(
         if hasattr(kept.geometry, "union_all")
         else kept.geometry.unary_union
     )
+    if cache_file is not None:
+        try:
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = cache_file.with_suffix(".tmp")
+            tmp.write_bytes(shapely.to_wkb(geom))
+            tmp.replace(cache_file)
+        except OSError as exc:
+            logger.warning("Failed to write mainland cache %s: %s", cache_file, exc)
     return gpd.GeoDataFrame({"contiguous": [True]}, geometry=[geom], crs="EPSG:4326")
 
 
@@ -522,14 +567,42 @@ def _intersection_threaded(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
     Returns:
         Array of intersection geometries, same order/length as `geoms`.
     """
-    if len(geoms) < _THREADED_INTERSECTION_MIN_FEATURES:
-        return shapely.intersection(geoms, clip_geom)
+    out = geoms.copy()
+    todo = _not_covered_lines(geoms, clip_geom)
+    if not todo.any():
+        return out
+    rest = geoms[todo]
+    if len(rest) < _THREADED_INTERSECTION_MIN_FEATURES:
+        out[todo] = shapely.intersection(rest, clip_geom)
+        return out
 
     n_workers = min(os.cpu_count() or 1, _MAX_INTERSECTION_WORKERS)
-    chunks = np.array_split(geoms, n_workers)
+    chunks = np.array_split(rest, n_workers)
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         results = list(executor.map(lambda chunk: shapely.intersection(chunk, clip_geom), chunks))
-    return np.concatenate(results)
+    out[todo] = np.concatenate(results)
+    return out
+
+
+_SIMPLE_LINE_TYPE_ID = 1  # LineString; a MultiLineString or a LinearRing always goes through the exact intersection
+
+
+def _not_covered_lines(geoms: np.ndarray, clip_geom: Any) -> np.ndarray:
+    """Boolean mask of the features whose intersection with `clip_geom` has to be computed.
+
+    Only a simple LineString that `clip_geom` covers wholly intersects it in itself, so only that feature is kept as it is (COMMAND 77, item 1a,
+    restricted by COMMAND 79). A line that touches itself is rewritten by GEOS (it is noded at the touch, which turns a closed boundary ring
+    of a protected area into a MultiLineString and drops vertices; measured on IND, 8,705 of 8,707 closed non-simple lines differ and no simple
+    one does), and a multipart line or a polygon is always intersected exactly: the intersection rewrites the rings, so keeping the input would
+    change the coordinates (and the content hash of the clip) even though the geometry is topologically equal.
+    """
+    todo = np.ones(len(geoms), dtype=bool)
+    lines = np.where(shapely.get_type_id(geoms) == _SIMPLE_LINE_TYPE_ID)[0]
+    if len(lines):
+        shapely.prepare(clip_geom)
+        candidates = geoms[lines]
+        todo[lines] = ~(shapely.covers(clip_geom, candidates) & shapely.is_simple(candidates))
+    return todo
 
 
 def clip_vector_to_country(
@@ -594,11 +667,7 @@ def clip_vector_to_country(
     gdf, feature_repair_report = repair_invalid_geometries(gdf)
 
     country_in_gdf_crs = country_gdf.to_crs(gdf.crs) if gdf.crs is not None else country_gdf
-    country_geom = (
-        country_in_gdf_crs.geometry.union_all()
-        if hasattr(country_in_gdf_crs.geometry, "union_all")
-        else country_in_gdf_crs.geometry.unary_union
-    )
+    country_geom = country_union(country_in_gdf_crs)
 
     minx, miny, maxx, maxy = country_in_gdf_crs.total_bounds
     prefiltered = gdf.cx[minx:maxx, miny:maxy]
@@ -709,6 +778,25 @@ def clip_cache_is_current(cache_path: str | Path, key: str) -> bool:
     cache_path = Path(cache_path)
     key_path = cache_path.with_suffix(".key")
     return cache_path.exists() and key_path.exists() and key_path.read_text(encoding="utf-8") == key
+
+
+AUDIT_PHASE_DIR = "data_quality_audit"
+
+
+def current_clip_cache(cache_path: str | Path, key: str) -> Path | None:
+    """The clip file to read for `key`: `cache_path`, else the one the audit kept for the same layer, else None (COMMAND 77, item 2).
+
+    The audit (F1b) runs first and keeps `<interim>/<ISO>/data_quality_audit/<layer>_clipped.gpkg`; F2a and F3 clip the same layers of the same
+    country with the same function, and their caches carry the same key when the source file and the polygon are the same. A clip is then
+    made once per country and read by the next phase, not made again. The key decides it, as before: a clip of another source or polygon
+    never matches, so this changes when a clip is computed, not what it contains.
+    """
+    cache_path = Path(cache_path)
+    audit_copy = cache_path.parent.parent / AUDIT_PHASE_DIR / cache_path.name
+    for candidate in (cache_path, audit_copy):
+        if clip_cache_is_current(candidate, key):
+            return candidate
+    return None
 
 
 def write_clip_cache_key(cache_path: str | Path, key: str) -> None:

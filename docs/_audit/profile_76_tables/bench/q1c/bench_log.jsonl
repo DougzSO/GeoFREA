@@ -1,0 +1,3 @@
+{"name": "vecc_PRT_rivers", "when": "2026-10-29T08:42:48", "cap_mb": 500, "min_free_mb": 1500, "kill_free_mb": 1500, "free_at_start_mb": 2030, "verdict": "finished", "exit": 0, "wall_s": 11.5, "peak_tree_mb": 199, "min_free_during_mb": 1852}
+{"name": "vecc_PRT_lakes", "when": "2026-10-29T08:43:00", "cap_mb": 500, "min_free_mb": 1500, "kill_free_mb": 1500, "free_at_start_mb": 2032, "verdict": "finished", "exit": 0, "wall_s": 7.0, "peak_tree_mb": 195, "min_free_during_mb": 1855}
+{"name": "vecc_PRT_roads", "when": "2026-10-29T08:43:07", "cap_mb": 500, "min_free_mb": 1500, "kill_free_mb": 1500, "free_at_start_mb": 2043, "verdict": "finished", "exit": 0, "wall_s": 135.6, "peak_tree_mb": 495, "min_free_during_mb": 1524}

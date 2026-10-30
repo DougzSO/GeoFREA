@@ -1,0 +1,82 @@
+{
+ "step": "glo30",
+ "old_src": "D:\\Douglas\\DOUTORADO\\GeoFREA\\src",
+ "windows": {
+  "PRT@-8.9,38.9,2.0": {
+   "old": {
+    "hashes": {
+     "elevation": "tif:aef8c7423b7ea6fd520822d7ed844abae941a2bdf1df08bfff9e19b7f3b4237f",
+     "slope": "tif:28c0d892752389d84bd8bb4afa0b3c8d94e109349521a3977e9e074344453032",
+     "slope_counts": "tif:8d18c8926bfc7bfc550297ce860949194c2727cae0eb470e8b86f79ad46f6492"
+    },
+    "cpu_s": 22.28,
+    "wall_s": 26.13,
+    "opens": 162,
+    "grid_pixels": 40000
+   },
+   "new": {
+    "hashes": {
+     "elevation": "tif:aef8c7423b7ea6fd520822d7ed844abae941a2bdf1df08bfff9e19b7f3b4237f",
+     "slope": "tif:28c0d892752389d84bd8bb4afa0b3c8d94e109349521a3977e9e074344453032",
+     "slope_counts": "tif:8d18c8926bfc7bfc550297ce860949194c2727cae0eb470e8b86f79ad46f6492"
+    },
+    "cpu_s": 10.72,
+    "wall_s": 10.81,
+    "opens": 15,
+    "grid_pixels": 40000
+   },
+   "equal": true
+  },
+  "IND@77.0,28.0,1.0": {
+   "old": {
+    "hashes": {
+     "elevation": "tif:d4839758dcfcb87b64ab46c03df30980f04c439693d84039f02db4a60ed90be7",
+     "slope": "tif:ba686b2c29d2160347adc0937d646bb3a3b70823f724510da35b88917481f6be",
+     "slope_counts": "tif:7ced2cd05e6c40975a4dcb74cb6af79f91fc8004759e6547d52b3f2b94800641"
+    },
+    "cpu_s": 7.27,
+    "wall_s": 8.54,
+    "opens": 87,
+    "grid_pixels": 10000
+   },
+   "new": {
+    "hashes": {
+     "elevation": "tif:d4839758dcfcb87b64ab46c03df30980f04c439693d84039f02db4a60ed90be7",
+     "slope": "tif:ba686b2c29d2160347adc0937d646bb3a3b70823f724510da35b88917481f6be",
+     "slope_counts": "tif:7ced2cd05e6c40975a4dcb74cb6af79f91fc8004759e6547d52b3f2b94800641"
+    },
+    "cpu_s": 2.88,
+    "wall_s": 2.95,
+    "opens": 15,
+    "grid_pixels": 10000
+   },
+   "equal": true
+  },
+  "BRA@-46.5,-23.5,1.0": {
+   "old": {
+    "hashes": {
+     "elevation": "tif:b3e8030f67ab266153cdcf9be04a2c94b8547d66101651c8e89a22fee3ff536d",
+     "slope": "tif:425916d19e36f933b372e926b6dcf54d3cf1d543e831b24b4bb466cfb35b5b3e",
+     "slope_counts": "tif:70c4bf85112affe88591fee03d747b8528b736eb992599c4aa261f0006185bed"
+    },
+    "cpu_s": 6.52,
+    "wall_s": 7.47,
+    "opens": 58,
+    "grid_pixels": 10000
+   },
+   "new": {
+    "hashes": {
+     "elevation": "tif:b3e8030f67ab266153cdcf9be04a2c94b8547d66101651c8e89a22fee3ff536d",
+     "slope": "tif:425916d19e36f933b372e926b6dcf54d3cf1d543e831b24b4bb466cfb35b5b3e",
+     "slope_counts": "tif:70c4bf85112affe88591fee03d747b8528b736eb992599c4aa261f0006185bed"
+    },
+    "cpu_s": 2.81,
+    "wall_s": 2.86,
+    "opens": 10,
+    "grid_pixels": 10000
+   },
+   "equal": true
+  }
+ },
+ "equal": true
+}

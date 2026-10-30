@@ -1,0 +1,236 @@
+{
+ "iso": "PRT",
+ "phase": "overview",
+ "exit": 0,
+ "wall_s": 103.5,
+ "cpu_s": 51.0,
+ "peak_working_set_mb": 796,
+ "top_own": [
+  {
+   "function": "draw (collections.py:360)",
+   "own_s": 20.036,
+   "cum_s": 20.612,
+   "calls": 546,
+   "calls_per_own_s": 27
+  },
+  {
+   "function": "union_all (set_operations.py:463)",
+   "own_s": 13.935,
+   "cum_s": 13.935,
+   "calls": 6,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "<method 'dwithin' of 'shapely.lib.STRtree' objects> (~:0)",
+   "own_s": 4.977,
+   "cum_s": 4.977,
+   "calls": 360,
+   "calls_per_own_s": 72
+  },
+  {
+   "function": "transform (transformer.py:712)",
+   "own_s": 3.194,
+   "cum_s": 3.253,
+   "calls": 572,
+   "calls_per_own_s": 179
+  },
+  {
+   "function": "<built-in method matplotlib.backends._backend_agg.draw_path> (~:0)",
+   "own_s": 2.216,
+   "cum_s": 2.25,
+   "calls": 2195,
+   "calls_per_own_s": 990
+  },
+  {
+   "function": "<built-in method matplotlib.ft2font._render_glyph> (~:0)",
+   "own_s": 1.87,
+   "cum_s": 1.889,
+   "calls": 11156,
+   "calls_per_own_s": 5966
+  },
+  {
+   "function": "<method 'encode' of 'ImagingEncoder' objects> (~:0)",
+   "own_s": 1.818,
+   "cum_s": 1.818,
+   "calls": 91,
+   "calls_per_own_s": 50
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.692,
+   "cum_s": 2.899,
+   "calls": 917160,
+   "calls_per_own_s": 542194
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.67,
+   "cum_s": 2.557,
+   "calls": 376491,
+   "calls_per_own_s": 225413
+  },
+  {
+   "function": "<built-in method builtins.compile> (~:0)",
+   "own_s": 1.65,
+   "cum_s": 1.65,
+   "calls": 317,
+   "calls_per_own_s": 192
+  },
+  {
+   "function": "<built-in method matplotlib.ft2font._layout> (~:0)",
+   "own_s": 1.508,
+   "cum_s": 1.51,
+   "calls": 1621,
+   "calls_per_own_s": 1075
+  },
+  {
+   "function": "buffer (constructive.py:136)",
+   "own_s": 1.255,
+   "cum_s": 1.255,
+   "calls": 2,
+   "calls_per_own_s": 2
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 1.012,
+   "cum_s": 1.09,
+   "calls": 3502905,
+   "calls_per_own_s": 3459929
+  },
+  {
+   "function": "_make_image (image.py:350)",
+   "own_s": 0.974,
+   "cum_s": 3.442,
+   "calls": 22,
+   "calls_per_own_s": 23
+  },
+  {
+   "function": "reproject_nearest (mapstyle.py:339)",
+   "own_s": 0.97,
+   "cum_s": 4.181,
+   "calls": 22,
+   "calls_per_own_s": 23
+  }
+ ],
+ "python_loops": [
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.692,
+   "cum_s": 2.899,
+   "calls": 917160,
+   "calls_per_own_s": 542194
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.67,
+   "cum_s": 2.557,
+   "calls": 376491,
+   "calls_per_own_s": 225413
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 1.012,
+   "cum_s": 1.09,
+   "calls": 3502905,
+   "calls_per_own_s": 3459929
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.95,
+   "cum_s": 0.978,
+   "calls": 238449,
+   "calls_per_own_s": 251091
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.805,
+   "cum_s": 4.249,
+   "calls": 459057,
+   "calls_per_own_s": 570136
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.745,
+   "cum_s": 0.882,
+   "calls": 1175897,
+   "calls_per_own_s": 1579078
+  },
+  {
+   "function": "wrapped (decorators.py:73)",
+   "own_s": 0.681,
+   "cum_s": 19.304,
+   "calls": 104142,
+   "calls_per_own_s": 152852
+  },
+  {
+   "function": "<method 'extend' of 'collections.deque' objects> (~:0)",
+   "own_s": 0.497,
+   "cum_s": 3.396,
+   "calls": 458739,
+   "calls_per_own_s": 923103
+  },
+  {
+   "function": "<listcomp> (polygon.py:91)",
+   "own_s": 0.485,
+   "cum_s": 0.485,
+   "calls": 133198,
+   "calls_per_own_s": 274801
+  },
+  {
+   "function": "peek (reader.py:87)",
+   "own_s": 0.398,
+   "cum_s": 0.398,
+   "calls": 468585,
+   "calls_per_own_s": 1177571
+  },
+  {
+   "function": "stale (artist.py:324)",
+   "own_s": 0.375,
+   "cum_s": 0.543,
+   "calls": 195312,
+   "calls_per_own_s": 520958
+  },
+  {
+   "function": "<method 'join' of 'str' objects> (~:0)",
+   "own_s": 0.362,
+   "cum_s": 2.561,
+   "calls": 272426,
+   "calls_per_own_s": 752066
+  },
+  {
+   "function": "_get (__init__.py:723)",
+   "own_s": 0.278,
+   "cum_s": 0.381,
+   "calls": 254675,
+   "calls_per_own_s": 914760
+  },
+  {
+   "function": "<built-in method builtins.getattr> (~:0)",
+   "own_s": 0.258,
+   "cum_s": 0.654,
+   "calls": 1278701,
+   "calls_per_own_s": 4949485
+  },
+  {
+   "function": "__iter__ (coords.py:43)",
+   "own_s": 0.219,
+   "cum_s": 0.24,
+   "calls": 133554,
+   "calls_per_own_s": 609970
+  }
+ ],
+ "opens": {
+  "PRT_elevation_aligned.tif": 2,
+  "PRT_slope_aligned.tif": 2,
+  "PRT_population_aligned.tif": 2,
+  "PRT_lakes_aligned.tif": 2,
+  "PRT_rivers_aligned.tif": 2,
+  "PRT_roads_aligned.tif": 2,
+  "PRT_grid_aligned.tif": 2,
+  "PRT_solar_aligned.tif": 2,
+  "PRT_wind_wind_speed_100m_aligned.tif": 2,
+  "PRT_wind_weibull_k_100m_aligned.tif": 2
+ },
+ "opens_total": 26,
+ "to_crs_calls": 20524
+}

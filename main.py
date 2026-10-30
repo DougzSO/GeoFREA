@@ -65,6 +65,7 @@ import re
 import sys
 from collections import Counter
 from collections.abc import Iterable
+from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -110,7 +111,9 @@ from geofrea.core.orchestrator import (
     compute_run_id,
     phase_graph,
 )
-from geofrea.core.paths import log_path, outputs_dir, phase_dir
+from geofrea.core.deferred_check import for_country as deferred_check_for
+from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
+from geofrea.core.paths import data_root, interim, log_path, outputs_dir, phase_dir
 from geofrea.core.power import keep_awake
 from geofrea.core.production import (
     ConfigConsistencyError,
@@ -200,6 +203,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(REPO_ROOT / ".env", override=False)
 
 COUNTRIES_YAML = REPO_ROOT / "config" / "countries.yaml"
+DEFERRED_CHECKS_YAML = REPO_ROOT / "config" / "deferred_checks.yaml"  # D-core-050: content check against a reference manifest, per country
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
@@ -1395,6 +1399,7 @@ def _run_geofrea(
         dirty=dirty,
         prune_unregistered=True,
         revalidate_phases=revalidate_phases or [],
+        deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
@@ -1478,9 +1483,17 @@ def elevation_sensitivities(technologies: tuple[str, ...]) -> dict[str, float | 
     }
 
 
+def _keep_awake_enabled() -> bool:
+    """settings.yaml's `keep_awake`; True when the settings cannot be read (`_main` reports that, and the run stays protected meanwhile)."""
+    try:
+        return load_settings(SETTINGS_YAML).keep_awake
+    except Exception:  # noqa: BLE001 — any unreadable settings are reported by _main
+        return True
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run the pipeline with the computer kept awake (V-T: no suspension in the middle of a phase; nothing on other systems)."""
-    with keep_awake():
+    """Run the pipeline, with the computer kept awake when settings.yaml says `keep_awake` (V-T: no suspension in the middle of a phase; nothing on other systems)."""
+    with keep_awake() if _keep_awake_enabled() else nullcontext():
         return _main(argv)
 
 
@@ -1565,6 +1578,12 @@ def _main(argv: list[str] | None = None) -> int:
     run_id = compute_run_id(
         _resolved_config_json(settings, parameters, args.scale), methodology_version, git_commit
     )
+
+    for country_code in countries:
+        shortfall = cold_start_shortfall(country_code, target_phases, interim)
+        if shortfall:
+            logger.error("%s", shortfall)
+            return EXIT_NOT_STARTED
 
     all_ok = True
     table_rows: list[dict] = []

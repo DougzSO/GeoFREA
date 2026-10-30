@@ -72,7 +72,42 @@ def test_main_runs_inside_keep_awake(monkeypatch):
             return False
 
     monkeypatch.setattr(main, "keep_awake", lambda: Recorder())
+    monkeypatch.setattr(main, "_keep_awake_enabled", lambda: True)
     monkeypatch.setattr(main, "_main", lambda argv=None: events.append("run") or 0)
 
     assert main.main([]) == 0
     assert events == ["enter", "run", "exit"]
+
+
+@pytest.mark.unit
+def test_main_does_not_ask_for_keep_awake_when_settings_turn_it_off(monkeypatch):
+    import main
+
+    events: list[str] = []
+    monkeypatch.setattr(main, "keep_awake", lambda: events.append("enter") or pytest.fail("asked to stay awake"))
+    monkeypatch.setattr(main, "_keep_awake_enabled", lambda: False)
+    monkeypatch.setattr(main, "_main", lambda argv=None: events.append("run") or 0)
+
+    assert main.main([]) == 0
+    assert events == ["run"]
+
+
+@pytest.mark.unit
+def test_keep_awake_setting_defaults_to_false_in_the_schema_and_is_true_in_the_run_settings():
+    import main
+    from geofrea.core.config_loader import load_settings
+    from geofrea.core.schemas import SettingsFile
+
+    assert SettingsFile.model_fields["keep_awake"].default is False
+    assert load_settings(main.SETTINGS_YAML).keep_awake is True  # the protection the runs have had since D-core-027
+
+
+@pytest.mark.unit
+def test_unreadable_settings_keep_the_computer_awake(monkeypatch):
+    import main
+
+    def broken(_path):
+        raise ValueError("bad yaml")
+
+    monkeypatch.setattr(main, "load_settings", broken)
+    assert main._keep_awake_enabled() is True

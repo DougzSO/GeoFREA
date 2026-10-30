@@ -1652,8 +1652,12 @@ def new_map(
     placed.update({n: Furniture(n, b, "footer") for n, b in boxes.items()})
 
     with plt.rc_context(_rc(pre)):
-        fig = plt.figure(
-            figsize=(layout.width_mm / 25.4, layout.height_mm / 25.4), dpi=DPI, facecolor="white"
+        fig = quiet_figure(
+            plt.figure(
+                figsize=(layout.width_mm / 25.4, layout.height_mm / 25.4),
+                dpi=DPI,
+                facecolor="white",
+            )
         )
         canvas = MapFigure(
             fig, None, None, None, layout, frame.lonlat_extent, placed, preset=pre, frame=frame
@@ -2113,6 +2117,18 @@ def png_metadata(canvas: MapFigure, extra: dict[str, str] | None = None) -> dict
 def close_figure(figure) -> None:
     """Close a figure that will not be saved (a header that is drawn again): the `Figure` itself, or a map or sheet that holds one."""
     plt.close(getattr(figure, "fig", figure))
+
+
+def quiet_figure(fig):
+    """The figure with its idle redraw switched off, so that drawing the layers of a map does not render the whole figure after each one.
+
+    `GeoDataFrame.plot` and `GeoSeries.plot` end with `ax.figure.canvas.draw_idle()`, which on the Agg canvas is a full `draw()`: a sheet of 18
+    panels rendered the A4 figure 216 times before it was saved once (56 of the 94 s of CPU of the PRT climate maps, COMMAND 77 item 5 and
+    docs/_audit/optimizations_77.md). Nothing reads those renders: `savefig` draws the figure it writes, from the same artists, so the pixels
+    are the same (compared pixel by pixel in tests/unit/test_mapstyle_quiet_figure.py and over the figures of PRT).
+    """
+    fig.canvas.draw_idle = lambda *args, **kwargs: None
+    return fig
 
 
 def save_png(canvas_or_fig, path: Path, metadata: dict[str, str] | None = None) -> Path:

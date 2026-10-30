@@ -1,0 +1,28 @@
+{
+ "iso": "PRT",
+ "layer": "rivers",
+ "window": [
+  -15.0,
+  30.0,
+  20.0
+ ],
+ "features_matched": 5561,
+ "clip_vertices": 5648,
+ "current": {
+  "wall_s": 3.046,
+  "cpu_s": 3.047
+ },
+ "fastpath": {
+  "wall_s": 0.125,
+  "cpu_s": 0.125
+ },
+ "covered": 5200,
+ "covered_fraction": 0.9351,
+ "identical_exact": 5561,
+ "differ_exact": 0,
+ "differ_after_normalize": 0,
+ "differ_topologically": 0,
+ "covered_that_differ_exact": 0,
+ "type_changes": 0,
+ "speedup_cpu": 24.38
+}

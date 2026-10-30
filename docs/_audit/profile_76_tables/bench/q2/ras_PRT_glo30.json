@@ -1,0 +1,54 @@
+{
+ "iso": "PRT",
+ "step": "glo30",
+ "window": [
+  -8.9,
+  38.9,
+  1.0
+ ],
+ "grid_pixels": 10000,
+ "grid_shape": [
+  100,
+  100
+ ],
+ "tiles": 19,
+ "wall_s": 6.773,
+ "cpu_s": 5.938,
+ "top5_own_time": [
+  {
+   "function": "_read_dem_block (raster_alignment.py:377)",
+   "own_s": 4.302,
+   "calls": 25
+  },
+  {
+   "function": "glo30_aligned_outputs (raster_alignment.py:451)",
+   "own_s": 0.902,
+   "calls": 1
+  },
+  {
+   "function": "_glo30_strip_samples (raster_alignment.py:413)",
+   "own_s": 0.526,
+   "calls": 25
+  },
+  {
+   "function": "wrapper (env.py:442)",
+   "own_s": 0.349,
+   "calls": 58
+  },
+  {
+   "function": "open (__init__.py:111)",
+   "own_s": 0.329,
+   "calls": 55
+  }
+ ],
+ "opens_per_file": {
+  "Copernicus_DSM_COG_10_N39_00_W009_00_DEM.tif": 23,
+  "Copernicus_DSM_COG_10_N39_00_W008_00_DEM.tif": 23,
+  "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif": 3,
+  "Copernicus_DSM_COG_10_N38_00_W008_00_DEM.tif": 3,
+  "e.writing.tif": 1,
+  "s.writing.tif": 1,
+  "c.writing.tif": 1
+ },
+ "opens_total": 55
+}

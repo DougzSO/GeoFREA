@@ -1,0 +1,241 @@
+{
+ "iso": "PRT",
+ "layer": "roads",
+ "window": [
+  -15.0,
+  30.0,
+  20.0
+ ],
+ "source": "D:\\Douglas\\DOUTORADO\\GeoFREA_data\\raw\\infrastructure_roads\\_global\\Region_4_Europe\\GRIP4_region4.shp",
+ "clip": {
+  "wall_s": 111.081,
+  "cpu_s": 106.938,
+  "top5_own_time": [
+   {
+    "function": "<method 'acquire' of '_thread.lock' objects> (~:0)",
+    "own_s": 98.57,
+    "calls": 40
+   },
+   {
+    "function": "read (raw.py:39)",
+    "own_s": 9.185,
+    "calls": 1
+   },
+   {
+    "function": "union_all (set_operations.py:463)",
+    "own_s": 1.348,
+    "calls": 1
+   },
+   {
+    "function": "read_info (core.py:241)",
+    "own_s": 0.73,
+    "calls": 1
+   },
+   {
+    "function": "simplify (constructive.py:1128)",
+    "own_s": 0.381,
+    "calls": 1
+   }
+  ]
+ },
+ "features": 178986,
+ "pixels": 178500,
+ "grid_shape": [
+  525,
+  340
+ ],
+ "raster": {
+  "wall_s": 15.641,
+  "cpu_s": 15.609,
+  "top5_own_time": [
+   {
+    "function": "simplify (constructive.py:1128)",
+    "own_s": 5.186,
+    "calls": 1
+   },
+   {
+    "function": "wrapped (decorators.py:73)",
+    "own_s": 1.87,
+    "calls": 537253
+   },
+   {
+    "function": "rasterize (features.py:182)",
+    "own_s": 0.828,
+    "calls": 1
+   },
+   {
+    "function": "is_empty (predicates.py:181)",
+    "own_s": 0.803,
+    "calls": 178986
+   },
+   {
+    "function": "has_z (predicates.py:45)",
+    "own_s": 0.599,
+    "calls": 179050
+   }
+  ]
+ },
+ "feature_pixels": 37681,
+ "edt": {
+  "wall_s": 0.014,
+  "cpu_s": 0.031,
+  "top5_own_time": [
+   {
+    "function": "<built-in method scipy.ndimage._nd_image.euclidean_feature_transform> (~:0)",
+    "own_s": 0.008,
+    "calls": 1
+   },
+   {
+    "function": "distance_transform_edt (_morphology.py:2435)",
+    "own_s": 0.002,
+    "calls": 1
+   },
+   {
+    "function": "<method 'astype' of 'numpy.ndarray' objects> (~:0)",
+    "own_s": 0.001,
+    "calls": 4
+   },
+   {
+    "function": "edt (bench_vector.py:126)",
+    "own_s": 0.001,
+    "calls": 1
+   },
+   {
+    "function": "<method 'reduce' of 'numpy.ufunc' objects> (~:0)",
+    "own_s": 0.001,
+    "calls": 1
+   }
+  ]
+ },
+ "write": {
+  "wall_s": 0.134,
+  "cpu_s": 0.094,
+  "top5_own_time": [
+   {
+    "function": "wrapper (env.py:442)",
+    "own_s": 0.096,
+    "calls": 4
+   },
+   {
+    "function": "open (__init__.py:111)",
+    "own_s": 0.018,
+    "calls": 2
+   },
+   {
+    "function": "_write_distance_and_flag (vector_alignment.py:157)",
+    "own_s": 0.012,
+    "calls": 1
+   },
+   {
+    "function": "safe_raster_write (raster_io.py:114)",
+    "own_s": 0.003,
+    "calls": 4
+   },
+   {
+    "function": "<built-in method nt.stat> (~:0)",
+    "own_s": 0.001,
+    "calls": 12
+   }
+  ]
+ },
+ "cache_write": {
+  "wall_s": 2.643,
+  "cpu_s": 2.609,
+  "top5_own_time": [
+   {
+    "function": "write (raw.py:595)",
+    "own_s": 1.99,
+    "calls": 1
+   },
+   {
+    "function": "default_array_ufunc (arraylike.py:481)",
+    "own_s": 0.583,
+    "calls": 1
+   },
+   {
+    "function": "is_empty (predicates.py:181)",
+    "own_s": 0.015,
+    "calls": 2
+   },
+   {
+    "function": "_from_sequence (string_arrow.py:195)",
+    "own_s": 0.014,
+    "calls": 1
+   },
+   {
+    "function": "has_z (predicates.py:45)",
+    "own_s": 0.008,
+    "calls": 1
+   }
+  ]
+ },
+ "cache_read": {
+  "wall_s": 1.222,
+  "cpu_s": 1.203,
+  "top5_own_time": [
+   {
+    "function": "read (raw.py:39)",
+    "own_s": 0.91,
+    "calls": 1
+   },
+   {
+    "function": "from_wkb (io.py:308)",
+    "own_s": 0.277,
+    "calls": 1
+   },
+   {
+    "function": "_read_file_pyogrio (file.py:482)",
+    "own_s": 0.011,
+    "calls": 1
+   },
+   {
+    "function": "<method 'copy' of 'numpy.ndarray' objects> (~:0)",
+    "own_s": 0.008,
+    "calls": 10
+   },
+   {
+    "function": "_stack_arrays (managers.py:2457)",
+    "own_s": 0.005,
+    "calls": 3
+   }
+  ]
+ },
+ "ckdtree_chord": {
+  "wall_s": 0.605,
+  "cpu_s": 0.562,
+  "top5_own_time": [
+   {
+    "function": "chord_distance_km (bench_vector.py:56)",
+    "own_s": 0.278,
+    "calls": 1
+   },
+   {
+    "function": "<built-in method io.open_code> (~:0)",
+    "own_s": 0.062,
+    "calls": 85
+   },
+   {
+    "function": "<built-in method _imp.create_dynamic> (~:0)",
+    "own_s": 0.015,
+    "calls": 23
+   },
+   {
+    "function": "<built-in method nt.stat> (~:0)",
+    "own_s": 0.015,
+    "calls": 323
+   },
+   {
+    "function": "xyz (bench_vector.py:64)",
+    "own_s": 0.013,
+    "calls": 2
+   }
+  ]
+ },
+ "ckdtree_vs_edt": {
+  "max_diff_m": 1378.2,
+  "mean_diff_m": 95.84,
+  "fraction_over_1m": 0.5956,
+  "fraction_over_10m": 0.581,
+  "fraction_identical": 0.4042
+ }
+}

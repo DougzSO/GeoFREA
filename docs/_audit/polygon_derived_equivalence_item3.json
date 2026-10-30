@@ -1,0 +1,108 @@
+{
+ "old_src": "D:\\Douglas\\DOUTORADO\\GeoFREA\\src",
+ "windows": {
+  "PRT@-8.9,38.9,2.0": {
+   "old": {
+    "grid_pixels": 40000,
+    "n_lakes": 81,
+    "n_protected": 66,
+    "lake_mask": "5c6fa97826b45bd920a26931facd3814d7ac3a44f05fdfd99c61d3207fa06afb",
+    "lakes_fraction": "e38fe9a7bf22751084ff0d02d93f8f3f532ac2545b7a3529d381049831e7db20",
+    "protected_fraction_all": "20c5186188c3cbfbc5d56c79bf0237098388e1e3ad168218e8e6084b877294f9",
+    "protected_fraction_strict": "b9ce164d30e4101b009fe4be765a070593cfbdd48f897853de159a8c177fabe8",
+    "wkb_lakes": "4339c914e3db446aa76d6c73cf893bbc030aed530228a86ef6403b14addc8a8c",
+    "wkb_protected": "6cdb8c20753ca4fbab2ff7039cc777b00241a269a5241186abc66230679ea37c",
+    "areas_deg2": {
+     "lakes": 0.012096421177859659,
+     "protected": 0.9224412554064626
+    }
+   },
+   "new": {
+    "grid_pixels": 40000,
+    "n_lakes": 81,
+    "n_protected": 66,
+    "lake_mask": "5c6fa97826b45bd920a26931facd3814d7ac3a44f05fdfd99c61d3207fa06afb",
+    "lakes_fraction": "e38fe9a7bf22751084ff0d02d93f8f3f532ac2545b7a3529d381049831e7db20",
+    "protected_fraction_all": "20c5186188c3cbfbc5d56c79bf0237098388e1e3ad168218e8e6084b877294f9",
+    "protected_fraction_strict": "b9ce164d30e4101b009fe4be765a070593cfbdd48f897853de159a8c177fabe8",
+    "wkb_lakes": "32d21c93ae62d5f2e7b0edbf4382635040f912d4a5fe552d0abd33abd203bd84",
+    "wkb_protected": "f51a657b66c6f1a5bac03a174eb8eff9bdfa50f410f12fbd6f8af126c4411e1d",
+    "areas_deg2": {
+     "lakes": 0.012096421177859659,
+     "protected": 0.9224412554064626
+    }
+   },
+   "derived_equal": true,
+   "clip_geometry_identical": false
+  },
+  "IND@77.0,28.0,1.0": {
+   "old": {
+    "grid_pixels": 10000,
+    "n_lakes": 22,
+    "n_protected": 309,
+    "lake_mask": "422c303aed452f132bb926df0e55bf0cd026ff61ca41bcf7a638567c0fb05259",
+    "lakes_fraction": "b1d251372b3c9b86d5c4492060c950b606e550e397505fd25b41ca5864bc11c6",
+    "protected_fraction_all": "fe89b7d5d50350905f5ce3251d5b6fd02897cb18746e915ae1245bb3505a135b",
+    "protected_fraction_strict": "e7e2dcff542de95352682dc186432e98f0188084896773f1973276b0577d5305",
+    "wkb_lakes": "6892a8902ce96d81a15274bdc059068676d40183c2cfcdca84705caf6a1fa943",
+    "wkb_protected": "8d25c12fcc5e7b2b3eeb07a434d73239aafc5712fccf89d2eee54b5fc20c9da4",
+    "areas_deg2": {
+     "lakes": 0.000485831129071652,
+     "protected": 0.022034354493313486
+    }
+   },
+   "new": {
+    "grid_pixels": 10000,
+    "n_lakes": 22,
+    "n_protected": 309,
+    "lake_mask": "422c303aed452f132bb926df0e55bf0cd026ff61ca41bcf7a638567c0fb05259",
+    "lakes_fraction": "b1d251372b3c9b86d5c4492060c950b606e550e397505fd25b41ca5864bc11c6",
+    "protected_fraction_all": "a57dceed4f88e57b00b0b15a1df82a1b78918a24987fa946fe5bdee6cfccb4d3",
+    "protected_fraction_strict": "e7e2dcff542de95352682dc186432e98f0188084896773f1973276b0577d5305",
+    "wkb_lakes": "220d1de379c8a0b8efacfe720d4be24561eee0003c23bac8ed590b2361e3d66d",
+    "wkb_protected": "e883efd74d7b0cbf22c971ef372b4fe942ab6400e07b8cd1ffe1871350d4657f",
+    "areas_deg2": {
+     "lakes": 0.000485831129071652,
+     "protected": 0.022034354493313486
+    }
+   },
+   "derived_equal": false,
+   "clip_geometry_identical": false
+  },
+  "BRA@-46.5,-23.5,1.0": {
+   "old": {
+    "grid_pixels": 10000,
+    "n_lakes": 28,
+    "n_protected": 58,
+    "lake_mask": "44ae7ca9e7dbf24bb2b1f6e29bd0f48b298f89819a6124b50264940d06f40802",
+    "lakes_fraction": "32bbf005dd153916670f1e5fd03c88d690c50d44678ce9b970ff1cd1f35c789e",
+    "protected_fraction_all": "61010547c4dc923026386be96a66238fc7885b963706719986e70d1517ed399a",
+    "protected_fraction_strict": "c6654ea4765c2ee5ebfd52831ea405b1c52e54e0b6816404b7ed3994cf478294",
+    "wkb_lakes": "20405c4df1e1f538de4c53e0aabedd2e022440896aeac93434ab1b84c65c2ddc",
+    "wkb_protected": "095c3dd12a0cd24c7a299c7014a9e19cd32794649d67b321b2b03c6d28006117",
+    "areas_deg2": {
+     "lakes": 0.01636009209381045,
+     "protected": 0.7140999666729645
+    }
+   },
+   "new": {
+    "grid_pixels": 10000,
+    "n_lakes": 28,
+    "n_protected": 58,
+    "lake_mask": "44ae7ca9e7dbf24bb2b1f6e29bd0f48b298f89819a6124b50264940d06f40802",
+    "lakes_fraction": "32bbf005dd153916670f1e5fd03c88d690c50d44678ce9b970ff1cd1f35c789e",
+    "protected_fraction_all": "61010547c4dc923026386be96a66238fc7885b963706719986e70d1517ed399a",
+    "protected_fraction_strict": "c6654ea4765c2ee5ebfd52831ea405b1c52e54e0b6816404b7ed3994cf478294",
+    "wkb_lakes": "f578adb2364c884634c60d2b9a3152f6db568b7710431f1dc6b29ecb6ac700ef",
+    "wkb_protected": "68cdf99f1fe240ed6c4171201e4f6e25db0c14690f28893b1b17f57df8a412a0",
+    "areas_deg2": {
+     "lakes": 0.01636009209381045,
+     "protected": 0.7140999666729643
+    }
+   },
+   "derived_equal": true,
+   "clip_geometry_identical": false
+  }
+ },
+ "derived_equal": false
+}

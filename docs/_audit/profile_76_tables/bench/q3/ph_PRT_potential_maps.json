@@ -1,0 +1,236 @@
+{
+ "iso": "PRT",
+ "phase": "potential_maps",
+ "exit": 0,
+ "wall_s": 22.9,
+ "cpu_s": 19.7,
+ "peak_working_set_mb": 684,
+ "top_own": [
+  {
+   "function": "_integral_chunk (weibull_cf.py:96)",
+   "own_s": 1.976,
+   "cum_s": 1.978,
+   "calls": 4,
+   "calls_per_own_s": 2
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.078,
+   "cum_s": 1.486,
+   "calls": 376491,
+   "calls_per_own_s": 349180
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.016,
+   "cum_s": 1.94,
+   "calls": 917160,
+   "calls_per_own_s": 903046
+  },
+  {
+   "function": "transform (transformer.py:712)",
+   "own_s": 0.914,
+   "cum_s": 0.934,
+   "calls": 85,
+   "calls_per_own_s": 93
+  },
+  {
+   "function": "<built-in method builtins.compile> (~:0)",
+   "own_s": 0.878,
+   "cum_s": 0.878,
+   "calls": 317,
+   "calls_per_own_s": 361
+  },
+  {
+   "function": "<method 'encode' of 'ImagingEncoder' objects> (~:0)",
+   "own_s": 0.618,
+   "cum_s": 0.618,
+   "calls": 38,
+   "calls_per_own_s": 61
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.613,
+   "cum_s": 0.644,
+   "calls": 242689,
+   "calls_per_own_s": 395663
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.572,
+   "cum_s": 0.709,
+   "calls": 1175897,
+   "calls_per_own_s": 2057322
+  },
+  {
+   "function": "wrapper (env.py:442)",
+   "own_s": 0.571,
+   "cum_s": 0.675,
+   "calls": 39,
+   "calls_per_own_s": 68
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.54,
+   "cum_s": 0.58,
+   "calls": 2968177,
+   "calls_per_own_s": 5496761
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.483,
+   "cum_s": 2.679,
+   "calls": 459057,
+   "calls_per_own_s": 950279
+  },
+  {
+   "function": "<built-in method matplotlib.backends._backend_agg.draw_path> (~:0)",
+   "own_s": 0.438,
+   "cum_s": 0.447,
+   "calls": 462,
+   "calls_per_own_s": 1055
+  },
+  {
+   "function": "<method 'acquire' of '_thread.lock' objects> (~:0)",
+   "own_s": 0.362,
+   "cum_s": 0.362,
+   "calls": 36,
+   "calls_per_own_s": 99
+  },
+  {
+   "function": "_make_image (image.py:350)",
+   "own_s": 0.337,
+   "cum_s": 0.895,
+   "calls": 4,
+   "calls_per_own_s": 12
+  },
+  {
+   "function": "<built-in method matplotlib.ft2font._layout> (~:0)",
+   "own_s": 0.328,
+   "cum_s": 0.329,
+   "calls": 693,
+   "calls_per_own_s": 2111
+  }
+ ],
+ "python_loops": [
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.078,
+   "cum_s": 1.486,
+   "calls": 376491,
+   "calls_per_own_s": 349180
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.016,
+   "cum_s": 1.94,
+   "calls": 917160,
+   "calls_per_own_s": 903046
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.613,
+   "cum_s": 0.644,
+   "calls": 242689,
+   "calls_per_own_s": 395663
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.572,
+   "cum_s": 0.709,
+   "calls": 1175897,
+   "calls_per_own_s": 2057322
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.54,
+   "cum_s": 0.58,
+   "calls": 2968177,
+   "calls_per_own_s": 5496761
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.483,
+   "cum_s": 2.679,
+   "calls": 459057,
+   "calls_per_own_s": 950279
+  },
+  {
+   "function": "<built-in method builtins.getattr> (~:0)",
+   "own_s": 0.23,
+   "cum_s": 0.306,
+   "calls": 1180053,
+   "calls_per_own_s": 5134912
+  },
+  {
+   "function": "peek (reader.py:87)",
+   "own_s": 0.208,
+   "cum_s": 0.208,
+   "calls": 475669,
+   "calls_per_own_s": 2289564
+  },
+  {
+   "function": "<method 'extend' of 'collections.deque' objects> (~:0)",
+   "own_s": 0.208,
+   "cum_s": 2.148,
+   "calls": 458739,
+   "calls_per_own_s": 2202075
+  },
+  {
+   "function": "need_more_tokens (scanner.py:145)",
+   "own_s": 0.14,
+   "cum_s": 0.243,
+   "calls": 108606,
+   "calls_per_own_s": 775436
+  },
+  {
+   "function": "<genexpr> (ast.py:170)",
+   "own_s": 0.097,
+   "cum_s": 1.481,
+   "calls": 103279,
+   "calls_per_own_s": 1064292
+  },
+  {
+   "function": "<method 'join' of 'str' objects> (~:0)",
+   "own_s": 0.092,
+   "cum_s": 1.49,
+   "calls": 272288,
+   "calls_per_own_s": 2973625
+  },
+  {
+   "function": "stale_possible_simple_keys (scanner.py:279)",
+   "own_s": 0.077,
+   "cum_s": 0.077,
+   "calls": 113915,
+   "calls_per_own_s": 1486697
+  },
+  {
+   "function": "<built-in method builtins.len> (~:0)",
+   "own_s": 0.077,
+   "cum_s": 0.082,
+   "calls": 535963,
+   "calls_per_own_s": 6927863
+  },
+  {
+   "function": "<method 'append' of 'list' objects> (~:0)",
+   "own_s": 0.07,
+   "cum_s": 0.07,
+   "calls": 432780,
+   "calls_per_own_s": 6147504
+  }
+ ],
+ "opens": {
+  "potential_density_solar.writing.tif": 1,
+  "capacity_factor_solar.writing.tif": 1,
+  "eligible_fraction_solar.tif": 1,
+  "pvout_kwh_kwp_day.tif": 1,
+  "display_capacity-factor_solar.writing.tif": 1,
+  "display_eligible-fraction_solar.writing.tif": 1,
+  "display_capacity-density_solar.writing.tif": 1,
+  "display_energy-density_solar.writing.tif": 1,
+  "display_capacity-density_solar.tif": 1,
+  "display_energy-density_solar.tif": 1
+ },
+ "opens_total": 29,
+ "to_crs_calls": 8383
+}

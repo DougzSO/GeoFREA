@@ -1,0 +1,70 @@
+{
+ "iso": "IND",
+ "layers": {
+  "protected": {
+   "n_matched": 193089,
+   "n_lines": 8747,
+   "n_covered": 8745,
+   "n_checked": 8745,
+   "n_differ": 8705,
+   "by_original_type": {
+    "LineString": {
+     "covered": 8707,
+     "differ": 8705,
+     "differ_not_simple": 8705,
+     "differ_repeated_points": 0,
+     "differ_closed": 8705,
+     "differ_exact_becomes": {
+      "LineString": 7091,
+      "MultiLineString": 1614
+     },
+     "differ_fewer_vertices": 7949,
+     "differ_same_normalized": 0,
+     "identical_not_simple": 0
+    },
+    "MultiLineString": {
+     "covered": 38,
+     "differ": 0
+    }
+   }
+  },
+  "lakes": {
+   "n_matched": 11120,
+   "n_lines": 0,
+   "n_covered": 0,
+   "n_checked": 0,
+   "n_differ": 0,
+   "by_original_type": {}
+  },
+  "rivers": {
+   "n_matched": 254877,
+   "n_lines": 254877,
+   "n_covered": 251724,
+   "n_checked": 150000,
+   "n_differ": 0,
+   "by_original_type": {
+    "LineString": {
+     "covered": 150000,
+     "differ": 0
+    }
+   }
+  },
+  "roads": {
+   "n_matched": 610665,
+   "n_lines": 610665,
+   "n_covered": 609284,
+   "n_checked": 150000,
+   "n_differ": 0,
+   "by_original_type": {
+    "LineString": {
+     "covered": 143976,
+     "differ": 0
+    },
+    "MultiLineString": {
+     "covered": 6024,
+     "differ": 0
+    }
+   }
+  }
+ }
+}

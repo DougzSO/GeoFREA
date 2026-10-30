@@ -1,0 +1,435 @@
+country,date,run,phase,reason,status,wall_s,slept_s,awake_s,cpu_s,ratio,peak_rss_mb,temperature,class,class_source,revision
+PRT,2026-10-14 16:51,0d80b60b,climate_forcing,named in rerun_phases,success,97.400,0.000,97.400,93.000,0.955,,always,cpu,measured,689cd67
+PRT,2026-10-14 16:52,0d80b60b,climate_maps,named in rerun_phases,success,21.700,0.000,21.700,21.400,0.986,,always,cpu,measured,689cd67
+PRT,2026-10-14 16:53,0d80b60b,hazard_context,named in rerun_phases,success,29.500,0.000,29.500,28.400,0.963,,always,cpu,measured,689cd67
+PRT,2026-10-14 16:53,0d80b60b,overview,named in rerun_phases,success,63.900,0.000,63.900,59.300,0.928,,always,cpu,measured,689cd67
+IND,2026-10-14 16:55,0d80b60b,climate_forcing,named in rerun_phases,success,122.800,0.000,122.800,112.000,0.912,,always,cpu,measured,689cd67
+IND,2026-10-14 16:57,0d80b60b,climate_maps,named in rerun_phases,success,31.500,0.000,31.500,31.200,0.990,,always,cpu,measured,689cd67
+IND,2026-10-14 16:57,0d80b60b,hazard_context,named in rerun_phases,success,87.400,0.000,87.400,78.900,0.903,,always,cpu,measured,689cd67
+IND,2026-10-14 16:59,0d80b60b,overview,named in rerun_phases,success,133.100,0.000,133.100,122.500,0.920,,always,cpu,measured,689cd67
+BRA,2026-10-14 17:01,0d80b60b,climate_forcing,named in rerun_phases,success,168.100,0.000,168.100,147.700,0.879,,always,cpu,measured,689cd67
+BRA,2026-10-14 17:04,0d80b60b,climate_maps,named in rerun_phases,success,51.900,0.000,51.900,50.900,0.981,,always,cpu,measured,689cd67
+BRA,2026-10-14 17:05,0d80b60b,hazard_context,named in rerun_phases,success,159.900,0.000,159.900,138.900,0.869,,always,cpu,measured,689cd67
+BRA,2026-10-14 17:08,0d80b60b,overview,named in rerun_phases,success,208.600,0.000,208.600,193.700,0.929,,always,cpu,measured,689cd67
+PRT,2026-10-14 20:54,e0233a5f,land_eligibility,named in rerun_phases,success,12.400,0.000,12.400,7.900,0.637,,always,mixed,measured,89e67fe
+PRT,2026-10-14 20:54,e0233a5f,overview,named in rerun_phases,success,71.500,0.000,71.500,64.700,0.905,,always,cpu,measured,89e67fe
+IND,2026-10-14 20:55,e0233a5f,land_eligibility,named in rerun_phases,success,199.800,0.000,199.800,137.100,0.686,,always,mixed,measured,89e67fe
+IND,2026-10-14 20:59,e0233a5f,overview,named in rerun_phases,success,273.000,0.000,273.000,126.500,0.463,,always,mixed,measured,89e67fe
+BRA,2026-10-14 21:06,e0233a5f,land_eligibility,named in rerun_phases,success,657.700,0.000,657.700,512.000,0.778,,always,cpu,measured,89e67fe
+BRA,2026-10-14 21:17,e0233a5f,overview,named in rerun_phases,success,199.900,0.000,199.900,169.300,0.847,,always,cpu,measured,89e67fe
+PRT,2026-10-14 21:41,fc515236,data_acquisition,named in rerun_phases,success,36.500,0.000,36.500,7.200,0.197,,always,io_or_wait,measured,0491beb
+PRT,2026-10-14 21:42,fc515236,data_quality_audit,named in rerun_phases,success,117.000,0.000,117.000,114.900,0.982,,warm,cpu,measured,0491beb
+PRT,2026-10-14 21:44,fc515236,grid_alignment,named in rerun_phases,success,25.100,0.000,25.100,4.500,0.179,,warm,io_or_wait,measured,0491beb
+PRT,2026-10-14 21:44,fc515236,climate_forcing,stale_upstream,success,93.800,0.000,93.800,88.800,0.947,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:46,fc515236,climate_maps,stale_upstream,success,22.000,0.000,22.000,21.300,0.968,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:46,fc515236,hazard_context,stale_upstream,success,28.900,0.000,28.900,27.500,0.952,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:46,fc515236,siting_layers,named in rerun_phases,success,3.100,0.000,3.100,1.000,0.323,,always,negligible,measured,0491beb
+PRT,2026-10-14 21:47,fc515236,land_eligibility,named in rerun_phases,success,9.200,0.000,9.200,7.600,0.826,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:47,fc515236,overview,stale_upstream,success,64.900,0.000,64.900,61.300,0.945,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:49,fc515236,data_acquisition,named in rerun_phases,success,34.500,0.000,34.500,8.100,0.235,,always,io_or_wait,measured,0491beb
+PRT,2026-10-14 21:50,fc515236,data_quality_audit,named in rerun_phases,success,25.500,0.000,25.500,19.000,0.745,,warm,mixed,measured,0491beb
+PRT,2026-10-14 21:50,fc515236,grid_alignment,named in rerun_phases,success,2.000,0.000,2.000,0.600,0.300,,warm,negligible,measured,0491beb
+PRT,2026-10-14 21:50,fc515236,climate_forcing,stale_upstream,success,93.000,0.000,93.000,87.700,0.943,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:52,fc515236,climate_maps,stale_upstream,success,22.200,0.000,22.200,21.600,0.973,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:52,fc515236,hazard_context,stale_upstream,success,28.600,0.000,28.600,27.500,0.962,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:53,fc515236,siting_layers,named in rerun_phases,success,2.900,0.000,2.900,1.000,0.345,,always,negligible,measured,0491beb
+PRT,2026-10-14 21:53,fc515236,land_eligibility,named in rerun_phases,success,9.700,0.000,9.700,7.300,0.753,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:53,fc515236,overview,stale_upstream,success,60.600,0.000,60.600,59.100,0.975,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:55,fc515236,data_acquisition,named in rerun_phases,success,36.500,0.000,36.500,7.500,0.205,,always,io_or_wait,measured,0491beb
+PRT,2026-10-14 21:55,fc515236,data_quality_audit,named in rerun_phases,success,27.500,0.000,27.500,19.200,0.698,,warm,mixed,measured,0491beb
+PRT,2026-10-14 21:56,fc515236,grid_alignment,named in rerun_phases,success,2.000,0.000,2.000,0.700,0.350,,warm,negligible,measured,0491beb
+PRT,2026-10-14 21:56,fc515236,climate_forcing,stale_upstream,success,98.100,0.000,98.100,88.100,0.898,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:57,fc515236,climate_maps,stale_upstream,success,23.700,0.000,23.700,23.100,0.975,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:58,fc515236,hazard_context,stale_upstream,success,29.600,0.000,29.600,27.600,0.932,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:58,fc515236,siting_layers,named in rerun_phases,success,3.000,0.000,3.000,1.000,0.333,,always,negligible,measured,0491beb
+PRT,2026-10-14 21:58,fc515236,land_eligibility,named in rerun_phases,success,10.100,0.000,10.100,7.800,0.772,,always,cpu,measured,0491beb
+PRT,2026-10-14 21:58,fc515236,overview,stale_upstream,success,65.800,0.000,65.800,63.200,0.960,,always,cpu,measured,0491beb
+IND,2026-10-14 22:01,fc515236,data_acquisition,named in rerun_phases,success,80.200,0.000,80.200,22.600,0.282,,always,io_or_wait,measured,0491beb
+IND,2026-10-14 22:02,fc515236,data_quality_audit,named in rerun_phases,success,233.600,0.000,233.600,173.400,0.742,,warm,mixed,measured,0491beb
+IND,2026-10-14 22:06,fc515236,grid_alignment,stale_upstream,success,40.400,0.000,40.400,8.800,0.218,,warm,io_or_wait,measured,0491beb
+IND,2026-10-14 22:07,fc515236,climate_forcing,stale_upstream,success,118.800,0.000,118.800,106.500,0.896,,always,cpu,measured,0491beb
+IND,2026-10-14 22:09,fc515236,climate_maps,stale_upstream,success,32.800,0.000,32.800,32.000,0.976,,always,cpu,measured,0491beb
+IND,2026-10-14 22:09,fc515236,hazard_context,stale_upstream,success,87.000,0.000,87.000,75.300,0.866,,always,cpu,measured,0491beb
+IND,2026-10-14 22:11,fc515236,siting_layers,stale_upstream,success,23.200,0.000,23.200,11.400,0.491,,always,mixed,measured,0491beb
+IND,2026-10-14 22:11,fc515236,land_eligibility,stale_upstream,success,138.200,0.000,138.200,125.500,0.908,,always,cpu,measured,0491beb
+IND,2026-10-14 22:13,fc515236,overview,stale_upstream,success,126.400,0.000,126.400,114.600,0.907,,always,cpu,measured,0491beb
+BRA,2026-10-14 22:16,fc515236,data_acquisition,named in rerun_phases,success,169.800,0.000,169.800,41.100,0.242,,always,io_or_wait,measured,0491beb
+BRA,2026-10-14 22:19,fc515236,data_quality_audit,named in rerun_phases,success,379.100,0.000,379.100,258.300,0.681,,warm,mixed,measured,0491beb
+BRA,2026-10-14 22:25,fc515236,grid_alignment,stale_upstream,success,129.300,0.000,129.300,23.700,0.183,,warm,io_or_wait,measured,0491beb
+BRA,2026-10-14 22:27,fc515236,climate_forcing,stale_upstream,success,163.900,0.000,163.900,135.100,0.824,,always,cpu,measured,0491beb
+BRA,2026-10-14 22:30,fc515236,climate_maps,stale_upstream,success,52.400,0.000,52.400,49.900,0.952,,always,cpu,measured,0491beb
+BRA,2026-10-14 22:31,fc515236,hazard_context,stale_upstream,success,167.600,0.000,167.600,137.800,0.822,,always,cpu,measured,0491beb
+BRA,2026-10-14 22:34,fc515236,siting_layers,stale_upstream,success,54.800,0.000,54.800,26.400,0.482,,always,mixed,measured,0491beb
+BRA,2026-10-14 22:35,fc515236,land_eligibility,stale_upstream,success,569.100,0.000,569.100,497.900,0.875,,always,cpu,measured,0491beb
+BRA,2026-10-14 22:44,fc515236,overview,stale_upstream,success,208.200,0.000,208.200,179.000,0.860,,always,cpu,measured,0491beb
+PRT,2026-10-14 23:16,f409d01d,data_quality_audit,named in rerun_phases,success,30.400,0.000,30.400,20.400,0.671,,warm,mixed,measured,4317d63
+IND,2026-10-14 23:17,f409d01d,data_quality_audit,named in rerun_phases,success,198.800,0.000,198.800,167.400,0.842,,warm,cpu,measured,4317d63
+BRA,2026-10-14 23:21,f409d01d,data_quality_audit,named in rerun_phases,success,367.900,0.000,367.900,256.300,0.697,,warm,mixed,measured,4317d63
+PRT,2026-10-16 15:13,c7803cb9,technical_potential,no manifest entry,success,14.400,0.000,14.400,12.700,0.882,,always,cpu,measured,5f624d1
+PRT,2026-10-16 15:14,c7803cb9,potential_maps,no manifest entry,success,1.400,0.000,1.400,1.200,0.857,,always,negligible,measured,5f624d1
+PRT,2026-10-16 15:16,c7803cb9,technical_potential,named in rerun_phases,success,13.800,0.000,13.800,12.800,0.928,,always,cpu,measured,5f624d1
+PRT,2026-10-16 15:16,c7803cb9,potential_maps,named in rerun_phases,success,1.400,0.000,1.400,1.200,0.857,,always,negligible,measured,5f624d1
+IND,2026-10-16 15:17,c7803cb9,technical_potential,named in rerun_phases,success,233.100,0.000,233.100,214.900,0.922,,always,cpu,measured,5f624d1
+IND,2026-10-16 15:21,c7803cb9,potential_maps,named in rerun_phases,success,3.900,0.000,3.900,3.500,0.897,,always,negligible,measured,5f624d1
+IND,2026-10-16 19:22,d46b9f5d,land_eligibility,named in rerun_phases,success,153.400,0.000,153.400,144.600,0.943,,always,cpu,measured,d6f4725
+PRT,2026-10-16 19:22,d46b9f5d,land_eligibility,named in rerun_phases,success,10.400,0.000,10.400,8.200,0.788,,always,cpu,measured,d6f4725
+BRA,2026-10-16 19:25,d46b9f5d,land_eligibility,named in rerun_phases,failed,33.000,0.000,33.000,,,,always,failed,measured,d6f4725
+BRA,2026-10-16 19:26,d46b9f5d,land_eligibility,named in rerun_phases,failed,35.000,0.000,35.000,,,,always,failed,measured,d6f4725
+BRA,2026-10-16 19:30,d46b9f5d,land_eligibility,named in rerun_phases,failed,33.000,0.000,33.000,,,,always,failed,measured,d6f4725
+PRT,2026-10-16 19:31,d46b9f5d,technical_potential,named in rerun_phases,success,14.800,0.000,14.800,13.000,0.878,,always,cpu,measured,d6f4725
+IND,2026-10-16 19:32,d46b9f5d,technical_potential,named in rerun_phases,success,219.700,0.000,219.700,214.000,0.974,,always,cpu,measured,d6f4725
+PRT,2026-10-16 19:32,d46b9f5d,potential_maps,named in rerun_phases,success,1.500,0.000,1.500,1.300,0.867,,always,negligible,measured,d6f4725
+IND,2026-10-16 19:36,d46b9f5d,potential_maps,named in rerun_phases,success,4.100,0.000,4.100,3.500,0.854,,always,negligible,measured,d6f4725
+BRA,2026-10-16 20:57,d46b9f5d,land_eligibility,named in rerun_phases,success,551.800,0.000,551.800,512.700,0.929,,always,cpu,measured,d6f4725
+PRT,2026-10-16 21:17,d46b9f5d,technical_potential,named in rerun_phases,success,13.400,0.000,13.400,11.800,0.881,,always,cpu,measured,d6f4725
+IND,2026-10-16 21:18,d46b9f5d,technical_potential,named in rerun_phases,success,200.300,0.000,200.300,194.300,0.970,,always,cpu,measured,d6f4725
+PRT,2026-10-16 21:18,d46b9f5d,potential_maps,named in rerun_phases,success,1.400,0.000,1.400,1.200,0.857,,always,negligible,measured,d6f4725
+IND,2026-10-16 21:22,d46b9f5d,potential_maps,named in rerun_phases,success,3.900,0.000,3.900,3.200,0.821,,always,negligible,measured,d6f4725
+BRA,2026-10-16 21:32,d46b9f5d,technical_potential,named in rerun_phases,success,587.300,0.000,587.300,563.600,0.960,,always,cpu,measured,d6f4725
+BRA,2026-10-16 21:42,d46b9f5d,potential_maps,named in rerun_phases,success,7.800,0.000,7.800,8.000,1.026,,always,cpu,measured,d6f4725
+PRT,2026-10-18 17:36,c18339ee,data_acquisition,named in rerun_phases,success,32.900,0.000,32.900,6.800,0.207,,always,io_or_wait,measured,e03be60
+PRT,2026-10-18 17:37,c18339ee,external_inputs,named in rerun_phases,success,0.800,0.000,0.800,0.100,0.125,,always,negligible,measured,e03be60
+PRT,2026-10-18 17:37,c18339ee,climate_forcing,stale_upstream,success,96.200,0.000,96.200,89.300,0.928,,always,cpu,measured,e03be60
+PRT,2026-10-18 17:39,c18339ee,climate_maps,stale_upstream,success,22.800,0.000,22.800,22.300,0.978,,always,cpu,measured,e03be60
+PRT,2026-10-18 17:39,c18339ee,hazard_context,stale_upstream,success,30.500,0.000,30.500,28.700,0.941,,always,cpu,measured,e03be60
+PRT,2026-10-18 17:40,c18339ee,overview,stale_upstream,success,66.600,0.000,66.600,62.700,0.941,,always,cpu,measured,e03be60
+IND,2026-10-18 17:42,c18339ee,data_acquisition,named in rerun_phases,success,70.100,0.000,70.100,23.700,0.338,,always,mixed,measured,e03be60
+IND,2026-10-18 17:43,c18339ee,external_inputs,named in rerun_phases,success,0.300,0.000,0.300,0.100,0.333,,always,negligible,measured,e03be60
+IND,2026-10-18 17:43,c18339ee,climate_forcing,stale_upstream,success,117.600,0.000,117.600,107.300,0.912,,always,cpu,measured,e03be60
+IND,2026-10-18 17:45,c18339ee,climate_maps,stale_upstream,success,31.800,0.000,31.800,31.700,0.997,,always,cpu,measured,e03be60
+IND,2026-10-18 17:46,c18339ee,hazard_context,stale_upstream,success,86.600,0.000,86.600,75.900,0.876,,always,cpu,measured,e03be60
+IND,2026-10-18 17:47,c18339ee,overview,stale_upstream,success,126.900,0.000,126.900,119.000,0.938,,always,cpu,measured,e03be60
+BRA,2026-10-18 17:50,c18339ee,data_acquisition,named in rerun_phases,success,163.900,0.000,163.900,43.000,0.262,,always,io_or_wait,measured,e03be60
+BRA,2026-10-18 17:53,c18339ee,data_quality_audit,stale_upstream,success,351.800,0.000,351.800,266.600,0.758,,warm,cpu,measured,e03be60
+BRA,2026-10-18 17:59,c18339ee,external_inputs,named in rerun_phases,success,0.400,0.000,0.400,0.100,0.250,,always,negligible,measured,e03be60
+BRA,2026-10-18 17:59,c18339ee,grid_alignment,stale_upstream,success,6.000,0.000,6.000,4.400,0.733,,warm,mixed,measured,e03be60
+BRA,2026-10-18 17:59,c18339ee,climate_forcing,stale_upstream,success,158.200,0.000,158.200,141.400,0.894,,always,cpu,measured,e03be60
+BRA,2026-10-18 18:01,c18339ee,climate_maps,stale_upstream,success,48.900,0.000,48.900,48.700,0.996,,always,cpu,measured,e03be60
+BRA,2026-10-18 18:02,c18339ee,hazard_context,stale_upstream,success,191.300,0.000,191.300,170.000,0.889,,always,cpu,measured,e03be60
+BRA,2026-10-18 18:05,c18339ee,siting_layers,stale_upstream,success,50.900,0.000,50.900,25.800,0.507,,always,mixed,measured,e03be60
+BRA,2026-10-18 18:06,c18339ee,land_eligibility,stale_upstream,success,539.300,0.000,539.300,506.100,0.938,,always,cpu,measured,e03be60
+BRA,2026-10-18 18:15,c18339ee,overview,stale_upstream,success,202.900,0.000,202.900,186.000,0.917,,always,cpu,measured,e03be60
+PRT,2026-10-18 18:38,5a217c40,land_eligibility,configuration it reads changed,success,9.900,0.000,9.900,7.700,0.778,,always,cpu,measured,0f3c9d8
+PRT,2026-10-18 18:38,5a217c40,technical_potential,stale_upstream,success,12.000,0.000,12.000,11.600,0.967,,always,cpu,measured,0f3c9d8
+IND,2026-10-18 18:39,5a217c40,land_eligibility,configuration it reads changed,success,134.500,0.000,134.500,128.300,0.954,,always,cpu,measured,0f3c9d8
+PRT,2026-10-18 18:39,5a217c40,potential_maps,stale_upstream,success,1.200,0.000,1.200,1.100,0.917,,always,negligible,measured,0f3c9d8
+IND,2026-10-18 18:42,5a217c40,technical_potential,stale_upstream,success,200.400,0.000,200.400,193.500,0.966,,always,cpu,measured,0f3c9d8
+IND,2026-10-18 18:45,5a217c40,potential_maps,stale_upstream,success,3.800,0.000,3.800,3.300,0.868,,always,negligible,measured,0f3c9d8
+BRA,2026-10-18 18:55,5a217c40,land_eligibility,configuration it reads changed,success,543.600,0.000,543.600,513.100,0.944,,always,cpu,measured,0f3c9d8
+BRA,2026-10-18 19:04,5a217c40,technical_potential,stale_upstream,success,599.100,0.000,599.100,567.700,0.948,,always,cpu,measured,0f3c9d8
+BRA,2026-10-18 19:14,5a217c40,potential_maps,stale_upstream,success,8.700,0.000,8.700,8.500,0.977,,always,cpu,measured,0f3c9d8
+PRT,2026-10-18 19:36,5a217c40,overview,stale_upstream,success,62.900,0.000,62.900,61.500,0.978,,always,cpu,measured,0f3c9d8
+IND,2026-10-18 19:37,5a217c40,overview,stale_upstream,success,139.500,0.000,139.500,124.300,0.891,,always,cpu,measured,0f3c9d8
+BRA,2026-10-18 19:40,809da68c,overview,stale_upstream,success,227.100,0.000,227.100,202.800,0.893,,always,cpu,measured,b252112
+PRT,2026-10-18 21:18,54ff5119,potential_maps,configuration it reads changed,success,72.800,0.000,72.800,70.700,0.971,,always,cpu,measured,712a524
+PRT,2026-10-18 21:20,54ff5119,potential_maps,named in rerun_phases,success,72.200,0.000,72.200,70.600,0.978,,always,cpu,measured,712a524
+IND,2026-10-18 21:21,54ff5119,potential_maps,named in rerun_phases,success,226.700,0.000,226.700,223.500,0.986,,always,cpu,measured,712a524
+BRA,2026-10-18 21:26,54ff5119,potential_maps,named in rerun_phases,success,253.500,0.000,253.500,240.700,0.950,,always,cpu,measured,712a524
+PRT,2026-10-18 21:35,54ff5119,potential_maps,named in rerun_phases,success,74.600,0.000,74.600,72.000,0.965,,always,cpu,measured,712a524
+IND,2026-10-18 21:37,54ff5119,potential_maps,named in rerun_phases,success,222.000,0.000,222.000,220.200,0.992,,always,cpu,measured,712a524
+BRA,2026-10-18 21:41,54ff5119,potential_maps,named in rerun_phases,success,231.900,0.000,231.900,225.300,0.972,,always,cpu,measured,712a524
+PRT,2026-10-19 06:53,c68bca73,potential_maps,named in rerun_phases,success,77.000,0.000,77.000,73.800,0.958,,always,cpu,measured,7953831
+IND,2026-10-19 06:54,ae14a777,potential_maps,named in rerun_phases,success,220.000,0.000,220.000,218.200,0.992,,always,cpu,measured,7953831
+BRA,2026-10-19 06:59,ae14a777,potential_maps,named in rerun_phases,success,234.900,0.000,234.900,225.300,0.959,,always,cpu,measured,7953831
+IND,2026-10-19 09:16,15dcf1cc,data_acquisition,named in rerun_phases,success,84.300,0.000,84.300,30.600,0.363,,always,mixed,measured,25ae968
+IND,2026-10-19 09:17,15dcf1cc,data_quality_audit,named in rerun_phases,success,4333.700,0.000,4333.700,7747.600,1.788,,warm,multithread,measured,25ae968
+IND,2026-10-19 10:29,15dcf1cc,external_inputs,named in rerun_phases,success,0.500,0.000,0.500,0.100,0.200,,always,negligible,measured,25ae968
+IND,2026-10-19 10:29,15dcf1cc,grid_alignment,named in rerun_phases,success,9922.500,0.000,9922.500,12259.600,1.236,,cold,cpu,measured,25ae968
+IND,2026-10-19 13:15,15dcf1cc,climate_forcing,named in rerun_phases,success,146.900,0.000,146.900,110.100,0.749,,always,mixed,measured,25ae968
+IND,2026-10-19 13:17,15dcf1cc,siting_layers,named in rerun_phases,success,26.300,0.000,26.300,12.200,0.464,,always,mixed,measured,25ae968
+IND,2026-10-19 13:18,15dcf1cc,land_eligibility,named in rerun_phases,success,3437.100,0.000,3437.100,5730.700,1.667,,always,multithread,measured,25ae968
+IND,2026-10-19 14:15,15dcf1cc,technical_potential,named in rerun_phases,success,421.900,0.000,421.900,369.700,0.876,,always,cpu,measured,25ae968
+IND,2026-10-19 14:22,15dcf1cc,potential_maps,named in rerun_phases,success,229.200,0.000,229.200,210.400,0.918,,always,cpu,measured,25ae968
+BRA,2026-10-19 14:27,15dcf1cc,data_acquisition,named in rerun_phases,success,228.800,0.000,228.800,33.500,0.146,,always,io_or_wait,measured,25ae968
+BRA,2026-10-19 14:31,15dcf1cc,data_quality_audit,named in rerun_phases,success,6562.900,0.000,6562.900,7856.900,1.197,,warm,cpu,measured,25ae968
+PRT,2026-10-19 14:44,15dcf1cc,data_acquisition,named in rerun_phases,success,38.500,0.000,38.500,6.500,0.169,,always,io_or_wait,measured,25ae968
+PRT,2026-10-19 14:45,15dcf1cc,data_quality_audit,named in rerun_phases,success,403.900,0.000,403.900,251.400,0.622,,warm,mixed,measured,25ae968
+PRT,2026-10-19 14:51,15dcf1cc,external_inputs,named in rerun_phases,success,0.500,0.000,0.500,0.100,0.200,,always,negligible,measured,25ae968
+PRT,2026-10-19 14:51,15dcf1cc,grid_alignment,named in rerun_phases,success,648.300,0.000,648.300,384.800,0.594,,cold,mixed,measured,25ae968
+PRT,2026-10-19 15:02,15dcf1cc,climate_forcing,named in rerun_phases,success,226.000,0.000,226.000,85.500,0.378,,always,mixed,measured,25ae968
+PRT,2026-10-19 15:06,15dcf1cc,siting_layers,named in rerun_phases,success,5.500,0.000,5.500,1.000,0.182,,always,suspended,measured,25ae968
+PRT,2026-10-19 15:06,15dcf1cc,land_eligibility,named in rerun_phases,success,129.400,0.000,129.400,34.500,0.267,,always,suspended,measured,25ae968
+PRT,2026-10-19 15:08,15dcf1cc,technical_potential,named in rerun_phases,success,34.900,0.000,34.900,13.000,0.372,,always,mixed,measured,25ae968
+PRT,2026-10-19 15:09,15dcf1cc,potential_maps,named in rerun_phases,success,176.300,0.000,176.300,75.500,0.428,,always,mixed,measured,25ae968
+BRA,2026-10-19 16:20,15dcf1cc,external_inputs,named in rerun_phases,success,0.500,0.000,0.500,0.100,0.200,,always,negligible,measured,25ae968
+BRA,2026-10-19 16:20,15dcf1cc,grid_alignment,named in rerun_phases,success,18840.500,0.000,18840.500,22081.000,1.172,,cold,cpu,measured,25ae968
+BRA,2026-10-19 21:34,15dcf1cc,climate_forcing,named in rerun_phases,success,174.800,0.000,174.800,146.500,0.838,,always,cpu,measured,25ae968
+BRA,2026-10-19 21:37,15dcf1cc,siting_layers,named in rerun_phases,success,57.000,0.000,57.000,29.900,0.525,,always,mixed,measured,25ae968
+BRA,2026-10-19 21:38,15dcf1cc,land_eligibility,named in rerun_phases,success,3401.700,0.000,3401.700,5576.900,1.639,,always,multithread,measured,25ae968
+BRA,2026-10-19 22:35,15dcf1cc,technical_potential,named in rerun_phases,success,1095.000,0.000,1095.000,956.700,0.874,,always,cpu,measured,25ae968
+BRA,2026-10-19 22:53,15dcf1cc,potential_maps,named in rerun_phases,success,252.900,0.000,252.900,222.800,0.881,,always,cpu,measured,25ae968
+PRT,2026-10-20 12:22,74d1d7a2,data_acquisition,code it runs changed,success,61.100,0.000,61.100,22.600,0.370,,always,mixed,measured,1d915a1
+PRT,2026-10-20 12:23,74d1d7a2,data_quality_audit,stale_upstream,success,56.600,0.000,56.600,45.500,0.804,,warm,cpu,measured,1d915a1
+PRT,2026-10-20 12:24,74d1d7a2,grid_alignment,stale_upstream,success,12.400,0.000,12.400,10.500,0.847,,warm,cpu,measured,1d915a1
+PRT,2026-10-20 12:25,74d1d7a2,climate_forcing,stale_upstream,success,115.400,0.000,115.400,102.700,0.890,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:26,74d1d7a2,climate_maps,stale_upstream,success,27.600,0.000,27.600,26.500,0.960,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:27,74d1d7a2,hazard_context,stale_upstream,success,34.300,0.000,34.300,32.300,0.942,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:27,74d1d7a2,siting_layers,stale_upstream,success,3.100,0.000,3.100,1.000,0.323,,always,negligible,measured,1d915a1
+PRT,2026-10-20 12:28,74d1d7a2,land_eligibility,stale_upstream,success,20.600,0.000,20.600,19.000,0.922,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:28,74d1d7a2,overview,stale_upstream,success,78.700,0.000,78.700,75.400,0.958,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:30,74d1d7a2,technical_potential,stale_upstream,success,15.400,0.000,15.400,14.400,0.935,,always,cpu,measured,1d915a1
+PRT,2026-10-20 12:30,74d1d7a2,potential_maps,stale_upstream,failed,2.000,0.000,2.000,,,,always,failed,measured,1d915a1
+IND,2026-10-20 12:31,74d1d7a2,data_acquisition,configuration it reads changed,success,2381.800,0.000,2381.800,1028.000,0.432,,always,mixed,measured,1d915a1
+IND,2026-10-20 13:11,74d1d7a2,data_quality_audit,stale_upstream,success,404.400,0.000,404.400,364.400,0.901,,warm,cpu,measured,1d915a1
+IND,2026-10-20 13:18,74d1d7a2,grid_alignment,stale_upstream,success,164.700,0.000,164.700,135.900,0.825,,cold,cpu,measured,1d915a1
+IND,2026-10-20 13:20,74d1d7a2,climate_forcing,stale_upstream,success,142.000,0.000,142.000,122.200,0.861,,always,cpu,measured,1d915a1
+IND,2026-10-20 13:23,74d1d7a2,climate_maps,stale_upstream,success,44.400,0.000,44.400,43.100,0.971,,always,cpu,measured,1d915a1
+IND,2026-10-20 13:23,74d1d7a2,hazard_context,stale_upstream,failed,1.000,0.000,1.000,,,,always,failed,measured,1d915a1
+IND,2026-10-20 13:23,74d1d7a2,siting_layers,stale_upstream,success,28.800,0.000,28.800,12.700,0.441,,always,mixed,measured,1d915a1
+IND,2026-10-20 13:24,74d1d7a2,land_eligibility,stale_upstream,success,296.500,0.000,296.500,198.100,0.668,,always,mixed,measured,1d915a1
+IND,2026-10-20 13:30,74d1d7a2,technical_potential,stale_upstream,success,248.300,0.000,248.300,232.800,0.938,,always,cpu,measured,1d915a1
+IND,2026-10-20 13:34,74d1d7a2,potential_maps,stale_upstream,failed,6.000,0.000,6.000,,,,always,failed,measured,1d915a1
+PRT,2026-10-20 13:53,74d1d7a2,potential_maps,failed,failed,5.000,0.000,5.000,,,,always,failed,measured,1d915a1
+IND,2026-10-20 13:56,74d1d7a2,potential_maps,failed,success,262.700,0.000,262.700,205.500,0.782,,always,cpu,measured,1d915a1
+BRA,2026-10-20 14:10,74d1d7a2,data_acquisition,code it runs changed,success,542.900,0.000,542.900,329.300,0.607,,always,mixed,measured,1d915a1
+PRT,2026-10-20 14:58,a63b8792,data_acquisition,code it runs changed,success,73.500,0.000,73.500,21.300,0.290,,always,io_or_wait,measured,9e591ae
+PRT,2026-10-20 14:59,a63b8792,grid_alignment,code it runs changed,success,14.200,0.000,14.200,9.900,0.697,,warm,mixed,measured,9e591ae
+PRT,2026-10-20 14:59,a63b8792,land_eligibility,code it runs changed,success,36.700,0.000,36.700,25.900,0.706,,always,mixed,measured,9e591ae
+PRT,2026-10-20 15:00,a63b8792,overview,stale_upstream,success,90.200,0.000,90.200,80.800,0.896,,always,cpu,measured,9e591ae
+PRT,2026-10-20 15:02,a63b8792,technical_potential,stale_upstream,success,15.900,0.000,15.900,14.600,0.918,,always,cpu,measured,9e591ae
+PRT,2026-10-20 15:02,a63b8792,potential_maps,stale_upstream,success,92.300,0.000,92.300,83.600,0.906,,always,cpu,measured,9e591ae
+IND,2026-10-20 15:04,a63b8792,data_acquisition,code it runs changed,success,541.600,0.000,541.600,437.200,0.807,,always,cpu,measured,9e591ae
+IND,2026-10-20 15:13,a63b8792,grid_alignment,code it runs changed,success,71.300,0.000,71.300,62.400,0.875,,warm,cpu,measured,9e591ae
+IND,2026-10-20 15:15,a63b8792,hazard_context,failed,failed,1.000,0.000,1.000,,,,always,failed,measured,9e591ae
+IND,2026-10-20 15:15,a63b8792,land_eligibility,code it runs changed,success,735.500,0.000,735.500,579.800,0.788,,always,cpu,measured,9e591ae
+IND,2026-10-20 15:28,a63b8792,technical_potential,stale_upstream,success,233.100,0.000,233.100,220.500,0.946,,always,cpu,measured,9e591ae
+IND,2026-10-20 15:32,a63b8792,potential_maps,stale_upstream,success,245.500,0.000,245.500,214.900,0.875,,always,cpu,measured,9e591ae
+BRA,2026-10-20 15:44,a63b8792,data_acquisition,code it runs changed,success,493.300,0.000,493.300,343.400,0.696,,always,mixed,measured,9e591ae
+BRA,2026-10-20 15:52,a63b8792,data_quality_audit,stale_upstream,success,618.200,0.000,618.200,403.800,0.653,,warm,mixed,measured,9e591ae
+BRA,2026-10-20 16:03,a63b8792,grid_alignment,stale_upstream,success,37.600,0.000,37.600,34.200,0.910,,warm,cpu,measured,9e591ae
+BRA,2026-10-20 16:03,a63b8792,climate_forcing,stale_upstream,success,204.800,0.000,204.800,163.700,0.799,,always,cpu,measured,9e591ae
+BRA,2026-10-20 16:07,a63b8792,climate_maps,stale_upstream,success,65.800,0.000,65.800,63.900,0.971,,always,cpu,measured,850361e
+BRA,2026-10-20 16:08,a63b8792,hazard_context,stale_upstream,success,219.000,0.000,219.000,164.300,0.750,,always,cpu,measured,850361e
+BRA,2026-10-20 16:11,a63b8792,siting_layers,stale_upstream,success,62.200,0.000,62.200,32.100,0.516,,always,mixed,measured,850361e
+BRA,2026-10-20 16:12,a63b8792,land_eligibility,stale_upstream,success,1632.300,0.000,1632.300,1443.100,0.884,,always,cpu,measured,850361e
+PRT,2026-10-20 16:23,d3070607,data_acquisition,code it runs changed,failed,51.000,0.000,51.000,,,,always,failed,measured,68123c3
+BRA,2026-10-20 16:40,a63b8792,overview,stale_upstream,success,230.400,0.000,230.400,212.400,0.922,,always,cpu,measured,68123c3
+BRA,2026-10-20 16:45,d0086ede,technical_potential,stale_upstream,success,788.800,0.000,788.800,654.200,0.829,,always,cpu,measured,68123c3
+BRA,2026-10-20 16:58,d0086ede,potential_maps,stale_upstream,success,241.100,0.000,241.100,229.700,0.953,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:26,d3070607,data_acquisition,failed,success,49.700,0.000,49.700,22.500,0.453,,always,mixed,measured,68123c3
+PRT,2026-10-20 17:27,d3070607,data_quality_audit,failed,success,55.100,0.000,55.100,44.500,0.808,,warm,cpu,measured,68123c3
+PRT,2026-10-20 17:28,d3070607,grid_alignment,failed,success,12.200,0.000,12.200,10.200,0.836,,warm,cpu,measured,68123c3
+PRT,2026-10-20 17:28,d3070607,climate_forcing,failed,success,123.200,0.000,123.200,95.700,0.777,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:30,d3070607,climate_maps,code it runs changed,success,31.800,0.000,31.800,26.300,0.827,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:31,d3070607,hazard_context,code it runs changed,success,34.800,0.000,34.800,31.600,0.908,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:31,d3070607,siting_layers,failed,success,3.000,0.000,3.000,1.100,0.367,,always,negligible,measured,68123c3
+PRT,2026-10-20 17:31,d3070607,land_eligibility,failed,success,23.000,0.000,23.000,18.200,0.791,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:32,d3070607,technical_potential,failed,success,14.900,0.000,14.900,14.000,0.940,,always,cpu,measured,68123c3
+PRT,2026-10-20 17:33,d3070607,potential_maps,failed,success,462.300,0.000,462.300,456.900,0.988,,always,cpu,measured,68123c3
+BRA,2026-10-20 17:41,d3070607,data_acquisition,code it runs changed,success,446.900,0.000,446.900,330.500,0.740,,always,mixed,measured,68123c3
+BRA,2026-10-20 17:49,d3070607,grid_alignment,code it runs changed,success,34.500,0.000,34.500,32.000,0.928,,warm,cpu,measured,68123c3
+BRA,2026-10-20 17:50,d3070607,climate_forcing,code it runs changed,success,185.600,0.000,185.600,160.300,0.864,,always,cpu,measured,68123c3
+BRA,2026-10-20 17:53,d3070607,climate_maps,code it runs changed,success,61.800,0.000,61.800,60.300,0.976,,always,cpu,measured,68123c3
+BRA,2026-10-20 17:54,d3070607,hazard_context,code it runs changed,success,192.900,0.000,192.900,160.800,0.834,,always,cpu,measured,68123c3
+BRA,2026-10-20 17:58,d3070607,technical_potential,code it runs changed,success,673.600,0.000,673.600,654.900,0.972,,always,cpu,measured,68123c3
+BRA,2026-10-20 18:09,d3070607,potential_maps,configuration it reads changed,success,1257.700,0.000,1257.700,1235.400,0.982,,always,cpu,measured,68123c3
+IND,2026-10-20 18:56,d3070607,data_acquisition,code it runs changed,success,567.300,0.000,567.300,446.800,0.788,,always,cpu,measured,68123c3
+IND,2026-10-20 19:05,d3070607,grid_alignment,code it runs changed,success,75.000,0.000,75.000,63.300,0.844,,warm,cpu,measured,68123c3
+IND,2026-10-20 19:07,d3070607,climate_forcing,code it runs changed,success,153.400,0.000,153.400,125.700,0.819,,always,cpu,measured,68123c3
+IND,2026-10-20 19:09,d3070607,climate_maps,code it runs changed,success,54.000,0.000,54.000,45.700,0.846,,always,cpu,measured,68123c3
+IND,2026-10-20 19:10,d3070607,hazard_context,failed,failed,1.000,0.000,1.000,,,,always,failed,measured,68123c3
+IND,2026-10-20 19:11,d3070607,technical_potential,code it runs changed,success,287.600,0.000,287.600,237.300,0.825,,always,cpu,measured,68123c3
+IND,2026-10-20 19:16,d3070607,potential_maps,configuration it reads changed,success,2633.600,0.000,2633.600,2448.200,0.930,,always,cpu,measured,68123c3
+PRT,2026-10-20 20:19,afd22bf9,technical_potential,code it runs changed,success,15.300,0.000,15.300,13.600,0.889,,always,cpu,measured,735188f
+PRT,2026-10-20 20:20,afd22bf9,potential_maps,code it runs changed,success,49.600,0.000,49.600,44.600,0.899,,always,cpu,measured,735188f
+BRA,2026-10-20 20:21,afd22bf9,technical_potential,code it runs changed,success,663.000,0.000,663.000,628.300,0.948,,always,cpu,measured,735188f
+BRA,2026-10-20 20:32,afd22bf9,potential_maps,code it runs changed,success,104.000,0.000,104.000,98.800,0.950,,always,cpu,measured,735188f
+IND,2026-10-20 20:34,afd22bf9,technical_potential,code it runs changed,success,222.500,0.000,222.500,216.000,0.971,,always,cpu,measured,735188f
+IND,2026-10-20 20:38,afd22bf9,potential_maps,code it runs changed,success,122.700,0.000,122.700,120.600,0.983,,always,cpu,measured,735188f
+PRT,2026-10-20 21:02,59ceaa92,technical_potential,code it runs changed,success,14.100,0.000,14.100,13.000,0.922,,always,cpu,measured,22f808a
+PRT,2026-10-20 21:02,59ceaa92,potential_maps,code it runs changed,success,47.500,0.000,47.500,44.100,0.928,,always,cpu,measured,22f808a
+BRA,2026-10-20 21:03,59ceaa92,technical_potential,code it runs changed,success,672.200,0.000,672.200,628.800,0.935,,always,cpu,measured,22f808a
+BRA,2026-10-20 21:14,59ceaa92,potential_maps,code it runs changed,success,104.200,0.000,104.200,98.600,0.946,,always,cpu,measured,22f808a
+IND,2026-10-20 21:17,59ceaa92,technical_potential,code it runs changed,success,221.200,0.000,221.200,215.100,0.972,,always,cpu,measured,22f808a
+IND,2026-10-20 21:20,59ceaa92,potential_maps,code it runs changed,success,123.000,0.000,123.000,120.500,0.980,,always,cpu,measured,22f808a
+PRT,2026-10-21 08:26,5c87d565,data_acquisition,code it runs changed,success,168.200,0.000,168.200,125.100,0.744,,always,mixed,measured,9a42375
+PRT,2026-10-21 08:29,5c87d565,data_quality_audit,configuration it reads changed,success,237.500,0.000,237.500,257.800,1.085,,warm,cpu,measured,9a42375
+PRT,2026-10-21 08:33,5c87d565,grid_alignment,code it runs changed,success,354.600,0.000,354.600,376.800,1.063,,cold,cpu,measured,9a42375
+PRT,2026-10-21 08:39,5c87d565,climate_forcing,stale_upstream,success,104.000,0.000,104.000,89.300,0.859,,always,cpu,measured,9a42375
+PRT,2026-10-21 08:41,5c87d565,climate_maps,stale_upstream,success,23.400,0.000,23.400,22.300,0.953,,always,cpu,measured,9a42375
+PRT,2026-10-21 08:41,5c87d565,hazard_context,stale_upstream,success,30.200,0.000,30.200,28.000,0.927,,always,cpu,measured,9a42375
+PRT,2026-10-21 08:41,5c87d565,siting_layers,stale_upstream,success,2.700,0.000,2.700,1.000,0.370,,always,negligible,measured,9a42375
+PRT,2026-10-21 08:42,5c87d565,land_eligibility,stale_upstream,success,45.700,0.000,45.700,34.200,0.748,,always,mixed,measured,9a42375
+PRT,2026-10-21 08:42,5c87d565,overview,stale_upstream,success,70.300,0.000,70.300,66.400,0.945,,always,cpu,measured,9a42375
+PRT,2026-10-21 08:44,5c87d565,technical_potential,stale_upstream,success,27.900,0.000,27.900,21.500,0.771,,always,cpu,measured,9a42375
+PRT,2026-10-21 08:45,5c87d565,potential_maps,stale_upstream,success,54.900,0.000,54.900,45.000,0.820,,always,cpu,measured,9a42375
+IND,2026-10-21 08:46,5c87d565,data_acquisition,code it runs changed,success,1003.700,0.000,1003.700,794.500,0.792,,always,cpu,measured,9a42375
+IND,2026-10-21 09:03,5c87d565,data_quality_audit,configuration it reads changed,success,4096.200,0.000,4096.200,7489.700,1.828,,warm,multithread,measured,822f89f
+IND,2026-10-21 10:11,5c87d565,grid_alignment,code it runs changed,success,9677.700,0.000,9677.700,12413.300,1.283,,cold,multithread,measured,822f89f
+IND,2026-10-21 12:52,5c87d565,climate_forcing,stale_upstream,success,139.600,0.000,139.600,112.100,0.803,,always,cpu,measured,822f89f
+IND,2026-10-21 12:55,5c87d565,climate_maps,stale_upstream,success,41.900,0.000,41.900,38.100,0.909,,always,cpu,measured,822f89f
+IND,2026-10-21 12:55,5c87d565,siting_layers,stale_upstream,success,23.600,0.000,23.600,13.400,0.568,,always,mixed,measured,822f89f
+IND,2026-10-21 12:56,5c87d565,land_eligibility,stale_upstream,success,3325.400,0.000,3325.400,5896.700,1.773,,always,multithread,measured,822f89f
+IND,2026-10-21 13:52,1ab203b9,technical_potential,stale_upstream,success,406.500,0.000,406.500,372.300,0.916,,always,cpu,measured,822f89f
+IND,2026-10-21 13:59,1ab203b9,potential_maps,stale_upstream,success,124.000,0.000,124.000,114.500,0.923,,always,cpu,measured,822f89f
+BRA,2026-10-21 14:02,1ab203b9,data_acquisition,code it runs changed,success,647.000,0.000,647.000,475.700,0.735,,always,mixed,measured,822f89f
+BRA,2026-10-21 21:03,1ab203b9,data_quality_audit,stale_upstream,success,3861.300,0.000,3861.300,3518.500,0.911,,warm,cpu,measured,822f89f
+BRA,2026-10-21 22:07,1ab203b9,grid_alignment,stale_upstream,success,42176.300,23469.000,18707.300,21047.900,0.499,,cold,suspended (sleep),measured,822f89f
+BRA,2026-10-22 09:50,1ab203b9,climate_forcing,stale_upstream,success,173.600,0.000,173.600,131.400,0.757,,always,cpu,measured,8fe3df9
+BRA,2026-10-22 09:53,1ab203b9,climate_maps,stale_upstream,success,57.700,0.000,57.700,55.100,0.955,,always,cpu,measured,8fe3df9
+BRA,2026-10-22 09:54,1ab203b9,hazard_context,stale_upstream,success,183.600,0.000,183.600,148.600,0.809,,always,cpu,measured,8fe3df9
+BRA,2026-10-22 09:57,1ab203b9,siting_layers,stale_upstream,success,58.200,0.000,58.200,30.200,0.519,,always,mixed,measured,8fe3df9
+BRA,2026-10-22 09:58,1ab203b9,land_eligibility,stale_upstream,success,4134.400,0.000,4134.400,5952.700,1.440,,always,multithread,measured,8fe3df9
+BRA,2026-10-22 11:07,1ab203b9,overview,stale_upstream,success,246.800,0.000,246.800,194.800,0.789,,always,cpu,measured,8fe3df9
+BRA,2026-10-22 11:12,1ab203b9,technical_potential,stale_upstream,success,1293.400,0.000,1293.400,1043.600,0.807,,always,cpu,measured,8fe3df9
+BRA,2026-10-22 11:34,1ab203b9,potential_maps,stale_upstream,success,146.500,0.000,146.500,101.200,0.691,,always,mixed,measured,8fe3df9
+IND,2026-10-23 15:56,14ccd642,hazard_context,failed,success,144.300,0.000,144.300,85.600,0.593,,always,mixed,measured,6b8940a
+IND,2026-10-23 15:58,14ccd642,overview,failed,success,208.800,0.000,208.800,153.700,0.736,,always,mixed,measured,6b8940a
+IND,2026-10-25 08:10,93b0762d,hazard_context,named in rerun_phases,success,125.600,0.000,125.600,101.900,0.811,,always,cpu,measured,7fb10a1
+IND,2026-10-25 08:12,93b0762d,overview,named in rerun_phases,success,228.400,0.000,228.400,205.300,0.899,,always,cpu,measured,7fb10a1
+PRT,2026-10-26 16:21,ac373884,climate_forcing,code it runs changed,success,106.200,0.000,106.200,96.400,0.908,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 16:23,ac373884,hazard_context,code it runs changed,success,32.800,0.000,32.800,29.500,0.899,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 16:23,ac373884,land_eligibility,code it runs changed,success,22.700,0.000,22.700,17.000,0.749,,always,mixed,measured,ae9ac10
+PRT,2026-10-26 16:24,ac373884,overview,code it runs changed,success,78.900,0.000,78.900,74.900,0.949,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 16:25,ac373884,technical_potential,code it runs changed,success,15.900,0.000,15.900,13.400,0.843,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 16:26,ac373884,climate_maps,code it runs changed,success,290.600,0.000,290.600,285.700,0.983,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 16:31,ac373884,potential_maps,configuration it reads changed,success,59.800,0.000,59.800,56.700,0.948,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:32,ac373884,climate_forcing,code it runs changed,success,125.500,0.000,125.500,117.600,0.937,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:34,ac373884,climate_maps,code it runs changed,success,678.500,0.000,678.500,669.100,0.986,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:46,ac373884,hazard_context,code it runs changed,success,98.100,0.000,98.100,84.600,0.862,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:47,ac373884,land_eligibility,code it runs changed,success,221.400,0.000,221.400,208.700,0.943,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:51,ac373884,overview,code it runs changed,success,108.000,0.000,108.000,101.900,0.944,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:53,ac373884,technical_potential,code it runs changed,success,230.800,0.000,230.800,225.800,0.978,,always,cpu,measured,ae9ac10
+IND,2026-10-26 16:57,ac373884,potential_maps,configuration it reads changed,success,149.100,0.000,149.100,147.400,0.989,,always,cpu,measured,ae9ac10
+BRA,2026-10-26 17:00,ac373884,climate_forcing,code it runs changed,success,189.600,0.000,189.600,151.400,0.799,,always,cpu,measured,ae9ac10
+BRA,2026-10-26 17:03,ac373884,climate_maps,code it runs changed,success,614.400,0.000,614.400,496.300,0.808,,always,cpu,measured,ae9ac10
+BRA,2026-10-26 17:13,ac373884,hazard_context,code it runs changed,success,230.800,0.000,230.800,145.400,0.630,,always,mixed,measured,ae9ac10
+BRA,2026-10-26 17:17,ac373884,land_eligibility,code it runs changed,success,865.900,0.000,865.900,564.000,0.651,,always,mixed,measured,ae9ac10
+BRA,2026-10-26 17:31,ac373884,overview,code it runs changed,success,105.700,0.000,105.700,81.800,0.774,,always,cpu,measured,ae9ac10
+BRA,2026-10-26 17:33,ac373884,technical_potential,code it runs changed,success,682.800,0.000,682.800,630.000,0.923,,always,cpu,measured,ae9ac10
+BRA,2026-10-26 17:44,ac373884,potential_maps,configuration it reads changed,success,124.600,0.000,124.600,110.300,0.885,,always,cpu,measured,ae9ac10
+PRT,2026-10-26 20:43,9f44af7f,climate_forcing,code it runs changed,success,105.800,0.000,105.800,93.900,0.888,,always,cpu,measured,8ca7347
+PRT,2026-10-26 20:45,9f44af7f,land_eligibility,code it runs changed,success,19.900,0.000,19.900,17.600,0.884,,always,cpu,measured,8ca7347
+PRT,2026-10-26 20:45,9f44af7f,technical_potential,code it runs changed,success,14.300,0.000,14.300,13.500,0.944,,always,cpu,measured,8ca7347
+PRT,2026-10-26 20:45,9f44af7f,potential_maps,code it runs changed,success,88.300,0.000,88.300,86.500,0.980,,always,cpu,measured,8ca7347
+IND,2026-10-26 20:49,9f44af7f,climate_forcing,code it runs changed,success,127.800,0.000,127.800,114.800,0.898,,always,cpu,measured,8ca7347
+IND,2026-10-26 20:51,9f44af7f,land_eligibility,code it runs changed,success,213.400,0.000,213.400,201.800,0.946,,always,cpu,measured,8ca7347
+IND,2026-10-26 20:54,9f44af7f,technical_potential,code it runs changed,success,233.900,0.000,233.900,220.600,0.943,,always,cpu,measured,8ca7347
+IND,2026-10-26 20:58,9f44af7f,potential_maps,code it runs changed,success,264.900,0.000,264.900,254.900,0.962,,always,cpu,measured,8ca7347
+BRA,2026-10-26 21:05,9f44af7f,climate_forcing,code it runs changed,success,181.400,0.000,181.400,154.400,0.851,,always,cpu,measured,8ca7347
+BRA,2026-10-26 21:08,9f44af7f,land_eligibility,code it runs changed,success,632.200,0.000,632.200,568.900,0.900,,always,cpu,measured,8ca7347
+BRA,2026-10-26 21:18,9f44af7f,technical_potential,code it runs changed,success,669.300,0.000,669.300,640.300,0.957,,always,cpu,measured,8ca7347
+BRA,2026-10-26 21:29,9f44af7f,potential_maps,code it runs changed,success,313.300,0.000,313.300,283.500,0.905,,always,cpu,measured,8ca7347
+PRT,2026-10-27 08:03,30b4eb4c,technical_potential,code it runs changed,success,14.200,0.000,14.200,12.600,0.887,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 08:04,30b4eb4c,potential_maps,stale_upstream,failed,1.000,0.000,1.000,,,,always,failed,measured,aedd9e3
+PRT,2026-10-27 08:04,30b4eb4c,technical_potential,code it runs changed,success,13.000,0.000,13.000,12.700,0.977,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 08:04,30b4eb4c,potential_maps,failed,success,95.500,0.000,95.500,89.300,0.935,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 08:08,30b4eb4c,potential_maps,named in rerun_phases,success,93.600,0.000,93.600,87.700,0.937,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 08:12,30b4eb4c,technical_potential,code it runs changed,success,13.600,0.000,13.600,12.900,0.949,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 08:12,30b4eb4c,potential_maps,named in rerun_phases,success,91.900,0.000,91.900,87.900,0.956,,always,cpu,measured,aedd9e3
+PRT,2026-10-27 13:49,449fc6e8,data_acquisition,code it runs changed,success,52.200,0.000,52.200,20.000,0.383,323,always,mixed,measured,abe5868
+PRT,2026-10-27 13:50,449fc6e8,data_quality_audit,code it runs changed,success,158.000,0.000,158.000,137.100,0.868,1005,warm,cpu,measured,abe5868
+PRT,2026-10-27 13:53,449fc6e8,climate_forcing,stale_upstream,success,97.000,0.000,97.000,89.700,0.925,352,always,cpu,measured,abe5868
+PRT,2026-10-27 13:55,449fc6e8,climate_maps,stale_upstream,success,88.700,0.000,88.700,86.000,0.970,696,always,cpu,measured,abe5868
+PRT,2026-10-27 13:56,449fc6e8,hazard_context,stale_upstream,success,32.700,0.000,32.700,28.600,0.875,893,always,cpu,measured,abe5868
+PRT,2026-10-27 13:57,449fc6e8,siting_layers,stale_upstream,success,3.100,0.000,3.100,1.100,0.355,537,always,negligible,measured,abe5868
+PRT,2026-10-27 13:57,449fc6e8,land_eligibility,stale_upstream,success,19.800,0.000,19.800,17.300,0.874,619,always,cpu,measured,abe5868
+PRT,2026-10-27 13:57,449fc6e8,overview,stale_upstream,success,33.100,0.000,33.100,30.800,0.931,733,always,cpu,measured,abe5868
+PRT,2026-10-27 13:59,449fc6e8,technical_potential,stale_upstream,success,14.600,0.000,14.600,13.500,0.925,327,always,cpu,measured,abe5868
+PRT,2026-10-27 13:59,449fc6e8,potential_maps,stale_upstream,success,8.800,0.000,8.800,7.800,0.886,685,always,cpu,measured,abe5868
+PRT,2026-10-27 14:00,449fc6e8,technical_potential,named in rerun_phases,success,13.700,0.000,13.700,13.400,0.978,327,always,cpu,measured,abe5868
+IND,2026-10-27 14:01,449fc6e8,data_acquisition,code it runs changed,success,535.000,0.000,535.000,414.700,0.775,907,always,cpu,measured,abe5868
+IND,2026-10-27 14:10,449fc6e8,data_quality_audit,code it runs changed,success,576.800,0.000,576.800,445.400,0.772,2792,warm,cpu,measured,abe5868
+IND,2026-10-27 14:20,449fc6e8,climate_forcing,stale_upstream,success,135.200,0.000,135.200,110.900,0.820,1815,always,cpu,measured,abe5868
+IND,2026-10-27 14:22,449fc6e8,climate_maps,stale_upstream,success,262.300,0.000,262.300,256.500,0.978,1590,always,cpu,measured,abe5868
+IND,2026-10-27 14:26,449fc6e8,hazard_context,stale_upstream,success,101.000,0.000,101.000,82.700,0.819,2051,always,cpu,measured,abe5868
+IND,2026-10-27 14:28,449fc6e8,siting_layers,stale_upstream,success,25.500,0.000,25.500,14.600,0.573,316,always,mixed,measured,abe5868
+IND,2026-10-27 14:28,449fc6e8,land_eligibility,stale_upstream,success,249.000,0.000,249.000,208.900,0.839,2565,always,cpu,measured,abe5868
+IND,2026-10-27 14:33,449fc6e8,overview,stale_upstream,success,74.600,0.000,74.600,66.300,0.889,1912,always,cpu,measured,abe5868
+IND,2026-10-27 14:35,449fc6e8,technical_potential,stale_upstream,success,234.500,0.000,234.500,225.200,0.960,1230,always,cpu,measured,abe5868
+IND,2026-10-27 14:39,449fc6e8,potential_maps,stale_upstream,success,40.800,0.000,40.800,36.900,0.904,1096,always,cpu,measured,abe5868
+BRA,2026-10-27 14:40,449fc6e8,data_acquisition,code it runs changed,success,437.200,0.000,437.200,323.800,0.741,831,always,mixed,measured,abe5868
+PRT,2026-10-27 15:25,fed6c904,data_quality_audit,code it runs changed,success,142.000,0.000,142.000,132.500,0.933,1010,warm,cpu,measured,9466057
+IND,2026-10-27 15:28,fed6c904,data_quality_audit,code it runs changed,success,468.000,0.000,468.000,433.300,0.926,3002,warm,cpu,measured,9466057
+BRA,2026-10-27 15:37,fed6c904,data_quality_audit,stale_upstream,success,3880.800,0.000,3880.800,3607.800,0.930,4027,warm,cpu,measured,9466057
+BRA,2026-10-27 16:42,fed6c904,grid_alignment,stale_upstream,success,39.100,0.000,39.100,29.600,0.757,221,warm,cpu,measured,9466057
+BRA,2026-10-27 16:42,fed6c904,climate_forcing,stale_upstream,success,182.700,0.000,182.700,144.100,0.789,2798,always,cpu,measured,9466057
+BRA,2026-10-27 16:45,fed6c904,climate_maps,stale_upstream,success,185.500,0.000,185.500,169.500,0.914,2322,always,cpu,measured,9466057
+BRA,2026-10-27 16:48,fed6c904,hazard_context,stale_upstream,success,215.000,0.000,215.000,149.200,0.694,3182,always,mixed,measured,9466057
+BRA,2026-10-27 16:52,fed6c904,siting_layers,stale_upstream,success,56.100,0.000,56.100,29.100,0.519,432,always,mixed,measured,9466057
+BRA,2026-10-27 16:53,fed6c904,land_eligibility,stale_upstream,success,623.600,0.000,623.600,535.800,0.859,3693,always,cpu,measured,9466057
+BRA,2026-10-27 17:03,fed6c904,overview,stale_upstream,success,60.600,0.000,60.600,54.300,0.896,3332,always,cpu,measured,9466057
+BRA,2026-10-27 17:06,fed6c904,technical_potential,stale_upstream,success,621.800,0.000,621.800,596.500,0.959,2269,always,cpu,measured,9466057
+BRA,2026-10-27 17:16,fed6c904,potential_maps,stale_upstream,success,73.300,0.000,73.300,70.500,0.962,1613,always,cpu,measured,9466057
+IND,2026-10-27 17:19,fed6c904,external_inputs,named in rerun_phases,success,0.400,0.000,0.400,0.100,0.250,252,always,negligible,measured,9466057
+IND,2026-10-27 17:19,fed6c904,grid_alignment,named in rerun_phases,success,62.400,0.000,62.400,57.700,0.925,408,warm,cpu,measured,9466057
+PRT,2026-10-27 17:19,fed6c904,external_inputs,named in rerun_phases,success,1.000,0.000,1.000,0.100,0.100,251,always,negligible,measured,9466057
+PRT,2026-10-27 17:19,fed6c904,grid_alignment,named in rerun_phases,success,11.800,0.000,11.800,9.700,0.822,288,warm,cpu,measured,9466057
+BRA,2026-10-27 17:20,fed6c904,external_inputs,named in rerun_phases,success,0.200,0.000,0.200,0.100,0.500,253,always,negligible,measured,9466057
+PRT,2026-10-27 18:42,40dad437,climate_forcing,code it runs changed,success,102.200,0.000,102.200,91.500,0.895,327,always,cpu,measured,14afc3a
+PRT,2026-10-27 18:43,40dad437,land_eligibility,code it runs changed,success,24.500,0.000,24.500,17.700,0.722,392,always,mixed,measured,14afc3a
+PRT,2026-10-27 18:44,40dad437,technical_potential,code it runs changed,success,209.800,0.000,209.800,187.800,0.895,411,always,cpu,measured,14afc3a
+PRT,2026-10-27 18:47,40dad437,potential_maps,stale_upstream,success,11.900,0.000,11.900,8.300,0.697,737,always,mixed,measured,14afc3a
+IND,2026-10-27 18:55,40dad437,climate_forcing,code it runs changed,success,140.100,0.000,140.100,108.300,0.773,1439,always,cpu,measured,14afc3a
+IND,2026-10-27 18:57,40dad437,land_eligibility,code it runs changed,success,243.400,0.000,243.400,201.600,0.828,2893,always,cpu,measured,14afc3a
+IND,2026-10-27 19:01,40dad437,technical_potential,code it runs changed,success,2444.800,0.000,2444.800,2383.500,0.975,985,always,cpu,measured,14afc3a
+IND,2026-10-27 19:42,40dad437,potential_maps,stale_upstream,success,37.600,0.000,37.600,30.100,0.801,794,always,cpu,measured,14afc3a
+BRA,2026-10-27 20:23,c7f003bb,climate_forcing,code it runs changed,success,170.900,0.000,170.900,140.100,0.820,2668,always,cpu,measured,14afc3a
+BRA,2026-10-27 20:26,c7f003bb,land_eligibility,code it runs changed,success,608.500,0.000,608.500,532.900,0.876,4860,always,cpu,measured,14afc3a
+BRA,2026-10-27 20:36,c7f003bb,technical_potential,code it runs changed,success,45516.300,34795.000,10721.300,10442.500,0.229,2208,always,suspended (sleep),measured,14afc3a
+BRA,2026-10-28 09:15,c7f003bb,potential_maps,stale_upstream,success,104.800,0.000,104.800,76.400,0.729,1423,always,mixed,measured,14afc3a
+PRT,2026-10-28 12:35,acf08947,potential_maps,configuration it reads changed,failed,4.000,0.000,4.000,,,,always,failed,measured,14afc3a
+PRT,2026-10-28 14:58,583fbdd3,data_acquisition,code it runs changed,success,158.300,0.000,158.300,124.400,0.786,338,always,cpu,measured,cbb4850
+PRT,2026-10-28 15:01,583fbdd3,grid_alignment,named in rerun_phases,success,294.400,0.000,294.400,255.600,0.868,1933,cold,cpu,measured,cbb4850
+PRT,2026-10-28 15:10,bf2d90d0,grid_alignment,named in rerun_phases,success,206.900,0.000,206.900,179.400,0.867,2292,cold,cpu,measured,bcf893f
+PRT,2026-10-28 15:19,26b8b7e6,data_quality_audit,named in rerun_phases,success,57.800,0.000,57.800,50.000,0.865,781,warm,cpu,measured,a5ff6ce
+PRT,2026-10-28 15:25,760a9d8d,data_quality_audit,named in rerun_phases,success,58.000,0.000,58.000,51.100,0.881,782,warm,cpu,measured,79b7082
+IND,2026-10-28 15:26,760a9d8d,data_acquisition,code it runs changed,success,1185.400,0.000,1185.400,1087.500,0.917,1152,always,cpu,measured,79b7082
+IND,2026-10-28 15:46,760a9d8d,data_quality_audit,named in rerun_phases,success,443.700,0.000,443.700,402.300,0.907,2891,warm,cpu,measured,79b7082
+IND,2026-10-28 15:55,760a9d8d,data_quality_audit,named in rerun_phases,success,489.600,0.000,489.600,428.500,0.875,2932,warm,cpu,measured,79b7082
+IND,2026-10-28 16:04,760a9d8d,data_quality_audit,named in rerun_phases,success,473.100,0.000,473.100,423.400,0.895,1603,warm,cpu,measured,79b7082
+PRT,2026-10-28 16:14,0bc49acd,data_quality_audit,named in rerun_phases,success,60.700,0.000,60.700,53.200,0.876,783,warm,cpu,measured,df8af08
+PRT,2026-10-28 16:15,0bc49acd,data_quality_audit,named in rerun_phases,success,41.600,0.000,41.600,41.200,0.990,536,warm,cpu,measured,df8af08
+BRA,2026-10-28 16:27,703c7a45,data_acquisition,code it runs changed,success,418.800,0.000,418.800,309.800,0.740,829,always,mixed,measured,ef36d99
+BRA,2026-10-28 16:34,703c7a45,grid_alignment,code it runs changed,success,33.700,0.000,33.700,30.200,0.896,436,warm,cpu,measured,ef36d99
+BRA,2026-10-28 16:35,703c7a45,data_quality_audit,code it runs changed,success,427.300,0.000,427.300,332.300,0.778,1809,warm,cpu,measured,ef36d99
+BRA,2026-10-28 16:42,703c7a45,siting_layers,stale_upstream,success,57.300,0.000,57.300,29.100,0.508,522,always,mixed,measured,ef36d99
+BRA,2026-10-28 16:43,703c7a45,land_eligibility,named in rerun_phases,success,718.300,0.000,718.300,585.400,0.815,3630,always,cpu,measured,ef36d99
+BRA,2026-10-28 16:57,703c7a45,land_eligibility,named in rerun_phases,success,710.000,0.000,710.000,612.100,0.862,3833,always,cpu,measured,ef36d99
+BRA,2026-10-28 17:16,8886a4e1,land_eligibility,named in rerun_phases,success,583.000,0.000,583.000,541.800,0.929,3272,always,cpu,measured,43b2418
+BRA,2026-10-28 17:28,7eb0ea9f,land_eligibility,named in rerun_phases,success,579.000,0.000,579.000,537.300,0.928,3315,always,cpu,measured,e2f75c9
+BRA,2026-10-28 17:42,9d43f3db,land_eligibility,named in rerun_phases,success,584.200,0.000,584.200,537.100,0.919,3122,always,cpu,measured,2941162
+BRA,2026-10-28 17:54,ab0fc717,land_eligibility,named in rerun_phases,success,603.600,0.000,603.600,543.400,0.900,2994,always,cpu,measured,1b0de8b
+BRA,2026-10-28 18:05,ab0fc717,climate_forcing,stale_upstream,success,171.000,0.000,171.000,141.900,0.830,3006,always,cpu,measured,1b0de8b
+BRA,2026-10-28 18:08,ab0fc717,hazard_context,named in rerun_phases,success,180.200,0.000,180.200,144.800,0.804,2867,always,cpu,measured,1b0de8b
+BRA,2026-10-28 18:14,56196aae,climate_forcing,code it runs changed,success,169.800,0.000,169.800,138.700,0.817,3290,always,cpu,measured,831fecb
+BRA,2026-10-28 18:17,56196aae,hazard_context,named in rerun_phases,success,297.000,0.000,297.000,277.500,0.934,785,always,cpu,measured,831fecb
+BRA,2026-10-28 18:24,4e29eab2,climate_forcing,code it runs changed,success,167.700,0.000,167.700,140.200,0.836,3389,always,cpu,measured,1f4a8dc
+BRA,2026-10-28 18:27,4e29eab2,hazard_context,named in rerun_phases,success,174.900,0.000,174.900,146.900,0.840,1721,always,cpu,measured,1f4a8dc
+BRA,2026-10-28 18:31,4e29eab2,climate_forcing,named in rerun_phases,success,178.700,0.000,178.700,141.600,0.792,3155,always,cpu,measured,1f4a8dc
+BRA,2026-10-28 18:38,af7090c2,climate_forcing,named in rerun_phases,success,128.400,0.000,128.400,116.500,0.907,713,always,cpu,measured,64f1503
+BRA,2026-10-28 18:41,8f3ad702,hazard_context,code it runs changed,success,168.200,0.000,168.200,145.300,0.864,1799,always,cpu,measured,ce7eed6
+BRA,2026-10-28 18:44,8f3ad702,overview,named in rerun_phases,success,93.400,0.000,93.400,85.000,0.910,1616,always,cpu,measured,ce7eed6
+PRT,2026-10-28 19:42,4464ae59,data_acquisition,named in rerun_phases,success,16.300,0.000,16.300,14.200,0.871,320,always,cpu,measured,428adec
+PRT,2026-10-28 19:43,4464ae59,data_quality_audit,named in rerun_phases,success,203.500,0.000,203.500,253.300,1.245,1037,warm,cpu,measured,428adec
+PRT,2026-10-28 19:46,4464ae59,external_inputs,named in rerun_phases,success,0.500,0.000,0.500,0.100,0.200,340,always,negligible,measured,428adec
+PRT,2026-10-28 19:46,4464ae59,grid_alignment,named in rerun_phases,success,276.200,0.000,276.200,305.700,1.107,2091,cold,cpu,measured,428adec
+PRT,2026-10-28 19:51,4464ae59,climate_forcing,named in rerun_phases,success,92.500,0.000,92.500,86.700,0.937,365,always,cpu,measured,428adec
+PRT,2026-10-28 19:52,4464ae59,climate_maps,named in rerun_phases,success,83.100,0.000,83.100,79.600,0.958,701,always,cpu,measured,428adec
+PRT,2026-10-28 19:54,4464ae59,hazard_context,named in rerun_phases,success,29.800,0.000,29.800,27.600,0.926,921,always,cpu,measured,428adec
+PRT,2026-10-28 19:54,4464ae59,siting_layers,named in rerun_phases,success,2.600,0.000,2.600,1.200,0.462,570,always,negligible,measured,428adec
+PRT,2026-10-28 19:54,4464ae59,land_eligibility,named in rerun_phases,success,39.000,0.000,39.000,34.300,0.879,688,always,cpu,measured,428adec
+PRT,2026-10-28 19:55,4464ae59,overview,named in rerun_phases,success,30.700,0.000,30.700,28.500,0.928,923,always,cpu,measured,428adec
+PRT,2026-10-28 19:55,4464ae59,technical_potential,named in rerun_phases,success,13.700,0.000,13.700,11.700,0.854,608,always,cpu,measured,428adec
+PRT,2026-10-28 19:56,4464ae59,potential_maps,named in rerun_phases,success,11.400,0.000,11.400,10.400,0.912,786,always,cpu,measured,428adec
+PRT,2026-10-28 19:56,4464ae59,data_acquisition,named in rerun_phases,success,16.000,0.000,16.000,14.500,0.906,321,always,cpu,measured,428adec
+PRT,2026-10-28 19:57,4464ae59,data_quality_audit,named in rerun_phases,success,45.600,0.000,45.600,39.200,0.860,547,warm,cpu,measured,428adec
+PRT,2026-10-28 19:58,4464ae59,external_inputs,named in rerun_phases,success,0.200,0.000,0.200,0.100,0.500,300,always,negligible,measured,428adec
+PRT,2026-10-28 19:58,4464ae59,grid_alignment,named in rerun_phases,success,9.600,0.000,9.600,9.000,0.938,332,warm,cpu,measured,428adec
+PRT,2026-10-28 19:58,4464ae59,climate_forcing,named in rerun_phases,success,90.300,0.000,90.300,86.000,0.952,324,always,cpu,measured,428adec
+PRT,2026-10-28 19:59,4464ae59,climate_maps,named in rerun_phases,success,81.000,0.000,81.000,78.800,0.973,682,always,cpu,measured,428adec
+PRT,2026-10-28 20:01,4464ae59,hazard_context,named in rerun_phases,success,29.200,0.000,29.200,27.800,0.952,928,always,cpu,measured,428adec
+PRT,2026-10-28 20:01,4464ae59,siting_layers,named in rerun_phases,success,2.900,0.000,2.900,1.000,0.345,533,always,negligible,measured,428adec
+PRT,2026-10-28 20:01,4464ae59,land_eligibility,named in rerun_phases,success,19.000,0.000,19.000,16.500,0.868,571,always,cpu,measured,428adec
+PRT,2026-10-28 20:01,4464ae59,overview,named in rerun_phases,success,29.200,0.000,29.200,27.700,0.949,735,always,cpu,measured,428adec
+PRT,2026-10-28 20:02,4464ae59,technical_potential,named in rerun_phases,success,4.200,0.000,4.200,3.700,0.881,659,always,negligible,measured,428adec
+PRT,2026-10-28 20:02,4464ae59,potential_maps,named in rerun_phases,success,10.600,0.000,10.600,10.100,0.953,697,always,cpu,measured,428adec
+IND,2026-10-28 20:03,4464ae59,data_acquisition,named in rerun_phases,success,1067.200,0.000,1067.200,1010.400,0.947,1013,always,cpu,measured,428adec
+IND,2026-10-28 20:44,4464ae59,data_acquisition,named in rerun_phases,success,394.200,0.000,394.200,380.100,0.964,1006,always,cpu,measured,428adec
+IND,2026-10-28 21:13,4464ae59,data_quality_audit,named in rerun_phases,success,3511.400,0.000,3511.400,8194.300,2.334,1359,warm,multithread,measured,428adec
+IND,2026-10-28 22:12,4464ae59,external_inputs,named in rerun_phases,success,0.700,0.000,0.700,0.100,0.143,253,always,negligible,measured,428adec
+IND,2026-10-28 22:12,4464ae59,grid_alignment,named in rerun_phases,success,31913.400,25035.000,6878.400,9966.600,0.312,3889,cold,suspended (sleep),measured,428adec
+IND,2026-10-29 07:04,4464ae59,climate_forcing,named in rerun_phases,success,117.600,0.000,117.600,99.400,0.845,705,always,cpu,measured,428adec
+IND,2026-10-29 07:06,4464ae59,climate_maps,named in rerun_phases,success,264.800,0.000,264.800,247.800,0.936,1339,always,cpu,measured,428adec
+IND,2026-10-29 07:11,4464ae59,hazard_context,named in rerun_phases,success,99.900,0.000,99.900,83.500,0.836,1535,always,cpu,measured,428adec
+IND,2026-10-29 07:12,4464ae59,siting_layers,named in rerun_phases,success,27.200,0.000,27.200,13.900,0.511,634,always,mixed,measured,428adec

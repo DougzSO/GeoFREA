@@ -705,3 +705,54 @@ def test_glo30_outputs_that_are_not_asked_for_are_not_written(tmp_path):
     assert out["slope_counts"] is not None and out["elevation"] is None and out["slope"] is None
     assert [p.name for p in tmp_path.glob("*.tif") if "only" in p.name] == ["only_counts.tif"]
     assert glo30_aligned_outputs([tile], grid, samples_per_degree=sp) == {"elevation": None, "slope": None, "slope_counts": None}
+
+
+@pytest.mark.unit
+def test_kept_open_glo30_tiles_give_the_same_samples_and_open_each_file_once(tmp_path, monkeypatch):
+    """COMMAND 77, item 8: the strip loop keeps the tiles open; the samples read are the same, the opens fewer."""
+    from geofrea.grid_alignment import raster_alignment as ra
+
+    grid, sp = _grid(), 400
+    rng = np.random.default_rng(77)
+    z = np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=1)
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+    index = ra._glo30_tile_index([tile])
+
+    opened = []
+    real_open = rasterio.open
+    monkeypatch.setattr(ra.rasterio, "open", lambda p, *a, **k: opened.append(Path(p).name) or real_open(p, *a, **k))
+    rows = range(0, grid.height, ra._SLOPE_STRIP_GRID_ROWS)
+    plain = [ra._glo30_strip_samples(index, grid, r, min(r + ra._SLOPE_STRIP_GRID_ROWS, grid.height), sp) for r in rows]
+    plain_opens = len(opened)
+    opened.clear()
+    handles = ra._TileHandles()
+    try:
+        kept = [ra._glo30_strip_samples(index, grid, r, min(r + ra._SLOPE_STRIP_GRID_ROWS, grid.height), sp, handles) for r in rows]
+    finally:
+        handles.close()
+    assert len(opened) == 1 < plain_opens
+    for a, b in zip(plain, kept, strict=True):
+        assert (a is None) == (b is None)
+        if a is not None:
+            for x, y in zip(a, b, strict=True):
+                np.testing.assert_array_equal(x, y)
+
+
+@pytest.mark.unit
+def test_tile_handles_never_hold_more_than_the_limit_and_close_the_oldest(tmp_path):
+    from geofrea.grid_alignment import raster_alignment as ra
+
+    paths = []
+    for i in range(4):
+        path = tmp_path / f"t{i}.tif"
+        _glo30_tile(path, 8, np.zeros((8, 8)))
+        paths.append(path)
+    handles = ra._TileHandles(limit=2)
+    first = handles.get(paths[0])
+    handles.get(paths[1])
+    handles.get(paths[2])  # the first is closed to stay at two
+    assert first.closed and len(handles._open) == 2
+    assert handles.get(paths[2]) is handles.get(paths[2])
+    handles.close()
+    assert not handles._open
