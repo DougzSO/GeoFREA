@@ -448,6 +448,125 @@ def _glo30_strip_samples(
     return z[1:-1, 1:-1][ix], slope[ix], grow[keep_r], gcol[keep_c]
 
 
+def glo30_aligned_outputs(
+    dem_tiles: list,
+    grid: GridContext,
+    *,
+    elevation_out=None,
+    slope_out=None,
+    counts_out=None,
+    samples_per_degree: int | None = None,
+    nodata_out: float = NODATA_FLOAT,
+) -> dict[str, Path | None]:
+    """The aligned elevation, the aligned slope and the slope bins of the grid from ONE pass over the Copernicus GLO-30 tiles (COMMAND 75).
+
+    `elevation_and_slope_from_glo30` and `slope_class_counts` each walked the strips of the grid, read the same tiles and computed the same
+    slope; the strip is now read and differentiated once and feeds the means (elevation, slope) and the 1 degree bins. Every output is what
+    the two functions wrote before (the same samples, the same pixel rule, the same order of summation): byte-identical rasters. An output
+    whose path is None is not computed or written.
+
+    Returns a dict with the keys `elevation`, `slope` and `slope_counts`: the written path, or None when it was not asked for or no valid
+    sample exists for it (elevation and slope: no valid elevation sample; counts: no valid slope sample).
+
+    Implements: M-F2a-07, M-F2a-08.
+    """
+    index = _glo30_tile_index(dem_tiles)
+    sp = (
+        samples_per_degree or _GLO30_SAMPLES_PER_DEGREE
+    )  # a tile has this many samples per side (tests use smaller synthetic tiles)
+    shape = (grid.height, grid.width)
+    want_means = elevation_out is not None or slope_out is not None
+    want_counts = counts_out is not None
+    if not (want_means or want_counts):
+        return {"elevation": None, "slope": None, "slope_counts": None}
+    sums = {k: np.zeros(shape) for k in ("z", "slope")} if want_means else {}
+    n = {k: np.zeros(shape, dtype=np.int64) for k in ("z", "slope")} if want_means else {}
+    counts = np.zeros((SLOPE_BINS, grid.height, grid.width), dtype=np.uint16) if want_counts else None
+    progress = PeriodicProgress(
+        logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "elevation, slope and slope bins from GLO-30"
+    )
+    for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
+        progress.step()
+        r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
+        strip = _glo30_strip_samples(index, grid, r0, r1, sp)
+        if strip is None:
+            continue
+        z, slope, grow, gcol = strip
+        if want_means:
+            pixel = grow[:, None] * grid.width + gcol[None, :]
+            for name, values in (("z", z), ("slope", slope)):
+                ok = np.isfinite(values)
+                if not ok.any():
+                    continue
+                size = (r1 - r0) * grid.width
+                total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
+                count = np.bincount(pixel[ok], minlength=size)
+                sums[name][r0:r1] = total.reshape(r1 - r0, grid.width)
+                n[name][r0:r1] = count.reshape(r1 - r0, grid.width)
+        if want_counts:
+            valid = np.isfinite(slope)
+            if not valid.any():
+                continue
+            bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
+            key = (grow[:, None] * grid.width + gcol[None, :]) * SLOPE_BINS + bins
+            flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
+            counts[:, r0:r1, :] = (
+                flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+            )
+    written: dict[str, Path | None] = {"elevation": None, "slope": None, "slope_counts": None}
+    if want_means and n["z"].any():
+        profile = {
+            "driver": "GTiff",
+            "dtype": "float32",
+            "width": grid.width,
+            "height": grid.height,
+            "count": 1,
+            "crs": grid.crs,
+            "transform": grid.transform,
+            "nodata": nodata_out,
+            "compress": "lzw",
+            "tiled": True,
+            "blockxsize": 256,
+            "blockysize": 256,
+        }
+        for name, key_name, out in (("z", "elevation", elevation_out), ("slope", "slope", slope_out)):
+            if out is None:
+                continue
+            data = np.full(shape, nodata_out, dtype=np.float32)
+            has = n[name] > 0
+            data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
+            data[~grid.country_mask] = nodata_out
+            with safe_raster_write(out, **profile) as dst:
+                dst.write(data, 1)
+                dst.update_tags(
+                    source="Copernicus GLO-30, mean of the 30 m samples per pixel",
+                    samples_per_degree=str(sp),
+                )
+            written[key_name] = Path(out)
+    if want_counts and counts.any():
+        counts[:, ~grid.country_mask] = SLOPE_COUNT_NODATA
+        profile = {
+            "driver": "GTiff",
+            "dtype": "uint16",
+            "width": grid.width,
+            "height": grid.height,
+            "count": SLOPE_BINS,
+            "crs": grid.crs,
+            "transform": grid.transform,
+            "nodata": SLOPE_COUNT_NODATA,
+            "compress": "deflate",
+            "predictor": 2,
+            "tiled": True,
+            "blockxsize": 256,
+            "blockysize": 256,
+        }
+        with safe_raster_write(counts_out, **profile) as dst:
+            dst.write(counts)
+            dst.update_tags(slope_bins_deg="1", last_bin_open="true", samples_per_degree=str(sp))
+        written["slope_counts"] = Path(counts_out)
+    return written
+
+
 def elevation_and_slope_from_glo30(
     dem_tiles: list,
     elevation_out,
@@ -463,63 +582,17 @@ def elevation_and_slope_from_glo30(
     elevation; the slope also needs the stencil) and neither is displaced against the other. A pixel with no valid sample, and every pixel
     outside the country mask, is `nodata_out`. Returns (elevation path, slope path), or (None, None) if no sample was valid.
 
-    Implements: M-F2a-08.
+    Implements: M-F2a-08. The work is `glo30_aligned_outputs`, which also gives the slope bins from the same pass.
     """
-    index = _glo30_tile_index(dem_tiles)
-    sp = (
-        samples_per_degree or _GLO30_SAMPLES_PER_DEGREE
-    )  # a tile has this many samples per side (tests use smaller synthetic tiles)
-    shape = (grid.height, grid.width)
-    sums = {k: np.zeros(shape) for k in ("z", "slope")}
-    n = {k: np.zeros(shape, dtype=np.int64) for k in ("z", "slope")}
-    progress = PeriodicProgress(
-        logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "elevation and slope from GLO-30"
+    out = glo30_aligned_outputs(
+        dem_tiles,
+        grid,
+        elevation_out=elevation_out,
+        slope_out=slope_out,
+        samples_per_degree=samples_per_degree,
+        nodata_out=nodata_out,
     )
-    for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
-        progress.step()
-        r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
-        strip = _glo30_strip_samples(index, grid, r0, r1, sp)
-        if strip is None:
-            continue
-        z, slope, grow, gcol = strip
-        pixel = grow[:, None] * grid.width + gcol[None, :]
-        for name, values in (("z", z), ("slope", slope)):
-            ok = np.isfinite(values)
-            if not ok.any():
-                continue
-            size = (r1 - r0) * grid.width
-            total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
-            count = np.bincount(pixel[ok], minlength=size)
-            sums[name][r0:r1] = total.reshape(r1 - r0, grid.width)
-            n[name][r0:r1] = count.reshape(r1 - r0, grid.width)
-    if not n["z"].any():
-        return None, None
-    profile = {
-        "driver": "GTiff",
-        "dtype": "float32",
-        "width": grid.width,
-        "height": grid.height,
-        "count": 1,
-        "crs": grid.crs,
-        "transform": grid.transform,
-        "nodata": nodata_out,
-        "compress": "lzw",
-        "tiled": True,
-        "blockxsize": 256,
-        "blockysize": 256,
-    }
-    for name, out in (("z", elevation_out), ("slope", slope_out)):
-        data = np.full(shape, nodata_out, dtype=np.float32)
-        has = n[name] > 0
-        data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
-        data[~grid.country_mask] = nodata_out
-        with safe_raster_write(out, **profile) as dst:
-            dst.write(data, 1)
-            dst.update_tags(
-                source="Copernicus GLO-30, mean of the 30 m samples per pixel",
-                samples_per_degree=str(sp),
-            )
-    return Path(elevation_out), Path(slope_out)
+    return out["elevation"], out["slope"]
 
 
 def slope_class_counts(
@@ -538,54 +611,11 @@ def slope_class_counts(
     what lets the slope maximum be a range. Pixels outside the country are SLOPE_COUNT_NODATA. Returns the output path, or
     None if no sample was valid.
 
-    Implements: M-F2a-07.
+    Implements: M-F2a-07. The work is `glo30_aligned_outputs`, which also gives the elevation and the slope from the same pass.
     """
-    index = _glo30_tile_index(dem_tiles)
-    sp = (
-        samples_per_degree or _GLO30_SAMPLES_PER_DEGREE
-    )  # a tile has this many samples per side (tests use smaller synthetic tiles)
-    counts = np.zeros((SLOPE_BINS, grid.height, grid.width), dtype=np.uint16)
-    progress = PeriodicProgress(
-        logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "slope class counts"
-    )
-    for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
-        progress.step()
-        r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
-        strip = _glo30_strip_samples(index, grid, r0, r1, sp)
-        if strip is None:
-            continue
-        _, sub, grow, gcol = strip  # the slope of every sample
-        valid = np.isfinite(sub)
-        if not valid.any():
-            continue
-        bins = np.clip(np.floor(np.where(valid, sub, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
-        key = (grow[:, None] * grid.width + gcol[None, :]) * SLOPE_BINS + bins
-        flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
-        counts[:, r0:r1, :] = (
-            flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
-        )
-    if not counts.any():
-        return None
-    counts[:, ~grid.country_mask] = SLOPE_COUNT_NODATA
-    profile = {
-        "driver": "GTiff",
-        "dtype": "uint16",
-        "width": grid.width,
-        "height": grid.height,
-        "count": SLOPE_BINS,
-        "crs": grid.crs,
-        "transform": grid.transform,
-        "nodata": SLOPE_COUNT_NODATA,
-        "compress": "deflate",
-        "predictor": 2,
-        "tiled": True,
-        "blockxsize": 256,
-        "blockysize": 256,
-    }
-    with safe_raster_write(out_path, **profile) as dst:
-        dst.write(counts)
-        dst.update_tags(slope_bins_deg="1", last_bin_open="true", samples_per_degree=str(sp))
-    return Path(out_path)
+    return glo30_aligned_outputs(
+        dem_tiles, grid, counts_out=out_path, samples_per_degree=samples_per_degree
+    )["slope_counts"]
 
 
 WORLDCOVER_CLASSES = (10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 100)

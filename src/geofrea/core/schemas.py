@@ -517,6 +517,8 @@ class SettingsFile(BaseModel):
         figures: Which diagnostic figures a phase draws (A-08): `all`, `summary` (the figure the thesis output
             needs, not the member-level ones) or `none`. Rasters and tables are artifacts and are always written.
             Honoured by climate_maps, overview (with its per-layer maps) and potential_maps.
+        wind_cf_integral: How F5 evaluates the wind capacity factor integral `I(A, k)` (D-F5-039): `table` (the exact integral on a fixed
+            grid, cubic spline, error below 1e-5 in the capacity factor; the setting of the runs) or `exact` (the closed form, the validation mode).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -525,6 +527,7 @@ class SettingsFile(BaseModel):
     geospatial: GeospatialConfig
     memory: MemoryConfig
     figures: Literal["all", "summary", "none"]
+    wind_cf_integral: Literal["table", "exact"] = "exact"
 
 
 class GeometryRepairSummary(BaseModel):

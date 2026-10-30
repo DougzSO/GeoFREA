@@ -661,3 +661,47 @@ def test_elevation_and_slope_from_glo30_agree_with_the_slope_bins(tmp_path):
     assert (elevation[inside] != e_nodata).all()
     assert np.allclose(slope[inside], 20.5, atol=0.05)
     assert (counts[20][inside] == 16).all()
+
+
+@pytest.mark.unit
+def test_one_pass_over_glo30_gives_the_same_rasters_as_the_two_separate_passes_and_reads_the_strips_once(tmp_path):
+    """COMMAND 75: the elevation, the slope and the slope bins from one pass are byte-identical to the two functions run apart."""
+    from unittest.mock import patch
+
+    from geofrea.grid_alignment import raster_alignment as ra
+
+    grid, sp = _grid(), 400
+    rng = np.random.default_rng(75)
+    z = np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=1) + np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=0)
+    z[100:130, 50:80] = np.nan  # a hole: the samples whose stencil touches it are counted in no band
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+
+    with patch.object(ra, "_glo30_strip_samples", wraps=ra._glo30_strip_samples) as apart_spy:
+        e1, s1 = elevation_and_slope_from_glo30([tile], tmp_path / "e1.tif", tmp_path / "s1.tif", grid, samples_per_degree=sp)
+        c1 = slope_class_counts([tile], tmp_path / "c1.tif", grid, samples_per_degree=sp)
+    with patch.object(ra, "_glo30_strip_samples", wraps=ra._glo30_strip_samples) as once_spy:
+        out = ra.glo30_aligned_outputs(
+            [tile], grid, elevation_out=tmp_path / "e2.tif", slope_out=tmp_path / "s2.tif", counts_out=tmp_path / "c2.tif",
+            samples_per_degree=sp,
+        )  # fmt: skip
+    assert once_spy.call_count * 2 == apart_spy.call_count > 0
+    for apart, together in ((e1, out["elevation"]), (s1, out["slope"]), (c1, out["slope_counts"])):
+        with rasterio.open(apart) as a, rasterio.open(together) as b:
+            np.testing.assert_array_equal(a.read(), b.read())
+            assert a.profile == b.profile and a.tags() == b.tags()
+    with rasterio.open(c1) as c:
+        assert c.read()[:, grid.country_mask].sum() > 0  # the test world has samples
+
+
+@pytest.mark.unit
+def test_glo30_outputs_that_are_not_asked_for_are_not_written(tmp_path):
+    grid, sp = _grid(), 400
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, np.arange(sp)[None, :] * np.ones((sp, 1)))
+    from geofrea.grid_alignment.raster_alignment import glo30_aligned_outputs
+
+    out = glo30_aligned_outputs([tile], grid, counts_out=tmp_path / "only_counts.tif", samples_per_degree=sp)
+    assert out["slope_counts"] is not None and out["elevation"] is None and out["slope"] is None
+    assert [p.name for p in tmp_path.glob("*.tif") if "only" in p.name] == ["only_counts.tif"]
+    assert glo30_aligned_outputs([tile], grid, samples_per_degree=sp) == {"elevation": None, "slope": None, "slope_counts": None}

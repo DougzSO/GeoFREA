@@ -172,6 +172,9 @@ def eligible_fraction_file(tech: str, scenario: str) -> str:
     return f"eligible_fraction_{tech}.tif" if scenario == "central" else f"eligible_fraction_{tech}__{scenario}.tif"
 
 
+_STRIPE_PIXELS = 4_000_000  # pixels of one stripe of cell rows in `aggregate_to_cells` (32 MB as float64)
+
+
 def _block_sum(a: np.ndarray, k: int) -> np.ndarray:
     h, w = a.shape
     return a.reshape(h // k, k, w // k, k).sum(axis=(1, 3))
@@ -197,16 +200,8 @@ def aggregate_to_cells(
     height, width = country_mask.shape
     window = lattice_window(transform, height, width)
     k = window.k
-
-    def block_sum(a: np.ndarray) -> np.ndarray:
-        return _block_sum(pad_to_window(np.asarray(a, dtype=float), window), k)
-
     area_row = pixel_row_area_km2(transform, height)
-    area = np.repeat(area_row[:, None], width, axis=1) * country_mask
-    eligible_area = area * np.asarray(eligible, dtype=float)  # bool or an eligible share in [0, 1]
-
-    cell_area = block_sum(area)
-    el_area = block_sum(eligible_area)
+    excluded_names = list(exclusions)
 
     rows_i, cols_i = np.meshgrid(
         np.arange(window.n_rows) + window.row0,
@@ -214,39 +209,73 @@ def aggregate_to_cells(
         indexing="ij",
     )
     lat_c, lon_c = cell_center(rows_i, cols_i)
+
+    # The cells are summed in stripes of whole cell rows: a cell takes its pixels from one stripe, so every sum is the one of the whole grid,
+    # and the float64 work arrays (a few per layer) are those of a stripe and not of the country (COMMAND 75: F3 of BRA peaked at 3.3 GB).
+    stripe_cells = max(1, _STRIPE_PIXELS // max(1, window.n_cols * k * k))
+    parts: dict[str, list[np.ndarray]] = {}
+
+    def keep(name: str, values: np.ndarray) -> None:
+        parts.setdefault(name, []).append(values)
+
+    for c0 in range(0, window.n_rows, stripe_cells):
+        c1 = min(c0 + stripe_cells, window.n_rows)
+        lat0 = c0 * k - window.pad_top  # first grid row of the stripe (negative inside the top padding of the first one)
+        g0, g1 = max(lat0, 0), min(c1 * k - window.pad_top, height)
+        rows = slice(g0, g1)
+
+        def block_sum(a: np.ndarray) -> np.ndarray:
+            padded = np.zeros(((c1 - c0) * k, window.n_cols * k), dtype=float)
+            padded[
+                g0 - lat0 : g1 - lat0, window.pad_left : window.pad_left + window.width
+            ] = np.asarray(a, dtype=float)
+            return _block_sum(padded, k)
+
+        area = np.repeat(area_row[rows, None], width, axis=1) * country_mask[rows]
+        eligible_area = area * np.asarray(eligible[rows], dtype=float)  # bool or an eligible share in [0, 1]
+
+        keep("cell_area_km2", block_sum(area))
+        el_area = block_sum(eligible_area)
+        keep("eligible_area_km2", el_area)
+
+        excluded = {}
+        for name in excluded_names:
+            excluded[name] = block_sum(
+                area * np.asarray(exclusions[name][rows], dtype=float)
+            )  # bool or a share in [0, 1]
+            keep(f"excluded_area_km2_{name}", excluded[name])
+        if excluded:
+            stack = np.stack([excluded[n] for n in excluded_names])
+            dominant = np.array(excluded_names, dtype=object)[stack.argmax(axis=0)]
+            keep("dominant_exclusion", np.where(stack.max(axis=0) > 0, dominant, None))
+
+        for name, values in (resources or {}).items():
+            chunk = values[rows]
+            usable = eligible_area * np.isfinite(chunk)
+            weighted = block_sum(np.where(np.isfinite(chunk), chunk, 0.0) * usable)
+            weight = block_sum(usable)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                keep(name, np.where(weight > 0, weighted / weight, np.nan))
+        for name, flag in (flags or {}).items():
+            flagged = block_sum(eligible_area * flag[rows].astype(bool))
+            with np.errstate(invalid="ignore", divide="ignore"):
+                keep(name, np.where(el_area > 0, flagged / el_area, np.nan))
+
     frame: dict[str, np.ndarray] = {
         "cell_id": cell_id(rows_i, cols_i).ravel(),
         "row": rows_i.ravel(),
         "col": cols_i.ravel(),
         "lat_c": lat_c.ravel(),
         "lon_c": lon_c.ravel(),
-        "cell_area_km2": cell_area.ravel(),
-        "eligible_area_km2": el_area.ravel(),
     }
-
-    excluded = {}
-    for name, mask in exclusions.items():
-        excluded[name] = block_sum(
-            area * np.asarray(mask, dtype=float)
-        )  # bool or a share in [0, 1]
-        frame[f"excluded_area_km2_{name}"] = excluded[name].ravel()
-    if excluded:
-        names = list(excluded)
-        stack = np.stack([excluded[n] for n in names])
-        dominant = np.array(names, dtype=object)[stack.argmax(axis=0)]
-        dominant = np.where(stack.max(axis=0) > 0, dominant, None)
-        frame["dominant_exclusion"] = dominant.ravel()
-
-    for name, values in (resources or {}).items():
-        usable = eligible_area * np.isfinite(values)
-        weighted = block_sum(np.where(np.isfinite(values), values, 0.0) * usable)
-        weight = block_sum(usable)
-        with np.errstate(invalid="ignore", divide="ignore"):
-            frame[name] = np.where(weight > 0, weighted / weight, np.nan).ravel()
-    for name, flag in (flags or {}).items():
-        flagged = block_sum(eligible_area * flag.astype(bool))
-        with np.errstate(invalid="ignore", divide="ignore"):
-            frame[name] = np.where(el_area > 0, flagged / el_area, np.nan).ravel()
+    for name in ("cell_area_km2", "eligible_area_km2"):
+        frame[name] = np.concatenate(parts.pop(name)).ravel()
+    for name in excluded_names:
+        frame[f"excluded_area_km2_{name}"] = np.concatenate(parts.pop(f"excluded_area_km2_{name}")).ravel()
+    if excluded_names:
+        frame["dominant_exclusion"] = np.concatenate(parts.pop("dominant_exclusion")).ravel()
+    for name in [*(resources or {}), *(flags or {})]:
+        frame[name] = np.concatenate(parts.pop(name)).ravel()
 
     out = pd.DataFrame(frame)
     if "dominant_exclusion" in out:  # nullable string: <NA> when nothing is excluded in the cell

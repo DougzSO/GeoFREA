@@ -163,3 +163,5 @@ Every later adaptation follows this format: provenance comment above the `def`, 
 - `pytest`, `ruff` clean before any commit proposal.
 - Test names state the property tested (`test_regret_is_non_negative`).
 - Tests that need external data (raw, legacy baseline, reference repositories) are marked and skipped when required env vars are unset; the synthetic country fixture covers CI.
+- Development loop (COMMAND 75): while developing, run only the tests the change can reach: `python scripts/affected_tests.py --run` selects the test files whose import closure (the one that fingerprints a phase's code) contains a changed module, plus the changed tests and the tests that name a changed non-Python file; `pytest --testmon` (pytest-testmon) is the alternative that learns the selection from coverage. Both can miss a test that reaches code through a string (a path, a registry).
+- The full suite is mandatory before every merge, and it is the only gate. pytest-xdist with 2 workers (`-n 2 --dist loadgroup`) was evaluated: 15% faster than one worker (22:47 against 26:41) with a process-tree peak of 3.04 GB (decimal), at the 3 GB limit of the machine; it is not the default.

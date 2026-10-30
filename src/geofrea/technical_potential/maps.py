@@ -96,7 +96,7 @@ def build_potential_maps(
             maps are drawn (D-F5-029); without them the territory is the union of the cells.
         absolute_maps: Classification of those maps (`experiments.yaml` `absolute_maps`).
         members_yaml: The `members.yaml` of F4 (default: the F4 artifacts directory), read by the figures of the questions of the thesis (`all`).
-        resolved: The F5 `ResolvedTechnology` of each technology of the run; with it, and `figures_mode == "all"`, the 0.01 degree display layers are
+        resolved: The F5 `ResolvedTechnology` of each technology of the run; with it, and `figures_mode` `all` or `summary`, the 0.01 degree display layers are
             built when the px-per-cell rule asks for them (COMMAND 70), checked against the analysis, and a layer that fails is refused.
         siting_dir: The F2b resource rasters (default: the siting_layers artifacts directory).
 
@@ -139,7 +139,7 @@ def build_potential_maps(
         rasters[f"capacity_factor_{tech}"] = write_cog(
             Path(artifacts) / f"capacity_factor_{tech}.tif", cf, row0, col0
         )
-        if has_values and figures_mode == "all":
+        if has_values and figures_mode in ("all", "summary"):  # the display layers follow the potential in both modes (COMMAND 75, R73)
             ctx = ctx or map_context(country_geometry(units, cell_ids), neighbours)
             if resolved is not None and tech in resolved:
                 display_layers[tech] = ensure_display_layers(
@@ -152,6 +152,7 @@ def build_potential_maps(
                     siting_dir=siting_dir
                     or core_paths.phase_dir(iso, "siting_layers", "artifacts"),
                 )
+        if has_values and figures_mode == "all":
             figures.append(
                 draw_cell_density_map(
                     cell_ids,

@@ -183,7 +183,7 @@ def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path
     inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 100.0), country_gdf=country_gdf)
     context = _context(tmp_path)
 
-    def bad_elevation(tiles, elevation_out, slope_out, grid, *args, **kwargs):
+    def bad_elevation(tiles, grid, *args, elevation_out=None, slope_out=None, counts_out=None, **kwargs):
         transform = from_origin(_ORIGIN_LON, _ORIGIN_LAT, _RES, _RES)
         for out_path in (elevation_out, slope_out):
             with rasterio.open(
@@ -199,10 +199,10 @@ def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path
                 nodata=-9999.0,
             ) as dst:
                 dst.write(np.ones((3, 3), dtype="float32"), 1)
-        return elevation_out, slope_out
+        return {"elevation": elevation_out, "slope": slope_out, "slope_counts": None}
 
     with (
-        patch.object(alignment_module, "elevation_and_slope_from_glo30", side_effect=bad_elevation),
+        patch.object(alignment_module, "glo30_aligned_outputs", side_effect=bad_elevation),
         pytest.raises(RuntimeError, match="Topology mismatch"),
     ):
         run_grid_alignment_phase(context, inputs)
@@ -258,11 +258,11 @@ def test_run_grid_alignment_phase_reuses_already_aligned_raster_on_second_call(t
 
     def fail_if_called(*a, **k):
         raise AssertionError(
-            "elevation_and_slope_from_glo30() was called again — alignment cache was NOT reused!"
+            "glo30_aligned_outputs() was called again — alignment cache was NOT reused!"
         )
 
     with patch.object(
-        alignment_module, "elevation_and_slope_from_glo30", side_effect=fail_if_called
+        alignment_module, "glo30_aligned_outputs", side_effect=fail_if_called
     ):
         second = run_grid_alignment_phase(context, inputs)
 

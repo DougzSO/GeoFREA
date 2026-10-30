@@ -223,8 +223,8 @@ class AcquiredLayer(BaseModel):
             dedicated `gadm_level0_sha256` config field/comparison
             (fetchers/gadm.py), not this one.
         source_sha256_skipped_reason: Why source_sha256 is None despite
-            at least one file being resolved (e.g. hashing exceeded the
-            per-layer time budget, see phase.py's `_HASH_BUDGET_S`).
+            at least one file being resolved (None since R73-02: there is
+            no time budget any more; the field stays for the registries written before).
             None whenever source_sha256 is populated, or when there was
             no file to hash in the first place (nothing to explain).
         fetch_status: Computed, not stored — "implemented" if

@@ -35,6 +35,7 @@ TECHNICAL_POTENTIAL_NUMERIC_MODULES = (
     "aggregates",
     "capacity",
     "cf_models",
+    "cf_table",
     "density_check",
     "iec_class",
     "input_ranges",

@@ -14,7 +14,7 @@ Population density is the count per pixel over the geodesic pixel area (the alig
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -34,8 +34,8 @@ class EligibilityLayers:
     country_mask: np.ndarray  # bool, True inside the country
     pixel_area_km2: np.ndarray  # float, geodesic area of each pixel
     slope_counts: (
-        np.ndarray
-    )  # uint16 (1 degree bin, row, col): 30 m samples per slope bin; the last bin is open ended
+        np.ndarray | None
+    )  # uint16 (1 degree bin, row, col): 30 m samples per slope bin; the last bin is open ended; None when only the shares are kept
     slope_valid: np.ndarray  # bool, False where the pixel has no slope sample at all
     population_count: np.ndarray  # people per pixel, NaN where missing
     land_cover_counts: (
@@ -54,6 +54,12 @@ class EligibilityLayers:
     required_valid: dict[
         str, np.ndarray
     ]  # layer name -> bool (resource layers that must exist for the technology)
+    riparian_share: dict[tuple[float, float], np.ndarray] = field(
+        default_factory=dict
+    )  # E3 share per (setback km, minimum discharge m3/s) of the scenarios, from `riparian_shares` (COMMAND 75)
+    slope_steep_share: dict[float, np.ndarray] = field(
+        default_factory=dict
+    )  # E4 share per slope maximum (deg), prepared from the bins by `slope_steep_shares` (COMMAND 75: the 41 bins need not stay in memory)
 
 
 def _bracket(value: float, keys: list[float], what: str) -> tuple[float, float, float]:
@@ -107,6 +113,29 @@ def _steep_share(counts: np.ndarray, threshold_deg: float) -> np.ndarray:
     return np.clip(share, 0.0, 1.0).astype(np.float32)
 
 
+def riparian_shares(
+    shares: dict[tuple[float, float], np.ndarray], pairs
+) -> dict[tuple[float, float], np.ndarray]:
+    """E3 for each (setback km, minimum discharge m3/s) in `pairs`, from the prepared shares: what `exclusion_fractions` would compute (same function).
+
+    F3 prepares a share for every setback and discharge threshold of the configuration (BRA: 12 arrays of 61 MB); the scenarios read three
+    combinations of them, so these are kept and the prepared grid is dropped.
+    """
+    return {
+        (float(t), float(q)): _riparian_for(float(t), float(q), shares).astype(np.float32)
+        for t, q in sorted({(float(t), float(q)) for t, q in pairs})
+    }
+
+
+def slope_steep_shares(counts: np.ndarray, thresholds) -> dict[float, np.ndarray]:
+    """E4 for each slope maximum in `thresholds`, from the 1 degree bin counts: what `exclusion_fractions` would compute from `counts` (same function).
+
+    The 41 bins are 80 bytes a pixel (BRA: 1.2 GB); the shares of the few slope maxima the scenarios use are 4 bytes a pixel each, so F3
+    prepares them once and drops the bins.
+    """
+    return {float(t): _steep_share(counts, float(t)) for t in sorted({float(t) for t in thresholds})}
+
+
 def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np.ndarray:
     """E5: 1 minus the share of the pixel's samples that lie in a class which is not excluded."""
     excluded = set(params.excluded_classes)
@@ -127,6 +156,17 @@ def _excluded_class_share(layers: EligibilityLayers, params: ParameterSet) -> np
     return np.clip(share, 0.0, 1.0).astype(np.float32)
 
 
+def _riparian_share(layers: EligibilityLayers, params: ParameterSet) -> np.ndarray:
+    prepared = layers.riparian_share.get(
+        (float(params.riparian_setback_km), float(params.riparian_min_discharge_m3s))
+    )
+    if prepared is not None:
+        return prepared
+    return _riparian_for(
+        params.riparian_setback_km, params.riparian_min_discharge_m3s, layers.riparian_fraction
+    ).astype(np.float32)
+
+
 def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict[str, np.ndarray]:
     """E1-E6 excluded shares (float32 in [0, 1]) for one parameter set.
 
@@ -139,15 +179,19 @@ def exclusion_fractions(layers: EligibilityLayers, params: ParameterSet) -> dict
         )
     with np.errstate(invalid="ignore"):
         density = layers.population_count / layers.pixel_area_km2
-        e4 = _steep_share(layers.slope_counts, params.slope_max_deg)
+        e4 = layers.slope_steep_share.get(float(params.slope_max_deg))
+        if e4 is None:
+            if layers.slope_counts is None:
+                raise MissingExclusionLayerError(
+                    f"no slope share prepared for a maximum of {params.slope_max_deg} deg (have {sorted(layers.slope_steep_share)})"
+                )
+            e4 = _steep_share(layers.slope_counts, params.slope_max_deg)
         e6 = (density > params.pop_density_max_per_km2).astype(np.float32)
         e5 = _excluded_class_share(layers, params)
     return {
         "E1": layers.protected_fraction[key].astype(np.float32),
         "E2": layers.lakes_fraction.astype(np.float32),
-        "E3": _riparian_for(
-            params.riparian_setback_km, params.riparian_min_discharge_m3s, layers.riparian_fraction
-        ).astype(np.float32),
+        "E3": _riparian_share(layers, params),
         "E4": e4,
         "E5": e5,
         "E6": e6,

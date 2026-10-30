@@ -9,7 +9,7 @@ registry lists for the technology.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from geofrea.core.config_schemas import ClassFlagRule
+from geofrea.technical_potential.cf_table import cf_integral
 from geofrea.technical_potential.iec_class import exceeds_class
 from geofrea.technical_potential.pixel_inputs import CellPixels
 from geofrea.technical_potential.power_curve import PowerCurve
@@ -54,6 +55,7 @@ class CfSettings:
     rho0: float  # density of the standard atmosphere, used when the curve does not state its own
     t_star_k: float
     hours_per_day: float
+    wind_cf_integral: str = "exact"  # `table` (cf_table, D-F5-039) or `exact` (the closed form); settings.yaml technical_potential.wind_cf_integral
 
 
 class PreparedCf(Protocol):
@@ -186,6 +188,7 @@ class _WeibullPixelPrepared:
     class_flag: np.ndarray | None
     v_ave_ms: np.ndarray | None
     rho_ref: np.ndarray  # of the cell means, for the density check
+    integral: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None  # `(A, k) -> I`; None: the exact closed form
 
     def member(self, rows, delta_rsds, d_t, delta_wind):
         rows = np.asarray(rows, dtype="int64")
@@ -213,6 +216,7 @@ class _WeibullPixelPrepared:
                 self.cell.eta_loss,
                 self.cell.rho0,
                 self.cell.t_star_k,
+                self.integral,
             )
             weight = self.weight_km2[pix]
             total = np.bincount(cell_of, weights=weight, minlength=stop - start)
@@ -319,6 +323,7 @@ class WeibullWithAirDensity:
             class_flag=cell.class_flag,
             v_ave_ms=cell.v_ave_ms,
             rho_ref=cell.rho_ref,
+            integral=None if settings.wind_cf_integral == "exact" else cf_integral(settings.curve, settings.wind_cf_integral),
         )
 
 

@@ -131,3 +131,60 @@ def test_the_indicator_definitions_are_in_the_configuration_with_their_names():
         indicators.wet_p95_exceed_freq.wet_day_mm,
     ) == (95.0, 1.0)
     assert not hasattr(hz, "HEAT_THRESHOLDS_C") and not hasattr(hz, "WET_DAY_PERCENTILE")
+
+
+# --- COMMAND 75: the fields are computed by bands of latitude rows and are the ones of the whole grid ------------------------------------------
+
+
+def _crop(path, variable, start, end, rng, scale, lats=(0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0)):
+    times = pd.date_range(f"{start}-01-01", f"{end}-12-31", freq="D")
+    data = (rng.uniform(0.0, 1.0, (len(times), len(lats), 4)) * scale).astype("float32")
+    xr.Dataset(
+        {variable: (("time", "lat", "lon"), data)},
+        coords={"time": times, "lat": list(lats), "lon": [10.0, 10.5, 11.0, 11.5]},
+    ).to_netcdf(path)
+    return path
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("rows", [1, 2, 3, 100])
+def test_the_hazard_fields_by_bands_of_latitude_rows_are_those_of_the_whole_grid(tmp_path, monkeypatch, rows):
+    from pathlib import Path
+
+    from geofrea.core.config_loader import load_experiments
+
+    indicators = load_experiments(Path(__file__).resolve().parents[2] / "config" / "experiments.yaml").hazard_indicators
+    rng = np.random.default_rng(75)
+    files = (
+        _crop(tmp_path / "h_tx.nc", "tasmax", 1995, 2014, rng, 320.0),
+        _crop(tmp_path / "s_tx.nc", "tasmax", 2041, 2050, rng, 325.0),
+        _crop(tmp_path / "h_pr.nc", "pr", 1995, 2014, rng, 4e-4),
+        _crop(tmp_path / "s_pr.nc", "pr", 2041, 2050, rng, 5e-4),
+    )
+    monkeypatch.setattr(hz, "LAT_ROWS_PER_BAND", 10_000)
+    whole = hz.hazard_fields(*files, (2041, 2050), indicators)
+    monkeypatch.setattr(hz, "LAT_ROWS_PER_BAND", rows)
+    banded = hz.hazard_fields(*files, (2041, 2050), indicators)
+    assert set(banded) == set(whole) and len(whole) == 8
+    for name in whole:
+        xr.testing.assert_identical(banded[name], whole[name])
+    assert banded["tx35_days"].dims == ("lat", "lon") and banded["tx35_days"].sizes["lat"] == 7
+
+
+@pytest.mark.unit
+def test_crops_that_do_not_share_their_latitude_rows_are_refused(tmp_path):
+    from pathlib import Path
+
+    from geofrea.core.config_loader import load_experiments
+
+    indicators = load_experiments(Path(__file__).resolve().parents[2] / "config" / "experiments.yaml").hazard_indicators
+    rng = np.random.default_rng(76)
+    shifted = (0.1, 0.6, 1.1, 1.6, 2.1, 2.6, 3.1)
+    files = (
+        _crop(tmp_path / "h_tx.nc", "tasmax", 1995, 2014, rng, 320.0),
+        _crop(tmp_path / "s_tx.nc", "tasmax", 2041, 2050, rng, 325.0, lats=shifted),
+        _crop(tmp_path / "h_pr.nc", "pr", 1995, 2014, rng, 4e-4),
+        _crop(tmp_path / "s_pr.nc", "pr", 2041, 2050, rng, 5e-4),
+    )
+    with pytest.raises(hz.HazardDataError, match="latitude rows"):
+        hz.hazard_fields(*files, (2041, 2050), indicators)

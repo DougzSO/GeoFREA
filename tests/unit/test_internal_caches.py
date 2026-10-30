@@ -42,6 +42,7 @@ TARGET = {
     "era5_reduction": "data_acquisition/fetchers/era5.py",
     "gwa_mask_mosaic": "data_acquisition/fetchers/wind.py",
     "gadm_mainland": "data_acquisition/fetchers/gadm.py",
+    "cf_table": "technical_potential/cf_table.py",
 }
 
 
@@ -221,6 +222,20 @@ def _probe_gadm(tmp: Path):
     return probe
 
 
+def _probe_cf_table(tmp: Path):
+    def probe() -> str:
+        from geofrea.technical_potential.cf_table import table_key
+        from geofrea.technical_potential.power_curve import PowerCurve
+
+        curve = PowerCurve(
+            curve_id="probe", iec_class="III", rated_power_kw=1000.0, v_ms=[3.0, 8.0, 12.0, 25.0],
+            p_kw=[0.0, 400.0, 1000.0, 1000.0], cut_out_ms=25.0, reference_density_kg_m3=1.225, synthetic=True,
+        )  # fmt: skip
+        return table_key(curve)
+
+    return probe
+
+
 PROBES = {
     "clip": _probe_clip,
     "aligned_layers": _probe_aligned,
@@ -231,6 +246,7 @@ PROBES = {
     "era5_reduction": _probe_era5,
     "gwa_mask_mosaic": _probe_gwa,
     "gadm_mainland": _probe_gadm,
+    "cf_table": _probe_cf_table,
 }
 
 

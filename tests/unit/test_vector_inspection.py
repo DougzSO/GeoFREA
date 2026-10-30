@@ -1,11 +1,12 @@
 """Unit tests for geofrea.data_quality_audit.vector_inspection."""
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
 import geopandas as gpd
 import pytest
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Polygon, box
 
 from geofrea.data_quality_audit.vector_inspection import (
     ClipRequiresCountryGdfError,
@@ -253,6 +254,53 @@ def test_inspect_vector_layer_rebuilds_the_cache_when_the_source_changes(tmp_pat
         ]
         == 1
     )
+
+
+def _layer_with_an_invalid_polygon(tmp_path):
+    bowtie = Polygon([(0.2, 0.2), (0.6, 0.6), (0.6, 0.2), (0.2, 0.6)])  # self-intersecting: invalid
+    path = tmp_path / "lakes.geojson"
+    gpd.GeoDataFrame(geometry=[box(0.7, 0.7, 0.9, 0.9), bowtie], crs="EPSG:4326").to_file(path, driver="GeoJSON")
+    return path, gpd.GeoDataFrame(geometry=[box(0, 0, 2, 2)], crs="EPSG:4326")
+
+
+@pytest.mark.unit
+def test_a_cold_and_a_warm_run_give_the_same_repair_report_and_geometry_types(tmp_path):
+    """R73-01: the repair counts and the types are measured when the clip is computed, so they are stored beside it."""
+    path, country_gdf = _layer_with_an_invalid_polygon(tmp_path)
+    cache_path = tmp_path / "cache" / "lakes_clipped.gpkg"
+
+    cold = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    warm = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+
+    assert cold["geometry_repair"]["n_total"] == 2 and cold["geometry_repair"]["n_invalid"] == 1
+    assert warm["geometry_repair"] == cold["geometry_repair"]
+    assert warm["geometry_types"] == cold["geometry_types"]
+
+
+@pytest.mark.unit
+def test_a_clip_made_before_the_stats_file_reports_the_repair_as_not_measured(tmp_path):
+    path, country_gdf = _layer_with_an_invalid_polygon(tmp_path)
+    cache_path = tmp_path / "cache" / "lakes_clipped.gpkg"
+    inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    (tmp_path / "cache" / "lakes_clipped.gpkg.stats.json").unlink()
+
+    warm = inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+
+    assert warm["geometry_repair"] is None
+    assert warm["error"] is None and warm["n_features"] == 2
+
+
+@pytest.mark.unit
+def test_the_stats_of_another_clip_are_not_used(tmp_path):
+    path, country_gdf = _layer_with_an_invalid_polygon(tmp_path)
+    cache_path = tmp_path / "cache" / "lakes_clipped.gpkg"
+    inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)
+    stats = tmp_path / "cache" / "lakes_clipped.gpkg.stats.json"
+    stored = json.loads(stats.read_text(encoding="utf-8"))
+    stored["key"] = "another"
+    stats.write_text(json.dumps(stored), encoding="utf-8")
+
+    assert inspect_vector_layer(path, country_gdf=country_gdf, clip=True, cache_path=cache_path)["geometry_repair"] is None
 
 
 @pytest.mark.unit

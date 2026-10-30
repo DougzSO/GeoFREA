@@ -696,25 +696,40 @@ def test_run_acquisition_phase_records_source_sha256_at_resolve_time(tmp_path, m
 
 
 @pytest.mark.unit
-def test_run_acquisition_phase_skips_hash_over_budget_and_records_reason(tmp_path, monkeypatch):
-    # A layer whose hashing would exceed the per-layer time budget
-    # stores null with a reason instead of being dropped from the model
-    # (verdict, F1-1b action 2) — simulated here by forcing the budget
-    # to 0 rather than actually waiting out a real one-minute budget.
+def test_the_hash_of_a_layer_does_not_depend_on_how_long_it_takes(tmp_path, monkeypatch):
+    # R73-02: there is no time budget, so a slow disk and a fast one give the same layer_registry content.
     fake_path = tmp_path / "wind.fake"
     fake_path.write_bytes(b"some bytes")
     monkeypatch.setattr(phase_module, "fetch_wind", lambda *a, **kw: fake_path)
-    monkeypatch.setattr(phase_module, "_HASH_BUDGET_S", 0.0)
+    clock = iter(range(0, 10_000, 1000))  # every call of the clock is 1000 s later: any budget would be exceeded
+    monkeypatch.setattr("time.perf_counter", lambda: next(clock))
 
     result = run_acquisition_phase(_context(tmp_path))
 
     wind = next(layer for layer in result.layers if layer.layer_name == "wind")
-    assert wind.source_sha256 is None
-    assert wind.source_sha256_skipped_reason is not None
-    assert "budget" in wind.source_sha256_skipped_reason
-    # Still resolved, not failed — a cost-based skip is not an error.
+    assert wind.source_sha256 == {str(fake_path): hashlib.sha256(b"some bytes").hexdigest()}
+    assert wind.source_sha256_skipped_reason is None
     assert wind.resolution_status == "resolved"
-    assert wind.path == fake_path
+
+
+@pytest.mark.unit
+def test_a_layer_file_is_hashed_once_while_its_path_size_and_mtime_do_not_change(tmp_path, monkeypatch):
+    from geofrea.core import cache_key
+    from geofrea.core.cache_key import FileHashMemo
+
+    files = [tmp_path / "a.bin", tmp_path / "b.bin"]
+    for i, f in enumerate(files):
+        f.write_bytes(bytes([i]) * 100)
+    reads = []
+    real = cache_key.file_sha256
+    monkeypatch.setattr(cache_key, "file_sha256", lambda p: (reads.append(Path(p).name), real(p))[1])
+    memo_path = tmp_path / "memo.json"
+    first, reason = phase_module._hash_layer_files(files, FileHashMemo(memo_path))
+    second, _ = phase_module._hash_layer_files(files, FileHashMemo(memo_path))  # a later run: the memo is read from disk
+    assert first == second and reason is None
+    assert reads == ["a.bin", "b.bin"]
+    assert first[str(files[0])] == hashlib.sha256(bytes([0]) * 100).hexdigest()
+    assert phase_module._hash_layer_files([], None) == (None, None)
 
 
 @pytest.mark.unit

@@ -50,7 +50,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.7"
+_MANIFEST_SCHEMA_VERSION = "2.8"
+# 2.8 (COMMAND 75, A-02, R73-03): every PhaseManifestEntry also records the cold figures of the phase, `cold_wall_s`, `cold_cpu_s`,
+# `cold_peak_rss_mb`, `cold_started_at` and `cold_code_fingerprint`: the slowest execution of the phase under its current code. A run that
+# finds its caches current replaces `wall_s` (the last execution) and leaves the cold figures; a change of the code starts them again.
+# Entries written before 2.8 have None: the first execution under 2.8 starts them.
 # 2.7 (COMMAND 73, A-02): every PhaseManifestEntry records `peak_rss_mb`, the peak resident memory of the process during the phase
 # (`core.peak_memory`), and the files of F2b (`siting/<layer>`) and F3 (`eligibility/<file>`) are registered one by one, each with its
 # canonical content hash, as the other phases already do. Entries written before 2.7 have no peak (None).
@@ -73,7 +77,7 @@ _MANIFEST_SCHEMA_VERSION = "2.7"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -299,6 +303,10 @@ class PhaseManifestEntry(BaseModel):
             executed again. None for entries written before manifest schema 2.6 and for phases whose spec declares none.
         peak_rss_mb: Peak resident memory of the process while the phase ran, MB (`core.peak_memory`). None for entries written before
             manifest schema 2.7 and for a phase that was resumed, not executed.
+        cold_wall_s, cold_cpu_s, cold_peak_rss_mb, cold_started_at, cold_code_fingerprint: the slowest execution of the phase under the code
+            `cold_code_fingerprint` (R73-03): the cold run when one happened under that code, else the slowest run there was. `wall_s` and
+            the others above are those of the last execution, which is a short one when every cache was current. None for entries
+            written before manifest schema 2.8 and for a phase that never ran under its fingerprint.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -318,6 +326,58 @@ class PhaseManifestEntry(BaseModel):
     config_fingerprint: str | None = None
     code_fingerprint: str | None = None
     peak_rss_mb: float | None = None
+    cold_wall_s: float | None = None
+    cold_cpu_s: float | None = None
+    cold_peak_rss_mb: float | None = None
+    cold_started_at: str | None = None
+    cold_code_fingerprint: str | None = None
+
+
+COLD_FIELDS = (
+    "cold_wall_s",
+    "cold_cpu_s",
+    "cold_peak_rss_mb",
+    "cold_started_at",
+    "cold_code_fingerprint",
+)
+
+
+def carry_cold(previous: PhaseManifestEntry | None) -> dict[str, Any]:
+    """The cold figures of `previous`, to keep them in an entry that replaces it without executing the phase (failed, skipped)."""
+    return {} if previous is None else {name: getattr(previous, name) for name in COLD_FIELDS}
+
+
+def cold_figures(
+    previous: PhaseManifestEntry | None, result: PhaseResult, code_fingerprint: str | None
+) -> dict[str, Any]:
+    """The cold figures after the execution `result` of a phase whose current code is `code_fingerprint` (R73-03).
+
+    The slowest execution under the same code: a run that found every cache current is shorter than the cold one and does not replace it;
+    a change of the code makes the figures of the earlier code no longer describe the phase, so the new execution starts them. An
+    entry of manifest 2.7 or earlier has no cold figures; its last execution is the candidate when its code is the current one.
+    """
+    this = {
+        "cold_wall_s": result.wall_s,
+        "cold_cpu_s": result.cpu_s,
+        "cold_peak_rss_mb": result.peak_rss_mb,
+        "cold_started_at": result.started_at,
+        "cold_code_fingerprint": code_fingerprint,
+    }
+    if previous is None or result.wall_s is None:
+        return this
+    if previous.cold_wall_s is not None and previous.cold_code_fingerprint == code_fingerprint:
+        before = {name: getattr(previous, name) for name in COLD_FIELDS}
+    elif previous.status == "success" and previous.wall_s is not None and previous.code_fingerprint == code_fingerprint:
+        before = {
+            "cold_wall_s": previous.wall_s,
+            "cold_cpu_s": previous.cpu_s,
+            "cold_peak_rss_mb": previous.peak_rss_mb,
+            "cold_started_at": previous.started_at,
+            "cold_code_fingerprint": code_fingerprint,
+        }
+    else:
+        return this
+    return before if before["cold_wall_s"] >= result.wall_s else this
 
 
 class ArtifactEntry(BaseModel):
@@ -368,7 +428,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.7"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.8"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -976,7 +1036,9 @@ class Orchestrator:
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
-                    **result.model_dump(), methodology_version=self.methodology_version
+                    **result.model_dump(),
+                    methodology_version=self.methodology_version,
+                    **carry_cold(self.manifest.phases.get(spec.name)),
                 )
                 self._write_manifest()
                 logger.warning("Phase '%s' skipped — upstream failed: %s", spec.name, failed_deps)
@@ -1186,7 +1248,9 @@ class Orchestrator:
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
-                    **result.model_dump(), methodology_version=self.methodology_version
+                    **result.model_dump(),
+                    methodology_version=self.methodology_version,
+                    **carry_cold(self.manifest.phases.get(spec.name)),
                 )
                 self.manifest.artifacts.update(new_artifacts)
                 self._write_manifest()
@@ -1229,6 +1293,7 @@ class Orchestrator:
                 for key in spec.requires
                 if key in self.manifest.artifacts
             }
+            cold = cold_figures(self.manifest.phases.get(spec.name), result, spec.code_fingerprint)
             self.manifest.phases[spec.name] = PhaseManifestEntry(
                 phase=spec.name,
                 status="success",
@@ -1243,6 +1308,7 @@ class Orchestrator:
                 peak_rss_mb=result.peak_rss_mb,
                 config_fingerprint=spec.config_fingerprint,
                 code_fingerprint=spec.code_fingerprint,
+                **cold,
             )
             # A re-executed phase replaces its whole artifact set: keys it registered in an earlier run but no
             # longer produces (an output removed from its `produces`) are dropped, or they would stay in the
