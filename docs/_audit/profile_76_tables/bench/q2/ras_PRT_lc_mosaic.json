@@ -1,0 +1,53 @@
+{
+ "iso": "PRT",
+ "step": "lc_mosaic",
+ "window": [
+  -8.9,
+  38.9,
+  1.0
+ ],
+ "grid_pixels": 10000,
+ "grid_shape": [
+  100,
+  100
+ ],
+ "tiles": 5,
+ "wall_s": 0.533,
+ "cpu_s": 0.5,
+ "top5_own_time": [
+  {
+   "function": "reproject (warp.py:160)",
+   "own_s": 0.476,
+   "calls": 2
+  },
+  {
+   "function": "open (__init__.py:111)",
+   "own_s": 0.018,
+   "calls": 6
+  },
+  {
+   "function": "wrapper (env.py:442)",
+   "own_s": 0.015,
+   "calls": 7
+  },
+  {
+   "function": "mosaic_land_cover (raster_alignment.py:765)",
+   "own_s": 0.01,
+   "calls": 1
+  },
+  {
+   "function": "<built-in method nt.stat> (~:0)",
+   "own_s": 0.002,
+   "calls": 38
+  }
+ ],
+ "opens_per_file": {
+  "ESA_WorldCover_10m_2020_v100_N36W009_Map.tif": 1,
+  "ESA_WorldCover_10m_2020_v100_N36W012_Map.tif": 1,
+  "ESA_WorldCover_10m_2020_v100_N39W009_Map.tif": 1,
+  "ESA_WorldCover_10m_2020_v100_N39W012_Map.tif": 1,
+  "ESA_WorldCover_10m_2020_v100_N42W009_Map.tif": 1,
+  "out.writing.tif": 1
+ },
+ "opens_total": 6
+}

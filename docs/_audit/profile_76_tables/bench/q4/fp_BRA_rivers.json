@@ -1,0 +1,28 @@
+{
+ "iso": "BRA",
+ "layer": "rivers",
+ "window": [
+  -62.0,
+  -4.0,
+  3.0
+ ],
+ "features_matched": 15230,
+ "clip_vertices": 5,
+ "current": {
+  "wall_s": 0.552,
+  "cpu_s": 0.547
+ },
+ "fastpath": {
+  "wall_s": 0.01,
+  "cpu_s": 0.0
+ },
+ "covered": 14973,
+ "covered_fraction": 0.9831,
+ "identical_exact": 15230,
+ "differ_exact": 0,
+ "differ_after_normalize": 0,
+ "differ_topologically": 0,
+ "covered_that_differ_exact": 0,
+ "type_changes": 0,
+ "speedup_cpu": 547.0
+}

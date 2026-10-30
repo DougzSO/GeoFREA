@@ -1,0 +1,203 @@
+{
+ "iso": "BRA",
+ "layer": "lakes",
+ "window": [
+  -62.0,
+  -4.0,
+  3.0
+ ],
+ "source": "D:\\Douglas\\DOUTORADO\\GeoFREA_data\\raw\\hydrosheds\\_global\\HydroLAKES_polys_v10_shp\\HydroLAKES_polys_v10_shp\\HydroLAKES_polys_v10.shp",
+ "clip": {
+  "wall_s": 2.202,
+  "cpu_s": 1.797,
+  "top5_own_time": [
+   {
+    "function": "make_valid (constructive.py:679)",
+    "own_s": 0.773,
+    "calls": 1
+   },
+   {
+    "function": "read (raw.py:39)",
+    "own_s": 0.594,
+    "calls": 1
+   },
+   {
+    "function": "default_array_ufunc (arraylike.py:481)",
+    "own_s": 0.277,
+    "calls": 1
+   },
+   {
+    "function": "is_valid (predicates.py:429)",
+    "own_s": 0.257,
+    "calls": 4
+   },
+   {
+    "function": "read_info (core.py:241)",
+    "own_s": 0.164,
+    "calls": 1
+   }
+  ]
+ },
+ "features": 993,
+ "pixels": 90000,
+ "grid_shape": [
+  300,
+  300
+ ],
+ "raster": {
+  "wall_s": 0.656,
+  "cpu_s": 0.672,
+  "top5_own_time": [
+   {
+    "function": "simplify (constructive.py:1128)",
+    "own_s": 0.417,
+    "calls": 1
+   },
+   {
+    "function": "wrapped (decorators.py:73)",
+    "own_s": 0.038,
+    "calls": 12221
+   },
+   {
+    "function": "__geo_interface__ (polygon.py:270)",
+    "own_s": 0.019,
+    "calls": 991
+   },
+   {
+    "function": "rasterize (features.py:182)",
+    "own_s": 0.017,
+    "calls": 1
+   },
+   {
+    "function": "from_wkt (io.py:264)",
+    "own_s": 0.016,
+    "calls": 991
+   }
+  ]
+ },
+ "feature_pixels": 9425,
+ "edt": {
+  "wall_s": 0.007,
+  "cpu_s": 0.0,
+  "top5_own_time": [
+   {
+    "function": "<built-in method scipy.ndimage._nd_image.euclidean_feature_transform> (~:0)",
+    "own_s": 0.004,
+    "calls": 1
+   },
+   {
+    "function": "distance_transform_edt (_morphology.py:2435)",
+    "own_s": 0.001,
+    "calls": 1
+   },
+   {
+    "function": "<method 'astype' of 'numpy.ndarray' objects> (~:0)",
+    "own_s": 0.001,
+    "calls": 4
+   },
+   {
+    "function": "indices (numeric.py:1790)",
+    "own_s": 0.0,
+    "calls": 1
+   },
+   {
+    "function": "edt (bench_vector.py:126)",
+    "own_s": 0.0,
+    "calls": 1
+   }
+  ]
+ },
+ "write": {
+  "wall_s": 0.107,
+  "cpu_s": 0.078,
+  "top5_own_time": [
+   {
+    "function": "wrapper (env.py:442)",
+    "own_s": 0.072,
+    "calls": 4
+   },
+   {
+    "function": "open (__init__.py:111)",
+    "own_s": 0.017,
+    "calls": 2
+   },
+   {
+    "function": "_write_distance_and_flag (vector_alignment.py:157)",
+    "own_s": 0.01,
+    "calls": 1
+   },
+   {
+    "function": "delenv (env.py:367)",
+    "own_s": 0.001,
+    "calls": 4
+   },
+   {
+    "function": "safe_raster_write (raster_io.py:114)",
+    "own_s": 0.001,
+    "calls": 4
+   }
+  ]
+ },
+ "cache_write": {
+  "wall_s": 0.1,
+  "cpu_s": 0.094,
+  "top5_own_time": [
+   {
+    "function": "write (raw.py:595)",
+    "own_s": 0.075,
+    "calls": 1
+   },
+   {
+    "function": "default_array_ufunc (arraylike.py:481)",
+    "own_s": 0.014,
+    "calls": 1
+   },
+   {
+    "function": "to_numpy (array.py:1757)",
+    "own_s": 0.0,
+    "calls": 6
+   },
+   {
+    "function": "write_dataframe (geopandas.py:528)",
+    "own_s": 0.0,
+    "calls": 1
+   },
+   {
+    "function": "<built-in method builtins.isinstance> (~:0)",
+    "own_s": 0.0,
+    "calls": 1415
+   }
+  ]
+ },
+ "cache_read": {
+  "wall_s": 0.037,
+  "cpu_s": 0.047,
+  "top5_own_time": [
+   {
+    "function": "read (raw.py:39)",
+    "own_s": 0.024,
+    "calls": 1
+   },
+   {
+    "function": "from_wkb (io.py:308)",
+    "own_s": 0.004,
+    "calls": 1
+   },
+   {
+    "function": "_from_sequence (string_arrow.py:195)",
+    "own_s": 0.001,
+    "calls": 7
+   },
+   {
+    "function": "sanitize_array (construction.py:531)",
+    "own_s": 0.0,
+    "calls": 32
+   },
+   {
+    "function": "<built-in method builtins.isinstance> (~:0)",
+    "own_s": 0.0,
+    "calls": 1556
+   }
+  ]
+ }
+}

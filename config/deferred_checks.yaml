@@ -1,4 +1,4 @@
-# deferred_checks.yaml — content check of a country against a reference manifest (D-core-045; src/geofrea/core/deferred_check.py).
+# deferred_checks.yaml — content check of a country against a reference manifest (D-core-050; src/geofrea/core/deferred_check.py).
 #
 # COMMANDS 75 to 77 made the pipeline faster without changing what it computes. PRT was proved equal by content hash, artifact by artifact; IND and BRA
 # are proved by this file: the first time the pipeline executes a listed phase for them, the content hash of each artifact of the phase is compared with

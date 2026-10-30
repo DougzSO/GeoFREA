@@ -1,4 +1,4 @@
-"""Deferred content check against a reference manifest (COMMAND 80; D-core-045)."""
+"""Deferred content check against a reference manifest (COMMAND 80; D-core-050)."""
 
 from __future__ import annotations
 

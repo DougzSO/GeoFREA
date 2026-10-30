@@ -1,0 +1,225 @@
+{
+ "iso": "PRT",
+ "phase": "climate_maps",
+ "exit": 0,
+ "wall_s": 196.8,
+ "cpu_s": 95.2,
+ "peak_working_set_mb": 644,
+ "top_own": [
+  {
+   "function": "draw (collections.py:360)",
+   "own_s": 64.565,
+   "cum_s": 66.2,
+   "calls": 1731,
+   "calls_per_own_s": 27
+  },
+  {
+   "function": "union_all (set_operations.py:463)",
+   "own_s": 14.092,
+   "cum_s": 14.092,
+   "calls": 6,
+   "calls_per_own_s": 0
+  },
+  {
+   "function": "<built-in method matplotlib.backends._backend_agg.draw_path> (~:0)",
+   "own_s": 6.266,
+   "cum_s": 6.449,
+   "calls": 6513,
+   "calls_per_own_s": 1039
+  },
+  {
+   "function": "<method 'dwithin' of 'shapely.lib.STRtree' objects> (~:0)",
+   "own_s": 4.934,
+   "cum_s": 4.934,
+   "calls": 360,
+   "calls_per_own_s": 73
+  },
+  {
+   "function": "<built-in method matplotlib.ft2font._render_glyph> (~:0)",
+   "own_s": 4.641,
+   "cum_s": 4.724,
+   "calls": 25750,
+   "calls_per_own_s": 5549
+  },
+  {
+   "function": "<built-in method matplotlib.ft2font._layout> (~:0)",
+   "own_s": 4.362,
+   "cum_s": 4.368,
+   "calls": 4076,
+   "calls_per_own_s": 934
+  },
+  {
+   "function": "transform (transformer.py:712)",
+   "own_s": 3.471,
+   "cum_s": 3.643,
+   "calls": 944,
+   "calls_per_own_s": 272
+  },
+  {
+   "function": "<built-in method matplotlib.backends._backend_agg.clear> (~:0)",
+   "own_s": 2.826,
+   "cum_s": 2.826,
+   "calls": 225,
+   "calls_per_own_s": 80
+  },
+  {
+   "function": "wrapped (decorators.py:73)",
+   "own_s": 2.783,
+   "cum_s": 24.399,
+   "calls": 294726,
+   "calls_per_own_s": 105888
+  },
+  {
+   "function": "<method 'encode' of 'ImagingEncoder' objects> (~:0)",
+   "own_s": 2.481,
+   "cum_s": 2.481,
+   "calls": 77,
+   "calls_per_own_s": 31
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 2.251,
+   "cum_s": 2.929,
+   "calls": 376491,
+   "calls_per_own_s": 167257
+  },
+  {
+   "function": "_draw_text_glyphs_and_boxes (backend_agg.py:175)",
+   "own_s": 1.843,
+   "cum_s": 9.591,
+   "calls": 4076,
+   "calls_per_own_s": 2211
+  },
+  {
+   "function": "<built-in method builtins.compile> (~:0)",
+   "own_s": 1.724,
+   "cum_s": 1.724,
+   "calls": 317,
+   "calls_per_own_s": 184
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 1.563,
+   "cum_s": 1.749,
+   "calls": 4492233,
+   "calls_per_own_s": 2874457
+  },
+  {
+   "function": "<built-in method matplotlib.backends._backend_agg.draw_text_image> (~:0)",
+   "own_s": 1.51,
+   "cum_s": 1.656,
+   "calls": 25750,
+   "calls_per_own_s": 17049
+  }
+ ],
+ "python_loops": [
+  {
+   "function": "wrapped (decorators.py:73)",
+   "own_s": 2.783,
+   "cum_s": 24.399,
+   "calls": 294726,
+   "calls_per_own_s": 105888
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 2.251,
+   "cum_s": 2.929,
+   "calls": 376491,
+   "calls_per_own_s": 167257
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 1.563,
+   "cum_s": 1.749,
+   "calls": 4492233,
+   "calls_per_own_s": 2874457
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.447,
+   "cum_s": 2.73,
+   "calls": 917160,
+   "calls_per_own_s": 633939
+  },
+  {
+   "function": "<built-in method numpy.asarray> (~:0)",
+   "own_s": 1.256,
+   "cum_s": 1.347,
+   "calls": 193843,
+   "calls_per_own_s": 154323
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.84,
+   "cum_s": 0.939,
+   "calls": 253485,
+   "calls_per_own_s": 301894
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.807,
+   "cum_s": 3.99,
+   "calls": 459057,
+   "calls_per_own_s": 569108
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.734,
+   "cum_s": 0.87,
+   "calls": 1175897,
+   "calls_per_own_s": 1601232
+  },
+  {
+   "function": "_get (__init__.py:723)",
+   "own_s": 0.727,
+   "cum_s": 0.982,
+   "calls": 580863,
+   "calls_per_own_s": 799337
+  },
+  {
+   "function": "<method 'copy' of 'numpy.ndarray' objects> (~:0)",
+   "own_s": 0.717,
+   "cum_s": 0.717,
+   "calls": 207191,
+   "calls_per_own_s": 288908
+  },
+  {
+   "function": "check_in_list (__init__.py:188)",
+   "own_s": 0.594,
+   "cum_s": 0.615,
+   "calls": 131024,
+   "calls_per_own_s": 220655
+  },
+  {
+   "function": "__getitem__ (__init__.py:789)",
+   "own_s": 0.566,
+   "cum_s": 1.541,
+   "calls": 567640,
+   "calls_per_own_s": 1002217
+  },
+  {
+   "function": "<listcomp> (polygon.py:91)",
+   "own_s": 0.519,
+   "cum_s": 0.519,
+   "calls": 133198,
+   "calls_per_own_s": 256621
+  },
+  {
+   "function": "<built-in method builtins.getattr> (~:0)",
+   "own_s": 0.408,
+   "cum_s": 1.14,
+   "calls": 1475027,
+   "calls_per_own_s": 3617028
+  },
+  {
+   "function": "deepcopy (copy.py:128)",
+   "own_s": 0.393,
+   "cum_s": 1.051,
+   "calls": 141044,
+   "calls_per_own_s": 359224
+  }
+ ],
+ "opens": {},
+ "opens_total": 0,
+ "to_crs_calls": 49659
+}

@@ -1,0 +1,236 @@
+{
+ "iso": "PRT",
+ "phase": "technical_potential",
+ "exit": 0,
+ "wall_s": 29.7,
+ "cpu_s": 12.6,
+ "peak_working_set_mb": 332,
+ "top_own": [
+  {
+   "function": "<built-in method io.open> (~:0)",
+   "own_s": 2.049,
+   "cum_s": 2.092,
+   "calls": 490,
+   "calls_per_own_s": 239
+  },
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.827,
+   "cum_s": 2.596,
+   "calls": 376491,
+   "calls_per_own_s": 206095
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.639,
+   "cum_s": 2.801,
+   "calls": 917160,
+   "calls_per_own_s": 559556
+  },
+  {
+   "function": "<built-in method scipy.ndimage._nd_image.geometric_transform> (~:0)",
+   "own_s": 1.495,
+   "cum_s": 1.495,
+   "calls": 93,
+   "calls_per_own_s": 62
+  },
+  {
+   "function": "<method 'acquire' of '_thread.lock' objects> (~:0)",
+   "own_s": 1.451,
+   "cum_s": 1.451,
+   "calls": 188,
+   "calls_per_own_s": 130
+  },
+  {
+   "function": "<built-in method builtins.compile> (~:0)",
+   "own_s": 1.37,
+   "cum_s": 1.37,
+   "calls": 315,
+   "calls_per_own_s": 230
+  },
+  {
+   "function": "__iter__ (array.py:875)",
+   "own_s": 1.045,
+   "cum_s": 1.045,
+   "calls": 292334,
+   "calls_per_own_s": 279661
+  },
+  {
+   "function": "write_table (core.py:1191)",
+   "own_s": 0.827,
+   "cum_s": 0.827,
+   "calls": 11,
+   "calls_per_own_s": 13
+  },
+  {
+   "function": "<built-in method _imp.create_dynamic> (~:0)",
+   "own_s": 0.815,
+   "cum_s": 0.815,
+   "calls": 9,
+   "calls_per_own_s": 11
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.804,
+   "cum_s": 4.139,
+   "calls": 459057,
+   "calls_per_own_s": 570627
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.754,
+   "cum_s": 0.909,
+   "calls": 1175897,
+   "calls_per_own_s": 1560357
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.715,
+   "cum_s": 0.753,
+   "calls": 2900765,
+   "calls_per_own_s": 4055362
+  },
+  {
+   "function": "<built-in method nt.stat> (~:0)",
+   "own_s": 0.714,
+   "cum_s": 0.778,
+   "calls": 6534,
+   "calls_per_own_s": 9154
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.71,
+   "cum_s": 0.779,
+   "calls": 285379,
+   "calls_per_own_s": 402037
+  },
+  {
+   "function": "_strip_docstrings (code_fingerprint.py:171)",
+   "own_s": 0.618,
+   "cum_s": 2.701,
+   "calls": 157,
+   "calls_per_own_s": 254
+  }
+ ],
+ "python_loops": [
+  {
+   "function": "_format (ast.py:125)",
+   "own_s": 1.827,
+   "cum_s": 2.596,
+   "calls": 376491,
+   "calls_per_own_s": 206095
+  },
+  {
+   "function": "iter_child_nodes (ast.py:267)",
+   "own_s": 1.639,
+   "cum_s": 2.801,
+   "calls": 917160,
+   "calls_per_own_s": 559556
+  },
+  {
+   "function": "__iter__ (array.py:875)",
+   "own_s": 1.045,
+   "cum_s": 1.045,
+   "calls": 292334,
+   "calls_per_own_s": 279661
+  },
+  {
+   "function": "walk (ast.py:380)",
+   "own_s": 0.804,
+   "cum_s": 4.139,
+   "calls": 459057,
+   "calls_per_own_s": 570627
+  },
+  {
+   "function": "iter_fields (ast.py:255)",
+   "own_s": 0.754,
+   "cum_s": 0.909,
+   "calls": 1175897,
+   "calls_per_own_s": 1560357
+  },
+  {
+   "function": "<built-in method builtins.isinstance> (~:0)",
+   "own_s": 0.715,
+   "cum_s": 0.753,
+   "calls": 2900765,
+   "calls_per_own_s": 4055362
+  },
+  {
+   "function": "forward (reader.py:99)",
+   "own_s": 0.71,
+   "cum_s": 0.779,
+   "calls": 285379,
+   "calls_per_own_s": 402037
+  },
+  {
+   "function": "<method 'extend' of 'collections.deque' objects> (~:0)",
+   "own_s": 0.368,
+   "cum_s": 3.169,
+   "calls": 458739,
+   "calls_per_own_s": 1246743
+  },
+  {
+   "function": "<method 'join' of 'str' objects> (~:0)",
+   "own_s": 0.313,
+   "cum_s": 2.603,
+   "calls": 275776,
+   "calls_per_own_s": 879693
+  },
+  {
+   "function": "peek (reader.py:87)",
+   "own_s": 0.266,
+   "cum_s": 0.266,
+   "calls": 628844,
+   "calls_per_own_s": 2365448
+  },
+  {
+   "function": "<built-in method builtins.getattr> (~:0)",
+   "own_s": 0.253,
+   "cum_s": 0.253,
+   "calls": 1143184,
+   "calls_per_own_s": 4522436
+  },
+  {
+   "function": "<method 'popleft' of 'collections.deque' objects> (~:0)",
+   "own_s": 0.164,
+   "cum_s": 0.164,
+   "calls": 458739,
+   "calls_per_own_s": 2795501
+  },
+  {
+   "function": "need_more_tokens (scanner.py:145)",
+   "own_s": 0.144,
+   "cum_s": 0.343,
+   "calls": 157719,
+   "calls_per_own_s": 1097577
+  },
+  {
+   "function": "stale_possible_simple_keys (scanner.py:279)",
+   "own_s": 0.134,
+   "cum_s": 0.134,
+   "calls": 165078,
+   "calls_per_own_s": 1232233
+  },
+  {
+   "function": "<built-in method builtins.len> (~:0)",
+   "own_s": 0.114,
+   "cum_s": 0.124,
+   "calls": 565891,
+   "calls_per_own_s": 4948101
+  }
+ ],
+ "opens": {
+  "weibull_a_100m.tif": 3,
+  "weibull_k_100m.tif": 3,
+  "air_density_100m.tif": 3,
+  "weibull_a_150m.tif": 3,
+  "weibull_k_150m.tif": 3,
+  "air_density_150m.tif": 3,
+  "weibull_a_200m.tif": 3,
+  "weibull_k_200m.tif": 3,
+  "air_density_200m.tif": 3,
+  "PRT_elevation_aligned.tif": 1
+ },
+ "opens_total": 31,
+ "to_crs_calls": 0
+}

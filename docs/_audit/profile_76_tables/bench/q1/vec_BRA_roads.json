@@ -1,0 +1,179 @@
+{
+ "iso": "BRA",
+ "layer": "roads",
+ "window": [
+  -46.5,
+  -23.5,
+  1.0
+ ],
+ "source": "D:\\Douglas\\DOUTORADO\\GeoFREA_data\\raw\\infrastructure_roads\\_global\\Region_2_Central_South_America\\GRIP4_region2.shp",
+ "clip": {
+  "wall_s": 4.177,
+  "cpu_s": 1.172,
+  "top5_own_time": [
+   {
+    "function": "read_info (core.py:241)",
+    "own_s": 2.582,
+    "calls": 1
+   },
+   {
+    "function": "read (raw.py:39)",
+    "own_s": 1.378,
+    "calls": 1
+   },
+   {
+    "function": "default_array_ufunc (arraylike.py:481)",
+    "own_s": 0.175,
+    "calls": 1
+   },
+   {
+    "function": "from_wkb (io.py:308)",
+    "own_s": 0.006,
+    "calls": 1
+   },
+   {
+    "function": "<method 'query' of 'shapely.lib.STRtree' objects> (~:0)",
+    "own_s": 0.002,
+    "calls": 1
+   }
+  ]
+ },
+ "features": 8131,
+ "pixels": 10000,
+ "grid_shape": [
+  100,
+  100
+ ],
+ "raster": {
+  "wall_s": 0.662,
+  "cpu_s": 0.5,
+  "top5_own_time": [
+   {
+    "function": "get_coordinates (coordinates.py:197)",
+    "own_s": 0.086,
+    "calls": 8132
+   },
+   {
+    "function": "wrapped (decorators.py:73)",
+    "own_s": 0.074,
+    "calls": 24399
+   },
+   {
+    "function": "simplify (constructive.py:1128)",
+    "own_s": 0.072,
+    "calls": 1
+   },
+   {
+    "function": "__iter__ (coords.py:43)",
+    "own_s": 0.065,
+    "calls": 24813
+   },
+   {
+    "function": "is_empty (predicates.py:181)",
+    "own_s": 0.039,
+    "calls": 8131
+   }
+  ]
+ },
+ "feature_pixels": 2349,
+ "edt": {
+  "wall_s": 0.002,
+  "cpu_s": 0.0,
+  "top5_own_time": [
+   {
+    "function": "<built-in method scipy.ndimage._nd_image.euclidean_feature_transform> (~:0)",
+    "own_s": 0.001,
+    "calls": 1
+   },
+   {
+    "function": "distance_transform_edt (_morphology.py:2435)",
+    "own_s": 0.0,
+    "calls": 1
+   },
+   {
+    "function": "edt (bench_vector.py:125)",
+    "own_s": 0.0,
+    "calls": 1
+   },
+   {
+    "function": "<method 'astype' of 'numpy.ndarray' objects> (~:0)",
+    "own_s": 0.0,
+    "calls": 4
+   },
+   {
+    "function": "indices (numeric.py:1790)",
+    "own_s": 0.0,
+    "calls": 1
+   }
+  ]
+ },
+ "write": {
+  "wall_s": 0.063,
+  "cpu_s": 0.031,
+  "top5_own_time": [
+   {
+    "function": "wrapper (env.py:442)",
+    "own_s": 0.036,
+    "calls": 4
+   },
+   {
+    "function": "open (__init__.py:111)",
+    "own_s": 0.017,
+    "calls": 2
+   },
+   {
+    "function": "_write_distance_and_flag (vector_alignment.py:157)",
+    "own_s": 0.003,
+    "calls": 1
+   },
+   {
+    "function": "safe_raster_write (raster_io.py:114)",
+    "own_s": 0.002,
+    "calls": 4
+   },
+   {
+    "function": "<built-in method nt.stat> (~:0)",
+    "own_s": 0.001,
+    "calls": 12
+   }
+  ]
+ },
+ "ckdtree_chord": {
+  "wall_s": 0.362,
+  "cpu_s": 0.281,
+  "top5_own_time": [
+   {
+    "function": "<built-in method io.open_code> (~:0)",
+    "own_s": 0.07,
+    "calls": 85
+   },
+   {
+    "function": "<built-in method _imp.create_dynamic> (~:0)",
+    "own_s": 0.016,
+    "calls": 23
+   },
+   {
+    "function": "<built-in method nt.stat> (~:0)",
+    "own_s": 0.015,
+    "calls": 323
+   },
+   {
+    "function": "cleandoc (inspect.py:863)",
+    "own_s": 0.01,
+    "calls": 123
+   },
+   {
+    "function": "chord_distance_km (bench_vector.py:55)",
+    "own_s": 0.01,
+    "calls": 1
+   }
+  ]
+ },
+ "ckdtree_vs_edt": {
+  "max_diff_m": 417.7,
+  "mean_diff_m": 54.07,
+  "fraction_over_1m": 0.7651,
+  "fraction_over_10m": 0.652,
+  "fraction_identical": 0.2349
+ }
+}

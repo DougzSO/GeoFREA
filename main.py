@@ -203,7 +203,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(REPO_ROOT / ".env", override=False)
 
 COUNTRIES_YAML = REPO_ROOT / "config" / "countries.yaml"
-DEFERRED_CHECKS_YAML = REPO_ROOT / "config" / "deferred_checks.yaml"  # D-core-045: content check against a reference manifest, per country
+DEFERRED_CHECKS_YAML = REPO_ROOT / "config" / "deferred_checks.yaml"  # D-core-050: content check against a reference manifest, per country
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
 AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"

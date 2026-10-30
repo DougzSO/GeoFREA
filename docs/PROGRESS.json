@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "15.3.0",
-  "last_updated": "2026-10-28",
+  "methodology_version": "15.3.1",
+  "last_updated": "2026-10-30",
   "current_milestone": "MS-6",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -63,11 +63,30 @@
     {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
   ],
   "countries": {
-    "BRA": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "BRA": {"F1": "awaiting_content_check_post_77", "F1b": "awaiting_content_check_post_77", "F2a": "awaiting_content_check_post_77", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
-    "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
+    "IND": {"F1": "awaiting_content_check_post_77", "F1b": "awaiting_content_check_post_77", "F2a": "awaiting_content_check_post_77", "F2b": "awaiting_content_check_post_77", "F3": "awaiting_content_check_post_77", "F4": "awaiting_content_check_post_77", "F5": "awaiting_content_check_post_77", "F6": "not_run", "F7": "not_run", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_with_issues", "F6": "ran_clean", "F7": "ran_with_issues", "F7b": "ran_with_issues"}
   },
+  "pending_verifications": [
+    {
+      "id": "PV-77",
+      "what": "Content of F1 to F5 of IND and BRA after the performance work of COMMANDS 75 to 79: the artifacts have not yet been compared by hash with the state before the work.",
+      "countries": [
+        "IND",
+        "BRA"
+      ],
+      "where": "The pipeline itself: config/deferred_checks.yaml and core/deferred_check.py (D-core-050). The first execution of each phase of IND and BRA on main compares the content hash of its artifacts with outputs/<ISO>/unattended/20261029_135838/manifest_before.json and writes outputs/<ISO>/deferred_check.json.",
+      "to_do": [
+        "adopt the aligned layers once per country: python scripts/adopt_aligned_cache_keys.py <ISO> --revision perf/75-performance --proof docs/_audit/cumulative_equivalence_77_PRT.json",
+        "run the phases of F1 to F5 for the country (the next real round) and read outputs/<ISO>/deferred_check.json: IDENTICO or EXPLICADO for every phase",
+        "BRA audit_report: if EXPLICADO_REVISAR, open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of geometry_types changed",
+        "on DIFERENTE: do not use the numbers; the report names the artifact and the probable cause",
+        "when both countries are IDENTICO or EXPLICADO, set their F1 to F5 back to ran_clean and delete the countries from config/deferred_checks.yaml"
+      ],
+      "evidence_so_far": "PRT 94 of 94 artifacts equal by content hash and 95 of 95 PNG by pixels; IND clips of protected, roads, rivers and lakes equal to those made before COMMAND 77; docs/_audit/performance_75.md and docs/_audit/optimizations_77.md"
+    }
+  ],
   "pending_figures": ["COMMAND 70: migrate the F8 thesis figures (results_synthesis) and the audit charts (scripts/audit_potential.py) to viz", "F6 and F7 figures: check on the first real run", "Supply curve against LCOE after F6", "Wind CF display layer of PRT refused by the 1% aggregation check (16 of 3500 cells, max 1.96%): decide the tolerance, see docs/figures/display_layers_70.md"],
   "regression": {
     "workflow": ".github/workflows/regression.yml",

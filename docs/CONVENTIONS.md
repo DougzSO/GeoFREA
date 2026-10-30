@@ -36,7 +36,7 @@ Used in `docs/PROGRESS.json` only (phase records carry no status line):
 - `conformant`: audited, all conformance rows pass
 - `rework_required`: code exists and conflicts with the methodology
 
-Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
+Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`, and, while a check of the content is open, `awaiting_content_check_post_77` (the phase ran, but its artifacts have not been compared with the state before the performance work of COMMANDS 75 to 79; `pending_verifications` of `docs/PROGRESS.json` says what is missing and where it is done, and the status returns to `ran_clean` when the check settles). They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
 
 ## Where status lives
 
@@ -111,6 +111,18 @@ Implementation decisions are cited as `See docs/phases/F5_technical_potential.md
 ## Long-running scripts
 
 Scripts or validations expected to run longer than 30 seconds log progress with elapsed time and estimated remaining time, using flushed output.
+
+## Memory before a cold round
+
+A cold audit or a cold F2a of a large country peaks near 2 to 4 GB. `main.py` does not start a run whose target phases include a cold `data_quality_audit` or `grid_alignment` (no current manifest entry or cache for the country) when `core/memory_guard.py` finds less than **2 GB available** (`MIN_AVAILABLE_GB`): it logs the shortfall and exits with code 75 before any phase of any country runs. Close the browser and the editors first. A script that runs a country unattended (`scripts/run_unattended.ps1`) also samples the available memory and stops the country cleanly under 400 MB, so the manifest keeps the phases that finished (it is replaced atomically, never truncated).
+
+## Keeping the computer awake
+
+`settings.yaml` `keep_awake` (schema default `false`; the shipped file sets `true`) tells `main.py` to ask Windows not to suspend the computer while a run goes on. A phase suspended by the system logs hours of wall time that its CPU time does not show: report a duration as **awake time** (`wall - slept`, the sleeps read from the Kernel-Power 42 and Power-Troubleshooter 1 events, `scripts/profiling/export_power_events.ps1`), never as wall time alone.
+
+## Changes that must not change a result
+
+A change made for speed or memory is accepted only with the canonical content hash (`core/content_hash.py`, the hash of the manifest) of what it writes equal to that of the code before it, on the same input; a clip is compared with `equals_exact` at tolerance 0, a figure by pixels. The proof runs on a sample country and, for a transformation that depends on the data (a clip of a layer with lines that touch themselves), on the whole layer of the countries it touches. One change per commit, with tests; a change that cannot be proved equal is not applied and its evidence stays in `docs/_audit`. Where a country cannot be run in the proof (hours of compute), the proof is deferred to the pipeline itself: `config/deferred_checks.yaml` names a reference manifest and the first execution of each phase is compared with it (D-core-050). A new cache key or a changed fingerprint rebuilds the internal caches once; adopting the caches of an earlier revision is allowed only under D-core-044.
 
 ## Run legibility (COMMAND ADJ-7)
 

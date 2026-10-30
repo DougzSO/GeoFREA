@@ -1,0 +1,94 @@
+{
+ "iso": "BRA",
+ "step": "population",
+ "window": [
+  -46.5,
+  -23.5,
+  1.0
+ ],
+ "grid_pixels": 10000,
+ "grid_shape": [
+  100,
+  100
+ ],
+ "wall_s": 2.613,
+ "cpu_s": 1.797,
+ "top5_own_time": [
+  {
+   "function": "reproject (warp.py:160)",
+   "own_s": 1.254,
+   "calls": 1
+  },
+  {
+   "function": "reproject_to_grid (raster_alignment.py:63)",
+   "own_s": 1.143,
+   "calls": 1
+  },
+  {
+   "function": "open (__init__.py:111)",
+   "own_s": 0.176,
+   "calls": 2
+  },
+  {
+   "function": "wrapper (env.py:442)",
+   "own_s": 0.022,
+   "calls": 3
+  },
+  {
+   "function": "safe_raster_open (raster_io.py:37)",
+   "own_s": 0.005,
+   "calls": 2
+  }
+ ],
+ "source": {
+  "crs": "EPSG:4326",
+  "res": [
+   0.0008333333300044304,
+   -0.0008333333300081173
+  ],
+  "dtype": "float32",
+  "block": [
+   1,
+   54172
+  ],
+  "compress": "LZW"
+ },
+ "block_sum": {
+  "wall_s": 0.002,
+  "cpu_s": 0.0,
+  "top5_own_time": [
+   {
+    "function": "open (__init__.py:111)",
+    "own_s": 0.001,
+    "calls": 1
+   },
+   {
+    "function": "<built-in method nt.stat> (~:0)",
+    "own_s": 0.0,
+    "calls": 4
+   },
+   {
+    "function": "block_sum_population (bench_raster.py:66)",
+    "own_s": 0.0,
+    "calls": 1
+   },
+   {
+    "function": "defenv (env.py:328)",
+    "own_s": 0.0,
+    "calls": 2
+   },
+   {
+    "function": "splitdrive (<frozen ntpath>:154)",
+    "own_s": 0.0,
+    "calls": 16
+   }
+  ],
+  "applicable": "no: source and grid are not nested on the same CRS"
+ },
+ "opens_per_file": {
+  "bra_pop_2020.tif": 3,
+  "out.writing.tif": 1,
+  "out.tif": 1
+ },
+ "opens_total": 5
+}

@@ -1,4 +1,4 @@
-"""Deferred content check of a country against a reference manifest (COMMAND 80; D-core-045).
+"""Deferred content check of a country against a reference manifest (COMMAND 80; D-core-050).
 
 The performance work of COMMANDS 75 to 77 changed how the phases compute, not what they compute. For PRT every artifact of F1 to F5 was proved equal by
 content hash; for IND and BRA the proof is made by this check, the first time the pipeline runs those phases on the new code. `config/deferred_checks.yaml`

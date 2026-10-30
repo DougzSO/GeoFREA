@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 
-# the comparison itself is the one the pipeline applies in its deferred check (core/deferred_check.py, D-core-045)
+# the comparison itself is the one the pipeline applies in its deferred check (core/deferred_check.py, D-core-050)
 from geofrea.core.deferred_check import compare_artifacts, content_of  # noqa: E402,F401
 
 

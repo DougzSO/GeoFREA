@@ -1,4 +1,4 @@
-"""The deferred content check on the synthetic country ZZZ, through the real phases (COMMAND 80; D-core-045).
+"""The deferred content check on the synthetic country ZZZ, through the real phases (COMMAND 80; D-core-050).
 
 ZZZ2 runs hazard_context and technical_potential; its manifest is the reference. An artifact of technical_potential is then altered by hand in the
 reference (its recorded content hash), and the same phases run again: hazard_context matches the reference, technical_potential does not, with no change of

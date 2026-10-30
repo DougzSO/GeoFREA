@@ -1,0 +1,28 @@
+{
+ "iso": "IND",
+ "layer": "roads",
+ "window": [
+  77.0,
+  28.0,
+  1.0
+ ],
+ "features_matched": 96354,
+ "clip_vertices": 5,
+ "current": {
+  "wall_s": 2.065,
+  "cpu_s": 2.078
+ },
+ "fastpath": {
+  "wall_s": 0.023,
+  "cpu_s": 0.031
+ },
+ "covered": 96056,
+ "covered_fraction": 0.9969,
+ "identical_exact": 96354,
+ "differ_exact": 0,
+ "differ_after_normalize": 0,
+ "differ_topologically": 0,
+ "covered_that_differ_exact": 0,
+ "type_changes": 0,
+ "speedup_cpu": 67.03
+}
