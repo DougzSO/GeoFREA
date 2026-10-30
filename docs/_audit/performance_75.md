@@ -96,7 +96,7 @@ For comparison, `profile_76.md` A.3 counts 4 cold executions of IND (7.4 awake h
   explains. The expected differences are the F5 artifacts of BRA that depend on the wind table (the configuration fingerprint of the phase changed) and the `audit_report` of BRA, flagged for review: its difference in the
   round was the count of `geometry_types` and the reference copy of the file was not kept, so what differs cannot be read back; nothing computes from the report.
 * **Before the first IND or BRA run on the merged code**, adopt the aligned layers (the cache code of the aligned layers is now `c147200ba18b`):
-  `python scripts/adopt_aligned_cache_keys.py <ISO> --revision perf/75-performance --proof docs/_audit/cumulative_equivalence_77_PRT.json`
+  `python scripts/adopt_aligned_cache_keys.py <ISO> --revision adopt-base-75 --proof docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json`
   (the script puts back the keys of the revision first, so it can be run again). Without it F2a is rebuilt from the start (6,878 s awake in IND and 18,707 s in BRA in the last cold executions).
 
 ## 5. Limits of what was measured
