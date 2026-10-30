@@ -78,7 +78,7 @@
       ],
       "where": "The pipeline itself: config/deferred_checks.yaml and core/deferred_check.py (D-core-050). The first execution of each phase of IND and BRA on main compares the content hash of its artifacts with outputs/<ISO>/unattended/20261029_135838/manifest_before.json and writes outputs/<ISO>/deferred_check.json.",
       "to_do": [
-        "adopt the aligned layers once per country: python scripts/adopt_aligned_cache_keys.py <ISO> --revision perf/75-performance --proof docs/_audit/cumulative_equivalence_77_PRT.json",
+        "adopt the aligned layers once per country: python scripts/adopt_aligned_cache_keys.py <ISO> --revision adopt-base-75 --proof docs/_audit/cumulative_equivalence_77_PRT.json",
         "run the phases of F1 to F5 for the country (the next real round) and read outputs/<ISO>/deferred_check.json: IDENTICO or EXPLICADO for every phase",
         "BRA audit_report: if EXPLICADO_REVISAR, open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of geometry_types changed",
         "on DIFERENTE: do not use the numbers; the report names the artifact and the probable cause",

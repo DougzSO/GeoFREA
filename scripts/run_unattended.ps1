@@ -28,7 +28,7 @@
 .PARAMETER Phases         Comma list of the phases (default: the twelve phases to potential_maps).
 .PARAMETER MinFreeMb      Available memory under which the current country is stopped (default 400).
 .PARAMETER MinStartMb     Available memory that a round needs to start (default 2000, the rule of CONVENTIONS "Memory before a cold round").
-.PARAMETER AdoptRevision  The revision under which the aligned layers of the countries were made (default perf/75-performance).
+.PARAMETER AdoptRevision  The revision under which the aligned layers of the countries were made (default adopt-base-75).
 .PARAMETER AdoptProof     The equivalence proof the adoption needs, relative to the worktree.
 .PARAMETER BaselineStamp  The round whose saved manifest_before.json is the reference of the comparison (default 20261029_135838, the manifest of before the
                       first unattended round; '' compares with the manifest at the start of this round).
@@ -44,7 +44,7 @@ param(
     [int]$MinFreeMb = 400,
     [int]$MinStartMb = 2000,
     [int]$PollSeconds = 15,
-    [string]$AdoptRevision = 'perf/75-performance',
+    [string]$AdoptRevision = 'adopt-base-75',
     [string]$AdoptProof = 'docs/_audit/cumulative_equivalence_77_PRT.json',
     [string]$BaselineStamp = '20261029_135838',
     [switch]$SkipAdopt,

@@ -158,3 +158,22 @@ def test_the_adopting_run_names_f2a_in_rerun_so_it_executes_when_its_manifest_en
 
     args = phase_arguments("IND")
     assert args[0] == "IND" and args[args.index("--phases") + 1] == "grid_alignment" and args[args.index("--rerun") + 1] == "grid_alignment"
+
+
+@pytest.mark.unit
+def test_check_mode_resolves_the_revision_and_the_proof_without_adopting_or_running(monkeypatch, capsys, tmp_path):
+    import json
+
+    module = _script()
+    from geofrea.core.cache_code import cache_code
+
+    proof = tmp_path / "proof.json"
+    proof.write_text(json.dumps({"equal": True, "old_cache_code": "old" * 4, "new_cache_code": cache_code("aligned_layers")}), encoding="utf-8")
+    monkeypatch.setattr(module, "cache_code_at", lambda revision: "old" * 4)
+
+    def must_not_run(*_args, **_kwargs):
+        raise AssertionError("check mode ran something")
+
+    monkeypatch.setattr(module, "adopt", must_not_run)
+    assert module.main(["PRT", "--revision", "adopt-base-75", "--proof", str(proof), "--check"]) == 0
+    assert "check only" in capsys.readouterr().out

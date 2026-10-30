@@ -1,6 +1,6 @@
 """Adopt the aligned layers of a country under the current code instead of computing them again (COMMAND 75).
 
-usage: python scripts/adopt_aligned_cache_keys.py <ISO3> --revision <git revision> [--proof docs/_audit/aligned_equivalence_PRT.json]
+usage: python scripts/adopt_aligned_cache_keys.py <ISO3> --revision <git revision> [--proof docs/_audit/aligned_equivalence_PRT.json] [--check]
 
 Every aligned layer of F2a has a cache key that holds the fingerprint of the code of `grid_alignment` (`cache_code("aligned_layers")`, A-02).
 A change of that code gives another key, so the next run computes every layer again: for BRA that is about 42,000 s. COMMAND 75 changed the code
@@ -154,6 +154,11 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO / "docs" / "_audit" / "aligned_equivalence_PRT.json",
         help="result of scripts/check_aligned_equivalence.py (default: the PRT sample)",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="resolve --revision, compute its cache code and check the proof against it and the current code; adopt nothing and run nothing",
+    )
     args = parser.parse_args(argv)
 
     import main as pipeline
@@ -165,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
     require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, cache_code(CACHE_NAME))
     artifacts = core_paths.phase_dir(args.iso, "grid_alignment", "artifacts")
     print(f"aligned-layer cache code at {args.revision}: {old_code[:12]}")
+    if args.check:
+        print(f"check only: the proof matches {args.revision} ({old_code[:12]}) and the current code ({cache_code(CACHE_NAME)[:12]}); nothing adopted, no phase run")
+        return 0
     restored = restore_before_adopt(artifacts)
     if restored:
         print(f"{len(restored)} sidecars put back to the key of {args.revision} (an earlier adoption under other code)")
