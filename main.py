@@ -409,6 +409,9 @@ def _build_grid_alignment_inputs(
             "poi_voltage_threshold_kv": None
             if connection is None
             else connection.poi_voltage_threshold_kv.value,
+            "poi_sensitivity_threshold_kv": None
+            if connection is None or connection.poi_sensitivity_threshold_kv is None
+            else connection.poi_sensitivity_threshold_kv.value,
             "poi_line_tolerance_m": geospatial.poi_line_tolerance_m,
             "poi_substation_source": _substation_source(
                 geospatial.poi_substations_geojson, context.country_code
@@ -471,6 +474,9 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "poi_distance_capped",
 )
 
+# Layers a country has only when its parameters ask for them (COMMAND 86: IND 132 kV sensitivity): registered when present, not in `produces`
+_OPTIONAL_ALIGNED_RASTER_LAYER_KEYS = ("poi_sensitivity", "poi_sensitivity_distance_capped")
+
 
 # Per-height wind layers (M-F2a-04): "<product>_<height>m" for every GWA product and height; each aligned
 # raster is its own artifact "aligned/wind_<product>_<height>m".
@@ -487,6 +493,10 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
     in docs/phases/core.md Known issues).
     """
     for layer_key in _ALIGNED_RASTER_LAYER_KEYS:
+        path = getattr(result, layer_key)
+        if path is not None:
+            context.register_artifact(f"aligned/{layer_key}", path, "1.0")
+    for layer_key in _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS:
         path = getattr(result, layer_key)
         if path is not None:
             context.register_artifact(f"aligned/{layer_key}", path, "1.0")

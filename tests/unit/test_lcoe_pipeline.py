@@ -644,9 +644,13 @@ def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_citing_oq_0
         )  # fmt: skip
     message = str(caught.value)
     connection = parameters.countries[iso].connection
-    assert "OQ-001" in message
+    still_open = [n for n in ("line_cost_per_km", "bay_cost") if getattr(connection, n).value is None]
+    assert connection.road_cost_excluded  # COMMAND 85: no sourced road cost, the central scenario bills none
+    assert not still_open  # COMMAND 86: every cost has a value and a year
+    assert "conversion to 2024 USD" in message  # the unit test has no conversion indices (they live in GEOFREA_DATA_DIR)
     for tech in TECHS:
-        for name in ("line_cost_per_km", "bay_cost", "road_cost_per_km"):
+        assert f"{tech}: road_cost_per_km" not in message  # an excluded road is not a missing item
+        for name in ("line_cost_per_km", "bay_cost"):
             cost = getattr(connection, name)
             if cost.value is None:
                 assert f"{tech}: {name} (no value, status to_be_sourced; OQ-001)" in message, name

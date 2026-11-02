@@ -106,6 +106,8 @@ class GridAlignmentInputs(BaseModel):
             replaces the substation points of `grid_source` (the lines stay). None keeps the substations of `grid_source`.
         poi_voltage_threshold_kv: Country threshold of the point of interconnection (`connection.poi_voltage_threshold_kv` of
             parameters.json, Group 3). Null: the `poi` distance layer is not produced.
+        poi_sensitivity_threshold_kv: Threshold of the sensitivity layer `poi_sensitivity` (`connection.poi_sensitivity_threshold_kv`, IND 132 kV, COMMAND 86);
+            null: no sensitivity layer.
         poi_line_tolerance_m: Distance (m) within which an OSM line reaches a substation, for the inference of a missing voltage
             (`geospatial.poi_line_tolerance_m` of settings.yaml); recorded in the manifest.
         road_classes: The road classes that count for `roads` (`geospatial.road_classes`); null keeps every class.
@@ -128,6 +130,7 @@ class GridAlignmentInputs(BaseModel):
     distance_cap_km: float
     poi_substation_source: Path | None = None
     poi_voltage_threshold_kv: float | None = None
+    poi_sensitivity_threshold_kv: float | None = None
     poi_line_tolerance_m: float | None = None
     road_classes: RoadClasses | None = None
 
@@ -239,3 +242,6 @@ class GridAlignmentResult(BaseModel):
     poi: Path | None = None
     poi_distance_capped: Path | None = None
     poi_counts: dict[str, int] | None = None
+    poi_sensitivity: Path | None = None
+    poi_sensitivity_distance_capped: Path | None = None
+    poi_sensitivity_counts: dict[str, int] | None = None

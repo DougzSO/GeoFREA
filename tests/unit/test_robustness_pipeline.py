@@ -453,7 +453,8 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
         text = str(info.value)
         assert text.count("cf_min") == 2 and "OQ-008" in text
         # Groups 1 and 2 are recorded: what stays open is the Group 3 unit costs (OQ-001) and the F7 thresholds
-        assert "OQ-001" in text
+        # no real country has an open cost since COMMAND 86: the F6 check stops at the conversion indices, which are not in the test data dir
+        assert "conversion to 2024 USD" in text  # COMMAND 86: no cost is open; the test data dir has no conversion indices
         assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 4
 
 

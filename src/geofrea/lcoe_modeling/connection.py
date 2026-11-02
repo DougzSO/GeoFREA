@@ -154,6 +154,8 @@ class Group3:
     long_distance_flag_km: float
     loss_sensitivity_per_km: tuple[float, float]  # the range of the named scenario `transmission_losses`
     hot_zone_sensitivity: tuple[float, int] | None = None  # (rate, first zone) of the named scenario `pv_hot_zone_degradation`
+    road_cost_excluded: bool = False  # the central scenario bills no access road (COMMAND 85): the LCOE is a lower bound
+    road_high_usd_per_km: float | None = None  # the named scenario `road_cost_high`, in 2024 USD per km, when its cost has a value
 
 
 def group3_problems(iso: str, technology: str, connection: ConnectionParams | None, tech_params: object, indices_dir: Path | None = None) -> list[str]:
@@ -165,6 +167,8 @@ def group3_problems(iso: str, technology: str, connection: ConnectionParams | No
         return [f"connection (no `connection` block in parameters.json for {iso}, Group 3; {OPEN_QUESTION_COSTS})"]
     problems: list[str] = []
     for name in ("line_cost_per_km", "bay_cost", "road_cost_per_km"):
+        if name == "road_cost_per_km" and connection.road_cost_excluded:
+            continue  # the central scenario bills no road; the sensitivity `road_cost_high` is not run by the central F6
         cost: UnitCost = getattr(connection, name)
         if cost.value is None:
             suffix = f"; {cost.open_question}" if cost.open_question else f"; {OPEN_QUESTION_COSTS}"
@@ -204,6 +208,10 @@ def resolve_group3(
         ("bay_cost_usd", "bay_cost"),
         ("road_cost_usd_per_km", "road_cost_per_km"),
     ):
+        if kernel_key == "road_cost_usd_per_km" and connection.road_cost_excluded:
+            nominal[kernel_key] = 0.0
+            ranges[kernel_key] = (0.0, 0.0, "uniform")  # fixed at zero: no road in the central scenario
+            continue
         cost: UnitCost = getattr(connection, name)
         nominal[kernel_key] = to_usd_2024(cost.value, cost, indices)
         ranges[kernel_key] = (to_usd_2024(cost.low, cost, indices), to_usd_2024(cost.high, cost, indices), "uniform")
@@ -226,6 +234,8 @@ def resolve_group3(
         nominal["degradation_weight"] = 0.0 if high == low else (float(entry.value) - low) / (high - low)
     ranges["degradation_weight"] = (0.0, 1.0, "uniform")
     sensitivity = connection.transmission_loss_per_km_sensitivity
+    high = connection.road_cost_per_km_high
+    road_high = to_usd_2024(high.value, high, indices) if high is not None and high.value is not None and high.price_year is not None else None
     hot_zone = None
     if hasattr(tech_params, "degradation_by_zone") and tech_params.degradation_by_zone.hot_zone_sensitivity is not None:
         hz = tech_params.degradation_by_zone.hot_zone_sensitivity
@@ -237,6 +247,8 @@ def resolve_group3(
         long_distance_flag_km=float(connection.long_distance_flag_km.value),
         loss_sensitivity_per_km=(sensitivity.range.min, sensitivity.range.max) if sensitivity.range else (sensitivity.value,) * 2,
         hot_zone_sensitivity=hot_zone,
+        road_cost_excluded=connection.road_cost_excluded,
+        road_high_usd_per_km=road_high,
     )
 
 

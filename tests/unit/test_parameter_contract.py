@@ -123,9 +123,11 @@ def test_uncertain_parameter_requires_range_in_production():
     # the recorded parameters carry a value and a range for what Group 1 and 2 set
     ok = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
     assert not any("capex_usd_per_kw" in e or "gamma" in e for e in ok.errors)
-    # the discount rate and the degradation are recorded; the road cost of Group 3 is not (OQ-001), and a production run refuses it
+    # the discount rate and the degradation are recorded; the road cost of Group 3 is not, but the central scenario excludes it (COMMAND 86):
+    # no error, a warning that the LCOE is a lower bound
     assert not any("degradation" in e for e in ok.errors)
-    assert any("PRT connection road_cost_per_km: no value" in e and "OQ-001" in e for e in ok.errors)
+    assert not any("road_cost_per_km" in e for e in ok.errors)
+    assert any("PRT connection road_cost_per_km" in w and "road_cost_excluded" in w for w in ok.warnings)
 
 
 @pytest.mark.unit

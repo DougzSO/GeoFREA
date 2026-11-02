@@ -237,7 +237,7 @@ class VerifiedValue(BaseModel, Generic[T]):
         return self
 
 
-CostStatus = Literal["sourced", "verify", "to_be_sourced"]
+CostStatus = Literal["sourced", "verify", "proxy", "provisional", "to_be_sourced"]
 GROUP3_RENAMED_KEYS = {
     "grid_cost_usd_per_mw_km": "line_cost_per_km (countries.<ISO3>.connection, per project in the currency of the source)",
     "substation_cost_usd_per_mw": "bay_cost (countries.<ISO3>.connection, per bay)",
@@ -261,7 +261,8 @@ class UnitCost(BaseModel):
         per: What the cost is incurred per: `km` of line or road, or `bay` (a connection at the receiving substation).
         price_year: Price base year of the source, or null while it is unconfirmed (status `verify`).
         source: BibTeX key or citation of the source.
-        status: `sourced`, `verify` (value present, a detail such as the base year to be confirmed) or `to_be_sourced` (no value).
+        status: `sourced`, `verify` (value present, a detail such as the base year to be confirmed), `proxy` (a regulator's figure of another
+        nature stands in for the cost, COMMAND 86), `provisional` (a benchmark of another region or period, Tier 3) or `to_be_sourced` (no value).
         tier: Evidence tier (U-07).
         note: Free-text caveat (voltage class, whether right of way is included).
         open_question: Open question that tracks a missing value (for example `OQ-001`).
@@ -368,11 +369,15 @@ class ConnectionParams(BaseModel):
     Values match `docs/thesis/methods/group3_connection_degradation.tex`. The costs are per project (a line, a bay, a road) and are spread
     over `reference_project_mw` by F6. `transmission_loss_per_km` is 0 in the central case; `transmission_loss_per_km_sensitivity` carries the
     range of the named scenario `transmission_losses`.
+
+    `road_cost_excluded` (COMMAND 85) is the central scenario of a country whose access-road cost has no source: the road term is zero, F6 warns that
+    the LCOE is a lower bound, and `road_cost_per_km_high` (when it has a value) is the named sensitivity `road_cost_high` that bills a road.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     poi_voltage_threshold_kv: VerifiedValue[PositiveFloat]
+    poi_sensitivity_threshold_kv: VerifiedValue[PositiveFloat] | None = None  # sensitivity layer `poi_sensitivity` (IND 132 kV)
     reference_project_mw: VerifiedValue[PositiveFloat]
     tortuosity_grid: VerifiedValue[PositiveFloat]
     tortuosity_road: VerifiedValue[PositiveFloat]
@@ -382,6 +387,8 @@ class ConnectionParams(BaseModel):
     line_cost_per_km: UnitCost
     bay_cost: UnitCost
     road_cost_per_km: UnitCost
+    road_cost_excluded: bool = False
+    road_cost_per_km_high: UnitCost | None = None
     conversion_indices_path: str  # relative to GEOFREA_DATA_DIR: World Bank NY.GDP.DEFL.ZS and PA.NUS.FCRF with source and access date
 
 

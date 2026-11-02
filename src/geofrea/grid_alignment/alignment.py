@@ -517,29 +517,34 @@ def run_grid_alignment_phase(
             distance_cap_km=inputs.distance_cap_km,
         )
 
+    def _poi_points(threshold_kv: float, counts_path: Path) -> object | None:
+        """The eligible substations at `threshold_kv` of the country (see `select_poi`); writes the counts beside the raster."""
+        grid_gdf = load_vector_bbox(inputs.grid_source, inputs.country_gdf, "grid")
+        if grid_gdf is None:
+            return None
+        if inputs.poi_substation_source is not None:
+            # substations as nodes, ways and relations (OQ-067): they replace the points of the raw grid extract, the lines stay
+            substations = load_vector_bbox(inputs.poi_substation_source, inputs.country_gdf, "substations")
+            lines = grid_gdf[grid_gdf["power"] != "substation"]
+            grid_gdf = (
+                lines
+                if substations is None
+                else gpd.GeoDataFrame(
+                    pd.concat([lines, substations], ignore_index=True), geometry="geometry", crs=lines.crs
+                )
+            )
+        points, counts = select_poi(grid_gdf, threshold_kv, inputs.poi_line_tolerance_m)
+        counts_path.write_text(json.dumps(counts.as_dict(), indent=2), encoding="utf-8")
+        logger.info("    [%s] substations at %s kV: %s", counts_path.stem, threshold_kv, counts.as_dict())
+        return points
+
     poi_counts_path = out_dir / "poi_counts.json"
     with timer("poi_distance", timings):
 
         def _poi_distance() -> object | None:
-            grid_gdf = load_vector_bbox(inputs.grid_source, inputs.country_gdf, "grid")
-            if grid_gdf is None:
+            points = _poi_points(inputs.poi_voltage_threshold_kv, poi_counts_path)
+            if points is None:
                 return None
-            if inputs.poi_substation_source is not None:
-                # substations as nodes, ways and relations (OQ-067): they replace the points of the raw grid extract, the lines stay
-                substations = load_vector_bbox(inputs.poi_substation_source, inputs.country_gdf, "substations")
-                lines = grid_gdf[grid_gdf["power"] != "substation"]
-                grid_gdf = (
-                    lines
-                    if substations is None
-                    else gpd.GeoDataFrame(
-                        pd.concat([lines, substations], ignore_index=True), geometry="geometry", crs=lines.crs
-                    )
-                )
-            points, counts = select_poi(
-                grid_gdf, inputs.poi_voltage_threshold_kv, inputs.poi_line_tolerance_m
-            )
-            poi_counts_path.write_text(json.dumps(counts.as_dict(), indent=2), encoding="utf-8")
-            logger.info("    [poi] substations: %s", counts.as_dict())
             return rasterize_linear_distance(
                 points if len(points) else None,
                 _path("poi"),
@@ -560,6 +565,37 @@ def run_grid_alignment_phase(
             poi_line_tolerance_m=inputs.poi_line_tolerance_m,
             poi_algorithm=POI_ALGORITHM_VERSION,
         )
+
+    # Sensitivity `poi_ind_132kv` (COMMAND 86): the same layer at another voltage threshold, computed in the same pass (IND: 132 kV)
+    poi_sensitivity_counts_path = out_dir / "poi_sensitivity_counts.json"
+    aligned["poi_sensitivity"] = None
+    if inputs.poi_sensitivity_threshold_kv is not None:
+        with timer("poi_sensitivity_distance", timings):
+
+            def _poi_sensitivity_distance() -> object | None:
+                points = _poi_points(inputs.poi_sensitivity_threshold_kv, poi_sensitivity_counts_path)
+                if points is None:
+                    return None
+                return rasterize_linear_distance(
+                    points if len(points) else None,
+                    _path("poi_sensitivity"),
+                    inputs.country_gdf,
+                    grid,
+                    "poi_sensitivity",
+                    inputs.distance_cap_km,
+                )
+
+            aligned["poi_sensitivity"] = _execute_or_load(
+                "poi_sensitivity",
+                _poi_sensitivity_distance,
+                _exists(inputs.grid_source),
+                files=[inputs.grid_source]
+                + ([] if inputs.poi_substation_source is None else [inputs.poi_substation_source]),
+                distance_cap_km=inputs.distance_cap_km,
+                poi_voltage_threshold_kv=inputs.poi_sensitivity_threshold_kv,
+                poi_line_tolerance_m=inputs.poi_line_tolerance_m,
+                poi_algorithm=POI_ALGORITHM_VERSION,
+            )
 
     with timer("roads", timings):
         aligned["roads"] = _execute_or_load(
@@ -602,7 +638,7 @@ def run_grid_alignment_phase(
             distance_cap_km=inputs.distance_cap_km,
         )
 
-    for layer in ("roads", "grid", "rivers", "poi"):
+    for layer in ("roads", "grid", "rivers", "poi", "poi_sensitivity"):
         flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
         aligned[f"{layer}_distance_capped"] = (
             flag_path if flag_path and flag_path.exists() else None
@@ -628,5 +664,10 @@ def run_grid_alignment_phase(
         grid_metadata=grid_metadata,
         wind_layers=wind_layers,
         poi_counts=poi_counts,
+        poi_sensitivity_counts=(
+            json.loads(poi_sensitivity_counts_path.read_text(encoding="utf-8"))
+            if aligned.get("poi_sensitivity") and poi_sensitivity_counts_path.exists()
+            else None
+        ),
         **aligned,
     )

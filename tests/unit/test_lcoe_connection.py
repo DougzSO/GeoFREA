@@ -117,15 +117,17 @@ def registry():
 
 
 @pytest.mark.unit
-def test_f6_is_refused_while_a_group_3_cost_is_null_and_the_message_cites_oq_001(parameters, registry):
+def test_f6_is_refused_while_a_group_3_cost_is_to_be_sourced_and_the_message_cites_oq_001(parameters, registry):
     bra = parameters.countries["BRA"]
+    open_cost = UnitCost.model_validate(
+        {"unit": "BRL/km", "currency": "BRL", "per": "km", "status": "to_be_sourced", "open_question": "OQ-001"}
+    )
+    connection = bra.connection.model_copy(update={"line_cost_per_km": open_cost})
     with pytest.raises(LcoeMissingInputError) as caught:
-        resolve_technology_costs(
-            "BRA", "wind", registry.technologies["wind"], bra.technologies.wind, bra.connection
-        )
+        resolve_technology_costs("BRA", "wind", registry.technologies["wind"], bra.technologies.wind, connection)
     text = str(caught.value)
-    for name in ("line_cost_per_km", "bay_cost", "road_cost_per_km"):
-        assert f"{name} (no value, status to_be_sourced; OQ-001)" in text
+    assert "line_cost_per_km (no value, status to_be_sourced; OQ-001)" in text
+    assert "bay_cost" not in text and "road_cost_per_km" not in text  # recorded, or excluded from the central scenario
     assert "capex_usd_per_kw" not in text  # what is recorded is not listed
 
 
@@ -137,12 +139,31 @@ def test_a_country_without_the_connection_block_is_refused(parameters, registry)
 
 
 @pytest.mark.unit
-def test_the_acer_costs_are_accepted_by_the_schema_but_refused_by_f6_until_the_year_is_confirmed(parameters):
+def test_the_validator_accepts_the_three_real_countries_for_both_technologies(parameters):
+    """COMMAND 86: every cost has a value and a price year (the IND bay is a proxy, the road is excluded), so F6 is accepted without running."""
+    for iso in ("BRA", "IND", "PRT"):
+        country = parameters.countries[iso]
+        for tech in ("solar", "wind"):
+            assert group3_problems(iso, tech, country.connection, getattr(country.technologies, tech)) == [], (iso, tech)
+
+
+@pytest.mark.unit
+def test_the_central_scenario_without_road_bills_nothing_and_keeps_the_sensitivity_value(parameters):
     prt = parameters.countries["PRT"]
-    problems = group3_problems("PRT", "wind", prt.connection, prt.technologies.wind)
-    assert any(p.startswith("line_cost_per_km price_year (null, status verify") for p in problems)
-    assert any(p.startswith("bay_cost price_year") for p in problems)
-    assert any(p.startswith("road_cost_per_km (no value") for p in problems)
+    assert prt.connection.road_cost_excluded
+    g3 = resolve_group3("PRT", "solar", prt.connection, prt.technologies.solar, _indices_for_prt(prt))
+    assert g3.road_cost_excluded and g3.nominal["road_cost_usd_per_km"] == 0.0
+    assert g3.ranges["road_cost_usd_per_km"][:2] == (0.0, 0.0)  # a fixed zero, not a sampled cost
+    assert g3.road_high_usd_per_km == pytest.approx(631096.0)  # road_cost_high of PRT: the DNIT 2016 cost in 2024 USD (USD price year 2024, no conversion)
+    # a country with a sourced road cost is billed: the flag off makes the cost a required item again
+    billed = prt.connection.model_copy(update={"road_cost_excluded": False})
+    assert any(p.startswith("road_cost_per_km (no value") for p in group3_problems("PRT", "solar", billed, prt.technologies.solar))
+
+
+def _indices_for_prt(prt):
+    from geofrea.lcoe_modeling.connection import ConversionIndices
+
+    return ConversionIndices("PRT", {2023: 100.0, 2024: 100.0}, {2024: 1.0}, "synthetic", "2026-01-01")
 
 
 @pytest.mark.unit
@@ -238,3 +259,36 @@ def test_the_fleet_file_of_the_degradation_zones_is_present_and_the_conversion_i
     for iso in ("BRA", "IND", "PRT"):
         loaded = load_conversion_indices(indices, iso)
         assert loaded.factor(2024) > 0
+
+
+@pytest.mark.unit
+def test_an_excluded_road_resolves_for_f6_with_a_fixed_zero_in_the_design(parameters, registry):
+    zzz = parameters.countries["ZZZ"]
+    connection = zzz.connection.model_copy(update={"road_cost_excluded": True})
+    resolved = resolve_technology_costs(
+        "ZZZ", "wind", registry.technologies["wind"], zzz.technologies.wind, connection
+    )
+    assert resolved.nominal["road_cost_usd_per_km"] == 0.0
+    spec = next(s for s in resolved.specs if s.name == "road_cost_usd_per_km")
+    assert (spec.low, spec.nominal, spec.high) == (0.0, 0.0, 0.0)
+    assert resolved.group3.road_cost_excluded
+
+
+@pytest.mark.unit
+def test_the_real_countries_resolve_to_2024_usd_with_the_world_bank_indices_of_the_data_dir(parameters):
+    """The costs of the three countries convert with the indices written by `scripts/fetch_conversion_indices.py` (read from the key of `.env`)."""
+    env = REPO / ".env"
+    values = dict(
+        line.split("=", 1) for line in env.read_text(encoding="utf-8").splitlines() if line.startswith("GEOFREA_DATA_DIR=")
+    ) if env.is_file() else {}
+    assert values.get("GEOFREA_DATA_DIR"), "GEOFREA_DATA_DIR is not set in .env"
+    indices_file = Path(values["GEOFREA_DATA_DIR"].strip().strip('"')) / "external" / "world_bank" / "conversion_indices.json"
+    for iso in ("BRA", "IND", "PRT"):
+        country = parameters.countries[iso]
+        indices = load_conversion_indices(indices_file, iso)
+        for tech in ("solar", "wind"):
+            g3 = resolve_group3(iso, tech, country.connection, getattr(country.technologies, tech), indices)
+            assert g3.road_cost_excluded and g3.nominal["road_cost_usd_per_km"] == 0.0
+            assert 5e4 < g3.nominal["line_cost_usd_per_km"] < 1e6  # BRA 111 thousand, IND 130 thousand, PRT 411 thousand USD/km
+            assert 1e5 < g3.nominal["bay_cost_usd"] < 5e6
+            assert g3.road_high_usd_per_km is not None and g3.road_high_usd_per_km > 5e5  # the sensitivity road_cost_high

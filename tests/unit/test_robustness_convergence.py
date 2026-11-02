@@ -282,7 +282,8 @@ def test_build_convergence_lists_the_values_only_the_author_can_set(tmp_path):
 @pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
 def test_real_countries_do_not_run_the_protocol_until_their_parameters_have_ranges(iso, tmp_path):
     """The parameter check comes first and lists the absent Group 3 costs (OQ-001); no input is read and nothing is written."""
-    with pytest.raises(LcoeMissingInputError, match="OQ-001"):
+    # no real country has an open cost since COMMAND 86: the check stops at the conversion indices (absent from the test data dir)
+    with pytest.raises(LcoeMissingInputError, match="conversion to 2024 USD"):
         build_convergence(
             iso, load_technologies(TECHNOLOGIES), load_parameters(PARAMETERS).countries[iso],
             ["solar", "wind"], sampler=_sampler(), thresholds=THRESHOLDS, core_window="2041-2070",

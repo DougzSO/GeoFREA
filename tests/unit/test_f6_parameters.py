@@ -70,21 +70,34 @@ def test_real_countries_carry_the_group3_blocks_and_the_old_names_are_gone(param
     assert parameters.countries["IND"].connection.line_cost_per_km.value == 1.10
     assert parameters.countries["PRT"].connection.line_cost_per_km.value == 0.362
     assert parameters.countries["PRT"].connection.bay_cost.value == 2.789
-    assert parameters.countries["PRT"].connection.line_cost_per_km.price_year is None  # ACER base year to be confirmed (verify)
-    assert parameters.countries["PRT"].connection.line_cost_per_km.status == "verify"
-    for iso, name in (
-        ("IND", "bay_cost"),
-        ("BRA", "line_cost_per_km"),
-        ("BRA", "bay_cost"),
-        ("BRA", "road_cost_per_km"),
-        ("IND", "road_cost_per_km"),
-        ("PRT", "road_cost_per_km"),
-    ):
-        assert getattr(parameters.countries[iso].connection, name).value is None, f"{iso} {name}"
+    for name in ("line_cost_per_km", "bay_cost"):  # ACER 2023 report, p. 17: "2023 as the base year" (COMMAND 85, OQ-066 closed)
+        assert getattr(parameters.countries["PRT"].connection, name).price_year == 2023
+        assert getattr(parameters.countries["PRT"].connection, name).status == "sourced"
+    # BRA bay: ANEEL BPR module Entrada de Linha 138 kV, arrangement BPT, with the other arrangements as the range
+    bay = parameters.countries["BRA"].connection.bay_cost
+    assert (bay.currency, bay.price_year, bay.status) == ("BRL", 2017, "verify")
+    assert bay.low < bay.value < bay.high
+    # COMMAND 86: the BRA line (median of seven ANEEL modular costs, deflated to 2024), the IND bay (a proxy) and the road (excluded)
+    line = parameters.countries["BRA"].connection.line_cost_per_km
+    assert (line.currency, line.price_year, line.status, line.tier) == ("BRL", 2024, "sourced", 2)
+    assert line.low < line.value < line.high
+    ind_bay = parameters.countries["IND"].connection.bay_cost
+    assert (ind_bay.value, ind_bay.low, ind_bay.high, ind_bay.status, ind_bay.tier) == (3.0, 1.5, 6.0, "proxy", 3)
+    for iso in REAL_COUNTRIES:
+        connection = parameters.countries[iso].connection
+        assert connection.road_cost_per_km.value is None and connection.road_cost_excluded
+        high = connection.road_cost_per_km_high  # sensitivity road_cost_high, an upper bound for the three
+        assert high.status == "proxy" and high.low <= high.value <= high.high
     thresholds = {
         iso: parameters.countries[iso].connection.poi_voltage_threshold_kv.value for iso in REAL_COUNTRIES
     }
     assert thresholds == {"BRA": 138.0, "IND": 220.0, "PRT": 150.0}
+    for iso in REAL_COUNTRIES:  # COMMAND 86: an author's choice with the evidence of docs/_audit/vth_evidence_85.md in the note
+        assert parameters.countries[iso].connection.poi_voltage_threshold_kv.status == "author_choice"
+    ind = parameters.countries["IND"].connection
+    assert ind.poi_sensitivity_threshold_kv.value == 132.0  # sensitivity layer poi_ind_132kv
+    assert parameters.countries["BRA"].connection.poi_sensitivity_threshold_kv is None
+    assert "ren-dados-tecnicos-2024.pdf" in parameters.countries["PRT"].connection.poi_voltage_threshold_kv.note
     for iso in REAL_COUNTRIES:
         c = parameters.countries[iso].connection
         assert c.reference_project_mw.value == 100.0 and c.long_distance_flag_km.value == 100.0

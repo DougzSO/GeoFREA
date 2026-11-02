@@ -174,6 +174,10 @@ def _provenance(
             if resolved.group3.degradation.by_zone is not None
             else "reference turbine vintages (range)",
             "currency": "constant 2024 USD (World Bank GDP deflator and 2024 average exchange rate)",
+            "road_cost_excluded": resolved.group3.road_cost_excluded,
+            "warning": "the access road is not billed (no sourced road cost): the LCOE is a lower bound; sensitivity road_cost_high"
+            if resolved.group3.road_cost_excluded
+            else None,
         },
     }
     return {PROVENANCE_KEY: json.dumps(payload, sort_keys=True)}
@@ -313,6 +317,10 @@ def build_technology_lcoe(
         )[ELEVATION_COLUMN]
     )
     design_path = out_dir / f"design_matrix_{tech}.parquet"
+    if resolved.group3 is not None and resolved.group3.road_cost_excluded:
+        logger.warning(
+            "%s %s: the access road is not billed (road_cost_excluded, no sourced cost): the LCOE is a lower bound; see sensitivity road_cost_high", iso, tech
+        )
     progress = PeriodicProgress(logger, len(members), f"{iso} {tech} LCOE members", every=5)
     n_rows = n_nonfinite_nominal = n_draw_nonfinite = n_excluded_total = 0
     long_distance_share: float | None = None

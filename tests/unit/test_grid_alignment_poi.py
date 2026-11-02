@@ -154,3 +154,16 @@ def test_a_line_that_crosses_a_polygon_gives_it_a_voltage_even_when_the_point_is
     away = LineString([(-0.01, 0.01), (-0.009, 0.01)])
     far, far_counts = select_poi(_grid([(None, big)], [("230000", away)]), threshold_kv=138.0, tolerance_m=50.0)
     assert len(far) == 0 and far_counts.excluded_no_voltage == 1
+
+
+@pytest.mark.unit
+def test_the_sensitivity_threshold_gives_a_denser_layer_than_the_main_one():
+    """`poi_sensitivity` (IND, 132 kV) is the same selection at a lower threshold: it keeps every substation of the main layer and adds the lower ones."""
+    grid = _grid(
+        [("230000", Point(0.0, 0.0)), ("132000", Point(1.0, 0.0)), ("69000", Point(2.0, 0.0))],
+        [],
+    )
+    main, main_counts = select_poi(grid, threshold_kv=220.0, tolerance_m=50.0)
+    sensitivity, sensitivity_counts = select_poi(grid, threshold_kv=132.0, tolerance_m=50.0)
+    assert (main_counts.eligible, sensitivity_counts.eligible) == (1, 2)
+    assert {g.wkt for g in main.geometry} <= {g.wkt for g in sensitivity.geometry}

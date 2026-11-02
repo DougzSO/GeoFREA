@@ -147,6 +147,11 @@ def _audit_connection(audit: ParameterAudit, iso: str, connection) -> None:
     for name in ("line_cost_per_km", "bay_cost", "road_cost_per_km"):
         cost = getattr(connection, name)
         where = f"{iso} connection {name}"
+        if name == "road_cost_per_km" and connection.road_cost_excluded:
+            audit.warnings.append(f"{where}: no road cost, road_cost_excluded is the central scenario (the LCOE is a lower bound)")
+            continue
+        if cost.status in ("proxy", "provisional") and not cost.synthetic:
+            audit.warnings.append(f"{where}: status {cost.status}, a stand-in value (COMMAND 86)")
         if cost.value is None:
             audit.errors.append(f"{where}: no value (status {cost.status}; {cost.open_question or 'OQ-001'})")
         elif cost.price_year is None:

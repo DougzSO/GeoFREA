@@ -579,8 +579,8 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Lowest voltage of the transmission network operated by REN; 60 kV belongs to the distribution network. Verify: OQ-065.",
-          "status": null,
+          "note": "Author's choice (Tier 2). Evidence: REN Dados Tecnicos 2024 (https://www.ren.pt/media/al3n1imk/ren-dados-tecnicos-2024.pdf, pp. 8-9): the national transmission grid has lines at 150 kV (2,533 km), 220 kV (3,886 km) and 400 kV (3,242 km) at the end of 2024; 150 kV is its lowest voltage. docs/_audit/vth_evidence_85.md.",
+          "status": "author_choice",
           "synthetic": false,
           "proxy": false
         },
@@ -700,11 +700,11 @@
           "currency": "EUR",
           "scale": 1000000.0,
           "per": "km",
-          "price_year": null,
+          "price_year": 2023,
           "source": "acer2023uic",
-          "status": "verify",
+          "status": "sourced",
           "tier": 2,
-          "note": "ACER unit investment cost indicator for 220 kV single-circuit overhead lines (median; range Q1-Q3), used at 150 kV (conservative). Price base year of ACER (2023) unconfirmed: OQ-066.",
+          "note": "ACER UIC report 2023, Table of overhead lines 220-225 kV 1 circuit (median 362,180 EUR/km; interquartile range 303,301-542,906; 7 assets, 2015-2021), used at 150 kV (conservative). Price base year 2023: 'all nominal values of the investments were adjusted for inflation, with 2023 as the base year' (report p. 17). OQ-066 closed.",
           "open_question": "OQ-001"
         },
         "bay_cost": {
@@ -715,11 +715,11 @@
           "currency": "EUR",
           "scale": 1000000.0,
           "per": "bay",
-          "price_year": null,
+          "price_year": 2023,
           "source": "acer2023uic",
-          "status": "verify",
+          "status": "sourced",
           "tier": 2,
-          "note": "ACER indicator for the upgrade of an existing air-insulated substation with up to five bays (median; range Q1-Q3). Price base year unconfirmed: OQ-066.",
+          "note": "Connection works at the receiving substation (ACER, per substation): ACER UIC report 2023, AC substations with 0-5 bays, AIS Updated/Refurbished (median 2,789,344 EUR per substation; interquartile range 2,116,075-4,300,494; 28 assets, 2014-2021; report p. 40, unit million EUR/station). Price base year 2023 (report p. 17). OQ-066 closed.",
           "open_question": "OQ-001"
         },
         "road_cost_per_km": {
@@ -734,10 +734,26 @@
           "source": null,
           "status": "to_be_sourced",
           "tier": null,
-          "note": "Unpaved access road. To be sourced.",
+          "note": "No sourced access-road cost for this country (COMMAND 85): the central scenario bills no road (road_cost_excluded); the cost stays to_be_sourced (OQ-001). See docs/_audit/group3_costs_85.md.",
           "open_question": "OQ-001"
         },
-        "conversion_indices_path": "external/world_bank/conversion_indices.json"
+        "conversion_indices_path": "external/world_bank/conversion_indices.json",
+        "road_cost_excluded": true,
+        "road_cost_per_km_high": {
+          "value": 631096.0,
+          "low": 631096.0,
+          "high": 923570.0,
+          "unit": "USD/km",
+          "currency": "USD",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": 2024,
+          "source": "dnitCMG2016",
+          "status": "proxy",
+          "tier": 3,
+          "open_question": "OQ-001",
+          "note": "Sensitivity road_cost_high, not the central case. The Brazilian DNIT value (R$ 2,106,000/km, high R$ 3,082,000/km, Custos Medios Gerenciais jan/2016, paved single carriageway) converted to 2024 USD with the Brazilian GDP deflator (157.63 in 2016, 254.56 in 2024) and the 2024 exchange rate (5.389 BRL/USD): 631,096 and 923,570 USD/km. Transferred to a country without a road cost (Tier 3): an upper bound, not a local estimate."
+        }
       }
     },
     "BRA": {
@@ -1319,8 +1335,8 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Lowest subtransmission voltage at which a plant of about 100 MW commonly connects, below the 230 kV Basic Network. Verify against the ONS/ANEEL access rules (Procedimentos de Rede, PRODIST Modulo 3): OQ-065.",
-          "status": null,
+          "note": "Author's choice (Tier 2). Evidence: ONS Procedimentos de Rede, Submodulo 3.1, item 1.7 (connection of generation to a distributor's facilities above 69 kV is within the ONS minimum technical requirements); no clause names 138 kV; the Basic Network starts at 230 kV. docs/_audit/vth_evidence_85.md.",
+          "status": "author_choice",
           "synthetic": false,
           "proxy": false
         },
@@ -1433,33 +1449,33 @@
           "proxy": false
         },
         "line_cost_per_km": {
-          "value": null,
-          "low": null,
-          "high": null,
+          "value": 598332.0,
+          "low": 569999.0,
+          "high": 713726.0,
           "unit": "BRL/km",
           "currency": "BRL",
           "scale": 1.0,
           "per": "km",
-          "price_year": null,
-          "source": "aneelBPR",
-          "status": "to_be_sourced",
-          "tier": null,
-          "note": "138 kV single-circuit line, ANEEL reference price bank. To be sourced.",
+          "price_year": 2024,
+          "source": "epeR1ModularCosts",
+          "status": "sourced",
+          "tier": 2,
+          "note": "ANEEL modular cost per km of a 138 kV single-circuit line (single conductor 336.4 to 954 MCM) as applied in seven cases of three EPE R1 transmission studies (EPE-DEE-RE-043/2023, EPE-DEE-RE-039/2019, EPE-DEE-RE-075/2019), each deflated from its price base (Mar/2023, Jun/2017, May/2019) to 2024 BRL with the World Bank GDP deflator. Median of the 7 cases; range = Q1-Q3. Reference modular costs, not as-built investments. Cases: docs/_audit/bra_line_138_86.md.",
           "open_question": "OQ-001"
         },
         "bay_cost": {
-          "value": null,
-          "low": null,
-          "high": null,
+          "value": 1987188.27,
+          "low": 1884382.41,
+          "high": 2061514.29,
           "unit": "BRL",
           "currency": "BRL",
           "scale": 1.0,
           "per": "bay",
-          "price_year": null,
+          "price_year": 2017,
           "source": "aneelBPR",
-          "status": "to_be_sourced",
-          "tier": null,
-          "note": "138 kV line entry module, ANEEL reference price bank. To be sourced.",
+          "status": "verify",
+          "tier": 2,
+          "note": "ANEEL BPR open data (generated 2026-11-01): Module Entrada de Linha (EL) 138 kV, arrangement BPT = sum of price x quantity of every item of banco-preco-referencia-item-modulo-manobra.csv (UAR equipment 1,389,043 + COM minor components 396,376 = 1,785,418) + the infrastructure-of-switching module of 138 kV (201,770, banco-preco-referencia-item-infraestrutura-manobra.csv) = BRL 1,987,188. Range = the other arrangements of the same module: BS 1,884,382 (low), BD5 2,061,514 (high). Items carry their own reference index (most 5-6/2017, eight COM items 12/2011, one 5/2007): price_year 2017 is the dominant index, not a single date. Composition (UAR + COM + infrastructure per module) follows the BPR methodology (REH 758/2009, 2514/2019; PRORET 9.1); confirm with bpr@aneel.gov.br. See docs/_audit/group3_costs_85.md.",
           "open_question": "OQ-001"
         },
         "road_cost_per_km": {
@@ -1474,10 +1490,26 @@
           "source": null,
           "status": "to_be_sourced",
           "tier": null,
-          "note": "Unpaved access road. To be sourced.",
+          "note": "No sourced access-road cost for this country (COMMAND 85): the central scenario bills no road (road_cost_excluded); the cost stays to_be_sourced (OQ-001). See docs/_audit/group3_costs_85.md.",
           "open_question": "OQ-001"
         },
-        "conversion_indices_path": "external/world_bank/conversion_indices.json"
+        "conversion_indices_path": "external/world_bank/conversion_indices.json",
+        "road_cost_excluded": true,
+        "road_cost_per_km_high": {
+          "value": 2106000.0,
+          "low": 2106000.0,
+          "high": 3082000.0,
+          "unit": "BRL/km",
+          "currency": "BRL",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": 2016,
+          "source": "dnitCMG2016",
+          "status": "proxy",
+          "tier": 2,
+          "open_question": "OQ-001",
+          "note": "Sensitivity road_cost_high, not the central case (road_cost_excluded). DNIT Custos Medios Gerenciais, base SICRO 2 jan/2016, Modal rodoviario, Implantacao/Pavimentacao pista simples faixa 3.6 m: acostamento 1.0 m (ate Classe III) R$ 2,106,000/km (value, low); acostamento 2.5 m R$ 3,082,000/km (high). A paved national-highway benchmark, ten years old: an upper bound for an access road."
+        }
       }
     },
     "IND": {
@@ -2059,8 +2091,8 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Lowest voltage of the interstate transmission system for renewable plants of 50 MW or more (CERC GNA Regulations 2022). Verify the 220 kV level and the 50 MW limit: OQ-065.",
-          "status": null,
+          "note": "Author's choice (Tier 2). Evidence: CERC GNA Regulations 2022, Reg. 4.1(a)-(b): 50 MW and above for Connectivity; Reg. 8.2(a) lists ISTS terminal bays at 132, 220/230, 400 and 765 kV, so no clause fixes 220 kV; the 132 kV sensitivity layer poi_sensitivity covers the lower level. docs/_audit/vth_evidence_85.md.",
+          "status": "author_choice",
           "synthetic": false,
           "proxy": false
         },
@@ -2184,22 +2216,22 @@
           "source": "ctuilIndicative2025",
           "status": "sourced",
           "tier": 2,
-          "note": "Indicative capital cost of a 220 kV single-circuit line, single Moose / AL59 Zebra conductor; excludes right of way.",
+          "note": "Indicative capital cost of a 220 kV single-circuit line, single Moose / AL59 Zebra conductor; excludes right of way. Confirmed in COMMAND 85 against the CTUIL document 'Indicative Capital Cost of Dedicated Transmission Systems' (Table 1: 220 kV S/c Single Moose wind zone 4, 1.10 crore/km; Single AL59 Zebra wind zone 5, 1.14 crore/km; excludes RoW).",
           "open_question": "OQ-001"
         },
         "bay_cost": {
-          "value": null,
-          "low": null,
-          "high": null,
+          "value": 3.0,
+          "low": 1.5,
+          "high": 6.0,
           "unit": "INR crore",
           "currency": "INR",
           "scale": 10000000.0,
           "per": "bay",
-          "price_year": null,
-          "source": null,
-          "status": "to_be_sourced",
-          "tier": null,
-          "note": "220 kV line bay. To be sourced.",
+          "price_year": 2022,
+          "source": "CERC GNA Regulations 2022, Reg. 8.2(a)",
+          "status": "proxy",
+          "tier": 3,
+          "note": "PROXY, not a capital cost: Conn-BG2 bank guarantee per 220/230 kV terminal bay, Rs 3 crore (regulation notified 7 June 2022). The range [1.5, 6] is the author's (Tier 3): half the guarantee and the 400 kV value (Rs 6 crore). To be replaced by a bay cost (TGTRANSCO 2025-26 cost data or CTUIL).",
           "open_question": "OQ-001"
         },
         "road_cost_per_km": {
@@ -2214,10 +2246,41 @@
           "source": null,
           "status": "to_be_sourced",
           "tier": null,
-          "note": "Unpaved access road. To be sourced.",
+          "note": "No sourced access-road cost for this country (COMMAND 85): the central scenario bills no road (road_cost_excluded); the cost stays to_be_sourced (OQ-001). See docs/_audit/group3_costs_85.md.",
           "open_question": "OQ-001"
         },
-        "conversion_indices_path": "external/world_bank/conversion_indices.json"
+        "conversion_indices_path": "external/world_bank/conversion_indices.json",
+        "road_cost_excluded": true,
+        "road_cost_per_km_high": {
+          "value": 631096.0,
+          "low": 631096.0,
+          "high": 923570.0,
+          "unit": "USD/km",
+          "currency": "USD",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": 2024,
+          "source": "dnitCMG2016",
+          "status": "proxy",
+          "tier": 3,
+          "open_question": "OQ-001",
+          "note": "Sensitivity road_cost_high, not the central case. The Brazilian DNIT value (R$ 2,106,000/km, high R$ 3,082,000/km, Custos Medios Gerenciais jan/2016, paved single carriageway) converted to 2024 USD with the Brazilian GDP deflator (157.63 in 2016, 254.56 in 2024) and the 2024 exchange rate (5.389 BRL/USD): 631,096 and 923,570 USD/km. Transferred to a country without a road cost (Tier 3): an upper bound, not a local estimate."
+        },
+        "poi_sensitivity_threshold_kv": {
+          "value": 132.0,
+          "unit": "kV",
+          "source": "cerc2022gna",
+          "tier": 2,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Sensitivity layer poi_ind_132kv (`poi_sensitivity` of F2a), computed in the same pass as `poi`: substations at 132 kV and above. CERC GNA Regulations 2022, Reg. 8.2(a) lists 132 kV terminal bays of the ISTS. Author's choice (Tier 2).",
+          "status": "author_choice",
+          "synthetic": false,
+          "proxy": false
+        }
       }
     },
     "ZZZ": {

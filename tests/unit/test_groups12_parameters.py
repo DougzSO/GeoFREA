@@ -156,11 +156,11 @@ def test_the_design_rounds_the_lifetime_to_whole_years_so_the_crf_never_sees_a_f
 
 
 @pytest.mark.unit
-def test_the_loader_audit_leaves_no_f5_gap_and_only_the_group_3_costs_for_f6():
+def test_the_loader_audit_leaves_no_f5_gap_and_no_group_3_cost_open_for_f6():
     technologies = load_technologies(REPO / "config" / "technologies.yaml")
     audit = audit_parameters(PARAMS, technologies, list(COUNTRIES), ["solar", "wind"])
     f5 = {"luf", "power_density_mw_per_km2", "gamma", "eta_loss", "hub_height_m"}
-    f6_open = {"line_cost_per_km", "bay_cost", "road_cost_per_km"}  # OQ-001: the costs still to be sourced
+    f6_open: set[str] = set()  # COMMAND 86: every cost has a value (the IND bay is a proxy, the road is excluded)
     f7 = {"cf_min", "tau_lcoe_usd_per_mwh", "top_k_percent"}
     keys = {e.split(":")[0].split()[-1] for e in audit.errors}
     assert not keys & f5
@@ -168,8 +168,9 @@ def test_the_loader_audit_leaves_no_f5_gap_and_only_the_group_3_costs_for_f6():
     assert "discount_rate" not in keys  # recorded: the validator sees it filled
     assert not [e for e in audit.errors if "discount_rate" in e]
     assert not [e for e in audit.errors if "degradation" in e]  # the zone rates and the wind rate are recorded
-    assert {"line_cost_per_km", "bay_cost", "road_cost_per_km"} <= keys
-    assert any("OQ-001" in e for e in audit.errors)
+    assert not keys & {"line_cost_per_km", "bay_cost", "road_cost_per_km"}
+    assert any("road_cost_excluded" in w for w in audit.warnings)  # the lower bound is reported, not hidden
+    assert any("IND connection bay_cost: status proxy" in w for w in audit.warnings)
 
 
 REAL_CURVE_PATH = REPO / "config" / "turbines" / "iea_3.4_130.csv"
