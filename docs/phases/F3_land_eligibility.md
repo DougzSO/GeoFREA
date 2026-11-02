@@ -197,6 +197,7 @@ Requires: `siting_layers`, `aligned_rasters`, `layer_registry`, `audit_report`, 
 - **D-F3-015 — New baseline of land_eligibility and overview for BRA, PRT and IND with the schema of 2026-10-14 (elevation_m and the count of Weibull k below 1).** Rerun on the clean tree of commit b1aefb3 plus the records after it. Wind candidates above the 3000 m of the sensitivity: PRT 0, IND 1,316, BRA 0. Candidates with k below 1 (100, 150, 200 m): PRT 0, 0, 2; IND 220, 211, 205; BRA 20, 21, 22. Time: land_eligibility 12 s, 200 s and 658 s. The sha256 of every registered artifact of the three countries is in `docs/_audit/2026-10_f3_baseline_hashes.json`; the equivalence proof of the move of the shared inputs (COMMAND 37) compares with it.
 
 
+- **D-F3-023 — Group 3 columns (2026-11-02, COMMAND 83; M-F2b-02, M-F6-09).** Table schema 1.2: `dist_sub_km` (eligible-area mean of the distance to the nearest eligible substation, NaN where the cell has no valid value), `dist_sub_capped_share` (share of the eligible area beyond `distance_cap_km` of a substation) and `pvcz_zone` (PVCZ-2019 thermal zone 1 to 10 of the cell centre, 0 when no land point lies within `geospatial.pvcz_max_distance_km`; the phase raises if the PVCZ file is absent). Built, not run on a real country; F3 of the three countries must run again after F2a and F2b.
 
 ## Known issues
 
