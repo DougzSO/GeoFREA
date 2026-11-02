@@ -47,39 +47,41 @@ VALIDATOR = (
 INITIAL_SIZE, CEILING = 16, 64
 TECHS = ("wind", "solar")
 
-# Expected statistics of the core window at the primary setting, from the hand validation of this world (see the module docstring).
+# Expected statistics of the core window at the primary setting, from the hand validation of this world (see the module docstring). Re-derived on 2026-11-02
+# (COMMAND 84) for the Group 3 cost structure (the connection cost per project over P_ref, the substations as the point of interconnection); the hand validator
+# computes the connection cost, the degradation and the LCOE with its own formulas and imports nothing from geofrea.
 EXPECTED = {
     "wind": {
-        "c_k": 1.0,
+        "c_k": 0.8,
         "v_k": 0.8,
-        "overlap": 0.6134364728419008,
-        "overlap_ref": 0.361205191909124,
-        "d": 0.396691483432451,
-        "d_clim": 0.396691483432451,
+        "overlap": 0.3865848018,
+        "overlap_ref": 0.32388465,
+        "d": 0.3271735215,
+        "d_clim": 0.3271735215,
         "d_tec": 0.0,
         "rho": 1.0,
         "profile": "climate_dominated",
-        "r_loss": 0.055151173074069304,  # METHODOLOGY 15.3.0: the wind CF is the eligible-area mean of the pixel CFs (D-F5-038); was 0.055151402881962984 on the cell means (14.2.0: the member density follows dT, was 0.0521657052686253)
-        "cases": 134,
+        "r_loss": 0.1847993265,
+        "cases": 119,
         "futures": 240,
         "box_density": 1.0,
-        "box_coverage": 0.7164179104477612,
+        "box_coverage": 78 / 119,
     },
     "solar": {
         "c_k": 1.0,
-        "v_k": 0.4,
-        "overlap": 0.7604003039769672,
-        "overlap_ref": 0.35522992510054363,
-        "d": 0.1932716627892325,
+        "v_k": 0.2,
+        "overlap": 0.3066969618,
+        "overlap_ref": 0.2402889517,
+        "d": 0.28572216,
         "d_clim": 0.0,
-        "d_tec": 0.1932716627892325,
+        "d_tec": 0.5818426416,
         "rho": 0.0,
         "profile": "techno_economic_dominated",
-        "r_loss": 0.07072541219935047,
-        "cases": 220,
+        "r_loss": 0.01927401405,
+        "cases": 213,
         "futures": 288,
-        "box_density": 0.9444444444444444,
-        "box_coverage": 0.7727272727272727,
+        "box_density": 0.875,
+        "box_coverage": 196 / 213,
     },
 }
 
@@ -209,11 +211,12 @@ def test_the_cells_change_order_between_members_and_between_draws(zzz2, tech):
         robust["techno_only_rank"],
     )
     assert not nominal.equals(climate), "the climate-only ranking equals the nominal one"
-    assert not nominal.equals(techno), "the techno-only ranking equals the nominal one"
+    if tech == "solar":  # the cost draws reorder the cells of the techno-economic-dominated technology; wind keeps its order by design (D_tec = 0)
+        assert not nominal.equals(techno), "the techno-only ranking equals the nominal one"
     futures = pd.read_parquet(_art(zzz2, "robustness_analysis") / f"futures_{tech}__core.parquet")
     futures = futures[futures["sample"] >= 1]
     share = futures["displaced_capacity_share"]
-    assert share.nunique() > 3
+    assert share.nunique() > 2  # the share moves in steps of one cell (17 cells, a shortlist of 5): at least 0, one cell and two cells occur
     assert 0.0 < float((share >= 0.2).mean()) < 1.0
     # the nominal shortlist is displaced in some climate models and in none of some others (wind: ACCESS-CM2 and MRI-ESM2-0 barely move it)
     by_gcm = futures.groupby("gcm")["displaced_capacity_share"].max()
@@ -259,10 +262,16 @@ def test_prim_finds_a_box_on_the_real_outcome_that_restricts_what_decides_it(zzz
             "opex_fixed_frac",
             "discount_rate",
             "lifetime_years",
-            "degradation_rate",
-            "substation_cost_usd_per_mw",
+            "degradation_weight",
+            "line_cost_usd_per_km",
+            "bay_cost_usd",
+            "road_cost_usd_per_km",
+            "tortuosity_grid",
+            "tortuosity_road",
             "gamma",
+            "delta_rsds_mean",  # the weak irradiance descriptor of the member (its pattern is half the amplitude of the first design), not the climate model itself
         }
+        assert set(restricted) & {"line_cost_usd_per_km", "road_cost_usd_per_km", "bay_cost_usd"}, "no distance cost is restricted"
     assert box["n_cases"] == expected["cases"]
     assert box["n_futures"] == expected["futures"]
     assert box["density"] == pytest.approx(expected["box_density"], abs=1e-9)
