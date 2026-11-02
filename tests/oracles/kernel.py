@@ -29,18 +29,27 @@ def lcoe_direct(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
     out = np.empty((len(cells), len(samples)))
     for s in range(len(samples)):
         capex_kw = samples.capex_usd_per_kw[s]
-        capex_total = (
-            cells.p_mw * 1000.0 * capex_kw
-            + cells.p_mw * cells.dist_grid_km * samples.grid_cost_usd_per_mw_km[s]
-            + cells.p_mw * samples.substation_cost_usd_per_mw[s]
-            + cells.dist_road_km * samples.road_cost_usd_per_km[s]
+        p_ref = samples.reference_project_mw[s]
+        l_grid = samples.tortuosity_grid[s] * cells.dist_sub_km
+        l_road = samples.tortuosity_road[s] * cells.dist_road_km
+        c_inter = (
+            samples.line_cost_usd_per_km[s] * l_grid
+            + samples.bay_cost_usd[s]
+            + samples.road_cost_usd_per_km[s] * l_road
+        ) / p_ref
+        capex_total = cells.p_mw * (1000.0 * capex_kw + c_inter)
+        eta = np.maximum(1.0 - samples.transmission_loss_per_km[s] * l_grid, 0.0)
+        energy_1 = (
+            cells.energy_mwh
+            * (cells.energy_offset + cells.energy_slope * samples.energy_parameter[s])
+            * eta
         )
-        energy_1 = cells.energy_mwh * (
-            cells.energy_offset + cells.energy_slope * samples.energy_parameter[s]
+        d = cells.degradation_low + samples.degradation_weight[s] * (
+            cells.degradation_high - cells.degradation_low
         )
         numerator = capex_total.copy()
         denominator = np.zeros(len(cells))
-        r, d = samples.discount_rate[s], samples.degradation_rate[s]
+        r = samples.discount_rate[s]
         for t in range(1, int(samples.lifetime_years[s]) + 1):
             e_t = energy_1 * (1.0 - d) ** (t - 1)
             opex_t = samples.opex_fixed_frac[s] * cells.p_mw * 1000.0 * capex_kw + (

@@ -129,11 +129,13 @@ def _member(name, ids, cf):
     p = np.full(n, 100.0)
     cells = CellInputs(
         p_mw=p,
-        dist_grid_km=np.zeros(n),
+        dist_sub_km=np.zeros(n),
         dist_road_km=np.zeros(n),
         energy_mwh=p * cf * 8760.0,
         energy_offset=np.ones(n),
         energy_slope=np.zeros(n),
+        degradation_low=np.zeros(n),
+        degradation_high=np.zeros(n),
     )
     return name, MemberCells(member=name, cell_id=ids, cells=cells, cf=cf)
 

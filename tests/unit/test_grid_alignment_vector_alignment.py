@@ -15,6 +15,7 @@ from geofrea.grid_alignment.vector_alignment import (
     align_rivers,
     calculate_wgs84_isotropic_distance,
     distance_capped_path,
+    filter_road_classes,
     load_vector_bbox,
     rasterize_linear_distance,
 )
@@ -288,3 +289,44 @@ def test_rasterize_linear_distance_catches_rasterize_failure_and_returns_none(tm
         )
 
     assert result is None
+
+
+# -- road classes (Group 3, M-F2a-10) ---------------------------------------------------------------------
+
+
+def _roads(column, values):
+    return gpd.GeoDataFrame(
+        {column: values},
+        geometry=[LineString([(0.0, i), (1.0, i)]) for i in range(len(values))],
+        crs="EPSG:4326",
+    )
+
+
+@pytest.mark.unit
+def test_filter_road_classes_keeps_the_grip4_primary_and_secondary_roads_and_the_highways():
+    from geofrea.core.schemas import RoadClasses
+
+    classes = RoadClasses(grip4_gp_rtp=[1, 2, 3], osm_highway=["primary"])
+    kept = filter_road_classes(_roads("GP_RTP", [1, 2, 3, 4, 5, 3]), classes)
+    assert kept["GP_RTP"].tolist() == [1, 2, 3, 3]
+
+
+@pytest.mark.unit
+def test_filter_road_classes_reads_the_osm_highway_tag_and_ignores_a_source_without_classes():
+    from geofrea.core.schemas import RoadClasses
+
+    classes = RoadClasses(grip4_gp_rtp=[1], osm_highway=["motorway", "trunk", "primary", "secondary"])
+    osm = _roads("highway", ["tertiary", "primary", "secondary", "residential", "motorway"])
+    assert filter_road_classes(osm, classes)["highway"].tolist() == ["primary", "secondary", "motorway"]
+    plain = _roads("gp_gripreg", [99, 99])  # the synthetic country has no road class
+    assert len(filter_road_classes(plain, classes)) == 2
+    assert filter_road_classes(osm, None) is osm  # no configuration keeps every road
+    assert filter_road_classes(None, classes) is None
+
+
+@pytest.mark.unit
+def test_filter_road_classes_gives_none_when_no_road_is_in_the_classes():
+    from geofrea.core.schemas import RoadClasses
+
+    classes = RoadClasses(grip4_gp_rtp=[1], osm_highway=["primary"])
+    assert filter_road_classes(_roads("GP_RTP", [4, 5]), classes) is None

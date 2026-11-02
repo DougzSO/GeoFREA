@@ -156,23 +156,20 @@ def test_the_design_rounds_the_lifetime_to_whole_years_so_the_crf_never_sees_a_f
 
 
 @pytest.mark.unit
-def test_the_loader_audit_leaves_no_f5_gap_and_only_degradation_and_group_3_for_f6():
+def test_the_loader_audit_leaves_no_f5_gap_and_only_the_group_3_costs_for_f6():
     technologies = load_technologies(REPO / "config" / "technologies.yaml")
     audit = audit_parameters(PARAMS, technologies, list(COUNTRIES), ["solar", "wind"])
     f5 = {"luf", "power_density_mw_per_km2", "gamma", "eta_loss", "hub_height_m"}
-    f6_open = {
-        "degradation_rate",
-        "grid_cost_usd_per_mw_km",
-        "substation_cost_usd_per_mw",
-        "road_cost_usd_per_km",
-    }
+    f6_open = {"line_cost_per_km", "bay_cost", "road_cost_per_km"}  # OQ-001: the costs still to be sourced
     f7 = {"cf_min", "tau_lcoe_usd_per_mwh", "top_k_percent"}
     keys = {e.split(":")[0].split()[-1] for e in audit.errors}
     assert not keys & f5
     assert keys <= f6_open | f7
     assert "discount_rate" not in keys  # recorded: the validator sees it filled
     assert not [e for e in audit.errors if "discount_rate" in e]
-    assert {"degradation_rate", "grid_cost_usd_per_mw_km"} <= keys
+    assert not [e for e in audit.errors if "degradation" in e]  # the zone rates and the wind rate are recorded
+    assert {"line_cost_per_km", "bay_cost", "road_cost_per_km"} <= keys
+    assert any("OQ-001" in e for e in audit.errors)
 
 
 REAL_CURVE_PATH = REPO / "config" / "turbines" / "iea_3.4_130.csv"
