@@ -39,6 +39,8 @@ from pathlib import Path
 import geopandas as gpd
 from pydantic import BaseModel, ConfigDict
 
+from geofrea.core.schemas import RoadClasses
+
 
 class GridAlignmentInputs(BaseModel):
     """Raw, already-resolved geodata this phase reprojects onto one reference grid.
@@ -100,6 +102,13 @@ class GridAlignmentInputs(BaseModel):
             written beside the roads/grid/rivers distance rasters (M-F2a-03,
             OQ-040); it never truncates a stored distance. From settings.yaml's
             `geospatial.distance_cap_km`.
+        poi_substation_source: GeoJSON of the substations as nodes, ways and relations (`scripts/fetch_osm_substations.py`); when set it
+            replaces the substation points of `grid_source` (the lines stay). None keeps the substations of `grid_source`.
+        poi_voltage_threshold_kv: Country threshold of the point of interconnection (`connection.poi_voltage_threshold_kv` of
+            parameters.json, Group 3). Null: the `poi` distance layer is not produced.
+        poi_line_tolerance_m: Distance (m) within which an OSM line reaches a substation, for the inference of a missing voltage
+            (`geospatial.poi_line_tolerance_m` of settings.yaml); recorded in the manifest.
+        road_classes: The road classes that count for `roads` (`geospatial.road_classes`); null keeps every class.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -117,6 +126,10 @@ class GridAlignmentInputs(BaseModel):
     country_gdf: gpd.GeoDataFrame
     resolution_deg: float
     distance_cap_km: float
+    poi_substation_source: Path | None = None
+    poi_voltage_threshold_kv: float | None = None
+    poi_line_tolerance_m: float | None = None
+    road_classes: RoadClasses | None = None
 
 
 class GridMetadata(BaseModel):
@@ -195,9 +208,12 @@ class GridAlignmentResult(BaseModel):
             were found within the country.
         rivers: Geodesic distance-to-river raster (km, float32,
             raw, never truncated; OQ-040), or None if no rivers were found within the country.
-        roads_distance_capped/grid_distance_capped/rivers_distance_capped:
+        poi: Geodesic distance (km, float32, raw) to the nearest eligible substation, the point of interconnection of Group 3
+            (`poi.py`), or None if the grid source or the voltage threshold is missing or no substation is eligible.
+        roads_distance_capped/grid_distance_capped/rivers_distance_capped/poi_distance_capped:
             uint8 flag rasters (1 = raw distance above `distance_cap_km`),
             written beside the distance rasters (M-F2a-03, OQ-040).
+        poi_counts: Substations of the country by outcome (`PoiCounts`): total, with a tag, inferred, excluded, below the threshold, eligible.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -220,3 +236,6 @@ class GridAlignmentResult(BaseModel):
     roads_distance_capped: Path | None = None
     grid_distance_capped: Path | None = None
     rivers_distance_capped: Path | None = None
+    poi: Path | None = None
+    poi_distance_capped: Path | None = None
+    poi_counts: dict[str, int] | None = None

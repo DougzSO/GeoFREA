@@ -95,20 +95,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 from rasterio.enums import Resampling
 
 from geofrea.core import paths as core_paths
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
 from geofrea.core.constants import CELL_NESTING_PIXELS
+from geofrea.core.geo_utils import clip_cache_key as _clip_cache_key
 from geofrea.core.geo_utils import (
     current_clip_cache,
     read_clipped_to_country,
     write_clip_cache_key,
 )
-from geofrea.core.geo_utils import clip_cache_key as _clip_cache_key
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import gdal_quiet, safe_raster_open
+from geofrea.grid_alignment.poi import POI_ALGORITHM_VERSION, select_poi
 from geofrea.grid_alignment.raster_alignment import (
     MissingSourceCrsError,
     glo30_aligned_outputs,
@@ -122,6 +124,7 @@ from geofrea.grid_alignment.vector_alignment import (
     align_lakes,
     align_rivers,
     distance_capped_path,
+    filter_road_classes,
     load_vector_bbox,
     rasterize_linear_distance,
 )
@@ -514,11 +517,55 @@ def run_grid_alignment_phase(
             distance_cap_km=inputs.distance_cap_km,
         )
 
+    poi_counts_path = out_dir / "poi_counts.json"
+    with timer("poi_distance", timings):
+
+        def _poi_distance() -> object | None:
+            grid_gdf = load_vector_bbox(inputs.grid_source, inputs.country_gdf, "grid")
+            if grid_gdf is None:
+                return None
+            if inputs.poi_substation_source is not None:
+                # substations as nodes, ways and relations (OQ-067): they replace the points of the raw grid extract, the lines stay
+                substations = load_vector_bbox(inputs.poi_substation_source, inputs.country_gdf, "substations")
+                lines = grid_gdf[grid_gdf["power"] != "substation"]
+                grid_gdf = (
+                    lines
+                    if substations is None
+                    else gpd.GeoDataFrame(
+                        pd.concat([lines, substations], ignore_index=True), geometry="geometry", crs=lines.crs
+                    )
+                )
+            points, counts = select_poi(
+                grid_gdf, inputs.poi_voltage_threshold_kv, inputs.poi_line_tolerance_m
+            )
+            poi_counts_path.write_text(json.dumps(counts.as_dict(), indent=2), encoding="utf-8")
+            logger.info("    [poi] substations: %s", counts.as_dict())
+            return rasterize_linear_distance(
+                points if len(points) else None,
+                _path("poi"),
+                inputs.country_gdf,
+                grid,
+                "poi",
+                inputs.distance_cap_km,
+            )
+
+        aligned["poi"] = _execute_or_load(
+            "poi",
+            _poi_distance,
+            _exists(inputs.grid_source) and inputs.poi_voltage_threshold_kv is not None,
+            files=[inputs.grid_source]
+            + ([] if inputs.poi_substation_source is None else [inputs.poi_substation_source]),
+            distance_cap_km=inputs.distance_cap_km,
+            poi_voltage_threshold_kv=inputs.poi_voltage_threshold_kv,
+            poi_line_tolerance_m=inputs.poi_line_tolerance_m,
+            poi_algorithm=POI_ALGORITHM_VERSION,
+        )
+
     with timer("roads", timings):
         aligned["roads"] = _execute_or_load(
             "roads",
             lambda: rasterize_linear_distance(
-                _clipped_gdf(inputs.roads_source, "roads"),
+                filter_road_classes(_clipped_gdf(inputs.roads_source, "roads"), inputs.road_classes),
                 _path("roads"),
                 inputs.country_gdf,
                 grid,
@@ -528,6 +575,9 @@ def run_grid_alignment_phase(
             _exists(inputs.roads_source),
             files=[inputs.roads_source],
             distance_cap_km=inputs.distance_cap_km,
+            road_classes=None
+            if inputs.road_classes is None
+            else inputs.road_classes.model_dump(mode="json"),
         )
 
     with timer("lakes", timings):
@@ -552,7 +602,7 @@ def run_grid_alignment_phase(
             distance_cap_km=inputs.distance_cap_km,
         )
 
-    for layer in ("roads", "grid", "rivers"):
+    for layer in ("roads", "grid", "rivers", "poi"):
         flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
         aligned[f"{layer}_distance_capped"] = (
             flag_path if flag_path and flag_path.exists() else None
@@ -567,10 +617,16 @@ def run_grid_alignment_phase(
     # try/except, becoming a failed phase.
     _verify_alignment({**aligned, **{f"wind_{k}": v for k, v in wind_layers.items()}}, grid)
 
+    poi_counts = (
+        json.loads(poi_counts_path.read_text(encoding="utf-8"))
+        if aligned.get("poi") and poi_counts_path.exists()
+        else None
+    )
     return GridAlignmentResult(
         country_code=context.country_code,
         timestamp=timestamp,
         grid_metadata=grid_metadata,
         wind_layers=wind_layers,
+        poi_counts=poi_counts,
         **aligned,
     )

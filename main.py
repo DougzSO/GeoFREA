@@ -101,7 +101,9 @@ from geofrea.core.config_loader import (
     load_settings,
     load_technologies,
 )
+from geofrea.core.deferred_check import for_country as deferred_check_for
 from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
@@ -111,8 +113,6 @@ from geofrea.core.orchestrator import (
     compute_run_id,
     phase_graph,
 )
-from geofrea.core.deferred_check import for_country as deferred_check_for
-from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
 from geofrea.core.paths import data_root, interim, log_path, outputs_dir, phase_dir
 from geofrea.core.power import keep_awake
 from geofrea.core.production import (
@@ -123,6 +123,7 @@ from geofrea.core.production import (
     validate_registry,
     validate_run_technologies,
 )
+from geofrea.core.pv_zones import ZoneSource
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.scale import DEFAULT_SCALE, SCALES, active_scale, use_scale
 from geofrea.core.schemas import ResolutionsConfig, SettingsFile
@@ -355,6 +356,20 @@ def _audit_run(context: PhaseContext, audit_config: AuditConfig) -> AuditResult:
     return result
 
 
+def _zone_source() -> ZoneSource:
+    """The PVCZ points and the lookup distance of `settings.yaml` (Group 3): the thermal zone of each cell, a column of the F3 tables."""
+    geospatial = load_settings(SETTINGS_YAML).geospatial
+    return ZoneSource(
+        csv_path=data_root() / geospatial.pvcz_csv, max_distance_km=geospatial.pvcz_max_distance_km
+    )
+
+
+def _substation_source(pattern: str, iso: str) -> Path | None:
+    """The substations file of the country if it was fetched, else None (the substations of the raw grid extract are used)."""
+    path = data_root() / pattern.format(iso=iso)
+    return path if path.is_file() else None
+
+
 def _build_grid_alignment_inputs(
     context: PhaseContext, resolutions: ResolutionsConfig, distance_cap_km: float
 ) -> GridAlignmentInputs:
@@ -383,8 +398,23 @@ def _build_grid_alignment_inputs(
             grid_alignment/adapter.py).
     """
     acquisition_output = context.prior_results["data_acquisition"].output
-    return acquisition_result_to_grid_alignment_inputs(
+    inputs = acquisition_result_to_grid_alignment_inputs(
         acquisition_output, resolutions, distance_cap_km
+    )
+    # Group 3: the substation threshold of the country (parameters.json), the tolerance and the road classes (settings.yaml)
+    geospatial = load_settings(SETTINGS_YAML).geospatial
+    connection = None if context.country_params is None else context.country_params.connection
+    return inputs.model_copy(
+        update={
+            "poi_voltage_threshold_kv": None
+            if connection is None
+            else connection.poi_voltage_threshold_kv.value,
+            "poi_line_tolerance_m": geospatial.poi_line_tolerance_m,
+            "poi_substation_source": _substation_source(
+                geospatial.poi_substations_geojson, context.country_code
+            ),
+            "road_classes": geospatial.road_classes,
+        }
     )
 
 
@@ -437,6 +467,8 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "roads_distance_capped",
     "grid_distance_capped",
     "rivers_distance_capped",
+    "poi",
+    "poi_distance_capped",
 )
 
 
@@ -577,6 +609,7 @@ def _build_phase_specs(
             resolved_path(layers.get("lakes")),
             resolved_path(layers.get("rivers")),
             resolved_path(layers.get("admin1")),
+            zone_source=_zone_source(),
         )
         out_dir = artifacts_dir(context.country_code)
         for key, name in eligibility_artifact_files(

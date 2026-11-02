@@ -40,6 +40,7 @@ class PhysicalLayerSpec:
 
 LAYER_SPECS: tuple[PhysicalLayerSpec, ...] = (
     PhysicalLayerSpec("dist_grid_km", "km", "cost_driver"),
+    PhysicalLayerSpec("dist_sub_km", "km", "cost_driver"),
     PhysicalLayerSpec("dist_road_km", "km", "cost_driver"),
     PhysicalLayerSpec("pvout_kwh_kwp_day", "kWh/kWp/day", "resource"),
     *(PhysicalLayerSpec(f"weibull_a_{h}m", "m/s", "resource") for h in WIND_HEIGHTS_M),
@@ -56,6 +57,7 @@ def _sources(grid_result: GridAlignmentResult) -> dict[str, Path | None]:
     wind = grid_result.wind_layers
     sources: dict[str, Path | None] = {
         "dist_grid_km": grid_result.grid,
+        "dist_sub_km": grid_result.poi,
         "dist_road_km": grid_result.roads,
         "pvout_kwh_kwp_day": grid_result.solar,
     }

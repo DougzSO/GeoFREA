@@ -120,6 +120,26 @@ def load_vector_bbox(
         return None
 
 
+def filter_road_classes(gdf: gpd.GeoDataFrame | None, classes) -> gpd.GeoDataFrame | None:
+    """Keep the roads of the configured classes (Group 3: primary and secondary roads; the distance to the road is a distance to a main road).
+
+    GRIP4 carries the class in `GP_RTP` (1 highways, 2 primary, 3 secondary, 4 tertiary, 5 local) and OSM in `highway`. A frame with neither
+    column is returned unchanged (the synthetic country has no road classes); `classes` None keeps every road.
+
+    Implements: M-F2a-10.
+    """
+    if gdf is None or classes is None or gdf.empty:
+        return gdf
+    if "GP_RTP" in gdf.columns:
+        kept = gdf[gdf["GP_RTP"].isin(classes.grip4_gp_rtp)]
+    elif "highway" in gdf.columns:
+        kept = gdf[gdf["highway"].isin(classes.osm_highway)]
+    else:
+        return gdf
+    logger.info("    [roads] %d of %d features in the configured road classes.", len(kept), len(gdf))
+    return kept if not kept.empty else None
+
+
 def calculate_wgs84_isotropic_distance(
     feature_mask_inv: np.ndarray, grid: GridContext
 ) -> np.ndarray:

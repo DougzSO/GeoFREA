@@ -194,7 +194,7 @@ def derived_range(
     """The derived `(low, high)` of a layer, or `None` when the layer has no derivation (Weibull A and k, OQ-053).
 
     Args:
-        layer: `air_density`, `dist_grid_km` or `dist_road_km`.
+        layer: `air_density`, `dist_grid_km`, `dist_sub_km` or `dist_road_km`.
         geometry: The country's geometry.
         height_m: Height above ground of an `air_density` layer.
         tolerance_rel: Relative quality-control tolerance on each side of an `air_density` envelope (`audit.yaml`); ignored by
@@ -205,7 +205,7 @@ def derived_range(
             raise SanityError("air_density needs the layer height")
         low, high = air_density_envelope(geometry.z_min_m, geometry.z_max_m, height_m)
         return low * (1.0 - tolerance_rel), high * (1.0 + tolerance_rel)
-    if layer in ("dist_grid_km", "dist_road_km"):
+    if layer in ("dist_grid_km", "dist_sub_km", "dist_road_km"):
         return 0.0, bbox_diagonal_km(geometry.west, geometry.south, geometry.east, geometry.north)
     return None
 

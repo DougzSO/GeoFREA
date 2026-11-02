@@ -46,11 +46,12 @@ from geofrea.core.constants import (
     WIND_HEIGHTS_M,
 )
 from geofrea.core.geo_utils import (
-    current_clip_cache,
     clip_cache_key,
+    current_clip_cache,
     read_clipped_to_country,
     write_clip_cache_key,
 )
+from geofrea.core.pv_zones import ZoneSource, zones_for_cells
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
@@ -298,7 +299,7 @@ def _share_key(kind: str, source: Path | None, country_gdf, transform, shape, **
 
 
 def _required_resources(tech: str, siting: dict[str, Path]) -> dict[str, Path]:
-    names = ["dist_grid_km", "dist_road_km"]
+    names = ["dist_grid_km", "dist_sub_km", "dist_road_km"]
     if tech == "solar":
         names.append("pvout_kwh_kwp_day")
     elif tech == "wind":
@@ -477,6 +478,7 @@ def prepare_shared_layers(
         == 1,
         "dist_road_capped_share": _read(grid_result.roads_distance_capped, "roads_distance_capped")
         == 1,
+        "dist_sub_capped_share": _read(grid_result.poi_distance_capped, "poi_distance_capped") == 1,
     }
 
     return SharedLayers(
@@ -537,6 +539,7 @@ def build_eligibility(
     rivers_path: Path | None,
     admin1_path: Path | None,
     technologies: list[str] | None = None,
+    zone_source: ZoneSource | None = None,
 ) -> EligibilitySummary:
     """Eligibility, cells and candidate tables for every configured technology (nominal parameter set)."""
     la: LandAvailability = load_land_availability(experiments_yaml)
@@ -588,6 +591,10 @@ def build_eligibility(
                     schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
                     row_model=Admin1UnitRow,
                 )
+            if zone_source is not None:
+                cells["pvcz_zone"] = zones_for_cells(
+                    cells["lat_c"].to_numpy(), cells["lon_c"].to_numpy(), zone_source
+                ).astype("int8")
             cells["admin1_id"] = cells["cell_id"].map(admin1_by_cell)
             if cells["admin1_id"].isna().any():
                 raise LandEligibilityError(
