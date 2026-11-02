@@ -171,66 +171,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -289,6 +229,63 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_by_zone": {
+            "source": "Jordan et al. 2022 (DuraMAT public fleet results, Fleet_results_public_2022_02_02.csv)",
+            "tier": 2,
+            "filter": "technology1 in {mono-Si, multi-Si, c-Si} and type_mounting == Ground",
+            "min_systems": 20,
+            "generated_date": "2026-11-02",
+            "synthetic": false,
+            "zones": {
+              "T1": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T2"
+              },
+              "T2": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T3": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T4": {
+                "n": 402,
+                "median": 0.0094,
+                "mean": 0.010726,
+                "merged_with": null
+              },
+              "T5": {
+                "n": 61,
+                "median": 0.0085,
+                "mean": 0.009467,
+                "merged_with": null
+              },
+              "T6": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T7"
+              },
+              "T7": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T6"
+              }
+            },
+            "hot_zone_sensitivity": {
+              "rate": 0.0094,
+              "applies_from_zone": 7,
+              "source": "Straub and Mueck 2025, global median PV degradation (0.94 %/yr); deterministic sensitivity pv_hot_zone_degradation, not sampled"
+            }
           }
         },
         "wind": {
@@ -474,66 +471,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -592,8 +529,215 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": 0.0017,
+            "unit": "fraction/year",
+            "source": "hamilton2020",
+            "tier": 2,
+            "range": {
+              "min": 0.0017,
+              "max": 0.0053,
+              "distribution": "uniform",
+              "source": "hamilton2020: newer vintages to older vintages (United States fleet)",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Reference turbine: central = newer vintages, range up to older vintages (0.17-0.53 %/yr). The policy-related drop after ten years in the United States is not included. Transferred from United States fleets (Tier 2).",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
+          },
+          "wind_degradation_complex_terrain": {
+            "value": 0.0072,
+            "unit": "fraction/year",
+            "source": "kim2025",
+            "tier": 2,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Complex-terrain rate (0.72 %/yr), kept as a deterministic sensitivity (wind_complex_terrain_degradation), not sampled.",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
           }
         }
+      },
+      "connection": {
+        "poi_voltage_threshold_kv": {
+          "value": 150.0,
+          "unit": "kV",
+          "source": null,
+          "tier": 2,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Lowest voltage of the transmission network operated by REN; 60 kV belongs to the distribution network. Verify: OQ-065.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "reference_project_mw": {
+          "value": 100.0,
+          "unit": "MW",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_grid": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed line length to the geodesic distance to the substation.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_road": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed road length to the geodesic distance to the road.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "long_distance_flag_km": {
+          "value": 100.0,
+          "unit": "km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Cells beyond this distance to the nearest eligible substation are flagged long_distance, kept with the same cost formula.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km": {
+          "value": 0.0,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Central case: no resistive loss on the spur line (eta_trans = 1).",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km_sensitivity": {
+          "value": 0.0004,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 0.0003,
+            "max": 0.0005,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Named scenario transmission_losses, not sampled: 0.03-0.05 %/km.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "line_cost_per_km": {
+          "value": 0.362,
+          "low": 0.303,
+          "high": 0.543,
+          "unit": "MEUR/km",
+          "currency": "EUR",
+          "scale": 1000000.0,
+          "per": "km",
+          "price_year": null,
+          "source": "acer2023uic",
+          "status": "verify",
+          "tier": 2,
+          "note": "ACER unit investment cost indicator for 220 kV single-circuit overhead lines (median; range Q1-Q3), used at 150 kV (conservative). Price base year of ACER (2023) unconfirmed: OQ-066.",
+          "open_question": "OQ-001"
+        },
+        "bay_cost": {
+          "value": 2.789,
+          "low": 2.116,
+          "high": 4.3,
+          "unit": "MEUR",
+          "currency": "EUR",
+          "scale": 1000000.0,
+          "per": "bay",
+          "price_year": null,
+          "source": "acer2023uic",
+          "status": "verify",
+          "tier": 2,
+          "note": "ACER indicator for the upgrade of an existing air-insulated substation with up to five bays (median; range Q1-Q3). Price base year unconfirmed: OQ-066.",
+          "open_question": "OQ-001"
+        },
+        "road_cost_per_km": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "MEUR/km",
+          "currency": "EUR",
+          "scale": 1000000.0,
+          "per": "km",
+          "price_year": null,
+          "source": null,
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "Unpaved access road. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "conversion_indices_path": "external/world_bank/conversion_indices.json"
       }
     },
     "BRA": {
@@ -767,66 +911,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -885,6 +969,63 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_by_zone": {
+            "source": "Jordan et al. 2022 (DuraMAT public fleet results, Fleet_results_public_2022_02_02.csv)",
+            "tier": 2,
+            "filter": "technology1 in {mono-Si, multi-Si, c-Si} and type_mounting == Ground",
+            "min_systems": 20,
+            "generated_date": "2026-11-02",
+            "synthetic": false,
+            "zones": {
+              "T1": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T2"
+              },
+              "T2": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T3": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T4": {
+                "n": 402,
+                "median": 0.0094,
+                "mean": 0.010726,
+                "merged_with": null
+              },
+              "T5": {
+                "n": 61,
+                "median": 0.0085,
+                "mean": 0.009467,
+                "merged_with": null
+              },
+              "T6": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T7"
+              },
+              "T7": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T6"
+              }
+            },
+            "hot_zone_sensitivity": {
+              "rate": 0.0094,
+              "applies_from_zone": 7,
+              "source": "Straub and Mueck 2025, global median PV degradation (0.94 %/yr); deterministic sensitivity pv_hot_zone_degradation, not sampled"
+            }
           }
         },
         "wind": {
@@ -1070,66 +1211,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -1188,8 +1269,215 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": 0.0017,
+            "unit": "fraction/year",
+            "source": "hamilton2020",
+            "tier": 2,
+            "range": {
+              "min": 0.0017,
+              "max": 0.0053,
+              "distribution": "uniform",
+              "source": "hamilton2020: newer vintages to older vintages (United States fleet)",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Reference turbine: central = newer vintages, range up to older vintages (0.17-0.53 %/yr). The policy-related drop after ten years in the United States is not included. Transferred from United States fleets (Tier 2).",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
+          },
+          "wind_degradation_complex_terrain": {
+            "value": 0.0072,
+            "unit": "fraction/year",
+            "source": "kim2025",
+            "tier": 2,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Complex-terrain rate (0.72 %/yr), kept as a deterministic sensitivity (wind_complex_terrain_degradation), not sampled.",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
           }
         }
+      },
+      "connection": {
+        "poi_voltage_threshold_kv": {
+          "value": 138.0,
+          "unit": "kV",
+          "source": null,
+          "tier": 2,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Lowest subtransmission voltage at which a plant of about 100 MW commonly connects, below the 230 kV Basic Network. Verify against the ONS/ANEEL access rules (Procedimentos de Rede, PRODIST Modulo 3): OQ-065.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "reference_project_mw": {
+          "value": 100.0,
+          "unit": "MW",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_grid": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed line length to the geodesic distance to the substation.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_road": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed road length to the geodesic distance to the road.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "long_distance_flag_km": {
+          "value": 100.0,
+          "unit": "km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Cells beyond this distance to the nearest eligible substation are flagged long_distance, kept with the same cost formula.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km": {
+          "value": 0.0,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Central case: no resistive loss on the spur line (eta_trans = 1).",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km_sensitivity": {
+          "value": 0.0004,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 0.0003,
+            "max": 0.0005,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Named scenario transmission_losses, not sampled: 0.03-0.05 %/km.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "line_cost_per_km": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "BRL/km",
+          "currency": "BRL",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": null,
+          "source": "aneelBPR",
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "138 kV single-circuit line, ANEEL reference price bank. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "bay_cost": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "BRL",
+          "currency": "BRL",
+          "scale": 1.0,
+          "per": "bay",
+          "price_year": null,
+          "source": "aneelBPR",
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "138 kV line entry module, ANEEL reference price bank. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "road_cost_per_km": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "BRL/km",
+          "currency": "BRL",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": null,
+          "source": null,
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "Unpaved access road. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "conversion_indices_path": "external/world_bank/conversion_indices.json"
       }
     },
     "IND": {
@@ -1363,66 +1651,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -1481,6 +1709,63 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_by_zone": {
+            "source": "Jordan et al. 2022 (DuraMAT public fleet results, Fleet_results_public_2022_02_02.csv)",
+            "tier": 2,
+            "filter": "technology1 in {mono-Si, multi-Si, c-Si} and type_mounting == Ground",
+            "min_systems": 20,
+            "generated_date": "2026-11-02",
+            "synthetic": false,
+            "zones": {
+              "T1": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T2"
+              },
+              "T2": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T3": {
+                "n": 992,
+                "median": 0.004,
+                "mean": 0.005061,
+                "merged_with": "T1"
+              },
+              "T4": {
+                "n": 402,
+                "median": 0.0094,
+                "mean": 0.010726,
+                "merged_with": null
+              },
+              "T5": {
+                "n": 61,
+                "median": 0.0085,
+                "mean": 0.009467,
+                "merged_with": null
+              },
+              "T6": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T7"
+              },
+              "T7": {
+                "n": 50,
+                "median": 0.00855,
+                "mean": 0.007812,
+                "merged_with": "T6"
+              }
+            },
+            "hot_zone_sensitivity": {
+              "rate": 0.0094,
+              "applies_from_zone": 7,
+              "source": "Straub and Mueck 2025, global median PV degradation (0.94 %/yr); deterministic sensitivity pv_hot_zone_degradation, not sampled"
+            }
           }
         },
         "wind": {
@@ -1666,66 +1951,6 @@
             "synthetic": false,
             "proxy": false
           },
-          "degradation_rate": {
-            "value": null,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Annual energy degradation d of M-F6-01, E_t = E_m (1-d)^(t-1). No value yet: pending OQ-019.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": null,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Transmission connection cost per MW and km of M-F6-01 (L-019). No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "substation_cost_usd_per_mw": {
-            "value": null,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Substation / point-of-interconnection cost per MW of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
-          "road_cost_usd_per_km": {
-            "value": null,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": null,
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Road access cost per km of M-F6-01. No value yet: pending OQ-001.",
-            "status": "pending_research",
-            "synthetic": false,
-            "proxy": false
-          },
           "cf_min": {
             "value": null,
             "unit": "fraction",
@@ -1784,8 +2009,215 @@
             "note": "Technology and cost vintage: the commissioning cohort of the IRENA 2024 costs (t_ref = 2024, OQ-018). Documentation only: the kernel reads no year.",
             "synthetic": false,
             "proxy": false
+          },
+          "degradation_rate": {
+            "value": 0.0017,
+            "unit": "fraction/year",
+            "source": "hamilton2020",
+            "tier": 2,
+            "range": {
+              "min": 0.0017,
+              "max": 0.0053,
+              "distribution": "uniform",
+              "source": "hamilton2020: newer vintages to older vintages (United States fleet)",
+              "tier": 2
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Reference turbine: central = newer vintages, range up to older vintages (0.17-0.53 %/yr). The policy-related drop after ten years in the United States is not included. Transferred from United States fleets (Tier 2).",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
+          },
+          "wind_degradation_complex_terrain": {
+            "value": 0.0072,
+            "unit": "fraction/year",
+            "source": "kim2025",
+            "tier": 2,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Complex-terrain rate (0.72 %/yr), kept as a deterministic sensitivity (wind_complex_terrain_degradation), not sampled.",
+            "status": null,
+            "synthetic": false,
+            "proxy": false
           }
         }
+      },
+      "connection": {
+        "poi_voltage_threshold_kv": {
+          "value": 220.0,
+          "unit": "kV",
+          "source": "cerc2022gna",
+          "tier": 2,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Lowest voltage of the interstate transmission system for renewable plants of 50 MW or more (CERC GNA Regulations 2022). Verify the 220 kV level and the 50 MW limit: OQ-065.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "reference_project_mw": {
+          "value": 100.0,
+          "unit": "MW",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_grid": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed line length to the geodesic distance to the substation.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "tortuosity_road": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Ratio of the routed road length to the geodesic distance to the road.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "long_distance_flag_km": {
+          "value": 100.0,
+          "unit": "km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Cells beyond this distance to the nearest eligible substation are flagged long_distance, kept with the same cost formula.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km": {
+          "value": 0.0,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Central case: no resistive loss on the spur line (eta_trans = 1).",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "transmission_loss_per_km_sensitivity": {
+          "value": 0.0004,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": 3,
+          "range": {
+            "min": 0.0003,
+            "max": 0.0005,
+            "distribution": "uniform",
+            "source": "Author judgment (Tier 3)",
+            "tier": 3
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Named scenario transmission_losses, not sampled: 0.03-0.05 %/km.",
+          "status": null,
+          "synthetic": false,
+          "proxy": false
+        },
+        "line_cost_per_km": {
+          "value": 1.1,
+          "low": 1.1,
+          "high": 1.14,
+          "unit": "INR crore/km",
+          "currency": "INR",
+          "scale": 10000000.0,
+          "per": "km",
+          "price_year": 2025,
+          "source": "ctuilIndicative2025",
+          "status": "sourced",
+          "tier": 2,
+          "note": "Indicative capital cost of a 220 kV single-circuit line, single Moose / AL59 Zebra conductor; excludes right of way.",
+          "open_question": "OQ-001"
+        },
+        "bay_cost": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "INR crore",
+          "currency": "INR",
+          "scale": 10000000.0,
+          "per": "bay",
+          "price_year": null,
+          "source": null,
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "220 kV line bay. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "road_cost_per_km": {
+          "value": null,
+          "low": null,
+          "high": null,
+          "unit": "INR crore/km",
+          "currency": "INR",
+          "scale": 10000000.0,
+          "per": "km",
+          "price_year": null,
+          "source": null,
+          "status": "to_be_sourced",
+          "tier": null,
+          "note": "Unpaved access road. To be sourced.",
+          "open_question": "OQ-001"
+        },
+        "conversion_indices_path": "external/world_bank/conversion_indices.json"
       }
     },
     "ZZZ": {
@@ -1949,89 +2381,6 @@
             "status": null,
             "synthetic": true
           },
-          "degradation_rate": {
-            "value": 0.005,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 0.0,
-              "max": 0.01,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: 0.5% per year, round.",
-            "status": null,
-            "synthetic": true
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": 1000.0,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 500.0,
-              "max": 1500.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 1000 USD per MW and km.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
-          "substation_cost_usd_per_mw": {
-            "value": 20000.0,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 10000.0,
-              "max": 30000.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 20000 USD per MW.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
-          "road_cost_usd_per_km": {
-            "value": 50000.0,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 25000.0,
-              "max": 75000.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 50000 USD per km.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
           "cf_min": {
             "value": 0.15,
             "unit": "fraction",
@@ -2074,6 +2423,58 @@
             "note": "Test value: small enough for the six synthetic solar cells to give a top-k of two.",
             "status": null,
             "synthetic": true
+          },
+          "degradation_by_zone": {
+            "source": "Test values (A-06), not fleet data.",
+            "tier": null,
+            "filter": "synthetic",
+            "min_systems": 20,
+            "generated_date": null,
+            "synthetic": true,
+            "zones": {
+              "T1": {
+                "n": 100,
+                "median": 0.004,
+                "mean": 0.0045,
+                "merged_with": null
+              },
+              "T2": {
+                "n": 100,
+                "median": 0.005,
+                "mean": 0.0055,
+                "merged_with": null
+              },
+              "T3": {
+                "n": 100,
+                "median": 0.006,
+                "mean": 0.0065,
+                "merged_with": null
+              },
+              "T4": {
+                "n": 100,
+                "median": 0.007,
+                "mean": 0.0075,
+                "merged_with": null
+              },
+              "T5": {
+                "n": 100,
+                "median": 0.008,
+                "mean": 0.0085,
+                "merged_with": null
+              },
+              "T6": {
+                "n": 100,
+                "median": 0.009,
+                "mean": 0.0095,
+                "merged_with": null
+              },
+              "T7": {
+                "n": 100,
+                "median": 0.01,
+                "mean": 0.0105,
+                "merged_with": null
+              }
+            }
           }
         },
         "wind": {
@@ -2249,89 +2650,6 @@
             "status": null,
             "synthetic": true
           },
-          "degradation_rate": {
-            "value": 0.005,
-            "unit": "fraction/year",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 0.0,
-              "max": 0.01,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: 0.5% per year, round.",
-            "status": null,
-            "synthetic": true
-          },
-          "grid_cost_usd_per_mw_km": {
-            "value": 1000.0,
-            "unit": "USD/(MW km)",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 500.0,
-              "max": 1500.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 1000 USD per MW and km.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
-          "substation_cost_usd_per_mw": {
-            "value": 20000.0,
-            "unit": "USD/MW",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 10000.0,
-              "max": 30000.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 20000 USD per MW.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
-          "road_cost_usd_per_km": {
-            "value": 50000.0,
-            "unit": "USD/km",
-            "source": null,
-            "tier": null,
-            "range": {
-              "min": 25000.0,
-              "max": 75000.0,
-              "distribution": "uniform",
-              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
-              "tier": null
-            },
-            "verified": false,
-            "verified_by": null,
-            "verified_date": null,
-            "verification_method": "unverified",
-            "note": "Test value: round 50000 USD per km.",
-            "status": null,
-            "synthetic": true,
-            "price_year": 2024
-          },
           "cf_min": {
             "value": 0.3,
             "unit": "fraction",
@@ -2374,8 +2692,217 @@
             "note": "Test value: small enough for the seventeen synthetic wind cells to give a top-k of five.",
             "status": null,
             "synthetic": true
+          },
+          "degradation_rate": {
+            "value": 0.005,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": {
+              "min": 0.0,
+              "max": 0.01,
+              "distribution": "uniform",
+              "source": "Test range (A-06), not a sourced range; it brackets the test value so the sampler has a span to draw from.",
+              "tier": null
+            },
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value: 0.5% per year, round.",
+            "status": null,
+            "synthetic": true
+          },
+          "wind_degradation_complex_terrain": {
+            "value": 0.01,
+            "unit": "fraction/year",
+            "source": null,
+            "tier": null,
+            "range": null,
+            "verified": false,
+            "verified_by": null,
+            "verified_date": null,
+            "verification_method": "unverified",
+            "note": "Test value (A-06).",
+            "status": null,
+            "synthetic": true,
+            "proxy": false
           }
         }
+      },
+      "connection": {
+        "poi_voltage_threshold_kv": {
+          "value": 138.0,
+          "unit": "kV",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "reference_project_mw": {
+          "value": 100.0,
+          "unit": "MW",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "tortuosity_grid": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": null,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Test range (A-06), not a sourced range.",
+            "tier": null
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "tortuosity_road": {
+          "value": 1.25,
+          "unit": "1",
+          "source": null,
+          "tier": null,
+          "range": {
+            "min": 1.2,
+            "max": 1.3,
+            "distribution": "uniform",
+            "source": "Test range (A-06), not a sourced range.",
+            "tier": null
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "long_distance_flag_km": {
+          "value": 100.0,
+          "unit": "km",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "transmission_loss_per_km": {
+          "value": 0.0,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": null,
+          "range": null,
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "transmission_loss_per_km_sensitivity": {
+          "value": 0.0004,
+          "unit": "fraction/km",
+          "source": null,
+          "tier": null,
+          "range": {
+            "min": 0.0003,
+            "max": 0.0005,
+            "distribution": "uniform",
+            "source": "Test range (A-06), not a sourced range.",
+            "tier": null
+          },
+          "verified": false,
+          "verified_by": null,
+          "verified_date": null,
+          "verification_method": "unverified",
+          "note": "Test value (A-06), not a sourced figure.",
+          "status": null,
+          "synthetic": true,
+          "proxy": false
+        },
+        "line_cost_per_km": {
+          "value": 100000.0,
+          "low": 50000.0,
+          "high": 150000.0,
+          "unit": "USD/km",
+          "currency": "USD",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": 2024,
+          "source": null,
+          "status": "sourced",
+          "tier": null,
+          "note": "Test value (A-06), not a sourced figure.",
+          "open_question": null,
+          "synthetic": true
+        },
+        "bay_cost": {
+          "value": 2000000.0,
+          "low": 1000000.0,
+          "high": 3000000.0,
+          "unit": "USD",
+          "currency": "USD",
+          "scale": 1.0,
+          "per": "bay",
+          "price_year": 2024,
+          "source": null,
+          "status": "sourced",
+          "tier": null,
+          "note": "Test value (A-06), not a sourced figure.",
+          "open_question": null,
+          "synthetic": true
+        },
+        "road_cost_per_km": {
+          "value": 50000.0,
+          "low": 25000.0,
+          "high": 75000.0,
+          "unit": "USD/km",
+          "currency": "USD",
+          "scale": 1.0,
+          "per": "km",
+          "price_year": 2024,
+          "source": null,
+          "status": "sourced",
+          "tier": null,
+          "note": "Test value (A-06), not a sourced figure.",
+          "open_question": null,
+          "synthetic": true
+        },
+        "conversion_indices_path": "external/world_bank/conversion_indices.json"
       }
     }
   }

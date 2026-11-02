@@ -237,6 +237,171 @@ class VerifiedValue(BaseModel, Generic[T]):
         return self
 
 
+CostStatus = Literal["sourced", "verify", "to_be_sourced"]
+GROUP3_RENAMED_KEYS = {
+    "grid_cost_usd_per_mw_km": "line_cost_per_km (countries.<ISO3>.connection, per project in the currency of the source)",
+    "substation_cost_usd_per_mw": "bay_cost (countries.<ISO3>.connection, per bay)",
+    "road_cost_usd_per_km": "road_cost_per_km (countries.<ISO3>.connection)",
+}
+
+
+class UnitCost(BaseModel):
+    """A per-project unit cost of the external connection in the currency and price year of its source (Group 3, U-05).
+
+    The value is never stored in USD: F6 converts it to constant 2024 USD with the national GDP deflator and the 2024 average exchange rate
+    (`lcoe_modeling/connection.py`). A cost with `status = "to_be_sourced"` has no value (F6 refuses to run until it has one).
+
+    Args:
+        value: Central value in `unit`, or null while the cost is to be sourced.
+        low: Lower bound of the sampling range, in `unit`.
+        high: Upper bound of the sampling range, in `unit`.
+        unit: Human-readable unit of the source (for example `INR crore/km`, `MEUR`).
+        currency: ISO 4217 code of the source currency.
+        scale: Currency units in one `unit` of the source (10,000,000 for crore, 1,000,000 for a million).
+        per: What the cost is incurred per: `km` of line or road, or `bay` (a connection at the receiving substation).
+        price_year: Price base year of the source, or null while it is unconfirmed (status `verify`).
+        source: BibTeX key or citation of the source.
+        status: `sourced`, `verify` (value present, a detail such as the base year to be confirmed) or `to_be_sourced` (no value).
+        tier: Evidence tier (U-07).
+        note: Free-text caveat (voltage class, whether right of way is included).
+        open_question: Open question that tracks a missing value (for example `OQ-001`).
+        synthetic: True for a test value of the synthetic country.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: float | None = None
+    low: float | None = None
+    high: float | None = None
+    unit: str
+    currency: str
+    scale: PositiveFloat = 1.0
+    per: Literal["km", "bay"]
+    price_year: int | None = None
+    source: str | None = None
+    status: CostStatus
+    tier: Literal[1, 2, 3] | None = None
+    note: str | None = None
+    open_question: str | None = None
+    synthetic: bool = False  # a test value of the synthetic country (A-06), never a sourced cost
+
+    @model_validator(mode="after")
+    def _consistent(self) -> UnitCost:
+        """A to_be_sourced cost has no number; a sourced one has the value inside its range."""
+        numbers = (self.value, self.low, self.high)
+        if self.status == "to_be_sourced":
+            if any(v is not None for v in numbers):
+                raise ValueError("a cost with status to_be_sourced must have null value, low and high.")
+            return self
+        if any(v is None for v in numbers):
+            raise ValueError(f"a cost with status {self.status!r} needs value, low and high.")
+        if not self.low <= self.value <= self.high:
+            raise ValueError(f"value ({self.value}) must be within [{self.low}, {self.high}].")
+        if min(numbers) < 0:
+            raise ValueError("a cost must not be negative.")
+        return self
+
+
+class ZoneRate(BaseModel):
+    """The annual PV degradation of one thermal zone computed from the fleet data (fractions per year, positive).
+
+    Args:
+        n: Systems behind the rate (after the filter, and after merging when `merged_with` is set).
+        median: Zone median, the central value.
+        mean: Zone mean, the upper end of the sampling range when it exceeds the median.
+        merged_with: The zone whose systems were pooled with this one because the zone had fewer than `min_systems`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    n: int
+    median: NonNegativeFloat
+    mean: NonNegativeFloat
+    merged_with: str | None = None
+
+
+class HotZoneSensitivity(BaseModel):
+    """The deterministic sensitivity `pv_hot_zone_degradation`: one rate for every cell of thermal zone `applies_from_zone` or above (not sampled).
+
+    Args:
+        rate: Annual degradation (fraction per year) replacing the zone rate of those cells, both bounds.
+        applies_from_zone: First zone number the rate applies to (7 = T7 and hotter).
+        source: Where the rate comes from.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    rate: PositiveFloat
+    applies_from_zone: PositiveInt
+    source: str
+
+
+class PvDegradationByZone(BaseModel):
+    """PV degradation rates by thermal zone T1 to T7, derived from the public fleet data (Group 3; `scripts/derive_pv_degradation_by_zone.py`).
+
+    The central rate of a cell is the median of its zone; the sampling range runs from the median to the mean when the mean is higher
+    (the sample is skewed toward faster degradation). Cells of a zone hotter than T7 take the T7 rate.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str
+    tier: Literal[1, 2, 3] | None = None
+    filter: str
+    min_systems: PositiveInt
+    generated_date: str | None = None
+    synthetic: bool = False
+    zones: dict[str, ZoneRate]
+    hot_zone_sensitivity: HotZoneSensitivity | None = None
+
+    @model_validator(mode="after")
+    def _zones_are_t1_to_t7(self) -> PvDegradationByZone:
+        expected = {f"T{i}" for i in range(1, 8)}
+        if self.zones and set(self.zones) != expected:
+            raise ValueError(f"zones must be exactly {sorted(expected)}, got {sorted(self.zones)}.")
+        return self
+
+
+class ConnectionParams(BaseModel):
+    """Group 3 parameters of one country: point of interconnection, reference project, lengths, unit costs and losses.
+
+    Values match `docs/thesis/methods/group3_connection_degradation.tex`. The costs are per project (a line, a bay, a road) and are spread
+    over `reference_project_mw` by F6. `transmission_loss_per_km` is 0 in the central case; `transmission_loss_per_km_sensitivity` carries the
+    range of the named scenario `transmission_losses`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    poi_voltage_threshold_kv: VerifiedValue[PositiveFloat]
+    reference_project_mw: VerifiedValue[PositiveFloat]
+    tortuosity_grid: VerifiedValue[PositiveFloat]
+    tortuosity_road: VerifiedValue[PositiveFloat]
+    long_distance_flag_km: VerifiedValue[PositiveFloat]
+    transmission_loss_per_km: VerifiedValue[NonNegativeFloat]
+    transmission_loss_per_km_sensitivity: VerifiedValue[NonNegativeFloat]
+    line_cost_per_km: UnitCost
+    bay_cost: UnitCost
+    road_cost_per_km: UnitCost
+    conversion_indices_path: str  # relative to GEOFREA_DATA_DIR: World Bank NY.GDP.DEFL.ZS and PA.NUS.FCRF with source and access date
+
+
+class _RejectsRenamedKeys(BaseModel):
+    """Refuses the pre-Group-3 cost names, whose unit (USD per MW and km) differs from the new ones, with the migration in the message."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _old_names(cls, data):
+        if isinstance(data, dict):
+            old = [k for k in GROUP3_RENAMED_KEYS if k in data]
+            if old:
+                listing = "; ".join(f"{k} -> {GROUP3_RENAMED_KEYS[k]}" for k in old)
+                raise ValueError(
+                    f"parameters.json uses pre-Group-3 cost names with a different unit (USD per MW and km): {listing}. "
+                    "Rename, do not reuse (COMMAND 83)."
+                )
+        return data
+
+
 class _TechnologyEconomicParams(BaseModel):
     """Shared shape for per-technology economic/performance parameters.
 
@@ -295,7 +460,7 @@ class _TechnologySitingParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
+class SolarParams(_RejectsRenamedKeys, _TechnologyEconomicParams, _TechnologySitingParams):
     """Solar PV technology parameters for a single country.
 
     See docs/_archive/2026-09/DECISIONS.md 2026-08-20 - solar and wind parameters
@@ -319,16 +484,13 @@ class SolarParams(_TechnologyEconomicParams, _TechnologySitingParams):
     luf: VerifiedValue[UnitInterval | None]  # M-F5-01 (OQ-004)
     power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
     gamma: VerifiedValue[float | None]  # M-F5-02 (OQ-023), 1/K, negative
-    degradation_rate: VerifiedValue[UnitInterval | None]  # M-F6-01 (OQ-019), fraction per year
-    grid_cost_usd_per_mw_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
-    substation_cost_usd_per_mw: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
-    road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    degradation_by_zone: PvDegradationByZone | None  # Group 3: rates by thermal zone T1-T7 (the PV zone of the cell picks the rate)
     cf_min: VerifiedValue[UnitInterval | None]  # M-F7-01 (OQ-008), fraction
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
 
 
-class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
+class WindParams(_RejectsRenamedKeys, _TechnologyEconomicParams, _TechnologySitingParams):
     """Onshore wind technology parameters for a single country.
 
     See docs/_archive/2026-09/DECISIONS.md 2026-08-20 - solar and wind parameters
@@ -346,10 +508,8 @@ class WindParams(_TechnologyEconomicParams, _TechnologySitingParams):
     power_density_mw_per_km2: VerifiedValue[NonNegativeFloat | None]  # M-F5-01 (OQ-004)
     eta_loss: VerifiedValue[UnitInterval | None]  # M-F5-03 (OQ-005)
     hub_height_m: VerifiedValue[PositiveFloat | None]  # M-F5-03 (OQ-005), within 100 to 200 m
-    degradation_rate: VerifiedValue[UnitInterval | None]  # M-F6-01 (OQ-019), fraction per year
-    grid_cost_usd_per_mw_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
-    substation_cost_usd_per_mw: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
-    road_cost_usd_per_km: VerifiedValue[NonNegativeFloat | None]  # M-F6-01 (OQ-001)
+    degradation_rate: VerifiedValue[UnitInterval | None]  # Group 3: central = newer vintages, range up to older vintages, fraction per year
+    wind_degradation_complex_terrain: VerifiedValue[UnitInterval | None]  # Group 3: deterministic sensitivity, not sampled
     cf_min: VerifiedValue[UnitInterval | None]  # M-F7-01 (OQ-008), fraction
     tau_lcoe_usd_per_mwh: VerifiedValue[NonNegativeFloat | None]  # M-F7-04 (OQ-008), 2024 USD
     top_k_percent: VerifiedValue[PositiveFloat | None]  # M-F7-05 (OQ-021), 0 < p_k <= 100
@@ -384,6 +544,7 @@ class CountryParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     technologies: TechnologyParams
+    connection: ConnectionParams | None = None  # Group 3 (F6 refuses a country without it)
 
 
 class ParametersFile(BaseModel):
@@ -471,6 +632,20 @@ class ResolutionsConfig(BaseModel):
     suitability: PositiveFloat
 
 
+class RoadClasses(BaseModel):
+    """Road classes that count for the distance to the road (Group 3: primary and secondary roads, their higher classes kept).
+
+    Args:
+        grip4_gp_rtp: Values of the GRIP4 `GP_RTP` road-type field to keep (1 highways, 2 primary, 3 secondary, 4 tertiary, 5 local).
+        osm_highway: Values of the OSM `highway` tag to keep.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    grip4_gp_rtp: list[int]
+    osm_highway: list[str]
+
+
 class GeospatialConfig(BaseModel):
     """geospatial section of settings.yaml.
 
@@ -480,12 +655,25 @@ class GeospatialConfig(BaseModel):
             distance-to-grid/roads/rivers rasters (M-F2a-03). It never truncates a distance:
             the connection-cost model bills the real one (OQ-040, METHODOLOGY 1.4.0).
             The value lives only in settings.yaml (no default here, CONVENTIONS).
+        poi_line_tolerance_m: Distance (m) within which an OSM line reaches a substation, for the voltage a substation without a tag inherits
+            (Group 3, `poi.py`); recorded in the manifest through the fingerprint of the configuration.
+        road_classes: The road classes that count for the distance to the road (Group 3).
+        poi_substations_geojson: Path pattern, relative to GEOFREA_DATA_DIR, of the substations of a country as nodes, ways and relations
+            (`{iso}` is replaced; `scripts/fetch_osm_substations.py`).
+        pvcz_csv: Path, relative to GEOFREA_DATA_DIR, of the PVCZ-2019 land points (Karin et al. 2019) with the thermal zone of each.
+        pvcz_max_distance_km: Largest distance from a cell centre to the nearest PVCZ land point for the cell to take its zone (a coastal
+            cell takes the nearest land point); beyond it the cell has no zone (Tier 3).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     resolutions: ResolutionsConfig
     distance_cap_km: PositiveFloat
+    poi_line_tolerance_m: NonNegativeFloat
+    road_classes: RoadClasses
+    poi_substations_geojson: str
+    pvcz_csv: str
+    pvcz_max_distance_km: PositiveFloat
 
 
 class MemoryConfig(BaseModel):

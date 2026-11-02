@@ -52,10 +52,12 @@ solar:
     - opex_fixed_frac
     - discount_rate
     - lifetime_years
-    - degradation_rate
-    - grid_cost_usd_per_mw_km
-    - substation_cost_usd_per_mw
-    - road_cost_usd_per_km
+    - degradation_weight       # Group 3: position between the degradation bounds of the cell (PV zone or wind vintage)
+    - line_cost_usd_per_km     # Group 3: connection line, USD 2024 per project
+    - bay_cost_usd             # Group 3: connection works at the receiving substation, USD 2024 per project
+    - road_cost_usd_per_km     # Group 3: access road, USD 2024 per km
+    - tortuosity_grid          # Group 3
+    - tortuosity_road          # Group 3
     - gamma  # Temperature coefficient (1/K, negative)
 
 wind:
@@ -97,10 +99,12 @@ wind:
     - opex_fixed_frac
     - discount_rate
     - lifetime_years
-    - degradation_rate
-    - grid_cost_usd_per_mw_km
-    - substation_cost_usd_per_mw
-    - road_cost_usd_per_km
+    - degradation_weight       # Group 3: position between the degradation bounds of the cell (PV zone or wind vintage)
+    - line_cost_usd_per_km     # Group 3: connection line, USD 2024 per project
+    - bay_cost_usd             # Group 3: connection works at the receiving substation, USD 2024 per project
+    - road_cost_usd_per_km     # Group 3: access road, USD 2024 per km
+    - tortuosity_grid          # Group 3
+    - tortuosity_road          # Group 3
     - eta_loss  # Availability + wake losses
 
   # Parameters F5 and F6 need and that are not uncertain (M-F5-01, M-F5-03, M-F6-01; D-F5-011, D-F5-012, D-F6-016). Keys of

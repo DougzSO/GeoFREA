@@ -85,14 +85,18 @@ uncertain_parameters:
     description: "Technology-specific real discount rate"
   lifetime_years:
     description: "Asset operational lifetime"
-  degradation_rate:
-    description: "Annual capacity degradation (technology-dependent)"
-  grid_cost_usd_per_mw_km:
-    description: "Transmission interconnection cost per MW·km"
-  substation_cost_usd_per_mw:
-    description: "Substation / POI cost per MW"
+  degradation_weight:
+    description: "Position in [0, 1] between the lower and the upper degradation bound of the cell (PV: median to mean of its thermal zone; wind: newer to older vintages)"
+  line_cost_usd_per_km:
+    description: "Cost of the connection line to the point of interconnection, 2024 USD per km (per project)"
+  bay_cost_usd:
+    description: "Cost of the connection works at the receiving substation, 2024 USD per project"
   road_cost_usd_per_km:
-    description: "Road access / construction cost per km"
+    description: "Access road cost, 2024 USD per km (per project)"
+  tortuosity_grid:
+    description: "Ratio of the routed connection length to the geodesic distance to the substation"
+  tortuosity_road:
+    description: "Ratio of the routed access road length to the geodesic distance to the road"
   gamma:
     description: "Solar module temperature coefficient (1/K, negative)"
   eta_loss:
