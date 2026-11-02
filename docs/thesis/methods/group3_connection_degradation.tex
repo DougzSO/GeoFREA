@@ -1,0 +1,273 @@
+% ============================================================================
+% CHAPTER 3 - METHODS / PARAMETERS
+% File: docs/thesis/methods/group3_connection_degradation.tex
+% Group 3: grid connection, access road, transmission losses, degradation (Stage F6).
+% Theory: docs/thesis/theory/ch2_grid_access_degradation.tex
+% Values must match config/parameters.json. Lines marked % verify or % pending are open.
+% ============================================================================
+
+\section{Grid Connection and Degradation (Stage F6)}
+\label{sec:params_group3}
+
+This section defines how the cost of reaching the transmission network
+and the decline of output over the plant life enter the LCOE of Stage F6.
+It completes the cost structure of Section~\ref{sec:params_group2}.
+
+\subsection{Point of Interconnection and Connection Length}
+\label{subsec:g3_poi}
+
+The point of interconnection of a cell is the nearest OpenStreetMap
+substation whose nominal voltage is at least a country threshold
+$V_{\mathrm{th},c}$, the lowest voltage at which a plant of about 100~MW
+connects to a network able to absorb its output. In Brazil the threshold
+is 138~kV, the subtransmission level at which plants of this size
+commonly connect, below the 230~kV Basic Network. In India it is 220~kV,
+the lowest voltage of the interstate transmission system to which
+renewable plants of 50~MW or more may connect under the General Network
+Access regulations \cite{cerc2022gna}. In Portugal it is 150~kV, the
+lowest voltage of the transmission network operated by REN; the 60~kV
+level belongs to the distribution network and has limited capacity for
+plants of this size.
+% verify: BRA 138 kV against ONS/ANEEL access rules (Procedimentos de Rede, PRODIST Modulo 3); IND 220 kV and the 50 MW limit in CERC GNA Regulations 2022
+Substations without a voltage tag take the highest voltage of the OSM
+lines that reach them; substations with no inferable voltage are
+excluded, and their number is reported per country.
+
+Distances are computed with the same geodesic distance transform used for
+the other distance layers (Stage F2a), on the 0.01$^\circ$ grid, and
+aggregated to each 0.05$^\circ$ cell as the mean over its eligible area.
+The connection length is the distance corrected by a tortuosity factor:
+\begin{equation}
+    L_{\mathrm{grid},i} = \tau_{\mathrm{grid}}\, D_{\mathrm{sub},i},
+    \qquad
+    L_{\mathrm{road},i} = \tau_{\mathrm{road}}\, D_{\mathrm{road},i},
+    \label{eq:g3_lengths}
+\end{equation}
+where $D_{\mathrm{sub},i}$ and $D_{\mathrm{road},i}$ are the distances to
+the nearest eligible substation and to the nearest primary or secondary
+road. Cells whose substation distance exceeds 100~km are flagged as
+requiring transmission development rather than a radial spur; they remain
+in the analysis with the same cost formula, and the share of potential
+they hold is reported.
+
+As a sensitivity, the substation distance is replaced by the distance to
+the nearest line of the predictive network layer (gridfinder combined
+with OSM \cite{arderne2020}), which has no voltage attribute and
+therefore gives an optimistic, lower-bound connection length.
+
+\subsection{Reference Project and Cost Boundary}
+\label{subsec:g3_boundary}
+
+Line, bay and road costs are incurred per project, not per megawatt.
+They are converted to cost per unit capacity with a reference project of
+$P_{\mathrm{ref}}=100$~MW for both technologies. This is a modelling
+convention: it does not assume that every cell hosts a 100~MW plant, and
+it is applied identically in all cells so that sites are compared on the
+same basis.
+
+The capital cost of Section~\ref{subsec:g2_capex} covers everything
+inside the plant boundary: collection networks, collector substations,
+step-up transformers and the switchyard. For PV this matches the scope
+stated by IRENA \cite{irena2025costs2024}. For onshore wind the report
+does not state its scope, and the same boundary is assumed; this is
+recorded as a limitation. Outside the boundary GeoFREA adds the external
+interconnection cost per unit capacity
+\begin{equation}
+    C_{\mathrm{inter},i} =
+    \frac{c_{\mathrm{line}}\,L_{\mathrm{grid},i}
+          + C_{\mathrm{bay}}
+          + c_{\mathrm{road}}\,L_{\mathrm{road},i}}{P_{\mathrm{ref}}}
+    \quad [\mathrm{USD/MW}],
+    \label{eq:g3_inter}
+\end{equation}
+with $c_{\mathrm{line}}$ the cost of a single-circuit overhead line at
+$V_{\mathrm{th},c}$ (USD/km), $C_{\mathrm{bay}}$ the cost of the
+connection works at the receiving substation (USD) and
+$c_{\mathrm{road}}$ the cost of a new access road (USD/km). Upstream
+network reinforcement is not included, so the result is the cost of the
+radial connection only, not a full interconnection-study estimate
+\cite{seel2023}.
+
+Unit costs come from regulatory or regulator-compiled benchmarks of each
+country (Table~\ref{tab:g3_costs}). For India, the line cost is the
+indicative capital cost of a 220~kV single-circuit line published by the
+Central Transmission Utility, which excludes right of way
+\cite{ctuilIndicative2025}. For Portugal, no national per-kilometre
+benchmark is public; the line cost is the ACER indicator for 220~kV
+single-circuit overhead lines, which is conservative for 150~kV, and the
+connection works are represented by the ACER indicator for the upgrade of
+an existing air-insulated substation with up to five bays
+\cite{acer2023uic}. For Brazil, line and bay costs come from the ANEEL
+reference price bank \cite{aneelBPR}. All values are converted to 2024
+USD with the national GDP deflator and the 2024 average exchange rate.
+Each cost is sampled uniformly between the bounds in the table.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Unit costs of the external connection, in source currency and price year.}
+    \label{tab:g3_costs}
+    \small
+    \begin{tabularx}{\textwidth}{@{}l
+        >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}p{3.3cm}
+        >{\raggedright\arraybackslash}p{2.3cm}@{}}
+        \toprule
+        Country & Item & Central [range] & Source \\
+        \midrule
+        IND & $c_{\mathrm{line}}$, 220~kV S/C, single Moose / AL59 Zebra
+            & 1.10 [1.10, 1.14] INR crore/km (2025)
+            & \cite{ctuilIndicative2025} \\
+        IND & $C_{\mathrm{bay}}$, 220~kV line bay
+            & to be sourced & -- \\
+        PRT & $c_{\mathrm{line}}$, 220~kV S/C (used at 150~kV)
+            & 0.362 [0.303, 0.543] MEUR/km
+            & \cite{acer2023uic} \\
+        PRT & $C_{\mathrm{bay}}$, AIS substation upgrade, 0--5 bays
+            & 2.789 [2.116, 4.300] MEUR
+            & \cite{acer2023uic} \\
+        BRA & $c_{\mathrm{line}}$, 138~kV S/C
+            & to be sourced & \cite{aneelBPR} \\
+        BRA & $C_{\mathrm{bay}}$, 138~kV line entry module
+            & to be sourced & \cite{aneelBPR} \\
+        All & $c_{\mathrm{road}}$, unpaved access road
+            & to be sourced & -- \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+% verify: ACER (2023) price base year; ranges for PRT are the interquartile range (Q1-Q3), central is the median
+% pending: IND bay, BRA line and bay, road costs
+
+\subsection{Transmission Losses}
+\label{subsec:g3_losses}
+
+The energy of Stage F5 is measured at the plant terminals. Resistive
+losses on the spur line are not modelled in the central case, because no
+country-specific line parameters were found; the energy is used as
+delivered at the POI ($\eta_{\mathrm{trans}}=1$). As a sensitivity, a
+linear loss of $\alpha_{\mathrm{loss}}$ per kilometre is applied,
+\begin{equation}
+    \eta_{\mathrm{trans},i} = 1 - \alpha_{\mathrm{loss}}\,L_{\mathrm{grid},i},
+    \qquad \alpha_{\mathrm{loss}} \in [0.03,\,0.05]~\%/\mathrm{km},
+    \label{eq:g3_losses}
+\end{equation}
+which is author judgment (Tier 3). For a 100~MW plant connected at
+138~kV, the resistive loss at rated flow is of the order of
+$P\,r'\,L/V^2$, a few percent at 50~km for typical conductor resistance,
+which is consistent with that range.
+
+\subsection{Degradation}
+\label{subsec:g3_degradation}
+
+Annual energy declines geometrically,
+\begin{equation}
+    E_{i,t} = E_{i,1}\,(1-d)^{t-1}, \qquad t = 1,\dots,n,
+    \label{eq:g3_degradation}
+\end{equation}
+which is the form already used in the Stage F6 kernel.
+
+For PV, $d$ follows the temperature zone of the cell. Zones are taken
+from the global PV climate-zone dataset of Karin et al.\ \cite{karin2019,pvcz},
+the same scheme used to classify the fleet of Jordan et al.\
+\cite{jordan2022}: the zone of a cell is that of the nearest 0.25$^\circ$
+point of the dataset, using the equivalent temperature of an open-rack
+module. The zone is a property of the site's historical climate and does
+not change across climate members. The rate of each zone is computed
+from the public fleet data of Jordan et al.\ \cite{jordan2022}: the
+central value is the zone median and the sampling range runs from the
+median to the mean, so the uncertainty is skewed toward faster
+degradation, as in the fleet data. The fleet covers zones T1 to T7;
+cells in hotter zones take the T7 value, and zones with too few systems
+are merged with the adjacent zone. Most of the territory of Brazil and
+India lies in zones T6 and T7 and most of Portugal in T5, so the hot end
+of the fleet sample determines the result.
+% pending: zone rates computed from Fleet_results_public_2022_02_02.csv (DuraMAT); minimum systems per zone set in config
+
+For onshore wind, $d$ follows the vintage of the reference turbine. The
+central value is the rate of newer vintages and the sampling range
+extends to that of older vintages \cite{hamilton2020}. The policy-related
+drop observed after ten years in the United States is not included. The
+complex-terrain rate of Kim and Kim \cite{kim2025} is kept as a
+deterministic sensitivity, not sampled.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Annual degradation rate (uniform sampling).}
+    \label{tab:g3_degradation}
+    \small
+    \begin{tabular}{llccc}
+        \toprule
+        Technology & Class & Central & Range & Source \\
+        \midrule
+        PV   & zones T1--T7 & zone median & median--mean & \cite{jordan2022} \\
+        Wind & reference turbine & 0.17\,\%/yr & 0.17--0.53\,\%/yr & \cite{hamilton2020} \\
+        Wind & complex terrain (sensitivity) & 0.72\,\%/yr & -- & \cite{kim2025} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+All values are transferred from United States fleets (Tier 2). The fleet
+medians of about 0.48\,\%/yr in cooler and 0.88\,\%/yr in hotter climates
+\cite{jordan2022} serve as a check on the zone values, and the global
+meta-analysis median of 0.94\,\%/yr \cite{straubmuck2025} is reported for
+comparison only.
+
+\subsection{Levelized Cost with Connection and Degradation}
+\label{subsec:g3_lcoe}
+
+With these terms, the LCOE of cell $i$ in climate member $m$ and
+parameter draw $s$ is
+\begin{equation}
+    \mathrm{LCOE}_{i,m,s} =
+    \frac{I_s + C_{\mathrm{inter},i,s}
+          + \sum_{t=1}^{n_s} F_s\,(1+r_s)^{-t}}
+         {\sum_{t=1}^{n_s} E_{i,m,1}\,(1-d_{i,s})^{t-1}\,
+          \eta_{\mathrm{trans},i}\,(1+r_s)^{-t}},
+    \label{eq:g3_lcoe}
+\end{equation}
+where $I$ is the plant capital cost, $F=f\,I$ the fixed operating cost
+of Section~\ref{subsec:g2_opex}, $r$ the real discount rate and $n$ the
+lifetime. The connection cost enters as capital at commissioning. A cell
+with a missing distance is not given a zero connection cost: it is
+flagged and excluded from the LCOE results, and the count is reported.
+
+\subsection{Parameters}
+\label{subsec:g3_parameters}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Group 3 parameters.}
+    \label{tab:g3_summary}
+    \small
+    \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.6cm}
+        >{\raggedright\arraybackslash}X
+        >{\centering\arraybackslash}p{1.3cm}
+        >{\centering\arraybackslash}p{0.9cm}@{}}
+        \toprule
+        Parameter & Value & Sampled & Tier \\
+        \midrule
+        $V_{\mathrm{th}}$ & BRA 138~kV; IND 220~kV; PRT 150~kV & no & 2 \\
+        $P_{\mathrm{ref}}$ & 100~MW & no & 3 \\
+        $\tau_{\mathrm{grid}}$ & 1.25, U[1.2, 1.3] & yes & 3 \\
+        $\tau_{\mathrm{road}}$ & 1.25, U[1.2, 1.3] & yes & 3 \\
+        $c_{\mathrm{line}}$, $C_{\mathrm{bay}}$, $c_{\mathrm{road}}$ & Table~\ref{tab:g3_costs} & yes & 2 \\
+        $\alpha_{\mathrm{loss}}$ & 0 (central); 0.03--0.05\,\%/km (sensitivity) & no & 3 \\
+        $d$ & Table~\ref{tab:g3_degradation} & yes & 2 \\
+        Long-distance flag & 100~km & no & 3 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:g3_limitations}
+
+The connection cost covers the radial spur, the works at the receiving
+substation and an access road, not network reinforcement, which can
+dominate real interconnection costs. Substation voltage comes from OSM
+tags, which are incomplete, most of all in India. Tortuosity is a uniform
+factor rather than a routed path. Line costs exclude right of way in
+India and come from a higher voltage class in Portugal. The capital-cost
+boundary of IRENA is stated for PV and assumed for onshore wind.
+Degradation rates come from United States fleets, whose hottest zone is
+the most common one in Brazil and India; the PV zone is fixed at the
+historical climate, and wind uses a single vintage. Transmission losses
+are not modelled in the central case.
