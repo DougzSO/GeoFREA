@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 import geofrea.grid_alignment.alignment as alignment_module
+import geofrea.grid_alignment.layers as layers_module
 import geofrea.grid_alignment.raster_alignment as raster_alignment_module
 from geofrea.grid_alignment.alignment import run_grid_alignment_phase
 from tests.unit.test_grid_alignment_alignment import (
@@ -52,7 +53,7 @@ def _artifacts(context) -> Path:
 
 
 def _calls(run) -> int:
-    with patch.object(alignment_module, "glo30_aligned_outputs", wraps=alignment_module.glo30_aligned_outputs) as spy:
+    with patch.object(layers_module, "glo30_aligned_outputs", wraps=layers_module.glo30_aligned_outputs) as spy:
         run()
     return spy.call_count
 
@@ -93,7 +94,7 @@ def test_a_layer_that_was_not_made_under_the_old_code_stops_the_adoption_before_
     monkeypatch.setattr(alignment_module, "cache_code", lambda name: "code-after")
     before = {p.name: p.read_text(encoding="utf-8") for p in _artifacts(context).glob("*.cachekey")}
 
-    with patch.object(alignment_module, "glo30_aligned_outputs") as computed, pytest.raises(adopt.AdoptionError, match="not made under the code"):
+    with patch.object(layers_module, "glo30_aligned_outputs") as computed, pytest.raises(adopt.AdoptionError, match="not made under the code"):
         adopt.adopt(run, "code-before", _artifacts(context))
 
     computed.assert_not_called()
@@ -104,11 +105,11 @@ def test_a_layer_that_was_not_made_under_the_old_code_stops_the_adoption_before_
 
 def test_the_cache_code_of_a_revision_is_that_of_its_tree():
     adopt = _script()
-    from geofrea.core.cache_code import cache_code
+    from geofrea.core.cache_code import aligned_layers_code
 
     head = adopt.cache_code_at("HEAD")
     assert len(head) == 64 and head != adopt.cache_code_at("38e8da1")
-    assert isinstance(cache_code("aligned_layers"), str)
+    assert isinstance(aligned_layers_code(), str)
 
 
 def test_the_adoption_needs_a_proof_of_equality_for_exactly_these_two_codes():
@@ -165,10 +166,10 @@ def test_check_mode_resolves_the_revision_and_the_proof_without_adopting_or_runn
     import json
 
     module = _script()
-    from geofrea.core.cache_code import cache_code
+    from geofrea.core.cache_code import aligned_layers_code
 
     proof = tmp_path / "proof.json"
-    proof.write_text(json.dumps({"equal": True, "old_cache_code": "old" * 4, "new_cache_code": cache_code("aligned_layers")}), encoding="utf-8")
+    proof.write_text(json.dumps({"equal": True, "old_cache_code": "old" * 4, "new_cache_code": aligned_layers_code()}), encoding="utf-8")
     monkeypatch.setattr(module, "cache_code_at", lambda revision: "old" * 4)
 
     def must_not_run(*_args, **_kwargs):

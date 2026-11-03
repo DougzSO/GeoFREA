@@ -25,6 +25,8 @@ def setup_test_environment():
     os.environ.setdefault("GEOFREA_DATA_DIR", str(test_tmp_base / "data"))
     os.environ.setdefault("GEOWORLD_BASELINE_DIR", str(test_tmp_base / "geoworld"))
     os.environ.setdefault("CRAEI_BASELINE_DIR", str(test_tmp_base / "craei"))
+    # The layers of F2a run in a child process in a real run (COMMAND 88); the unit tests patch module attributes, which only the calling process sees
+    os.environ.setdefault("GEOFREA_LAYERS_IN_PROCESS", "1")
 
     yield
 

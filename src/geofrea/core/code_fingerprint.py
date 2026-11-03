@@ -109,6 +109,8 @@ INFRASTRUCTURE_MODULES = frozenset(
         "core.content_hash",
         "core.run_logging",
         "core.peak_memory",
+        "core.memory_guard",
+        "core.layer_process",
         "core.power",
     }
 )

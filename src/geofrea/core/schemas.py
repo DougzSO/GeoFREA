@@ -670,6 +670,10 @@ class GeospatialConfig(BaseModel):
         pvcz_csv: Path, relative to GEOFREA_DATA_DIR, of the PVCZ-2019 land points (Karin et al. 2019) with the thermal zone of each.
         pvcz_max_distance_km: Largest distance from a cell centre to the nearest PVCZ land point for the cell to take its zone (a coastal
             cell takes the nearest land point); beyond it the cell has no zone (Tier 3).
+        gdal_cachemax_mb: Size (MB) of the GDAL block cache, set as `GDAL_CACHEMAX` for the process and for every layer child (COMMAND 88). Fixed, so
+            that the cache does not grow with the physical memory of the machine.
+        warp_mem_limit_mb: Working memory (MB) GDAL may use for one warp chunk in `reproject_to_grid` (rasterio `warp_mem_limit`). The warp of a
+            sum (population) held 1.7 GB for a 49 MB window at the GDAL default and about 0.5 GB at 16 MB (docs/_audit/population_memory_87.md).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -681,6 +685,8 @@ class GeospatialConfig(BaseModel):
     poi_substations_geojson: str
     pvcz_csv: str
     pvcz_max_distance_km: PositiveFloat
+    gdal_cachemax_mb: PositiveInt = 256
+    warp_mem_limit_mb: PositiveInt = 16
 
 
 class MemoryConfig(BaseModel):

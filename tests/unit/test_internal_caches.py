@@ -23,11 +23,15 @@ from shapely.geometry import box
 
 import geofrea
 from geofrea.core import cache_code as cache_code_module
-from geofrea.core.cache_code import CACHE_CODE_ROOTS, cache_code
+from geofrea.core.cache_code import CACHE_CODE_ROOTS, CACHE_FUNCTION_ENTRIES, cache_code
 from geofrea.core.cache_key import cache_key
 from geofrea.core.code_fingerprint import closure_fingerprint
+from geofrea.core.function_fingerprint import function_fingerprint
 
 pytestmark = pytest.mark.unit
+
+# the inventory: the module-closure caches and the aligned layers, whose key holds the code of the functions their builder reaches (COMMAND 88)
+INVENTORY = {*CACHE_CODE_ROOTS, "aligned_layers"}
 
 SRC = Path(geofrea.__file__).resolve().parent
 
@@ -59,6 +63,11 @@ def _read_from(monkeypatch, root: Path) -> None:
         cache_code_module,
         "cached_closure_fingerprint",
         lambda roots: closure_fingerprint(roots, root),
+    )
+    monkeypatch.setattr(
+        cache_code_module,
+        "_function_code",
+        lambda name: function_fingerprint(CACHE_FUNCTION_ENTRIES[name], root),
     )
 
 
@@ -110,7 +119,7 @@ def _probe_aligned(tmp: Path):
     def probe() -> str:
         from geofrea.grid_alignment.alignment import aligned_layer_key
 
-        return aligned_layer_key([source], {"resolution_deg": 0.01}, None)
+        return aligned_layer_key("solar", [source], {"resolution_deg": 0.01}, None)
 
     return probe
 
@@ -251,10 +260,10 @@ PROBES = {
 
 
 def test_every_cache_of_the_inventory_has_a_probe_and_a_target():
-    assert set(CACHE_CODE_ROOTS) == set(PROBES) == set(TARGET)
+    assert INVENTORY == set(PROBES) == set(TARGET)
 
 
-@pytest.mark.parametrize("name", sorted(CACHE_CODE_ROOTS))
+@pytest.mark.parametrize("name", sorted(INVENTORY))
 def test_a_changed_calculation_gives_another_key_and_a_comment_does_not(
     name, tmp_path, source_copy, monkeypatch
 ):
@@ -321,11 +330,16 @@ def test_every_call_that_builds_a_cache_key_passes_the_code_and_names_a_cache_of
             )
         for call in _calls(tree, "cache_code"):
             arg = call.args[0]
+            if isinstance(arg, ast.JoinedStr):  # the aligned layers: cache_code(f"aligned_layer.{kind}")
+                prefix = arg.values[0]
+                assert isinstance(prefix, ast.Constant) and prefix.value == "aligned_layer.", f"{path.name}:{call.lineno}"
+                used.add("aligned_layers")
+                continue
             assert isinstance(arg, ast.Constant) and arg.value in CACHE_CODE_ROOTS, (
                 f"{path.name}:{call.lineno}"
             )
             used.add(arg.value)
-    assert used == set(CACHE_CODE_ROOTS), "an entry of the inventory that no cache uses"
+    assert used == INVENTORY, "an entry of the inventory that no cache uses"
 
 
 def test_the_roots_of_every_cache_exist():

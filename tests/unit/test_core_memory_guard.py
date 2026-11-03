@@ -66,3 +66,62 @@ def test_main_leaves_with_the_not_started_code_before_any_phase(monkeypatch):
     monkeypatch.setattr(main, "_keep_awake_enabled", lambda: False)
     monkeypatch.setattr(main, "run_geofrea", lambda *a, **k: pytest.fail("a phase started"))
     assert main.main(["PRT", "--phases", "data_quality_audit,grid_alignment"]) == EXIT_NOT_STARTED
+
+
+# ─── COMMAND 88, item 5: wait for the memory a layer needs; stop only on the commit charge ───────────────────────────────────────────
+
+from geofrea.core.memory_guard import (  # noqa: E402
+    COMMIT_STOP_FRACTION,
+    CommitLimitExceeded,
+    MemoryWaitTimeout,
+    commit_fraction,
+    wait_for_memory,
+)
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+    def __call__(self):
+        return self.now
+
+
+def test_the_layer_starts_at_once_when_the_peak_plus_the_margin_is_free():
+    clock = _Clock()
+    log = wait_for_memory("population", 1000, available_mb=lambda: 1400, commit=lambda: 0.5, sleep=clock.sleep, clock=clock)
+    assert log.waits == [] and log.needed_mb == 1300
+
+
+def test_the_layer_waits_for_memory_and_logs_each_wait_with_its_reason():
+    clock = _Clock()
+    free = iter([500, 800, 1200, 1400])
+    log = wait_for_memory("population", 1000, available_mb=lambda: next(free), commit=lambda: 0.5, sleep=clock.sleep, clock=clock, poll_s=5)
+    assert len(log.waits) == 3 and log.waited_s == 15
+    assert "500 MB free, 1300 MB needed" in log.waits[0] and "measured peak 1000 MB" in log.waits[0]
+
+
+def test_a_wait_that_times_out_does_not_start_the_layer_and_ends_nothing():
+    clock = _Clock()
+    with pytest.raises(MemoryWaitTimeout, match="not started and nothing was stopped"):
+        wait_for_memory("population", 1000, available_mb=lambda: 100, commit=lambda: 0.5, sleep=clock.sleep, clock=clock, timeout_s=30, poll_s=5)
+    assert clock.now >= 30
+
+
+def test_low_physical_memory_with_a_paging_file_to_spare_only_waits_it_does_not_stop():
+    clock = _Clock()
+    free = iter([100, 100, 2000])  # physical memory is low, the commit charge is not
+    wait_for_memory("roads", 500, available_mb=lambda: next(free), commit=lambda: 0.60, sleep=clock.sleep, clock=clock)
+
+
+def test_a_commit_charge_over_95_percent_stops_the_run_before_the_layer():
+    clock = _Clock()
+    with pytest.raises(CommitLimitExceeded, match="95%"):
+        wait_for_memory("roads", 500, available_mb=lambda: 5000, commit=lambda: COMMIT_STOP_FRACTION + 0.01, sleep=clock.sleep, clock=clock)
+
+
+def test_the_commit_fraction_is_a_share_of_the_limit():
+    assert 0.0 < commit_fraction() < 1.0

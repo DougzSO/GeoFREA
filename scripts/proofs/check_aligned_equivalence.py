@@ -54,6 +54,32 @@ def compare_manifests(old: dict, new: dict, phase: str | tuple[str, ...] = PHASE
     }
 
 
+def apply_tolerance(verdict: dict, old: dict, new: dict, old_data: Path, new_data: Path) -> dict:
+    """Re-judge the rasters whose hashes differ by the rule of `core.equivalence` (COMMAND 88, item 4): a float within 1e-6 relative + 1e-9 absolute of
+    the reference passes, an integer or categorical raster must be equal; the largest differences are recorded in the row of the artifact."""
+    from geofrea.core.equivalence import compare_rasters
+
+    def resolve(manifest: dict, data: Path, key: str) -> Path | None:
+        entry = manifest["artifacts"].get(key)
+        rel = None if entry is None else (entry.get("path") or {}).get("rel")
+        return None if rel is None else data / rel
+
+    for key, row in verdict["artifacts"].items():
+        if row["equal"]:
+            continue
+        ref, got = resolve(old, old_data, key), resolve(new, new_data, key)
+        if ref is None or got is None or ref.suffix != ".tif" or not ref.exists() or not got.exists():
+            continue
+        comparison = compare_rasters(ref, got)
+        row.update({"criterion": "tolerance", "comparison": comparison.as_dict(), "equal": comparison.equivalent})
+    verdict["n_equal"] = sum(r["equal"] for r in verdict["artifacts"].values())
+    verdict["equal"] = bool(verdict["artifacts"]) and all(r["equal"] for r in verdict["artifacts"].values())
+    verdict["max_abs_delta_by_artifact"] = {
+        k: r["comparison"]["max_abs_delta"] for k, r in verdict["artifacts"].items() if "comparison" in r
+    }
+    return verdict
+
+
 def _junction(link: Path, target: Path) -> None:
     link.parent.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
@@ -80,10 +106,9 @@ def _run_f2a(repo: Path, data_dir: Path, sample: str, real_raw: Path, phases: st
 
 
 def cache_code_at(tree_src: Path) -> str:
-    from geofrea.core.cache_code import CACHE_CODE_ROOTS
-    from geofrea.core.code_fingerprint import closure_fingerprint
+    from geofrea.core.cache_code import aligned_layers_code
 
-    return closure_fingerprint(CACHE_CODE_ROOTS["aligned_layers"], tree_src / "geofrea")
+    return aligned_layers_code(tree_src / "geofrea")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
                 if link.exists() or link.is_symlink():
                     os.rmdir(link) if os.name == "nt" else link.unlink()
         verdict = compare_manifests(old_manifest, new_manifest, tuple(args.phases.split(",")))
+        verdict = apply_tolerance(verdict, old_manifest, new_manifest, tmp_path / "data_old", tmp_path / "data_new")
         verdict.update(
             {
                 "sample": args.sample,

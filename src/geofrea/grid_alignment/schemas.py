@@ -111,6 +111,7 @@ class GridAlignmentInputs(BaseModel):
         poi_line_tolerance_m: Distance (m) within which an OSM line reaches a substation, for the inference of a missing voltage
             (`geospatial.poi_line_tolerance_m` of settings.yaml); recorded in the manifest.
         road_classes: The road classes that count for `roads` (`geospatial.road_classes`); null keeps every class.
+        warp_mem_limit_mb: Working memory (MB) of one GDAL warp chunk in `reproject_to_grid` (`geospatial.warp_mem_limit_mb`).
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -133,6 +134,7 @@ class GridAlignmentInputs(BaseModel):
     poi_sensitivity_threshold_kv: float | None = None
     poi_line_tolerance_m: float | None = None
     road_classes: RoadClasses | None = None
+    warp_mem_limit_mb: int = 16
 
 
 class GridMetadata(BaseModel):

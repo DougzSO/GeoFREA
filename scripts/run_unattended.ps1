@@ -14,8 +14,9 @@
     2. the aligned layers made by the revision in -AdoptRevision are adopted under the current code (scripts\adopt_aligned_cache_keys.py, D-core-044:
        it stops unless the equivalence proof in -AdoptProof says "equal" for these two code versions; without it F2a of BRA would be about 42,000 s);
     3. `main.py <ISO> --phases <all> --rerun <all>` runs in the worktree, with the computer kept awake, its output in the log of the run, and the available memory
-       sampled every -PollSeconds into memory.csv. Under -MinFreeMb the process tree is stopped, the country is marked ABORTADO and the round goes on to the next
-       one: the manifest is written after each phase, so it keeps the phases that finished;
+       sampled every -PollSeconds into memory.csv. The process tree is stopped only when the commit charge of the system (physical memory plus the paging file) passes -MaxCommitPercent;
+       the country is then marked ABORTADO and the round goes on to the next one: the manifest is written after each phase, so it keeps the phases that finished.
+       Low free physical memory alone never stops anything (COMMAND 88): the layers of F2a and F2b wait for their own memory (core/memory_guard.py);
     4. scripts\unattended_check.py compares the content hash of every artifact of the phases that ran with the manifest saved in step 1 and writes
        <data>\outputs\<ISO>\unattended_check.json (IDENTICO or DIFERENTE per artifact, and the wall, awake and CPU time and the peak memory of each phase).
   The exit code is 0 only when every country is IDENTICO.
@@ -26,7 +27,7 @@
 .PARAMETER Worktree       The tree to run (default: the one this script is in; it must be the merged main).
 .PARAMETER Python         python.exe to use (default: the .venv of the main checkout of the repository).
 .PARAMETER Phases         Comma list of the phases (default: the twelve phases to potential_maps).
-.PARAMETER MinFreeMb      Available memory under which the current country is stopped (default 400).
+.PARAMETER MaxCommitPercent  Commit charge of the system, in percent of its limit, above which the current country is stopped (default 95).
 .PARAMETER MinStartMb     Available memory that a round needs to start (default 2000, the rule of CONVENTIONS "Memory before a cold round").
 .PARAMETER AdoptRevision  The revision under which the aligned layers of the countries were made (default adopt-base-75).
 .PARAMETER AdoptProof     The equivalence proof the adoption needs, relative to the worktree.
@@ -41,7 +42,7 @@ param(
     [string]$Worktree = '',
     [string]$Python = '',
     [string]$Phases = 'data_acquisition,data_quality_audit,grid_alignment,siting_layers,land_eligibility,external_inputs,climate_forcing,hazard_context,climate_maps,overview,technical_potential,potential_maps',
-    [int]$MinFreeMb = 400,
+    [int]$MaxCommitPercent = 95,
     [int]$MinStartMb = 2000,
     [int]$PollSeconds = 15,
     [string]$AdoptRevision = 'adopt-base-75',
@@ -69,6 +70,17 @@ function Get-AvailableMb {
     }
 }
 
+function Get-CommitPercent {
+    try {
+        if (-not $script:CommitCounter) { $script:CommitCounter = New-Object System.Diagnostics.PerformanceCounter('Memory', '% Committed Bytes In Use') }
+        return [double]$script:CommitCounter.NextValue()
+    } catch {
+        $os = Get-CimInstance Win32_OperatingSystem
+        $limitKb = $os.TotalVirtualMemorySize
+        return [double](100.0 * ($limitKb - $os.FreeVirtualMemory) / $limitKb)
+    }
+}
+
 function Get-OtherGeoFreaProcesses {
     Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'pythonw.exe'" |
         Where-Object { $_.CommandLine -match 'main\.py|run_unattended|check_aligned|adopt_aligned|bench_guard|bench_phase|prof_phase' -and $_.ProcessId -ne $PID }
@@ -93,11 +105,12 @@ function Invoke-Monitored([string[]]$Arguments, [string]$LogFile, [string]$Memor
     $aborted = $null
     while (-not $p.WaitForExit($PollSeconds * 1000)) {
         $free = Get-AvailableMb
+        $commit = Get-CommitPercent
         if ($free -lt $minFree) { $minFree = $free }
-        Add-Content -Path $MemoryCsv -Value ('{0},{1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $free)
-        if ($free -lt $MinFreeMb) {
-            $aborted = "available memory fell to $free MB (limit $MinFreeMb MB)"
-            Write-Log "LOW MEMORY: $aborted; stopping the process tree $($p.Id)"
+        Add-Content -Path $MemoryCsv -Value ('{0},{1},{2:N1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $free, $commit)
+        if ($commit -gt $MaxCommitPercent) {
+            $aborted = ('the commit charge of the system reached {0:N0} % (limit {1} %), available memory {2} MB' -f $commit, $MaxCommitPercent, $free)
+            Write-Log "COMMIT LIMIT: $aborted; stopping the process tree $($p.Id)"
             Stop-Tree $p.Id
             $null = $p.WaitForExit(30000)
             break
@@ -165,7 +178,7 @@ try {
         $runDir = Join-Path $outDir "unattended\$Stamp"
         New-Item -ItemType Directory -Force -Path $runDir | Out-Null
         $mem = Join-Path $runDir 'memory.csv'
-        Set-Content -Path $mem -Value 'time,available_mb' -Encoding utf8
+        Set-Content -Path $mem -Value 'time,available_mb,commit_percent' -Encoding utf8
         if (-not (Test-Path $manifest)) { Write-Log "${iso}: no manifest, skipped"; $results += @{ country = $iso; verdict = 'SEM_MANIFEST' }; continue }
         $baseline = Join-Path $outDir "unattended\$BaselineStamp\manifest_before.json"
         if ($BaselineStamp -and (Test-Path $baseline) -and ($BaselineStamp -ne $Stamp)) {
@@ -178,7 +191,7 @@ try {
         $aborted = $null
         $free = Get-AvailableMb
         Write-Log "${iso}: start; available memory $free MB; manifest saved in $runDir"
-        if ($free -lt $MinFreeMb) { $aborted = "available memory is $free MB at the start of $iso" }
+        if ((Get-CommitPercent) -gt $MaxCommitPercent) { $aborted = "the commit charge of the system is over $MaxCommitPercent % at the start of $iso" }
 
         if (-not $aborted -and -not $SkipAdopt) {
             Write-Log "${iso}: adopting the aligned layers made by $AdoptRevision"

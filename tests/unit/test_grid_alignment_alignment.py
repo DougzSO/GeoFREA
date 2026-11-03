@@ -11,6 +11,7 @@ from rasterio.transform import from_origin
 from shapely.geometry import LineString, Polygon
 
 import geofrea.grid_alignment.alignment as alignment_module
+import geofrea.grid_alignment.layers as layers_module
 import geofrea.grid_alignment.raster_alignment as raster_alignment_module
 from geofrea.core import paths
 from geofrea.core.config_loader import load_parameters
@@ -202,7 +203,7 @@ def test_run_grid_alignment_phase_propagates_topology_mismatch_uncaught(tmp_path
         return {"elevation": elevation_out, "slope": slope_out, "slope_counts": None}
 
     with (
-        patch.object(alignment_module, "glo30_aligned_outputs", side_effect=bad_elevation),
+        patch.object(layers_module, "glo30_aligned_outputs", side_effect=bad_elevation),
         pytest.raises(RuntimeError, match="Topology mismatch"),
     ):
         run_grid_alignment_phase(context, inputs)
@@ -262,7 +263,7 @@ def test_run_grid_alignment_phase_reuses_already_aligned_raster_on_second_call(t
         )
 
     with patch.object(
-        alignment_module, "glo30_aligned_outputs", side_effect=fail_if_called
+        layers_module, "glo30_aligned_outputs", side_effect=fail_if_called
     ):
         second = run_grid_alignment_phase(context, inputs)
 
@@ -459,7 +460,7 @@ def test_run_grid_alignment_phase_multi_polygon_country_gdf_does_not_crash(tmp_p
 def _seed_key(cache_path, source, country_gdf):
     """Mark a pre-seeded clip cache as produced from `source` and `country_gdf` (the cache identity)."""
     cache_path.with_suffix(".key").write_text(
-        alignment_module._clip_cache_key(source, country_gdf), encoding="utf-8"
+        layers_module._clip_cache_key(source, country_gdf), encoding="utf-8"
     )
 
 
@@ -520,7 +521,7 @@ def test_read_clipped_with_cache_reads_from_cache_without_calling_read_clipped_t
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() must not be called when cache exists")
 
-    with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
+    with patch.object(layers_module, "read_clipped_to_country", side_effect=fail_if_called):
         result = _read_clipped_with_cache(source, country_gdf, cache_path)
 
     assert len(result) == 1
@@ -588,7 +589,7 @@ def test_run_grid_alignment_phase_reuses_preexisting_clip_cache_without_data_qua
 
     cache_bytes = cache_path.read_bytes()
     cache_mtime = cache_path.stat().st_mtime_ns
-    with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
+    with patch.object(layers_module, "read_clipped_to_country", side_effect=fail_if_called):
         result = run_grid_alignment_phase(context, inputs)
 
     assert result.roads is not None
@@ -636,7 +637,7 @@ def test_run_grid_alignment_phase_lakes_and_rivers_also_use_cache_convention(tmp
     def fail_if_called(*a, **k):
         raise AssertionError("read_clipped_to_country() was called — cache was NOT reused!")
 
-    with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
+    with patch.object(layers_module, "read_clipped_to_country", side_effect=fail_if_called):
         result = run_grid_alignment_phase(context, inputs)
 
     assert result.lakes is not None and result.lakes.exists()
@@ -681,13 +682,13 @@ def test_run_grid_alignment_phase_land_cover_hits_alignment_cache_on_second_run(
     inputs = _inputs(land_cover_tiles=[tile], country_gdf=country_gdf)
 
     call_count = {"n": 0}
-    real_mosaic = alignment_module.mosaic_land_cover
+    real_mosaic = layers_module.mosaic_land_cover
 
     def counting_mosaic(*args, **kwargs):
         call_count["n"] += 1
         return real_mosaic(*args, **kwargs)
 
-    with patch.object(alignment_module, "mosaic_land_cover", side_effect=counting_mosaic):
+    with patch.object(layers_module, "mosaic_land_cover", side_effect=counting_mosaic):
         run_grid_alignment_phase(context, inputs)
         run_grid_alignment_phase(context, inputs)
 
@@ -758,8 +759,8 @@ def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_riv
         distance_cap_km=77.0,
     )
 
-    real_rasterize = alignment_module.rasterize_linear_distance
-    real_align_rivers = alignment_module.align_rivers
+    real_rasterize = layers_module.rasterize_linear_distance
+    real_align_rivers = layers_module.align_rivers
     captured: dict[str, float] = {}
 
     def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km):
@@ -772,8 +773,8 @@ def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_riv
         return real_align_rivers(gdf, out_path, grid, distance_cap_km)
 
     with (
-        patch.object(alignment_module, "rasterize_linear_distance", side_effect=spy_rasterize),
-        patch.object(alignment_module, "align_rivers", side_effect=spy_align_rivers),
+        patch.object(layers_module, "rasterize_linear_distance", side_effect=spy_rasterize),
+        patch.object(layers_module, "align_rivers", side_effect=spy_align_rivers),
     ):
         result = run_grid_alignment_phase(_context(tmp_path), inputs)
 
@@ -888,6 +889,6 @@ def test_a_clip_cache_survives_the_move_of_its_source_without_being_recomputed(t
     def fail_if_called(*a, **k):
         raise AssertionError("the clip was recomputed after the source moved")
 
-    with patch.object(alignment_module, "read_clipped_to_country", side_effect=fail_if_called):
+    with patch.object(layers_module, "read_clipped_to_country", side_effect=fail_if_called):
         again = _read_clipped_with_cache(new, country_gdf, cache_path)
     assert len(again) == len(first)

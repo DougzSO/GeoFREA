@@ -32,6 +32,7 @@ countries:
       # is a finding to read in the report of the round (docs/_audit), not an equality: the roads keep only `geospatial.road_classes`, the `poi` layer
       # is new, and the F3 tables gain `dist_sub_km` and `pvcz_zone`. Any other artifact that differs still stops the run.
       aligned/roads: "Group 3: road classes of the source (geospatial.road_classes)"
+      aligned/population: "COMMAND 89 (D-F2a-026): exact area-weighted sum; at most a few people in a pixel against the GDAL sum, the total kept"
       aligned_rasters: "Group 3: summary of the aligned layers now lists poi (and poi_sensitivity for IND)"
       siting/dist_road_km: "Group 3: distance to the road from the reclassified roads"
       siting_layers: "Group 3: summary of the siting layers (dist_road_km)"

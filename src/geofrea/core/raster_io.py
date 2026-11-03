@@ -163,3 +163,45 @@ def gdal_quiet() -> Generator[None, None, None]:
             _gdal.PopErrorHandler()
     else:
         yield
+
+
+class RasterStream:
+    """A raster written window by window whose result can still be thrown away (COMMAND 88: nothing the size of the whole raster is held).
+
+    Opened by `open_raster_stream`. `dataset` takes windowed writes and tags like any rasterio writer; `commit()` closes it and converts it to a
+    Cloud Optimized GeoTIFF at the destination exactly as `safe_raster_write` does on exit (A-07), `discard()` closes it and removes the partial
+    file. Leaving the `with` block without `commit()` discards, so an error leaves nothing at the destination.
+    """
+
+    def __init__(self, file_path: str | Path, **kwargs: Any) -> None:
+        kwargs.setdefault("compress", "lzw")
+        kwargs.setdefault("tiled", True)
+        self._final = Path(file_path)
+        self._final.parent.mkdir(parents=True, exist_ok=True)
+        self._tmp = self._final.with_name(f"{self._final.stem}.writing.tif")
+        self._kwargs = kwargs
+        self.dataset = _open_for_write(self._tmp, kwargs)
+        self._done = False
+
+    def commit(self) -> Path:
+        self.dataset.close()
+        _write_cog(self._tmp, self._final, self._kwargs)
+        self._done = True
+        return self._final
+
+    def discard(self) -> None:
+        if not self._done:
+            self.dataset.close()
+            self._tmp.unlink(missing_ok=True)
+            self._done = True
+
+    def __enter__(self) -> RasterStream:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.discard()
+
+
+def open_raster_stream(file_path: str | Path, **kwargs: Any) -> RasterStream:
+    """Open `file_path` for windowed writing; see `RasterStream`."""
+    return RasterStream(file_path, **kwargs)

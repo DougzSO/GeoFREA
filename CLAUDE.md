@@ -75,7 +75,7 @@ Note: All pipeline data lives in GEOFREA_DATA_DIR (external directory). No data 
 
 ## Regression and testing
 
-- Frozen regression (METHODOLOGY V-01): binary layers require exact parity; float rasters `rtol = 1e-6` unless a documented platform difference justifies a larger bound in the phase record.
+- Frozen regression (METHODOLOGY V-01): integer, categorical and binary layers require exact parity; float rasters `|Δ| <= 1e-6 * |ref| + 1e-9` (`core/equivalence.py`) unless a documented platform difference justifies a larger bound in the phase record.
 - Fixtures are refrozen only with Douglas's authorization, recorded in the phase record with the reason.
 - Phases F3 onward are tested by analytical cases, invariants, and sanity ranges (V-02 to V-04), not by legacy parity.
 - Every new method item needs at least one test that fails if the item is violated.

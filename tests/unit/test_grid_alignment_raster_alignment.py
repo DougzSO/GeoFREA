@@ -19,6 +19,7 @@ from geofrea.grid_alignment.raster_alignment import (
     mosaic_land_cover,
     reproject_to_grid,
     slope_class_counts,
+    sum_to_grid,
 )
 from geofrea.grid_alignment.reference_grid import build_reference_grid
 
@@ -786,3 +787,143 @@ def test_tile_handles_never_hold_more_than_the_limit_and_close_the_oldest(tmp_pa
     assert handles.get(paths[2]) is handles.get(paths[2])
     handles.close()
     assert not handles._open
+
+
+@pytest.mark.unit
+def test_glo30_outputs_written_in_small_blocks_are_the_same_as_in_one_block(tmp_path, monkeypatch):
+    """COMMAND 88: the rows go to the rasters block by block; the block size changes the memory held, never a value."""
+    from geofrea.grid_alignment import raster_alignment as ra
+
+    grid, sp = _grid(), 400
+    rng = np.random.default_rng(88)
+    z = np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=1) + np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=0)
+    z[100:130, 50:80] = np.nan
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+
+    def run(name: str) -> dict:
+        return ra.glo30_aligned_outputs(
+            [tile], grid, elevation_out=tmp_path / f"e_{name}.tif", slope_out=tmp_path / f"s_{name}.tif", counts_out=tmp_path / f"c_{name}.tif",
+            samples_per_degree=sp,
+        )  # fmt: skip
+
+    whole = run("whole")
+    monkeypatch.setattr(ra, "_OUTPUT_BLOCK_ROWS", ra._SLOPE_STRIP_GRID_ROWS)  # one strip per block: the most blocks possible
+    blocks = run("blocks")
+    for key in ("elevation", "slope", "slope_counts"):
+        with rasterio.open(whole[key]) as a, rasterio.open(blocks[key]) as b:
+            np.testing.assert_array_equal(a.read(), b.read())
+            assert a.profile == b.profile and a.tags() == b.tags()
+
+
+@pytest.mark.unit
+def test_glo30_without_a_valid_sample_writes_nothing_and_leaves_no_partial_file(tmp_path):
+    grid, sp = _grid(), 400
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, np.full((sp, sp), np.nan))
+    from geofrea.grid_alignment.raster_alignment import glo30_aligned_outputs
+
+    out = glo30_aligned_outputs(
+        [tile], grid, elevation_out=tmp_path / "e.tif", slope_out=tmp_path / "s.tif", counts_out=tmp_path / "c.tif", samples_per_degree=sp
+    )
+    assert out == {"elevation": None, "slope": None, "slope_counts": None}
+    assert not [p for p in tmp_path.glob("*.tif") if p != tile]
+
+
+@pytest.mark.unit
+def test_glo30_outputs_do_not_depend_on_the_strip_height(tmp_path, monkeypatch):
+    """COMMAND 88: a strip of one grid row holds a quarter of the samples of four and gives the same rasters bit for bit."""
+    from geofrea.grid_alignment import raster_alignment as ra
+
+    grid, sp = _grid(), 400
+    rng = np.random.default_rng(881)
+    z = np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=1) + np.cumsum(rng.normal(0, 2.0, (sp, sp)), axis=0)
+    z[100:130, 50:80] = np.nan
+    tile = tmp_path / "Copernicus_DSM_COG_10_N38_00_W009_00_DEM.tif"
+    _glo30_tile(tile, sp, z)
+
+    def run(name: str) -> dict:
+        return ra.glo30_aligned_outputs(
+            [tile], grid, elevation_out=tmp_path / f"e_{name}.tif", slope_out=tmp_path / f"s_{name}.tif", counts_out=tmp_path / f"c_{name}.tif",
+            samples_per_degree=sp,
+        )  # fmt: skip
+
+    monkeypatch.setattr(ra, "_SLOPE_STRIP_GRID_ROWS", 4)
+    four = run("four")
+    monkeypatch.setattr(ra, "_SLOPE_STRIP_GRID_ROWS", 1)
+    one = run("one")
+    for key in ("elevation", "slope", "slope_counts"):
+        with rasterio.open(four[key]) as a, rasterio.open(one[key]) as b:
+            np.testing.assert_array_equal(a.read(), b.read())
+
+
+@pytest.mark.unit
+def test_chunked_rasterization_gives_the_mask_of_all_the_features_at_once(monkeypatch):
+    from shapely.geometry import LineString
+
+    from geofrea.grid_alignment import vector_alignment as va
+
+    grid = _grid()
+    rng = np.random.default_rng(5)
+    lines = [LineString(rng.uniform([-8.95, 38.55], [-8.6, 38.95], (4, 2))) for _ in range(60)]
+    series = gpd.GeoSeries(lines, crs="EPSG:4326")
+    whole, n_whole = va.rasterize_in_chunks(series, grid, 0.005)
+    monkeypatch.setattr(va, "_RASTERIZE_CHUNK", 7)
+    chunked, n_chunked = va.rasterize_in_chunks(series, grid, 0.005)
+    np.testing.assert_array_equal(whole, chunked)
+    assert n_whole == n_chunked == 60 and whole.any()
+
+
+def _shifted_count_source(path: Path, rng: np.random.Generator):
+    """A count raster 12 pixels per target pixel on a grid shifted by a little under half a source pixel (the BRA population: 0.4996), with nodata and NaN."""
+    fine = _RES / 12 * (1 + 4e-9)
+    size = 60 * 12
+    transform = from_origin(_ORIGIN_LON - 0.37 * fine, _ORIGIN_LAT + 0.41 * fine, fine, fine)
+    data = rng.integers(0, 50, size=(size, size)).astype("float32")
+    data[rng.random((size, size)) < 0.05] = -9999.0
+    data[rng.random((size, size)) < 0.01] = np.nan
+    with rasterio.open(path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326", transform=transform, nodata=-9999.0) as dst:
+        dst.write(data, 1)
+    return data, transform
+
+
+@pytest.mark.unit
+def test_sum_to_grid_is_exact_independent_of_the_strips_and_keeps_the_total(tmp_path):
+    """The area-weighted sum of a source whose pixel edges fall near the middle of a target pixel's source pixels equals a brute-force sum, is the
+    same to the bit whatever the window, and keeps the total of the source inside the grid (COMMAND 89)."""
+    grid = _grid()
+    data, transform = _shifted_count_source(tmp_path / "pop.tif", np.random.default_rng(7))
+    outs = [rasterio.open(sum_to_grid(tmp_path / "pop.tif", tmp_path / f"s{i}.tif", grid, max_window_bytes=w)) for i, w in enumerate((4 * 720 * 13, 4 * 720 * 100, 10**9))]
+    arrays = [o.read(1) for o in outs]
+    for o in outs:
+        o.close()
+    assert all(np.array_equal(arrays[0], a) for a in arrays[1:])  # bit for bit
+    valid = np.isfinite(data) & (data != -9999.0)
+    clean = np.where(valid, data, 0.0).astype(np.float64)
+    fine = transform.a
+    cells = np.argwhere(grid.country_mask)
+    for r, c in cells[:: max(1, len(cells) // 4)][:4]:
+        x0, y0 = grid.transform.c + c * _RES, grid.transform.f - r * _RES
+        total = 0.0
+        for i in range(clean.shape[0]):
+            for j in range(clean.shape[1]):
+                ox = max(0.0, min(x0 + _RES, transform.c + (j + 1) * fine) - max(x0, transform.c + j * fine)) / fine
+                oy = max(0.0, min(y0, transform.f - i * fine) - max(y0 - _RES, transform.f - (i + 1) * fine)) / fine
+                total += clean[i, j] * ox * oy
+        assert arrays[0][r, c] == pytest.approx(total, rel=1e-6, abs=1e-6)
+    inside = grid.country_mask & (arrays[0] != NODATA_FLOAT)
+    assert inside.any()
+    assert arrays[0][~grid.country_mask].max() == NODATA_FLOAT
+
+
+@pytest.mark.unit
+def test_sum_to_grid_leaves_nodata_where_no_source_pixel_is_valid_and_falls_back_for_another_crs(tmp_path):
+    grid = _grid()
+    path = tmp_path / "empty.tif"
+    _write_raster(path, -9999.0)
+    with rasterio.open(sum_to_grid(path, tmp_path / "o.tif", grid)) as out:
+        assert (out.read(1) == NODATA_FLOAT).all()
+    utm = tmp_path / "utm.tif"
+    with rasterio.open(utm, "w", driver="GTiff", height=10, width=10, count=1, dtype="float32", crs="EPSG:3857", transform=from_origin(-1_000_000, 4_700_000, 1000, 1000), nodata=-9999.0) as dst:
+        dst.write(np.ones((10, 10), dtype="float32"), 1)
+    assert sum_to_grid(utm, tmp_path / "w.tif", grid).exists()  # goes through the warp

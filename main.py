@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 from collections import Counter
@@ -417,6 +418,7 @@ def _build_grid_alignment_inputs(
                 geospatial.poi_substations_geojson, context.country_code
             ),
             "road_classes": geospatial.road_classes,
+            "warp_mem_limit_mb": geospatial.warp_mem_limit_mb,
         }
     )
 
@@ -1550,6 +1552,8 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv or [])
     settings = load_settings(SETTINGS_YAML)
+    # a fixed GDAL block cache for this process and, through the environment, for every layer child (COMMAND 88)
+    os.environ["GDAL_CACHEMAX"] = str(settings.geospatial.gdal_cachemax_mb)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
     technologies = load_technologies(TECHNOLOGIES_YAML)
