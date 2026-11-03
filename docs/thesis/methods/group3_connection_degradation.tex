@@ -27,9 +27,11 @@ renewable plants of 50~MW or more may connect under the General Network
 Access regulations \cite{cerc2022gna}. In Portugal it is 150~kV, the
 lowest voltage of the transmission network operated by REN; the 60~kV
 level belongs to the distribution network and has limited capacity for
-plants of this size.
-% verify: BRA 138 kV against ONS/ANEEL access rules (Procedimentos de Rede, PRODIST Modulo 3); IND 220 kV and the 50 MW limit in CERC GNA Regulations 2022
-Substations without a voltage tag take the highest voltage of the OSM
+plants of this size \cite{renDadosTecnicos2024}. None of the regulations
+fixes these voltages for a given plant size; they are modelling choices
+based on usual practice. Because the interstate system of India also
+admits 132~kV terminal bays \cite{cerc2022gna}, a sensitivity uses a
+132~kV threshold there. Substations without a voltage tag take the highest voltage of the OSM
 lines that reach them; substations with no inferable voltage are
 excluded, and their number is reported per country.
 
@@ -89,18 +91,37 @@ radial connection only, not a full interconnection-study estimate
 \cite{seel2023}.
 
 Unit costs come from regulatory or regulator-compiled benchmarks of each
-country (Table~\ref{tab:g3_costs}). For India, the line cost is the
-indicative capital cost of a 220~kV single-circuit line published by the
-Central Transmission Utility, which excludes right of way
-\cite{ctuilIndicative2025}. For Portugal, no national per-kilometre
-benchmark is public; the line cost is the ACER indicator for 220~kV
-single-circuit overhead lines, which is conservative for 150~kV, and the
-connection works are represented by the ACER indicator for the upgrade of
-an existing air-insulated substation with up to five bays
-\cite{acer2023uic}. For Brazil, line and bay costs come from the ANEEL
-reference price bank \cite{aneelBPR}. All values are converted to 2024
-USD with the national GDP deflator and the 2024 average exchange rate.
-Each cost is sampled uniformly between the bounds in the table.
+country (Table~\ref{tab:g3_costs}). For Brazil, the line cost is the
+ANEEL modular reference cost of a 138~kV single-circuit line, taken from
+seven cases in three EPE transmission-planning studies and deflated from
+each study's price reference to 2024; the central value is the median and
+the range the interquartile range. The bay cost is the ANEEL reference
+module for a 138~kV line entry, summed from its equipment and
+infrastructure items, with the range spanning the busbar arrangements
+\cite{aneelBPR}. For India, the line cost is the indicative capital cost
+of a 220~kV single-circuit line published by the Central Transmission
+Utility, which excludes right of way \cite{ctuilIndicative2025}. No
+capital-cost benchmark for a 220~kV bay was found; the bank guarantee per
+terminal bay required for connectivity to the interstate system
+\cite{cerc2022gna} is used as a proxy, with a wide range, since its effect
+on the LCOE is below one percent of the plant capital cost. For
+Portugal, no national per-kilometre benchmark is public; the line cost is
+the ACER indicator for 220~kV single-circuit overhead lines, which is
+conservative for 150~kV, and the connection works are represented by the
+ACER indicator for the upgrade of an existing air-insulated substation
+with up to five bays, in 2023 prices \cite{acer2023uic}. All values are
+converted to 2024 USD with the national GDP deflator and the 2024 average
+exchange rate. Each cost is sampled uniformly between the bounds in the
+table.
+
+The access road is excluded from the central case, because no source
+covers an unpaved access road in the three countries and the term is
+small: the median distance from eligible land to the nearest road is a
+few kilometres in every country, and less than one percent of eligible
+area lies more than 30~km away. The central LCOE is therefore a lower
+bound with respect to this term. A sensitivity applies the DNIT cost of a
+paved road \cite{dnit2016}, an upper bound for an access road, to the
+three countries.
 
 \begin{table}[htbp]
     \centering
@@ -114,28 +135,30 @@ Each cost is sampled uniformly between the bounds in the table.
         \toprule
         Country & Item & Central [range] & Source \\
         \midrule
+        BRA & $c_{\mathrm{line}}$, 138~kV S/C
+            & 598{,}332 [569{,}999, 713{,}726] BRL/km (2024)
+            & \cite{aneelBPR} \\
+        BRA & $C_{\mathrm{bay}}$, 138~kV line entry module
+            & 1{,}987{,}188 [1{,}884{,}382, 2{,}061{,}514] BRL (2017 index)
+            & \cite{aneelBPR} \\
         IND & $c_{\mathrm{line}}$, 220~kV S/C, single Moose / AL59 Zebra
             & 1.10 [1.10, 1.14] INR crore/km (2025)
             & \cite{ctuilIndicative2025} \\
-        IND & $C_{\mathrm{bay}}$, 220~kV line bay
-            & to be sourced & -- \\
+        IND & $C_{\mathrm{bay}}$, 220~kV terminal bay (proxy)
+            & 3 [1.5, 6] INR crore
+            & \cite{cerc2022gna} \\
         PRT & $c_{\mathrm{line}}$, 220~kV S/C (used at 150~kV)
-            & 0.362 [0.303, 0.543] MEUR/km
+            & 0.362 [0.303, 0.543] MEUR/km (2023)
             & \cite{acer2023uic} \\
         PRT & $C_{\mathrm{bay}}$, AIS substation upgrade, 0--5 bays
-            & 2.789 [2.116, 4.300] MEUR
+            & 2.789 [2.116, 4.300] MEUR (2023)
             & \cite{acer2023uic} \\
-        BRA & $c_{\mathrm{line}}$, 138~kV S/C
-            & to be sourced & \cite{aneelBPR} \\
-        BRA & $C_{\mathrm{bay}}$, 138~kV line entry module
-            & to be sourced & \cite{aneelBPR} \\
-        All & $c_{\mathrm{road}}$, unpaved access road
-            & to be sourced & -- \\
+        All & $c_{\mathrm{road}}$, access road
+            & excluded (central); DNIT paved road (sensitivity)
+            & \cite{dnit2016} \\
         \bottomrule
     \end{tabularx}
 \end{table}
-% verify: ACER (2023) price base year; ranges for PRT are the interquartile range (Q1-Q3), central is the median
-% pending: IND bay, BRA line and bay, road costs
 
 \subsection{Transmission Losses}
 \label{subsec:g3_losses}
@@ -175,12 +198,16 @@ not change across climate members. The rate of each zone is computed
 from the public fleet data of Jordan et al.\ \cite{jordan2022}: the
 central value is the zone median and the sampling range runs from the
 median to the mean, so the uncertainty is skewed toward faster
-degradation, as in the fleet data. The fleet covers zones T1 to T7;
-cells in hotter zones take the T7 value, and zones with too few systems
-are merged with the adjacent zone. Most of the territory of Brazil and
-India lies in zones T6 and T7 and most of Portugal in T5, so the hot end
-of the fleet sample determines the result.
-% pending: zone rates computed from Fleet_results_public_2022_02_02.csv (DuraMAT); minimum systems per zone set in config
+degradation, as in the fleet data. Rates are derived from ground-mounted
+crystalline-silicon systems (1505 systems), whose medians reproduce the
+published values for cooler and hotter climates within 0.15 percentage
+points. The public fleet has no systems in zones T1 or T7: cells in T1
+and T2 take the T3 rate, and cells in T7 or hotter take the T6 rate.
+This matters, because zone T7 or hotter holds 43.7\,\% of the PV
+potential of Brazil and 81.6\,\% of that of India, and none of
+Portugal's. A deterministic sensitivity therefore applies the global
+meta-analysis median of 0.94\,\%/yr \cite{straubmuck2025} to these
+cells.
 
 For onshore wind, $d$ follows the vintage of the reference turbine. The
 central value is the rate of newer vintages and the sampling range
@@ -198,18 +225,15 @@ deterministic sensitivity, not sampled.
         \toprule
         Technology & Class & Central & Range & Source \\
         \midrule
-        PV   & zones T1--T7 & zone median & median--mean & \cite{jordan2022} \\
+        PV   & zones T3--T6 (T1--T2 as T3; T7+ as T6) & zone median & median--mean & \cite{jordan2022} \\
+        PV   & T7+ (sensitivity) & 0.94\,\%/yr & -- & \cite{straubmuck2025} \\
         Wind & reference turbine & 0.17\,\%/yr & 0.17--0.53\,\%/yr & \cite{hamilton2020} \\
         Wind & complex terrain (sensitivity) & 0.72\,\%/yr & -- & \cite{kim2025} \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-All values are transferred from United States fleets (Tier 2). The fleet
-medians of about 0.48\,\%/yr in cooler and 0.88\,\%/yr in hotter climates
-\cite{jordan2022} serve as a check on the zone values, and the global
-meta-analysis median of 0.94\,\%/yr \cite{straubmuck2025} is reported for
-comparison only.
+All central values are transferred from United States fleets (Tier 2).
 
 \subsection{Levelized Cost with Connection and Degradation}
 \label{subsec:g3_lcoe}
@@ -245,7 +269,7 @@ flagged and excluded from the LCOE results, and the count is reported.
         \toprule
         Parameter & Value & Sampled & Tier \\
         \midrule
-        $V_{\mathrm{th}}$ & BRA 138~kV; IND 220~kV; PRT 150~kV & no & 2 \\
+        $V_{\mathrm{th}}$ & BRA 138~kV; IND 220~kV (132~kV sensitivity); PRT 150~kV & no & 3 \\
         $P_{\mathrm{ref}}$ & 100~MW & no & 3 \\
         $\tau_{\mathrm{grid}}$ & 1.25, U[1.2, 1.3] & yes & 3 \\
         $\tau_{\mathrm{road}}$ & 1.25, U[1.2, 1.3] & yes & 3 \\
@@ -261,11 +285,17 @@ flagged and excluded from the LCOE results, and the count is reported.
 \label{subsec:g3_limitations}
 
 The connection cost covers the radial spur, the works at the receiving
-substation and an access road, not network reinforcement, which can
-dominate real interconnection costs. Substation voltage comes from OSM
-tags, which are incomplete, most of all in India. Tortuosity is a uniform
-factor rather than a routed path. Line costs exclude right of way in
-India and come from a higher voltage class in Portugal. The capital-cost
+substation, not the access road or network reinforcement, which can
+dominate real interconnection costs. Substation coverage and voltage come
+from OSM, whose mapping is uneven; in regions of Brazil with sparse
+mapping the connection length is overstated, which the predictive-network
+sensitivity bounds. Tortuosity is a uniform factor rather than a routed
+path. The cost sources differ in scope: Brazilian values are modular
+reference costs rather than executed investments, Indian line costs
+exclude right of way and the Indian bay is a proxy, and Portuguese values
+come from European indicators, with the line taken from a higher voltage
+class and the substation term covering an upgrade rather than a single
+bay. The capital-cost
 boundary of IRENA is stated for PV and assumed for onshore wind.
 Degradation rates come from United States fleets, whose hottest zone is
 the most common one in Brazil and India; the PV zone is fixed at the

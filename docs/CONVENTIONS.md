@@ -114,7 +114,7 @@ Scripts or validations expected to run longer than 30 seconds log progress with 
 
 ## Memory before a cold round
 
-A cold audit or a cold F2a of a large country peaks near 2 to 4 GB. `main.py` does not start a run whose target phases include a cold `data_quality_audit` or `grid_alignment` (no current manifest entry or cache for the country) when `core/memory_guard.py` finds less than **2 GB available** (`MIN_AVAILABLE_GB`): it logs the shortfall and exits with code 75 before any phase of any country runs. Close the browser and the editors first. A script that runs a country unattended (`scripts/run_unattended.ps1`) also samples the available memory and stops the country cleanly under 400 MB, so the manifest keeps the phases that finished (it is replaced atomically, never truncated).
+A cold audit or a cold F2a of a large country peaks near 2 to 4 GB. `main.py` does not start a run whose target phases include a cold `data_quality_audit` or `grid_alignment` (no current manifest entry or cache for the country) when `core/memory_guard.py` finds less than **1.5 GB available** (`MIN_AVAILABLE_GB`, lowered from 2 GB by the author on 2026-11-02 for the Group 3 round): it logs the shortfall and exits with code 75 before any phase of any country runs. Close the browser and the editors first. A script that runs a country unattended (`scripts/run_unattended.ps1`) also samples the available memory and stops the country cleanly under 400 MB, so the manifest keeps the phases that finished (it is replaced atomically, never truncated).
 
 ## Keeping the computer awake
 
