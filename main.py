@@ -523,6 +523,7 @@ def _build_phase_specs(
     max_batch_gb: float | None = None,
     country_code: str | None = None,
     wind_cf_integral: str = "exact",
+    optional_aligned_keys: tuple[str, ...] = (),
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -946,6 +947,7 @@ def _build_phase_specs(
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"aligned_rasters", "reference_grid"})
             | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS}
+            | {f"aligned/{key}" for key in optional_aligned_keys}
             | {f"aligned/wind_{key}" for key in _WIND_LAYER_KEYS},
             summarize=_summarize_grid_alignment,
         ),
@@ -1457,6 +1459,11 @@ def _run_geofrea(
             max_batch_gb,
             country_code,
             wind_cf_integral,
+            _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS
+            if country_params is not None
+            and country_params.connection is not None
+            and country_params.connection.poi_sensitivity_threshold_kv is not None
+            else (),
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)

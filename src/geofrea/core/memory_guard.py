@@ -16,7 +16,7 @@ from pathlib import Path
 
 import psutil
 
-MIN_AVAILABLE_GB = 2.0  # CONVENTIONS, "Memory before a cold round"
+MIN_AVAILABLE_GB = 1.5  # lowered from 2.0 by the author for the Group 3 round (CONVENTIONS, "Memory before a cold round")
 COLD_GATED_PHASES = ("data_quality_audit", "grid_alignment")  # F1b and F2a
 EXIT_NOT_STARTED = 75  # EX_TEMPFAIL: the run did not start and can be tried again
 

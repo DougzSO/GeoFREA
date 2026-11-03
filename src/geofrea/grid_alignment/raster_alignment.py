@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 # a 6 GB machine (docs/phases/F2a_grid_alignment.md known issue, 2026-09-22).
 _REPROJECT_WINDOW_BYTES = 400_000_000
 
+# Working memory GDAL may use for one warp chunk, MB (rasterio `warp_mem_limit`). Its default left `Resampling.sum` on the BRA population
+# raster at 1.7 GB for a 49 MB window (2.8 GB for a 400 MB one) and stopped the cold F2a of BRA on a 6 GB machine; with 16 MB the same strip
+# peaks at about 0.5 GB and the output is byte for byte the same (COMMAND 87, docs/_audit/population_memory_87.md).
+_WARP_MEM_LIMIT_MB = 16
+
 
 class MissingSourceCrsError(ValueError):
     """A source raster has no CRS and the caller supplied none (A-09: never guess a projection)."""
@@ -150,7 +155,10 @@ def reproject_to_grid(
                     nan_mask = np.isnan(block)
                     if nan_mask.any():
                         nan_total += int(nan_mask.sum())
-                        block = np.where(nan_mask, src_nodata, block).astype(block.dtype)
+                        # in place: np.where(...).astype(...) made two more copies of the window (one in float64) and
+                        # took the population window of BRA to 2.8 GB of RSS (COMMAND 87)
+                        block[nan_mask] = src_nodata
+                    del nan_mask
                 reproject(
                     source=block,
                     destination=data_out[row_start:row_end],
@@ -161,6 +169,7 @@ def reproject_to_grid(
                     resampling=resampling,
                     src_nodata=src_nodata,
                     dst_nodata=nd_out,
+                    warp_mem_limit=_WARP_MEM_LIMIT_MB,
                 )
             if nan_total:
                 logger.info(

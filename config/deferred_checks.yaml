@@ -27,11 +27,32 @@ countries:
       - overview
       - technical_potential
       - potential_maps
+    expected: &group3_by_design
+      # COMMANDS 83 to 86 (Group 3, METHODOLOGY 16): these artifacts change BY DESIGN against the baseline of 2026-10-29. They carry results, so each
+      # is a finding to read in the report of the round (docs/_audit), not an equality: the roads keep only `geospatial.road_classes`, the `poi` layer
+      # is new, and the F3 tables gain `dist_sub_km` and `pvcz_zone`. Any other artifact that differs still stops the run.
+      aligned/roads: "Group 3: road classes of the source (geospatial.road_classes)"
+      aligned_rasters: "Group 3: summary of the aligned layers now lists poi (and poi_sensitivity for IND)"
+      siting/dist_road_km: "Group 3: distance to the road from the reclassified roads"
+      siting_layers: "Group 3: summary of the siting layers (dist_road_km)"
+      eligibility/candidates_solar__central: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/candidates_solar__permissive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/candidates_solar__restrictive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/candidates_wind__central: "Group 3: dist_sub_km and dist_road_km columns"
+      eligibility/candidates_wind__permissive: "Group 3: dist_sub_km and dist_road_km columns"
+      eligibility/candidates_wind__restrictive: "Group 3: dist_sub_km and dist_road_km columns"
+      eligibility/cells_solar__central: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/cells_solar__permissive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/cells_solar__restrictive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
+      eligibility/cells_wind__central: "Group 3: dist_sub_km and dist_road_km columns"
+      eligibility/cells_wind__permissive: "Group 3: dist_sub_km and dist_road_km columns"
+      eligibility/cells_wind__restrictive: "Group 3: dist_sub_km and dist_road_km columns"
   BRA:
     label: "outputs/BRA/unattended/20261029_135838/manifest_before.json"
     baseline: outputs/BRA/unattended/20261029_135838/manifest_before.json
     phases: *phases
     expected:
+      <<: *group3_by_design
       # The report of the audit counts the geometry types of the clipped layers. In the unattended round of 2026-10-29 it differed in BRA, and the
       # reference copy of the file was not kept, so what differs cannot be read back. Nothing computes from it (it is a report). The difference is
       # accepted and flagged: open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of `geometry_types` changed.

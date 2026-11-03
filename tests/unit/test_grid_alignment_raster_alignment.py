@@ -129,6 +129,36 @@ def test_sum_resampling_keeps_the_total_of_a_count_raster_when_coarsening(tmp_pa
 
 
 @pytest.mark.unit
+def test_the_warp_memory_limit_and_the_in_place_nan_cleaning_do_not_change_a_value(tmp_path, monkeypatch):
+    """COMMAND 87: the cold F2a of BRA stopped on the memory of the population warp. Bounding the memory of GDAL's chunks and cleaning the NaN
+    of a window in place must give the same pixels as an unbounded warp (checked on the real BRA raster: 0 of 588,750 pixels differ)."""
+    from rasterio.enums import Resampling
+
+    from geofrea.grid_alignment import raster_alignment
+
+    grid = _grid()
+    fine = _RES / 12
+    size = 60 * 12
+    rng = np.random.default_rng(87)
+    counts = rng.integers(0, 50, (size, size)).astype("float32")
+    counts[rng.random((size, size)) < 0.05] = np.nan  # the literal NaN of a source that declares a finite nodata
+    path = tmp_path / "pop.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", height=size, width=size, count=1, dtype="float32", crs="EPSG:4326",
+        transform=from_origin(_ORIGIN_LON, _ORIGIN_LAT, fine, fine), nodata=-9999.0,
+    ) as dst:
+        dst.write(counts, 1)
+
+    bounded = reproject_to_grid(path, tmp_path / "bounded.tif", grid, resampling=Resampling.sum)
+    monkeypatch.setattr(raster_alignment, "_WARP_MEM_LIMIT_MB", 2048)
+    unbounded = reproject_to_grid(path, tmp_path / "unbounded.tif", grid, resampling=Resampling.sum)
+    with rasterio.open(bounded) as a, rasterio.open(unbounded) as b:
+        x, y = a.read(1), b.read(1)
+    assert raster_alignment._WARP_MEM_LIMIT_MB == 2048 and np.array_equal(x, y)
+    assert (x[grid.country_mask] != NODATA_FLOAT).any() and not np.isnan(x).any()
+
+
+@pytest.mark.unit
 def test_reproject_to_grid_uint8_dtype_uses_zero_nodata_default(tmp_path):
     grid = _grid()
     src_path = tmp_path / "src.tif"

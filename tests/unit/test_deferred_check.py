@@ -198,7 +198,9 @@ def test_the_shipped_configuration_lists_ind_and_bra_with_the_twelve_phases():
     assert set(checks) == {"IND", "BRA"}
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases
     assert checks["IND"].baseline.as_posix().endswith("outputs/IND/unattended/20261029_135838/manifest_before.json")
-    assert list(checks["BRA"].expected) == ["audit_report"] and not checks["IND"].expected
+    # the artifacts that Group 3 changes by design (METHODOLOGY 16) are accepted in both countries; only BRA also has the audit report
+    assert set(checks["BRA"].expected) == set(checks["IND"].expected) | {"audit_report"}
+    assert "siting/dist_road_km" in checks["IND"].expected and "audit_report" not in checks["IND"].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
 
