@@ -1,19 +1,65 @@
 {
   "cap_mb": 1536,
   "country": "BRA",
-  "note": "Peak resident memory (MB) of the process of each kind of layer of F2a/F2b on BRA, the largest country (COMMAND 88/89; docs/_audit/memory_budget_88.md). `source` says how a figure was obtained: measured (this session, file or log), session_table (a measurement of the previous session reported in the table of COMMAND 88, not kept in a file) or budget_test (tests/unit/test_memory_budget.py, a raster of the size of BRA). The guard waits for peak_rss_mb + margin of free memory before a layer starts.",
+  "note": "Peak resident memory (MB) of the process of each kind of layer of F2a/F2b on BRA, the largest country, measured in the cold round of 2026-11-03 (interim/BRA/*/layers.json; COMMANDS 88/89; docs/_audit/memory_budget_88.md). The guard waits for peak_rss_mb + margin of free memory before a layer starts. F3 (land_eligibility) is not a layer process: it peaked at 3,337 MB on BRA, above the cap (see f3_phase).",
   "layers": {
-    "glo30": {"peak_rss_mb": 672, "source": "budget_test", "detail": "worst block of the budget test; the complete BRA run (about 3 h) was not repeated"},
-    "solar": {"peak_rss_mb": 409, "source": "session_table"},
-    "wind": {"peak_rss_mb": 610, "source": "session_table"},
-    "land_cover": {"peak_rss_mb": 1504, "source": "session_table", "detail": "warp chunk of 1024 MB kept; nearest neighbour, no pixel changes with the chunk"},
-    "land_cover_counts": {"peak_rss_mb": 1108, "source": "session_table", "detail": "tile loop, partial run (stopped by the time limit); the final stretch (mask, write of 11 bands) measured alone peaks at 789 MB (2026-11-03)"},
-    "population": {"peak_rss_mb": 637, "source": "measured", "detail": "sum_to_grid, window of 64 MB, whole BRA, 84 s (2026-11-03); 551 MB with a 16 MB window"},
-    "grid": {"peak_rss_mb": 773, "source": "session_table"},
-    "poi": {"peak_rss_mb": 776, "source": "session_table"},
-    "roads": {"peak_rss_mb": 881, "source": "session_table"},
-    "lakes": {"peak_rss_mb": 375, "source": "session_table"},
-    "rivers": {"peak_rss_mb": 1065, "source": "session_table"},
-    "physical": {"peak_rss_mb": 295, "source": "session_table"}
+    "glo30": {
+      "peak_rss_mb": 984,
+      "source": "measured",
+      "detail": "layer 'elevation', whole BRA run of 11,117 s"
+    },
+    "solar": {
+      "peak_rss_mb": 409,
+      "source": "measured"
+    },
+    "wind": {
+      "peak_rss_mb": 610,
+      "source": "measured"
+    },
+    "land_cover": {
+      "peak_rss_mb": 1473,
+      "source": "measured",
+      "detail": "warp chunk of 1024 MB kept; nearest neighbour, no pixel changes with the chunk"
+    },
+    "land_cover_counts": {
+      "peak_rss_mb": 1207,
+      "source": "measured",
+      "detail": "whole BRA run of 2,482 s"
+    },
+    "population": {
+      "peak_rss_mb": 742,
+      "source": "measured",
+      "detail": "sum_to_grid, window of 64 MB, inside the layer process; 637 MB when run alone (84 s)"
+    },
+    "grid": {
+      "peak_rss_mb": 772,
+      "source": "measured"
+    },
+    "poi": {
+      "peak_rss_mb": 777,
+      "source": "measured"
+    },
+    "roads": {
+      "peak_rss_mb": 887,
+      "source": "measured"
+    },
+    "lakes": {
+      "peak_rss_mb": 376,
+      "source": "measured"
+    },
+    "rivers": {
+      "peak_rss_mb": 1064,
+      "source": "measured"
+    },
+    "physical": {
+      "peak_rss_mb": 295,
+      "source": "measured",
+      "detail": "largest layer of F2b on BRA (air density, weibull, pvout, distances)"
+    }
+  },
+  "f3_phase": {
+    "peak_rss_mb": 3337,
+    "source": "measured",
+    "detail": "phase land_eligibility of BRA, 1,119 s, round of 2026-11-03; IND 2,097; PRT 342. Over the cap: to be fixed"
   }
 }

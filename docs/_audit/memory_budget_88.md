@@ -55,7 +55,28 @@ Rule of the command (peak ≤ 1,536 MB and time ≤ 1.5 × the present one): met
 
 The mask of the pixels outside the country, the write of 11 bands (uint16, deflate with predictor, 256-pixel tiles) and the tags, on an array of the size of BRA with random counts, alone on the machine: 26 s, peak 789 MB (the process held 497 MB before it, the 322 MB array included), file 192 MB. Under the cap. No method changed. The measurement used `safe_raster_write`, the writer of the function, which ends the file as a COG (A-07), so the copy to the COG of the 11 bands is inside the 789 MB.
 
+## Cold round of 2026-11-03: measured peaks per layer (MB, `interim/<ISO>/*/layers.json`)
+
+No layer of any country waited for the guard (`waited_s` = 0) and every layer is at or under the cap of 1,536 MB. For BRA these figures replace the "session table" ones above (`config/memory_budget.json`).
+
+| Layer | PRT | IND | BRA |
+|---|---|---|---|
+| elevation (glo30) | 485 | 855 | 984 |
+| solar | 163 | 336 | 409 |
+| wind (largest of the 12 layers) | 201 | 573 | 610 |
+| land_cover | 1,351 | 220 | 1,473 |
+| land_cover_counts | 904 | 1,079 | 1,207 |
+| population | 470 | 703 | 742 |
+| grid / poi | 188 / 240 | 536 / 582 | 772 / 777 |
+| roads / lakes | 311 / 141 | 785 / 258 | 887 / 376 |
+| rivers | 172 | 568 | 1,064 |
+| F2b layers (largest) | 108 | 213 | 297 |
+
+Wall time of BRA F2a: 14,996 s (elevation 11,117 s, land_cover_counts 2,482 s, land_cover 498 s, population 95 s).
+
+**F3 (`land_eligibility`) is not under the cap**: peak 3,337 MB on BRA (1,119 s), 2,097 MB on IND, 342 MB on PRT. It runs inside the main process, not in a layer process. It is open work (a per-step measurement and a fix with an equivalence proof), not settled here.
+
 ## What is left
 
-- The cold round of the three countries has not been run (`docs/PIPELINE_GUIDE.md`, "Group 3 round").
-- `glo30` and `land_cover_counts` have no complete BRA measurement; the guard measures them in the round (`layers.json` of each country keeps the peak of every layer).
+- F3 peak (above).
+- The phases F4 to F8 have no measured peak.
