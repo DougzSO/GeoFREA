@@ -103,6 +103,7 @@ from geofrea.core.config_loader import (
     load_technologies,
 )
 from geofrea.core.deferred_check import for_country as deferred_check_for
+from geofrea.core.deferred_check import load_store as reference_store_for
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
 from geofrea.core.orchestrator import (
@@ -1447,6 +1448,7 @@ def _run_geofrea(
         prune_unregistered=True,
         revalidate_phases=revalidate_phases or [],
         deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
+        reference_store=reference_store_for(DEFERRED_CHECKS_YAML, data_root()),
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)

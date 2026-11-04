@@ -9,15 +9,24 @@
 #           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
 # phases:   the phases to compare (F1 to F5 and the figure phases that follow)
 # expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
-# references: directories (relative to the data root) with copies of the rasters of the reference run. A raster whose hash differs and that has a copy there
-#           is compared with it by tolerance (core.equivalence); if it is equivalent the difference is a last bit of a float and needs no entry in `expected`
-#           (verdict EQUIVALENTE, COMMAND 91). A raster with no copy, or outside the tolerance, still stops the run.
+# reference_run: the round of the reference store (GeoFREA_data/references/, core.reference_store) whose files the rasters are compared with: a run_id, or
+#           `latest`, the last round the pipeline accepted (default). A raster whose hash differs and that has a file there is compared with it by tolerance
+#           (core.equivalence); if it is equivalent the difference is a last bit of a float and needs no entry in `expected` (verdict EQUIVALENTE, COMMAND 91).
+#           A raster with no file there, or outside the tolerance, still stops the run. IND and BRA pin the round of 2026-11-02 that was imported from
+#           backup_before_89 (scripts/seed_references.py), the one their baseline manifest of 2026-10-29 is equivalent to; change it to `latest` to compare
+#           with the last accepted round instead.
+# reference_store: what the store keeps of an accepted round: the JSON artifacts (the summaries) of every phase and the rasters of `raster_phases`.
+
+reference_store:
+  root: references
+  suffixes: [".json"]
+  raster_phases: [grid_alignment, siting_layers]
 
 countries:
   IND:
     label: "outputs/IND/unattended/20261029_135838/manifest_before.json"
     baseline: outputs/IND/unattended/20261029_135838/manifest_before.json
-    references: [backup_before_89/IND, backup_before_89/IND_siting]
+    reference_run: seed_20261102_IND
     phases: &phases
       - data_acquisition
       - data_quality_audit
@@ -55,7 +64,7 @@ countries:
   BRA:
     label: "outputs/BRA/unattended/20261029_135838/manifest_before.json"
     baseline: outputs/BRA/unattended/20261029_135838/manifest_before.json
-    references: [backup_before_89/BRA, backup_before_89/BRA_siting]
+    reference_run: seed_20261102_BRA
     phases: *phases
     expected:
       <<: *group3_by_design

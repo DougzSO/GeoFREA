@@ -10,7 +10,7 @@ only resumes from its manifest entry proves nothing about the new code), the con
                      difference is the one the change of configuration is expected to cause (BRA F5: `wind_cf_integral` exact -> table)
   EXPLICADO_REVISAR  some differ, with no change of configuration, but the artifact is named in `expected` of the country: it carries no result and
                      its difference is explained in the file (BRA `audit_report`); it is flagged for a manual look
-  EQUIVALENTE        some differ in hash, and each of them is a raster that has a reference file (`references` of the country) and is equal to it
+  EQUIVALENTE        some differ in hash, and each of them is a raster that has a reference file (the reference store, `core.reference_store`) and is equal to it
                      within the tolerance of CONVENTIONS (`core.equivalence`: |d| <= 1e-6 |ref| + 1e-9, same grid, same missing pixels): a last-bit
                      difference of a float, decided by the numbers and not by an entry in `expected` (COMMAND 91)
   DIFERENTE          some differ with no change of configuration and no entry in `expected`: the run stops before the phases that follow and
@@ -27,12 +27,15 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from geofrea.core.reference_store import ReferenceStore, StoreConfig
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +87,7 @@ class CountryCheck:
     phases: tuple[str, ...]
     expected: dict[str, str] = field(default_factory=dict)  # artifact key -> why its difference is accepted
     suspects: dict[str, str] = field(default_factory=dict)  # phase -> probable cause of an unexplained difference
-    references: tuple[Path, ...] = ()  # directories with copies of the rasters of the reference run, for the comparison by tolerance
+    reference_run: str = "latest"  # the round of the reference store whose files the rasters are compared with: a run_id, or `latest` (the last accepted)
 
 
 def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
@@ -102,9 +105,22 @@ def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
             phases=tuple(spec["phases"]),
             expected={str(k): str(v) for k, v in (spec.get("expected") or {}).items()},
             suspects=suspects,
-            references=tuple(Path(data_root) / str(p) for p in (spec.get("references") or ())),
+            reference_run=str(spec.get("reference_run", "latest")),
         )
     return checks
+
+
+def load_store(yaml_path: Path, data_root: Path) -> ReferenceStore:
+    """The reference store of `data_root`, configured by the `reference_store` block of `yaml_path` (what to keep; defaults when the block is absent)."""
+    raw = {}
+    if Path(yaml_path).is_file():
+        raw = (yaml.safe_load(Path(yaml_path).read_text(encoding="utf-8")) or {}).get("reference_store") or {}
+    defaults = StoreConfig()
+    config = StoreConfig(
+        suffixes=tuple(raw.get("suffixes", defaults.suffixes)),
+        raster_phases=tuple(raw.get("raster_phases", defaults.raster_phases)),
+    )
+    return ReferenceStore(Path(data_root) / str(raw.get("root", "references")), config)
 
 
 def _now() -> str:
@@ -121,12 +137,12 @@ def _write_json(path: Path, data: dict) -> None:
 _WIND_LAYER = re.compile(r"(weibull_a|weibull_k|air_density)_\d+m")
 
 
-def reference_file(key: str, after: Path, iso: str, directories: tuple[Path, ...]) -> Path | None:
-    """The copy of the reference run that `after` (the raster of artifact `key`) is to be compared with, or None.
+def reference_names(key: str, after: Path, iso: str) -> list[str]:
+    """The file names under which the reference of artifact `key` (the raster `after`) can be kept, in order.
 
-    Searched by file name in each directory of `references`: the same name (the aligned layers `<ISO>_<layer>_aligned.tif`) and, for the resource layers
-    of F2b, the aligned layer they are a copy of (M-F2b-04: the values are kept, only the missing pixels take the F2b nodata): `pvout_kwh_kwp_day` is
-    `<ISO>_solar_aligned.tif` and `weibull_a_100m` is `<ISO>_wind_weibull_a_100m_aligned.tif`.
+    The same name (the aligned layers `<ISO>_<layer>_aligned.tif`) and, for the resource layers of F2b, the aligned layer they are a copy of
+    (M-F2b-04: the values are kept, only the missing pixels take the F2b nodata): `pvout_kwh_kwp_day` is `<ISO>_solar_aligned.tif` and
+    `weibull_a_100m` is `<ISO>_wind_weibull_a_100m_aligned.tif`.
     """
     names = [after.name]
     layer = key.split("/", 1)[1] if key.startswith("siting/") else None
@@ -134,19 +150,25 @@ def reference_file(key: str, after: Path, iso: str, directories: tuple[Path, ...
         names.append(f"{iso}_solar_aligned.tif")
     elif layer is not None and _WIND_LAYER.fullmatch(layer):
         names.append(f"{iso}_wind_{layer}_aligned.tif")
-    for directory in directories:
-        for name in names:
-            if (directory / name).is_file():
-                return directory / name
+    return names
+
+
+def reference_file(key: str, after: Path, iso: str, find: Callable[[str], Path | None]) -> Path | None:
+    """The kept file that `after` (the raster of artifact `key`) is to be compared with, or None; `find(name)` looks a file name up in the store."""
+    for name in reference_names(key, after, iso):
+        found = find(name)
+        if found is not None:
+            return found
     return None
 
 
 class DeferredCheck:
     """The check of one country; `Orchestrator` calls `after_phase` each time a phase has been executed."""
 
-    def __init__(self, check: CountryCheck, report_path: Path) -> None:
+    def __init__(self, check: CountryCheck, report_path: Path, store: ReferenceStore | None = None) -> None:
         self.check = check
         self.report_path = Path(report_path)
+        self.store = store
         self._baseline: dict | None = None
 
     def _load_report(self) -> dict:
@@ -179,7 +201,7 @@ class DeferredCheck:
         """
         equivalent: dict[str, dict] = {}
         compared: dict[str, dict] = {}
-        if not self.check.references:
+        if self.store is None or self.store.resolve(self.check.iso, self.check.reference_run) is None:
             return equivalent, compared
         from geofrea.core.equivalence import compare_rasters
 
@@ -190,7 +212,7 @@ class DeferredCheck:
             after = Path(entry.path.resolve())
             if after.suffix.lower() not in (".tif", ".tiff"):
                 continue
-            reference = reference_file(key, after, self.check.iso, self.check.references)
+            reference = reference_file(key, after, self.check.iso, lambda name: self.store.find(self.check.iso, self.check.reference_run, name))
             if reference is None:
                 continue
             result = compare_rasters(reference, after).as_dict()
@@ -199,6 +221,15 @@ class DeferredCheck:
             if result["equivalent"]:
                 equivalent[key] = result
         return equivalent, compared
+
+    def verdicts(self) -> dict[str, str]:
+        """The verdict of each listed phase in the report on disk (a phase not yet compared is absent)."""
+        phases = self._load_report()["phases"]
+        return {p: phases[p]["verdict"] for p in self.check.phases if p in phases}
+
+    def blocked_phases(self) -> list[str]:
+        """The listed phases whose verdict is DIFERENTE: a round with one of them is not accepted."""
+        return [p for p, v in self.verdicts().items() if v == "DIFERENTE"]
 
     def after_phase(self, manifest: Any, phase: str) -> str | None:
         """Compare the artifacts of the phase that has just been executed with the reference; the message of an unexplained difference, else None."""
@@ -313,8 +344,8 @@ def seed_from_comparison(check: CountryCheck, report_path: Path, comparison: dic
 
 
 def for_country(iso: str, yaml_path: Path, data_root: Path, outputs_dir: Path) -> DeferredCheck | None:
-    """The check of `iso` when `yaml_path` lists it, None otherwise."""
+    """The check of `iso` when `yaml_path` lists it, None otherwise; it reads the reference rasters from the store of `data_root`."""
     check = load_checks(yaml_path, data_root).get(iso.upper())
     if check is None:
         return None
-    return DeferredCheck(check, Path(outputs_dir) / iso.upper() / REPORT_NAME)
+    return DeferredCheck(check, Path(outputs_dir) / iso.upper() / REPORT_NAME, load_store(yaml_path, data_root))
