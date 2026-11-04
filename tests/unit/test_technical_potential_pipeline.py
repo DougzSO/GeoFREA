@@ -504,6 +504,38 @@ def test_a_wind_ratio_masked_cell_member_is_absent_for_wind_only_and_solar_keeps
 
 
 @pytest.mark.unit
+def test_a_cell_with_a_masked_wind_member_is_flagged_incomplete_and_kept_and_a_complete_technology_has_no_flag(run_ok):
+    """OQ-069, D-F5-041: `ensemble_<tech>__<scenario>` gives the members of each candidate cell; the cell whose wind ratio is masked in one member has one
+    member fewer, is flagged `incomplete_ensemble`, and stays in the potential with the members it has. Solar keeps every member: nothing is flagged."""
+    _, out = run_ok
+    masked_cell = int(CELL_IDS[MASKED_CELL_INDEX])
+    wind = pd.read_parquet(out / "ensemble_wind__central.parquet")
+    assert list(wind.columns) == ["cell_id", "n_members", "n_expected", "incomplete_ensemble"] and len(wind) == N_CELLS
+    flagged = wind[wind["incomplete_ensemble"]]
+    assert list(flagged["cell_id"]) == [masked_cell] and list(flagged["n_members"]) == [len(MEMBERS) - 1]
+    assert (wind["n_expected"] == len(MEMBERS)).all() and (wind.loc[~wind["incomplete_ensemble"], "n_members"] == len(MEMBERS)).all()
+    table = pd.read_parquet(out / "potential_wind__central.parquet")  # the cell is kept, with the members it has
+    assert (table["cell_id"] == masked_cell).sum() == len(MEMBERS) - 1
+    solar = pd.read_parquet(out / "ensemble_solar__central.parquet")
+    assert not solar["incomplete_ensemble"].any() and (solar["n_members"] == len(MEMBERS)).all()
+    for scenario in ("restrictive", "permissive"):  # every land scenario has its table
+        assert (out / f"ensemble_wind__{scenario}.parquet").is_file()
+
+
+@pytest.mark.unit
+def test_the_capacity_and_the_energy_of_the_incomplete_cells_are_reported_with_the_scenario(run_ok):
+    result, out = run_ok
+    wind = result.technologies["wind"].scenarios["central"]
+    assert wind.n_incomplete_ensemble_cells == 1 and wind.ensemble_path == out / "ensemble_wind__central.parquet"
+    table = pd.read_parquet(out / "potential_wind__central.parquet")
+    masked_cell = int(CELL_IDS[MASKED_CELL_INDEX])
+    m0 = table[(table["member"].astype(str) == "m0") & (table["cell_id"] == masked_cell)].iloc[0]
+    assert wind.p_gw_incomplete_ensemble == pytest.approx(m0["P_MW"] / 1e3) and wind.e_twh_incomplete_ensemble_m0 == pytest.approx(m0["E_MWh"] / 1e6)
+    solar = result.technologies["solar"].scenarios["central"]
+    assert (solar.n_incomplete_ensemble_cells, solar.p_gw_incomplete_ensemble, solar.e_twh_incomplete_ensemble_m0) == (0, 0.0, 0.0)
+
+
+@pytest.mark.unit
 def test_a_member_without_a_wind_channel_is_absent_for_wind_by_declaration_and_present_for_solar(
     tmp_path, registry, synthetic_params
 ):

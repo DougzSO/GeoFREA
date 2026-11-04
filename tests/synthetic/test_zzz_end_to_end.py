@@ -846,12 +846,15 @@ def test_f7_classifies_every_candidate_and_ranks_the_whole_f7_set_in_the_core_wi
         _phase(zzz, "land_eligibility") / f"candidates_{tech}__central.parquet"
     )
     assert sorted(table["cell_id"]) == sorted(candidates["cell_id"])
-    assert set(table["cell_class"]) == {"ranked"}  # cf_min is below every synthetic member
+    # cf_min is below every synthetic member; a cell that lacks a member of the other window is `incomplete_ensemble`, out of the F7 set (OQ-069, D-F7-064)
+    assert set(table["cell_class"]) <= {"ranked", "incomplete_ensemble"}
+    table_all, table = table, table[table["cell_class"] == "ranked"]
     assert (table["failing_members"].map(len) == 0).all()
     assert sorted(table["robust_rank"]) == list(range(1, len(table) + 1))
     assert sorted(table["nominal_rank"]) == list(range(1, len(table) + 1))
     assert (table["mr"] >= 0).all() and table["sr"].between(0, 1).all()
     assert table["topk_robust"].sum() == table["topk_nominal"].sum() == -(-len(table) // 4)
+    assert table_all.loc[table_all["cell_class"] != "ranked", "robust_rank"].isna().all()
     assert set(table["admin1_id"]) <= {"ZZZ.1_1", "ZZZ.2_1"}
 
 
@@ -872,8 +875,9 @@ def test_f7_nominal_lcoe_is_the_nominal_lcoe_of_f6_for_the_reference_and_every_c
     assert (
         len(merged)
         == len(nominal)
-        == len(_robustness(zzz, tech)) * (1 + len(_core_members(zzz, tech)))
-    )
+        == int(_robustness(zzz, tech)["cell_class"].isin(["ranked", "climate_fragile"]).sum())
+        * (1 + len(_core_members(zzz, tech)))
+    )  # the F7 set: a cell with an incomplete ensemble has no nominal LCOE row (OQ-069)
     np.testing.assert_allclose(merged["lcoe_nominal"], merged["lcoe_nominal_f6"], rtol=1e-13)
 
 
@@ -917,7 +921,10 @@ def test_f7_flags_the_cells_a_masked_member_removes_from_the_sensitivity_window(
     expected = set(masked["cell_id"]) & set(wind.index)
     assert set(wind.index[wind["cell_class"] == "climate_data_invalid"]) == expected
     core = _robustness(zzz, "wind", "core")
-    assert set(core["cell_class"]) == {"ranked"}
+    # a cell masked in 2071-2100 and present in 2041-2070 is `incomplete_ensemble` there: the F7 analysis covers the complete ensemble (OQ-069, D-F7-064)
+    assert set(core["cell_class"]) <= {"ranked", "incomplete_ensemble"}
+    assert set(core.loc[core["cell_class"] == "incomplete_ensemble", "cell_id"]) == expected
+    assert core.loc[core["cell_class"] == "incomplete_ensemble", ["mr", "robust_rank"]].isna().all().all()
     assert (wind.loc[sorted(expected), "mr"].isna()).all()
     assert (wind.loc[sorted(set(wind.index) - expected), "cell_class"] == "ranked").all()
 
@@ -935,6 +942,8 @@ def test_f7_lists_the_outputs_it_could_not_write_with_the_blocking_question(zzz)
             "core",
             "sensitivity",
         }  # no altitude window: wind above 3000 m is not a candidate (OQ-058, COMMAND 46)
+        if tech == "wind":  # the masked members miss cells of the 2071-2100 window: its sensitivity on the common ensemble (D-F7-064)
+            roles |= {"sensitivity_common_ensemble"}
         assert entry["provisional"] is False and set(entry["windows"]) == roles
         assert all(s["reason"] and s["open_question"] for s in entry["skipped"])
 
@@ -1295,6 +1304,7 @@ def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_remo
     assert set(core["cell_class"]) == {"ranked"} and len(core) == len(sensitivity) > 0
     assert set(sensitivity["cell_class"]) == {"ranked"}  # a wind mask never removes a solar cell
     wind = pd.read_parquet(_fine(zzz_fine, "robustness_analysis") / "robustness_wind__core.parquet")
+    wind = wind[wind["cell_class"] == "ranked"]  # the cells with an incomplete ensemble are not ranked (OQ-069)
     assert sorted(wind["robust_rank"]) == list(range(1, len(wind) + 1))
     assert (wind["cell_id"] // 3600 == wind["lat_c"].rsub(90.0).floordiv(0.1)).all()
     wind_sensitivity = pd.read_parquet(
@@ -1306,7 +1316,7 @@ def test_f7_runs_at_the_coarse_scale_with_the_same_code_and_the_masked_wind_remo
         masked["cell_id"]
     ) & set(wind_sensitivity["cell_id"])
     assert wind_sensitivity.loc[invalid, ["mr", "robust_rank"]].isna().all().all()
-    assert (wind_sensitivity.loc[~invalid, "cell_class"] == "ranked").all()
+    assert wind_sensitivity.loc[~invalid, "cell_class"].isin(["ranked", "incomplete_ensemble"]).all()
 
 
 @pytest.mark.synthetic

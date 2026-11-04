@@ -7,6 +7,8 @@ Reads, per technology and land scenario, `candidates_<tech>__<scenario>.parquet`
     masked (M-F4-07) has no row;
   - `potential_aggregates_<tech>.parquet`: one row per scenario and member, all-present and like-for-like series (D-F5-006);
   - `class_flag_<tech>__<scenario>.parquet` (a technology with a design-class flag): `cell_id`, `v_ave_ms`, `exceeds_class`.
+  - `ensemble_<tech>__<scenario>.parquet`: `cell_id`, `n_members`, `n_expected`, `incomplete_ensemble` (OQ-069, D-F5-041): the members each cell has;
+    a cell with fewer than expected stays in the tables with the members it has and is flagged.
 
 Nothing is computed before every input is checked: the parameters, curves and registry rules the technologies need (a missing
 one raises `MissingParameterError` listing all of them), and for each scenario the forcing contract
@@ -75,8 +77,10 @@ from geofrea.technical_potential.power_curve import (
 )
 from geofrea.technical_potential.table_schemas import (
     CLASS_FLAG_TABLE_SCHEMA_VERSION,
+    ENSEMBLE_TABLE_SCHEMA_VERSION,
     POTENTIAL_TABLE_SCHEMA_VERSION,
     ClassFlagRow,
+    EnsembleRow,
     PotentialAggregateRow,
     PotentialRow,
 )
@@ -106,6 +110,10 @@ class ScenarioPotential(BaseModel):
     e_twh_reference: float
     luf: float
     power_density_mw_per_km2: float
+    ensemble_path: Path | None = None  # the cells with their members and the flag `incomplete_ensemble` (OQ-069, D-F5-041)
+    n_incomplete_ensemble_cells: int = 0
+    p_gw_incomplete_ensemble: float = 0.0  # capacity of those cells (GW)
+    e_twh_incomplete_ensemble_m0: float = 0.0  # their energy in the reference member (TWh/yr)
     class_flag_path: Path | None = None
     p_gw_class_flag: float | None = (
         None  # capacity in the flagged cells (potential beyond the design class of the turbine)
@@ -459,6 +467,7 @@ def build_technology_potential(
         )
         energy_by_member: dict[str, np.ndarray] = {}
         absent_by_member: dict[str, int] = {}
+        n_present = np.zeros(len(frame), dtype="int64")  # the members that have a row for each cell
         pieces: list[pd.DataFrame] = []
         for member in members:
             energy = np.full(len(frame), np.nan)
@@ -498,6 +507,7 @@ def build_technology_potential(
                 )
             energy_by_member[member] = energy
             absent_by_member[member] = int(len(frame) - len(rows))
+            n_present[rows] += 1
         if pieces:
             table = pd.concat(pieces, ignore_index=True)
         else:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
@@ -522,6 +532,38 @@ def build_technology_potential(
             compression="zstd",
             extra_metadata=_provenance(resolved, scenario, absent_by_member, production),
         )
+        incomplete = n_present < len(members)
+        ensemble_path = Path(out_dir) / f"ensemble_{tech}__{scenario}.parquet"
+        write_table(
+            pd.DataFrame(
+                {
+                    "cell_id": cell_ids.astype("int64"),
+                    "n_members": n_present,
+                    "n_expected": np.full(len(frame), len(members), dtype="int64"),
+                    "incomplete_ensemble": incomplete,
+                }
+            ),
+            ensemble_path,
+            schema_version=ENSEMBLE_TABLE_SCHEMA_VERSION,
+            row_model=EnsembleRow,
+            compression="zstd",
+        )
+        e_m0 = energy_by_member[REFERENCE_MEMBER_ID]
+        p_incomplete_gw = float(p_mw[incomplete].sum()) / 1e3
+        e_incomplete_twh = float(np.nansum(e_m0[incomplete])) / 1e6
+        if incomplete.any():
+            logger.info(
+                "%s %s [%s]: %d of %d candidate cells have an incomplete ensemble (fewer than %d members): %.3f GW and %.3f TWh at m0; flagged in %s, kept in F5 and F6, not analysed in F7 (OQ-069)",
+                iso,
+                tech,
+                scenario,
+                int(incomplete.sum()),
+                len(frame),
+                len(members),
+                p_incomplete_gw,
+                e_incomplete_twh,
+                ensemble_path.name,
+            )
         flag_path: Path | None = None
         p_gw_flag: float | None = None
         if prepared.class_flag is not None and qc is not None:
@@ -581,6 +623,10 @@ def build_technology_potential(
             e_twh_reference=float(ref["E_TWh"]),
             luf=luf,
             power_density_mw_per_km2=power_density,
+            ensemble_path=ensemble_path,
+            n_incomplete_ensemble_cells=int(incomplete.sum()),
+            p_gw_incomplete_ensemble=p_incomplete_gw,
+            e_twh_incomplete_ensemble_m0=e_incomplete_twh,
             class_flag_path=flag_path,
             p_gw_class_flag=p_gw_flag,
             n_density_outside_isa_check=None if qc is None else int(qc.density_outside.sum()),

@@ -28,7 +28,7 @@
 .PARAMETER Python         python.exe to use (default: the .venv of the main checkout of the repository).
 .PARAMETER Phases         Comma list of the phases (default: the twelve phases to potential_maps).
 .PARAMETER MaxCommitPercent  Commit charge of the system, in percent of its limit, above which the current country is stopped (default 95).
-.PARAMETER MinStartMb     Available memory that a round needs to start (default 2000, the rule of CONVENTIONS "Memory before a cold round").
+.PARAMETER MinStartMb     Available memory that a round needs to start (default 1800, the rule of CONVENTIONS "Memory before a cold round").
 .PARAMETER AdoptRevision  The revision under which the aligned layers of the countries were made (default adopt-base-75).
 .PARAMETER AdoptProof     The equivalence proof the adoption needs, relative to the worktree.
 .PARAMETER BaselineStamp  The round whose saved manifest_before.json is the reference of the comparison (default 20261029_135838, the manifest of before the
@@ -43,7 +43,7 @@ param(
     [string]$Python = '',
     [string]$Phases = 'data_acquisition,data_quality_audit,grid_alignment,siting_layers,land_eligibility,external_inputs,climate_forcing,hazard_context,climate_maps,overview,technical_potential,potential_maps',
     [int]$MaxCommitPercent = 95,
-    [int]$MinStartMb = 2000,
+    [int]$MinStartMb = 1800,
     [int]$PollSeconds = 15,
     [string]$AdoptRevision = 'adopt-base-75',
     [string]$AdoptProof = 'docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json',

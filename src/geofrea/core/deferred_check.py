@@ -16,6 +16,10 @@ only resumes from its manifest entry proves nothing about the new code), the con
   DIFERENTE          some differ with no change of configuration and no entry in `expected`: the run stops before the phases that follow and
                      the artifacts, the probable cause (`suspects` of the phase) and the reference are written in the report
 
+An entry of `expected` is pinned to the reference it was declared against: it records the `reference_run` (a run_id of the store) and counts only while that round
+is the reference of the country (`reference_run: latest` resolves to the last accepted round). When `latest` moves on, the entry is expired: it explains nothing,
+the gate warns, and `scripts/list_expired_expected.py` lists what can be removed from the file.
+
 The report is `outputs/<ISO>/deferred_check.json`, kept between runs: a phase that has a verdict other than DIFERENTE is settled and is not compared
 again (a later change of data or code is not an error of this check); one that has DIFERENTE is compared again at its next execution. The overall
 verdict is DIFERENTE, PENDENTE (a listed phase has not run yet), REVISAR, EQUIVALENTE or IDENTICO. Removing a country from the file retires its check.
@@ -86,8 +90,30 @@ class CountryCheck:
     baseline_label: str
     phases: tuple[str, ...]
     expected: dict[str, str] = field(default_factory=dict)  # artifact key -> why its difference is accepted
+    expected_pins: dict[str, str] = field(default_factory=dict)  # artifact key -> the run_id of the reference it was declared against
     suspects: dict[str, str] = field(default_factory=dict)  # phase -> probable cause of an unexplained difference
     reference_run: str = "latest"  # the round of the reference store whose files the rasters are compared with: a run_id, or `latest` (the last accepted)
+
+
+def parse_expected(iso: str, spec: dict) -> tuple[dict[str, str], dict[str, str]]:
+    """`(reasons, pins)` of the `expected` block of a country.
+
+    An entry is a text (the reason; its pin is the country's `expected_reference_run`) or a mapping `{reason, reference_run}`. An entry with no pin is refused: it
+    would hold for every later reference.
+    """
+    default = spec.get("expected_reference_run")
+    reasons: dict[str, str] = {}
+    pins: dict[str, str] = {}
+    for key, value in (spec.get("expected") or {}).items():
+        if isinstance(value, dict):
+            reason, pin = value.get("reason"), value.get("reference_run", default)
+        else:
+            reason, pin = value, default
+        if not reason or not pin:
+            raise ValueError(f"{iso}: the `expected` entry {key!r} needs a reason and the reference_run it was declared against (expected_reference_run)")
+        reasons[str(key)] = str(reason)
+        pins[str(key)] = str(pin)
+    return reasons, pins
 
 
 def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
@@ -99,12 +125,14 @@ def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
     checks = {}
     for iso, spec in (raw.get("countries") or {}).items():
         from_store = str(spec["baseline"]) == "latest"
+        reasons, pins = parse_expected(str(iso).upper(), spec)
         checks[str(iso).upper()] = CountryCheck(
             iso=str(iso).upper(),
             baseline=None if from_store else Path(data_root) / str(spec["baseline"]),
             baseline_label=str(spec.get("label", "references/" + str(spec.get("reference_run", "latest")) if from_store else spec["baseline"])),
             phases=tuple(spec["phases"]),
-            expected={str(k): str(v) for k, v in (spec.get("expected") or {}).items()},
+            expected=reasons,
+            expected_pins=pins,
             suspects=suspects,
             reference_run=str(spec.get("reference_run", "latest")),
         )
@@ -183,6 +211,24 @@ class DeferredCheck:
                 logger.warning("%s is unreadable; the check starts again", self.report_path)
         return {"country": self.check.iso, "baseline": self.check.baseline_label, "phases": {}}
 
+    def reference_run_id(self) -> str | None:
+        """The run_id the check compares with now (`latest` resolved), or None when the baseline is a manifest outside the store or there is no store."""
+        if self.check.baseline is not None or self.store is None:
+            return None
+        return self.store.resolve(self.check.iso, self.check.reference_run)
+
+    def expired_expected(self) -> dict[str, str]:
+        """The entries of `expected` declared against a reference that is no longer the one compared with: key -> the run_id they were declared against."""
+        current = self.reference_run_id()
+        if self.check.baseline is not None or self.store is None:
+            return {}
+        return {k: pin for k, pin in self.check.expected_pins.items() if pin != current}
+
+    def active_expected(self) -> dict[str, str]:
+        """The entries of `expected` that count now: key -> reason."""
+        expired = self.expired_expected()
+        return {k: v for k, v in self.check.expected.items() if k not in expired}
+
     def _baseline_path(self) -> Path | None:
         if self.check.baseline is not None:
             return self.check.baseline
@@ -259,11 +305,13 @@ class DeferredCheck:
             self._finish(report)
             return None
 
+        expected = self.active_expected()
+        expired = {k: p for k, p in self.expired_expected().items()}
         rows = compare_artifacts(baseline, self._after_view(manifest, phase), [phase])
         different = {k: r for k, r in rows.items() if r["status"] in ("DIFERENTE", "AUSENTE_DEPOIS")}
         with_config = sorted(k for k, r in different.items() if r["config_changed"])
-        accepted = sorted(k for k, r in different.items() if not r["config_changed"] and k in self.check.expected)
-        unexplained = sorted(k for k, r in different.items() if not r["config_changed"] and k not in self.check.expected)
+        accepted = sorted(k for k, r in different.items() if not r["config_changed"] and k in expected)
+        unexplained = sorted(k for k, r in different.items() if not r["config_changed"] and k not in expected)
         equivalent, compared = self._by_tolerance(manifest, unexplained)
         unexplained = [k for k in unexplained if k not in equivalent]
         verdict = (
@@ -276,7 +324,8 @@ class DeferredCheck:
             "n_artifacts": len(rows),
             "n_identico": sum(r["status"] == "IDENTICO" for r in rows.values()),
             "different_with_config_change": with_config,
-            "different_expected": {k: self.check.expected[k] for k in accepted},
+            "different_expected": {k: expected[k] for k in accepted},
+            "expired_expected": sorted(k for k in expired if k in different),  # differences that an expired entry would have explained
             "different_equivalent": equivalent,
             "different_unexplained": {
                 k: {"before": rows[k]["before"], "after": rows[k]["after"], "status": rows[k]["status"], **({"comparison": compared[k]} if k in compared else {})}
@@ -284,6 +333,12 @@ class DeferredCheck:
             },
             "new": sorted(k for k, r in rows.items() if r["status"] == "AUSENTE_ANTES"),
         }
+        if expired:
+            logger.warning(
+                "deferred check %s/%s: %d entries of `expected` were declared against an earlier reference and no longer count (the reference is now %s): %s. "
+                "Run scripts/list_expired_expected.py; remove them from config/deferred_checks.yaml.",
+                self.check.iso, phase, len(expired), self.reference_run_id(), ", ".join(sorted(expired)[:MAX_LISTED]) + (" ..." if len(expired) > MAX_LISTED else ""),
+            )
         message = None
         if unexplained:
             cause = self.check.suspects.get(phase, "not listed in config/deferred_checks.yaml: compare the code of the phase with the reference revision")
@@ -294,6 +349,9 @@ class DeferredCheck:
                 f"{self.check.baseline_label} with no change of configuration to explain them: {listed}. Probable cause: {cause}. "
                 f"The phases after {phase} did not run; the report is {self.report_path}."
             )
+            stale = sorted(set(unexplained) & set(expired))
+            if stale:
+                message += f" {len(stale)} of them have an entry in `expected` declared against an earlier reference, which no longer counts: {', '.join(stale[:MAX_LISTED])}."
         report["phases"][phase] = entry
         self._finish(report)
         return message

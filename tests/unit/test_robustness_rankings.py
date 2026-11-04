@@ -10,6 +10,7 @@ from geofrea.lcoe_modeling.kernel import CellInputs
 from geofrea.robustness_analysis.cell_set import (
     CLIMATE_DATA_INVALID,
     CLIMATE_FRAGILE,
+    INCOMPLETE_ENSEMBLE,
     INFEASIBLE_AT_F0,
     RANKED,
     CellSetError,
@@ -173,6 +174,7 @@ def test_the_four_classes_follow_the_definitions_of_m_f7_01():
         CLIMATE_FRAGILE: 1,
         CLIMATE_DATA_INVALID: 1,
         INFEASIBLE_AT_F0: 1,
+        INCOMPLETE_ENSEMBLE: 0,
     }
     # the floor handed to the kernel: +inf where the member fails CF_min, 0 elsewhere (D-F7-007)
     assert cells.core[0].floor.tolist() == [0.0, np.inf, 0.0] and (cells.core[1].floor == 0).all()
@@ -192,3 +194,28 @@ def test_a_member_without_rows_makes_every_cell_climate_data_invalid_and_bad_inp
         build_cell_set(np.array(ids), members, "m0", ["a", "a"], cf_min=0.1)
     with pytest.raises(CellSetError, match="not candidates"):
         build_cell_set(np.array([1]), members, "m0", [], cf_min=0.1)
+
+
+@pytest.mark.unit
+def test_a_cell_flagged_incomplete_leaves_the_f7_set_and_is_neither_ranked_nor_invalid():
+    """OQ-069, D-F7-064: present in the window but lacking a member of the other window: its own class, out of the F7 set."""
+    ids = [1, 2, 3, 4]
+    members = dict(
+        [
+            _member("m0", ids, [0.3, 0.3, 0.3, 0.3]),
+            _member("a", ids, [0.3, 0.3, 0.3, 0.3]),
+        ]
+    )
+    cells = build_cell_set(
+        np.array(ids), members, "m0", ["a"], cf_min=0.25, incomplete_ids=np.array([2, 4, 99])
+    )
+    classes = dict(zip(cells.candidate_ids.tolist(), cells.classes.tolist(), strict=True))
+    assert classes == {1: RANKED, 2: INCOMPLETE_ENSEMBLE, 3: RANKED, 4: INCOMPLETE_ENSEMBLE}
+    assert cells.f7_ids.tolist() == [1, 3] and cells.p_mw.tolist() == [100.0, 100.0]
+    assert cells.counts()[INCOMPLETE_ENSEMBLE] == 2
+    # a cell absent from the window stays climate_data_invalid, whatever the flag says
+    gap = dict([_member("m0", ids, [0.3] * 4), _member("a", [1, 2, 3], [0.3] * 3)])
+    cells = build_cell_set(np.array(ids), gap, "m0", ["a"], cf_min=0.25, incomplete_ids=np.array([4]))
+    assert cells.classes.tolist()[3] == CLIMATE_DATA_INVALID
+    # no flag: nothing changes
+    assert build_cell_set(np.array(ids), members, "m0", ["a"], cf_min=0.25).n_f7 == 4

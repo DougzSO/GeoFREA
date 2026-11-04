@@ -74,7 +74,12 @@ from geofrea.robustness_analysis.assemble import (
     robustness_frame,
     ssp_scores_frame,
 )
-from geofrea.robustness_analysis.cell_set import CellSet, build_cell_set
+from geofrea.robustness_analysis.cell_set import (
+    CLIMATE_DATA_INVALID,
+    INCOMPLETE_ENSEMBLE,
+    CellSet,
+    build_cell_set,
+)
 from geofrea.robustness_analysis.decision import (
     RobustnessMissingInputError,
     SkippedOutput,
@@ -267,6 +272,12 @@ class WindowResult(BaseModel):
     top_k_truncated: bool
     target_unreachable: bool | None
     tables: dict[str, Path]
+    excluded: dict[
+        str, dict[str, float]
+    ] = {}  # cells, capacity (GW) and energy at m0 (TWh/yr) of the classes the analysis does not cover (OQ-069)
+    dropped_members: list[
+        str
+    ] = []  # the members left out of the common ensemble (empty in the other runs)
 
 
 class TechRobustness(BaseModel):
@@ -278,6 +289,13 @@ class TechRobustness(BaseModel):
     provisional: bool
     windows: dict[str, WindowResult]
     skipped: list[dict[str, str]]
+    n_incomplete_ensemble_cells: int = 0  # the candidates F5 flagged `incomplete_ensemble` (OQ-069)
+    common_ensemble_required: list[
+        str
+    ] = []  # the roles of the sensitivity on the common ensemble that the run owes (D-F7-064)
+    common_ensemble_skipped: dict[
+        str, str
+    ] = {}  # role -> reason, where the remaining members carry fewer than two SSPs
 
 
 class RobustnessSummary(BaseModel):
@@ -302,6 +320,79 @@ class MemberEntry:
     def carries(self, required: Sequence[str]) -> bool:
         """True if the member declares every channel in `required` (an undeclared channel counts as carried, old `members.yaml`)."""
         return all(self.channels.get(c, True) for c in required)
+
+
+def common_ensemble_role(role: str) -> str:
+    """The window role of the run on the common ensemble (OQ-069, D-F7-064), for example `core_common_ensemble`."""
+    return f"{role}_common_ensemble"
+
+
+def read_incomplete_cells(ensemble_path: Path) -> np.ndarray:
+    """The candidates that F5 flagged `incomplete_ensemble` (`ensemble_<tech>__central`), sorted."""
+    table = pd.read_parquet(ensemble_path, columns=["cell_id", "incomplete_ensemble"])
+    return np.sort(table.loc[table["incomplete_ensemble"], "cell_id"].to_numpy(dtype="int64"))
+
+
+def members_missing_in_a_cell(
+    potential_path: Path, candidates_path: Path, member_ids: Sequence[str]
+) -> list[str]:
+    """The members, among `member_ids`, that lack a row for at least one candidate of the central scenario: the ones the common ensemble drops (OQ-069)."""
+    n_candidates = int(pd.read_parquet(candidates_path, columns=["cell_id"])["cell_id"].nunique())
+    table = pd.read_parquet(potential_path, columns=["cell_id", "member"])
+    cells_by_member = table.groupby("member", observed=True)["cell_id"].nunique()
+    return [m for m in member_ids if int(cells_by_member.get(m, 0)) < n_candidates]
+
+
+def check_common_ensemble_contract(
+    n_incomplete: int,
+    required: Sequence[str],
+    windows: Mapping[str, object],
+    skipped: Mapping[str, str],
+) -> None:
+    """With cells that have an incomplete ensemble the sensitivity on the common ensemble is owed (OQ-069, D-F7-064).
+
+    Every required role must be run or skipped with a reason; no incomplete cell, no sensitivity.
+
+    Raises:
+        RobustnessInputError: cells are flagged and no sensitivity is owed, or an owed one is neither written nor skipped with its reason.
+    """
+    if n_incomplete == 0:
+        if required:
+            raise RobustnessInputError(
+                f"the common-ensemble sensitivity {list(required)} is owed but no cell is flagged incomplete_ensemble"
+            )
+        return
+    if not required:
+        raise RobustnessInputError(
+            f"{n_incomplete} cells are flagged incomplete_ensemble in F5 and no member of the technology lacks a cell: the F5 files disagree"
+        )
+    missing = [r for r in required if r not in windows and r not in skipped]
+    if missing:
+        raise RobustnessInputError(
+            f"the common-ensemble sensitivity {missing} is required (F5 flagged {n_incomplete} cells incomplete_ensemble) and is neither written nor skipped with a reason"
+        )
+
+
+def excluded_totals(cell_set: CellSet, reference: MemberCells) -> dict[str, dict[str, float]]:
+    """Per class that leaves the F7 set for a reason of the data, the cells and their capacity (GW) and energy (TWh/yr) in the reference member `m0`.
+
+    `climate_data_invalid` and `incomplete_ensemble`: what the analysis does not cover, to be reported with it (OQ-069). A cell that has no row in `m0` counts as a cell
+    and adds nothing to the capacity.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for name in (CLIMATE_DATA_INVALID, INCOMPLETE_ENSEMBLE):
+        ids = cell_set.candidate_ids[cell_set.classes == name]
+        position = np.searchsorted(reference.cell_id, ids)
+        inside = position < reference.cell_id.size
+        found = np.zeros(ids.size, dtype=bool)
+        found[inside] = reference.cell_id[position[inside]] == ids[inside]
+        rows = position[found]
+        out[name] = {
+            "n_cells": int(ids.size),
+            "p_gw": float(reference.cells.p_mw[rows].sum()) / 1e3,
+            "e_twh_m0": float(reference.cells.energy_mwh[rows].sum()) / 1e6,
+        }
+    return out
 
 
 def robustness_dir(iso: str) -> Path:
@@ -444,6 +535,8 @@ def _provenance(
     skipped: Sequence[SkippedOutput],
     scale_id: str,
     production: bool,
+    excluded: Mapping[str, Mapping[str, float]] | None = None,
+    dropped_members: Sequence[str] = (),
 ) -> dict[str, str]:
     payload = {
         "technology": resolved.technology,
@@ -471,6 +564,8 @@ def _provenance(
         "feasibility": "CF(m, s0) stored by F5 against cf_min, handed to the kernel as an energy floor (D-F7-007)",
         "statistics_over": "draws s >= 1 of the core members; the nominal vector s0 is f0 and the central value",
         "class_counts": cell_set.counts(),
+        "excluded_by_data": {k: dict(v) for k, v in (excluded or {}).items()},
+        "common_ensemble_dropped_members": list(dropped_members),
         "k": None if ranking is None else ranking.k,
         "top_k_truncated": False if ranking is None else ranking.top_k_truncated,
         "target_unreachable": None
@@ -531,9 +626,13 @@ def _write_tables(
 
 
 def _scenario_tables(
-    scenario: str, tech: str, paths: WindowPaths, keep_ids: np.ndarray | None = None
+    scenario: str,
+    tech: str,
+    paths: WindowPaths,
+    keep_ids: np.ndarray | None = None,
+    drop_ids: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """The F5 rows and the F6 nominal LCOE of a land scenario; with `keep_ids` only the rows of those cells (the altitude sensitivity, OQ-058)."""
+    """The F5 rows and the F6 nominal LCOE of a land scenario; with `keep_ids` only the rows of those cells (the altitude sensitivity, OQ-058), without the rows of `drop_ids` (the incomplete ensemble, OQ-069)."""
     potential = pd.read_parquet(
         paths.potential_dir / f"potential_{tech}__{scenario}.parquet",
         columns=["cell_id", "member", "P_MW", "CF", "E_MWh"],
@@ -548,6 +647,9 @@ def _scenario_tables(
     if keep_ids is not None:
         potential = potential[potential["cell_id"].isin(keep_ids)]
         lcoe = lcoe[lcoe["cell_id"].isin(keep_ids)]
+    if drop_ids is not None and drop_ids.size:
+        potential = potential[~potential["cell_id"].isin(drop_ids)]
+        lcoe = lcoe[~lcoe["cell_id"].isin(drop_ids)]
     return potential, lcoe
 
 
@@ -633,6 +735,9 @@ def run_window(
     scale_id: str,
     production: bool,
     exclude_above_m: float | None = None,
+    incomplete_ids: np.ndarray | None = None,
+    drop_members: Sequence[str] = (),
+    base_role: str | None = None,
 ) -> WindowResult:
     """One window of one technology: the F7 set, the evaluation, the rankings, the hypotheses and the tables.
 
@@ -640,6 +745,10 @@ def run_window(
 
     With `exclude_above_m` (OQ-058, the altitude sensitivity) the candidates whose cell altitude is above it, and their rows in every member, are
     left out before the F7 set is built; the whole analysis then runs on the remaining cells and its tables carry the role in their names.
+
+    With `incomplete_ids` (OQ-069, D-F7-064) the candidates that lack a member of the ensemble of the technology in any window leave the F7 set as the class
+    `incomplete_ensemble`, and the capacity and the energy they carry are reported with the window. With `drop_members` the members are left out of the window
+    (the common ensemble: the members that miss cells, so that every cell has the same futures); `base_role` is the role whose analysis the run repeats.
 
     An empty F7 set is not an error: the classes are written, every result column is null and a warning says so.
 
@@ -650,7 +759,11 @@ def run_window(
     """
     tech = resolved.technology
     member_ids = [
-        e.member for e in entries if e.window == window and e.member != REFERENCE_MEMBER_ID
+        e.member
+        for e in entries
+        if e.window == window
+        and e.member != REFERENCE_MEMBER_ID
+        and e.member not in set(drop_members)
     ]
     if not member_ids:
         raise RobustnessInputError(f"members.yaml has no member of the {role} window {window}")
@@ -692,9 +805,26 @@ def run_window(
             exclude_above_m,
         )
     cell_set = build_cell_set(
-        candidates["cell_id"].to_numpy(), data, REFERENCE_MEMBER_ID, member_ids, decision.cf_min
+        candidates["cell_id"].to_numpy(),
+        data,
+        REFERENCE_MEMBER_ID,
+        member_ids,
+        decision.cf_min,
+        incomplete_ids=incomplete_ids,
     )
     logger.info("%s %s [%s]: %s", iso, tech, role, cell_set.counts())
+    excluded = excluded_totals(cell_set, data[REFERENCE_MEMBER_ID])
+    if excluded[INCOMPLETE_ENSEMBLE]["n_cells"] or excluded[CLIMATE_DATA_INVALID]["n_cells"]:
+        logger.info(
+            "%s %s [%s]: not covered by the analysis (data): %s",
+            iso,
+            tech,
+            role,
+            "; ".join(
+                f"{name} {v['n_cells']} cells, {v['p_gw']:.3f} GW, {v['e_twh_m0']:.3f} TWh/yr at m0"
+                for name, v in excluded.items()
+            ),
+        )
 
     def provenance_for(ranking: Rankings | None) -> dict[str, str]:
         return _provenance(
@@ -711,6 +841,8 @@ def run_window(
             skipped=skipped,
             scale_id=scale_id,
             production=production,
+            excluded=excluded,
+            dropped_members=drop_members,
         )
 
     if cell_set.n_f7 == 0:
@@ -733,7 +865,7 @@ def run_window(
             provenance_for(None),
             paths.out_dir,
         )
-        return _window_result(role, window, cell_set, None, tables)
+        return _window_result(role, window, cell_set, None, tables, excluded, drop_members)
 
     progress = PeriodicProgress(
         logger, len(member_ids) + 1, f"{iso} {tech} {role} members", every=5
@@ -760,8 +892,8 @@ def run_window(
     prim_cfg = experiments.prim
     shortlist = None
     is_core = (
-        role == "core" or exclude_above_m is not None
-    )  # the altitude sensitivity repeats the core window
+        (base_role or role) == "core" or exclude_above_m is not None
+    )  # the altitude and the common-ensemble sensitivities repeat the core window
     if is_core and ranking.k is not None and cell_set.ranked.any():
         nominal_order = order_by(evaluation.nominal_lcoe[:, 0], candidates=cell_set.ranked)
         shortlist = OutcomeShortlist(
@@ -1240,7 +1372,7 @@ def run_window(
         target, alternatives = _national_target(experiments, iso, tech)
         rows: list[dict] = []
         for scenario in LAND_SCENARIOS:
-            potential, lcoe = _scenario_tables(scenario, tech, paths, kept)
+            potential, lcoe = _scenario_tables(scenario, tech, paths, kept, incomplete_ids)
             scenario_rows = potential_below_tau_nominal(
                 potential,
                 lcoe,
@@ -1441,7 +1573,7 @@ def run_window(
             verdicts[at] = {"rule": None, "verdict": None, "verdict_reason": H5_DESCRIPTIVE}
     frames["hypothesis"] = hypothesis_frame(statistics, verdicts, window)
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
-    return _window_result(role, window, cell_set, ranking, tables)
+    return _window_result(role, window, cell_set, ranking, tables, excluded, drop_members)
 
 
 def _window_result(
@@ -1450,6 +1582,8 @@ def _window_result(
     cell_set: CellSet,
     ranking: Rankings | None,
     tables: Mapping[str, Path],
+    excluded: Mapping[str, Mapping[str, float]] | None = None,
+    dropped_members: Sequence[str] = (),
 ) -> WindowResult:
     return WindowResult(
         role=role,
@@ -1463,6 +1597,8 @@ def _window_result(
         if ranking is None or ranking.target_reached is None
         else not ranking.target_reached,
         tables=dict(tables),
+        excluded={k: dict(v) for k, v in (excluded or {}).items()},
+        dropped_members=list(dropped_members),
     )
 
 
@@ -1516,6 +1652,10 @@ def build_robustness(
         needed.append(paths.lcoe_dir / f"lcoe_summary_{tech}.parquet")
         for scenario in LAND_SCENARIOS:
             needed.append(paths.potential_dir / f"potential_{tech}__{scenario}.parquet")
+            if scenario == CENTRAL_SCENARIO:
+                needed.append(
+                    paths.potential_dir / f"ensemble_{tech}__{scenario}.parquet"
+                )  # OQ-069: the cells with an incomplete ensemble
             needed.append(paths.candidates_dir / f"candidates_{tech}__{scenario}.parquet")
             if scenario != CENTRAL_SCENARIO:
                 needed.append(paths.lcoe_dir / f"lcoe_nominal_{tech}__{scenario}.parquet")
@@ -1534,6 +1674,17 @@ def build_robustness(
             for e in entries
             if e.carries(required_channels(technologies.technologies[tech].cf_model))
         ]
+        # OQ-069, D-F7-064: the F7 analysis covers the cells with the complete ensemble of the technology (every member of both windows); the cells that lack
+        # a member stay in F5 and F6 and are the class `incomplete_ensemble` here. The sensitivity repeats both windows on the common ensemble: the members that
+        # lack a cell are left out, and every cell is kept.
+        incomplete_ids = read_incomplete_cells(
+            paths.potential_dir / f"ensemble_{tech}__{CENTRAL_SCENARIO}.parquet"
+        )
+        dropped_members = members_missing_in_a_cell(
+            paths.potential_dir / f"potential_{tech}__{CENTRAL_SCENARIO}.parquet",
+            paths.candidates_dir / f"candidates_{tech}__{CENTRAL_SCENARIO}.parquet",
+            [e.member for e in tech_entries if e.member != REFERENCE_MEMBER_ID],
+        )
         skipped = skipped_outputs(decision, experiments, has_hazard_members=has_hazard)
         for item in skipped:
             logger.warning(
@@ -1560,9 +1711,62 @@ def build_robustness(
                 max_batch_gb=max_batch_gb,
                 scale_id=scale_id,
                 production=production,
+                incomplete_ids=incomplete_ids,
             )
             for role in WINDOW_ROLES
         }
+        required_common: list[str] = []
+        skipped_common: dict[str, str] = {}
+        if dropped_members:  # no cell lacks a member of the technology otherwise, and the common ensemble is the ensemble
+            for role in WINDOW_ROLES:
+                in_window = {
+                    e.member for e in tech_entries if e.window == window_name(experiments, role)
+                }
+                if not in_window & set(
+                    dropped_members
+                ):  # the window keeps every member: it is the same run
+                    continue
+                common = common_ensemble_role(role)
+                required_common.append(common)
+                kept = [e for e in tech_entries if e.member in in_window - set(dropped_members)]
+                if (
+                    len({e.ssp for e in kept if e.ssp}) < 2
+                ):  # H1 compares SSPs: the only skip the contract allows
+                    skipped_common[common] = (
+                        f"the {len(kept)} members left after dropping {sorted(dropped_members)} carry fewer than two SSPs"
+                    )
+                    logger.warning(
+                        "%s %s [%s]: sensitivity skipped: %s",
+                        iso,
+                        tech,
+                        common,
+                        skipped_common[common],
+                    )
+                    continue
+                windows[common] = run_window(
+                    iso,
+                    common,
+                    window_name(experiments, role),
+                    res,
+                    decision,
+                    experiments,
+                    tech_entries,
+                    skipped,
+                    paths,
+                    n_samples=experiments.sampler.initial_size,
+                    seed=experiments.sampler.seed,
+                    max_batch_gb=max_batch_gb,
+                    scale_id=scale_id,
+                    production=production,
+                    drop_members=dropped_members,
+                    base_role=role,
+                )
+        # the flagged cells that the analysis meets (present in m0 and in the window): a cell without m0 is `climate_data_invalid`, not owed a sensitivity
+        n_incomplete = max(
+            (windows[role].class_counts.get("incomplete_ensemble", 0) for role in WINDOW_ROLES),
+            default=0,
+        )
+        check_common_ensemble_contract(n_incomplete, required_common, windows, skipped_common)
         cap = elevation_sensitivity_m(experiments.land_availability, tech)
         if (
             cap is not None
@@ -1583,6 +1787,7 @@ def build_robustness(
                 scale_id=scale_id,
                 production=production,
                 exclude_above_m=cap,
+                incomplete_ids=incomplete_ids,
             )
         result[tech] = TechRobustness(
             technology=tech,
@@ -1591,5 +1796,8 @@ def build_robustness(
             provisional=False,
             windows=windows,
             skipped=_skipped_dicts(skipped),
+            n_incomplete_ensemble_cells=n_incomplete,
+            common_ensemble_required=required_common,
+            common_ensemble_skipped=skipped_common,
         )
     return RobustnessSummary(country_code=iso, technologies=result)

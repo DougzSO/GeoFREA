@@ -5,6 +5,9 @@ The candidates `C` are the cells of the central land scenario. A candidate is
   - `climate_data_invalid` when it is missing from `m0` or from some member of the window (a cell-member masked by M-F4-07 has no F5 row,
     D-F5-006); it is counted and mapped, never ranked, and has no regret;
   - `infeasible_at_f0` when it is present everywhere but `CF(m0, s0) < CF_min` or its nominal energy is zero;
+  - `incomplete_ensemble` when it is present in `m0` and in every member of the window but lacks a member of the other window (a cell-member masked by
+    M-F4-07 there): the F7 analysis runs on the complete ensemble of the technology, so the cell is counted and mapped, never ranked, and has no regret
+    (OQ-069, D-F7-064); it stays in F5 and F6, flagged by `ensemble_<tech>__<scenario>`;
   - in the F7 set `S7` otherwise. Inside `S7`, a cell with `CF(m, s0) < CF_min` in at least one member of the window is `climate_fragile` (it
     is reported with the members in which it fails and is not ranked by `MR`); the others are `ranked`.
 
@@ -25,7 +28,8 @@ RANKED = "ranked"
 CLIMATE_FRAGILE = "climate_fragile"
 CLIMATE_DATA_INVALID = "climate_data_invalid"
 INFEASIBLE_AT_F0 = "infeasible_at_f0"
-CLASSES = (RANKED, CLIMATE_FRAGILE, CLIMATE_DATA_INVALID, INFEASIBLE_AT_F0)
+INCOMPLETE_ENSEMBLE = "incomplete_ensemble"
+CLASSES = (RANKED, CLIMATE_FRAGILE, CLIMATE_DATA_INVALID, INFEASIBLE_AT_F0, INCOMPLETE_ENSEMBLE)
 
 
 class CellSetError(ValueError):
@@ -84,6 +88,7 @@ def build_cell_set(
     reference: str,
     core: Sequence[str],
     cf_min: float,
+    incomplete_ids: np.ndarray | None = None,
 ) -> CellSet:
     """Classify the candidates and restrict every member to the F7 set.
 
@@ -95,6 +100,8 @@ def build_cell_set(
         reference: Identifier of `m0`.
         core: Identifiers of the members of the window, in the order the results use.
         cf_min: The minimum capacity factor of a feasible cell-member.
+        incomplete_ids: Candidates that lack a member of the ensemble of the technology in any window (`ensemble_<tech>__central`, F5); those that are present
+            in this window are the class `incomplete_ensemble` and leave the F7 set (OQ-069). None or empty: no cell is left out for it.
 
     Raises:
         CellSetError: the reference member has no rows, a member is repeated, or a member has a cell the candidates lack.
@@ -108,6 +115,11 @@ def build_cell_set(
     for name in wanted:
         if name in members and not np.isin(members[name].cell_id, candidate_ids).all():
             raise CellSetError(f"member {name} has cells that are not candidates")
+    incomplete = (
+        np.isin(candidate_ids, np.asarray(incomplete_ids, dtype="int64"))
+        if incomplete_ids is not None
+        else np.zeros(candidate_ids.size, dtype=bool)
+    )
     present = np.isin(candidate_ids, members[reference].cell_id)
     for name in core:
         present &= np.isin(candidate_ids, members[name].cell_id) if name in members else False
@@ -116,8 +128,10 @@ def build_cell_set(
     ok_ref = (ref.cf[at_ref] >= cf_min) & (ref.cells.energy_mwh[at_ref] > 0)
     in_f7 = np.zeros(candidate_ids.size, dtype=bool)
     in_f7[np.flatnonzero(present)[ok_ref]] = True
+    in_f7 &= ~incomplete  # the complete ensemble of the technology only (OQ-069)
     classes = np.full(candidate_ids.size, CLIMATE_DATA_INVALID, dtype=object)
     classes[present] = INFEASIBLE_AT_F0
+    classes[present & incomplete] = INCOMPLETE_ENSEMBLE
     f7_ids = candidate_ids[in_f7]
     position = np.full(candidate_ids.size, -1, dtype="int64")
     position[in_f7] = np.arange(f7_ids.size)

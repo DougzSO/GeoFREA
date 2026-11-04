@@ -11,6 +11,9 @@
 #           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
 # phases:   the phases to compare (F1 to F5 and the figure phases that follow)
 # expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
+#           An entry is pinned to the reference it was declared against: a text (its pin is the country's `expected_reference_run`) or {reason, reference_run}.
+#           It counts only while that round is the reference (`latest` resolved); when `latest` moves on it is expired, the gate warns and does not apply it, and
+#           `python scripts/list_expired_expected.py` lists what to remove. An entry with no pin is refused.
 # reference_run: the round of the reference store (GeoFREA_data/references/, core.reference_store) whose files the rasters are compared with: a run_id, or
 #           `latest`, the last round accepted (default; the state of 2026-11-04 of PRT, IND and BRA is the first one). A raster whose hash differs and that has a file there is compared with it by tolerance
 #           (core.equivalence); if it is equivalent the difference is a last bit of a float and needs no entry in `expected` (verdict EQUIVALENTE, COMMAND 91).
@@ -49,6 +52,7 @@ countries:
   IND:
     baseline: latest
     reference_run: latest
+    expected_reference_run: 864efbcb2848180b4cb610e0ba396ce2a829ed996849abe357c73032cc589a77  # the round the entries of `expected` were declared against; they expire when `latest` moves on
     phases: &phases
       - data_acquisition
       - data_quality_audit
@@ -64,6 +68,9 @@ countries:
       - potential_maps
     expected:
       <<: *group3_by_design
+      # COMMAND 96 (OQ-069): the summary of F5 gains the ensemble fields; nothing that was there changed (checked on PRT; the tables are compared by hash)
+      technical_potential: "summary of F5 (COMMAND 96, OQ-069, D-F5-041): it gains the fields of the ensemble table (ensemble_path, n_incomplete_ensemble_cells, p_gw_incomplete_ensemble, e_twh_incomplete_ensemble_m0); no existing field changed and the potential tables are identical (PRT, 2026-11-04)"
+      potential_maps: "summary of the maps of F5 (COMMAND 95, D-F5-040): the identity check of the wind display layers follows the tolerance of CONVENTIONS, so `display_layers/wind` reads `built` where it read `built, refused capacity-factor, energy-density`; nothing else of it changed and the five rasters and figures are identical (PRT, 2026-11-04, `potential_maps` run for real)"
       # COMMAND 89 (D-F2a-026): the exact population sum corrects one pixel column (731) of IND, where E6 changes in 91 cells (solar candidates that left 2/2/3, wind 5/5/3,
       # none entered). Every difference of these artifacts is in that column: docs/_audit/ind_population_effect_89.md.
       eligibility/candidate_stability_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
@@ -84,9 +91,13 @@ countries:
   BRA:
     baseline: latest
     reference_run: latest
+    expected_reference_run: 864efbcb2848180b4cb610e0ba396ce2a829ed996849abe357c73032cc589a77  # the round the entries of `expected` were declared against; they expire when `latest` moves on
     phases: *phases
     expected:
       <<: *group3_by_design
+      # COMMAND 96 (OQ-069): the summary of F5 gains the ensemble fields; nothing that was there changed (checked on PRT; the tables are compared by hash)
+      technical_potential: "summary of F5 (COMMAND 96, OQ-069, D-F5-041): it gains the fields of the ensemble table (ensemble_path, n_incomplete_ensemble_cells, p_gw_incomplete_ensemble, e_twh_incomplete_ensemble_m0); no existing field changed and the potential tables are identical (PRT, 2026-11-04)"
+      potential_maps: "summary of the maps of F5 (COMMAND 95, D-F5-040): the identity check of the wind display layers follows the tolerance of CONVENTIONS, so `display_layers/wind` reads `built` where it read `built, refused capacity-factor, energy-density`; nothing else of it changed and the five rasters and figures are identical (PRT, 2026-11-04, `potential_maps` run for real)"
       # The report of the audit counts the geometry types of the clipped layers. In the unattended round of 2026-10-29 it differed in BRA, and the
       # reference copy of the file was not kept, so what differs cannot be read back. Nothing computes from it (it is a report). The difference is
       # accepted and flagged: open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of `geometry_types` changed.
@@ -100,7 +111,7 @@ countries:
     baseline: latest
     reference_run: latest
     phases: *phases
-    expected: {}  # no baseline manifest of 2026-10-29 exists for PRT: its reference is the state kept on 2026-11-04 (COMMAND 91); what changes after it is to be explained
+    expected: {}  # the entries of COMMAND 95/96 (the F5 summaries) were pinned to the round 864efbcb and expired when the round of 2026-11-04 became the latest; removed (scripts/list_expired_expected.py)
 
 # probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
 suspects:

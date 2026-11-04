@@ -78,7 +78,7 @@ def _check(data: Path, outputs: Path, expected=None) -> DeferredCheck:
     config.write_text(
         yaml.safe_dump(
             {
-                "countries": {"ZZZ": {"baseline": "reference_manifest.json", "phases": list(PHASES), "expected": expected or {}}},
+                "countries": {"ZZZ": {"baseline": "reference_manifest.json", "phases": list(PHASES), "expected": expected or {}, "expected_reference_run": "r1"}},
                 "suspects": {"b": "the code of phase b"},
             }
         ),
@@ -200,13 +200,14 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases == checks["PRT"].phases
     for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
         assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
-    assert checks["PRT"].expected == {}
+    assert checks["PRT"].expected == {}  # the entries for the F5 summaries expired with the round of 2026-11-04 and were removed
     # the artifacts that Group 3 changes by design (METHODOLOGY 16) are accepted in both countries; only BRA also has the audit report and the summary of F3
     base = set(yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))["group3_by_design"])
     assert base <= set(checks["IND"].expected) and base <= set(checks["BRA"].expected)
-    assert set(checks["BRA"].expected) - base == {"audit_report", "land_eligibility"}  # the F3 summary: no derived number changed (f3_memory_90.md)
+    assert set(checks["BRA"].expected) - base == {"audit_report", "land_eligibility", "technical_potential", "potential_maps"}  # the F3 summary: no derived number changed (f3_memory_90.md)
     ind_extra = set(checks["IND"].expected) - base  # the F3 artifacts the exact population sum changes, all in one pixel column (ind_population_effect_89.md)
-    assert len(ind_extra) == 15 and "land_eligibility" in ind_extra and all(k.startswith("eligibility/") or k == "land_eligibility" for k in ind_extra)
+    assert len(ind_extra) == 17 and {"land_eligibility", "technical_potential", "potential_maps"} <= ind_extra
+    assert all(k.startswith("eligibility/") or k in ("land_eligibility", "technical_potential", "potential_maps") for k in ind_extra)
     assert "siting/dist_road_km" in checks["IND"].expected and "audit_report" not in checks["IND"].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
@@ -384,3 +385,91 @@ def test_the_shipped_configuration_has_no_manual_entry_for_a_last_bit_difference
         spec = config["countries"][iso]
         assert spec["reference_run"] == "latest", iso  # the last accepted round of the store, not a backup directory
         assert not [k for k in spec["expected"] if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso
+
+
+# --- the entries of `expected` are pinned to the reference they were declared against (COMMAND 96) --------------------------------------------------
+
+
+def _store_check(baseline, expected, *, latest="r1", pin="r1"):
+    """A check whose reference is the round `latest` of a store that holds the reference manifest; `expected` entries pinned to `pin`."""
+    from geofrea.core.reference_store import ReferenceStore
+
+    data, outputs, reference = baseline
+    store = ReferenceStore(data / "references")
+    store.publish_files("ZZZ", "r1", {}, manifest_data=json.loads(reference.read_text(encoding="utf-8")))
+    if latest != "r1":
+        store.publish_files("ZZZ", latest, {}, manifest_data=json.loads(reference.read_text(encoding="utf-8")))
+    config = data / "deferred_checks.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "countries": {
+                    "ZZZ": {
+                        "baseline": "latest",
+                        "reference_run": "latest",
+                        "phases": list(PHASES),
+                        "expected": {k: {"reason": v, "reference_run": pin} for k, v in expected.items()},
+                    }
+                },
+                "suspects": {"b": "the code of phase b"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    check = for_country("zzz", config, data, outputs)
+    assert check is not None
+    return check
+
+
+def test_an_entry_of_expected_needs_the_reference_it_was_declared_against():
+    from geofrea.core.deferred_check import parse_expected
+
+    reasons, pins = parse_expected(
+        "ZZZ", {"expected_reference_run": "r1", "expected": {"a": "why a", "b": {"reason": "why b", "reference_run": "r0"}}}
+    )
+    assert reasons == {"a": "why a", "b": "why b"} and pins == {"a": "r1", "b": "r0"}
+    with pytest.raises(ValueError, match="reference_run"):
+        parse_expected("ZZZ", {"expected": {"a": "why a"}})  # no country pin, no entry pin
+    with pytest.raises(ValueError, match="reason"):
+        parse_expected("ZZZ", {"expected": {"a": {"reference_run": "r1"}}})
+
+
+def test_an_entry_counts_while_its_reference_is_the_latest_and_expires_when_latest_moves(baseline):
+    check = _store_check(baseline, {"b_out": "a report"})
+    assert check.active_expected() == {"b_out": "a report"} and check.expired_expected() == {}
+    moved = _store_check(baseline, {"b_out": "a report"}, latest="r2")  # r2 is now the last accepted round; the entry was declared against r1
+    assert moved.reference_run_id() == "r2"
+    assert moved.expired_expected() == {"b_out": "r1"} and moved.active_expected() == {}
+
+
+def test_an_expired_entry_no_longer_explains_a_difference_and_the_gate_says_so(baseline, caplog):
+    _, outputs, _ = baseline
+    check = _store_check(baseline, {"b_out": "a report"}, latest="r2")
+    with caplog.at_level("WARNING"):
+        results = _orchestrator(outputs, check, rerun=PHASES).run(_specs({"a": 1, "b": 2, "c": 1}, SAME))
+    assert _report(outputs)["phases"]["b"]["verdict"] == "DIFERENTE" and results["c"].status != "success"
+    assert "no longer count" in caplog.text and "b_out" in caplog.text
+    assert _report(outputs)["phases"]["b"]["expired_expected"] == ["b_out"]
+
+
+def test_a_live_entry_still_explains_the_difference(baseline):
+    _, outputs, _ = baseline
+    check = _store_check(baseline, {"b_out": "a report"})
+    results = _orchestrator(outputs, check, rerun=PHASES).run(_specs({"a": 1, "b": 2, "c": 1}, SAME))
+    assert results["c"].status == "success" and _report(outputs)["phases"]["b"]["verdict"] == "EXPLICADO_REVISAR"
+
+
+def test_the_script_lists_the_entries_that_can_be_removed(baseline, capsys):
+    import importlib.util
+
+    data, _, _ = baseline
+    _store_check(baseline, {"b_out": "a report"}, latest="r2")
+    spec = importlib.util.spec_from_file_location("list_expired_expected", REPO_ROOT / "scripts" / "list_expired_expected.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.main(["--data-dir", str(data), "--config", str(data / "deferred_checks.yaml")]) == 1
+    out = capsys.readouterr().out
+    assert "ZZZ" in out and "b_out" in out and "r2" in out
+    _store_check(baseline, {"b_out": "a report"}, latest="r1", pin="r1")
+    (data / "references" / "latest.json").write_text(json.dumps({"ZZZ": "r1"}), encoding="utf-8")
+    assert module.main(["--data-dir", str(data), "--config", str(data / "deferred_checks.yaml")]) == 0

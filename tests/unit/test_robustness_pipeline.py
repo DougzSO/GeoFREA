@@ -176,6 +176,16 @@ def _stage(
             row_model=PotentialRow,
             extra_metadata=meta,
         )
+        expected = len([m for m in ALL_MEMBERS if not (tech == "wind" and m in no_wind)])
+        present = table.groupby("cell_id")["member"].nunique().reindex(IDS, fill_value=0)
+        pd.DataFrame(
+            {
+                "cell_id": IDS.astype("int64"),
+                "n_members": present.to_numpy().astype("int64"),
+                "n_expected": np.full(N_CELLS, expected, dtype="int64"),
+                "incomplete_ensemble": present.to_numpy() < expected,
+            }
+        ).to_parquet(pdir / f"ensemble_{tech}__{scenario}.parquet")
         pd.DataFrame(
             {
                 "cell_id": IDS,
@@ -295,6 +305,7 @@ def test_every_candidate_has_a_class_and_the_classes_follow_m_f7_01(tmp_path):
     window = entry.windows["core"]
     assert window.class_counts == {
         "ranked": 16, "climate_fragile": 2, "climate_data_invalid": 1, "infeasible_at_f0": 1,
+        "incomplete_ensemble": 0,
     }  # fmt: skip
     assert window.n_f7_set == 18
     assert cf_min == 0.30
@@ -454,7 +465,9 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
         assert text.count("cf_min") == 2 and "OQ-008" in text
         # Groups 1 and 2 are recorded: what stays open is the Group 3 unit costs (OQ-001) and the F7 thresholds
         # no real country has an open cost since COMMAND 86: the F6 check stops at the conversion indices, which are not in the test data dir
-        assert "conversion to 2024 USD" in text  # COMMAND 86: no cost is open; the test data dir has no conversion indices
+        assert (
+            "conversion to 2024 USD" in text
+        )  # COMMAND 86: no cost is open; the test data dir has no conversion indices
         assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 4
 
 
@@ -521,11 +534,15 @@ def test_wind_repeats_the_core_window_without_the_cells_above_the_altitude_sensi
 def test_the_sensitivity_window_has_its_own_set_and_files(tmp_path):
     entry, out, _ = _run(tmp_path, absent=[(2, SENSITIVITY[0])])
     core, sens = entry.windows["core"], entry.windows["sensitivity"]
-    assert core.n_f7_set == 20 and sens.n_f7_set == 19
+    # the cell that lacks a member of the sensitivity window leaves the core analysis too: the F7 set is the complete ensemble (OQ-069, D-F7-064)
+    assert core.n_f7_set == 19 and sens.n_f7_set == 19
     assert (
         sens.class_counts["climate_data_invalid"] == 1
         and core.class_counts["climate_data_invalid"] == 0
+        and core.class_counts["incomplete_ensemble"] == 1
     )
+    assert core.excluded["incomplete_ensemble"]["n_cells"] == 1
+    assert core.excluded["incomplete_ensemble"]["p_gw"] > 0
     names = sorted(p.name for p in out.iterdir())
     assert names == sorted(
         f"{kind}_wind__{role}.parquet"
@@ -1116,3 +1133,77 @@ def test_the_member_factor_means_of_a_member_without_wind_are_nan_not_zero(tmp_p
         means.loc["b", "delta_wind"]
     )
     assert means.loc["b", "delta_rsds"] == 1.0
+
+
+@pytest.mark.unit
+def test_without_incomplete_cells_there_is_no_common_ensemble_sensitivity(tmp_path):
+    """OQ-069, D-F7-064 case 1: no cell is flagged, no sensitivity is owed and none is written."""
+    entry, out, _ = _run(tmp_path)
+    assert entry.n_incomplete_ensemble_cells == 0
+    assert entry.common_ensemble_required == [] and entry.common_ensemble_skipped == {}
+    assert not any("common_ensemble" in p.name for p in out.iterdir())
+
+
+@pytest.mark.unit
+def test_with_incomplete_cells_the_common_ensemble_sensitivity_is_owed_and_written(tmp_path):
+    """Case 2: a core member lacks a cell of the other window's analysis; the core is repeated without it and every cell is kept."""
+    entry, out, _ = _run(tmp_path, absent=[(2, CORE[0])])
+    assert entry.common_ensemble_required == ["core_common_ensemble"]
+    assert entry.common_ensemble_skipped == {}
+    common = entry.windows["core_common_ensemble"]
+    assert common.dropped_members == [CORE[0]]
+    assert (
+        common.class_counts["climate_data_invalid"] == 0
+        and common.class_counts["incomplete_ensemble"] == 0
+    )
+    assert common.n_f7_set == 20
+    assert (out / "robustness_wind__core_common_ensemble.parquet").exists()
+    assert entry.windows["core"].class_counts["climate_data_invalid"] == 1
+
+
+@pytest.mark.unit
+def test_with_incomplete_cells_and_fewer_than_two_ssps_left_the_skip_is_recorded_not_silent(
+    tmp_path,
+):
+    """Case 3: the sensitivity window keeps members of one SSP only; the skip is allowed and is in the summary with its reason."""
+    entry, out, _ = _run(tmp_path, absent=[(2, SENSITIVITY[0])])
+    assert entry.n_incomplete_ensemble_cells == 1
+    assert entry.common_ensemble_required == ["sensitivity_common_ensemble"]
+    assert list(entry.common_ensemble_skipped) == ["sensitivity_common_ensemble"]
+    assert "fewer than two SSPs" in entry.common_ensemble_skipped["sensitivity_common_ensemble"]
+    assert "sensitivity_common_ensemble" not in entry.windows
+    assert not any("common_ensemble" in p.name for p in out.iterdir())
+
+
+@pytest.mark.unit
+def test_the_contract_refuses_an_owed_sensitivity_that_is_neither_written_nor_skipped():
+    from geofrea.robustness_analysis.pipeline import (
+        RobustnessInputError,
+        check_common_ensemble_contract,
+    )
+
+    check_common_ensemble_contract(0, [], {}, {})
+    check_common_ensemble_contract(3, ["core_common_ensemble"], {"core_common_ensemble": 1}, {})
+    check_common_ensemble_contract(3, ["core_common_ensemble"], {}, {"core_common_ensemble": "r"})
+    with pytest.raises(RobustnessInputError, match="neither written nor skipped"):
+        check_common_ensemble_contract(3, ["core_common_ensemble"], {}, {})
+    with pytest.raises(RobustnessInputError, match="disagree"):
+        check_common_ensemble_contract(3, [], {}, {})
+    with pytest.raises(RobustnessInputError, match="no cell is flagged"):
+        check_common_ensemble_contract(0, ["core_common_ensemble"], {}, {})
+
+
+@pytest.mark.unit
+def test_members_missing_in_a_cell_and_the_incomplete_cells_are_read_from_the_f5_files(tmp_path):
+    from geofrea.robustness_analysis.pipeline import (
+        members_missing_in_a_cell,
+        read_incomplete_cells,
+    )
+
+    dirs = _stage(tmp_path, absent=[(4, SENSITIVITY[1]), (9, CORE[2])])
+    pot = dirs["potential_dir"] / "potential_wind__central.parquet"
+    cand = dirs["candidates_dir"] / "candidates_wind__central.parquet"
+    assert members_missing_in_a_cell(pot, cand, [*CORE, *SENSITIVITY]) == [CORE[2], SENSITIVITY[1]]
+    assert read_incomplete_cells(
+        dirs["potential_dir"] / "ensemble_wind__central.parquet"
+    ).tolist() == sorted([int(IDS[4]), int(IDS[9])])

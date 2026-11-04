@@ -172,7 +172,13 @@ from geofrea.robustness_analysis.maps import (
     MAPS as ROBUSTNESS_MAPS,
 )
 from geofrea.robustness_analysis.maps import RobustnessMapsSummary, build_robustness_maps
-from geofrea.robustness_analysis.pipeline import ROW_MODELS, RobustnessSummary, build_robustness
+from geofrea.robustness_analysis.pipeline import (
+    ROW_MODELS,
+    WINDOW_ROLES,
+    RobustnessSummary,
+    build_robustness,
+    common_ensemble_role,
+)
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 from geofrea.siting_layers.physical_layers import (
     LAYER_SPECS,
@@ -192,6 +198,7 @@ from geofrea.technical_potential.question_figures import (
 )
 from geofrea.technical_potential.table_schemas import (
     CLASS_FLAG_TABLE_SCHEMA_VERSION,
+    ENSEMBLE_TABLE_SCHEMA_VERSION,
     POTENTIAL_TABLE_SCHEMA_VERSION,
 )
 
@@ -692,6 +699,10 @@ def _build_phase_specs(
                 f"potential_aggregates_{tech}", potential.aggregates, POTENTIAL_TABLE_SCHEMA_VERSION
             )
             for scenario, entry in potential.scenarios.items():
+                context.register_artifact(
+                    f"ensemble_{tech}__{scenario}", entry.ensemble_path, ENSEMBLE_TABLE_SCHEMA_VERSION
+                )
+            for scenario, entry in potential.scenarios.items():
                 if (
                     entry.class_flag_path is not None
                 ):  # only a technology with a class flag writes one (wind)
@@ -1024,6 +1035,11 @@ def _build_phase_specs(
             }
             | {f"potential_aggregates_{tech}" for tech in technologies}
             | {
+                f"ensemble_{tech}__{scenario}"
+                for tech in technologies
+                for scenario in LAND_SCENARIOS
+            }
+            | {
                 f"class_flag_{tech}__{scenario}"
                 for tech in technologies
                 if flagged_technologies.get(tech, False)
@@ -1118,6 +1134,12 @@ def _build_phase_specs(
                 if cap is not None
                 for kind in ROW_MODELS
             },
+            optional_produces=frozenset(  # the sensitivity on the common ensemble exists where a member lacks a cell (D-F7-064)
+                f"{kind}_{tech}__{common_ensemble_role(role)}"
+                for tech in technologies
+                for role in WINDOW_ROLES
+                for kind in ROW_MODELS
+            ),
             summarize=lambda out: "; ".join(
                 f"{t}: "
                 + ", ".join(

@@ -182,6 +182,36 @@ def test_undeclared_artifact_registration_raises(tmp_path):
     assert "extra" in orchestrator.manifest.phases["a"].error
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize("registers", [True, False])
+def test_an_optional_artifact_may_be_registered_or_not_and_a_third_one_is_still_refused(
+    tmp_path, registers
+):
+    """D-F7-064: the keys of `optional_produces` depend on the data; any other key is still undeclared."""
+
+    def run(context):
+        if registers:
+            path = context.outputs_dir / "maybe.txt"
+            path.write_text("x", encoding="utf-8")
+            context.register_artifact("maybe", path, "1.0")
+        return DummyOutput(value=1)
+
+    spec = PhaseSpec(
+        name="a",
+        output_model=DummyOutput,
+        run=run,
+        produces=frozenset(),
+        optional_produces=frozenset({"maybe"}),
+    )
+    orchestrator = _orchestrator(tmp_path, ["a"])
+    orchestrator.run([spec])
+    assert orchestrator.manifest.phases["a"].status == "success"
+    assert ("maybe" in orchestrator.manifest.artifacts) is registers
+    again = _orchestrator(tmp_path, ["a"])  # the resume accepts the recorded optional artifact
+    again.run([spec])
+    assert again.manifest.phases["a"].status == "success"
+
+
 def test_undeclared_artifact_registration_error_type_is_unexpected_artifact_error():
     # Sanity check the exception class used above exists and is the
     # right one (exercised indirectly through the manifest error string

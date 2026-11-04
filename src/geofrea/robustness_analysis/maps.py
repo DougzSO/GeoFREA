@@ -32,7 +32,13 @@ from geofrea.viz import mapstyle as ms
 from geofrea.viz.context import technology_name
 
 CENTRAL = "central"
-CLASS_CODES = {"ranked": 0, "climate_fragile": 1, "climate_data_invalid": 2, "infeasible_at_f0": 3}
+CLASS_CODES = {
+    "ranked": 0,
+    "climate_fragile": 1,
+    "climate_data_invalid": 2,
+    "infeasible_at_f0": 3,
+    "incomplete_ensemble": 4,
+}
 # map -> (column, title of the map, label of the colour bar, kind of colour, shown in the `summary` mode, the two classes of a 0/1 map)
 IN_OUT = {1: "In the set", 0: "Outside the set"}
 MAPS = {

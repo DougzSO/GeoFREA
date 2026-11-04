@@ -507,6 +507,8 @@ class PhaseSpec:
             registered PhaseSpec.
         produces: Artifact keys this phase's `run` must register via
             `PhaseContext.register_artifact`, exactly.
+        optional_produces: Artifact keys `run` may register or not, depending on the data it reads (D-F7-064: the
+            common-ensemble tables exist only where a member lacks a cell). They are hashed and verified like the others when registered.
         produces_schema_versions: Optional expected schema_version per
             produces key. A key absent here is not schema-version-
             checked on resume (only its presence in produces is).
@@ -535,6 +537,7 @@ class PhaseSpec:
     run: Callable[[PhaseContext], BaseModel]
     requires: frozenset[str] = frozenset()
     produces: frozenset[str] = frozenset()
+    optional_produces: frozenset[str] = frozenset()
     produces_schema_versions: Mapping[str, str] = field(default_factory=dict)
     summarize: Callable[[BaseModel], str] | None = None
     config_fingerprint: str | None = None
@@ -852,6 +855,7 @@ class Orchestrator:
         recorded_keys = {
             entry.key for entry in self.manifest.artifacts.values() if entry.phase == spec.name
         }
+        recorded_keys -= spec.optional_produces - spec.produces  # the optional ones that were registered
         if recorded_keys != spec.produces:
             missing = sorted(spec.produces - recorded_keys)
             extra = sorted(recorded_keys - spec.produces)
@@ -1093,6 +1097,9 @@ class Orchestrator:
                 self._check_resume_is_not_stale(spec)
                 for key in spec.produces:
                     self._verify_artifact_integrity(key)
+                for key in sorted(spec.optional_produces):
+                    if key in self.manifest.artifacts:
+                        self._verify_artifact_integrity(key)
                 self._warn_on_lineage_drift(spec, existing)
                 if existing.config_fingerprint is None and spec.config_fingerprint is not None:
                     logger.warning(
@@ -1186,7 +1193,7 @@ class Orchestrator:
                         f"Phase '{spec.name}' did not register artifact(s) "
                         f"{sorted(missing)}, declared in its produces."
                     )
-                extra = registered_keys - spec.produces
+                extra = registered_keys - spec.produces - spec.optional_produces
                 if extra:
                     raise UnexpectedArtifactError(
                         f"Phase '{spec.name}' registered artifact(s) "
