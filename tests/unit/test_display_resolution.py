@@ -596,3 +596,41 @@ def test_the_display_layers_are_written_as_cloud_optimized_geotiffs(tmp_path):
     np.testing.assert_allclose(
         np.where(back == -9999.0, np.nan, back), grid.astype("float32"), equal_nan=True
     )
+
+
+# --- COMMAND 95: the identity check of the wind layer follows the rule of CONVENTIONS, not a relative limit of 1e-9 -------------------------------
+
+
+def test_the_wind_identity_check_uses_the_rule_of_conventions_and_lets_the_last_bit_of_a_float32_input_pass():
+    """On 2026-11-04 the wind layers of PRT were refused at 2.07e-8 against a limit of 1e-9: an aligned layer had changed in its last bit. The rule is now
+    |display - analysis| <= 1e-6 |analysis| + 1e-9 per cell (core.equivalence)."""
+    from geofrea.core.equivalence import ABS_TOL, REL_TOL
+
+    assert dl.PIXEL_IDENTITY_TOLERANCE == REL_TOL and dl.PIXEL_IDENTITY_ABS_TOLERANCE == ABS_TOL
+    inputs = _wind_inputs()
+    inputs["analysis_cf"] = inputs["analysis_cf"] * (1 + 2.07e-8)
+    build = dl.build_display_layers(**inputs)
+    check = {c.name: c for c in build.checks}["capacity-factor"]
+    assert check.ok and 1e-9 < check.max_rel_diff < 1e-6 and check.abs_tolerance == ABS_TOL
+
+
+def test_a_wind_cell_beyond_the_conventions_rule_is_still_refused_and_the_message_names_both_parts_of_the_limit():
+    inputs = _wind_inputs()
+    inputs["analysis_cf"] = inputs["analysis_cf"] * (1 + 1e-5)
+    with pytest.raises(dl.DisplayLayerError, match=r"capacity-factor differs by .* \(limit 1e-06 relative \+ 1e-09 absolute\)"):
+        dl.build_display_layers(**inputs)
+
+
+def test_the_aggregation_check_with_an_absolute_floor_follows_the_rule_cell_by_cell():
+    fine = np.array([[1.0, 1.0], [1.0, 1.0]])
+    analysis = np.array([[0.0]])  # a cell whose analysis value is 0: only the absolute floor can accept a difference
+    near = display.check_aggregation("x", fine * 5e-10, analysis, 2, tolerance=1e-12)
+    assert not near.ok  # the relative rule alone (a zero counts as scale 1) refuses 5e-10 under a tolerance of 1e-12
+    assert display.check_aggregation("x", fine * 5e-10, analysis, 2, tolerance=1e-9).ok
+    with_floor = display.check_aggregation("x", fine * 5e-10, analysis, 2, tolerance=1e-6, abs_tolerance=1e-9)
+    assert with_floor.ok and with_floor.abs_tolerance == 1e-9
+    big = np.array([[100.0]])
+    assert display.check_aggregation("x", fine * 100.0 * (1 + 2e-8), big, 2, tolerance=1e-6, abs_tolerance=1e-9).ok
+    assert not display.check_aggregation("x", fine * 100.0 * (1 + 2e-5), big, 2, tolerance=1e-6, abs_tolerance=1e-9).ok
+    # without the floor the behaviour is the former one
+    assert not display.check_aggregation("x", fine * 100.0 * (1 + 2e-8), big, 2, tolerance=1e-9).ok

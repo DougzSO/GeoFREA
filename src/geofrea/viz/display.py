@@ -139,6 +139,7 @@ class AggregationCheck:
     max_rel_diff: float
     tolerance: float
     ok: bool
+    abs_tolerance: float = 0.0  # the absolute floor of the rule `|diff| <= tolerance * |analysis| + abs_tolerance` (the CONVENTIONS rule when it is not 0)
 
 
 def check_aggregation(
@@ -150,12 +151,16 @@ def check_aggregation(
     weight: np.ndarray | None = None,
     tolerance: float = CF_TOLERANCE,
     how: str = "mean",
+    abs_tolerance: float = 0.0,
 ) -> AggregationCheck:
     """Aggregate the display layer `fine` to the analysis cell (`k` fine pixels per side) and compare it with `analysis`, cell by cell.
 
     The largest relative difference over the cells that have a value in both must be within `tolerance` (1% for a capacity factor, 0 for an
     eligible area: use `tolerance=1e-9`). A cell with a value in one and none in the other is a failure (`ok` False, `max_rel_diff` inf).
     `how` is `mean` (weighted, for an intensive quantity) or `sum` (an area or a capacity; a block with no value is NaN).
+
+    With `abs_tolerance` the rule of every cell is the one of `core.equivalence` (CONVENTIONS): `|diff| <= tolerance * |analysis| + abs_tolerance`; `max_rel_diff`
+    is still the largest relative difference, for the report. Without it (0) the rule is the relative one only, as before.
     """
     if how == "sum":
         mean = np.where(
@@ -169,6 +174,8 @@ def check_aggregation(
         return AggregationCheck(name, 0, math.inf, tolerance, False)
     ref = np.abs(analysis[both])
     diff = np.abs(mean[both] - analysis[both])
-    rel = np.where(ref > 0, diff / np.where(ref > 0, ref, 1.0), diff)
+    scale = np.where(ref > 0, ref, 1.0)
+    rel = diff / scale
     worst = math.inf if mismatch else float(rel.max())
-    return AggregationCheck(name, int(both.sum()), worst, tolerance, worst <= tolerance)
+    ok = (not mismatch) and bool(np.all(diff <= tolerance * scale + abs_tolerance))
+    return AggregationCheck(name, int(both.sum()), worst, tolerance, ok, abs_tolerance)

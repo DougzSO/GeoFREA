@@ -13,9 +13,11 @@ Nothing here replaces an analysis artifact: the layers are `display_<layer>_<tec
 (their own fingerprint: the inputs, the parameters and the checks). They are used only by `potential_maps` to draw descriptive maps; no total, no
 LCOE and no ranking reads them. Every layer is checked against the analysis when it is built (`check_aggregation`): the capacity factor
 aggregated back to the 0.05 degree cell (weighted by the eligible area, as F3 does) is the value of the analysis in every cell, and so are the
-eligible area and the capacity. For wind the identity is exact by construction (F5 evaluates the same model on the same pixels and aggregates them
-with the same weights, D-F5-038; tolerance 1e-9); for a model evaluated on the cell means (solar, linear in the resource) it holds to the float32
-precision of the stored rasters (1e-6).
+eligible area and the capacity. For wind the identity is an identity by construction (F5 evaluates the same model on the same pixels and aggregates them
+with the same weights, D-F5-038); a cell passes by the rule of CONVENTIONS (`core.equivalence`: |diff| <= 1e-6 |analysis| + 1e-9), which allows the
+last bit of a float32 input (an aligned layer that changed in its last bit moved the identity to 2e-8 and refused the wind layers of PRT on 2026-11-04
+at the former limit of 1e-9). For a model evaluated on the cell means (solar, linear in the resource) the same rule holds to the float32 precision
+of the stored rasters.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ import pandas as pd
 import rasterio
 
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+from geofrea.core.equivalence import ABS_TOL, REL_TOL
 from geofrea.core.raster_io import safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.technical_potential.cf_models import CfModel, CfSettings
@@ -49,12 +52,14 @@ DEPENDS_ON = {
     "eligible-area": LAYERS,  # the retained pixels and their weights come from the eligible area: nothing is drawn if it fails
     "capacity-density": ("capacity-density", "energy-density"),
 }
-EXACT_TOLERANCE = (
-    1e-6  # float32 precision of the stored analysis rasters (an eligible area, a capacity): "exact"
-)
+# the relative part of the rule of CONVENTIONS (`core.equivalence`): float32 precision of the stored analysis rasters (an eligible area, a capacity): "exact"
+EXACT_TOLERANCE = REL_TOL
 # the capacity factor of a model evaluated per pixel (wind, D-F5-038) is the eligible-area-weighted mean of the very pixel values drawn here, computed by
-# the same function with the same weights: the two sides differ by the order of a sum (1e-15)
-PIXEL_IDENTITY_TOLERANCE = 1e-9
+# the same function with the same weights: the two sides differ by the order of a sum (1e-15) and by the last bit of the float32 layers they read. It was a
+# relative limit of 1e-9 until 2026-11-04, which refused the wind layers of PRT at 2e-8; it is the rule of CONVENTIONS now, per cell:
+# |display - analysis| <= PIXEL_IDENTITY_TOLERANCE * |analysis| + PIXEL_IDENTITY_ABS_TOLERANCE
+PIXEL_IDENTITY_TOLERANCE = REL_TOL
+PIXEL_IDENTITY_ABS_TOLERANCE = ABS_TOL
 NODATA = -9999.0
 HOURS_PER_YEAR = 8760.0
 
@@ -170,7 +175,7 @@ def build_display_layers(
         cap_density_back = np.where(np.isfinite(analysis_cf), cap_cell / cell_area_km2, np.nan)
     checks = [
         display.check_aggregation(
-            "capacity-factor", cf, analysis_cf, k, weight=weight, tolerance=cf_tolerance
+            "capacity-factor", cf, analysis_cf, k, weight=weight, tolerance=cf_tolerance, abs_tolerance=PIXEL_IDENTITY_ABS_TOLERANCE
         ),
         display.check_aggregation(
             "eligible-area",
@@ -190,7 +195,9 @@ def build_display_layers(
     ]
     failed = [c for c in checks if not c.ok]
     reasons = {
-        c.name: f"{c.name} differs by {c.max_rel_diff:.3g} (limit {c.tolerance:g})" for c in failed
+        c.name: f"{c.name} differs by {c.max_rel_diff:.3g} (limit {c.tolerance:g}"
+        + (f" relative + {c.abs_tolerance:g} absolute)" if c.abs_tolerance else ")")
+        for c in failed
     }
     refused = {
         layer: reasons[c.name] for c in failed for layer in DEPENDS_ON.get(c.name, tuple(LAYERS))
@@ -206,7 +213,7 @@ def build_display_layers(
             "k": k,
             "extent": extent,
             "capacity_density_mw_km2": capacity_density_mw_km2,
-            "cf_tolerance": cf_tolerance,
+            "cf_tolerance": [cf_tolerance, PIXEL_IDENTITY_ABS_TOLERANCE],
             "inputs": {n: _array_hash(a) for n, a in sorted(resources.items())},
             "fraction": _array_hash(eligible_fraction),
             "area": _array_hash(pixel_area_km2),
