@@ -44,7 +44,7 @@ B. **Stripe the whole pixel engine (what gets the phase under 1,536 MB):** read 
 
 ## Other phases (estimate by size, **not measured**)
 
-- **F5 `technical_potential`** (`pixel_inputs.read_cell_pixels`): reads the fraction raster and every resource whole (61 MB each as float32, one padded copy at a time) and gathers `n_cells x 25` pixels (the cell is 5 x 5 pixels): for BRA wind 181 k x 25 = 4.5 M pixels, 36 MB per float64 array, 9 resources about 330 MB plus the weights. Expected peak under 1 GB. Marked an estimate.
+- **F5 `technical_potential`** (`pixel_inputs.read_cell_pixels`): reads the fraction raster and every resource whole (61 MB each as float32, one padded copy at a time) and gathers `n_cells x 25` pixels (the cell is 5 x 5 pixels): for BRA wind 181 k x 25 = 4.5 M pixels, 36 MB per float64 array, 9 resources about 330 MB plus the weights. Expected peak under 1 GB. Marked an estimate. **Measured on 2026-11-04: `technical_potential` of BRA peaked at 3,074 MB and that of IND at 1,864 MB; the estimate was wrong** (`docs/_audit/memory_budget_88.md`).
 - **F7b `external_validation`** calls `prepare_shared_layers`: the held shared layers (above, about 1.5 GB for BRA) plus the F3 tables. Likely over the cap on BRA; it needs the same windowed reads as B, or a measurement.
 - **F4 `climate_forcing`, F6, F8**: no size estimate was made here. They work on cell tables (286 k cells) and members, not pixel grids as far as read; a ZZZ2 scaled run or a measurement with the profile harness is needed before a real round.
 

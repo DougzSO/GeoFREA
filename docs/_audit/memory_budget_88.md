@@ -76,7 +76,29 @@ Wall time of BRA F2a: 14,996 s (elevation 11,117 s, land_cover_counts 2,482 s, l
 
 **F3 (`land_eligibility`) was over the cap and is not any more**: before COMMAND 91 it peaked at 3,337 MB on BRA (1,119 s), 2,097 MB on IND, 342 MB on PRT; run by stripes of rows (D-F3-024, `docs/_audit/f3_memory_90.md`) it peaks at 1,438 MB on BRA (1,128 s), 834 MB on IND, 337 MB on PRT, with the outputs identical at tolerance 0. It runs inside the main process, not in a layer process.
 
+## Phases after F3, measured in the round of 2026-11-04 (peak resident memory of the phase, MB; cap 1,536)
+
+Run by `scripts/run_unattended.ps1` in an independent PowerShell, one country at a time, with the memory guard on; the peak is the one the orchestrator records for the phase (`peak_rss_mb` of `unattended_round_20261104_*.json`, the whole process, not a layer). These phases have no `layers.json` (they are not layer processes). Over the cap in **bold**; nothing was changed in code.
+
+| Phase | PRT | IND | BRA |
+|---|---|---|---|
+| climate_forcing | - | - | 713 |
+| hazard_context | - | - | **2,913** |
+| climate_maps | - | - | **2,394** |
+| overview | 839 | 1,414 | **1,773** |
+| technical_potential | 688 | **1,864** | **3,074** |
+| potential_maps | 852 | **1,542** | **1,781** |
+
+Wall time (s): BRA climate_forcing 111, hazard_context 157, climate_maps 79, overview 31, technical_potential 638, potential_maps 37; IND overview 104, technical_potential 247, potential_maps 20; PRT 19, 14, 9. Smallest free physical memory during the run: PRT 2,492 MB, IND 1,439 MB, BRA 835 MB; no phase was stopped by the guard.
+
+Six phases are over the cap, five of them in BRA; `potential_maps` of IND is 6 MB over. They are reported here and not corrected (the command of 2026-11-04 said so): the next step is the same as for F3 (a per-step measurement, then a fix with an equivalence proof, `docs/_audit/f3_memory_90.md`), starting with `technical_potential` and `hazard_context`; the cause was not measured. The size estimate of `f3_memory_90.md` for F5 (under 1 GB for BRA wind, from the 4.5 M candidate pixels) was wrong: the phase peaked at 3,074 MB.
+
+The F5 potential tables match the cells of the current F3: for each of the 18 combinations of country, technology and scenario, the cells of `potential_<tech>__<scenario>.parquet` are exactly the cells of `candidates_<tech>__<scenario>.parquet` (3,449 to 183,351 cells, none on only one side), and the capacity per eligible km2 is one constant per technology and scenario (relative spread 8e-16), so the areas agree (`scratchpad/f5_vs_f3.py`).
+
+The reference store kept the three rounds automatically at the end of the runs (`references/864efbcb.../<ISO>`, 52, 54 and 52 files) because the deferred check had no phase DIFERENTE: the phases it knew (F1 to F3, `climate_forcing` and `hazard_context` of PRT and IND) were IDENTICO against the state of 2026-11-04, and the six phases rerun here are not in that round (they were `stale_upstream`), so they were SEM_REFERENCIA, with nothing to compare.
+
 ## What is left
 
-- F4 to F8: no measured peak; F7b reads the whole-grid layers (OQ-068).
+- Six phases after F3 over the cap (table above), five of them in BRA; no fix made.
+- F6 to F8 have no real-country run and no measured peak; F7b reads the whole-grid layers (OQ-068).
 
