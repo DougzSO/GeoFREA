@@ -6,8 +6,7 @@
 # its probable cause, to outputs/<ISO>/deferred_check.json. A phase that matched is settled and is not compared again. Delete a country to retire its check.
 #
 # baseline: `latest`, or the manifest.json of the country as it was before the change, relative to the data root. `latest` is the manifest of the round `reference_run`
-#           of the reference store: what the pipeline last accepted. The `expected` entries below were written against the manifest of 2026-10-29 (the historical
-#           baseline, `outputs/<ISO>/unattended/20261029_135838/manifest_before.json`); with `latest` they are not needed and stay for the day a country goes back to it.
+#           of the reference store: what the pipeline last accepted. `expected` is empty for the three countries since 2026-11-04 (the entries of the baseline of 2026-10-29 expired with the new round).
 #           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
 # phases:   the phases to compare (F1 to F5 and the figure phases that follow)
 # expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
@@ -26,33 +25,11 @@ reference_store:
   suffixes: [".json"]
   raster_phases: [grid_alignment, siting_layers]
 
-group3_by_design: &group3_by_design
-  # COMMANDS 83 to 86 (Group 3, METHODOLOGY 16): these artifacts change BY DESIGN against the baseline of 2026-10-29. They carry results, so each
-  # is a finding to read in the report of the round (docs/_audit), not an equality: the roads keep only `geospatial.road_classes`, the `poi` layer
-  # is new, and the F3 tables gain `dist_sub_km` and `pvcz_zone`. Any other artifact that differs still stops the run.
-  aligned/roads: "Group 3: road classes of the source (geospatial.road_classes)"
-  aligned/population: "COMMAND 89 (D-F2a-026): exact area-weighted sum; at most a few people in a pixel against the GDAL sum, the total kept"
-  aligned_rasters: "Group 3: summary of the aligned layers now lists poi (and poi_sensitivity for IND)"
-  siting/dist_road_km: "Group 3: distance to the road from the reclassified roads"
-  siting_layers: "Group 3: summary of the siting layers (dist_road_km)"
-  eligibility/candidates_solar__central: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/candidates_solar__permissive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/candidates_solar__restrictive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/candidates_wind__central: "Group 3: dist_sub_km and dist_road_km columns"
-  eligibility/candidates_wind__permissive: "Group 3: dist_sub_km and dist_road_km columns"
-  eligibility/candidates_wind__restrictive: "Group 3: dist_sub_km and dist_road_km columns"
-  eligibility/cells_solar__central: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/cells_solar__permissive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/cells_solar__restrictive: "Group 3: dist_sub_km, pvcz_zone and dist_road_km columns"
-  eligibility/cells_wind__central: "Group 3: dist_sub_km and dist_road_km columns"
-  eligibility/cells_wind__permissive: "Group 3: dist_sub_km and dist_road_km columns"
-  eligibility/cells_wind__restrictive: "Group 3: dist_sub_km and dist_road_km columns"
 
 countries:
   IND:
     baseline: latest
     reference_run: latest
-    expected_reference_run: 864efbcb2848180b4cb610e0ba396ce2a829ed996849abe357c73032cc589a77  # the round the entries of `expected` were declared against; they expire when `latest` moves on
     phases: &phases
       - data_acquisition
       - data_quality_audit
@@ -66,52 +43,17 @@ countries:
       - overview
       - technical_potential
       - potential_maps
-    expected:
-      <<: *group3_by_design
-      # COMMAND 96 (OQ-069): the summary of F5 gains the ensemble fields; nothing that was there changed (checked on PRT; the tables are compared by hash)
-      technical_potential: "summary of F5 (COMMAND 96, OQ-069, D-F5-041): it gains the fields of the ensemble table (ensemble_path, n_incomplete_ensemble_cells, p_gw_incomplete_ensemble, e_twh_incomplete_ensemble_m0); no existing field changed and the potential tables are identical (PRT, 2026-11-04)"
-      potential_maps: "summary of the maps of F5 (COMMAND 95, D-F5-040): the identity check of the wind display layers follows the tolerance of CONVENTIONS, so `display_layers/wind` reads `built` where it read `built, refused capacity-factor, energy-density`; nothing else of it changed and the five rasters and figures are identical (PRT, 2026-11-04, `potential_maps` run for real)"
-      # COMMAND 89 (D-F2a-026): the exact population sum corrects one pixel column (731) of IND, where E6 changes in 91 cells (solar candidates that left 2/2/3, wind 5/5/3,
-      # none entered). Every difference of these artifacts is in that column: docs/_audit/ind_population_effect_89.md.
-      eligibility/candidate_stability_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/candidate_stability_wind: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/cells_0p1deg_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/cells_0p1deg_wind: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/dominant_exclusion_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/dominant_exclusion_wind: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_area_km2_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_area_km2_wind: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_solar: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_solar__permissive: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_solar__restrictive: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_wind: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_wind__permissive: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      eligibility/eligible_fraction_wind__restrictive: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
-      land_eligibility: "COMMAND 89 (D-F2a-026): exact population sum; every difference is in pixel column 731 (docs/_audit/ind_population_effect_89.md)"
+    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
   BRA:
     baseline: latest
     reference_run: latest
-    expected_reference_run: 864efbcb2848180b4cb610e0ba396ce2a829ed996849abe357c73032cc589a77  # the round the entries of `expected` were declared against; they expire when `latest` moves on
     phases: *phases
-    expected:
-      <<: *group3_by_design
-      # COMMAND 96 (OQ-069): the summary of F5 gains the ensemble fields; nothing that was there changed (checked on PRT; the tables are compared by hash)
-      technical_potential: "summary of F5 (COMMAND 96, OQ-069, D-F5-041): it gains the fields of the ensemble table (ensemble_path, n_incomplete_ensemble_cells, p_gw_incomplete_ensemble, e_twh_incomplete_ensemble_m0); no existing field changed and the potential tables are identical (PRT, 2026-11-04)"
-      potential_maps: "summary of the maps of F5 (COMMAND 95, D-F5-040): the identity check of the wind display layers follows the tolerance of CONVENTIONS, so `display_layers/wind` reads `built` where it read `built, refused capacity-factor, energy-density`; nothing else of it changed and the five rasters and figures are identical (PRT, 2026-11-04, `potential_maps` run for real)"
-      # The report of the audit counts the geometry types of the clipped layers. In the unattended round of 2026-10-29 it differed in BRA, and the
-      # reference copy of the file was not kept, so what differs cannot be read back. Nothing computes from it (it is a report). The difference is
-      # accepted and flagged: open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of `geometry_types` changed.
-      audit_report: "report of the audit; the counts of geometry_types of the clipped layers (the reference file was not kept: confirm by hand)"
-      # The summary of the F3 phase. It holds parameter sets, counts of cells and candidates, areas, the shares excluded by constraint and the invalid-pixel share; it has
-      # no statistic of `dist_road_km`. Every number of it that can be recomputed from the tables (cells, candidates, cell area, eligible area, the six excluded shares,
-      # the k < 1 counts) is identical, to the last bit, whether taken from the tables of 2026-10-28 (backup_before_89/BRA_elig) or from the current ones. The reference file was
-      # not kept: it had 14,687 bytes and now 14,689, and the two bytes could not be located. Evidence: docs/_audit/f3_memory_90.md, last section (COMMAND 91).
-      land_eligibility: "summary of F3: no number derivable from the tables changed; the 2 bytes of difference against the reference of 2026-10-29 could not be located (the reference file was not kept)"
+    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
   PRT:
     baseline: latest
     reference_run: latest
     phases: *phases
-    expected: {}  # the entries of COMMAND 95/96 (the F5 summaries) were pinned to the round 864efbcb and expired when the round of 2026-11-04 became the latest; removed (scripts/list_expired_expected.py)
+    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
 
 # probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
 suspects:

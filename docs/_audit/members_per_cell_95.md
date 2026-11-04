@@ -33,7 +33,7 @@ The wind candidate cells of BRA (F3 central, 181,306): 31 members in 173,870, 30
 
 `bra_wind_members_map.png`: 29,395 cells (10.3% of BRA) lose 1 to 6 members, in four blocks with sharp edges, all of them in the Amazon basin or its borders, plus one small block in Minas Gerais: the western Amazon near 69 W, 0 to 6 S (up to 6 members missing); the central Amazon, 52 to 58 W, 3 to 8 S (2 to 3 members); the north, near the border with Guyana and Suriname; and about 45 W, 17 to 19 S. The densest 5-degree box is 5 to 0 S, 60 to 55 W (8,631 cells). A block is a patch of the native grid of the GCM smoothed by the 3 x 3 neighbourhood (D-F4-014), not a ragged coastal edge: it is a model signal and not a missing value.
 
-Candidate cells that lose members are low-wind cells: their mean capacity factor is 0.074 against 0.159 in the cells with 31 members; they hold **1.86% of the BRA wind capacity (30.6 of 1,643.5 GW) and 1.26% of the energy (32.3 of 2,574.4 TWh)** of the central scenario.
+Candidate cells that lose members are low-wind cells: their mean capacity factor is 0.074 against 0.159 in the cells with 31 members; they hold **1.86% of the BRA wind capacity (30.6 of 1,643.5 GW) and 1.26% of the energy (32.3 of 2,574.4 TWh)** of the central scenario. *Correction (2026-11-04, real F5 run, COMMAND 97): measured in the reference member `m0`, the energy of these cells is 25.5 of 2,300.3 TWh/yr (1.11%); the 7,436 cells and the 30.6 GW agree.*
 
 ## Cause, against the four that were asked about
 

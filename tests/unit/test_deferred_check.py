@@ -200,15 +200,8 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases == checks["PRT"].phases
     for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
         assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
-    assert checks["PRT"].expected == {}  # the entries for the F5 summaries expired with the round of 2026-11-04 and were removed
-    # the artifacts that Group 3 changes by design (METHODOLOGY 16) are accepted in both countries; only BRA also has the audit report and the summary of F3
-    base = set(yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))["group3_by_design"])
-    assert base <= set(checks["IND"].expected) and base <= set(checks["BRA"].expected)
-    assert set(checks["BRA"].expected) - base == {"audit_report", "land_eligibility", "technical_potential", "potential_maps"}  # the F3 summary: no derived number changed (f3_memory_90.md)
-    ind_extra = set(checks["IND"].expected) - base  # the F3 artifacts the exact population sum changes, all in one pixel column (ind_population_effect_89.md)
-    assert len(ind_extra) == 17 and {"land_eligibility", "technical_potential", "potential_maps"} <= ind_extra
-    assert all(k.startswith("eligibility/") or k in ("land_eligibility", "technical_potential", "potential_maps") for k in ind_extra)
-    assert "siting/dist_road_km" in checks["IND"].expected and "audit_report" not in checks["IND"].expected
+    # the entries of `expected` (Group 3 by design, COMMANDS 89, 95 and 96) were pinned to the round of before 2026-11-04 and expired with the new round: removed
+    assert all(check.expected == {} and check.expected_pins == {} for check in checks.values())
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
 
