@@ -1,7 +1,7 @@
 {
   "cap_mb": 1536,
   "country": "BRA",
-  "note": "Peak resident memory (MB) of the process of each kind of layer of F2a/F2b on BRA, the largest country, measured in the cold round of 2026-11-03 (interim/BRA/*/layers.json; COMMANDS 88/89; docs/_audit/memory_budget_88.md). The guard waits for peak_rss_mb + margin of free memory before a layer starts. F3 (land_eligibility) is not a layer process: it peaked at 3,337 MB on BRA, above the cap (see f3_phase).",
+  "note": "Peak resident memory (MB) of the process of each kind of layer of F2a/F2b on BRA, the largest country, measured in the cold round of 2026-11-03 (interim/BRA/*/layers.json; COMMANDS 88/89; docs/_audit/memory_budget_88.md). The guard waits for peak_rss_mb + margin of free memory before a layer starts. F3 (land_eligibility) is not a layer process: it runs by stripes of rows since COMMAND 91 and peaks at 1,438 MB on BRA (see f3_phase).",
   "layers": {
     "glo30": {
       "peak_rss_mb": 984,
@@ -58,8 +58,8 @@
     }
   },
   "f3_phase": {
-    "peak_rss_mb": 3337,
+    "peak_rss_mb": 1438,
     "source": "measured",
-    "detail": "phase land_eligibility of BRA, 1,119 s, round of 2026-11-03; IND 2,097; PRT 342. Over the cap: to be fixed"
+    "detail": "phase land_eligibility of BRA through the pipeline, 1,128 s, round of 2026-11-04 (COMMAND 91, F3 by stripes of rows; D-F3-024); profile harness: 1,260 MB with the share caches current, 1,218 MB with them rebuilt. Before: 3,337 MB. IND 834 MB (2,097 before), PRT 337 MB (342)"
   }
 }

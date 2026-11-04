@@ -4,6 +4,10 @@ Reads the central candidates tables of F3 already on disk (`dist_road_km`, the e
 cell by its eligible area: median, P90 and the share of the eligible area beyond 30 km. The road layer of those tables is the one made before
 Group 3 (every road class of the source); the next F2a round rebuilds it with `geospatial.road_classes`, so rerun this script after that round.
 
+The same cells weight the technical potential of F5 (`potential_<tech>__central.parquet`: P_MW and E_MWh of each cell and member, averaged over the
+members of the cell): the share of the capacity (MW) and of the energy (GWh) that lies in cells beyond 30 km of a road (COMMAND 91, item d). The potential
+tables are those on disk; a cell of the candidates table with no row in them is counted, never dropped silently.
+
 Usage: python scripts/report_road_distance.py [BRA IND PRT]
 Output: stdout and docs/_audit/road_distance_86.md
 """
@@ -47,16 +51,46 @@ def summarize(frame: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def potential_beyond(candidates: pd.DataFrame, potential: pd.DataFrame) -> dict[str, float]:
+    """Capacity (MW) and energy (GWh) of the potential, and their shares in the cells beyond 30 km of a road.
+
+    The potential of a cell is the mean over its members of `P_MW` and `E_MWh` (the capacity of a cell does not depend on the member).
+    """
+    per_cell = potential.groupby("cell_id", sort=False).agg(P_MW=("P_MW", "mean"), E_MWh=("E_MWh", "mean"))
+    cells = candidates[["cell_id", "dist_road_km"]].drop_duplicates("cell_id").merge(per_cell, left_on="cell_id", right_index=True, how="left")
+    missing = int(cells["P_MW"].isna().sum())
+    known = cells[cells["P_MW"].notna() & cells["dist_road_km"].notna()]
+    far = known["dist_road_km"] > BEYOND_KM
+    p_total, e_total = float(known["P_MW"].sum()), float(known["E_MWh"].sum()) / 1000.0
+    return {
+        "capacity_gw": p_total / 1000.0,
+        "energy_twh": e_total / 1000.0,
+        "share_mw_beyond_30km": float(known.loc[far, "P_MW"].sum() / p_total) if p_total else float("nan"),
+        "share_gwh_beyond_30km": float(known.loc[far, "E_MWh"].sum() / 1000.0 / e_total) if e_total else float("nan"),
+        "cells_without_potential": missing,
+        "cells_without_distance": int(cells["dist_road_km"].isna().sum()),
+    }
+
+
 def main(isos: list[str]) -> None:
     out = _data_dir() / "outputs"
     lines = [
         "# Distance to the road D_road of the eligible area (COMMAND 86)",
         "",
         "Central scenario, `dist_road_km` of the F3 candidates (eligible-area mean per 0.05 degree cell), each cell weighted by its eligible area. The road layer is the one",
-        "made before Group 3 (all road classes of the source); the next F2a round rebuilds it with the primary and secondary classes, so the figures are to be recomputed",
-        "(`python scripts/report_road_distance.py`) after that round. They size the road term that `road_cost_excluded` leaves out.",
+        "of the round of 2026-11-03 (F2a with `geospatial.road_classes`, F3 rerun in all three countries); the figures before it, made with every road class of the source,",
+        "were BRA 2.4 km median and 0.6% beyond 30 km. They size the road term that `road_cost_excluded` leaves out.",
         "",
         "| Country | Technology | Cells | Eligible area (km2) | Median (km) | P90 (km) | Eligible area beyond 30 km |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    potential_lines = [
+        "",
+        "## Technical potential beyond 30 km of a road",
+        "",
+        "Central scenario of F5, mean over the members of each cell (the capacity does not depend on the member). The share is that of the potential of the cells whose `dist_road_km` is above 30 km.",
+        "",
+        "| Country | Technology | Capacity (GW) | Energy (TWh/yr) | Capacity beyond 30 km | Energy beyond 30 km | Candidate cells without potential |",
         "|---|---|---|---|---|---|---|",
     ]
     for iso in isos:
@@ -69,6 +103,18 @@ def main(isos: list[str]) -> None:
                 continue
             s = summarize(pd.read_parquet(path, columns=["dist_road_km", "eligible_area_km2"]))
             print(iso, tech, s, flush=True)
+            pot = out / iso / "technical_potential" / "artifacts" / f"potential_{tech}__central.parquet"
+            if pot.is_file():
+                q = potential_beyond(
+                    pd.read_parquet(path, columns=["cell_id", "dist_road_km"]),
+                    pd.read_parquet(pot, columns=["cell_id", "P_MW", "E_MWh"]),
+                )
+                print(iso, tech, q, flush=True)
+                potential_lines.append(
+                    f"| {iso} | {tech} | {q['capacity_gw']:.1f} | {q['energy_twh']:.1f} | {q['share_mw_beyond_30km']:.1%} | {q['share_gwh_beyond_30km']:.1%} | {q['cells_without_potential']} |"
+                )
+            else:
+                potential_lines.append(f"| {iso} | {tech} | not available | | | | |")
             lines.append(
                 f"| {iso} | {tech} | {s['cells']} | {s['eligible_area_km2']:.0f} | {s['median_km']:.1f} | {s['p90_km']:.1f} | {s['share_beyond_30km']:.1%} |"
             )

@@ -10,12 +10,15 @@ only resumes from its manifest entry proves nothing about the new code), the con
                      difference is the one the change of configuration is expected to cause (BRA F5: `wind_cf_integral` exact -> table)
   EXPLICADO_REVISAR  some differ, with no change of configuration, but the artifact is named in `expected` of the country: it carries no result and
                      its difference is explained in the file (BRA `audit_report`); it is flagged for a manual look
+  EQUIVALENTE        some differ in hash, and each of them is a raster that has a reference file (`references` of the country) and is equal to it
+                     within the tolerance of CONVENTIONS (`core.equivalence`: |d| <= 1e-6 |ref| + 1e-9, same grid, same missing pixels): a last-bit
+                     difference of a float, decided by the numbers and not by an entry in `expected` (COMMAND 91)
   DIFERENTE          some differ with no change of configuration and no entry in `expected`: the run stops before the phases that follow and
                      the artifacts, the probable cause (`suspects` of the phase) and the reference are written in the report
 
 The report is `outputs/<ISO>/deferred_check.json`, kept between runs: a phase that has a verdict other than DIFERENTE is settled and is not compared
 again (a later change of data or code is not an error of this check); one that has DIFERENTE is compared again at its next execution. The overall
-verdict is DIFERENTE, PENDENTE (a listed phase has not run yet), REVISAR or IDENTICO. Removing a country from the file retires its check.
+verdict is DIFERENTE, PENDENTE (a listed phase has not run yet), REVISAR, EQUIVALENTE or IDENTICO. Removing a country from the file retires its check.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,7 +37,7 @@ import yaml
 logger = logging.getLogger(__name__)
 
 REPORT_NAME = "deferred_check.json"
-SETTLED = ("IDENTICO", "EXPLICADO", "EXPLICADO_REVISAR")
+SETTLED = ("IDENTICO", "EQUIVALENTE", "EXPLICADO", "EXPLICADO_REVISAR")
 MAX_LISTED = 8
 
 
@@ -80,6 +84,7 @@ class CountryCheck:
     phases: tuple[str, ...]
     expected: dict[str, str] = field(default_factory=dict)  # artifact key -> why its difference is accepted
     suspects: dict[str, str] = field(default_factory=dict)  # phase -> probable cause of an unexplained difference
+    references: tuple[Path, ...] = ()  # directories with copies of the rasters of the reference run, for the comparison by tolerance
 
 
 def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
@@ -97,6 +102,7 @@ def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
             phases=tuple(spec["phases"]),
             expected={str(k): str(v) for k, v in (spec.get("expected") or {}).items()},
             suspects=suspects,
+            references=tuple(Path(data_root) / str(p) for p in (spec.get("references") or ())),
         )
     return checks
 
@@ -110,6 +116,29 @@ def _write_json(path: Path, data: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
     os.replace(tmp, path)
+
+
+_WIND_LAYER = re.compile(r"(weibull_a|weibull_k|air_density)_\d+m")
+
+
+def reference_file(key: str, after: Path, iso: str, directories: tuple[Path, ...]) -> Path | None:
+    """The copy of the reference run that `after` (the raster of artifact `key`) is to be compared with, or None.
+
+    Searched by file name in each directory of `references`: the same name (the aligned layers `<ISO>_<layer>_aligned.tif`) and, for the resource layers
+    of F2b, the aligned layer they are a copy of (M-F2b-04: the values are kept, only the missing pixels take the F2b nodata): `pvout_kwh_kwp_day` is
+    `<ISO>_solar_aligned.tif` and `weibull_a_100m` is `<ISO>_wind_weibull_a_100m_aligned.tif`.
+    """
+    names = [after.name]
+    layer = key.split("/", 1)[1] if key.startswith("siting/") else None
+    if layer == "pvout_kwh_kwp_day":
+        names.append(f"{iso}_solar_aligned.tif")
+    elif layer is not None and _WIND_LAYER.fullmatch(layer):
+        names.append(f"{iso}_wind_{layer}_aligned.tif")
+    for directory in directories:
+        for name in names:
+            if (directory / name).is_file():
+                return directory / name
+    return None
 
 
 class DeferredCheck:
@@ -137,11 +166,39 @@ class DeferredCheck:
     def _after_view(manifest: Any, phase: str) -> dict:
         """The artifacts and the configuration fingerprint of `phase` in the manifest of the run, in the shape `compare_artifacts` reads."""
         artifacts = {
-            key: {"phase": e.phase, "content_sha256": e.content_sha256, "sha256": e.sha256}
+            key: {"phase": e.phase, "content_sha256": e.content_sha256, "sha256": e.sha256, "path": e.path}
             for key, e in manifest.artifacts.items()
             if e.phase == phase
         }
         return {"artifacts": artifacts, "phases": {phase: {"config_fingerprint": manifest.phases[phase].config_fingerprint}}}
+
+    def _by_tolerance(self, manifest: Any, keys: list[str]) -> tuple[dict[str, dict], dict[str, dict]]:
+        """Compare the rasters among `keys` that have a reference file with it by tolerance: (the equivalent ones, every comparison made).
+
+        An artifact with no reference file, or that is not a raster, is not decided here and stays among the differences nobody explained.
+        """
+        equivalent: dict[str, dict] = {}
+        compared: dict[str, dict] = {}
+        if not self.check.references:
+            return equivalent, compared
+        from geofrea.core.equivalence import compare_rasters
+
+        for key in keys:
+            entry = manifest.artifacts.get(key)
+            if entry is None:
+                continue
+            after = Path(entry.path.resolve())
+            if after.suffix.lower() not in (".tif", ".tiff"):
+                continue
+            reference = reference_file(key, after, self.check.iso, self.check.references)
+            if reference is None:
+                continue
+            result = compare_rasters(reference, after).as_dict()
+            result["reference"] = reference.name
+            compared[key] = result
+            if result["equivalent"]:
+                equivalent[key] = result
+        return equivalent, compared
 
     def after_phase(self, manifest: Any, phase: str) -> str | None:
         """Compare the artifacts of the phase that has just been executed with the reference; the message of an unexplained difference, else None."""
@@ -166,7 +223,11 @@ class DeferredCheck:
         with_config = sorted(k for k, r in different.items() if r["config_changed"])
         accepted = sorted(k for k, r in different.items() if not r["config_changed"] and k in self.check.expected)
         unexplained = sorted(k for k, r in different.items() if not r["config_changed"] and k not in self.check.expected)
-        verdict = "DIFERENTE" if unexplained else "EXPLICADO_REVISAR" if accepted else "EXPLICADO" if with_config else "IDENTICO"
+        equivalent, compared = self._by_tolerance(manifest, unexplained)
+        unexplained = [k for k in unexplained if k not in equivalent]
+        verdict = (
+            "DIFERENTE" if unexplained else "EXPLICADO_REVISAR" if accepted else "EXPLICADO" if with_config else "EQUIVALENTE" if equivalent else "IDENTICO"
+        )
         entry = {
             "verdict": verdict,
             "checked_at": _now(),
@@ -175,7 +236,11 @@ class DeferredCheck:
             "n_identico": sum(r["status"] == "IDENTICO" for r in rows.values()),
             "different_with_config_change": with_config,
             "different_expected": {k: self.check.expected[k] for k in accepted},
-            "different_unexplained": {k: {"before": rows[k]["before"], "after": rows[k]["after"], "status": rows[k]["status"]} for k in unexplained},
+            "different_equivalent": equivalent,
+            "different_unexplained": {
+                k: {"before": rows[k]["before"], "after": rows[k]["after"], "status": rows[k]["status"], **({"comparison": compared[k]} if k in compared else {})}
+                for k in unexplained
+            },
             "new": sorted(k for k, r in rows.items() if r["status"] == "AUSENTE_ANTES"),
         }
         message = None
@@ -200,6 +265,8 @@ class DeferredCheck:
             overall = "PENDENTE"
         elif "EXPLICADO_REVISAR" in verdicts:
             overall = "REVISAR"
+        elif "EQUIVALENTE" in verdicts:
+            overall = "EQUIVALENTE"
         else:
             overall = "IDENTICO"
         report["verdict"] = overall

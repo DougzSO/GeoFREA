@@ -187,6 +187,7 @@ def aggregate_to_cells(
     exclusions: dict[str, np.ndarray],
     resources: dict[str, np.ndarray] | None = None,
     flags: dict[str, np.ndarray] | None = None,
+    stripe_pixels: int = _STRIPE_PIXELS,
 ) -> pd.DataFrame:
     """M-F3-03 on one country grid: one row per cell that contains at least one in-country pixel.
 
@@ -196,6 +197,10 @@ def aggregate_to_cells(
     entry (eligible-area-weighted mean, NaN when the cell has no eligible area) and one per `flags` entry
     (eligible-area share of pixels where the boolean flag is True, e.g. `distance_capped`).
     Resource values that are NaN on an eligible pixel are excluded from that resource's mean.
+
+    `eligible`, the arrays of `exclusions`, `resources` and `flags` and `country_mask` are only indexed by a slice of rows (`a[rows]`), so any of them
+    can be a row-window source instead of an array (`windows.RowsView`, COMMAND 91). `stripe_pixels` sets the height of a stripe of cell rows and
+    nothing else: a cell takes its pixels from one stripe, so the result is the same for any height (tests/unit/test_land_eligibility_stripes.py).
     """
     height, width = country_mask.shape
     window = lattice_window(transform, height, width)
@@ -212,7 +217,7 @@ def aggregate_to_cells(
 
     # The cells are summed in stripes of whole cell rows: a cell takes its pixels from one stripe, so every sum is the one of the whole grid,
     # and the float64 work arrays (a few per layer) are those of a stripe and not of the country (COMMAND 75: F3 of BRA peaked at 3.3 GB).
-    stripe_cells = max(1, _STRIPE_PIXELS // max(1, window.n_cols * k * k))
+    stripe_cells = max(1, stripe_pixels // max(1, window.n_cols * k * k))
     parts: dict[str, list[np.ndarray]] = {}
 
     def keep(name: str, values: np.ndarray) -> None:

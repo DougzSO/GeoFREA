@@ -74,9 +74,9 @@ No layer of any country waited for the guard (`waited_s` = 0) and every layer is
 
 Wall time of BRA F2a: 14,996 s (elevation 11,117 s, land_cover_counts 2,482 s, land_cover 498 s, population 95 s).
 
-**F3 (`land_eligibility`) is not under the cap**: peak 3,337 MB on BRA (1,119 s), 2,097 MB on IND, 342 MB on PRT. It runs inside the main process, not in a layer process. It is open work (a per-step measurement and a fix with an equivalence proof), not settled here.
+**F3 (`land_eligibility`) was over the cap and is not any more**: before COMMAND 91 it peaked at 3,337 MB on BRA (1,119 s), 2,097 MB on IND, 342 MB on PRT; run by stripes of rows (D-F3-024, `docs/_audit/f3_memory_90.md`) it peaks at 1,438 MB on BRA (1,128 s), 834 MB on IND, 337 MB on PRT, with the outputs identical at tolerance 0. It runs inside the main process, not in a layer process.
 
 ## What is left
 
-- F3 peak (above).
-- The phases F4 to F8 have no measured peak.
+- F4 to F8: no measured peak; F7b reads the whole-grid layers (OQ-068).
+

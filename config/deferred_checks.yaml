@@ -9,11 +9,15 @@
 #           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
 # phases:   the phases to compare (F1 to F5 and the figure phases that follow)
 # expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
+# references: directories (relative to the data root) with copies of the rasters of the reference run. A raster whose hash differs and that has a copy there
+#           is compared with it by tolerance (core.equivalence); if it is equivalent the difference is a last bit of a float and needs no entry in `expected`
+#           (verdict EQUIVALENTE, COMMAND 91). A raster with no copy, or outside the tolerance, still stops the run.
 
 countries:
   IND:
     label: "outputs/IND/unattended/20261029_135838/manifest_before.json"
     baseline: outputs/IND/unattended/20261029_135838/manifest_before.json
+    references: [backup_before_89/IND, backup_before_89/IND_siting]
     phases: &phases
       - data_acquisition
       - data_quality_audit
@@ -51,6 +55,7 @@ countries:
   BRA:
     label: "outputs/BRA/unattended/20261029_135838/manifest_before.json"
     baseline: outputs/BRA/unattended/20261029_135838/manifest_before.json
+    references: [backup_before_89/BRA, backup_before_89/BRA_siting]
     phases: *phases
     expected:
       <<: *group3_by_design
@@ -58,6 +63,11 @@ countries:
       # reference copy of the file was not kept, so what differs cannot be read back. Nothing computes from it (it is a report). The difference is
       # accepted and flagged: open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of `geometry_types` changed.
       audit_report: "report of the audit; the counts of geometry_types of the clipped layers (the reference file was not kept: confirm by hand)"
+      # The summary of the F3 phase. It holds parameter sets, counts of cells and candidates, areas, the shares excluded by constraint and the invalid-pixel share; it has
+      # no statistic of `dist_road_km`. Every number of it that can be recomputed from the tables (cells, candidates, cell area, eligible area, the six excluded shares,
+      # the k < 1 counts) is identical, to the last bit, whether taken from the tables of 2026-10-28 (backup_before_89/BRA_elig) or from the current ones. The reference file was
+      # not kept: it had 14,687 bytes and now 14,689, and the two bytes could not be located. Evidence: docs/_audit/f3_memory_90.md, last section (COMMAND 91).
+      land_eligibility: "summary of F3: no number derivable from the tables changed; the 2 bytes of difference against the reference of 2026-10-29 could not be located (the reference file was not kept)"
 
 # probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
 suspects:
