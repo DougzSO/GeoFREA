@@ -7,7 +7,7 @@ copied by hand to `backup_before_89`) is given that round once with this script,
 Usage:
     python scripts/seed_references.py BRA --run-id seed_20261102_BRA --from backup_before_89/BRA backup_before_89/BRA_siting --note "outputs of 2026-11-02"
 
-The directories are relative to the data root. The round is kept at `references/<run-id>/`, marked `imported`, and is not `latest`.
+The directories are relative to the data root. The round is kept at `references/<run-id>/<ISO>/`, marked `imported`, and is not `latest`.
 """
 
 from __future__ import annotations
@@ -38,14 +38,14 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     data = _data_dir()
     store = load_store(REPO / "config" / "deferred_checks.yaml", data)
-    if (store.root / args.run_id).exists():
-        raise SystemExit(f"round {args.run_id} already exists in {store.root}")
+    if store.round_dir(args.iso, args.run_id).exists():
+        raise SystemExit(f"round {args.run_id} of {args.iso.upper()} already exists in {store.root}")
     directories = [data / d for d in args.sources]
     missing = [str(d) for d in directories if not d.is_dir()]
     if missing:
         raise SystemExit(f"not a directory: {', '.join(missing)}")
     run_dir = store.import_directories(args.iso, args.run_id, directories, note=args.note)
-    index = store.index(args.run_id)
+    index = store.index(args.iso, args.run_id)
     print(f"{args.run_id}: {len(index['files'])} files kept in {run_dir}")
 
 

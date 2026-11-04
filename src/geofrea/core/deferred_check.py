@@ -82,7 +82,7 @@ class CountryCheck:
     """The check of one country, as `config/deferred_checks.yaml` states it."""
 
     iso: str
-    baseline: Path
+    baseline: Path | None  # the manifest of the reference, or None when it is the round `reference_run` of the store (`baseline: latest` in the yaml)
     baseline_label: str
     phases: tuple[str, ...]
     expected: dict[str, str] = field(default_factory=dict)  # artifact key -> why its difference is accepted
@@ -98,10 +98,11 @@ def load_checks(yaml_path: Path, data_root: Path) -> dict[str, CountryCheck]:
     suspects = {str(k): str(v) for k, v in (raw.get("suspects") or {}).items()}
     checks = {}
     for iso, spec in (raw.get("countries") or {}).items():
+        from_store = str(spec["baseline"]) == "latest"
         checks[str(iso).upper()] = CountryCheck(
             iso=str(iso).upper(),
-            baseline=Path(data_root) / str(spec["baseline"]),
-            baseline_label=str(spec.get("label", spec["baseline"])),
+            baseline=None if from_store else Path(data_root) / str(spec["baseline"]),
+            baseline_label=str(spec.get("label", "references/" + str(spec.get("reference_run", "latest")) if from_store else spec["baseline"])),
             phases=tuple(spec["phases"]),
             expected={str(k): str(v) for k, v in (spec.get("expected") or {}).items()},
             suspects=suspects,
@@ -174,14 +175,23 @@ class DeferredCheck:
     def _load_report(self) -> dict:
         if self.report_path.is_file():
             try:
-                return json.loads(self.report_path.read_text(encoding="utf-8"))
+                report = json.loads(self.report_path.read_text(encoding="utf-8"))
+                if report.get("baseline") == self.check.baseline_label:
+                    return report
+                logger.info("%s was made against %s, not %s; the check starts again", self.report_path, report.get("baseline"), self.check.baseline_label)
             except (OSError, ValueError):
                 logger.warning("%s is unreadable; the check starts again", self.report_path)
         return {"country": self.check.iso, "baseline": self.check.baseline_label, "phases": {}}
 
+    def _baseline_path(self) -> Path | None:
+        if self.check.baseline is not None:
+            return self.check.baseline
+        return None if self.store is None else self.store.manifest_path(self.check.iso, self.check.reference_run)
+
     def _baseline_manifest(self) -> dict | None:
-        if self._baseline is None and self.check.baseline.is_file():
-            self._baseline = json.loads(self.check.baseline.read_text(encoding="utf-8"))
+        path = self._baseline_path()
+        if self._baseline is None and path is not None and path.is_file():
+            self._baseline = json.loads(path.read_text(encoding="utf-8"))
         return self._baseline
 
     @staticmethod
@@ -240,8 +250,8 @@ class DeferredCheck:
             return None
         baseline = self._baseline_manifest()
         if baseline is None:
-            report["phases"][phase] = {"verdict": "SEM_REFERENCIA", "checked_at": _now(), "note": f"the reference {self.check.baseline} does not exist"}
-            logger.warning("deferred check %s/%s: the reference manifest %s does not exist; nothing compared", self.check.iso, phase, self.check.baseline)
+            report["phases"][phase] = {"verdict": "SEM_REFERENCIA", "checked_at": _now(), "note": f"the reference {self.check.baseline_label} does not exist"}
+            logger.warning("deferred check %s/%s: the reference manifest %s does not exist; nothing compared", self.check.iso, phase, self.check.baseline_label)
             self._finish(report)
             return None
         if phase not in baseline["phases"]:

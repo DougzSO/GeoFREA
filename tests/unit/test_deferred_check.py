@@ -194,13 +194,19 @@ def test_compare_artifacts_reports_absent_artifacts_and_config_change():
     assert all(r["config_changed"] for r in rows.values())
 
 
-def test_the_shipped_configuration_lists_ind_and_bra_with_the_twelve_phases():
+def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_against_the_latest_round():
     checks = load_checks(REPO_ROOT / "config" / "deferred_checks.yaml", Path("D:/data"))
-    assert set(checks) == {"IND", "BRA"}
-    assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases
-    assert checks["IND"].baseline.as_posix().endswith("outputs/IND/unattended/20261029_135838/manifest_before.json")
+    assert set(checks) == {"PRT", "IND", "BRA"}
+    assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases == checks["PRT"].phases
+    for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
+        assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
+    assert checks["PRT"].expected == {}
     # the artifacts that Group 3 changes by design (METHODOLOGY 16) are accepted in both countries; only BRA also has the audit report and the summary of F3
-    assert set(checks["BRA"].expected) == set(checks["IND"].expected) | {"audit_report", "land_eligibility"}  # the F3 summary: no derived number changed (f3_memory_90.md)
+    base = set(yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))["group3_by_design"])
+    assert base <= set(checks["IND"].expected) and base <= set(checks["BRA"].expected)
+    assert set(checks["BRA"].expected) - base == {"audit_report", "land_eligibility"}  # the F3 summary: no derived number changed (f3_memory_90.md)
+    ind_extra = set(checks["IND"].expected) - base  # the F3 artifacts the exact population sum changes, all in one pixel column (ind_population_effect_89.md)
+    assert len(ind_extra) == 15 and "land_eligibility" in ind_extra and all(k.startswith("eligibility/") or k == "land_eligibility" for k in ind_extra)
     assert "siting/dist_road_km" in checks["IND"].expected and "audit_report" not in checks["IND"].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
@@ -376,5 +382,5 @@ def test_the_shipped_configuration_has_no_manual_entry_for_a_last_bit_difference
     config = yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))
     for iso in ("IND", "BRA"):
         spec = config["countries"][iso]
-        assert spec["reference_run"].startswith("seed_"), iso  # the round imported by scripts/seed_references.py, not a backup directory
+        assert spec["reference_run"] == "latest", iso  # the last accepted round of the store, not a backup directory
         assert not [k for k in spec["expected"] if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso
