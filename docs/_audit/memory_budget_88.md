@@ -97,8 +97,19 @@ The F5 potential tables match the cells of the current F3: for each of the 18 co
 
 The reference store kept the three rounds automatically at the end of the runs (`references/864efbcb.../<ISO>`, 52, 54 and 52 files) because the deferred check had no phase DIFERENTE: the phases it knew (F1 to F3, `climate_forcing` and `hazard_context` of PRT and IND) were IDENTICO against the state of 2026-11-04, and the six phases rerun here are not in that round (they were `stale_upstream`), so they were SEM_REFERENCIA, with nothing to compare.
 
+## F5 again on the code of COMMANDS 95 and 96 (round of 2026-11-04, afternoon; COMMAND 97)
+
+`technical_potential` and `potential_maps` of IND and BRA, run by `scripts/run_unattended.ps1` in an independent PowerShell, one country at a time, on the code that writes the ensemble table (D-F5-041) and checks the display layers by the tolerance of CONVENTIONS (D-F5-040). Peak resident memory of the phase (MB; cap 1,536):
+
+| Phase | IND | BRA |
+|---|---|---|
+| technical_potential | **1,372** (was 1,864) | **2,613** (was 3,074) |
+| potential_maps | 1,415 (was 1,542) | **1,840** (was 1,781) |
+
+Wall time (s): IND technical_potential 64, potential_maps 23; BRA 226 and 38 (earlier round: 247 and 20; 638 and 37). The lowest available memory of the system during the runs was 1,298 MB (IND) and 934 MB (BRA). The two IND values and the BRA `technical_potential` are lower than in the first round and `potential_maps` of IND is now under the cap; the round of the morning ran with other programs open and the code was not the same, and the cause of the drop was not investigated (no change aimed at memory was made). Over the cap now: BRA `technical_potential` (2,613), BRA `potential_maps` (1,840) and, from the first round, the BRA phases `hazard_context`, `climate_maps` and `overview` that did not run again; IND `technical_potential` 1,372 is under the cap. Nothing was corrected.
+
 ## What is left
 
-- Six phases after F3 over the cap (table above), five of them in BRA; no fix made.
+- Phases after F3 over the cap: the five of BRA (`hazard_context` and `climate_maps` and `overview` from the round of the morning; `technical_potential` 2,613 and `potential_maps` 1,840 from the round of the afternoon); IND is under the cap in the afternoon values; no fix made.
 - F6 to F8 have no real-country run and no measured peak; F7b reads the whole-grid layers (OQ-068).
 
