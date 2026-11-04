@@ -2,7 +2,8 @@
 
 usage: python scripts/adopt_aligned_cache_keys.py <ISO3> --revision <git revision> [--proof docs/_audit/proofs_75_77/aligned_equivalence_PRT.json] [--check]
 
-Every aligned layer of F2a has a cache key that holds the fingerprint of the code of `grid_alignment` (`cache_code("aligned_layers")`, A-02).
+Every aligned layer of F2a has a cache key that holds the fingerprint of the code of its builder (`cache_code("aligned_layer.<kind>")`, A-02; before
+COMMAND 88 it was the fingerprint of the whole `grid_alignment` package, and `aligned_layers_code` still gives that for an earlier tree).
 A change of that code gives another key, so the next run computes every layer again: for BRA that is about 42,000 s. COMMAND 75 changed the code
 of F2a (the elevation, the slope and the slope bins come from one pass over the GLO-30 tiles) with outputs that are the same by content hash
 (PRT, `docs/_audit/performance_75.md`); the other layers were not touched. This script records that equivalence for a country whose layers were
@@ -37,7 +38,6 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO))
 
-CACHE_NAME = "aligned_layers"
 
 
 class AdoptionError(RuntimeError):
@@ -59,8 +59,7 @@ def require_proof(proof: dict, old_code: str, new_code: str) -> None:
 
 def cache_code_at(revision: str) -> str:
     """The fingerprint of the code of the aligned-layer caches on the `src/geofrea` tree of a git revision."""
-    from geofrea.core.cache_code import CACHE_CODE_ROOTS
-    from geofrea.core.code_fingerprint import closure_fingerprint
+    from geofrea.core.cache_code import aligned_layers_code
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "src.tar"
@@ -69,7 +68,7 @@ def cache_code_at(revision: str) -> str:
             check=True,
         )
         subprocess.run(["tar", "-xf", str(archive), "-C", tmp], check=True)
-        return closure_fingerprint(CACHE_CODE_ROOTS[CACHE_NAME], Path(tmp) / "src" / "geofrea")
+        return aligned_layers_code(Path(tmp) / "src" / "geofrea")
 
 
 @contextmanager
@@ -85,8 +84,8 @@ def pinned_to(old_code: str) -> Iterator[dict[str, str]]:
     real_key = alignment.aligned_layer_key
     recorded: dict[str, str] = {}
 
-    def old_key(files, config, hash_memo):
-        new = real_key(files, config, hash_memo)
+    def old_key(kind, files, config, hash_memo):
+        new = real_key(kind, files, config, hash_memo)
         old = cache_key(alignment.ALIGNMENT_ALGORITHM_VERSION, files, config, hash_memo, code=old_code)
         recorded[old] = new
         return old
@@ -165,13 +164,13 @@ def main(argv: list[str] | None = None) -> int:
     from geofrea.core import paths as core_paths
 
     old_code = cache_code_at(args.revision)
-    from geofrea.core.cache_code import cache_code
+    from geofrea.core.cache_code import aligned_layers_code
 
-    require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, cache_code(CACHE_NAME))
+    require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, aligned_layers_code())
     artifacts = core_paths.phase_dir(args.iso, "grid_alignment", "artifacts")
     print(f"aligned-layer cache code at {args.revision}: {old_code[:12]}")
     if args.check:
-        print(f"check only: the proof matches {args.revision} ({old_code[:12]}) and the current code ({cache_code(CACHE_NAME)[:12]}); nothing adopted, no phase run")
+        print(f"check only: the proof matches {args.revision} ({old_code[:12]}) and the current code ({aligned_layers_code()[:12]}); nothing adopted, no phase run")
         return 0
     restored = restore_before_adopt(artifacts)
     if restored:

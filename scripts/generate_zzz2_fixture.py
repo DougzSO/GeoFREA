@@ -20,7 +20,7 @@ import numpy as np
 import rasterio
 import zzz2_world as world
 from rasterio.transform import from_origin
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 from zzz_climate_fixture import write_climate_fixture
 
 WEST_LINE = (
@@ -49,11 +49,19 @@ def gen_roads() -> None:
     gdf.to_file(out)
 
 
+SUBSTATION_PIXEL_ROWS = (0, 5, 10, 15, 19)  # counted from the south edge, 0.01 degree pixels
+N_SUBSTATIONS = len(SUBSTATION_PIXEL_ROWS)
+
+
 def gen_grid() -> None:
     """The transmission line runs along the west edge (through the centres of the first pixel column): the distance to it grows eastward."""
     gdf = gpd.GeoDataFrame(
-        {"power": ["line"]},
-        geometry=[LineString([(WEST_LINE, base.SOUTH), (WEST_LINE, base.NORTH)])],
+        {"power": ["line"] + ["substation"] * N_SUBSTATIONS, "voltage": ["138000"] * (1 + N_SUBSTATIONS)},
+        geometry=[
+            LineString([(WEST_LINE, base.SOUTH), (WEST_LINE, base.NORTH)]),
+            # substations on the line at pixel centres (a point on a pixel edge would move by half a pixel), from edge to edge: the distance to the point of interconnection grows eastward like the one to the line
+            *[Point(WEST_LINE, base.SOUTH + 0.005 + 0.01 * row) for row in SUBSTATION_PIXEL_ROWS],
+        ],
         crs=base.CRS,
     )
     out = base.RAW / "infrastructure_grid" / "ZZZ" / "ZZZ_grid_osm.geojson"
@@ -116,6 +124,7 @@ def main() -> None:
     base.gen_lakes()
     gen_roads()
     gen_grid()
+    base.gen_pvcz()
     base.gen_solar()
     gen_wind()
     base.gen_gem_inventory()

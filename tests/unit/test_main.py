@@ -186,6 +186,21 @@ def test_sample_size_convergence_is_a_support_phase_with_its_own_artifacts_and_n
 
 
 @pytest.mark.unit
+def test_grid_alignment_declares_the_sensitivity_layers_only_when_the_country_has_them():
+    """The IND round of 2026-11-02 failed at the end of F2a: the sensitivity layers were registered but not in `produces`."""
+
+    def produces(**kwargs):
+        specs = main._build_phase_specs(
+            ResolutionsConfig(suitability=0.01), 100.0, _audit_config(), **kwargs
+        )
+        return next(s for s in specs if s.name == "grid_alignment").produces
+
+    assert "aligned/poi_sensitivity" not in produces()
+    declared = produces(optional_aligned_keys=main._OPTIONAL_ALIGNED_RASTER_LAYER_KEYS)
+    assert {"aligned/poi_sensitivity", "aligned/poi_sensitivity_distance_capped"} <= declared
+
+
+@pytest.mark.unit
 def test_dag_has_no_suitability_criteria():
     """V16: the legacy phase is retired: not registered, not produced, not required, and its package is gone."""
     specs = main._build_phase_specs(ResolutionsConfig(suitability=0.01), 100.0, _audit_config())

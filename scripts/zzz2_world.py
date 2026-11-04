@@ -37,7 +37,7 @@ NATIVE_LON = np.round(np.arange(19.5, 20.8 + 1e-9, 0.1), 6)
 # reference climate of every GCM (constant in space, with a seasonal cycle that averages to zero over the 12 months)
 REF_WIND_MS, REF_RSDS_WM2, REF_TAS_K = 5.0, 220.0, 295.0
 
-WIND_RESOURCE_SLOPE = 0.02  # relative growth of the Weibull scale per unit u (east is windier)
+WIND_RESOURCE_SLOPE = 0.04  # relative growth of the Weibull scale per unit u (east is windier)
 
 GCMS = ("gfdl_esm4", "miroc6", "access_cm2", "ipsl_cm6a_lr", "cnrm_cm6_1", "mri_esm2_0")
 SSP_SCALE = (0.6, 1.0, 1.4)  # SSP1-2.6, SSP3-7.0, SSP5-8.5
@@ -52,14 +52,15 @@ WIND_PATTERN = {
     "cnrm_cm6_1": (0.00, -0.03, 0.00),
     "mri_esm2_0": (0.02, 0.01, 0.00),
 }
-# (a, b, c) of delta_rsds = 1 + scale * (a u + b v + c)
+# (a, b, c) of delta_rsds = 1 + scale * (a u + b v + c); half the amplitude of the first design (COMMAND 84: with the connection cost per project the solar shortlist is
+# decided by the distance costs only if the irradiance pattern is weak)
 RSDS_PATTERN = {
-    "gfdl_esm4": (-0.10, 0.04, 0.00),
-    "miroc6": (-0.08, 0.00, 0.01),
-    "access_cm2": (0.08, -0.04, 0.00),
-    "ipsl_cm6a_lr": (-0.12, -0.04, -0.01),
-    "cnrm_cm6_1": (-0.06, 0.03, 0.00),
-    "mri_esm2_0": (-0.04, 0.02, 0.01),
+    "gfdl_esm4": (-0.05, 0.02, 0.00),
+    "miroc6": (-0.04, 0.00, 0.005),
+    "access_cm2": (0.04, -0.02, 0.00),
+    "ipsl_cm6a_lr": (-0.06, -0.02, -0.005),
+    "cnrm_cm6_1": (-0.03, 0.015, 0.00),
+    "mri_esm2_0": (-0.02, 0.01, 0.005),
 }
 # (d, e, f) of dT = scale * (d + e u + f v), K
 TAS_PATTERN = {
@@ -76,16 +77,17 @@ TAS_PATTERN = {
 # road: grid cost in USD/(MW km), road cost in USD/km of the whole plant. `cf_min` is below every member of the world (no climate-fragile cell) and `tau` inside the spread of the LCOE.
 PARAMETER_OVERRIDES = {
     "wind": {
-        "grid_cost_usd_per_mw_km": {"value": 9660.0, "min": 5730.0, "max": 28650.0},
-        "road_cost_usd_per_km": {"value": 1.75e6, "min": 1.56e6, "max": 2.51e6},
         "cf_min": {"value": 0.2},
         "tau_lcoe_usd_per_mwh": {"value": 55.0},
     },
     "solar": {
-        "grid_cost_usd_per_mw_km": {"value": 9720.0, "min": 7800.0, "max": 29200.0},
-        "road_cost_usd_per_km": {"value": 1.43e6, "min": 1.24e6, "max": 2.06e6},
         "cf_min": {"value": 0.1},
-        "tau_lcoe_usd_per_mwh": {"value": 105.0},
+        "tau_lcoe_usd_per_mwh": {"value": 116.0},
+    },
+    # Group 3 (COMMANDS 83 and 84): the connection block is shared by both technologies; per-project costs in USD 2024 (line per km, road per km, over P_ref = 100 MW)
+    "connection": {
+        "line_cost_per_km": {"value": 1.4e6, "min": 0.7e6, "max": 2.9e6},
+        "road_cost_per_km": {"value": 1.5e6, "min": 1.0e6, "max": 2.5e6},
     },
 }
 

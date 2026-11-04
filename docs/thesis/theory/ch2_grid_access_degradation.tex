@@ -1,0 +1,135 @@
+% ============================================================================
+% CHAPTER 2 - LITERATURE REVIEW
+% File: docs/thesis/theory/ch2_grid_access_degradation.tex
+% Grid access, external infrastructure costs and lifetime degradation.
+% Operational values: docs/thesis/methods/group3_connection_degradation.tex
+% ============================================================================
+
+\section{Grid Access and External Infrastructure Costs}
+\label{sec:grid_access_review}
+
+The cost of a utility-scale solar or wind plant depends not only on its
+resource and its equipment but also on the infrastructure needed to
+deliver its output to the transmission system. Where good resources lie
+far from the network, the distance to a suitable point of
+interconnection (POI) introduces a cost that varies strongly in space.
+Empirical analyses of interconnection requests in the United States show
+that these costs differ widely between projects and that network
+upgrades beyond the dedicated connection can account for a large share
+of the total \cite{seel2023,miso2024}; transmission planning studies in
+Australia reach the same conclusion for regional expansion options
+\cite{aemo2023}. A single average connection cost applied to every site
+therefore misrepresents the relative merit of locations. Spatial
+supply-curve models such as NREL's reV instead combine resource, land
+availability and the distance to transmission into site-specific
+connection costs \cite{maclaurin2021}.
+
+\subsection{Points of Interconnection and Open Grid Data}
+\label{subsec:poi_review}
+
+A POI is the interface between a plant and the shared network. For
+plants of tens to hundreds of megawatts it is normally a transmission
+substation able to accommodate the voltage, switching, protection and
+power transfer involved, not an arbitrary point on a line. OpenStreetMap
+(OSM) represents substations and lines with a nominal voltage tag, which
+allows assets to be filtered by voltage level
+\cite{osmPowerTag,osmVoltageTag}. Its completeness, however, varies
+between countries. Arderne et al.\ combined OSM with night-time lights
+and routing to predict the global power network, including medium-voltage
+lines that are not mapped \cite{arderne2020}. Such predictive layers cover
+more territory but do not record the voltage, status or capacity of each
+segment, whereas tagged substations are fewer but interpretable.
+Initiatives to improve open transmission data acknowledge this trade-off
+\cite{oetMapYourGrid2025}. A transparent hierarchy follows: verified
+high-voltage substations as the primary target, and predictive layers as
+a sensitivity.
+
+\subsection{From Distance to Route Length}
+\label{subsec:route_review}
+
+The straight-line distance to a POI is a first-order measure of
+proximity. Real lines and roads deviate from it because of terrain,
+protected areas, land tenure, existing infrastructure and right-of-way
+requirements. Screening studies that do not route each connection
+correct the straight-line distance with a tortuosity factor, the ratio of
+route length to geometric distance; least-cost-path routing or measured
+corridor lengths replace it when available
+\cite{maclaurin2021,miso2024,aemo2023}. The same reasoning applies to the
+access road from a site to the existing road network, which is distinct
+from the internal roads already counted in plant construction.
+
+\subsection{Cost Boundaries and Unit Costs}
+\label{subsec:cost_boundary_review}
+
+A plant's capital cost and its external connection must be separated
+explicitly, or the same equipment is counted twice. NREL's Annual
+Technology Baseline excludes grid connection from overnight capital cost
+while including on-site electrical equipment such as the plant
+switchyard; spur lines, the POI and nominal network upgrades are treated
+separately \cite{nrelATB2024definitions}, as they are in reV
+\cite{maclaurin2021}. The practical boundary places collection networks,
+collector substations, step-up transformers and the switchyard inside the
+plant, and the dedicated high-voltage spur line, the terminal bay at the
+receiving substation and off-site access works outside it. The label
+``total installed cost'' of a cost survey does not by itself establish
+where its boundary lies, which must be read from the source.
+
+Unit costs of lines and substations depend on voltage, circuit
+configuration, conductor, structures, terrain and right of way.
+Component-based guides such as MISO's give voltage-specific estimates
+\cite{miso2024}, and AEMO's materials do the same for Australian
+conditions \cite{aemo2023}. Their numbers do not transfer directly
+between countries, where labour, materials, standards, taxes and
+regulation differ, so regulatory benchmarks take precedence where they
+exist: the indicative capital costs of the Indian Central Transmission
+Utility for dedicated transmission lines \cite{ctuilIndicative2025}, the
+reference price bank of the Brazilian regulator \cite{aneelBPR}, and the
+unit investment cost indicators compiled by ACER from European
+transmission projects \cite{acer2023uic}. A review of World Bank-financed
+projects found unit costs well below those reported in the literature and
+a wide spread within each voltage class, and warns that such figures give
+only an order of magnitude \cite{esmap2026transmission}. A terminal bay
+at an existing substation, the incremental switching and protection for
+one feeder, is much cheaper than a new substation; broader reinforcements
+such as transformers or new circuits are a separate cost.
+
+\section{Lifetime Performance Degradation}
+\label{sec:degradation_review}
+
+Assuming constant output over a multi-decade life overstates discounted
+energy and therefore understates the levelized cost. Degradation differs
+by technology and location: PV loses performance through encapsulant
+discoloration, delamination, corrosion, cell and interconnect damage,
+potential-induced degradation and failures of balance-of-system
+components, driven by temperature, humidity and ultraviolet exposure
+\cite{jordan2017}; wind turbines lose performance through blade erosion,
+aerodynamic changes, drivetrain wear and rising maintenance needs
+\cite{hamilton2020,kim2025}.
+
+For PV, reported rates vary with technology, mounting, climate and
+measurement method. A recent meta-analysis of 610 observations from 80
+studies found a median of about 0.94\,\%/yr and a mean of 1.1\,\%/yr
+\cite{straubmuck2025}. Fleet data from the United States show the role of
+temperature: Jordan et al.\ report a median system performance-loss rate
+of 0.75\,\%/yr, about 0.48\,\%/yr in cooler and 0.88\,\%/yr in hotter
+climates, and find high-efficiency technologies broadly comparable to
+conventional silicon \cite{jordan2022}. Their climates are the
+temperature zones of Karin et al., which bin the Arrhenius-weighted
+equivalent temperature of an open-rack module (activation energy
+1.1\,eV) in 5\,$^\circ$C intervals, from T1 below 14\,$^\circ$C to T10
+\cite{karin2019}. The zones are a stress index derived from hourly
+weather rather than a climate class, which makes them transferable to
+other regions, but the rates themselves remain tied to the fleet in which
+they were measured, whose hottest zone is T7. A low temperature coefficient of power
+describes an instantaneous, reversible loss and is not evidence of slower
+irreversible degradation.
+
+For wind, Hamilton et al.\ analysed 917 plants in the United States and
+found performance declines over the first ten years of about
+0.17\,\%/yr for newer turbine vintages and 0.53\,\%/yr for older ones
+\cite{hamilton2020}. They also observed a drop when plants lose
+production tax-credit eligibility after ten years, an economic effect of
+the United States policy rather than physical ageing. Kim and Kim report
+about 0.72\,\%/yr for wind farms in complex terrain \cite{kim2025}. The
+evidence supports vintage-specific rates for wind, with higher values
+kept for demanding sites, and climate-specific rates for PV.

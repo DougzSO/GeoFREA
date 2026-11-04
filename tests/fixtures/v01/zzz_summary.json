@@ -53,14 +53,32 @@
     "max": 1.0,
     "sum": 150.0
   },
+  "f2a/ZZZ_poi_aligned": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 20.896028518676758,
+    "sum": 6482.132070064545
+  },
+  "f2a/ZZZ_poi_aligned_capped": {
+    "shape": [
+      20,
+      30
+    ],
+    "min": 0.0,
+    "max": 0.0,
+    "sum": 0.0
+  },
   "f2a/ZZZ_population_aligned": {
     "shape": [
       20,
       30
     ],
-    "min": 3.410605131648481e-12,
+    "min": 1.3500311979441904e-12,
     "max": 380.0,
-    "sum": 114000.0000000001
+    "sum": 114000.00000000004
   },
   "f2a/ZZZ_rivers_aligned": {
     "shape": [

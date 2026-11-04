@@ -75,6 +75,24 @@ geospatial:
   # (LIMITATIONS L-019); it only decides what the flag marks for quality control.
   distance_cap_km: 100.0
 
+  # Group 3 (COMMAND 83, docs/thesis/methods/group3_connection_degradation.tex).
+  # Distance (m) within which an OSM line reaches a substation: a substation without a `voltage` tag takes the highest voltage of those lines.
+  poi_line_tolerance_m: 50.0
+  # Substations as nodes, ways and relations (OQ-067), fetched by scripts/fetch_osm_substations.py; the raw grid extract holds points only.
+  poi_substations_geojson: external/osm_substations/{iso}_substations_osm.geojson
+  # The roads that count for the distance to the road (primary and secondary; highways kept as their higher class).
+  road_classes:
+    grip4_gp_rtp: [1, 2, 3]  # GRIP4 GP_RTP: 1 highways, 2 primary, 3 secondary
+    osm_highway: [motorway, trunk, primary, secondary]
+  # Thermal zones of PV degradation: PVCZ-2019 ver0p2 land points (Karin et al. 2019), zone T_equiv_rack_1p1eV_zone, exported by
+  # scripts/export_pvcz_csv.py. A cell takes the zone of the nearest land point; farther than the limit below it has no zone (Tier 3, no source).
+  pvcz_csv: external/pvcz/pvcz_2019_ver0p2_t_equiv_rack_1p1eV_zone.csv
+  pvcz_max_distance_km: 50.0
+  # Memory of the raster steps (COMMAND 88). GDAL_CACHEMAX is fixed for the process and for every layer child; the warp chunk of reproject_to_grid is
+  # bounded by warp_mem_limit_mb (its default held 1.7 GB for one strip of the BRA population, docs/_audit/population_memory_87.md).
+  gdal_cachemax_mb: 256
+  warp_mem_limit_mb: 16
+
   resolutions:
     # Pixel size of the aligned layers of F2a, degrees (M-F2a-01). The key keeps its legacy name `suitability`; it is the
     # 0.01 degree (~1 km) pixel, not the analysis cell. The analysis cell is 0.05 degree (S-06, OQ-064) and nests exactly

@@ -19,8 +19,17 @@ import yaml
 
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import PRICE_BASE_YEAR_USD
-from geofrea.core.schemas import CountryParams
+from geofrea.core.paths import data_root
+from geofrea.core.schemas import ConnectionParams, CountryParams
 from geofrea.core.tables import require_schema_version
+from geofrea.lcoe_modeling.connection import (
+    SAMPLED_KEYS,
+    ConversionError,
+    Group3,
+    group3_problems,
+    load_conversion_indices,
+    resolve_group3,
+)
 from geofrea.lcoe_modeling.kernel import KERNEL_PARAMETER_KEYS, CellInputs
 from geofrea.lcoe_modeling.sampling import UncertainSpec
 from geofrea.technical_potential.cf_models import CfModel, CfModelError, get_cf_model
@@ -40,10 +49,16 @@ CF_MAX = 1.0 + 1e-9  # V-03: a sampled capacity factor may not exceed 1 (roundin
 COST_PRICE_KEYS = (
     "capex_usd_per_kw",
     "opex_var_usd_per_mwh",
-    "grid_cost_usd_per_mw_km",
-    "substation_cost_usd_per_mw",
-    "road_cost_usd_per_km",
 )
+# the parameters of M-F6-01 that come from the technology block of parameters.json; Group 3 provides the others (`connection.py`)
+TECHNOLOGY_KEYS = (
+    "capex_usd_per_kw",
+    "opex_fixed_frac",
+    "opex_var_usd_per_mwh",
+    "lifetime_years",
+    "discount_rate",
+)
+GROUP3_FIXED_KEYS = ("reference_project_mw", "transmission_loss_per_km")
 
 
 class LcoeMissingInputError(RuntimeError):
@@ -73,6 +88,7 @@ class ResolvedLcoe:
     energy_key: str
     nominal: Mapping[str, float]  # every kernel key and the energy key
     specs: tuple[UncertainSpec, ...]  # the uncertain parameters, in registry order
+    group3: Group3 | None = None  # the connection and degradation values of Group 3, with the costs in 2024 USD
 
 
 def cells_per_block(max_batch_gb: float, n_samples: int) -> int:
@@ -91,22 +107,31 @@ def _range_problem(key: str, low: float, high: float) -> str | None:
         return "lifetime below one year"
     if key == "discount_rate" and low < 0:
         return "negative discount rate"
-    if key == "degradation_rate" and (low < 0 or high >= 1):
-        return "degradation outside [0, 1)"
-    if (key in COST_PRICE_KEYS or key == "opex_fixed_frac") and low < 0:
+    if key == "degradation_weight" and (low < 0 or high > 1):
+        return "degradation weight outside [0, 1]"
+    if (
+        key in COST_PRICE_KEYS
+        or key in ("opex_fixed_frac", "line_cost_usd_per_km", "bay_cost_usd", "road_cost_usd_per_km")
+    ) and low < 0:
         return "negative cost"
     return None
 
 
 def resolve_technology_costs(
-    iso: str, technology: str, tech_cfg: TechnologyConfig, tech_params: object
+    iso: str,
+    technology: str,
+    tech_cfg: TechnologyConfig,
+    tech_params: object,
+    connection: ConnectionParams | None = None,
 ) -> ResolvedLcoe:
     """Check every F6 input of a technology and gather them; raise `LcoeMissingInputError` listing what is absent.
 
-    Implements: M-F6-01, M-F6-02, D-F6-008, D-F6-010, D-F6-016.
+    Implements: M-F6-01, M-F6-02, M-F6-08, D-F6-008, D-F6-010, D-F6-016.
 
     A parameter is missing when it has no entry or no value, an uncertain one also when it has no range or a range outside the
-    domain of the kernel, and a cost when its price year is not the base year (S-07).
+    domain of the kernel, and a cost when its price year is not the base year (S-07). The Group 3 values (connection costs, tortuosity,
+    degradation) come from `connection` and the technology block, and are checked by `group3_problems`: a cost still `to_be_sourced`
+    (OQ-001), a null price year, a missing conversion index or a missing zone table each refuse the run.
 
     Raises:
         LcoeMissingInputError: any of the above, all listed.
@@ -124,7 +149,7 @@ def resolve_technology_costs(
     missing: list[str] = []
     nominal: dict[str, float] = {}
     specs: dict[str, UncertainSpec] = {}
-    for key in needed:
+    for key in (*TECHNOLOGY_KEYS, energy_key):
         entry = getattr(tech_params, key, None)
         if entry is None:
             missing.append(f"{key} (no entry in parameters.json)")
@@ -154,6 +179,33 @@ def resolve_technology_costs(
                         entry.range.max,
                         entry.range.distribution,
                     )
+
+    group3: Group3 | None = None
+    problems = group3_problems(iso, technology, connection, tech_params)
+    missing.extend(problems)
+    if not problems:
+        try:
+            try:
+                indices = load_conversion_indices(
+                    data_root() / connection.conversion_indices_path, iso
+                )
+            except ConversionError:
+                indices = None  # needed only by a cost that is not 2024 USD: `resolve_group3` then names what is missing
+            group3 = resolve_group3(iso, technology, connection, tech_params, indices)
+        except ConversionError as exc:
+            missing.append(f"conversion to 2024 USD ({exc})")
+    if group3 is not None:
+        for key in (*SAMPLED_KEYS, *GROUP3_FIXED_KEYS):
+            nominal[key] = group3.nominal[key]
+        for key in SAMPLED_KEYS:
+            if key not in uncertain:
+                continue
+            low, high, distribution = group3.ranges[key]
+            problem = _range_problem(key, low, high)
+            if problem is not None:
+                missing.append(f"{key} range [{low}, {high}] ({problem})")
+            else:
+                specs[key] = UncertainSpec(key, group3.nominal[key], low, high, distribution)
     if missing:
         raise LcoeMissingInputError(iso, technology, missing)
     return ResolvedLcoe(
@@ -163,6 +215,7 @@ def resolve_technology_costs(
         energy_key=energy_key,
         nominal=nominal,
         specs=tuple(specs[k] for k in tech_cfg.uncertain_parameters),
+        group3=group3,
     )
 
 
@@ -198,6 +251,7 @@ class MemberCells:
     cell_id: np.ndarray
     cells: CellInputs
     cf: np.ndarray
+    n_excluded: int = 0  # cell-members left out because the distance or the thermal zone is missing (Group 3)
 
 
 def read_member_inputs(
@@ -225,14 +279,27 @@ def read_member_inputs(
     potential = pd.read_parquet(
         potential_path, columns=["cell_id", "member", "P_MW", "CF", "E_MWh"]
     )
+    available = set(pq.read_schema(candidates_path).names)
+    absent = [c for c in ("dist_sub_km", "dist_road_km") if c not in available]
+    if absent:
+        raise LcoeInputError(
+            f"{candidates_path.name} lacks {absent}: F2a, F2b and F3 must run again with the Group 3 layers (COMMAND 83)"
+        )
     candidates = pd.read_parquet(
-        candidates_path, columns=["cell_id", "dist_grid_km", "dist_road_km"]
+        candidates_path,
+        columns=["cell_id", "dist_sub_km", "dist_road_km"]
+        + (["pvcz_zone"] if "pvcz_zone" in available else []),
     )
     if candidates["cell_id"].duplicated().any():
         raise LcoeInputError(f"{candidates_path.name}: duplicated cell_id")
     candidate_index = pd.Index(candidates["cell_id"].to_numpy())
-    dist_grid = candidates["dist_grid_km"].to_numpy(dtype="float64")
+    dist_sub = candidates["dist_sub_km"].to_numpy(dtype="float64")
     dist_road = candidates["dist_road_km"].to_numpy(dtype="float64")
+    # a cell with no distance, or (PV) no thermal zone, has no LCOE: it is left out and counted, never given a zero cost (Group 3)
+    d_low, d_high, has_bounds = resolved.group3.degradation.bounds_for_cells(
+        candidates["pvcz_zone"].to_numpy() if "pvcz_zone" in candidates else None, len(candidates)
+    )
+    usable = np.isfinite(dist_sub) & np.isfinite(dist_road) & has_bounds
     forcing = pd.read_parquet(forcing_path, columns=["cell_id", "member", "dT"])
     p_codes, p_names = _member_codes(potential)
     f_codes, f_names = _member_codes(forcing)
@@ -260,6 +327,12 @@ def read_member_inputs(
         if (np.diff(ids) == 0).any():
             raise LcoeInputError(f"{potential_path.name}: duplicated cell_id in member {member}")
         at = candidate_index.get_indexer(ids)
+        if (at >= 0).any() and not usable[at[at >= 0]].all():
+            keep = (at < 0) | usable[np.where(at < 0, 0, at)]
+            n_excluded = int((~keep).sum())
+            rows, ids, at = rows[keep], ids[keep], at[keep]
+        else:
+            n_excluded = 0
         if (at < 0).any():
             raise LcoeInputError(
                 f"{potential_path.name}: {int((at < 0).sum())} cells of member {member} are not in {candidates_path.name}"
@@ -277,18 +350,22 @@ def read_member_inputs(
         offset, slope = resolved.model.rescale_terms(nominal_x, d_t)
         cells = CellInputs(
             p_mw=p_mw[rows],
-            dist_grid_km=dist_grid[at],
+            dist_sub_km=dist_sub[at],
             dist_road_km=dist_road[at],
             energy_mwh=e_mwh[rows],
             energy_offset=offset,
             energy_slope=slope,
+            degradation_low=d_low[at],
+            degradation_high=d_high[at],
         )
         factor_max = np.maximum(offset + slope * x_range[0], offset + slope * x_range[1])
         if (cf[rows] * factor_max > CF_MAX).any():
             raise LcoeInputError(
                 f"member {member}: a capacity factor above 1 under the sampled {resolved.energy_key} (V-03)"
             )
-        yield MemberCells(member=member, cell_id=ids, cells=cells, cf=cf[rows])
+        yield MemberCells(
+            member=member, cell_id=ids, cells=cells, cf=cf[rows], n_excluded=n_excluded
+        )
 
 
 def resolve_all(
@@ -307,6 +384,7 @@ def resolve_all(
                 tech,
                 technologies.technologies[tech],
                 getattr(country_params.technologies, tech),
+                country_params.connection,
             )
         except LcoeMissingInputError as exc:
             failures.extend(f"{tech}: {item}" for item in exc.missing)

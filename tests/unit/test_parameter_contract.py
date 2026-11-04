@@ -60,8 +60,12 @@ def test_every_value_of_the_real_parameters_file_is_within_its_range():
     for iso, country in parameters.countries.items():
         for tech in ("solar", "wind"):
             for key, vv in getattr(country.technologies, tech).__dict__.items():
-                if vv is not None and vv.range is not None and vv.value is not None:
+                if isinstance(vv, VerifiedValue) and vv.range is not None and vv.value is not None:
                     assert vv.range.min <= vv.value <= vv.range.max, (iso, tech, key)
+        if country.connection is not None:
+            for key, vv in country.connection.__dict__.items():
+                if isinstance(vv, VerifiedValue) and vv.range is not None and vv.value is not None:
+                    assert vv.range.min <= vv.value <= vv.range.max, (iso, "connection", key)
 
 
 def _patched(parameters, iso, tech, key, **changes):
@@ -79,7 +83,7 @@ def test_no_real_parameter_is_a_proxy_and_the_flag_defaults_to_false():
         for iso, country in parameters.countries.items()
         for tech in ("solar", "wind")
         for key, vv in getattr(country.technologies, tech).__dict__.items()
-        if vv is not None and vv.proxy
+        if isinstance(vv, VerifiedValue) and vv.proxy
     }
     assert proxies == set()
     assert _vv(1.0).proxy is False
@@ -119,8 +123,11 @@ def test_uncertain_parameter_requires_range_in_production():
     # the recorded parameters carry a value and a range for what Group 1 and 2 set
     ok = audit_parameters(parameters, technologies, ["PRT"], ["solar"])
     assert not any("capex_usd_per_kw" in e or "gamma" in e for e in ok.errors)
-    # the discount rate is recorded (OQ-022 closed); the degradation is not, and a production run refuses it
-    assert "PRT solar degradation_rate: uncertain parameter has no value" in ok.errors
+    # the discount rate and the degradation are recorded; the road cost of Group 3 is not, but the central scenario excludes it (COMMAND 86):
+    # no error, a warning that the LCOE is a lower bound
+    assert not any("degradation" in e for e in ok.errors)
+    assert not any("road_cost_per_km" in e for e in ok.errors)
+    assert any("PRT connection road_cost_per_km" in w and "road_cost_excluded" in w for w in ok.warnings)
 
 
 @pytest.mark.unit

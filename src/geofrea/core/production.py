@@ -20,6 +20,18 @@ from dataclasses import dataclass, field
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.schemas import ParametersFile, VerifiedValue
 
+# kernel keys that come from the Group 3 block and not from the technology fields of parameters.json
+GROUP3_KERNEL_KEYS = frozenset(
+    {
+        "degradation_weight",
+        "line_cost_usd_per_km",
+        "bay_cost_usd",
+        "road_cost_usd_per_km",
+        "tortuosity_grid",
+        "tortuosity_road",
+    }
+)
+
 
 class ConfigConsistencyError(ValueError):
     """The configuration files contradict each other (A-04, A-09)."""
@@ -98,6 +110,8 @@ def audit_parameters(
                 if vv.range is not None and vv.range.tier == 3:
                     audit.warnings.append(f"{where}: Tier 3 range (U-07)")
             for key in technologies.technologies[tech].uncertain_parameters:
+                if key in GROUP3_KERNEL_KEYS:
+                    continue  # provided by the connection block and the degradation table, audited below
                 where = f"{iso} {tech} {key}"
                 vv = fields.get(key)
                 if vv is None:
@@ -108,6 +122,10 @@ def audit_parameters(
                     audit.errors.append(f"{where}: uncertain parameter has no value")
                 elif vv.range is None:
                     audit.errors.append(f"{where}: uncertain parameter has no range (U-05)")
+            if tech == "solar" and getattr(params, "degradation_by_zone", None) is None:
+                audit.errors.append(
+                    f"{iso} {tech} degradation_by_zone: no PV zone rates (scripts/derive_pv_degradation_by_zone.py)"
+                )
             for key in technologies.technologies[tech].required_parameters:
                 where = f"{iso} {tech} {key}"
                 vv = fields.get(key)
@@ -117,7 +135,35 @@ def audit_parameters(
                     )
                 elif vv.value is None:
                     audit.errors.append(f"{where}: required parameter has no value")
+        _audit_connection(audit, iso, country.connection)
     return audit
+
+
+def _audit_connection(audit: ParameterAudit, iso: str, connection) -> None:
+    """Group 3: the connection block must exist and every unit cost must have a value (OQ-001); a Tier 3 value is a warning."""
+    if connection is None:
+        audit.errors.append(f"{iso}: no connection block in parameters.json (Group 3)")
+        return
+    for name in ("line_cost_per_km", "bay_cost", "road_cost_per_km"):
+        cost = getattr(connection, name)
+        where = f"{iso} connection {name}"
+        if name == "road_cost_per_km" and connection.road_cost_excluded:
+            audit.warnings.append(f"{where}: no road cost, road_cost_excluded is the central scenario (the LCOE is a lower bound)")
+            continue
+        if cost.status in ("proxy", "provisional") and not cost.synthetic:
+            audit.warnings.append(f"{where}: status {cost.status}, a stand-in value (COMMAND 86)")
+        if cost.value is None:
+            audit.errors.append(f"{where}: no value (status {cost.status}; {cost.open_question or 'OQ-001'})")
+        elif cost.price_year is None:
+            audit.warnings.append(f"{where}: price_year is null (status {cost.status}); confirm before F6")
+        if cost.tier == 3 and not cost.synthetic:
+            audit.warnings.append(f"{where}: Tier 3 value (U-07)")
+    for key, vv in connection.__dict__.items():
+        if isinstance(vv, VerifiedValue):
+            if vv.tier == 3 and not vv.synthetic:
+                audit.warnings.append(f"{iso} connection {key}: Tier 3 value (U-07)")
+            if vv.proxy:
+                audit.errors.append(f"{iso} connection {key}: proxy value consumed (V6)")
 
 
 def enforce_production(audit: ParameterAudit) -> None:

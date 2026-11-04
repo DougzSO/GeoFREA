@@ -24,11 +24,13 @@ def _cells(rng, n, shift=0.0):
     cf = rng.uniform(0.15, 0.45, n) * (1.0 - shift)
     return CellInputs(
         p_mw=p,
-        dist_grid_km=rng.uniform(0.0, 120.0, n),
+        dist_sub_km=rng.uniform(0.0, 120.0, n),
         dist_road_km=rng.uniform(0.0, 30.0, n),
         energy_mwh=p * cf * 8760.0,
         energy_offset=np.full(n, 1.0),
         energy_slope=np.zeros(n),
+        degradation_low=np.zeros(n),
+        degradation_high=np.full(n, 0.01),
     )
 
 
@@ -47,10 +49,14 @@ def _samples(rng, n_draws=N_DRAWS):
         opex_var_usd_per_mwh=np.full(n, 2.0),
         lifetime_years=life,
         discount_rate=column(0.03, 0.08),
-        degradation_rate=column(0.0, 0.01),
-        grid_cost_usd_per_mw_km=column(500, 1500),
-        substation_cost_usd_per_mw=column(1e4, 3e4),
-        road_cost_usd_per_km=column(2.5e4, 7.5e4),
+        degradation_weight=column(0.0, 1.0),
+        line_cost_usd_per_km=column(5e4, 1.2e6),
+        bay_cost_usd=column(1e6, 3e6),
+        road_cost_usd_per_km=column(2.5e4, 1.5e6),
+        tortuosity_grid=column(1.2, 1.3),
+        tortuosity_road=column(1.2, 1.3),
+        reference_project_mw=np.full(n, 100.0),
+        transmission_loss_per_km=np.zeros(n),
         energy_parameter=np.full(n, 0.9),
     )
 
@@ -63,11 +69,13 @@ def _world(rng, n_cells=60, n_core=3, fails=None):
         scale = 1.0 - 0.05 * j
         cells = CellInputs(
             p_mw=base.p_mw,
-            dist_grid_km=base.dist_grid_km,
+            dist_sub_km=base.dist_sub_km,
             dist_road_km=base.dist_road_km,
             energy_mwh=base.energy_mwh * scale,
             energy_offset=base.energy_offset,
             energy_slope=base.energy_slope,
+            degradation_low=base.degradation_low,
+            degradation_high=base.degradation_high,
         )
         floor = np.zeros(n_cells)
         floor[list((fails or {}).get(j, []))] = np.inf
@@ -202,8 +210,9 @@ def test_a_zero_energy_draw_takes_the_worst_case_regret_of_its_sample():
     energy = cells.energy_mwh.copy()
     energy[3] = 0.0
     broken = CellInputs(
-        p_mw=cells.p_mw, dist_grid_km=cells.dist_grid_km, dist_road_km=cells.dist_road_km,
+        p_mw=cells.p_mw, dist_sub_km=cells.dist_sub_km, dist_road_km=cells.dist_road_km,
         energy_mwh=energy, energy_offset=cells.energy_offset, energy_slope=cells.energy_slope,
+        degradation_low=cells.degradation_low, degradation_high=cells.degradation_high,
     )  # fmt: skip
     world = MemberWorld("m1", broken, np.zeros(10))
     got = evaluate(reference, [world], samples, tau=None, block_cells=4)

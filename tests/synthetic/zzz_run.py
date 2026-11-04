@@ -109,6 +109,12 @@ def prepare_configuration(
     block = json.loads(json.dumps(document["countries"]["ZZZ"]))
     for tech, changes in (parameter_changes or {}).items():
         for name, change in changes.items():
+            if tech == "connection":  # a UnitCost of the country block: value, low and high
+                entry = block["connection"][name]
+                entry["value"] = change["value"]
+                if "min" in change:
+                    entry["low"], entry["high"] = change["min"], change["max"]
+                continue
             entry = block["technologies"][tech][name]
             entry["value"] = change["value"]
             if "min" in change:

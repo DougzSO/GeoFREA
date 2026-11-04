@@ -14,6 +14,7 @@ import geopandas as gpd
 from shapely.geometry import LineString
 
 import geofrea.grid_alignment.alignment as alignment_module
+import geofrea.grid_alignment.layers as layers_module
 from geofrea.core.cache_key import (
     FileHashMemo,
     cache_is_current,
@@ -127,9 +128,9 @@ def test_the_hash_memo_reuses_a_hash_while_size_and_mtime_hold_and_survives_a_re
 def _calls_of_reproject(inputs, context):
     """Calls of the elevation and slope pass (F2a reads the GLO-30 tiles, D-F2a-021)."""
     with patch.object(
-        alignment_module,
+        layers_module,
         "glo30_aligned_outputs",
-        wraps=alignment_module.glo30_aligned_outputs,
+        wraps=layers_module.glo30_aligned_outputs,
     ) as spy:
         run_grid_alignment_phase(context, inputs)
     return spy.call_count
@@ -176,9 +177,9 @@ def test_the_distance_cap_is_a_config_component_of_the_distance_layers(tmp_path)
     def calls(cap: float) -> int:
         inputs = _inputs(grid_source=grid_file, country_gdf=_country_gdf(), distance_cap_km=cap)
         with patch.object(
-            alignment_module,
+            layers_module,
             "rasterize_linear_distance",
-            wraps=alignment_module.rasterize_linear_distance,
+            wraps=layers_module.rasterize_linear_distance,
         ) as spy:
             run_grid_alignment_phase(context, inputs)
         return spy.call_count
@@ -194,15 +195,15 @@ def test_the_list_of_land_cover_tiles_is_part_of_the_key(tmp_path):
     _write_raster(t2, 20.0)
     context = _context(tmp_path)
 
-    def fake_mosaic(tiles, out_path, grid, country_gdf):
+    def fake_mosaic(tiles, out_path, grid, country_gdf, **kwargs):
         _write_raster(out_path, 10.0, size=grid.height)
         return out_path
 
     def calls(tiles) -> int:
         inputs = _inputs(land_cover_tiles=tiles, country_gdf=_country_gdf())
         with (
-            patch.object(alignment_module, "mosaic_land_cover", side_effect=fake_mosaic) as spy,
-            patch.object(alignment_module, "land_cover_class_counts", return_value=None),
+            patch.object(layers_module, "mosaic_land_cover", side_effect=fake_mosaic) as spy,
+            patch.object(layers_module, "land_cover_class_counts", return_value=None),
         ):
             run_grid_alignment_phase(context, inputs)
         return spy.call_count

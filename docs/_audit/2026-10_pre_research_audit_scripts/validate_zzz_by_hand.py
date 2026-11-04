@@ -32,13 +32,15 @@ TECH = sys.argv[2] if len(sys.argv) > 2 else "wind"
 WORLD = sys.argv[3] if len(sys.argv) > 3 else "zzz"
 REPO = Path(__file__).resolve().parents[3]
 OUT = DATA / "outputs" / "ZZZ"
-PARAMS = json.loads(
+COUNTRY = json.loads(
     (
         DATA / "parameters_synthetic.json"
         if (DATA / "parameters_synthetic.json").is_file()
         else REPO / "config" / "parameters.json"
     ).read_text(encoding="utf-8")
-)["countries"]["ZZZ"]["technologies"]
+)["countries"]["ZZZ"]
+PARAMS = COUNTRY["technologies"]
+CONN = COUNTRY["connection"]  # Group 3: USD 2024 in the synthetic world, so the cost values need no conversion
 EXPERIMENTS = yaml.safe_load((DATA / "experiments_zzz.yaml").read_text(encoding="utf-8"))
 CELL_DEG, PIXEL_DEG = 0.05, 0.01
 HOURS = 8760.0
@@ -51,6 +53,20 @@ EXPECT: dict[
 
 def val(tech: str, key: str) -> float:
     return float(PARAMS[tech][key]["value"])
+
+
+def conn(key: str) -> float:
+    return float(CONN[key]["value"])
+
+
+def degradation_bounds(zone: int) -> tuple[float, float]:
+    """The bounds of the annual degradation of a cell, from the parameters file alone: wind has one range; PV the median and the larger of median and mean
+    of its thermal zone (T1 to T7; a hotter zone takes T7)."""
+    if TECH == "wind":
+        r = PARAMS["wind"]["degradation_rate"]["range"]
+        return float(r["min"]), float(r["max"])
+    z = PARAMS["solar"]["degradation_by_zone"]["zones"][f"T{min(int(zone), 7)}"]
+    return float(z["median"]), max(float(z["median"]), float(z["mean"]))
 
 
 def check(label: str, expected: float, obtained: float, tol: float, relative: bool = True) -> None:
@@ -127,7 +143,48 @@ def validate_f3() -> pd.Series:
         float(cell["eligible_area_km2"]),
         1e-4,
     )
+    check_group3_layers(cell)
     return cell
+
+
+def haversine_km(lon1, lat1, lon2, lat2) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * 6371.0088 * math.asin(math.sqrt(a))
+
+
+def check_group3_layers(cell: pd.Series) -> None:
+    """D_sub (the eligible-area mean of the distance of each pixel centre to the nearest substation at or above the threshold) and the thermal zone of the cell."""
+    grid = json.loads(
+        (DATA / "fixtures" / "synthetic_zzz" / "raw" / "infrastructure_grid" / "ZZZ" / "ZZZ_grid_osm.geojson").read_text(encoding="utf-8")
+    )["features"]
+    threshold = conn("poi_voltage_threshold_kv")
+    subs = [
+        f["geometry"]["coordinates"]
+        for f in grid
+        if f["properties"].get("power") == "substation"
+        and f["geometry"]["type"] == "Point"
+        and float(f["properties"]["voltage"]) / 1000.0 >= threshold
+    ]
+    total_w = sum(w for _, _, w in CELL_PIXELS)
+    mean = sum(w * min(haversine_km(lon, lat, sx, sy) for sx, sy in subs) for lon, lat, w in CELL_PIXELS) / total_w
+    check(
+        f"F3 cell {int(cell['cell_id'])}: dist_sub_km (eligible-area mean of the haversine distance to the {len(subs)} substations; the run uses the ellipsoid)",
+        mean,
+        float(cell["dist_sub_km"]),
+        1e-2,
+    )
+    points = pd.read_csv(DATA / "external" / "pvcz" / "pvcz_2019_ver0p2_t_equiv_rack_1p1eV_zone.csv")
+    nearest = min(
+        points.itertuples(), key=lambda r: haversine_km(cell["lon_c"], cell["lat_c"], r.lon, r.lat)
+    )
+    check(
+        f"F3 cell {int(cell['cell_id'])}: pvcz_zone (nearest PVCZ land point, package number + 1)",
+        float(nearest.T_equiv_rack_1p1eV_zone + 1),
+        float(cell["pvcz_zone"]),
+        0.0,
+        relative=False,
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------
@@ -338,19 +395,29 @@ def validate_f5(cell: pd.Series) -> dict:
 # F6 LCOE: textbook form with an explicit loop over the years
 # ---------------------------------------------------------------------------------------------------------------------------------------
 def lcoe_textbook(
-    p_mw: float, e_mwh: float, dist_grid: float, dist_road: float, s: dict, opex_var: float
+    p_mw: float,
+    e_mwh: float,
+    dist_sub: float,
+    dist_road: float,
+    s: dict,
+    opex_var: float,
+    bounds: tuple[float, float],
 ) -> float:
-    capex_total = (
-        p_mw * 1000 * s["capex_usd_per_kw"]
-        + p_mw * dist_grid * s["grid_cost_usd_per_mw_km"]
-        + p_mw * s["substation_cost_usd_per_mw"]
-        + dist_road * s["road_cost_usd_per_km"]
-    )
+    """Group 3 LCOE with plain floats and an explicit loop over the years: the line and road lengths are tortuosity x distance, the connection cost per MW is
+    (line + bay + road) over the reference project, the degradation is a position between the bounds of the cell, and the transmission efficiency is 1 - alpha x line length."""
+    d = bounds[0] + s["degradation_weight"] * (bounds[1] - bounds[0])
+    line_km = s["tortuosity_grid"] * dist_sub
+    road_km = s["tortuosity_road"] * dist_road
+    per_mw = (
+        s["line_cost_usd_per_km"] * line_km + s["bay_cost_usd"] + s["road_cost_usd_per_km"] * road_km
+    ) / conn("reference_project_mw")
+    capex_total = p_mw * (1000 * s["capex_usd_per_kw"] + per_mw)
+    e_first = e_mwh * max(0.0, 1.0 - conn("transmission_loss_per_km") * line_km)
     n = int(round(s["lifetime_years"]))
     num = capex_total
     den = 0.0
     for t in range(1, n + 1):
-        e_t = e_mwh * (1 - s["degradation_rate"]) ** (t - 1)
+        e_t = e_first * (1 - d) ** (t - 1)
         opex_t = s["opex_fixed_frac"] * p_mw * 1000 * s["capex_usd_per_kw"] + opex_var * e_t
         num += opex_t / (1 + s["discount_rate"]) ** t
         den += e_t / (1 + s["discount_rate"]) ** t
@@ -366,7 +433,8 @@ def validate_f6(cell: pd.Series, f5: dict) -> None:
         cf, e, p = f5[m]
         s0 = design.loc[0].to_dict()
         want = lcoe_textbook(
-            p, e, float(cell["dist_grid_km"]), float(cell["dist_road_km"]), s0, opex_var
+            p, e, float(cell["dist_sub_km"]), float(cell["dist_road_km"]), s0, opex_var,
+            degradation_bounds(int(cell["pvcz_zone"])),
         )
         row = summ[(summ["cell_id"] == cid) & (summ["member"] == m)].iloc[0]
         check(
@@ -392,7 +460,8 @@ def validate_f6(cell: pd.Series, f5: dict) -> None:
             )
         draws.append(
             lcoe_textbook(
-                p, e_s, float(cell["dist_grid_km"]), float(cell["dist_road_km"]), s, opex_var
+                p, e_s, float(cell["dist_sub_km"]), float(cell["dist_road_km"]), s, opex_var,
+                degradation_bounds(int(cell["pvcz_zone"])),
             )
         )
     draws = np.array(draws)
@@ -483,10 +552,11 @@ class Robust:
         return lcoe_textbook(
             float(self.p_mw[c]),
             e_s,
-            float(cell["dist_grid_km"]),
+            float(cell["dist_sub_km"]),
             float(cell["dist_road_km"]),
             s,
             self.opex_var,
+            degradation_bounds(int(cell["pvcz_zone"])),
         )
 
     def regrets(self, member: str, s_idx: int) -> dict[int, float]:

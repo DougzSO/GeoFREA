@@ -10,11 +10,21 @@ from __future__ import annotations
 import pandas as pd
 
 from geofrea.config_models.land_availability import Levels, Ranged
-from geofrea.core.schemas import VerifiedValue
+from geofrea.core.schemas import UnitCost, VerifiedValue
 from geofrea.results_synthesis.members import members_table
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_table
 
 T_M2, T_M3 = "T-M2", "T-M3"
+
+# the sampled keys of Group 3 and the entry of `connection` that holds each (source currency, as recorded); the degradation weight is a position
+# in [0, 1] between the bounds of the cell
+_GROUP3_ENTRY = {
+    "line_cost_usd_per_km": "line_cost_per_km",
+    "bay_cost_usd": "bay_cost",
+    "road_cost_usd_per_km": "road_cost_per_km",
+    "tortuosity_grid": "tortuosity_grid",
+    "tortuosity_road": "tortuosity_road",
+}
 
 
 class ThesisValueError(RuntimeError):
@@ -50,6 +60,32 @@ def check_values(ctx: BuildContext, technology: str) -> None:
             problems.append(f"{name}: uncertain parameter without a value or a range")
     if problems:
         raise ThesisValueError(f"{ctx.iso} {technology}: " + "; ".join(problems))
+
+
+def _group3_row(ctx: BuildContext, technology: str, name: str) -> dict:
+    """The T-M3 row of a Group 3 sampled parameter: costs in the currency and unit of their source (F6 converts them to 2024 USD)."""
+    description = ctx.experiments.uncertain_parameters[name].description
+    if name == "degradation_weight":
+        return {
+            "parameter": name, "description": description, "unit": "weight", "nominal": None, "min": 0.0, "max": 1.0,
+            "distribution": "uniform", "range_source": "bounds of the PV thermal zone or of the wind vintages (parameters.json)",
+            "range_tier": 2, "nominal_source": None, "nominal_tier": 2, "flag": "",
+        }  # fmt: skip
+    entry = getattr(ctx.country_params.connection, _GROUP3_ENTRY[name]) if ctx.country_params.connection else None
+    if entry is None:
+        raise NotBuilt(f"{ctx.iso} has no connection block in parameters.json")
+    if isinstance(entry, UnitCost):
+        flag = "test value" if entry.synthetic else ("to be sourced" if entry.value is None else "")
+        return {
+            "parameter": name, "description": description, "unit": f"{entry.unit} ({entry.currency}, {entry.price_year})",
+            "nominal": entry.value, "min": entry.low, "max": entry.high, "distribution": "uniform",
+            "range_source": entry.source, "range_tier": entry.tier, "nominal_source": entry.source, "nominal_tier": entry.tier, "flag": flag,
+        }  # fmt: skip
+    return {
+        "parameter": name, "description": description, "unit": entry.unit, "nominal": entry.value, "min": entry.range.min,
+        "max": entry.range.max, "distribution": entry.range.distribution, "range_source": entry.range.source,
+        "range_tier": entry.range.tier, "nominal_source": entry.source, "nominal_tier": entry.tier, "flag": _flag(entry),
+    }  # fmt: skip
 
 
 def _flag(v: VerifiedValue) -> str:
@@ -173,6 +209,9 @@ def t_m3(ctx: BuildContext) -> None:
             continue
         rows = []
         for name in ctx.registry.technologies[technology].uncertain_parameters:
+            if name == "degradation_weight" or name in _GROUP3_ENTRY:
+                rows.append(_group3_row(ctx, technology, name))
+                continue
             v = values[name]
             assert v.range is not None  # checked above
             rows.append(

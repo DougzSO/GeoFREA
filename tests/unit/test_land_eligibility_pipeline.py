@@ -128,10 +128,12 @@ def world(tmp_path, monkeypatch):
         land_cover_counts=_write_counts(base / "lcc.tif", _counts(land_cover)),
         slope_counts=_write_slope_counts(base / "sc.tif", _slope_counts(slope)),
         grid=_write(base / "grid.tif", np.full((H, W), 7.0)),
+        poi=_write(base / "poi.tif", np.full((H, W), 7.0)),
         grid_distance_capped=_write(base / "gcap.tif", flag, "uint8", 0),
+        poi_distance_capped=_write(base / "pcap.tif", flag, "uint8", 0),
         roads_distance_capped=_write(base / "rcap.tif", flag, "uint8", 0),
     )
-    layers = {"dist_grid_km": 7.0, "dist_road_km": 2.0, "pvout_kwh_kwp_day": 4.5}
+    layers = {"dist_grid_km": 7.0, "dist_sub_km": 7.0, "dist_road_km": 2.0, "pvout_kwh_kwp_day": 4.5}
     for h in (100, 150, 200):
         layers.update({f"weibull_a_{h}m": 7.0, f"weibull_k_{h}m": 2.0, f"air_density_{h}m": 1.2})
     siting = SitingLayersResult(

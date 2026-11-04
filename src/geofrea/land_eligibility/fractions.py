@@ -32,6 +32,11 @@ DEFAULT_STRIP_ROWS = 40
 # keep the centres on it (the edge moves as much as the centre), and so would any edge whose slope is the ratio of the shifts.
 TIE_BREAK_DEG = 1e-7
 TIE_BREAK_SOUTH_RATIO = 0.6180339887498949
+# The distance transform of a strip is taken in blocks of this many sub-pixel columns, each with a margin of the setback in columns on both sides
+# (COMMAND 91: the transform of a whole BRA strip, 17 M sub-pixels, held 1 GB). A sub-pixel is excluded when a river lies within the largest setback,
+# and any such river is inside the margin, so `dist <= t` is the same as on the whole strip; a pixel whose nearest river is farther than the margin
+# is farther than every setback in both. A multiple of `DEFAULT_FACTOR`, so that a block holds whole pixels.
+RIVER_BLOCK_SUBCOLUMNS = 8000
 
 
 def _block_mean(a: np.ndarray, k: int) -> np.ndarray:
@@ -131,6 +136,7 @@ def river_setback_fractions(
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
     tie_break_deg: float = 0.0,
+    block_subcolumns: int = RIVER_BLOCK_SUBCOLUMNS,
 ) -> dict[float, np.ndarray]:
     """For each setback in `thresholds_km`, the share of each pixel within that geodesic distance of a river line.
 
@@ -169,10 +175,18 @@ def river_setback_fractions(
         ).astype(bool)
         if not river.any():
             continue
-        dist = distance_transform_edt(~river, sampling=(dy_km, dx_km))
         inner = slice((r0 - p0) * factor, (r1 - p0) * factor)
-        for t in thresholds_km:
-            out[t][r0:r1] = _block_mean((dist[inner] <= t).astype(np.float32), factor)
+        n_sub = river.shape[1]
+        halo = int(np.ceil(max_km / dx_km)) + 2  # sub-pixel columns of context on each side of a block
+        block = max(factor, (block_subcolumns // factor) * factor)
+        for c0 in range(0, n_sub, block):
+            c1 = min(c0 + block, n_sub)
+            a, b = max(0, c0 - halo), min(n_sub, c1 + halo)
+            if not river[:, a:b].any():  # no river within reach: every sub-pixel of the block is farther than every setback
+                continue
+            dist = distance_transform_edt(~river[:, a:b], sampling=(dy_km, dx_km))[inner, c0 - a : c1 - a]
+            for t in thresholds_km:
+                out[t][r0:r1, c0 // factor : c1 // factor] = _block_mean((dist <= t).astype(np.float32), factor)
     return out
 
 

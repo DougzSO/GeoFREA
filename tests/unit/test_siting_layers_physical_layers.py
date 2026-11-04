@@ -50,6 +50,7 @@ def _result(tmp_path, drop=None):
             n_valid_pixels=4,
         ),
         grid=_raster(tmp_path / "grid.tif", base, nodata=-9999.0),
+        poi=_raster(tmp_path / "poi.tif", base * 3),
         roads=_raster(tmp_path / "roads.tif", base * 2),
         solar=_raster(tmp_path / "solar.tif", np.array([[4.0, 5.0], [np.nan, 6.0]])),
         wind_layers=wind,
@@ -61,7 +62,7 @@ def test_every_layer_is_written_with_unchanged_values_and_units(tmp_path):
     out = pl.build_physical_layers(_result(tmp_path), tmp_path / "out")
 
     assert set(out) == {s.name for s in pl.LAYER_SPECS}
-    assert len(out) == 3 + 9
+    assert len(out) == 4 + 9
     with rasterio.open(out["dist_grid_km"]) as r:
         np.testing.assert_array_equal(
             r.read(1), [[1.0, 250.0], [3.5, 400.0]]

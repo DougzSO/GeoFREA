@@ -27,9 +27,10 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio
 from rasterio.transform import from_origin
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Point, box
 from zzz_climate_fixture import write_climate_fixture
 
 # --- Extent -----------------------------------------------------------
@@ -228,16 +229,41 @@ def gen_roads() -> None:
 
 
 def gen_grid() -> None:
-    """One transmission-grid line, the same full-height midline as roads, offset by 1 pixel east."""
+    """One transmission-grid line, the same full-height midline as roads, offset by 1 pixel east, tagged 138 kV, with one substation on it.
+
+    The substation point lies on the line, so the rasterized grid (and the frozen `grid` distance layer) is unchanged; it is the only point of
+    interconnection of the synthetic country (Group 3), at the threshold of 138 kV.
+    """
     mid_lon = WEST + (EAST - WEST) / 2 + PIXEL_DEG
     gdf = gpd.GeoDataFrame(
-        {"power": ["line"]},
-        geometry=[LineString([(mid_lon, SOUTH), (mid_lon, NORTH)])],
+        {"power": ["line", "substation"], "voltage": ["138000", "138000"]},
+        geometry=[
+            LineString([(mid_lon, SOUTH), (mid_lon, NORTH)]),
+            Point(mid_lon, (SOUTH + NORTH) / 2),
+        ],
         crs=CRS,
     )
     out = RAW / "infrastructure_grid" / "ZZZ" / "ZZZ_grid_osm.geojson"
     out.parent.mkdir(parents=True, exist_ok=True)
     gdf.to_file(out, driver="GeoJSON")
+
+
+def gen_pvcz(zones: tuple[int, int, int, int] = (1, 3, 5, 8)) -> None:
+    """Four PVCZ land points around the synthetic country; by default zones T2, T4, T6 and T9 (package numbers 1, 3, 5 and 8), so the cells take different zones."""
+    lats = [SOUTH - 0.05, SOUTH - 0.05, NORTH + 0.05, NORTH + 0.05]
+    lons = [WEST - 0.05, EAST + 0.05, WEST - 0.05, EAST + 0.05]
+    zones = list(zones)
+    temperature = [16.0, 26.0, 36.0, 46.0]
+    out = Path(os.environ["GEOFREA_DATA_DIR"]) / "external" / "pvcz"
+    out.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "lat": lats,
+            "lon": lons,
+            "T_equiv_rack_1p1eV": temperature,
+            "T_equiv_rack_1p1eV_zone": zones,
+        }
+    ).to_csv(out / "pvcz_2019_ver0p2_t_equiv_rack_1p1eV_zone.csv", index=False)
 
 
 def gen_solar() -> None:
@@ -425,6 +451,7 @@ def main() -> None:
     gen_lakes()
     gen_roads()
     gen_grid()
+    gen_pvcz()
     gen_solar()
     gen_wind()
     gen_gem_inventory()

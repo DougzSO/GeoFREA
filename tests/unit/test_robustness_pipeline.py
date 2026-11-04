@@ -183,8 +183,9 @@ def _stage(
                 "lon_c": 20.0 + 0.05 * (np.arange(N_CELLS) % 4),
                 "admin1_id": np.where(np.arange(N_CELLS) < 10, "A.1", "B.1"),
                 "cell_area_km2": np.full(N_CELLS, 25.0),
-                "dist_grid_km": rng.uniform(0.0, 120.0, N_CELLS),
+                "dist_sub_km": rng.uniform(0.0, 120.0, N_CELLS),
                 "dist_road_km": rng.uniform(0.0, 30.0, N_CELLS),
+                "pvcz_zone": rng.integers(1, 10, N_CELLS).astype("int8"),
                 "elevation_m": np.linspace(
                     100.0, 3600.0, N_CELLS
                 ),  # the last cells lie above the 3000 m of the wind sensitivity (OQ-058)
@@ -451,9 +452,10 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
             )  # fmt: skip
         text = str(info.value)
         assert text.count("cf_min") == 2 and "OQ-008" in text
-        # Groups 1 and 2 are recorded: what stays open is the Group 3 costs and the F7 thresholds (the discount rate is recorded)
-        assert "grid_cost_usd_per_mw_km" in text
-        assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 18
+        # Groups 1 and 2 are recorded: what stays open is the Group 3 unit costs (OQ-001) and the F7 thresholds
+        # no real country has an open cost since COMMAND 86: the F6 check stops at the conversion indices, which are not in the test data dir
+        assert "conversion to 2024 USD" in text  # COMMAND 86: no cost is open; the test data dir has no conversion indices
+        assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 4
 
 
 # -- the s0 invariant, determinism, memory, windows ---------------------------------------------------------

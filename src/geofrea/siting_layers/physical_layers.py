@@ -15,7 +15,10 @@ from pathlib import Path
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
+from geofrea.core import memory_budget
+from geofrea.core import paths as core_paths
 from geofrea.core.constants import NODATA_FLOAT, WIND_HEIGHTS_M
+from geofrea.core.layer_process import LayerFailedError, LayerRecord, append_ledger, run_layer
 from geofrea.core.raster_io import safe_raster_open, safe_raster_write
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 
@@ -40,12 +43,17 @@ class PhysicalLayerSpec:
 
 LAYER_SPECS: tuple[PhysicalLayerSpec, ...] = (
     PhysicalLayerSpec("dist_grid_km", "km", "cost_driver"),
+    PhysicalLayerSpec("dist_sub_km", "km", "cost_driver"),
     PhysicalLayerSpec("dist_road_km", "km", "cost_driver"),
     PhysicalLayerSpec("pvout_kwh_kwp_day", "kWh/kWp/day", "resource"),
     *(PhysicalLayerSpec(f"weibull_a_{h}m", "m/s", "resource") for h in WIND_HEIGHTS_M),
     *(PhysicalLayerSpec(f"weibull_k_{h}m", "1", "resource") for h in WIND_HEIGHTS_M),
     *(PhysicalLayerSpec(f"air_density_{h}m", "kg/m3", "resource") for h in WIND_HEIGHTS_M),
 )
+
+
+class PhysicalLayersFailedError(RuntimeError):
+    """One or more layers of F2b failed in their child process; the others were written (the ledger `layers.json` says which and why)."""
 
 
 class MissingPhysicalLayerError(ValueError):
@@ -56,6 +64,7 @@ def _sources(grid_result: GridAlignmentResult) -> dict[str, Path | None]:
     wind = grid_result.wind_layers
     sources: dict[str, Path | None] = {
         "dist_grid_km": grid_result.grid,
+        "dist_sub_km": grid_result.poi,
         "dist_road_km": grid_result.roads,
         "pvout_kwh_kwp_day": grid_result.solar,
     }
@@ -107,9 +116,27 @@ def build_physical_layers(grid_result: GridAlignmentResult, out_dir: Path) -> di
     missing = [name for name, p in sources.items() if p is None or not Path(p).exists()]
     if missing:
         raise MissingPhysicalLayerError(f"required aligned layers missing: {', '.join(missing)}")
-    return {
-        spec.name: write_physical_layer(
-            Path(sources[spec.name]), out_dir / f"{spec.name}.tif", spec
+    # Each layer in its own child process, one at a time (COMMAND 88): a layer that fails leaves the others written
+    ledger_path = core_paths.interim(grid_result.country_code, "siting_layers") / "layers.json"
+    ledger: list[LayerRecord] = []
+    written: dict[str, Path] = {}
+    failed: list[str] = []
+    for spec in LAYER_SPECS:
+        try:
+            _, record = run_layer(
+                spec.name,
+                f"{__name__}:write_physical_layer",
+                {"src_path": Path(sources[spec.name]), "out_path": out_dir / f"{spec.name}.tif", "spec": spec},
+                peak_mb=memory_budget.peak_mb("physical"),
+            )
+            written[spec.name] = out_dir / f"{spec.name}.tif"
+        except LayerFailedError as exc:
+            record = LayerRecord(layer=spec.name, status="failed", detail=str(exc))
+            failed.append(spec.name)
+        ledger.append(record)
+        append_ledger(ledger_path, ledger)
+    if failed:
+        raise PhysicalLayersFailedError(
+            f"{grid_result.country_code}: {len(failed)} layer(s) of F2b failed: {', '.join(failed)}; the others are written (see {ledger_path})"
         )
-        for spec in LAYER_SPECS
-    }
+    return written

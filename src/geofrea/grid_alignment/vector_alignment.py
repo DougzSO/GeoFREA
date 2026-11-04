@@ -120,6 +120,26 @@ def load_vector_bbox(
         return None
 
 
+def filter_road_classes(gdf: gpd.GeoDataFrame | None, classes) -> gpd.GeoDataFrame | None:
+    """Keep the roads of the configured classes (Group 3: primary and secondary roads; the distance to the road is a distance to a main road).
+
+    GRIP4 carries the class in `GP_RTP` (1 highways, 2 primary, 3 secondary, 4 tertiary, 5 local) and OSM in `highway`. A frame with neither
+    column is returned unchanged (the synthetic country has no road classes); `classes` None keeps every road.
+
+    Implements: M-F2a-10.
+    """
+    if gdf is None or classes is None or gdf.empty:
+        return gdf
+    if "GP_RTP" in gdf.columns:
+        kept = gdf[gdf["GP_RTP"].isin(classes.grip4_gp_rtp)]
+    elif "highway" in gdf.columns:
+        kept = gdf[gdf["highway"].isin(classes.osm_highway)]
+    else:
+        return gdf
+    logger.info("    [roads] %d of %d features in the configured road classes.", len(kept), len(gdf))
+    return kept if not kept.empty else None
+
+
 def calculate_wgs84_isotropic_distance(
     feature_mask_inv: np.ndarray, grid: GridContext
 ) -> np.ndarray:
@@ -147,6 +167,37 @@ def calculate_wgs84_isotropic_distance(
 
     px_scale_km = math.sqrt(abs(grid.transform.a) * lon_km_deg * abs(grid.transform.e) * lat_km_deg)
     return (dist_pixels * px_scale_km).astype(np.float32)
+
+
+_RASTERIZE_CHUNK = 20_000  # features simplified, converted and rasterized at a time
+
+
+def rasterize_in_chunks(geometries, grid: GridContext, tolerance: float) -> tuple[np.ndarray, int]:
+    """The mask (1 where a pixel is touched by a feature) of `geometries` simplified at `tolerance`, built `_RASTERIZE_CHUNK` features at a time.
+
+    Each feature is simplified and burnt on its own, and the mask is the union of what the features burn, so a chunk of any size gives the mask
+    of all of them at once (COMMAND 88). What changes is the memory: the simplified copy of the whole layer, its list of GeoJSON dictionaries
+    and the rasterizer's own copy were 1.5 GB for the rivers of BRA.
+    """
+    mask = np.zeros((grid.height, grid.width), dtype=np.uint8)
+    n_shapes = 0
+    geometries = list(geometries) if not hasattr(geometries, "iloc") else geometries
+    for start in range(0, len(geometries), _RASTERIZE_CHUNK):
+        chunk = geometries.iloc[start : start + _RASTERIZE_CHUNK] if hasattr(geometries, "iloc") else geometries[start : start + _RASTERIZE_CHUNK]
+        shapes = [(mapping(g), 1) for g in chunk.simplify(tolerance) if g is not None and not g.is_empty]
+        if not shapes:
+            continue
+        n_shapes += len(shapes)
+        mask |= rasterize(
+            shapes=shapes,
+            out_shape=(grid.height, grid.width),
+            transform=grid.transform,
+            fill=0,
+            all_touched=True,
+            dtype=np.uint8,
+        )
+        del shapes
+    return mask, n_shapes
 
 
 def distance_capped_path(distance_path) -> Path:
@@ -232,18 +283,8 @@ def rasterize_linear_distance(
 
         gdf_intersect = gdf.iloc[intersect_indices]
         tolerance = abs(grid.transform.a) * 0.5
-        shapes = [
-            (mapping(g), 1) for g in gdf_intersect.geometry.simplify(tolerance) if not g.is_empty
-        ]
-
-        feature_mask = rasterize(
-            shapes=shapes,
-            out_shape=(grid.height, grid.width),
-            transform=grid.transform,
-            fill=0,
-            all_touched=True,
-            dtype=np.uint8,
-        )
+        feature_mask, _ = rasterize_in_chunks(gdf_intersect.geometry, grid, tolerance)
+        del gdf_intersect, tree
         feature_mask = feature_mask & grid.country_mask.astype(np.uint8)
 
         dist_km = calculate_wgs84_isotropic_distance((feature_mask == 0).astype(np.uint8), grid)
@@ -329,21 +370,13 @@ def align_rivers(
         return None
 
     tolerance = abs(grid.transform.a) * 0.5
-    shapes = [
-        (mapping(g), 1) for g in rivers_gdf.geometry.simplify(tolerance) if g and not g.is_empty
-    ]
-    if not shapes:
+    river_mask, n_shapes = rasterize_in_chunks(rivers_gdf.geometry, grid, tolerance)
+    if n_shapes == 0:
         return None
 
-    river_mask = rasterize(
-        shapes=shapes,
-        out_shape=(grid.height, grid.width),
-        transform=grid.transform,
-        fill=0,
-        all_touched=True,
-        dtype=np.uint8,
-    )
-
-    dist_km = calculate_wgs84_isotropic_distance((river_mask == 0).astype(np.uint8), grid)
+    background = (river_mask == 0).astype(np.uint8)
+    del river_mask
+    dist_km = calculate_wgs84_isotropic_distance(background, grid)
+    del background
     _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
     return out_path

@@ -60,7 +60,7 @@ def _tech_params(parameters, iso, tech):
 # -- inputs ------------------------------------------------------------------------------------------
 
 
-def _write_inputs(root: Path, resolved, n_cells=30, zero_energy_cell=None, drop=()):
+def _write_inputs(root: Path, resolved, n_cells=30, zero_energy_cell=None, drop=(), nan_distance_cell=None, no_zone_cell=None):
     """F5-like potential table (with provenance), F3-like candidates and an F4-like forcing, for the cells 100..100+n."""
     rng = np.random.default_rng(5)
     ids = np.arange(100, 100 + n_cells)
@@ -113,11 +113,18 @@ def _write_inputs(root: Path, resolved, n_cells=30, zero_energy_cell=None, drop=
         extra_metadata=meta,
     )
     candidates_path = root / "candidates.parquet"
+    if nan_distance_cell is not None:
+        dist_grid = dist_grid.copy()
+        dist_grid[ids == nan_distance_cell] = np.nan  # no valid distance in the cell
+    zone = rng.integers(1, 10, n_cells).astype("int8")  # T1 to T9: T8 and T9 take the T7 rate
+    if no_zone_cell is not None:
+        zone[ids == no_zone_cell] = 0  # no PVCZ land point within the limit
     pd.DataFrame(
         {
             "cell_id": ids,
-            "dist_grid_km": dist_grid,
+            "dist_sub_km": dist_grid,
             "dist_road_km": dist_road,
+            "pvcz_zone": zone,
             "elevation_m": np.linspace(
                 100.0, 3500.0, n_cells
             ),  # the top fifth lies above the 3000 m of the wind sensitivity (OQ-058)
@@ -132,7 +139,8 @@ def _stage(tmp_path, tech, restrictive_drop=(), **kw):
     """The directory layout `build_lcoe` reads, from small tables for the ZZZ values of `tech`."""
     registry = load_technologies(TECHNOLOGIES)
     zzz = getattr(load_parameters(PARAMETERS).countries["ZZZ"].technologies, tech)
-    resolved = resolve_technology_costs("ZZZ", tech, registry.technologies[tech], zzz)
+    connection = load_parameters(PARAMETERS).countries["ZZZ"].connection
+    resolved = resolve_technology_costs("ZZZ", tech, registry.technologies[tech], zzz, connection)
     potential, candidates, forcing = _write_inputs(tmp_path / "raw", resolved, **kw)
     pdir, cdir, kdir = tmp_path / "potential", tmp_path / "candidates", tmp_path / "climate"
     for d in (pdir, cdir, kdir):
@@ -174,17 +182,27 @@ def _run(tmp_path, tech, n=40, seed=7, gb=1.0, **kw):
     return result.technologies[tech], out
 
 
-def _hand_lcoe(p, dist_grid, dist_road, e_year1, s):
-    """M-F6-01 written out year by year with plain floats, independent of the kernel module."""
-    capex_total = (
-        p * 1000 * s["capex_usd_per_kw"]
-        + p * dist_grid * s["grid_cost_usd_per_mw_km"]
-        + p * s["substation_cost_usd_per_mw"]
-        + dist_road * s["road_cost_usd_per_km"]
-    )
+def _bounds(resolved, zone):
+    """The degradation bounds of a cell: the pair of its PV zone (zones above T7 take T7) or the single pair of wind."""
+    model = resolved.group3.degradation
+    if model.by_zone is None:
+        return model.single
+    return model.by_zone[min(int(zone), 7)]
+
+
+def _hand_lcoe(p, dist_sub, dist_road, e_year1, s, d_bounds=(0.0, 0.0)):
+    """M-F6-01 and Group 3 written out year by year with plain floats, independent of the kernel module."""
+    low, high = d_bounds
+    degradation = low + s["degradation_weight"] * (high - low)
+    l_grid, l_road = s["tortuosity_grid"] * dist_sub, s["tortuosity_road"] * dist_road
+    c_inter = (
+        s["line_cost_usd_per_km"] * l_grid + s["bay_cost_usd"] + s["road_cost_usd_per_km"] * l_road
+    ) / s["reference_project_mw"]
+    capex_total = p * (1000 * s["capex_usd_per_kw"] + c_inter)
+    e_year1 = e_year1 * max(0.0, 1.0 - s["transmission_loss_per_km"] * l_grid)
     cost, energy = capex_total, 0.0
     for t in range(1, int(s["lifetime_years"]) + 1):
-        e_t = e_year1 * (1 - s["degradation_rate"]) ** (t - 1)
+        e_t = e_year1 * (1 - degradation) ** (t - 1)
         opex_t = (
             s["opex_fixed_frac"] * p * 1000 * s["capex_usd_per_kw"]
             + s["opex_var_usd_per_mwh"] * e_t
@@ -297,11 +315,13 @@ def _random_cells_and_samples(n_cells, n_draws, seed=3):
     rng = np.random.default_rng(seed)
     cells = CellInputs(
         p_mw=rng.uniform(10, 300, n_cells),
-        dist_grid_km=rng.uniform(0, 100, n_cells),
+        dist_sub_km=rng.uniform(0, 100, n_cells),
         dist_road_km=rng.uniform(0, 20, n_cells),
         energy_mwh=rng.uniform(1e4, 9e5, n_cells),
         energy_offset=np.ones(n_cells),
         energy_slope=np.zeros(n_cells),
+        degradation_low=np.zeros(n_cells),
+        degradation_high=np.full(n_cells, 0.01),
     )
     n = n_draws + 1
     samples = SampleInputs(
@@ -310,10 +330,14 @@ def _random_cells_and_samples(n_cells, n_draws, seed=3):
         opex_var_usd_per_mwh=np.full(n, 2.0),
         lifetime_years=rng.integers(15, 26, n).astype(float),
         discount_rate=rng.uniform(0.03, 0.08, n),
-        degradation_rate=rng.uniform(0.0, 0.01, n),
-        grid_cost_usd_per_mw_km=rng.uniform(500, 1500, n),
-        substation_cost_usd_per_mw=rng.uniform(1e4, 3e4, n),
+        degradation_weight=rng.uniform(0.0, 1.0, n),
+        line_cost_usd_per_km=rng.uniform(5e4, 1.5e5, n),
+        bay_cost_usd=rng.uniform(1e6, 3e6, n),
         road_cost_usd_per_km=rng.uniform(2.5e4, 7.5e4, n),
+        tortuosity_grid=rng.uniform(1.2, 1.3, n),
+        tortuosity_road=rng.uniform(1.2, 1.3, n),
+        reference_project_mw=np.full(n, 100.0),
+        transmission_loss_per_km=np.zeros(n),
         energy_parameter=np.ones(n),
     )
     return cells, samples.take(slice(0, 1)), samples.take(slice(1, None))
@@ -386,14 +410,17 @@ def test_a_summary_row_is_reproduced_by_recomputing_the_kernel_by_hand(tmp_path,
     forcing = pd.read_parquet(tmp_path / "climate" / "forcing.parquet").astype({"member": str})
     registry = load_technologies(TECHNOLOGIES)
     zzz = _tech_params(load_parameters(PARAMETERS), "ZZZ", tech)
-    resolved = resolve_technology_costs("ZZZ", tech, registry.technologies[tech], zzz)
+    resolved = resolve_technology_costs(
+        "ZZZ", tech, registry.technologies[tech], zzz, load_parameters(PARAMETERS).countries["ZZZ"].connection
+    )
     energy_key = resolved.energy_key
     x0 = resolved.nominal[energy_key]
 
     cell, member = 117, "m_b"
     prow = potential[(potential.cell_id == cell) & (potential.member == member)].iloc[0]
     d_t = float(forcing[(forcing.cell_id == cell) & (forcing.member == member)]["dT"].iloc[0])
-    dg, dr = candidates.loc[cell, "dist_grid_km"], candidates.loc[cell, "dist_road_km"]
+    dg, dr = candidates.loc[cell, "dist_sub_km"], candidates.loc[cell, "dist_road_km"]
+    bounds = _bounds(resolved, candidates.loc[cell, "pvcz_zone"])
 
     def lcoe_of(sample):
         s = {
@@ -405,7 +432,7 @@ def test_a_summary_row_is_reproduced_by_recomputing_the_kernel_by_hand(tmp_path,
             factor = (1 + x * d_t) / (1 + x0 * d_t)
         else:  # M-F5-03: eta_loss is a scalar factor
             factor = x / x0
-        return _hand_lcoe(prow.P_MW, dg, dr, prow.E_MWh * factor, s)
+        return _hand_lcoe(prow.P_MW, dg, dr, prow.E_MWh * factor, s, bounds)
 
     draws = np.array([lcoe_of(i) for i in range(1, 61)])
     row = summary[(summary.cell_id == cell) & (summary.member == member)].iloc[0]
@@ -437,15 +464,17 @@ def test_nominal_lcoe_equals_the_direct_lcoe_of_the_f5_table_and_the_rescale_is_
         tech,
         registry.technologies[tech],
         _tech_params(load_parameters(PARAMETERS), "ZZZ", tech),
+        load_parameters(PARAMETERS).countries["ZZZ"].connection,
     )
     merged = summary.merge(potential, on=["cell_id", "member"], validate="one_to_one")
     for _, r in merged.sample(12, random_state=1).iterrows():
         direct = _hand_lcoe(
             r.P_MW,
-            candidates.loc[r.cell_id, "dist_grid_km"],
+            candidates.loc[r.cell_id, "dist_sub_km"],
             candidates.loc[r.cell_id, "dist_road_km"],
             r.E_MWh,
             dict(resolved.nominal),
+            _bounds(resolved, candidates.loc[r.cell_id, "pvcz_zone"]),
         )
         assert r.lcoe_nominal == pytest.approx(direct, rel=1e-11)
 
@@ -483,10 +512,17 @@ def test_the_design_matrix_is_nominal_first_in_range_integer_lifetime_and_reprod
     keys = registry.technologies[tech].uncertain_parameters
     assert design["sample"].tolist() == list(range(81))
     assert design.columns.tolist() == ["sample", *keys]
+    connection = load_parameters(PARAMETERS).countries["ZZZ"].connection
+    specs = {
+        spec.name: spec
+        for spec in resolve_technology_costs(
+            "ZZZ", tech, registry.technologies[tech], zzz, connection
+        ).specs
+    }  # the values and ranges as F6 uses them: Group 3 costs in 2024 USD, the degradation as a weight in [0, 1]
     for key in keys:
-        entry = getattr(zzz, key)
-        assert design.loc[0, key] == entry.value  # sample 0 is the nominal vector
-        assert design[key].between(entry.range.min, entry.range.max).all()
+        spec = specs[key]
+        assert design.loc[0, key] == spec.nominal  # sample 0 is the nominal vector
+        assert design[key].between(spec.low, spec.high).all()
     assert (design["lifetime_years"] == design["lifetime_years"].round()).all()
     again, _ = _run(tmp_path / "b", tech, n=80, seed=11)
     pd.testing.assert_frame_equal(design, pd.read_parquet(again.design_matrix))
@@ -594,10 +630,11 @@ def test_supply_curve_function_ties_by_cell_id_and_puts_infinite_last():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("iso", ["BRA", "PRT", "IND"])
-def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_the_degradation(
+def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_citing_oq_001(
     iso, registry, parameters, tmp_path
 ):
-    """Groups 1 and 2 are recorded; F6 still lists exactly what is open (the degradation and the Group 3 costs; the discount rate is recorded), before reading any input."""
+    """Groups 1, 2 and the degradation are recorded; F6 still lists exactly what is open (the unit costs of Group 3, OQ-001, and the price year
+    of a cost that is still to be verified), before reading any input."""
     with pytest.raises(LcoeMissingInputError) as caught:
         build_lcoe(
             iso, registry, parameters.countries[iso], TECHS,
@@ -606,14 +643,22 @@ def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_the_degrada
             climate_dir=tmp_path / "none", out_dir=tmp_path / "out",
         )  # fmt: skip
     message = str(caught.value)
+    connection = parameters.countries[iso].connection
+    still_open = [n for n in ("line_cost_per_km", "bay_cost") if getattr(connection, n).value is None]
+    assert connection.road_cost_excluded  # COMMAND 85: no sourced road cost, the central scenario bills none
+    assert not still_open  # COMMAND 86: every cost has a value and a year
+    assert "conversion to 2024 USD" in message  # the unit test has no conversion indices (they live in GEOFREA_DATA_DIR)
     for tech in TECHS:
-        for item in (
-            f"{tech}: degradation_rate (pending_research)",
-            f"{tech}: grid_cost_usd_per_mw_km (pending_research)",
-            f"{tech}: substation_cost_usd_per_mw (pending_research)",
-            f"{tech}: road_cost_usd_per_km (pending_research)",
-        ):
-            assert item in message, item
+        assert f"{tech}: road_cost_per_km" not in message  # an excluded road is not a missing item
+        for name in ("line_cost_per_km", "bay_cost"):
+            cost = getattr(connection, name)
+            if cost.value is None:
+                assert f"{tech}: {name} (no value, status to_be_sourced; OQ-001)" in message, name
+            elif cost.price_year is None:
+                assert f"{tech}: {name} price_year (null, status verify" in message, name
+            else:
+                assert f"{tech}: {name}" not in message, name
+        assert f"{tech}: degradation" not in message  # the zone rates and the wind rate are recorded
         for recorded in ("capex_usd_per_kw", "opex_fixed_frac", "opex_var_usd_per_mwh", "lifetime_years"):
             assert f"{tech}: {recorded}" not in message, recorded
     assert "gamma" not in message and "eta_loss" not in message
@@ -624,10 +669,10 @@ def test_real_countries_fail_loud_listing_only_the_group_3_costs_and_the_degrada
 @pytest.mark.unit
 def test_a_cost_price_year_other_than_2024_is_refused_listing_the_parameter(registry, parameters):
     zzz = parameters.countries["ZZZ"].model_copy(deep=True)
-    zzz.technologies.wind.road_cost_usd_per_km.price_year = 2020
-    with pytest.raises(LcoeMissingInputError, match=r"road_cost_usd_per_km price_year \(is 2020"):
+    zzz.technologies.wind.capex_usd_per_kw.price_year = 2020
+    with pytest.raises(LcoeMissingInputError, match=r"capex_usd_per_kw price_year \(is 2020"):
         resolve_technology_costs(
-            "ZZZ", "wind", registry.technologies["wind"], zzz.technologies.wind
+            "ZZZ", "wind", registry.technologies["wind"], zzz.technologies.wind, zzz.connection
         )
 
 
@@ -639,7 +684,7 @@ def test_a_range_outside_the_kernel_domain_is_refused_not_clipped(registry, para
     zzz.technologies.wind.lifetime_years.range.min = 0.0
     with pytest.raises(LcoeMissingInputError) as caught:
         resolve_technology_costs(
-            "ZZZ", "wind", registry.technologies["wind"], zzz.technologies.wind
+            "ZZZ", "wind", registry.technologies["wind"], zzz.technologies.wind, zzz.connection
         )
     text = str(caught.value)
     assert "degradation outside [0, 1)" in text
@@ -889,3 +934,29 @@ def test_f6_computes_only_the_members_that_carry_the_channels_of_the_technology(
     assert solar.technologies["solar"].n_members == len(MEMBERS)
     assert no_wind not in set(pd.read_parquet(wind.technologies["wind"].lcoe_summary)["member"])
     assert no_wind in set(pd.read_parquet(solar.technologies["solar"].lcoe_summary)["member"])
+
+
+@pytest.mark.unit
+def test_cells_with_a_missing_distance_or_zone_are_left_out_and_counted(tmp_path):
+    """Group 3: a cell with a NaN distance, or (PV) no thermal zone, has no LCOE row and is counted; it is never given a zero connection cost."""
+    clean, _ = _run(tmp_path / "clean", "solar", n=16)
+    result, _ = _run(tmp_path / "holes", "solar", n=16, nan_distance_cell=105, no_zone_cell=110)
+    summary = pd.read_parquet(result.lcoe_summary)
+    assert not {105, 110} & set(summary["cell_id"])
+    assert result.n_excluded_cell_members == 2 * len(MEMBERS)
+    assert clean.n_excluded_cell_members == 0
+    assert result.n_rows == clean.n_rows - 2 * len(MEMBERS)
+    assert np.isfinite(summary["lcoe_nominal"]).all()
+    # the cells that remain keep their values: the same draws and the same inputs
+    kept = pd.read_parquet(clean.lcoe_summary)
+    kept = kept[~kept["cell_id"].isin([105, 110])].reset_index(drop=True)
+    pd.testing.assert_series_equal(
+        kept["lcoe_nominal"], summary["lcoe_nominal"].reset_index(drop=True), check_names=False
+    )
+
+
+@pytest.mark.unit
+def test_wind_does_not_need_the_zone_so_a_cell_without_one_stays(tmp_path):
+    result, _ = _run(tmp_path / "wind", "wind", n=16, no_zone_cell=110)
+    assert result.n_excluded_cell_members == 0
+    assert 110 in set(pd.read_parquet(result.lcoe_summary)["cell_id"])

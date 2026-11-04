@@ -82,6 +82,8 @@ class TechLcoe(BaseModel):
     n_draw_nonfinite: int
     lcoe_nominal_m0_min: float | None
     lcoe_nominal_m0_median: float | None
+    n_excluded_cell_members: int = 0  # left out because the distance or the PV zone is missing (never given a zero cost)
+    long_distance_share_of_capacity: float | None = None  # share of the reference member's capacity beyond `long_distance_flag_km` of a substation
     lcoe_summary: Path
     design_matrix: Path
     supply_curve: Path
@@ -163,6 +165,20 @@ def _provenance(
         "max_batch_gb": max_batch_gb,
         "c3_applied": False,
         "production": production,
+        "group3": None
+        if resolved.group3 is None
+        else {
+            "boundary": "radial connection only: line, bay at the receiving substation and access road, divided by reference_project_mw; no network reinforcement",
+            "long_distance_flag_km": resolved.group3.long_distance_flag_km,
+            "degradation": "by PVCZ thermal zone (median to mean)"
+            if resolved.group3.degradation.by_zone is not None
+            else "reference turbine vintages (range)",
+            "currency": "constant 2024 USD (World Bank GDP deflator and 2024 average exchange rate)",
+            "road_cost_excluded": resolved.group3.road_cost_excluded,
+            "warning": "the access road is not billed (no sourced road cost): the LCOE is a lower bound; sensitivity road_cost_high"
+            if resolved.group3.road_cost_excluded
+            else None,
+        },
     }
     return {PROVENANCE_KEY: json.dumps(payload, sort_keys=True)}
 
@@ -301,8 +317,13 @@ def build_technology_lcoe(
         )[ELEVATION_COLUMN]
     )
     design_path = out_dir / f"design_matrix_{tech}.parquet"
+    if resolved.group3 is not None and resolved.group3.road_cost_excluded:
+        logger.warning(
+            "%s %s: the access road is not billed (road_cost_excluded, no sourced cost): the LCOE is a lower bound; see sensitivity road_cost_high", iso, tech
+        )
     progress = PeriodicProgress(logger, len(members), f"{iso} {tech} LCOE members", every=5)
-    n_rows = n_nonfinite_nominal = n_draw_nonfinite = 0
+    n_rows = n_nonfinite_nominal = n_draw_nonfinite = n_excluded_total = 0
+    long_distance_share: float | None = None
     seen_cells: set[int] = set()
     m0_nominal: np.ndarray | None = None
     with (
@@ -394,8 +415,15 @@ def build_technology_lcoe(
                         item.cells.energy_mwh[keep],
                     )
                 )
+            n_excluded_total += item.n_excluded
             if item.member == REFERENCE_MEMBER_ID:
                 m0_nominal = nominal_all
+                capacity = float(item.cells.p_mw.sum())
+                flag_km = resolved.group3.long_distance_flag_km if resolved.group3 else None
+                if capacity > 0 and flag_km is not None:
+                    long_distance_share = float(
+                        item.cells.p_mw[item.cells.dist_sub_km > flag_km].sum() / capacity
+                    )
             progress.step()
     write_table(
         design.reset_index(),
@@ -431,6 +459,8 @@ def build_technology_lcoe(
         n_draw_nonfinite=n_draw_nonfinite,
         lcoe_nominal_m0_min=float(finite_m0.min()) if finite_m0.size else None,
         lcoe_nominal_m0_median=float(np.median(finite_m0)) if finite_m0.size else None,
+        n_excluded_cell_members=n_excluded_total,
+        long_distance_share_of_capacity=long_distance_share,
         lcoe_summary=summary_path,
         design_matrix=design_path,
         supply_curve=supply_path,
@@ -438,7 +468,8 @@ def build_technology_lcoe(
         lcoe_nominal_scenarios=scenario_tables,
     )
     logger.info(
-        "%s %s: %d cell-members, %d samples, %d cells per block, nominal LCOE at m0 min %s median %s USD/MWh, %d non-finite draws",
+        "%s %s: %d cell-members, %d samples, %d cells per block, nominal LCOE at m0 min %s median %s USD/MWh, %d non-finite draws, "
+        "%d cell-members excluded (missing distance or zone), %s of the capacity beyond the long-distance flag",
         iso,
         tech,
         n_rows,
@@ -447,6 +478,8 @@ def build_technology_lcoe(
         result.lcoe_nominal_m0_min,
         result.lcoe_nominal_m0_median,
         n_draw_nonfinite,
+        n_excluded_total,
+        "n/a" if long_distance_share is None else f"{long_distance_share:.1%}",
     )
     return result
 

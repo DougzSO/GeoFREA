@@ -94,39 +94,25 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-import geopandas as gpd
-from rasterio.enums import Resampling
-
+from geofrea.core import memory_budget
 from geofrea.core import paths as core_paths
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
 from geofrea.core.constants import CELL_NESTING_PIXELS
-from geofrea.core.geo_utils import (
-    current_clip_cache,
-    read_clipped_to_country,
-    write_clip_cache_key,
-)
-from geofrea.core.geo_utils import clip_cache_key as _clip_cache_key
+from geofrea.core.layer_process import LayerFailedError, LayerRecord, append_ledger, run_layer
 from geofrea.core.orchestrator import PhaseContext
-from geofrea.core.raster_io import gdal_quiet, safe_raster_open
-from geofrea.grid_alignment.raster_alignment import (
-    MissingSourceCrsError,
-    glo30_aligned_outputs,
-    land_cover_class_counts,
-    mosaic_land_cover,
-    reproject_to_grid,
-)
+from geofrea.core.raster_io import safe_raster_open
+from geofrea.grid_alignment.layers import LayerContext
+from geofrea.grid_alignment.layers import _read_clipped_with_cache as _read_clipped_with_cache  # noqa: PLC0414 — stays importable from here
+from geofrea.grid_alignment.layers import gwa_crs_for as _gwa_crs_for  # noqa: F401
+from geofrea.grid_alignment.poi import POI_ALGORITHM_VERSION
 from geofrea.grid_alignment.reference_grid import GridContext, build_reference_grid
 from geofrea.grid_alignment.schemas import GridAlignmentInputs, GridAlignmentResult, GridMetadata
-from geofrea.grid_alignment.vector_alignment import (
-    align_lakes,
-    align_rivers,
-    distance_capped_path,
-    load_vector_bbox,
-    rasterize_linear_distance,
-)
+from geofrea.grid_alignment.vector_alignment import distance_capped_path
 
 logger = logging.getLogger(__name__)
+
+_BUILDERS = "geofrea.grid_alignment.layers"
 
 # Version of the alignment logic, part of every aligned layer's cache key (OQ-026). Bump it by hand when the logic of any aligner
 # changes (resampling, masking, binning, distance rasterization), or the previous outputs would be reused.
@@ -135,10 +121,18 @@ ALIGNMENT_ALGORITHM_VERSION = (
 )
 
 
-def aligned_layer_key(files, config: dict, hash_memo: FileHashMemo | None) -> str:
-    """Key of an aligned layer: the algorithm version, the code of the phase (`cache_code`, COMMAND 61), the input files by content and the config."""
+class AlignmentLayersFailedError(RuntimeError):
+    """One or more layers of F2a failed; every other layer was still built and is in place (the ledger `layers.json` says which and why)."""
+
+
+def aligned_layer_key(kind: str, files, config: dict, hash_memo: FileHashMemo | None) -> str:
+    """Key of an aligned layer: the algorithm version, the code of ITS builder (`cache_code`, COMMAND 88), the input files by content and the config.
+
+    `kind` names the builder (`aligned_layer.<kind>` in `core.cache_code.CACHE_FUNCTION_ENTRIES`): only the functions it can reach enter the key,
+    so an edit of one layer's code leaves the others current.
+    """
     return cache_key(
-        ALIGNMENT_ALGORITHM_VERSION, files, config, hash_memo, code=cache_code("aligned_layers")
+        ALIGNMENT_ALGORITHM_VERSION, files, config, hash_memo, code=cache_code(f"aligned_layer.{kind}")
     )
 
 
@@ -148,7 +142,7 @@ def timer(label: str, timings: dict[str, float]) -> Generator[None, None, None]:
 
     Same shape as data_quality_audit's raster_inspection.py::timer() —
     not imported from there, kept local, same reasoning as
-    `_read_clipped_with_cache()` below (see module docstring).
+    `_read_clipped_with_cache()` (see module docstring).
     """
     t0 = time.perf_counter()
     logger.info("  [%s] starting...", label)
@@ -158,65 +152,6 @@ def timer(label: str, timings: dict[str, float]) -> Generator[None, None, None]:
         elapsed = time.perf_counter() - t0
         timings[label] = round(elapsed, 2)
         logger.info("  [%s] completed in %.1fs", label, elapsed)
-
-
-def _read_clipped_with_cache(
-    path: Path, country_gdf: gpd.GeoDataFrame, cache_path: Path
-) -> gpd.GeoDataFrame:
-    """read_clipped_to_country(), backed by an on-disk cache keyed by cache_path.
-
-    Duplicates vector_inspection.py's private `_read_clipped_with_cache()`
-    (data_quality_audit) rather than importing it: that function is
-    internal to a different phase package, and Passo 1's design
-    correction (see module docstring) deliberately avoids grid_alignment
-    depending on anything inside data_quality_audit — reuse here is by
-    disk-file convention (the same cache_path both phases compute),
-    not by sharing code across the phase boundary. This is a small,
-    known duplication (~10 lines), flagged for the user rather than
-    resolved unilaterally by promoting it to a shared module — that
-    would touch data_quality_audit/vector_inspection.py, outside this
-    stage's authorized scope.
-
-    Args:
-        path: Vector file to read (unclipped).
-        country_gdf: Country polygon(s) to clip against.
-        cache_path: Where to persist/read back the already-clipped result.
-
-    Returns:
-        The clipped GeoDataFrame, from cache if present, else freshly
-        computed and cached for next time.
-    """
-    key = _clip_cache_key(path, country_gdf)
-    current = current_clip_cache(cache_path, key)
-    if current is not None:
-        return gpd.read_file(str(current))
-    # No key, or a key for a different source file or country polygon: the cached clip is stale (a cache
-    # clipped from another source, e.g. IND roads from the wrong GRIP4 region, is rebuilt, never reused).
-
-    clipped, repair_report = read_clipped_to_country(path, country_gdf)
-    if repair_report.n_invalid:
-        # Not silent (METHODOLOGY A-02/A-09 spirit, see docs/phases/
-        # core.md): repair_invalid_geometries() runs unconditionally
-        # inside read_clipped_to_country() now, but grid_alignment's
-        # own output schema has no slot for the report itself (unlike
-        # data_quality_audit's VectorLayerInspection.geometry_repair) —
-        # logged here so a repair on this phase's inputs is still
-        # visible, not just on the audit/criteria side. INFO, not WARNING: the repair is documented behavior (D-F2a-020).
-        logger.info(
-            "%s: %d/%d features were topologically invalid and repaired "
-            "before clipping (expected, A-02; reasons: %s; decision D-F2a-020).",
-            path,
-            repair_report.n_invalid,
-            repair_report.n_total,
-            repair_report.invalid_reasons,
-        )
-    try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        clipped.to_file(cache_path, driver="GPKG")
-        write_clip_cache_key(cache_path, key)
-    except Exception as exc:  # noqa: BLE001 — caching is optional, must not fail alignment
-        logger.warning("Failed to write clip cache %s: %s", cache_path, exc)
-    return clipped
 
 
 def _verify_alignment(aligned: dict[str, Path | None], grid: GridContext) -> None:
@@ -278,34 +213,6 @@ def _save_grid_metadata(
     return meta
 
 
-def _gwa_crs_for(key: str, path: Path, wind_layers: dict[str, Path]):
-    """CRS for a GWA layer: its own, or, when the file declares none, the sibling wind-speed file's.
-
-    The GWA API serves the Weibull A/k tiles without a CRS tag (observed 2026-10-06 for PRT, BRA and IND), but
-    on the same grid as the wind-speed tile of the same height, which does declare EPSG:4326. The sibling's
-    CRS is used only when its transform and shape are identical; otherwise this raises (A-09).
-
-    Implements: M-F2a-04.
-    """
-    import rasterio
-
-    with rasterio.open(path) as own:
-        if own.crs is not None:
-            return None
-        height = key.rsplit("_", 1)[-1]
-        sibling = wind_layers.get(f"wind_speed_{height}")
-        if sibling is None:
-            raise MissingSourceCrsError(
-                f"{path}: no CRS and no wind-speed sibling at {height} to take it from"
-            )
-        with rasterio.open(sibling) as sib:
-            if sib.crs is None or sib.transform != own.transform or sib.shape != own.shape:
-                raise MissingSourceCrsError(
-                    f"{path}: no CRS and the {height} wind-speed sibling is not on the same grid"
-                )
-            return sib.crs
-
-
 def run_grid_alignment_phase(
     context: PhaseContext, inputs: GridAlignmentInputs
 ) -> GridAlignmentResult:
@@ -313,6 +220,9 @@ def run_grid_alignment_phase(
 
     Parameter order matches data_quality_audit's run_audit_phase(context,
     inputs) — see that module for the same (context, inputs) convention.
+
+    The phase only coordinates (COMMAND 88): each layer is built by its function in `layers.py` in a child process, one at a time, after the memory
+    guard has waited for the peak measured for that layer; a layer that fails does not remove the layers already written.
 
     Args:
         context: Shared phase context (country_code, outputs_dir, ...).
@@ -325,15 +235,20 @@ def run_grid_alignment_phase(
         RuntimeError: From _verify_alignment() if a produced raster's
             dimensions don't match the reference grid — propagates
             uncaught, see _verify_alignment()'s own docstring.
+        AlignmentLayersFailedError: A layer's child process failed (after every other layer was built).
+        MemoryWaitTimeout, CommitLimitExceeded: the machine could not give the memory (`core.memory_guard`); nothing already written is lost.
     """
     # METHODOLOGY A-08: phase outputs under outputs/<ISO3>/<phase>/<kind>/, intermediate caches under
     # interim/<ISO3>/<layer>/ (core.paths.interim(), from GEOFREA_DATA_DIR).
     out_dir = context.outputs_dir / context.country_code / "grid_alignment" / "artifacts"
     out_dir.mkdir(parents=True, exist_ok=True)
     interim_dir = core_paths.interim(context.country_code, "grid_alignment")
+    interim_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now(UTC).isoformat()
     timings: dict[str, float] = {}
+    ledger: list[LayerRecord] = []
+    failures: list[str] = []
 
     def _path(suffix: str) -> Path:
         return out_dir / f"{context.country_code}_{suffix}_aligned.tif"
@@ -346,41 +261,14 @@ def run_grid_alignment_phase(
         b"".join(g.wkb for g in inputs.country_gdf.geometry)
     ).hexdigest()
 
-    def _key(files, **config) -> str:
+    def _key(kind: str, files, **config) -> str:
         # Output-affecting config shared by every layer: the grid (resolution, nesting, country polygon).
         common = {
             "resolution_deg": float(inputs.resolution_deg),
             "cell_nesting_pixels": CELL_NESTING_PIXELS,
             "country_polygon_sha256": polygon_sha256,
         }
-        return aligned_layer_key(files, {**common, **config}, hash_memo)
-
-    def _execute_or_load(label: str, fn, condition: bool = True, files=(), **config):
-        p = _path(label)
-        key = _key(files, **config) if condition else None
-        if p.exists():
-            if key is not None and cache_is_current(p, key):
-                with safe_raster_open(p) as src:
-                    if (src.height, src.width) == (grid.height, grid.width):
-                        logger.info("    %s: cached.", label)
-                        return p
-            else:
-                logger.info("    %s: cache key differs or is absent; recomputing.", label)
-            p.unlink()
-        if condition:
-            result = fn()
-            if result is None:
-                logger.info("    %s: no data generated.", label)
-            elif Path(result) == p:
-                write_cache_key(p, key)
-            return result
-        return None
-
-    def _clipped_gdf(source_path: Path | None, layer_name: str) -> gpd.GeoDataFrame | None:
-        if not _exists(source_path):
-            return None
-        cache_path = interim_dir / f"{layer_name}_clipped.gpkg"
-        return _read_clipped_with_cache(source_path, inputs.country_gdf, cache_path)
+        return aligned_layer_key(kind, files, {**common, **config}, hash_memo)
 
     # Fixed resolution (M-F2a-01), from settings.yaml's geospatial.resolutions.suitability.
     resolution_deg = float(inputs.resolution_deg)
@@ -388,171 +276,228 @@ def run_grid_alignment_phase(
     grid = build_reference_grid(
         inputs.country_gdf, resolution_deg, nesting_pixels=CELL_NESTING_PIXELS
     )
+    layer_context = LayerContext(
+        inputs=inputs, grid=grid, out_dir=out_dir, interim_dir=interim_dir, country_code=context.country_code
+    )
+
+    def _build(label: str, kind: str, builder: str, **kwargs):
+        """Run the builder `layers.<builder>` for `label` in a child process (`core.layer_process`); its row goes to the ledger at once."""
+        try:
+            value, record = run_layer(
+                label,
+                f"{_BUILDERS}:{builder}",
+                {"ctx": layer_context, **kwargs},
+                peak_mb=memory_budget.peak_mb(kind),
+                work_dir=interim_dir,
+            )
+        except LayerFailedError as exc:
+            ledger.append(LayerRecord(layer=label, status="failed", detail=str(exc)))
+            append_ledger(interim_dir / "layers.json", ledger)
+            logger.error("    %s: FAILED (%s); the other layers go on.", label, exc)
+            failures.append(label)
+            return None
+        except BaseException:
+            ledger.append(LayerRecord(layer=label, status="stopped", detail="the run was stopped before this layer finished"))
+            append_ledger(interim_dir / "layers.json", ledger)
+            raise
+        ledger.append(record)
+        append_ledger(interim_dir / "layers.json", ledger)
+        logger.info("    %s: built in %.1fs (peak %.0f MB).", label, record.wall_s, record.peak_rss_mb)
+        return value
+
+    def _is_current(label: str, key: str | None) -> Path | None:
+        """The raster of `label` when it exists with a current key and the grid's shape; a stale or misshapen one is removed."""
+        p = _path(label)
+        if not p.exists():
+            return None
+        if key is not None and cache_is_current(p, key):
+            with safe_raster_open(p) as src:
+                if (src.height, src.width) == (grid.height, grid.width):
+                    logger.info("    %s: cached.", label)
+                    ledger.append(LayerRecord(layer=label, status="cached"))
+                    return p
+        else:
+            logger.info("    %s: cache key differs or is absent; recomputing.", label)
+        p.unlink()
+        return None
+
+    def _execute_or_load(label: str, kind: str, builder: str, condition: bool = True, files=(), builder_kwargs=None, **config):
+        key = _key(kind, files, **config) if condition else None
+        current = _is_current(label, key)
+        if current is not None:
+            return current
+        if not condition:
+            return None
+        result = _build(label, kind, builder, **(builder_kwargs or {}))
+        if result is None:
+            logger.info("    %s: no data generated.", label)
+        elif Path(result) == _path(label):
+            write_cache_key(Path(result), key)
+        return result
+
     aligned: dict[str, Path | None] = {}
 
     # Elevation and slope come from the same source and the same pixel rule (D-F2a-021): the mean of the 30 m Copernicus GLO-30 samples
     # inside each pixel (METHODOLOGY 15.2.0, M-F2a-02). There is no other DEM input (the bundled `<ISO>_elevation.tif` is not read).
     dem_tiles = list(inputs.slope_dem_tiles)
-
     glo30: dict[str, Path | None] = {}
 
-    def _glo30_pass() -> dict[str, Path | None]:
-        """One pass over the GLO-30 tiles writes the elevation, the slope and the slope bins (COMMAND 75): the first of the three steps that is
-        stale runs it and the other two find their raster current, with the key of the same source."""
+    def _glo30_layer(label: str) -> Path | None:
+        """One pass over the GLO-30 tiles writes the elevation, the slope and the slope bins (COMMAND 75): the first of the three that is stale
+        runs it and the other two find their raster current, with the key of the same source."""
+        if not dem_tiles:
+            return None
+        key = _key("glo30", dem_tiles)
+        current = _is_current(label, key)
+        if current is not None:
+            return current
         if not glo30:
-            glo30.update(
-                glo30_aligned_outputs(
-                    dem_tiles,
-                    grid,
-                    elevation_out=_path("elevation"),
-                    slope_out=_path("slope"),
-                    counts_out=_path("slope_counts"),
-                )
-            )
-            for written in glo30.values():  # every raster comes from one pass over one source: each is as current as the others
-                if written is not None:
-                    write_cache_key(written, _key(dem_tiles))
-        return glo30
+            glo30.update(_build(label, "glo30", "build_glo30") or {})
+            for raster in glo30.values():  # every raster comes from one pass over one source: each is as current as the others
+                if raster is not None:
+                    write_cache_key(raster, key)
+        if glo30.get(label) is None:
+            logger.info("    %s: no data generated.", label)
+        return glo30.get(label)
 
-    with timer("elevation", timings), gdal_quiet():
-        aligned["elevation"] = _execute_or_load(
-            "elevation", lambda: _glo30_pass()["elevation"], bool(dem_tiles), files=dem_tiles
-        )
+    with timer("elevation", timings):
+        aligned["elevation"] = _glo30_layer("elevation")
 
-    with timer("slope", timings), gdal_quiet():
-        aligned["slope"] = _execute_or_load(
-            "slope", lambda: _glo30_pass()["slope"], bool(dem_tiles), files=dem_tiles
-        )
+    with timer("slope", timings):
+        aligned["slope"] = _glo30_layer("slope")
 
-    with timer("solar", timings), gdal_quiet():
+    with timer("solar", timings):
         aligned["solar"] = _execute_or_load(
-            "solar",
-            lambda: reproject_to_grid(inputs.solar_path, _path("solar"), grid),
-            _exists(inputs.solar_path),
-            files=[inputs.solar_path],
+            "solar", "solar", "build_solar", _exists(inputs.solar_path), files=[inputs.solar_path]
         )
 
     # M-F2a-04 (G-2): every GWA product at every height is aligned on its own; nothing is
     # combined across heights. Keys are "<product>_<height>m" (e.g. "weibull_a_150m").
     wind_layers: dict[str, Path] = {}
     for key, wind_src in inputs.wind_layers.items():
-        with timer(f"wind_{key}", timings), gdal_quiet():
+        with timer(f"wind_{key}", timings):
             out = _execute_or_load(
                 f"wind_{key}",
-                lambda wind_src=wind_src, key=key: reproject_to_grid(
-                    wind_src,
-                    _path(f"wind_{key}"),
-                    grid,
-                    src_crs=_gwa_crs_for(key, wind_src, inputs.wind_layers),
-                ),
+                "wind",
+                "build_wind",
                 _exists(wind_src),
                 # The CRS of a tile without one is taken from the wind-speed file of the same height.
                 files=[wind_src, inputs.wind_layers.get(f"wind_speed_{key.rsplit('_', 1)[-1]}")],
+                builder_kwargs={"key": key},
             )
         if out is not None:
             wind_layers[key] = out
 
     with timer("land_cover", timings):
-        # Cache filename mismatch fixed 2026-09-09 (see module
-        # docstring) — writes to _path("land_cover") now, matching
-        # _execute_or_load("land_cover", ...)'s own cache-check, so a
-        # second run for the same country hits the cache instead of
-        # always recomputing.
+        # Writes to _path("land_cover"), matching the cache-check of _execute_or_load (a filename mismatch made it recompute on every run until 2026-09-09).
         aligned["land_cover"] = _execute_or_load(
             "land_cover",
-            lambda: mosaic_land_cover(
-                inputs.land_cover_tiles, _path("land_cover"), grid, inputs.country_gdf
-            ),
+            "land_cover",
+            "build_land_cover",
             bool(inputs.land_cover_tiles),
             files=inputs.land_cover_tiles,
         )
         aligned["land_cover_counts"] = _execute_or_load(
             "land_cover_counts",
-            lambda: land_cover_class_counts(
-                inputs.land_cover_count_tiles or inputs.land_cover_tiles,
-                _path("land_cover_counts"),
-                grid,
-                inputs.country_gdf,
-            ),
+            "land_cover_counts",
+            "build_land_cover_counts",
             bool(inputs.land_cover_tiles),
             files=inputs.land_cover_count_tiles or inputs.land_cover_tiles,
         )
 
     with timer("slope_counts", timings):
-        aligned["slope_counts"] = _execute_or_load(
-            "slope_counts",
-            lambda: _glo30_pass()["slope_counts"],
-            bool(inputs.slope_dem_tiles),
-            files=inputs.slope_dem_tiles,
-        )
+        aligned["slope_counts"] = _glo30_layer("slope_counts")
 
-    with timer("population", timings), gdal_quiet():
+    with timer("population", timings):
         aligned["population"] = _execute_or_load(
-            "population",
-            # Counts per pixel are SUMMED onto the coarser grid: bilinear took about one 100 m sample per 1.1 km pixel and
-            # left 1/144 of the population (D-F2a-014).
-            lambda: reproject_to_grid(
-                inputs.population_path, _path("population"), grid, resampling=Resampling.sum
-            ),
-            _exists(inputs.population_path),
-            files=[inputs.population_path],
+            "population", "population", "build_population", _exists(inputs.population_path), files=[inputs.population_path]
         )
 
     with timer("grid_distance", timings):
         aligned["grid"] = _execute_or_load(
             "grid",
-            lambda: rasterize_linear_distance(
-                load_vector_bbox(inputs.grid_source, inputs.country_gdf, "grid"),
-                _path("grid"),
-                inputs.country_gdf,
-                grid,
-                "grid",
-                inputs.distance_cap_km,
-            ),
+            "grid",
+            "build_grid_distance",
             _exists(inputs.grid_source),
             files=[inputs.grid_source],
             distance_cap_km=inputs.distance_cap_km,
         )
 
+    poi_counts_path = out_dir / "poi_counts.json"
+    with timer("poi_distance", timings):
+        aligned["poi"] = _execute_or_load(
+            "poi",
+            "poi",
+            "build_poi",
+            _exists(inputs.grid_source) and inputs.poi_voltage_threshold_kv is not None,
+            files=[inputs.grid_source]
+            + ([] if inputs.poi_substation_source is None else [inputs.poi_substation_source]),
+            builder_kwargs={"name": "poi", "threshold_kv": inputs.poi_voltage_threshold_kv, "counts_path": poi_counts_path},
+            distance_cap_km=inputs.distance_cap_km,
+            poi_voltage_threshold_kv=inputs.poi_voltage_threshold_kv,
+            poi_line_tolerance_m=inputs.poi_line_tolerance_m,
+            poi_algorithm=POI_ALGORITHM_VERSION,
+        )
+
+    # Sensitivity `poi_ind_132kv` (COMMAND 86): the same layer at another voltage threshold, computed in the same pass (IND: 132 kV)
+    poi_sensitivity_counts_path = out_dir / "poi_sensitivity_counts.json"
+    aligned["poi_sensitivity"] = None
+    if inputs.poi_sensitivity_threshold_kv is not None:
+        with timer("poi_sensitivity_distance", timings):
+            aligned["poi_sensitivity"] = _execute_or_load(
+                "poi_sensitivity",
+                "poi",
+                "build_poi",
+                _exists(inputs.grid_source),
+                files=[inputs.grid_source]
+                + ([] if inputs.poi_substation_source is None else [inputs.poi_substation_source]),
+                builder_kwargs={
+                    "name": "poi_sensitivity",
+                    "threshold_kv": inputs.poi_sensitivity_threshold_kv,
+                    "counts_path": poi_sensitivity_counts_path,
+                },
+                distance_cap_km=inputs.distance_cap_km,
+                poi_voltage_threshold_kv=inputs.poi_sensitivity_threshold_kv,
+                poi_line_tolerance_m=inputs.poi_line_tolerance_m,
+                poi_algorithm=POI_ALGORITHM_VERSION,
+            )
+
     with timer("roads", timings):
         aligned["roads"] = _execute_or_load(
             "roads",
-            lambda: rasterize_linear_distance(
-                _clipped_gdf(inputs.roads_source, "roads"),
-                _path("roads"),
-                inputs.country_gdf,
-                grid,
-                "roads",
-                inputs.distance_cap_km,
-            ),
+            "roads",
+            "build_roads",
             _exists(inputs.roads_source),
             files=[inputs.roads_source],
             distance_cap_km=inputs.distance_cap_km,
+            road_classes=None
+            if inputs.road_classes is None
+            else inputs.road_classes.model_dump(mode="json"),
         )
 
     with timer("lakes", timings):
         aligned["lakes"] = _execute_or_load(
-            "lakes",
-            lambda: align_lakes(_clipped_gdf(inputs.lakes_path, "lakes"), _path("lakes"), grid),
-            _exists(inputs.lakes_path),
-            files=[inputs.lakes_path],
+            "lakes", "lakes", "build_lakes", _exists(inputs.lakes_path), files=[inputs.lakes_path]
         )
 
     with timer("rivers", timings):
         aligned["rivers"] = _execute_or_load(
             "rivers",
-            lambda: align_rivers(
-                _clipped_gdf(inputs.rivers_path, "rivers"),
-                _path("rivers"),
-                grid,
-                inputs.distance_cap_km,
-            ),
+            "rivers",
+            "build_rivers",
             _exists(inputs.rivers_path),
             files=[inputs.rivers_path],
             distance_cap_km=inputs.distance_cap_km,
         )
 
-    for layer in ("roads", "grid", "rivers"):
+    append_ledger(interim_dir / "layers.json", ledger)
+    if failures:
+        raise AlignmentLayersFailedError(
+            f"{context.country_code}: {len(failures)} layer(s) of F2a failed: {', '.join(failures)}. The other layers are built and kept "
+            f"(see {interim_dir / 'layers.json'}); run the phase again once the cause is fixed."
+        )
+
+    for layer in ("roads", "grid", "rivers", "poi", "poi_sensitivity"):
         flag_path = distance_capped_path(aligned[layer]) if aligned.get(layer) else None
         aligned[f"{layer}_distance_capped"] = (
             flag_path if flag_path and flag_path.exists() else None
@@ -567,10 +512,21 @@ def run_grid_alignment_phase(
     # try/except, becoming a failed phase.
     _verify_alignment({**aligned, **{f"wind_{k}": v for k, v in wind_layers.items()}}, grid)
 
+    poi_counts = (
+        json.loads(poi_counts_path.read_text(encoding="utf-8"))
+        if aligned.get("poi") and poi_counts_path.exists()
+        else None
+    )
     return GridAlignmentResult(
         country_code=context.country_code,
         timestamp=timestamp,
         grid_metadata=grid_metadata,
         wind_layers=wind_layers,
+        poi_counts=poi_counts,
+        poi_sensitivity_counts=(
+            json.loads(poi_sensitivity_counts_path.read_text(encoding="utf-8"))
+            if aligned.get("poi_sensitivity") and poi_sensitivity_counts_path.exists()
+            else None
+        ),
         **aligned,
     )

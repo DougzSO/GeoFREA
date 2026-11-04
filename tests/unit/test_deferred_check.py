@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -198,7 +199,9 @@ def test_the_shipped_configuration_lists_ind_and_bra_with_the_twelve_phases():
     assert set(checks) == {"IND", "BRA"}
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases
     assert checks["IND"].baseline.as_posix().endswith("outputs/IND/unattended/20261029_135838/manifest_before.json")
-    assert list(checks["BRA"].expected) == ["audit_report"] and not checks["IND"].expected
+    # the artifacts that Group 3 changes by design (METHODOLOGY 16) are accepted in both countries; only BRA also has the audit report and the summary of F3
+    assert set(checks["BRA"].expected) == set(checks["IND"].expected) | {"audit_report", "land_eligibility"}  # the F3 summary: no derived number changed (f3_memory_90.md)
+    assert "siting/dist_road_km" in checks["IND"].expected and "audit_report" not in checks["IND"].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
 
@@ -248,3 +251,130 @@ def test_a_seeded_phase_is_not_compared_again_by_the_pipeline(baseline):
     results = _orchestrator(outputs, check, rerun=PHASES).run(_specs({"a": 1, "b": 2, "c": 1}, SAME))  # b would differ, but it is settled
     assert results["c"].status == "success"
     assert _report(outputs)["phases"]["b"]["source"] == "an earlier round"
+
+
+# --- COMMAND 91: the rasters that differ in the last bit are decided by tolerance against a reference copy ------------------------------------
+
+
+def _raster(path: Path, data, nodata=-9999.0) -> Path:
+    import numpy as np
+    import rasterio
+    from rasterio.transform import from_origin
+
+    arr = np.asarray(data, dtype="float32")
+    with rasterio.open(
+        path, "w", driver="GTiff", height=arr.shape[0], width=arr.shape[1], count=1, dtype="float32", crs="EPSG:4326",
+        transform=from_origin(10.0, 5.0, 0.01, 0.01), nodata=nodata,
+    ) as dst:
+        dst.write(arr, 1)
+    return path
+
+
+def _tolerance_case(tmp_path, new_values, *, reference_name="ZZZ_wind_weibull_a_100m_aligned.tif", key="siting/weibull_a_100m", expected=None, pin="seed"):
+    """A reference round in the store with one raster and a run whose raster has `new_values`; returns the check, the manifest, the report path and the store."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    data = tmp_path / "data"
+    refs = data / "refs"
+    refs.mkdir(parents=True)
+    (data / "outputs" / "ZZZ" / "siting").mkdir(parents=True)
+    ref_values = np.linspace(1.0, 12.0, 6 * 8, dtype="float32").reshape(6, 8)
+    _raster(refs / reference_name, ref_values)
+    after = _raster(data / "outputs" / "ZZZ" / "siting" / "weibull_a_100m.tif", new_values(ref_values), nodata=-3.4028234663852886e38)
+    baseline = data / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "phases": {"siting_layers": {"config_fingerprint": "c"}},
+                "artifacts": {key: {"phase": "siting_layers", "sha256": "ref", "content_sha256": "tif:ref"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    from geofrea.core.deferred_check import CountryCheck
+    from geofrea.core.reference_store import ReferenceStore
+
+    store = ReferenceStore(data / "references")
+    store.import_directories("ZZZ", "seed", [refs], note="test")
+    check = CountryCheck(
+        iso="ZZZ", baseline=baseline, baseline_label="baseline", phases=("siting_layers",), expected=expected or {}, reference_run=pin
+    )
+    entry = SimpleNamespace(phase="siting_layers", content_sha256="tif:new", sha256="new", path=SimpleNamespace(resolve=lambda: after))
+    manifest = SimpleNamespace(
+        artifacts={key: entry}, phases={"siting_layers": SimpleNamespace(config_fingerprint="c", code_fingerprint="code")}
+    )
+    return check, manifest, data / "report.json", store
+
+
+def test_a_raster_that_differs_in_the_last_bit_is_equivalent_by_tolerance_without_an_entry(tmp_path):
+    check, manifest, report, store = _tolerance_case(tmp_path, lambda ref: ref * (1 + 1e-7))
+    message = DeferredCheck(check, report, store).after_phase(manifest, "siting_layers")
+    assert message is None
+    entry = json.loads(report.read_text(encoding="utf-8"))
+    phase = entry["phases"]["siting_layers"]
+    assert phase["verdict"] == "EQUIVALENTE" and entry["verdict"] == "EQUIVALENTE" and phase["different_unexplained"] == {}
+    assert phase["different_equivalent"]["siting/weibull_a_100m"]["reference"] == "ZZZ_wind_weibull_a_100m_aligned.tif"
+    assert 0 < phase["different_equivalent"]["siting/weibull_a_100m"]["max_abs_delta"] < 1e-5
+
+
+def test_a_raster_outside_the_tolerance_still_stops_the_run_and_the_report_says_by_how_much(tmp_path):
+    check, manifest, report, store = _tolerance_case(tmp_path, lambda ref: ref * 1.001)
+    message = DeferredCheck(check, report, store).after_phase(manifest, "siting_layers")
+    assert message is not None and "siting/weibull_a_100m" in message
+    phase = json.loads(report.read_text(encoding="utf-8"))["phases"]["siting_layers"]
+    assert phase["verdict"] == "DIFERENTE"
+    comparison = phase["different_unexplained"]["siting/weibull_a_100m"]["comparison"]
+    assert comparison["equivalent"] is False and comparison["max_rel_delta"] > 1e-4
+
+
+def test_a_raster_with_no_reference_copy_is_not_decided_by_tolerance(tmp_path):
+    check, manifest, report, store = _tolerance_case(tmp_path, lambda ref: ref * (1 + 1e-7), reference_name="another_name.tif")
+    assert DeferredCheck(check, report, store).after_phase(manifest, "siting_layers") is not None
+    assert json.loads(report.read_text(encoding="utf-8"))["phases"]["siting_layers"]["verdict"] == "DIFERENTE"
+
+
+def test_without_a_store_or_with_a_round_that_does_not_exist_nothing_is_decided_by_tolerance(tmp_path):
+    from dataclasses import replace
+
+    check, manifest, report, store = _tolerance_case(tmp_path, lambda ref: ref * (1 + 1e-7))
+    assert DeferredCheck(check, report).after_phase(manifest, "siting_layers") is not None  # no store
+    report.unlink()
+    assert DeferredCheck(replace(check, reference_run="no_such_round"), report, store).after_phase(manifest, "siting_layers") is not None
+    report.unlink()
+    assert DeferredCheck(replace(check, reference_run="latest"), report, store).after_phase(manifest, "siting_layers") is not None  # an imported round is not latest
+
+
+def test_the_reference_of_an_f2b_resource_layer_is_the_aligned_layer_it_copies(tmp_path):
+    from geofrea.core.deferred_check import reference_file
+
+    refs = tmp_path / "refs"
+    refs.mkdir()
+    for name in ("BRA_solar_aligned.tif", "BRA_wind_air_density_150m_aligned.tif", "BRA_wind_weibull_k_200m_aligned.tif", "BRA_roads_aligned.tif"):
+        (refs / name).write_bytes(b"")
+    out = tmp_path / "out"
+
+    def find(name):
+        return refs / name if (refs / name).is_file() else None
+
+    assert reference_file("siting/pvout_kwh_kwp_day", out / "pvout_kwh_kwp_day.tif", "BRA", find) == refs / "BRA_solar_aligned.tif"
+    assert reference_file("siting/air_density_150m", out / "air_density_150m.tif", "BRA", find) == refs / "BRA_wind_air_density_150m_aligned.tif"
+    assert reference_file("siting/weibull_k_200m", out / "weibull_k_200m.tif", "BRA", find) == refs / "BRA_wind_weibull_k_200m_aligned.tif"
+    assert reference_file("aligned/roads", out / "BRA_roads_aligned.tif", "BRA", find) == refs / "BRA_roads_aligned.tif"
+    assert reference_file("siting/dist_road_km", out / "dist_road_km.tif", "BRA", find) is None  # a distance is not a copy of an aligned layer
+
+
+def test_the_shipped_configuration_configures_the_reference_store():
+    config = yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))
+    assert config["reference_store"]["root"] == "references" and ".json" in config["reference_store"]["suffixes"]
+    assert {"grid_alignment", "siting_layers"} <= set(config["reference_store"]["raster_phases"])
+    assert not [k for spec in config["countries"].values() for k in spec if k == "references"]  # no backup directory is read any more
+
+
+def test_the_shipped_configuration_has_no_manual_entry_for_a_last_bit_difference():
+    config = yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))
+    for iso in ("IND", "BRA"):
+        spec = config["countries"][iso]
+        assert spec["reference_run"].startswith("seed_"), iso  # the round imported by scripts/seed_references.py, not a backup directory
+        assert not [k for k in spec["expected"] if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso

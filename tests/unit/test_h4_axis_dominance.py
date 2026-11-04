@@ -294,11 +294,13 @@ def _world(rng, n_cells=60, n_core=3):
             member=f"m{j}",
             cells=CellInputs(
                 p_mw=p,
-                dist_grid_km=grid,
+                dist_sub_km=grid,
                 dist_road_km=road,
                 energy_mwh=p * cf * (1.0 - 0.05 * j) * 8760.0,
                 energy_offset=np.full(n_cells, 1.0),
                 energy_slope=np.zeros(n_cells),
+                degradation_low=np.zeros(n_cells),
+                degradation_high=np.full(n_cells, 0.01),
             ),
             floor=np.zeros(n_cells),
         )
@@ -321,10 +323,14 @@ def _samples(rng, *, scale=1.0, shift=0.0):
         opex_var_usd_per_mwh=scale * np.full(n, 2.0) + shift,
         lifetime_years=np.round(column(15, 25)),
         discount_rate=column(0.03, 0.08),
-        degradation_rate=column(0.0, 0.01),
-        grid_cost_usd_per_mw_km=scale * column(500, 1500),
-        substation_cost_usd_per_mw=scale * column(1e4, 3e4),
+        degradation_weight=column(0.0, 1.0),
+        line_cost_usd_per_km=scale * column(5e4, 1.5e5),
+        bay_cost_usd=scale * column(1e6, 3e6),
         road_cost_usd_per_km=scale * column(2.5e4, 7.5e4),
+        tortuosity_grid=column(1.2, 1.3),
+        tortuosity_road=column(1.2, 1.3),
+        reference_project_mw=np.full(n, 100.0),
+        transmission_loss_per_km=np.zeros(n),
         energy_parameter=np.full(n, 0.9),
     )
 

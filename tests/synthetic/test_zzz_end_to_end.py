@@ -165,7 +165,7 @@ def zzz(tmp_path_factory):
             "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
             settings.memory.max_batch_gb,
         )
-        assert ok, {k: v.status for k, v in results.items()}
+        assert ok, {k: (v.status, getattr(v, "error", None)) for k, v in results.items() if v.status != "success"}
         # what main.main does after the country runs: the support phase cross_country_h4, then the thesis outputs again
         from geofrea.results_synthesis.runner import build_thesis
         from geofrea.robustness_analysis.cross_country import build_h4_verdict
@@ -531,17 +531,40 @@ def test_potential_maps_write_the_maps_of_capacity_and_energy_per_cell_and_per_s
 # -- F6 --------------------------------------------------------------------------------------------
 
 
-def _hand_lcoe(p, dist_grid, dist_road, e_year1, s):
-    """M-F6-01 year by year with plain floats, independent of the kernel module."""
-    capex_total = (
-        p * 1000 * s["capex_usd_per_kw"]
-        + p * dist_grid * s["grid_cost_usd_per_mw_km"]
-        + p * s["substation_cost_usd_per_mw"]
-        + dist_road * s["road_cost_usd_per_km"]
+def _group3_nominal(tech):
+    """The nominal kernel values of ZZZ as F6 resolves them (Group 3 costs in 2024 USD, the degradation bounds by zone)."""
+    from geofrea.core.config_loader import load_parameters, load_technologies
+    from geofrea.lcoe_modeling.inputs import resolve_technology_costs
+
+    zzz = load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"]
+    resolved = resolve_technology_costs(
+        "ZZZ",
+        tech,
+        load_technologies(REPO / "config" / "technologies.yaml").technologies[tech],
+        getattr(zzz.technologies, tech),
+        zzz.connection,
     )
+    return dict(resolved.nominal), resolved.group3.degradation
+
+
+def _bounds(model, zone):
+    """Degradation bounds of a cell: the pair of its PV zone (T8 and above take T7) or the single pair of wind."""
+    return model.single if model.by_zone is None else model.by_zone[min(int(zone), 7)]
+
+
+def _hand_lcoe(p, dist_sub, dist_road, e_year1, s, d_bounds):
+    """M-F6-01 and Group 3 year by year with plain floats, independent of the kernel module."""
+    low, high = d_bounds
+    degradation = low + s["degradation_weight"] * (high - low)
+    l_grid, l_road = s["tortuosity_grid"] * dist_sub, s["tortuosity_road"] * dist_road
+    c_inter = (
+        s["line_cost_usd_per_km"] * l_grid + s["bay_cost_usd"] + s["road_cost_usd_per_km"] * l_road
+    ) / s["reference_project_mw"]
+    capex_total = p * (1000 * s["capex_usd_per_kw"] + c_inter)
+    e_year1 = e_year1 * max(0.0, 1.0 - s["transmission_loss_per_km"] * l_grid)
     cost, energy = capex_total, 0.0
     for t in range(1, int(s["lifetime_years"]) + 1):
-        e_t = e_year1 * (1 - s["degradation_rate"]) ** (t - 1)
+        e_t = e_year1 * (1 - degradation) ** (t - 1)
         opex_t = (
             s["opex_fixed_frac"] * p * 1000 * s["capex_usd_per_kw"]
             + s["opex_var_usd_per_mwh"] * e_t
@@ -600,7 +623,6 @@ def test_f6_writes_the_nominal_lcoe_of_the_other_land_scenarios_with_no_draws(zz
 @pytest.mark.parametrize("tech", ["solar", "wind"])
 def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech):
     """A row of the F6 summary, recomputed from the F5 and F3 tables, the F4 forcing and the stored design matrix by plain arithmetic."""
-    from geofrea.core.config_loader import load_parameters
 
     art = _phase(zzz, "lcoe_modeling")
     summary = pd.read_parquet(art / f"lcoe_summary_{tech}.parquet").astype({"member": str})
@@ -614,13 +636,7 @@ def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech
     forcing = pd.read_parquet(_phase(zzz, "climate_forcing") / "forcing.parquet").astype(
         {"member": str}
     )
-    nominal = {
-        k: float(v.value)
-        for k, v in getattr(
-            load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"].technologies, tech
-        ).__dict__.items()
-        if hasattr(v, "value") and v.value is not None
-    }
+    nominal, degradation_model = _group3_nominal(tech)
     energy_key = "gamma" if tech == "solar" else "eta_loss"
     warm = forcing[(forcing["member"] != "m0")].merge(potential, on=["cell_id", "member"])
     pick = warm.iloc[len(warm) // 2]
@@ -636,10 +652,11 @@ def test_f6_summary_row_is_reproduced_by_hand_from_the_pipeline_tables(zzz, tech
         factor = (1 + x * d_t) / (1 + x0 * d_t) if tech == "solar" else x / x0
         return _hand_lcoe(
             pick["P_MW"],
-            candidates.loc[cell, "dist_grid_km"],
+            candidates.loc[cell, "dist_sub_km"],
             candidates.loc[cell, "dist_road_km"],
             pick["E_MWh"] * factor,
             s,
+            _bounds(degradation_model, candidates.loc[cell, "pvcz_zone"]),
         )
 
     draws = np.array([lcoe_of(i) for i in range(1, len(design))])
@@ -768,7 +785,6 @@ class _HandWorld:
     """The ZZZ tables of one technology, read back for plain-arithmetic LCOE of any (cell, member, sample)."""
 
     def __init__(self, zzz, tech):
-        from geofrea.core.config_loader import load_parameters
 
         self.tech = tech
         art = _phase(zzz, "lcoe_modeling")
@@ -788,14 +804,7 @@ class _HandWorld:
             .astype({"member": str})
             .set_index(["cell_id", "member"])
         )
-        params = getattr(
-            load_parameters(REPO / "config" / "parameters.json").countries["ZZZ"].technologies, tech
-        )
-        self.nominal = {
-            k: float(v.value)
-            for k, v in params.__dict__.items()
-            if hasattr(v, "value") and v.value is not None
-        }
+        self.nominal, self.degradation_model = _group3_nominal(tech)
         self.energy_key = "gamma" if tech == "solar" else "eta_loss"
 
     def lcoe(self, cell, member, sample):
@@ -809,10 +818,11 @@ class _HandWorld:
         factor = (1 + x * d_t) / (1 + x0 * d_t) if self.tech == "solar" else x / x0
         return _hand_lcoe(
             row["P_MW"],
-            self.candidates.loc[cell, "dist_grid_km"],
+            self.candidates.loc[cell, "dist_sub_km"],
             self.candidates.loc[cell, "dist_road_km"],
             row["E_MWh"] * factor,
             s,
+            _bounds(self.degradation_model, self.candidates.loc[cell, "pvcz_zone"]),
         )
 
 
@@ -2351,7 +2361,7 @@ def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_pea
 
     siting = {k for k in artifacts if k.startswith("siting/")}
     assert siting == {f"siting/{p.stem}" for p in _phase(zzz, "siting_layers").glob("*.tif")}
-    assert len(siting) == 12
+    assert len(siting) == 13
 
     eligibility = {k for k in artifacts if k.startswith("eligibility/")}
     files_on_disk = {p.stem for p in _phase(zzz, "land_eligibility").iterdir() if p.is_file()}

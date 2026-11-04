@@ -22,16 +22,21 @@ from tests.oracles.kernel import capital_recovery_factor, lcoe_direct
 KERNEL_FILE = Path(kernel.__file__)
 
 
-def _cells(p, dg, dr, e, offset=None, slope=None):
+def _cells(p, dg, dr, e, offset=None, slope=None, d=0.0, d_high=None):
+    """Cells; `d` is the degradation (or the lower bound when `d_high` is given), the same for every cell unless an array."""
     p = np.atleast_1d(np.asarray(p, dtype="float64"))
     n = len(p)
+    low = np.broadcast_to(np.asarray(d, dtype="float64"), n).copy()
+    high = low.copy() if d_high is None else np.broadcast_to(np.asarray(d_high, dtype="float64"), n).copy()
     return CellInputs(
         p_mw=p,
-        dist_grid_km=np.broadcast_to(np.asarray(dg, dtype="float64"), n).copy(),
+        dist_sub_km=np.broadcast_to(np.asarray(dg, dtype="float64"), n).copy(),
         dist_road_km=np.broadcast_to(np.asarray(dr, dtype="float64"), n).copy(),
         energy_mwh=np.broadcast_to(np.asarray(e, dtype="float64"), n).copy(),
         energy_offset=np.ones(n) if offset is None else np.asarray(offset, dtype="float64"),
         energy_slope=np.zeros(n) if slope is None else np.asarray(slope, dtype="float64"),
+        degradation_low=low,
+        degradation_high=high,
     )
 
 
@@ -42,10 +47,14 @@ def _samples(**kw):
         "opex_var_usd_per_mwh": 0.0,
         "lifetime_years": 20.0,
         "discount_rate": 0.05,
-        "degradation_rate": 0.0,
-        "grid_cost_usd_per_mw_km": 1000.0,
-        "substation_cost_usd_per_mw": 20000.0,
-        "road_cost_usd_per_km": 50000.0,
+        "degradation_weight": 0.0,
+        "line_cost_usd_per_km": 100000.0,
+        "bay_cost_usd": 2_000_000.0,
+        "road_cost_usd_per_km": 5000.0,
+        "tortuosity_grid": 1.0,
+        "tortuosity_road": 1.0,
+        "reference_project_mw": 100.0,
+        "transmission_loss_per_km": 0.0,
         "energy_parameter": 0.9,
     }
     base.update(kw)
@@ -105,8 +114,8 @@ def test_energy_annuity_matches_the_explicit_degraded_sum(r, d, n):
 def test_without_degradation_and_with_constant_opex_the_lcoe_is_the_crf_form():
     """V-02: `LCOE = (CAPEX * CRF + OPEX) / E` for `d = 0`, constant OPEX and no variable O&M."""
     p, dg, dr, e = 10.0, 20.0, 5.0, 30000.0
-    capex = p * 1000 * 1000.0 + p * dg * 1000.0 + p * 20000.0 + dr * 50000.0  # 1.065e7
-    assert capex == pytest.approx(10_650_000.0)
+    capex = p * (1000 * 1000.0 + (100000.0 * dg + 2_000_000.0 + 5000.0 * dr) / 100.0)  # 1.04025e7
+    assert capex == pytest.approx(10_402_500.0)
     opex = 0.05 * p * 1000 * 1000.0  # fixed O&M on the plant cost only
     expected = (capex * _crf(0.05, 20) + opex) / e
     got = lcoe_block(_cells(p, dg, dr, e), _samples())
@@ -121,7 +130,7 @@ def test_without_degradation_and_with_constant_opex_the_lcoe_is_the_crf_form():
 def test_at_a_zero_discount_rate_the_lcoe_is_total_cost_over_total_energy():
     """V-02: `r -> 0` gives `(CAPEX + n * OPEX) / (n * E)`."""
     p, dg, dr, e, n = 10.0, 20.0, 5.0, 30000.0, 20
-    capex = p * 1000 * 1000.0 + p * dg * 1000.0 + p * 20000.0 + dr * 50000.0
+    capex = p * (1000 * 1000.0 + (100000.0 * dg + 2_000_000.0 + 5000.0 * dr) / 100.0)
     opex = 0.05 * p * 1000 * 1000.0
     expected = (capex + n * opex) / (n * e)
     for fn in (lcoe_block, lcoe_direct):
@@ -151,8 +160,9 @@ def test_energy_that_is_zero_only_at_one_sample_is_infinite_only_there():
 @pytest.mark.unit
 def test_variable_om_adds_exactly_its_value_because_it_cancels_against_the_energy_denominator():
     cells = _cells([10.0, 4.0], [20.0, 80.0], [5.0, 1.0], [30000.0, 9000.0])
-    base = lcoe_block(cells, _samples(degradation_rate=0.01))
-    more = lcoe_block(cells, _samples(degradation_rate=0.01, opex_var_usd_per_mwh=7.5))
+    cells = _cells([10.0, 4.0], [20.0, 80.0], [5.0, 1.0], [30000.0, 9000.0], d=0.01)
+    base = lcoe_block(cells, _samples())
+    more = lcoe_block(cells, _samples(opex_var_usd_per_mwh=7.5))
     np.testing.assert_allclose(more - base, 7.5, rtol=1e-12, atol=1e-9)
 
 
@@ -163,11 +173,13 @@ def _random_problem(seed, n_cells=40, n_samples=30):
     rng = np.random.default_rng(seed)
     cells = CellInputs(
         p_mw=rng.uniform(0.5, 400.0, n_cells),
-        dist_grid_km=rng.uniform(0.0, 250.0, n_cells),
+        dist_sub_km=rng.uniform(0.0, 250.0, n_cells),
         dist_road_km=rng.uniform(0.0, 60.0, n_cells),
         energy_mwh=rng.uniform(1e3, 1e6, n_cells),
         energy_offset=rng.uniform(0.9, 1.1, n_cells),
         energy_slope=rng.uniform(-0.3, 0.3, n_cells),
+        degradation_low=rng.choice([0.0, 0.0048, 0.0069, 0.0088], n_cells),
+        degradation_high=rng.choice([0.0088, 0.0100, 0.0150], n_cells),
     )
     samples = SampleInputs(
         capex_usd_per_kw=rng.uniform(600, 1800, n_samples),
@@ -175,10 +187,14 @@ def _random_problem(seed, n_cells=40, n_samples=30):
         opex_var_usd_per_mwh=rng.uniform(0, 6, n_samples),
         lifetime_years=rng.integers(15, 36, n_samples).astype(float),
         discount_rate=rng.choice([0.0, 0.03, 0.05, 0.08, 0.12], n_samples),
-        degradation_rate=rng.uniform(0.0, 0.015, n_samples),
-        grid_cost_usd_per_mw_km=rng.uniform(300, 2500, n_samples),
-        substation_cost_usd_per_mw=rng.uniform(5e3, 6e4, n_samples),
+        degradation_weight=rng.uniform(0.0, 1.0, n_samples),
+        line_cost_usd_per_km=rng.uniform(3e4, 3e5, n_samples),
+        bay_cost_usd=rng.uniform(5e5, 6e6, n_samples),
         road_cost_usd_per_km=rng.uniform(1e4, 1e5, n_samples),
+        tortuosity_grid=rng.uniform(1.2, 1.3, n_samples),
+        tortuosity_road=rng.uniform(1.2, 1.3, n_samples),
+        reference_project_mw=np.full(n_samples, 100.0),
+        transmission_loss_per_km=rng.choice([0.0, 0.0003, 0.0005], n_samples),
         energy_parameter=rng.uniform(0.8, 1.1, n_samples),
     )
     return cells, samples
@@ -223,8 +239,11 @@ def test_lcoe_rises_with_capex_distance_and_discount_rate_and_falls_with_energy(
     [
         {"lifetime_years": 20.5},
         {"lifetime_years": 0.0},
-        {"degradation_rate": 1.0},
-        {"degradation_rate": -0.01},
+        {"degradation_weight": 1.5},
+        {"degradation_weight": -0.01},
+        {"reference_project_mw": 0.0},
+        {"tortuosity_grid": -1.0},
+        {"transmission_loss_per_km": -0.0001},
         {"discount_rate": -1.0},
         {"capex_usd_per_kw": -5.0},
         {"opex_var_usd_per_mwh": float("nan")},
@@ -257,7 +276,7 @@ def test_from_mapping_repeats_scalars_and_rejects_missing_keys_and_wrong_lengths
             **{k: 1.0 for k in kernel.KERNEL_PARAMETER_KEYS},
             "energy_parameter": 0.9,
             "lifetime_years": 10.0,
-            "degradation_rate": 0.01,
+            "degradation_weight": 0.5,
         },
         4,
     )
@@ -266,7 +285,7 @@ def test_from_mapping_repeats_scalars_and_rejects_missing_keys_and_wrong_lengths
         SampleInputs.from_mapping({"capex_usd_per_kw": 1.0}, 4)
     bad = {
         **{k: 1.0 for k in kernel.KERNEL_PARAMETER_KEYS},
-        "degradation_rate": 0.01,
+        "degradation_weight": 0.5,
         "energy_parameter": np.ones(3),
     }
     with pytest.raises(KernelInputError, match="expected 4"):
@@ -327,3 +346,126 @@ def test_a_bad_floor_is_refused():
     for bad in (np.zeros(3), np.array([0.0, -1.0]), np.array([0.0, np.nan])):
         with pytest.raises(KernelInputError):
             lcoe_block(cells, _samples(), min_energy_mwh=bad)
+
+
+# -- Group 3: connection cost, degradation by cell, transmission losses (COMMAND 83) ------------------------
+
+
+@pytest.mark.unit
+def test_no_connection_no_degradation_and_no_losses_reproduce_the_plant_only_closed_form():
+    """With `C_inter = 0`, `d = 0` and `eta = 1` the LCOE is the plant-only `(CAPEX*CRF + OPEX)/E` of the earlier kernel (V-02)."""
+    p, e, r, n, capex_kw, f = 25.0, 60000.0, 0.07, 25, 1100.0, 0.02
+    cells = _cells([p, p], [10.0, 200.0], [3.0, 40.0], e)  # distances are free, the unit costs are zero
+    samples = _samples(
+        capex_usd_per_kw=capex_kw,
+        opex_fixed_frac=f,
+        discount_rate=r,
+        lifetime_years=float(n),
+        line_cost_usd_per_km=0.0,
+        bay_cost_usd=0.0,
+        road_cost_usd_per_km=0.0,
+        energy_parameter=0.9,
+    )
+    expected = (p * 1000 * capex_kw * _crf(r, n) + f * p * 1000 * capex_kw) / e
+    np.testing.assert_allclose(lcoe_block(cells, samples), expected, rtol=1e-12)
+    np.testing.assert_allclose(lcoe_direct(cells, samples), expected, rtol=1e-12)
+
+
+@pytest.mark.unit
+def test_the_external_connection_cost_follows_the_analytic_formula_per_megawatt():
+    """`C_inter = (c_line*tau*D_sub + C_bay + c_road*tau*D_road)/P_ref`, added to the capital per MW at year 0 (equation g3_inter)."""
+    p, e, n = 40.0, 90000.0, 20
+    d_sub, d_road = 30.0, 6.0
+    c_line, bay, c_road, tau_g, tau_r, p_ref = 400_000.0, 3_000_000.0, 60_000.0, 1.25, 1.3, 100.0
+    cells = _cells(p, d_sub, d_road, e)
+    kw = dict(
+        capex_usd_per_kw=1000.0,
+        opex_fixed_frac=0.0,
+        discount_rate=0.0,
+        lifetime_years=float(n),
+        energy_parameter=0.9,
+    )
+    with_conn = lcoe_block(
+        cells,
+        _samples(
+            **kw,
+            line_cost_usd_per_km=c_line,
+            bay_cost_usd=bay,
+            road_cost_usd_per_km=c_road,
+            tortuosity_grid=tau_g,
+            tortuosity_road=tau_r,
+            reference_project_mw=p_ref,
+        ),
+    )
+    without = lcoe_block(
+        cells,
+        _samples(**kw, line_cost_usd_per_km=0.0, bay_cost_usd=0.0, road_cost_usd_per_km=0.0),
+    )
+    c_inter = (c_line * tau_g * d_sub + bay + c_road * tau_r * d_road) / p_ref  # USD/MW
+    expected_delta = p * c_inter / (n * e)  # r = 0, d = 0: total capital over total energy
+    assert float(with_conn[0, 0] - without[0, 0]) == pytest.approx(expected_delta, rel=1e-12)
+    assert float(c_inter) == pytest.approx(
+        (400_000.0 * 1.25 * 30.0 + 3_000_000.0 + 60_000.0 * 1.3 * 6.0) / 100.0
+    )
+
+
+@pytest.mark.unit
+def test_the_connection_cost_per_megawatt_does_not_depend_on_the_size_of_the_cell():
+    """Per-project costs are spread over `P_ref`, so two cells of different capacity at the same distances differ only by their energy."""
+    cells = _cells([10.0, 200.0], 50.0, 5.0, [10.0 * 2500.0, 200.0 * 2500.0])  # same energy per MW
+    got = lcoe_block(cells, _samples())
+    assert float(got[0, 0]) == pytest.approx(float(got[1, 0]), rel=1e-12)
+
+
+@pytest.mark.unit
+def test_degradation_follows_the_closed_form_and_the_weight_moves_it_between_the_bounds_of_each_cell():
+    p, e, r, n = 10.0, 30000.0, 0.05, 25
+    low, high = np.array([0.0048, 0.0088]), np.array([0.0088, 0.0125])
+    cells = _cells([p, p], 20.0, 3.0, e, d=low, d_high=high)
+    weights = np.array([0.0, 0.5, 1.0])
+    samples = _samples(degradation_weight=weights, discount_rate=r, lifetime_years=float(n))
+    got = lcoe_block(cells, samples)
+    for i in range(2):
+        for j, w in enumerate(weights):
+            d = low[i] + w * (high[i] - low[i])
+            a_e = sum((1 - d) ** (t - 1) / (1 + r) ** t for t in range(1, n + 1))
+            numerator = p * (
+                1000 * 1000.0 * (1 + 0.05 * float(annuity_factor(r, n)))
+                + (100000.0 * 20.0 + 2_000_000.0 + 5000.0 * 3.0) / 100.0
+            )
+            expected = numerator / (e * a_e)
+            assert float(got[i, j]) == pytest.approx(expected, rel=1e-11)
+    assert (np.diff(got, axis=1) > 0).all()  # more degradation, higher LCOE
+
+
+@pytest.mark.unit
+def test_transmission_losses_scale_the_energy_by_one_minus_alpha_l_grid_with_a_floor_at_zero():
+    cells = _cells([10.0, 10.0, 10.0], [0.0, 40.0, 5000.0], 1.0, 30000.0)
+    central = lcoe_block(cells, _samples(tortuosity_grid=1.25))
+    lossy = lcoe_block(
+        cells, _samples(transmission_loss_per_km=0.0005, tortuosity_grid=1.25)
+    )
+    eta = np.array([1.0, 1 - 0.0005 * 1.25 * 40.0])
+    np.testing.assert_allclose(lossy[:2, 0], central[:2, 0] / eta, rtol=1e-12)
+    assert np.isposinf(lossy[2, 0])  # 5000 km: the efficiency is floored at 0, the energy vanishes
+    np.testing.assert_allclose(
+        lcoe_block(cells, _samples(transmission_loss_per_km=0.0005, tortuosity_grid=1.25)),
+        lcoe_direct(cells, _samples(transmission_loss_per_km=0.0005, tortuosity_grid=1.25)),
+        rtol=1e-11,
+    )
+
+
+@pytest.mark.unit
+def test_a_missing_distance_never_becomes_a_zero_connection_cost():
+    with pytest.raises(KernelInputError, match="non-finite"):
+        _cells([10.0], [float("nan")], [1.0], [5.0])
+    with pytest.raises(KernelInputError, match="non-finite"):
+        _cells([10.0], [1.0], [float("nan")], [5.0])
+
+
+@pytest.mark.unit
+def test_degradation_bounds_must_be_ordered_and_below_one():
+    with pytest.raises(KernelInputError, match="degradation bounds"):
+        _cells([10.0], 1.0, 1.0, 5.0, d=0.02, d_high=0.01)
+    with pytest.raises(KernelInputError, match="degradation bounds"):
+        _cells([10.0], 1.0, 1.0, 5.0, d=0.5, d_high=1.0)

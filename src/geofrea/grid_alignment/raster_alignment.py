@@ -29,7 +29,12 @@ from geofrea.core.constants import (
     NODATA_UINT8,
 )
 from geofrea.core.geodesy import wgs84_km_per_degree
-from geofrea.core.raster_io import safe_raster_open, safe_raster_write
+from geofrea.core.raster_io import (
+    RasterStream,
+    open_raster_stream,
+    safe_raster_open,
+    safe_raster_write,
+)
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.grid_alignment.reference_grid import GridContext
 
@@ -39,7 +44,12 @@ logger = logging.getLogger(__name__)
 # Peak size of one source window read by reproject_to_grid(), in bytes of the source dtype. Bounds memory:
 # BRA's population raster is (46814, 54172) float32 = 9.45 GiB, which a whole-raster read cannot allocate on
 # a 6 GB machine (docs/phases/F2a_grid_alignment.md known issue, 2026-09-22).
-_REPROJECT_WINDOW_BYTES = 400_000_000
+_REPROJECT_WINDOW_BYTES = 64_000_000
+
+# Working memory GDAL may use for one warp chunk, MB (rasterio `warp_mem_limit`). Its default left `Resampling.sum` on the BRA population
+# raster at 1.7 GB for a 49 MB window (2.8 GB for a 400 MB one) and stopped the cold F2a of BRA on a 6 GB machine; with 16 MB the same strip
+# peaks at about 0.5 GB and the output is byte for byte the same (COMMAND 87, docs/_audit/population_memory_87.md).
+_WARP_MEM_LIMIT_MB = 16
 
 
 class MissingSourceCrsError(ValueError):
@@ -72,6 +82,7 @@ def reproject_to_grid(
     dtype_out: str = "float32",
     max_window_bytes: int = _REPROJECT_WINDOW_BYTES,
     src_crs=None,
+    warp_mem_limit_mb: int = _WARP_MEM_LIMIT_MB,
 ):
     """Reproject a source raster into the GridContext reference frame.
 
@@ -90,7 +101,8 @@ def reproject_to_grid(
         dtype_out: Output data type ("float32" or "uint8").
         max_window_bytes: Upper bound on one source window read, in bytes.
         src_crs: CRS to use when the source file declares none (the caller must have verified it; see
-            alignment.py::_gwa_crs_for). A source with no CRS and no `src_crs` raises MissingSourceCrsError.
+            layers.py::gwa_crs_for). A source with no CRS and no `src_crs` raises MissingSourceCrsError.
+        warp_mem_limit_mb: Working memory GDAL may use for one warp chunk, MB (`geospatial.warp_mem_limit_mb`).
 
     Returns:
         Path to the reprojected output raster.
@@ -150,7 +162,10 @@ def reproject_to_grid(
                     nan_mask = np.isnan(block)
                     if nan_mask.any():
                         nan_total += int(nan_mask.sum())
-                        block = np.where(nan_mask, src_nodata, block).astype(block.dtype)
+                        # in place: np.where(...).astype(...) made two more copies of the window (one in float64) and
+                        # took the population window of BRA to 2.8 GB of RSS (COMMAND 87)
+                        block[nan_mask] = src_nodata
+                    del nan_mask
                 reproject(
                     source=block,
                     destination=data_out[row_start:row_end],
@@ -161,6 +176,7 @@ def reproject_to_grid(
                     resampling=resampling,
                     src_nodata=src_nodata,
                     dst_nodata=nd_out,
+                    warp_mem_limit=warp_mem_limit_mb,
                 )
             if nan_total:
                 logger.info(
@@ -174,6 +190,102 @@ def reproject_to_grid(
 
     data_out[~grid.country_mask] = nd_out
 
+    _write_grid_raster(data_out, out_path, grid, dtype_out, nd_out)
+
+    return out_path
+
+
+def _overlap_weights(dst_edges: np.ndarray, src_lo: int, src_hi: int):
+    """Sparse (n_dst x (src_hi - src_lo)) matrix: the fraction of each source pixel that lies inside each destination pixel.
+
+    Both axes are in source-pixel units (pixel i spans [i, i + 1]); `dst_edges` holds the n_dst + 1 edges of the destination pixels, increasing.
+    """
+    from scipy import sparse
+
+    n = len(dst_edges) - 1
+    first = np.clip(np.floor(dst_edges[:-1]).astype(np.int64), src_lo, src_hi)
+    last = np.clip(np.ceil(dst_edges[1:]).astype(np.int64), src_lo, src_hi)
+    counts = np.maximum(last - first, 0)
+    rows = np.repeat(np.arange(n), counts)
+    offsets = np.arange(counts.sum()) - np.repeat(np.cumsum(counts) - counts, counts)
+    cols = np.repeat(first, counts) + offsets
+    lo = np.maximum(np.repeat(dst_edges[:-1], counts), cols)
+    hi = np.minimum(np.repeat(dst_edges[1:], counts), cols + 1)
+    return sparse.csr_matrix((np.clip(hi - lo, 0.0, None), (rows, cols - src_lo)), shape=(n, src_hi - src_lo))
+
+
+def sum_to_grid(
+    src_path,
+    out_path,
+    grid: GridContext,
+    nodata_out: float = NODATA_FLOAT,
+    max_window_bytes: int = _REPROJECT_WINDOW_BYTES,
+    src_crs=None,
+):
+    """Sum a count raster onto the grid: each target pixel is the sum of the source pixels under it, each weighted by the fraction of its area inside.
+
+    This is the exact form of `reproject_to_grid(..., Resampling.sum)` for a source in the CRS of the grid with north-up axes (M-F2a-05). GDAL's
+    warp resolves a source edge that falls within a few thousandths of a pixel of the middle of a source pixel (BRA population: 0.4996 of a pixel,
+    docs/_audit/memory_budget_88.md) according to the origin of its chunk, so the value of that pixel changed with the size of the window; the
+    weights here come from the pixel edges alone, every pixel is computed from the same operands in float64 whatever the strips, and the total is kept.
+
+    Source pixels equal to the declared nodata, or not finite, add nothing; a target pixel with no valid source pixel under it is `nodata_out`
+    (as the warp left it). A source in another CRS, or rotated, goes through `reproject_to_grid` with `Resampling.sum`.
+
+    Returns:
+        Path to the output raster (float32).
+    """
+    with safe_raster_open(src_path) as src:
+        crs_in = src.crs or src_crs
+        if crs_in is None:
+            raise MissingSourceCrsError(f"{src_path}: the raster declares no CRS and none was supplied")
+        t, g = src.transform, grid.transform
+        regular = crs_in == grid.crs and t.b == 0 and t.d == 0 and t.a > 0 and t.e < 0 and g.b == 0 and g.d == 0 and g.a > 0 and g.e < 0
+        if not regular:
+            return reproject_to_grid(src_path, out_path, grid, Resampling.sum, nodata_out, "float32", max_window_bytes, src_crs, _WARP_MEM_LIMIT_MB)
+        data_out = np.full((grid.height, grid.width), nodata_out, dtype=np.float32)
+        nodata = src.nodata
+        # destination edges in source-pixel units (x grows with the column, y with the row, as in the file)
+        x_edges = (g.c + np.arange(grid.width + 1) * g.a - t.c) / t.a
+        y_edges = (g.f + np.arange(grid.height + 1) * g.e - t.f) / t.e
+        col_lo, col_hi = int(np.clip(np.floor(x_edges[0]), 0, src.width)), int(np.clip(np.ceil(x_edges[-1]), 0, src.width))
+        if col_hi > col_lo:
+            wx = _overlap_weights(x_edges, col_lo, col_hi)
+            # float64 copies of the window (values and validity) outweigh the float32 read: 2 x 8 bytes against 4
+            window_rows = max(1, int(max_window_bytes // (4 * (col_hi - col_lo))))
+            nan_total = 0
+            row_start = 0
+            while row_start < grid.height:
+                row_end = row_start + 1
+                # grow the strip while the source rows it covers stay within the window
+                while row_end < grid.height and np.ceil(y_edges[row_end + 1]) - np.floor(y_edges[row_start]) <= window_rows:
+                    row_end += 1
+                lo = int(np.clip(np.floor(y_edges[row_start]), 0, src.height))
+                hi = int(np.clip(np.ceil(y_edges[row_end]), 0, src.height))
+                if hi > lo:
+                    block = src.read(1, window=Window(col_lo, lo, col_hi - col_lo, hi - lo))
+                    valid = np.isfinite(block)
+                    if nodata is not None and not np.isnan(nodata):
+                        valid &= block != nodata
+                    nan_total += int(np.isnan(block).sum()) if nodata is not None and not np.isnan(nodata) else 0
+                    values = np.where(valid, block, 0.0).astype(np.float64)
+                    del block
+                    wy = _overlap_weights(y_edges[row_start : row_end + 1], lo, hi)
+                    total = (wx @ (wy @ values).T).T
+                    del values
+                    weight = (wx @ (wy @ valid.astype(np.float64)).T).T
+                    got = weight > 1e-12
+                    data_out[row_start:row_end][got] = total[got].astype(np.float32)
+                row_start = row_end
+            if nan_total:
+                logger.info("    %s: %d source pixels are literal NaN despite a finite declared nodata (%s): they add nothing.", Path(src_path).name, nan_total, nodata)
+
+    data_out[~grid.country_mask] = nodata_out
+    _write_grid_raster(data_out, out_path, grid, "float32", nodata_out)
+    return out_path
+
+
+def _write_grid_raster(data_out: np.ndarray, out_path, grid: GridContext, dtype_out: str, nd_out) -> None:
     profile = {
         "driver": "GTiff",
         "dtype": dtype_out,
@@ -190,8 +302,6 @@ def reproject_to_grid(
     }
     with safe_raster_write(out_path, **profile) as dst:
         dst.write(data_out, 1)
-
-    return out_path
 
 
 _SLOPE_BLOCK_HEIGHT = 512
@@ -361,7 +471,8 @@ SLOPE_BINS = 41  # 1 degree bins 0-1 ... 39-40 and a last one for 40 degrees and
 SLOPE_COUNT_NODATA = 65535
 _GLO30_SAMPLES_PER_DEGREE = 3600
 _GLO30_TILE_RE = re.compile(r"_([NS])(\d{2})_00_([EW])(\d{3})_00_DEM")
-_SLOPE_STRIP_GRID_ROWS = 4
+_SLOPE_STRIP_GRID_ROWS = 1
+_OUTPUT_BLOCK_ROWS = 256  # rows of the grid held and written at once by `glo30_aligned_outputs`: a multiple of the strip and of the 256-pixel tile
 
 
 def _glo30_tile_index(tiles: list) -> dict[tuple[int, int], Path]:
@@ -513,97 +624,117 @@ def glo30_aligned_outputs(
     sp = (
         samples_per_degree or _GLO30_SAMPLES_PER_DEGREE
     )  # a tile has this many samples per side (tests use smaller synthetic tiles)
-    shape = (grid.height, grid.width)
     want_means = elevation_out is not None or slope_out is not None
     want_counts = counts_out is not None
     if not (want_means or want_counts):
         return {"elevation": None, "slope": None, "slope_counts": None}
-    sums = {k: np.zeros(shape) for k in ("z", "slope")} if want_means else {}
-    n = {k: np.zeros(shape, dtype=np.int64) for k in ("z", "slope")} if want_means else {}
-    counts = np.zeros((SLOPE_BINS, grid.height, grid.width), dtype=np.uint16) if want_counts else None
+
+    # Nothing the size of the grid is held (COMMAND 88): a strip of grid rows is final once it is processed, so its rows go to the output rasters in
+    # blocks of `_OUTPUT_BLOCK_ROWS` (a whole number of strips and of 256-pixel tile rows, so no tile is written twice). The 41-band count array alone
+    # was 1.26 GB for BRA. Each pixel's values come from the same samples summed in the same order as before: the rasters are the same.
+    width = grid.width
+    block_rows = _OUTPUT_BLOCK_ROWS
+    mean_profile = {
+        "driver": "GTiff",
+        "dtype": "float32",
+        "width": width,
+        "height": grid.height,
+        "count": 1,
+        "crs": grid.crs,
+        "transform": grid.transform,
+        "nodata": nodata_out,
+        "compress": "lzw",
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
+    counts_profile = {
+        "driver": "GTiff",
+        "dtype": "uint16",
+        "width": width,
+        "height": grid.height,
+        "count": SLOPE_BINS,
+        "crs": grid.crs,
+        "transform": grid.transform,
+        "nodata": SLOPE_COUNT_NODATA,
+        "compress": "deflate",
+        "predictor": 2,
+        "tiled": True,
+        "blockxsize": 256,
+        "blockysize": 256,
+    }
     progress = PeriodicProgress(
         logger, -(-grid.height // _SLOPE_STRIP_GRID_ROWS), "elevation, slope and slope bins from GLO-30"
     )
-    with contextlib.closing(_TileHandles()) as handles:
-        for r0 in range(0, grid.height, _SLOPE_STRIP_GRID_ROWS):
-            progress.step()
-            r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, grid.height)
-            strip = _glo30_strip_samples(index, grid, r0, r1, sp, handles)
-            if strip is None:
-                continue
-            z, slope, grow, gcol = strip
-            if want_means:
-                pixel = grow[:, None] * grid.width + gcol[None, :]
-                for name, values in (("z", z), ("slope", slope)):
-                    ok = np.isfinite(values)
-                    if not ok.any():
-                        continue
-                    size = (r1 - r0) * grid.width
-                    total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
-                    count = np.bincount(pixel[ok], minlength=size)
-                    sums[name][r0:r1] = total.reshape(r1 - r0, grid.width)
-                    n[name][r0:r1] = count.reshape(r1 - r0, grid.width)
-            if want_counts:
-                valid = np.isfinite(slope)
-                if not valid.any():
-                    continue
-                bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
-                key = (grow[:, None] * grid.width + gcol[None, :]) * SLOPE_BINS + bins
-                flat = np.bincount(key[valid], minlength=(r1 - r0) * grid.width * SLOPE_BINS)
-                counts[:, r0:r1, :] = (
-                    flat.reshape(r1 - r0, grid.width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
-                )
+    streams: dict[str, RasterStream] = {}
+    any_elevation = any_counts = False
     written: dict[str, Path | None] = {"elevation": None, "slope": None, "slope_counts": None}
-    if want_means and n["z"].any():
-        profile = {
-            "driver": "GTiff",
-            "dtype": "float32",
-            "width": grid.width,
-            "height": grid.height,
-            "count": 1,
-            "crs": grid.crs,
-            "transform": grid.transform,
-            "nodata": nodata_out,
-            "compress": "lzw",
-            "tiled": True,
-            "blockxsize": 256,
-            "blockysize": 256,
-        }
-        for name, key_name, out in (("z", "elevation", elevation_out), ("slope", "slope", slope_out)):
-            if out is None:
-                continue
-            data = np.full(shape, nodata_out, dtype=np.float32)
-            has = n[name] > 0
-            data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
-            data[~grid.country_mask] = nodata_out
-            with safe_raster_write(out, **profile) as dst:
-                dst.write(data, 1)
-                dst.update_tags(
-                    source="Copernicus GLO-30, mean of the 30 m samples per pixel",
-                    samples_per_degree=str(sp),
-                )
-            written[key_name] = Path(out)
-    if want_counts and counts.any():
-        counts[:, ~grid.country_mask] = SLOPE_COUNT_NODATA
-        profile = {
-            "driver": "GTiff",
-            "dtype": "uint16",
-            "width": grid.width,
-            "height": grid.height,
-            "count": SLOPE_BINS,
-            "crs": grid.crs,
-            "transform": grid.transform,
-            "nodata": SLOPE_COUNT_NODATA,
-            "compress": "deflate",
-            "predictor": 2,
-            "tiled": True,
-            "blockxsize": 256,
-            "blockysize": 256,
-        }
-        with safe_raster_write(counts_out, **profile) as dst:
-            dst.write(counts)
-            dst.update_tags(slope_bins_deg="1", last_bin_open="true", samples_per_degree=str(sp))
-        written["slope_counts"] = Path(counts_out)
+    with contextlib.ExitStack() as stack, contextlib.closing(_TileHandles()) as handles:
+        if want_means:
+            for name, out in (("elevation", elevation_out), ("slope", slope_out)):
+                if out is not None:
+                    streams[name] = stack.enter_context(open_raster_stream(out, **mean_profile))
+        if want_counts:
+            streams["slope_counts"] = stack.enter_context(open_raster_stream(counts_out, **counts_profile))
+        for b0 in range(0, grid.height, block_rows):
+            b1 = min(b0 + block_rows, grid.height)
+            rows = b1 - b0
+            sums = {k: np.zeros((rows, width)) for k in ("z", "slope")} if want_means else {}
+            n = {k: np.zeros((rows, width), dtype=np.int64) for k in ("z", "slope")} if want_means else {}
+            counts = np.zeros((SLOPE_BINS, rows, width), dtype=np.uint16) if want_counts else None
+            for r0 in range(b0, b1, _SLOPE_STRIP_GRID_ROWS):
+                progress.step()
+                r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, b1)
+                strip = _glo30_strip_samples(index, grid, r0, r1, sp, handles)
+                if strip is None:
+                    continue
+                z, slope, grow, gcol = strip
+                lo, hi = r0 - b0, r1 - b0
+                if want_means:
+                    pixel = grow[:, None] * width + gcol[None, :]
+                    for name, values in (("z", z), ("slope", slope)):
+                        ok = np.isfinite(values)
+                        if not ok.any():
+                            continue
+                        size = (r1 - r0) * width
+                        total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
+                        count = np.bincount(pixel[ok], minlength=size)
+                        sums[name][lo:hi] = total.reshape(r1 - r0, width)
+                        n[name][lo:hi] = count.reshape(r1 - r0, width)
+                if want_counts:
+                    valid = np.isfinite(slope)
+                    if not valid.any():
+                        continue
+                    bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
+                    key = (grow[:, None] * width + gcol[None, :]) * SLOPE_BINS + bins
+                    flat = np.bincount(key[valid], minlength=(r1 - r0) * width * SLOPE_BINS)
+                    counts[:, lo:hi, :] = flat.reshape(r1 - r0, width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+            window = Window(0, b0, width, rows)
+            outside = ~grid.country_mask[b0:b1]
+            if want_means:
+                any_elevation = any_elevation or bool(n["z"].any())
+                for name, key_name in (("z", "elevation"), ("slope", "slope")):
+                    if key_name not in streams:
+                        continue
+                    data = np.full((rows, width), nodata_out, dtype=np.float32)
+                    has = n[name] > 0
+                    data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
+                    data[outside] = nodata_out
+                    streams[key_name].dataset.write(data, 1, window=window)
+            if want_counts:
+                any_counts = any_counts or bool(counts.any())
+                counts[:, outside] = SLOPE_COUNT_NODATA
+                streams["slope_counts"].dataset.write(counts, window=window)
+        if want_means and any_elevation:
+            for name in ("elevation", "slope"):
+                if name in streams:
+                    streams[name].dataset.update_tags(
+                        source="Copernicus GLO-30, mean of the 30 m samples per pixel", samples_per_degree=str(sp)
+                    )
+                    written[name] = streams[name].commit()
+        if want_counts and any_counts:
+            streams["slope_counts"].dataset.update_tags(slope_bins_deg="1", last_bin_open="true", samples_per_degree=str(sp))
+            written["slope_counts"] = streams["slope_counts"].commit()
     return written
 
 
@@ -802,7 +933,7 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     return Path(out_path)
 
 
-def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
+def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf, warp_mem_limit_mb: int = 1024):
     """Build an ESA WorldCover mosaic from multiple tiles.
 
     Reprojects and merges tiles onto the reference grid (nearest-
@@ -833,6 +964,8 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
         out_path: Output path for the mosaicked raster.
         grid: Target GridContext.
         country_gdf: Country GeoDataFrame, for the tile-overlap bounds check.
+        warp_mem_limit_mb: Working memory of one GDAL warp chunk, MB. Nearest-neighbour takes the value of one source pixel, so the chunking
+            decides the memory and never a value.
 
     Returns:
         Path to the mosaicked land-cover raster, or None if no tile was used.
@@ -875,7 +1008,7 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf):
                     resampling=Resampling.nearest,
                     src_nodata=0,
                     dst_nodata=0,
-                    warp_mem_limit=1024,
+                    warp_mem_limit=warp_mem_limit_mb,
                 )
                 mask_fill = (tile_reprojected > 0) & (lc_out == 0)
                 lc_out[mask_fill] = tile_reprojected[mask_fill]

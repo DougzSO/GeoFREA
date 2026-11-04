@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 from collections import Counter
@@ -101,7 +102,10 @@ from geofrea.core.config_loader import (
     load_settings,
     load_technologies,
 )
+from geofrea.core.deferred_check import for_country as deferred_check_for
+from geofrea.core.deferred_check import load_store as reference_store_for
 from geofrea.core.geo_utils import load_mainland_boundary
+from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
 from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
@@ -111,8 +115,6 @@ from geofrea.core.orchestrator import (
     compute_run_id,
     phase_graph,
 )
-from geofrea.core.deferred_check import for_country as deferred_check_for
-from geofrea.core.memory_guard import EXIT_NOT_STARTED, cold_start_shortfall
 from geofrea.core.paths import data_root, interim, log_path, outputs_dir, phase_dir
 from geofrea.core.power import keep_awake
 from geofrea.core.production import (
@@ -123,6 +125,7 @@ from geofrea.core.production import (
     validate_registry,
     validate_run_technologies,
 )
+from geofrea.core.pv_zones import ZoneSource
 from geofrea.core.run_logging import configure_logging, render_run_table
 from geofrea.core.scale import DEFAULT_SCALE, SCALES, active_scale, use_scale
 from geofrea.core.schemas import ResolutionsConfig, SettingsFile
@@ -355,6 +358,20 @@ def _audit_run(context: PhaseContext, audit_config: AuditConfig) -> AuditResult:
     return result
 
 
+def _zone_source() -> ZoneSource:
+    """The PVCZ points and the lookup distance of `settings.yaml` (Group 3): the thermal zone of each cell, a column of the F3 tables."""
+    geospatial = load_settings(SETTINGS_YAML).geospatial
+    return ZoneSource(
+        csv_path=data_root() / geospatial.pvcz_csv, max_distance_km=geospatial.pvcz_max_distance_km
+    )
+
+
+def _substation_source(pattern: str, iso: str) -> Path | None:
+    """The substations file of the country if it was fetched, else None (the substations of the raw grid extract are used)."""
+    path = data_root() / pattern.format(iso=iso)
+    return path if path.is_file() else None
+
+
 def _build_grid_alignment_inputs(
     context: PhaseContext, resolutions: ResolutionsConfig, distance_cap_km: float
 ) -> GridAlignmentInputs:
@@ -383,8 +400,27 @@ def _build_grid_alignment_inputs(
             grid_alignment/adapter.py).
     """
     acquisition_output = context.prior_results["data_acquisition"].output
-    return acquisition_result_to_grid_alignment_inputs(
+    inputs = acquisition_result_to_grid_alignment_inputs(
         acquisition_output, resolutions, distance_cap_km
+    )
+    # Group 3: the substation threshold of the country (parameters.json), the tolerance and the road classes (settings.yaml)
+    geospatial = load_settings(SETTINGS_YAML).geospatial
+    connection = None if context.country_params is None else context.country_params.connection
+    return inputs.model_copy(
+        update={
+            "poi_voltage_threshold_kv": None
+            if connection is None
+            else connection.poi_voltage_threshold_kv.value,
+            "poi_sensitivity_threshold_kv": None
+            if connection is None or connection.poi_sensitivity_threshold_kv is None
+            else connection.poi_sensitivity_threshold_kv.value,
+            "poi_line_tolerance_m": geospatial.poi_line_tolerance_m,
+            "poi_substation_source": _substation_source(
+                geospatial.poi_substations_geojson, context.country_code
+            ),
+            "road_classes": geospatial.road_classes,
+            "warp_mem_limit_mb": geospatial.warp_mem_limit_mb,
+        }
     )
 
 
@@ -437,7 +473,12 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "roads_distance_capped",
     "grid_distance_capped",
     "rivers_distance_capped",
+    "poi",
+    "poi_distance_capped",
 )
+
+# Layers a country has only when its parameters ask for them (COMMAND 86: IND 132 kV sensitivity): registered when present, not in `produces`
+_OPTIONAL_ALIGNED_RASTER_LAYER_KEYS = ("poi_sensitivity", "poi_sensitivity_distance_capped")
 
 
 # Per-height wind layers (M-F2a-04): "<product>_<height>m" for every GWA product and height; each aligned
@@ -455,6 +496,10 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
     in docs/phases/core.md Known issues).
     """
     for layer_key in _ALIGNED_RASTER_LAYER_KEYS:
+        path = getattr(result, layer_key)
+        if path is not None:
+            context.register_artifact(f"aligned/{layer_key}", path, "1.0")
+    for layer_key in _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS:
         path = getattr(result, layer_key)
         if path is not None:
             context.register_artifact(f"aligned/{layer_key}", path, "1.0")
@@ -481,6 +526,7 @@ def _build_phase_specs(
     max_batch_gb: float | None = None,
     country_code: str | None = None,
     wind_cf_integral: str = "exact",
+    optional_aligned_keys: tuple[str, ...] = (),
 ) -> list[PhaseSpec]:
     """Registered phases, with their requires/produces artifact contracts.
 
@@ -577,6 +623,7 @@ def _build_phase_specs(
             resolved_path(layers.get("lakes")),
             resolved_path(layers.get("rivers")),
             resolved_path(layers.get("admin1")),
+            zone_source=_zone_source(),
         )
         out_dir = artifacts_dir(context.country_code)
         for key, name in eligibility_artifact_files(
@@ -903,6 +950,7 @@ def _build_phase_specs(
             requires=frozenset({"layer_registry"}),
             produces=frozenset({"aligned_rasters", "reference_grid"})
             | {f"aligned/{key}" for key in _ALIGNED_RASTER_LAYER_KEYS}
+            | {f"aligned/{key}" for key in optional_aligned_keys}
             | {f"aligned/wind_{key}" for key in _WIND_LAYER_KEYS},
             summarize=_summarize_grid_alignment,
         ),
@@ -1400,6 +1448,7 @@ def _run_geofrea(
         prune_unregistered=True,
         revalidate_phases=revalidate_phases or [],
         deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
+        reference_store=reference_store_for(DEFERRED_CHECKS_YAML, data_root()),
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
@@ -1414,6 +1463,11 @@ def _run_geofrea(
             max_batch_gb,
             country_code,
             wind_cf_integral,
+            _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS
+            if country_params is not None
+            and country_params.connection is not None
+            and country_params.connection.poi_sensitivity_threshold_kv is not None
+            else (),
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)
@@ -1500,6 +1554,8 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv or [])
     settings = load_settings(SETTINGS_YAML)
+    # a fixed GDAL block cache for this process and, through the environment, for every layer child (COMMAND 88)
+    os.environ["GDAL_CACHEMAX"] = str(settings.geospatial.gdal_cachemax_mb)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
     technologies = load_technologies(TECHNOLOGIES_YAML)

@@ -1,23 +1,28 @@
-"""Pure LCOE kernel (M-F6-01, M-F6-05; D-F6-001, D-F6-007, D-F6-010).
+"""Pure LCOE kernel (M-F6-01, M-F6-05; D-F6-001, D-F6-007, D-F6-010; Group 3, `docs/thesis/methods/group3_connection_degradation.tex`).
 
 No input or output happens here: the functions take arrays and return arrays, so F6 and F7 import them (M-F6-05). Units: power in
 MW, energy in MWh per year, distances in km, costs in constant 2024 USD (S-07), rates as fractions, the LCOE in USD/MWh.
 
-The textbook form of M-F6-01, for a cell `c` and a parameter sample `s` (the member is fixed by the energy that is passed in):
+The textbook form of M-F6-01, for a cell `i` and a parameter sample `s` (the member is fixed by the energy that is passed in):
 
-    CAPEX_total = P*1000*capex + P*dist_grid*grid_cost + P*substation_cost + dist_road*road_cost
-    OPEX_t      = opex_fixed_frac*P*1000*capex + opex_var*E_t,   E_t = E*(1 - d)^(t - 1),   t = 1..n
+    C_inter     = (c_line*tau_grid*D_sub + C_bay + c_road*tau_road*D_road) / P_ref        [USD/MW, external connection]
+    CAPEX_total = P*(1000*capex + C_inter)
+    OPEX_t      = opex_fixed_frac*P*1000*capex + opex_var*E_t,   E_t = E*(1 - d)^(t - 1)*eta_trans,   t = 1..n
     LCOE        = [CAPEX_total + sum_t OPEX_t/(1 + r)^t] / [sum_t E_t/(1 + r)^t]
+
+with `d = d_low + w*(d_high - d_low)` per cell and sample (the weight `w` in [0, 1] is the sampled quantity; PV cells take the bounds of their
+thermal zone, wind cells one pair) and `eta_trans = max(0, 1 - alpha*tau_grid*D_sub)` (`alpha = 0` in the central case, so `eta_trans = 1`).
 
 The kernel evaluates it in a factored form that is exact and needs no loop over the years. With the annuity of a constant cost,
 `A_o = sum_t (1 + r)^-t`, and the degradation-weighted energy annuity, `A_e = sum_t (1 - d)^(t - 1) (1 + r)^-t`, the variable
 O&M cancels against the denominator:
 
-    LCOE = opex_var + [ P*U + (P*dist_grid)*grid_cost + dist_road*road_cost ] / ( E * A_e ),
-    U    = 1000*capex*(1 + opex_fixed_frac*A_o) + substation_cost.
+    LCOE = opex_var + P * [ U + D_sub * (c_line*tau_grid/P_ref) + D_road * (c_road*tau_road/P_ref) ] / ( E * eta_trans * A_e ),
+    U    = 1000*capex*(1 + opex_fixed_frac*A_o) + C_bay/P_ref.
 
-The numerator of the whole (cells x samples) block is one matrix product, `(C x 3) @ (3 x S)`. The textbook form with
-an explicit loop over the years, the reference of the tests, is in `tests/oracles/kernel.py`.
+The numerator of the whole (cells x samples) block is one matrix product, `(C x 3) @ (3 x S)`; `A_e` is computed once per distinct pair of
+degradation bounds and gathered per cell. The textbook form with an explicit loop over the years, the reference of the tests, is in
+`tests/oracles/kernel.py`.
 
 Energy of a sample: `E_c(s) = energy_mwh_c * (energy_offset_c + energy_slope_c * x_s)`, where `x_s` is the sampled value of the
 parameter that scales the stored energy (`gamma` or `eta_loss`, D-F6-012) and offset and slope come from the capacity-factor model's
@@ -25,8 +30,8 @@ parameter that scales the stored energy (`gamma` or `eta_loss`, D-F6-012) and of
 
 Zero energy gives `LCOE = +inf` (D-F6-007). An optional energy floor per cell, `min_energy_mwh`, extends that rule: an entry whose sampled
 energy is below the floor is `+inf` too, so F7 can mark the cell-members that fail `CF_min` without a second energy block (M-F7-01,
-D-F7-007). A negative or non-finite energy, a non-finite input, a non-integer lifetime or a rate outside its domain raises
-`KernelInputError` (A-09). A discount rate of zero is evaluated by the limit of the closed form (D-F6-010).
+D-F7-007). A negative or non-finite energy or distance (a missing distance is never a zero cost), a non-finite input, a non-integer lifetime
+or a rate outside its domain raises `KernelInputError` (A-09). A discount rate of zero is evaluated by the limit of the closed form (D-F6-010).
 """
 
 from __future__ import annotations
@@ -36,7 +41,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-KERNEL_VERSION = "1.0"
+KERNEL_VERSION = "2.0"
 
 # the parameters of M-F6-01 that vary by sample; the energy parameter is passed separately
 KERNEL_PARAMETER_KEYS = (
@@ -45,10 +50,14 @@ KERNEL_PARAMETER_KEYS = (
     "opex_var_usd_per_mwh",
     "lifetime_years",
     "discount_rate",
-    "degradation_rate",
-    "grid_cost_usd_per_mw_km",
-    "substation_cost_usd_per_mw",
+    "degradation_weight",
+    "line_cost_usd_per_km",
+    "bay_cost_usd",
     "road_cost_usd_per_km",
+    "tortuosity_grid",
+    "tortuosity_road",
+    "reference_project_mw",
+    "transmission_loss_per_km",
 )
 ENERGY_PARAMETER_KEY = "energy_parameter"
 # parameters the kernel sums over whole years (D-F6-010); the design matrix rounds them
@@ -107,15 +116,18 @@ class CellInputs:
     """Per-cell inputs of one member, arrays of shape `(C,)`.
 
     `energy_mwh` is the annual energy stored by F5 for the member at the nominal value of the energy parameter; the sampled energy is
-    `energy_mwh * (energy_offset + energy_slope * x_s)`.
+    `energy_mwh * (energy_offset + energy_slope * x_s)`. `dist_sub_km` is the distance to the nearest eligible substation (`D_sub`); the
+    degradation of a cell and sample is `degradation_low + w_s * (degradation_high - degradation_low)`.
     """
 
     p_mw: np.ndarray
-    dist_grid_km: np.ndarray
+    dist_sub_km: np.ndarray
     dist_road_km: np.ndarray
     energy_mwh: np.ndarray
     energy_offset: np.ndarray
     energy_slope: np.ndarray
+    degradation_low: np.ndarray
+    degradation_high: np.ndarray
 
     def __post_init__(self) -> None:
         arrays = {
@@ -132,9 +144,14 @@ class CellInputs:
         for name, value in arrays.items():
             if not np.isfinite(value).all():
                 raise KernelInputError(f"cell input {name} has non-finite values")
-        for name in ("p_mw", "dist_grid_km", "dist_road_km", "energy_mwh"):
+        for name in ("p_mw", "dist_sub_km", "dist_road_km", "energy_mwh"):
             if (arrays[name] < 0).any():
                 raise KernelInputError(f"cell input {name} has negative values")
+        low, high = arrays["degradation_low"], arrays["degradation_high"]
+        if (low < 0).any() or (high >= 1).any() or (low > high).any():
+            raise KernelInputError(
+                "degradation bounds must satisfy 0 <= degradation_low <= degradation_high < 1"
+            )
 
     def __len__(self) -> int:
         return int(self.p_mw.shape[0])
@@ -155,10 +172,14 @@ class SampleInputs:
     opex_var_usd_per_mwh: np.ndarray
     lifetime_years: np.ndarray
     discount_rate: np.ndarray
-    degradation_rate: np.ndarray
-    grid_cost_usd_per_mw_km: np.ndarray
-    substation_cost_usd_per_mw: np.ndarray
+    degradation_weight: np.ndarray
+    line_cost_usd_per_km: np.ndarray
+    bay_cost_usd: np.ndarray
     road_cost_usd_per_km: np.ndarray
+    tortuosity_grid: np.ndarray
+    tortuosity_road: np.ndarray
+    reference_project_mw: np.ndarray
+    transmission_loss_per_km: np.ndarray
     energy_parameter: np.ndarray
 
     def __post_init__(self) -> None:
@@ -180,19 +201,24 @@ class SampleInputs:
             "capex_usd_per_kw",
             "opex_fixed_frac",
             "opex_var_usd_per_mwh",
-            "grid_cost_usd_per_mw_km",
-            "substation_cost_usd_per_mw",
+            "line_cost_usd_per_km",
+            "bay_cost_usd",
             "road_cost_usd_per_km",
+            "tortuosity_grid",
+            "tortuosity_road",
+            "transmission_loss_per_km",
         ):
             if (arrays[name] < 0).any():
                 raise KernelInputError(f"sample input {name} has negative values")
+        if (arrays["reference_project_mw"] <= 0).any():
+            raise KernelInputError("reference_project_mw must be positive")
         n = arrays["lifetime_years"]
         if (n < 1).any() or (n != np.round(n)).any():
             raise KernelInputError("lifetime_years must be whole years of at least 1 (D-F6-010)")
         if (arrays["discount_rate"] <= -1).any():
             raise KernelInputError("discount_rate must be above -1")
-        if (arrays["degradation_rate"] < 0).any() or (arrays["degradation_rate"] >= 1).any():
-            raise KernelInputError("degradation_rate must lie in [0, 1)")
+        if (arrays["degradation_weight"] < 0).any() or (arrays["degradation_weight"] > 1).any():
+            raise KernelInputError("degradation_weight must lie in [0, 1]")
 
     def __len__(self) -> int:
         return int(self.capex_usd_per_kw.shape[0])
@@ -247,6 +273,22 @@ def _check_floor(cells: CellInputs, min_energy_mwh: np.ndarray) -> np.ndarray:
     return floor
 
 
+def _energy_annuity_block(cells: CellInputs, samples: SampleInputs) -> np.ndarray:
+    """The energy annuity per cell and sample, `(C, S)`, or `(1, S)` when every cell shares one pair of degradation bounds.
+
+    `A_e` depends on the cell only through its pair of bounds, so it is evaluated once per distinct pair (`K` of them: the PV thermal zones,
+    or one) and gathered per cell.
+    """
+    pairs, inverse = np.unique(
+        np.column_stack([cells.degradation_low, cells.degradation_high]), axis=0, return_inverse=True
+    )
+    d = pairs[:, :1] + samples.degradation_weight[None, :] * (pairs[:, 1:] - pairs[:, :1])
+    a_e = energy_annuity_factor(samples.discount_rate[None, :], d, samples.lifetime_years[None, :])
+    if len(pairs) == 1:
+        return a_e
+    return a_e[np.asarray(inverse).reshape(-1)]
+
+
 def lcoe_block(
     cells: CellInputs, samples: SampleInputs, min_energy_mwh: np.ndarray | None = None
 ) -> np.ndarray:
@@ -265,13 +307,21 @@ def lcoe_block(
     """
     _check_energy_not_negative(cells, samples)
     floor = _check_floor(cells, min_energy_mwh) if min_energy_mwh is not None else None
-    r, d, n = samples.discount_rate, samples.degradation_rate, samples.lifetime_years
+    r, n = samples.discount_rate, samples.lifetime_years
     a_o = annuity_factor(r, n)
-    a_e = energy_annuity_factor(r, d, n)
+    p_ref = samples.reference_project_mw
     u = 1000.0 * samples.capex_usd_per_kw * (1.0 + samples.opex_fixed_frac * a_o)
-    u = u + samples.substation_cost_usd_per_mw
-    left = np.column_stack([cells.p_mw, cells.p_mw * cells.dist_grid_km, cells.dist_road_km])
-    right = np.vstack([u, samples.grid_cost_usd_per_mw_km, samples.road_cost_usd_per_km])
+    u = u + samples.bay_cost_usd / p_ref
+    left = np.column_stack(
+        [cells.p_mw, cells.p_mw * cells.dist_sub_km, cells.p_mw * cells.dist_road_km]
+    )
+    right = np.vstack(
+        [
+            u,
+            samples.line_cost_usd_per_km * samples.tortuosity_grid / p_ref,
+            samples.road_cost_usd_per_km * samples.tortuosity_road / p_ref,
+        ]
+    )
     block = left @ right  # numerator: capital cost plus discounted fixed O&M, (C, S)
 
     energy = np.multiply.outer(cells.energy_mwh * cells.energy_slope, samples.energy_parameter)
@@ -279,7 +329,13 @@ def lcoe_block(
     below_floor = (
         energy < floor[:, None] if floor is not None else None
     )  # annual energy, before discounting
-    energy *= a_e[None, :]
+    energy *= _energy_annuity_block(cells, samples)
+    alpha = samples.transmission_loss_per_km
+    if (alpha != 0.0).any():
+        eta = 1.0 - np.multiply.outer(cells.dist_sub_km, alpha * samples.tortuosity_grid)
+        np.maximum(eta, 0.0, out=eta)
+        energy *= eta
+        del eta
     with np.errstate(divide="ignore", invalid="ignore"):
         np.divide(block, energy, out=block)
     zero = energy == 0.0

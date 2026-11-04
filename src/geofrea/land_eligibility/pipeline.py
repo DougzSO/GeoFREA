@@ -17,6 +17,7 @@ function of one `ParameterSet`, so ranges can be sampled later without changing 
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +26,7 @@ import numpy as np
 import pandas as pd
 import rasterio
 from pydantic import BaseModel, ConfigDict
+from rasterio.windows import Window
 
 from geofrea.config_models.land_availability import (
     ELEVATION_COLUMN,
@@ -46,12 +48,13 @@ from geofrea.core.constants import (
     WIND_HEIGHTS_M,
 )
 from geofrea.core.geo_utils import (
-    current_clip_cache,
     clip_cache_key,
+    current_clip_cache,
     read_clipped_to_country,
     write_clip_cache_key,
 )
-from geofrea.core.raster_io import safe_raster_open, safe_raster_write
+from geofrea.core.pv_zones import ZoneSource, zones_for_cells
+from geofrea.core.raster_io import open_raster_stream, safe_raster_open, safe_raster_write
 from geofrea.core.scale import active_scale
 from geofrea.core.tables import write_table
 from geofrea.grid_alignment.schemas import GridAlignmentResult
@@ -65,11 +68,10 @@ from geofrea.land_eligibility.cells import (
 from geofrea.land_eligibility.eligibility import (
     EXCLUSION_NAMES,
     EligibilityLayers,
-    eligible_fraction,
     riparian_shares,
     slope_steep_shares,
-    valid_pixels,
 )
+from geofrea.land_eligibility.errors import LandEligibilityError, MissingRequiredLayerError
 from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
 from geofrea.land_eligibility.scenarios import (
     REASON_ELEVATION_MAX,
@@ -87,6 +89,16 @@ from geofrea.land_eligibility.table_schemas import (
     CellRow,
     CoarseCellRow,
 )
+from geofrea.land_eligibility.windows import (
+    ClassCountRows,
+    FlagRows,
+    NpyRows,
+    RasterRows,
+    ScenarioStripes,
+    StripeInputs,
+    prepare_slope_shares,
+    resolve_stripe_pixels,
+)
 from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 logger = logging.getLogger("geofrea.land_eligibility.pipeline")
@@ -95,14 +107,6 @@ DOMINANT_CODES = {
     name: i + 1 for i, name in enumerate(EXCLUSION_NAMES)
 }  # 0 = nothing excluded in the cell
 ANY_CATEGORY = "*"  # a protected-area level that excludes every polygon, whatever its IUCN category (incl. Not Reported)
-
-
-class LandEligibilityError(RuntimeError):
-    """An input of F3 is missing or an invariant of the result fails (A-09, V-03)."""
-
-
-class MissingRequiredLayerError(LandEligibilityError):
-    """A protected-area, lake or river layer of a configured country is absent; a zero share is never assumed (M-F2b-05)."""
 
 
 class ScenarioSummary(BaseModel):
@@ -261,16 +265,53 @@ def _iucn_subset(
     return protected[cat.isin(categories)]
 
 
-def _fraction_cache(path: Path, key: str, build) -> dict[str, np.ndarray]:
-    """npz cache of sub-pixel shares, valid only for the same key (inputs, thresholds, grid)."""
-    if path.exists():
+def _fraction_dir(path: Path) -> Path:
+    """The directory of the `.npy` files of a share cache: `path` without its suffix."""
+    return path.with_suffix("")
+
+
+def _fraction_files(path: Path, key: str, build) -> dict[str, Path]:
+    """The sub-pixel shares of a cache as `.npy` files (name -> file), valid only for the same key (inputs, thresholds, grid, code).
+
+    `build()` returns a dict of arrays or yields `(name, array)` pairs.
+
+    One file a share, written one at a time, so that a share can be read by rows through a memory map (`windows.NpyRows`). The key is written last:
+    a directory without it, or with another, is rebuilt. A cache made by an earlier version as one `.npz` with the same key is converted, not
+    rebuilt (COMMAND 91).
+    """
+    folder = _fraction_dir(path)
+    key_file = folder / "_key.txt"
+
+    def listed() -> dict[str, Path]:
+        return {p.name[: -len(".npy")]: p for p in sorted(folder.glob("*.npy"))}
+
+    if key_file.exists() and key_file.read_text(encoding="utf-8") == key:
+        return listed()
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    if path.suffix == ".npz" and path.exists():
         with np.load(path, allow_pickle=False) as data:
             if str(data["_key"]) == key:
-                return {k: data[k] for k in data.files if k != "_key"}
+                for name in (k for k in data.files if k != "_key"):
+                    np.save(folder / f"{name}.npy", data[name], allow_pickle=False)
+                key_file.write_text(key, encoding="utf-8")
+                return listed()
     arrays = build()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(path, _key=np.array(key), **arrays)
-    return arrays
+    if isinstance(arrays, dict):
+        for name in list(arrays):
+            np.save(folder / f"{name}.npy", arrays.pop(name), allow_pickle=False)
+    else:  # a builder that yields (name, array) saves each share before it makes the next (the riparian grid is 12 arrays of 61 MB for BRA)
+        for name, array in arrays:
+            np.save(folder / f"{name}.npy", array, allow_pickle=False)
+            del array
+    key_file.write_text(key, encoding="utf-8")
+    return listed()
+
+
+def _fraction_cache(path: Path, key: str, build) -> dict[str, np.ndarray]:
+    """The sub-pixel shares of a cache, read whole (what F7b and the tests use); see `_fraction_files`."""
+    return {name: np.load(p, allow_pickle=False) for name, p in _fraction_files(path, key, build).items()}
 
 
 SHARE_ALGORITHM_VERSION = 1
@@ -298,7 +339,7 @@ def _share_key(kind: str, source: Path | None, country_gdf, transform, shape, **
 
 
 def _required_resources(tech: str, siting: dict[str, Path]) -> dict[str, Path]:
-    names = ["dist_grid_km", "dist_road_km"]
+    names = ["dist_grid_km", "dist_sub_km", "dist_road_km"]
     if tech == "solar":
         names.append("pvout_kwh_kwp_day")
     elif tech == "wind":
@@ -477,6 +518,7 @@ def prepare_shared_layers(
         == 1,
         "dist_road_capped_share": _read(grid_result.roads_distance_capped, "roads_distance_capped")
         == 1,
+        "dist_sub_capped_share": _read(grid_result.poi_distance_capped, "poi_distance_capped") == 1,
     }
 
     return SharedLayers(
@@ -526,6 +568,153 @@ def technology_layers(
     return layers, resources
 
 
+def _require_vector(path: Path | None, name: str) -> None:
+    if path is None or not Path(path).exists():
+        raise MissingRequiredLayerError(
+            f"required layer {name!r} is absent ({path}); F3 never assumes a zero share for a missing "
+            f"protected-area, lake or river layer"
+        )
+
+
+def _riparian_shares_one_by_one(rivers_gdf, transform, shape, setbacks, discharges):
+    """`(name, share)` of every (minimum discharge, setback), the shares of one discharge at a time: the same arrays as `river_fractions` on all the
+    discharges (each discharge is computed on its own subset of rivers), without the 12 of them being in memory together."""
+    for q in discharges:
+        for (qq, t), array in river_fractions(rivers_gdf, transform, shape, setbacks, [q]).items():
+            yield f"q{qq}_t{t}", array
+
+
+def _prepare_window_rows(width: int) -> int:
+    return max(1, 500_000 // max(1, width))
+
+
+def prepare_stripe_inputs(
+    la: LandAvailability,
+    techs: list[str],
+    grid_result: GridAlignmentResult,
+    country_gdf: gpd.GeoDataFrame,
+    protected_path: Path | None,
+    lakes_path: Path | None,
+    rivers_path: Path | None,
+    interim: Path,
+    scratch: Path,
+) -> StripeInputs:
+    """The inputs of F3 as row sources (COMMAND 91): the same layers and shares as `prepare_shared_layers`, none of them read whole.
+
+    The sub-pixel shares come from the `.npy` caches of `interim` (built here, before any raster is opened, when the key is not current). The slope
+    bins are reduced to the E4 share of each slope maximum and to their validity by one pass over windows, written under `scratch`.
+
+    Raises:
+        LandEligibilityError: an aligned layer is missing.
+        MissingRequiredLayerError: a protected-area, lake or river layer is absent.
+    """
+    slope_maxima = {
+        p.slope_max_deg
+        for t in techs
+        for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
+    }
+    slope = prepare_slope_shares(grid_result.slope_counts, slope_maxima, scratch)
+
+    grid_rows = RasterRows(grid_result.grid, "grid")
+    height, width = grid_rows.shape
+    with safe_raster_open(Path(grid_result.grid)) as src:
+        transform = src.transform
+    # the distance-to-grid raster is valid on exactly the in-country pixels of the F2a grid (as in F4, `aligned_mask_path`)
+    country_mask = np.empty((height, width), dtype=bool)
+    step = _prepare_window_rows(width)
+    for r0 in range(0, height, step):
+        country_mask[r0 : r0 + step] = np.isfinite(grid_rows[r0 : r0 + step])
+
+    shape = (height, width)
+    # a missing vector layer is an error whether or not its shares are cached; the clipped vector is read only when its shares have to be built, and
+    # is released before the next one (COMMAND 91: the three at once, with the riparian work on top, took 1.8 GB on a cold BRA)
+    for path_, name_ in ((lakes_path, "lakes"), (protected_path, "protected"), (rivers_path, "rivers")):
+        _require_vector(path_, name_)
+
+    def clipped_when_built(path_, name_):
+        return _clipped(path_, name_, country_gdf, interim)
+
+    def build_lakes():
+        return {"a": polygon_coverage_fraction(clipped_when_built(lakes_path, "lakes"), transform, shape)}
+
+    lakes_files = _fraction_files(
+        interim / "lakes_fraction.npz", _share_key("lakes", lakes_path, country_gdf, transform, shape), build_lakes
+    )
+    level_sets: dict[tuple[str, ...], None] = {}
+    thresholds: set[float] = set()
+    for t in techs:
+        p = nominal_set(la.technologies[t])
+        level_sets[tuple(sorted(p.iucn_categories))] = None
+        thresholds.update(riparian_thresholds_km(la.technologies[t]))
+    protected: dict[tuple[str, ...], NpyRows] = {}
+    for cats in level_sets:
+
+        def build_protected(cats=cats):
+            subset = _iucn_subset(clipped_when_built(protected_path, "protected"), cats)
+            return {"a": polygon_coverage_fraction(subset, transform, shape)}
+
+        files = _fraction_files(
+            interim / f"protected_fraction_{'_'.join(cats).replace('*', 'any')}.npz",
+            _share_key("protected", protected_path, country_gdf, transform, shape, categories=list(cats)),
+            build_protected,
+        )
+        protected[cats] = NpyRows(files["a"])
+    thr = sorted(thresholds)
+    discharges = riparian_discharges_m3s(la)
+    rip_files = _fraction_files(
+        interim / "riparian_fraction.npz",
+        _share_key(
+            "rivers",
+            rivers_path,
+            country_gdf,
+            transform,
+            shape,
+            thresholds=thr,
+            discharges=[float(q) for q in discharges],
+        ),
+        lambda: _riparian_shares_one_by_one(clipped_when_built(rivers_path, "rivers"), transform, shape, thr, discharges),
+    )
+    return StripeInputs(
+        transform=transform,
+        shape=shape,
+        country_mask=country_mask,
+        area_row=pixel_row_area_km2(transform, height),
+        population=RasterRows(grid_result.population, "population"),
+        land_cover=ClassCountRows(grid_result.land_cover_counts),
+        slope=slope,
+        lakes=NpyRows(lakes_files["a"]),
+        protected=protected,
+        riparian={(q, t): NpyRows(rip_files[f"q{q}_t{t}"]) for q in discharges for t in thr},
+        flags={
+            "dist_grid_capped_share": FlagRows(grid_result.grid_distance_capped, "grid_distance_capped"),
+            "dist_road_capped_share": FlagRows(grid_result.roads_distance_capped, "roads_distance_capped"),
+            "dist_sub_capped_share": FlagRows(grid_result.poi_distance_capped, "poi_distance_capped"),
+        },
+    )
+
+
+class _EligibleRaster:
+    """The pixel eligible fraction of a scenario, written window by window (what `_pixel_raster` wrote from the whole array)."""
+
+    def __init__(self, path: Path, like: Path) -> None:
+        with safe_raster_open(like) as ref:
+            profile = {"crs": ref.crs, "transform": ref.transform, "width": ref.width, "height": ref.height}
+        self.path, self.width = path, profile["width"]
+        self._stream = open_raster_stream(
+            path, driver="GTiff", dtype="float32", count=1, nodata=NODATA_FLOAT, **profile
+        )
+
+    def write(self, first_row: int, values: np.ndarray) -> None:
+        out = np.where(np.isfinite(values), values, NODATA_FLOAT).astype("float32")
+        self._stream.dataset.write(out, 1, window=Window(0, first_row, self.width, out.shape[0]))
+
+    def commit(self) -> Path:
+        return self._stream.commit()
+
+    def discard(self) -> None:
+        self._stream.discard()
+
+
 def build_eligibility(
     iso: str,
     experiments_yaml: Path,
@@ -537,8 +726,15 @@ def build_eligibility(
     rivers_path: Path | None,
     admin1_path: Path | None,
     technologies: list[str] | None = None,
+    zone_source: ZoneSource | None = None,
+    stripe_pixels: int | None = None,
 ) -> EligibilitySummary:
-    """Eligibility, cells and candidate tables for every configured technology (nominal parameter set)."""
+    """Eligibility, cells and candidate tables for every configured technology (nominal parameter set).
+
+    The pixel engine works by stripes of whole cell rows (COMMAND 91, `windows.py`): every input is read by a window, the exclusions and the
+    cell sums of a window are computed, and the eligible fraction is written as it goes. `stripe_pixels` (else `GEOFREA_F3_STRIPE_PIXELS`, else
+    1,000,000) sets the height of a stripe, that is the memory, and changes no result.
+    """
     la: LandAvailability = load_land_availability(experiments_yaml)
     techs = technologies or sorted(la.technologies)
     out = artifacts_dir(iso)
@@ -549,51 +745,96 @@ def build_eligibility(
             f"required layer 'admin1' is absent ({admin1_path}); every cell takes its admin1 unit from it (M-F3-03)"
         )
     units = read_units(gpd.read_file(str(admin1_path)))
+    stripe_px = resolve_stripe_pixels(stripe_pixels)
+    scratch = interim / "stripes_tmp"
+    shutil.rmtree(scratch, ignore_errors=True)
+    try:
+        inputs = prepare_stripe_inputs(
+            la, techs, grid_result, country_gdf, protected_path, lakes_path, rivers_path, interim, scratch
+        )
+        elevation = RasterRows(
+            grid_result.elevation, "elevation", "float32"
+        )  # the aligned DEM: the altitude of a cell is its eligible-area-weighted mean (OQ-058)
+        return _build_tables(
+            iso, la, techs, out, units, inputs, elevation, siting_result, Path(grid_result.grid), zone_source, stripe_px
+        )
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _build_tables(
+    iso: str,
+    la: LandAvailability,
+    techs: list[str],
+    out: Path,
+    units,
+    inputs: StripeInputs,
+    elevation: RasterRows,
+    siting_result: SitingLayersResult,
+    grid_ref: Path,
+    zone_source: ZoneSource | None,
+    stripe_px: int,
+) -> EligibilitySummary:
+    transform, country_mask = inputs.transform, inputs.country_mask
     admin1_by_cell: dict[int, str] = {}
     units_path = Path(str(out / "admin1_units") + ".parquet")
-
-    shared = prepare_shared_layers(
-        la, techs, grid_result, country_gdf, protected_path, lakes_path, rivers_path, interim
-    )
-    transform, grid_ref = shared.transform, Path(grid_result.grid)
-    country_mask, pixel_area, flags = shared.country_mask, shared.pixel_area, shared.flags
-    elevation = _read(
-        grid_result.elevation, "elevation", "float32"
-    )  # the aligned DEM: the altitude of a cell is its eligible-area-weighted mean (OQ-058)
 
     summaries: dict[str, TechSummary] = {}
     for tech in techs:
         sets = scenario_sets(la.technologies[tech])
         composition = scenario_composition(la.technologies[tech])
         params: ParameterSet = sets["central"]
-        layers, resources = technology_layers(shared, tech, siting_result)
-        cell_resources = {
-            **resources,
-            ELEVATION_COLUMN: elevation,
-        }  # elevation is a column of the cells, not a validity requirement
+        resources = {
+            name: RasterRows(path, name, "float32")
+            for name, path in _required_resources(tech, siting_result.layers).items()
+        }
         cells_by_scenario: dict[str, pd.DataFrame] = {}
         scenario_summaries: dict[str, ScenarioSummary] = {}
         central: dict = {}
+        n_valid = 0
         for scenario, sparams in sets.items():
-            eligible, excl = eligible_fraction(layers, sparams)
-            cells = aggregate_to_cells(
-                transform, country_mask, eligible, excl, resources=cell_resources, flags=flags
-            )
-            if not admin1_by_cell:
-                ids = assign_admin1(cells["row"].to_numpy(), cells["col"].to_numpy(), units)
-                admin1_by_cell = dict(zip(cells["cell_id"].tolist(), ids.tolist(), strict=True))
-                write_table(
-                    _admin1_units(cells.assign(admin1_id=ids), units),
-                    units_path,
-                    schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
-                    row_model=Admin1UnitRow,
+            eligible_path = out / eligible_fraction_file(tech, scenario)
+            raster = _EligibleRaster(eligible_path, grid_ref)
+            try:
+                stripes = ScenarioStripes(inputs, resources, elevation, sparams, on_eligible=raster.write)
+                cells = aggregate_to_cells(
+                    transform,
+                    country_mask,
+                    stripes.eligible,
+                    stripes.exclusions,
+                    resources={**stripes.cell_resources, ELEVATION_COLUMN: stripes.elevation_view()},
+                    flags=inputs.flags,
+                    stripe_pixels=stripe_px,
                 )
-            cells["admin1_id"] = cells["cell_id"].map(admin1_by_cell)
-            if cells["admin1_id"].isna().any():
-                raise LandEligibilityError(
-                    f"{tech}/{scenario}: cells that the first table did not have (the cells of one country do not depend on the scenario)"
-                )
-            _check_invariants(f"{tech}/{scenario}", cells, eligible, pixel_area, country_mask)
+                if stripes.rows_done != inputs.shape[0]:
+                    raise LandEligibilityError(
+                        f"{tech}/{scenario}: {stripes.rows_done} of {inputs.shape[0]} pixel rows were computed (the stripes do not cover the grid)"
+                    )
+                if not admin1_by_cell:
+                    ids = assign_admin1(cells["row"].to_numpy(), cells["col"].to_numpy(), units)
+                    admin1_by_cell = dict(zip(cells["cell_id"].tolist(), ids.tolist(), strict=True))
+                    write_table(
+                        _admin1_units(cells.assign(admin1_id=ids), units),
+                        units_path,
+                        schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
+                        row_model=Admin1UnitRow,
+                    )
+                if zone_source is not None:
+                    cells["pvcz_zone"] = zones_for_cells(
+                        cells["lat_c"].to_numpy(), cells["lon_c"].to_numpy(), zone_source
+                    ).astype("int8")
+                cells["admin1_id"] = cells["cell_id"].map(admin1_by_cell)
+                if cells["admin1_id"].isna().any():
+                    raise LandEligibilityError(
+                        f"{tech}/{scenario}: cells that the first table did not have (the cells of one country do not depend on the scenario)"
+                    )
+                _check_invariants(f"{tech}/{scenario}", cells, stripes.pixel_total)
+                raster.commit()
+            finally:
+                raster.discard()
+            if scenario == "central":
+                n_valid = stripes.n_valid
+            del stripes
             cells["candidate"] = _is_candidate(cells, sparams)
             candidates = cells[cells["candidate"]].reset_index(drop=True).drop(columns="candidate")
             cells_path = _table_path(out, "cells", tech, scenario)
@@ -610,8 +851,6 @@ def build_eligibility(
                 schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
                 row_model=CellRow,
             )
-            if scenario != "central":  # the central one is written with the other rasters below
-                _pixel_raster(out / eligible_fraction_file(tech, scenario), eligible, grid_ref)
             cells_by_scenario[scenario] = cells
             scenario_summaries[scenario] = ScenarioSummary(
                 scenario=scenario,
@@ -626,14 +865,7 @@ def build_eligibility(
                 candidates=cand_path,
             )
             if scenario == "central":
-                central = {
-                    "eligible": eligible,
-                    "excl": excl,
-                    "cells": cells,
-                    "candidates": candidates,
-                }
-            else:  # only the central scenario keeps its pixel arrays: the others are on disk (COMMAND 75)
-                eligible = excl = None
+                central = {"cells": cells, "candidates": candidates}
             logger.info(
                 "%s %s [%s]: %d cells, %d candidates, %.1f%% of the land eligible",
                 iso,
@@ -654,12 +886,7 @@ def build_eligibility(
             row_model=CandidateStabilityRow,
         )
 
-        eligible, excl, cells, candidates = (
-            central["eligible"],
-            central["excl"],
-            central["cells"],
-            central["candidates"],
-        )
+        cells, candidates = central["cells"], central["candidates"]
         coarse_path: Path | None = None
         if active_scale().is_default:
             coarse_path = Path(str(out / f"cells_0p1deg_{tech}") + ".parquet")
@@ -669,9 +896,8 @@ def build_eligibility(
                 schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
                 row_model=CoarseCellRow,
             )
-        rasters = _write_rasters(out, tech, eligible, cells, transform, grid_ref)
+        rasters = _write_rasters(out, tech, out / eligible_fraction_file(tech, "central"), cells)
 
-        valid = valid_pixels(layers)
         total_area = float(cells["cell_area_km2"].sum())
         sensitivity_m = elevation_sensitivity_m(la, tech)
         limit_m = params.elevation_max_m
@@ -746,7 +972,7 @@ def build_eligibility(
                 for name in EXCLUSION_NAMES
             },
             invalid_pixel_share=float(
-                1.0 - np.count_nonzero(valid) / max(1, np.count_nonzero(country_mask))
+                1.0 - n_valid / max(1, np.count_nonzero(country_mask))
             ),
             candidates=scenario_summaries["central"].candidates,
             cells=scenario_summaries["central"].cells,
@@ -762,8 +988,7 @@ def build_eligibility(
             n_cells_excluded_by_elevation=n_excluded_by_elevation,
             candidate_exclusions=exclusions,
         )
-        # the pixel arrays of this technology (BRA wind: 1.3 GB) go before the next technology reads its own (COMMAND 75)
-        del layers, resources, cell_resources, central, eligible, excl
+        del central, cells_by_scenario
     return EligibilitySummary(country_code=iso, technologies=summaries)
 
 
@@ -798,13 +1023,10 @@ def _table_path(out: Path, kind: str, tech: str, scenario: str) -> Path:
     return out / f"{kind}_{tech}__{scenario}.parquet"
 
 
-def _check_invariants(
-    tech: str, cells: pd.DataFrame, eligible: np.ndarray, pixel_area: np.ndarray, mask: np.ndarray
-) -> None:
-    """V-03: eligible area never above cell area; the cell total equals the pixel total."""
+def _check_invariants(tech: str, cells: pd.DataFrame, pixel_total: float) -> None:
+    """V-03: eligible area never above cell area; the cell total equals the pixel total (summed by stripes of rows)."""
     if (cells["eligible_area_km2"] > cells["cell_area_km2"] * (1 + 1e-6)).any():
         raise LandEligibilityError(f"{tech}: a cell has more eligible area than cell area (V-03)")
-    pixel_total = float((eligible * pixel_area * mask).sum())
     cell_total = float(cells["eligible_area_km2"].sum())
     if abs(pixel_total - cell_total) > 1e-6 * max(1.0, pixel_total):
         raise LandEligibilityError(
@@ -823,9 +1045,7 @@ def _coarse(cells: pd.DataFrame) -> pd.DataFrame:
     return g
 
 
-def _write_rasters(
-    out: Path, tech: str, eligible: np.ndarray, cells: pd.DataFrame, transform, grid_ref: Path
-) -> dict[str, Path]:
+def _write_rasters(out: Path, tech: str, eligible_path: Path, cells: pd.DataFrame) -> dict[str, Path]:
     row0, col0 = int(cells["row"].min()), int(cells["col"].min())
     n_r, n_c = int(cells["row"].max()) - row0 + 1, int(cells["col"].max()) - col0 + 1
     area = np.full((n_r, n_c), NODATA_FLOAT, dtype="float32")
@@ -836,9 +1056,7 @@ def _write_rasters(
         cells["dominant_exclusion"].map(DOMINANT_CODES).fillna(0).astype("uint8").to_numpy()
     )
     return {
-        "eligible_fraction": _pixel_raster(
-            out / f"eligible_fraction_{tech}.tif", eligible, grid_ref
-        ),
+        "eligible_fraction": eligible_path,  # written by stripes while the cells were summed
         "eligible_area_km2": _cell_raster(
             out / f"eligible_area_km2_{tech}.tif", area, row0, col0, "float32", NODATA_FLOAT
         ),

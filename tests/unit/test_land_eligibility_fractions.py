@@ -195,3 +195,28 @@ def test_riparian_shares_do_not_depend_on_where_the_grid_begins():
     for t in (3.0, 6.0):
         # the rows within the setback of the north edge of the second grid do not see the river beyond it (the grid is the horizon of the strip)
         assert np.array_equal(fa[t][22:60], fb[t][12:50]), t
+
+
+@pytest.mark.parametrize("top_lat", [0.2, 45.2])
+def test_the_distance_transform_by_blocks_of_columns_gives_the_shares_of_the_whole_strip(top_lat):
+    """COMMAND 91: blocks of sub-pixel columns with a margin of the largest setback change no share, for blocks narrower than the margin, blocks that
+    do not divide the strip, and rivers across the block edges; at 45 degrees a sub-pixel is narrower, so the margin in columns is larger."""
+    rng = np.random.default_rng(91)
+    transform = from_origin(10.0, top_lat, 0.01, 0.01)
+    lines = []
+    for _ in range(14):
+        x = rng.uniform(10.0, 10.2, size=3)
+        y = rng.uniform(top_lat - 0.2, top_lat, size=3)
+        lines.append(LineString(list(zip(x, y, strict=True))))
+    rivers = gpd.GeoDataFrame({"DIS_AV_CMS": rng.uniform(0, 20, size=14)}, geometry=lines, crs="EPSG:4326")
+    setbacks = [0.3, 1.5, 4.0]
+    whole = river_setback_fractions(rivers, transform, SHAPE, setbacks, block_subcolumns=10**9)
+    for block in (10, 30, 70, 170):
+        blocks = river_setback_fractions(rivers, transform, SHAPE, setbacks, block_subcolumns=block)
+        for t in setbacks:
+            np.testing.assert_array_equal(blocks[t], whole[t], err_msg=f"block {block}, setback {t}")
+    assert max(a.max() for a in whole.values()) > 0 and 0 < whole[4.0].mean() < 1  # the test has something to compare
+    by_discharge = river_fractions(rivers, transform, SHAPE, setbacks, [0.0, 10.0], block_subcolumns=30)
+    reference = river_fractions(rivers, transform, SHAPE, setbacks, [0.0, 10.0], block_subcolumns=10**9)
+    for key in reference:
+        np.testing.assert_array_equal(by_discharge[key], reference[key])

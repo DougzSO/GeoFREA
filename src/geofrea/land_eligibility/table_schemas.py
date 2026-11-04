@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION = "1.1"
+LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION = "1.2"  # 1.2: dist_sub_km, dist_sub_capped_share (Group 3)
 
 
 class CellRow(BaseModel):
@@ -27,10 +27,13 @@ class CellRow(BaseModel):
     excluded_area_km2_E6: float
     dominant_exclusion: str | None
     dist_grid_km: float | None
+    dist_sub_km: float | None  # distance to the nearest eligible substation, D_sub of Group 3 (mean over the eligible area)
     dist_road_km: float | None
     dist_grid_capped_share: float | None
+    dist_sub_capped_share: float | None  # share of the eligible area beyond `distance_cap_km` of a substation (the long_distance share)
     dist_road_capped_share: float | None
     admin1_id: str  # GADM level-1 unit with the largest area of the cell (M-F3-03, D-F3-012)
+    pvcz_zone: int | None = None  # PVCZ-2019 thermal zone 1-10 of the cell centre, 0 when no land point lies within the limit (Group 3)
 
 
 class Admin1UnitRow(BaseModel):
