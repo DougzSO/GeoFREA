@@ -53,7 +53,7 @@ from geofrea.land_eligibility.cells import cell_id as make_cell_id
 from geofrea.land_eligibility.cells import cell_row_col
 from geofrea.land_eligibility.eligibility import eligible_fraction, valid_pixels
 from geofrea.land_eligibility.pipeline import prepare_shared_layers, technology_layers
-from geofrea.land_eligibility.scenarios import LAND_SCENARIOS, scenario_sets
+from geofrea.land_eligibility.scenarios import LAND_SCENARIOS, scenario_set
 from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 logger = logging.getLogger("geofrea.external_validation.pipeline")
@@ -197,9 +197,10 @@ def build_external_validation(
     la = load_land_availability(experiments_yaml)
     interim = core_paths.interim(iso, "land_eligibility")
     interim.mkdir(parents=True, exist_ok=True)
+    central_sets = {tech: scenario_set(la, tech, iso, "central") for tech in run_technologies}
     shared = prepare_shared_layers(
         la,
-        list(run_technologies),
+        list(central_sets.values()),
         grid_result,
         country_gdf,
         protected_path,
@@ -215,7 +216,7 @@ def build_external_validation(
     per_tech: dict[str, TechValidation] = {}
     for tech in run_technologies:
         layers, _ = technology_layers(shared, tech, siting_result)
-        eligible, excl = eligible_fraction(layers, scenario_sets(la.technologies[tech])["central"])
+        eligible, excl = eligible_fraction(layers, central_sets[tech])
         excluded = {**excl, "combined": (1.0 - eligible).astype("float32")}
         valid = valid_pixels(layers)
         candidates = pd.read_parquet(

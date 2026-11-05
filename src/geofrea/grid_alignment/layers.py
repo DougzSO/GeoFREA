@@ -17,6 +17,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+from rasterio.enums import Resampling
 
 from geofrea.core.cache_key import FileHashMemo
 from geofrea.core.clipped_cache import clipped_source
@@ -200,6 +201,24 @@ def build_population(ctx: LayerContext) -> Path:
     """
     with gdal_quiet():
         return sum_to_grid(_source(ctx, ctx.inputs.population_path), ctx.path("population"), ctx.grid)
+
+
+def build_settlements(ctx: LayerContext) -> Path:
+    """The GHS-SMOD class of each pixel by nearest neighbour (Group 6, COMMAND 97): the 1 km Mollweide cell that contains the centre of the pixel.
+
+    The classes are categorical (10 to 30), so no value is mixed; a pixel whose source cell has no value is 255 (the layer then makes it invalid in F3, never free).
+    The warp runs in the child process of the layer with `warp_mem_limit` of the settings, as the other warped layers.
+    """
+    with gdal_quiet():
+        return reproject_to_grid(
+            _source(ctx, ctx.inputs.settlements_path),
+            ctx.path("settlements"),
+            ctx.grid,
+            resampling=Resampling.nearest,
+            nodata_out=255,
+            dtype_out="uint8",
+            warp_mem_limit_mb=ctx.inputs.warp_mem_limit_mb,
+        )
 
 
 def build_grid_distance(ctx: LayerContext) -> Path | None:

@@ -31,6 +31,11 @@
       "source": "measured",
       "detail": "sum_to_grid, window of 64 MB, inside the layer process; 637 MB when run alone (84 s)"
     },
+    "settlements": {
+      "peak_rss_mb": 315,
+      "source": "measured",
+      "detail": "reproject_to_grid, nearest neighbour, uint8, inside the layer process; BRA 314.6 MB in 4.1 s, PRT 159 MB (COMMAND 97, scripts/profiling/measure_layer_memory.py)"
+    },
     "grid": {
       "peak_rss_mb": 772,
       "source": "measured"

@@ -48,7 +48,7 @@ def test_an_edit_of_the_shared_warp_changes_the_layers_that_call_it_and_not_the_
     _edit(root, "grid_alignment/raster_alignment.py", "pad_px = int(np.ceil(abs(grid.transform.a) / src_res)) + 4", "pad_px = int(np.ceil(abs(grid.transform.a) / src_res)) + 5")
     after = _fingerprints(root)
     changed = {k for k in before if before[k] != after[k]}
-    assert changed == {"aligned_layer.solar", "aligned_layer.wind", "aligned_layer.population"}
+    assert changed == {"aligned_layer.solar", "aligned_layer.wind", "aligned_layer.population", "aligned_layer.settlements"}
 
 
 def test_an_edit_of_the_elevation_pass_leaves_the_reprojected_layers_current(tmp_path):

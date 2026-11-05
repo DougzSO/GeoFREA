@@ -1,0 +1,196 @@
+% ============================================================================
+% CHAPTER 3 - METHODS / PARAMETERS
+% File: docs/thesis/methods/group6_land_eligibility.tex
+% Group 6: riparian buffers, settlements, terrain, elevation, minimum area (Stage F3).
+% Theory: docs/thesis/theory/ch2_land_eligibility_constraints.tex
+% Values must match config/parameters.json. Lines marked % verify are open.
+% ============================================================================
+
+\section{Land Eligibility Parameters (Stage F3)}
+\label{sec:params_group6}
+
+Stage F3 evaluates eligibility on the 0.01$^\circ$ grid as the eligible
+fraction of each pixel and aggregates it to the 0.05$^\circ$ cells. It is
+run under three scenarios, restrictive, central and permissive. This
+section defines the parameters that differ between them: the riparian
+buffer, the settlement setback, slope, the elevation limit for wind and
+the minimum eligible area. A legal rule is applied identically in the
+three scenarios; where the law leaves no choice, the scenarios vary the
+uncertain estimate to which the rule is applied. The residual land-use
+factor of Section~\ref{sec:params_group1} applies only to what these
+exclusions do not represent and does not repeat them.
+
+\subsection{Riparian Buffers}
+\label{subsec:g6_riparian}
+
+Rivers come from HydroRIVERS, which includes reaches with a catchment of
+at least 10~km$^2$ or a mean discharge of at least 0.1~m$^3$/s
+\cite{lehner2013}. The channel width of each reach is estimated from its
+long-term mean discharge $Q$ with the global hydraulic-geometry relation
+of Andreadis et al.\ \cite{andreadis2013},
+\begin{equation}
+    W = 7.2\,Q^{\,b}, \qquad b = 0.48,\ 0.50,\ 0.52
+    \label{eq:g6_width}
+\end{equation}
+in the permissive, central and restrictive scenarios, the published
+uncertainty of the exponent. Because the relation was fitted to bankfull
+discharge, which is larger than mean discharge, $W$ is a width proxy that
+tends to underestimate the legal channel width; the bias is toward the
+permissive side and is recorded as a limitation.
+
+Each reach excludes a corridor of half-width $W/2 + B_c(W)$ around its
+centre line, where $B_c$ is the buffer of country $c$ measured from the
+channel edge (Table~\ref{tab:g6_riparian}). The corridor is combined with
+the water classes of the land-cover map by union, so the channel is not
+counted twice.
+
+In Brazil, $B$ follows the five width classes of the Forest Code
+\cite{brasil2012forestcode}. The law excludes ephemeral channels, which
+HydroRIVERS does not distinguish; all reaches are treated as perennial or
+intermittent. In Portugal, the margin of the public water domain is
+10~m for non-navigable waters, 30~m for navigable or floatable waters and
+public reservoirs, and 50~m for waters under maritime and port
+jurisdiction \cite{portugal2005lei54}. Navigability is not available in
+global hydrography. The central scenario uses the estimated width as a
+proxy, with 10~m for reaches narrower than 10~m and 30~m for wider
+reaches (Tier 3); the permissive scenario applies 10~m and the
+restrictive scenario 30~m to all reaches. The 50~m margin of estuaries
+is not represented, since the tidal limit is not known in the river
+network. In India no national statutory riparian buffer was identified;
+the buffers are author judgment (Tier 3), chosen within the range used
+in siting studies.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Riparian buffer $B$ measured from the channel edge.}
+    \label{tab:g6_riparian}
+    \small
+    \begin{tabular}{llccc}
+        \toprule
+        Country & Channel width & Restrictive & Central & Permissive \\
+        \midrule
+        BRA & $W<10$~m          & 30~m  & 30~m  & 30~m \\
+            & $10\le W<50$~m    & 50~m  & 50~m  & 50~m \\
+            & $50\le W<200$~m   & 100~m & 100~m & 100~m \\
+            & $200\le W<600$~m  & 200~m & 200~m & 200~m \\
+            & $W\ge 600$~m      & 500~m & 500~m & 500~m \\
+        PRT & $W<10$~m          & 30~m  & 10~m  & 10~m \\
+            & $W\ge 10$~m       & 30~m  & 30~m  & 10~m \\
+        IND & all reaches       & 200~m & 100~m & 30~m \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+In Brazil the scenarios differ through the exponent $b$, which moves
+reaches between width classes. With $b=0.50$, the class limits of 10, 50,
+200 and 600~m correspond to mean discharges of about 1.9, 48, 770 and
+6\,900~m$^3$/s.
+
+\subsection{Settlements}
+\label{subsec:g6_settlements}
+
+Settlements are taken from the GHS settlement model, which applies the
+Degree of Urbanisation to gridded population and built-up surface
+\cite{schiavina2023smod}. A settlement is any 1~km cell classified as
+rural cluster (village) or denser, that is, the classes from rural
+cluster to urban centre. Dispersed rural population, the low-density and
+very-low-density rural classes, is not excluded by this criterion. The
+settlement mask is the same in the three scenarios; the scenarios vary
+the setback around it (Table~\ref{tab:g6_setback}).
+
+\begin{table}[htbp]
+    \centering
+    \caption{Setback from settlements.}
+    \label{tab:g6_setback}
+    \small
+    \begin{tabular}{lcccl}
+        \toprule
+        Technology & Restrictive & Central & Permissive & Source \\
+        \midrule
+        PV   & 1\,000~m & 500~m & 0~m   & \cite{uyan2013,watson2015}; restrictive Tier 3 \\
+        Wind & 1\,000~m & 800~m & 500~m & \cite{rediske2021,drechsler2017,lehmann2021,watson2015} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+This criterion replaces the population-density threshold. A density
+threshold applied uniformly would remove very different shares of land in
+countries with different rural settlement patterns, most of all in
+India, while the settlement classes combine density with contiguity and
+minimum population. The former threshold of 200 inhabitants/km$^2$ is
+kept only as a sensitivity.
+
+\subsection{Terrain and Elevation}
+\label{subsec:g6_terrain}
+
+Slope is computed in percent from the GLO-30 elevation model at its
+native resolution, and a pixel's eligible fraction excludes the share of
+its area steeper than the threshold. Elevation limits apply only to wind,
+because air density already enters the wind capacity factor
+(Section~\ref{sec:params_group1}); the limit stands for access,
+construction and cold-climate constraints, and the permissive scenario
+applies none.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Slope and elevation limits.}
+    \label{tab:g6_terrain}
+    \small
+    \begin{tabular}{llcccl}
+        \toprule
+        Parameter & Technology & Restrictive & Central & Permissive & Source \\
+        \midrule
+        Maximum slope & PV   & 3\,\%  & 5\,\%  & 10\,\% & \cite{lopez2012,tao2024,blm2024westernsolar} \\
+        Maximum slope & Wind & 10\,\% & 20\,\% & 30\,\% & \cite{vanhaaren2011,lopez2012,epg2024renewland} \\
+        Maximum elevation & Wind & 2\,000~m & 3\,000~m & none & \cite{epg2024renewland}; central Tier 3 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Minimum Eligible Area}
+\label{subsec:g6_minarea}
+
+Eligible pixels are grouped into clusters of 8-connected 0.01$^\circ$
+pixels with a positive eligible fraction, and a cluster is kept only if
+its eligible area reaches a minimum $A_{\min}$. For PV, the central value
+is 1~km$^2$ \cite{lopez2012}. For wind, the central scenario additionally
+discards pixels whose eligible fraction is below 10\,\%, the share needed
+for one turbine per square kilometre \cite{elsner2023onshore}. The
+restrictive scenario sets $A_{\min}$ to the area of the 100~MW reference
+project of Section~\ref{subsec:g3_boundary}, $A_{\min} =
+P_{\mathrm{ref}}/\mathrm{PD}$, with the power density PD of each
+technology, so that every retained cluster can host the project to which
+the connection cost refers. The permissive scenario applies no minimum.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Minimum eligible area.}
+    \label{tab:g6_minarea}
+    \small
+    \begin{tabular}{lccc}
+        \toprule
+        Technology & Restrictive & Central & Permissive \\
+        \midrule
+        PV   & cluster $\ge P_{\mathrm{ref}}/\mathrm{PD}_{\mathrm{PV}}$
+             & cluster $\ge 1$~km$^2$ & none \\
+        Wind & cluster $\ge P_{\mathrm{ref}}/\mathrm{PD}_{\mathrm{wind}}$; pixel $\ge 10\,\%$
+             & pixel $\ge 10\,\%$ & none \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Limitations}
+\label{subsec:g6_limitations}
+
+Channel widths are estimated from mean discharge with a bankfull
+relation, which underestimates the legal width, and HydroRIVERS omits
+small streams and does not distinguish ephemeral channels or navigable
+waters. The Indian riparian buffers and several scenario bounds are
+author judgment. Settlement setbacks come from studies in other
+countries, since none of the three countries sets a national setback for
+these technologies in the sources reviewed. The settlement model has a
+1~km resolution, so small villages are represented coarsely. Slope
+thresholds depend on the resolution of the elevation model. Clusters are
+formed from pixels with any eligible fraction, so a cluster of
+fragmented pixels can pass the area test without being contiguous at the
+sub-pixel scale.

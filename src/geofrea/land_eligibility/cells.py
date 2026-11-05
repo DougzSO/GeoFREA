@@ -288,6 +288,6 @@ def aggregate_to_cells(
     return out[out["cell_area_km2"] > 0].reset_index(drop=True)
 
 
-def candidate_cells(cells: pd.DataFrame, min_eligible_area_km2: float) -> pd.DataFrame:
-    """M-F3-04: keep cells with `eligible_area_km2 >= min_eligible_area_km2`."""
-    return cells[cells["eligible_area_km2"] >= min_eligible_area_km2].reset_index(drop=True)
+def candidate_cells(cells: pd.DataFrame) -> pd.DataFrame:
+    """M-F3-04: keep cells with any eligible area. The minimum project size is applied to the pixels (`min_area.py`), not to the cell."""
+    return cells[cells["eligible_area_km2"] > 0].reset_index(drop=True)

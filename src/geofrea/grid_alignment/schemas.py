@@ -64,6 +64,7 @@ class GridAlignmentInputs(BaseModel):
             each filename) — every path here is used, not just the
             first.
         population_path: Population raster path.
+        settlements_path: GHS-SMOD R2023A raster (1 km, Mollweide, global; `data_acquisition.fetchers.ghsl`), or None when it was not acquired (F3 then refuses to run).
         land_cover_count_tiles: 10 m WorldCover tiles acquired for the class counts when the local tiles are coarser (D-F2a-017);
             empty means the counts use `land_cover_tiles`.
         slope_dem_tiles: Copernicus GLO-30 (30 m) tile paths: the one source of the aligned elevation, the aligned slope and the slope bins
@@ -119,6 +120,7 @@ class GridAlignmentInputs(BaseModel):
     solar_path: Path | None = None
     wind_layers: dict[str, Path] = {}
     population_path: Path | None = None
+    settlements_path: Path | None = None
     land_cover_tiles: list[Path] = []
     slope_dem_tiles: list[Path] = []
     land_cover_count_tiles: list[Path] = []
@@ -205,6 +207,8 @@ class GridAlignmentResult(BaseModel):
             if no Copernicus GLO-30 tiles were acquired.
         population: Bilinear-reprojected float32 population raster, or
             None if population_path was missing.
+        settlements: GHS-SMOD settlement class of each pixel (uint8 L2 code, 10 to 30; 255 where the source has no value), by nearest neighbour from the
+            1 km Mollweide raster, or None if settlements_path was missing (Group 6, COMMAND 97).
         roads: Geodesic distance-to-road raster (km, float32,
             raw, never truncated; OQ-040), or None if roads_source was missing.
         grid: Geodesic distance-to-power-grid raster (km, float32,
@@ -234,6 +238,7 @@ class GridAlignmentResult(BaseModel):
     land_cover_counts: Path | None = None
     slope_counts: Path | None = None
     population: Path | None = None
+    settlements: Path | None = None
     roads: Path | None = None
     grid: Path | None = None
     lakes: Path | None = None

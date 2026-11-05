@@ -1,0 +1,130 @@
+% ============================================================================
+% CHAPTER 2 - LITERATURE REVIEW
+% File: docs/thesis/theory/ch2_land_eligibility_constraints.tex
+% Land eligibility constraints: rivers, settlements, terrain, minimum area.
+% Operational values: docs/thesis/methods/group6_land_eligibility.tex
+% ============================================================================
+
+\section{Land Eligibility Constraints}
+\label{sec:land_eligibility_review}
+
+Land eligibility analysis removes the areas where utility-scale solar or
+wind plants cannot or should not be built, before resource and cost are
+considered. Frameworks such as GLAES and ENSPRESO combine legal,
+environmental, social and physical restrictions into spatial exclusion
+masks, and show that the resulting potential is sensitive to the choice
+and value of each criterion \cite{ryberg2018,Ruiz2019}. Three groups of
+criteria dominate that sensitivity and lack a single accepted value:
+protection of watercourses, distance to settlements, and terrain. A
+fourth question, the minimum area that can host a project, decides how
+fragmented eligible land is counted.
+
+\subsection{Watercourses and Riparian Protection}
+\label{subsec:riparian_review}
+
+Riparian zones regulate water quality, floods and sediment and connect
+aquatic and terrestrial habitats. Most assessments protect them with a
+fixed buffer around mapped rivers, which ignores that legal protection
+often grows with river size. Where the law defines the protected strip
+by channel width, a model must first estimate that width.
+
+Downstream hydraulic geometry relates channel width to discharge by a
+power law, $W = a\,Q^{b}$ \cite{leopold1953}. The coefficients are
+empirical and depend on morphology, bank material, regional hydrology and
+the definition of discharge. For global applications, Andreadis et al.\
+estimated bankfull widths for the HydroSHEDS network with
+$W_{\mathrm{bf}} = 7.2\,Q_{\mathrm{bf}}^{0.50}$, with an uncertainty of
+about $\pm 0.02$ in the exponent, where $Q_{\mathrm{bf}}$ is a bankfull
+discharge of roughly a two-year return period derived from drainage area
+\cite{andreadis2013}. Validation against Landsat widths showed large
+errors for braided reaches, and the authors present the result as a
+first-order estimate. HydroRIVERS provides a consistent global river
+network with long-term mean discharge per reach, but not bankfull
+discharge or observed width \cite{lehner2013}. Using mean discharge in a
+bankfull relation therefore gives a width proxy that is systematically
+smaller than the bankfull width.
+
+Legal rules differ in kind between countries. The Brazilian Forest Code
+defines Permanent Preservation Areas along natural perennial and
+intermittent watercourses as strips measured from the edge of the
+regular channel, whose width increases in steps with channel width, from
+30~m for channels narrower than 10~m to 500~m for channels wider than
+600~m \cite{brasil2012forestcode}. Portuguese law defines the margin of
+the public water domain by fixed widths that depend on the legal class of
+the water, not on its size: 50~m for the sea and for navigable waters
+under maritime and port jurisdiction, 30~m for other navigable or
+floatable waters and public reservoirs, and 10~m for non-navigable waters
+such as torrents and intermittent streams \cite{portugal2005lei54}. Elsewhere no
+national rule may exist. The estimated channel width is a hydrological
+quantity; the buffer attached to it is a legal parameter of each
+jurisdiction, and a rule from one country is not a default for another.
+
+\subsection{Settlements and Population}
+\label{subsec:settlement_review}
+
+Settlements are excluded for two reasons: the land is already occupied,
+and plants impose local externalities such as noise, shadow flicker and
+visual intrusion for wind, and visual and land-use conflicts for PV. The
+usual representation is a settlement footprint with a technology-specific
+setback. Reported setbacks for wind vary widely with national rules and
+context: reviews find values from a few hundred metres to well above
+1~km, with about 1~km as a typical value \cite{rediske2021}, German
+studies use 800~m to meet noise limits for a 3~MW reference turbine and
+test larger distances \cite{drechsler2017,lehmann2021,lehmann2023}, and
+regional suitability studies use about 500~m for both technologies
+\cite{watson2015,uyan2013}. These are planning choices, not physical or
+universal legal limits.
+
+Population density is sometimes used instead of a footprint, with a
+threshold in inhabitants per square kilometre. The two are not
+equivalent: density depends on the resolution and allocation method of
+the population grid, and a dense pattern of rural households can exceed
+a threshold without forming a settlement. A uniform density threshold
+therefore excludes very different shares of land in countries with
+different settlement structures. In India, where productive rural
+districts commonly exceed 400 inhabitants/km$^2$, a threshold of
+250 inhabitants/km$^2$ removes most of the onshore wind potential
+\cite{mallya2024ceew}.
+% verify: share of wind potential retained under 250 inh/km2 in CEEW (2024); cited second-hand via SPRF (2025)
+The Degree of Urbanisation, adopted by
+the UN Statistical Commission and implemented globally in the GHS
+settlement model, avoids part of this problem by classifying grid cells
+with density, contiguity and minimum population together, which
+separates towns and villages from dispersed rural population
+\cite{schiavina2023smod}.
+
+\subsection{Terrain, Elevation and Minimum Project Area}
+\label{subsec:terrain_review}
+
+Slope controls earthworks, drainage, foundations and access. For
+utility PV, NREL used 3\,\% as a conservative limit \cite{lopez2012},
+engineering work on site grading reports design slopes of about 3 to
+7\,\% \cite{tao2024}, and the 2024 United States Western Solar Plan
+excludes land steeper than 10\,\% \cite{blm2024westernsolar}. For wind,
+slope limits crane operation, component transport and foundations; NREL
+used 20\,\% \cite{lopez2012}, 10\,\% has been argued from crane
+constraints \cite{vanhaaren2011}, the second ENSPRESO release uses
+18\,\% \cite{elsner2023onshore}, and a recent review of European siting
+studies reports wind slope exclusions from about 7 to 30\,\%
+\cite{epg2024renewland}. Values reported in degrees and in
+percent must be converted before comparison: 15$^\circ$ corresponds to
+26.8\,\%, and 15\,\% to 8.5$^\circ$. Slope also depends on the
+resolution of the elevation model, so a threshold is tied to the data
+on which it was defined.
+
+Elevation affects wind power through air density, since the power in the
+wind is proportional to $\rho\,v^3$, and through logistics and cold
+climate. Where air density is already part of the performance
+calculation, an elevation cutoff no longer represents the physics and
+remains a proxy for access and construction constraints. Siting studies
+commonly exclude land above 1\,800 to 2\,000~m for wind
+\cite{epg2024renewland}, while ENSPRESO applies no elevation cutoff and
+relies on slope and resource \cite{elsner2023onshore}; the value is a
+modelling convention.
+
+Finally, eligible pixels are not necessarily a project. NREL removed
+contiguous eligible areas smaller than 1~km$^2$ for rural utility PV
+\cite{lopez2012}, and the second ENSPRESO release allocates wind capacity
+to a 1~km$^2$ cell only when at least 10\,\% of it, 10~ha, is suitable,
+enough for one 3~MW turbine \cite{elsner2023onshore}. A minimum contiguous area and a minimum eligible share within a cell are
+different filters, and both depend on the resolution of the grid.

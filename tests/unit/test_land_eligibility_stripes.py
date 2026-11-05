@@ -1,7 +1,8 @@
 """COMMAND 91: F3 by stripes of rows gives, bit for bit, what the whole grid gave.
 
 The oracle is the whole-grid computation of before, still the one F7b uses: `prepare_shared_layers` + `technology_layers` + `eligible_fraction` +
-`aggregate_to_cells` on whole arrays. The world is random (land-cover and slope samples, population with gaps, resources with gaps, a country that
+`apply_minimum_area` + `aggregate_to_cells` on whole arrays. The minimum-area rules of Group 6 (the pixel floor and the clusters of 8-connected pixels, labelled on the
+whole grid) run on the world with clusters that cross the stripes. The world is random (land-cover and slope samples, population with gaps, resources with gaps, a country that
 does not fill its grid, partial protected areas, rivers, capped-distance flags), so that every exclusion, the validity masks and the cell means do work.
 """
 
@@ -21,8 +22,13 @@ from shapely.geometry import LineString, Polygon, box
 from geofrea.config_models.land_availability import ELEVATION_COLUMN, load_land_availability
 from geofrea.core.constants import NODATA_FLOAT
 from geofrea.land_eligibility import pipeline
-from geofrea.land_eligibility.cells import aggregate_to_cells, eligible_fraction_file
+from geofrea.land_eligibility.cells import (
+    aggregate_to_cells,
+    eligible_fraction_file,
+    pixel_row_area_km2,
+)
 from geofrea.land_eligibility.eligibility import eligible_fraction, slope_steep_shares
+from geofrea.land_eligibility.min_area import apply_minimum_area
 from geofrea.land_eligibility.scenarios import scenario_sets
 from geofrea.land_eligibility.windows import (
     ClassCountRows,
@@ -75,6 +81,9 @@ def world(tmp_path, monkeypatch):
     sc[:, :4, :4] = 65535
     population = rng.gamma(0.4, 80.0, size=(H, W))
     population[rng.uniform(size=(H, W)) < 0.04] = -9999.0
+    smod_classes = np.array([10, 11, 12, 13, 21, 22, 23, 30])
+    settlements = smod_classes[rng.choice(len(smod_classes), size=(H, W), p=[0.05, 0.2, 0.3, 0.2, 0.1, 0.07, 0.05, 0.03])].astype("uint8")
+    settlements[rng.uniform(size=(H, W)) < 0.02] = 255  # a pixel with no class is invalid, never free
     grid = np.full((H, W), 7.0)
     grid[-8:, -10:] = -9999.0  # the country does not fill its grid
     elevation = rng.uniform(0, 3600, size=(H, W))
@@ -83,6 +92,7 @@ def world(tmp_path, monkeypatch):
     grid_result = SimpleNamespace(
         elevation=_write(base / "elev.tif", elevation),
         population=_write(base / "pop.tif", population, "float64"),
+        settlements=_write(base / "smod.tif", settlements, "uint8", 255),
         land_cover_counts=_write(base / "lcc.tif", counts, "uint16", 65535, len(CLASSES), {"worldcover_classes": ",".join(map(str, CLASSES)), "samples_per_pixel": str(SPP)}),
         slope_counts=_write(base / "sc.tif", sc, "uint16", 65535, 41),
         grid=_write(base / "grid.tif", grid),
@@ -145,6 +155,13 @@ def world(tmp_path, monkeypatch):
     )
 
 
+# the area of the reference project per scenario (km2, P_ref / PD of parameters.json): about 2.5 and 9 pixels of 1.2 km2, so that the cluster floor bites
+PROJECT_AREA = {
+    "solar": {"restrictive": 3.0, "central": 2.0, "permissive": 1.0},
+    "wind": {"restrictive": 9.0, "central": 5.0, "permissive": 3.0},
+}
+
+
 def _build(world, stripe_pixels, techs=("solar", "wind")):
     return pipeline.build_eligibility(
         "ZZZ",
@@ -158,6 +175,7 @@ def _build(world, stripe_pixels, techs=("solar", "wind")):
         world.admin1,
         list(techs),
         stripe_pixels=stripe_pixels,
+        project_area_km2=PROJECT_AREA,
     )
 
 
@@ -166,12 +184,15 @@ def _oracle(world, tech):
     la = load_land_availability(EXPERIMENTS)
     interim = world.tmp / "interim_oracle"
     interim.mkdir(exist_ok=True)
-    shared = pipeline.prepare_shared_layers(la, [tech], world.grid_result, world.country, world.protected, world.lakes, world.rivers, interim)
+    sets = scenario_sets(la, tech, "ZZZ", PROJECT_AREA[tech])
+    shared = pipeline.prepare_shared_layers(la, list(sets.values()), world.grid_result, world.country, world.protected, world.lakes, world.rivers, interim)
     layers, resources = pipeline.technology_layers(shared, tech, world.siting)
     elevation = pipeline._read(world.grid_result.elevation, "elevation", "float32")
+    area_row = pixel_row_area_km2(shared.transform, shared.shape[0])
     out = {}
-    for scenario, params in scenario_sets(la.technologies[tech]).items():
+    for scenario, params in sets.items():
         eligible, excl = eligible_fraction(layers, params)
+        eligible, _ = apply_minimum_area(eligible, area_row, params.min_pixel_fraction, params.min_cluster_km2)
         cells = aggregate_to_cells(
             shared.transform, shared.country_mask, eligible, excl, resources={**resources, ELEVATION_COLUMN: elevation}, flags=shared.flags
         )
@@ -223,7 +244,8 @@ def test_the_invalid_pixel_share_is_the_one_of_the_whole_grid(world):
     la = load_land_availability(EXPERIMENTS)
     interim = world.tmp / "interim_oracle2"
     interim.mkdir()
-    shared = pipeline.prepare_shared_layers(la, ["wind"], world.grid_result, world.country, world.protected, world.lakes, world.rivers, interim)
+    central = scenario_sets(la, "wind", "ZZZ", PROJECT_AREA["wind"])["central"]
+    shared = pipeline.prepare_shared_layers(la, [central], world.grid_result, world.country, world.protected, world.lakes, world.rivers, interim)
     layers, _ = pipeline.technology_layers(shared, "wind", world.siting)
     from geofrea.land_eligibility.eligibility import valid_pixels
 
@@ -318,16 +340,38 @@ def test_a_failed_scenario_leaves_no_eligible_raster_behind(world, monkeypatch):
     assert not list(out.glob("eligible_fraction_*.tif")) and not list(out.glob("*.writing.tif"))
 
 
-def test_the_riparian_shares_made_one_discharge_at_a_time_are_those_of_all_the_discharges_at_once(world, tmp_path):
-    from geofrea.land_eligibility.fractions import river_fractions
+def test_the_corridor_shares_made_one_key_at_a_time_are_those_of_a_direct_call(world, tmp_path):
+    from geofrea.land_eligibility.fractions import corridor_half_widths_m, river_corridor_fraction
 
+    la = load_land_availability(EXPERIMENTS)
     rivers = gpd.read_file(world.rivers)
-    setbacks, discharges = [0.5, 2.0, 6.0], [0.0, 10.0, 100.0]
-    at_once = river_fractions(rivers, TRANSFORM, (H, W), setbacks, discharges)
-    one_by_one = dict(pipeline._riparian_shares_one_by_one(rivers, TRANSFORM, (H, W), setbacks, discharges))
-    assert set(one_by_one) == {f"q{q}_t{t}" for (q, t) in at_once}
-    for (q, t), array in at_once.items():
-        np.testing.assert_array_equal(one_by_one[f"q{q}_t{t}"], array)
-    files = pipeline._fraction_files(tmp_path / "rip.npz", "k", lambda: pipeline._riparian_shares_one_by_one(rivers, TRANSFORM, (H, W), setbacks, discharges))
-    assert set(files) == set(one_by_one)  # a builder that yields pairs is stored like a dict
-    np.testing.assert_array_equal(np.load(files["q10.0_t2.0"]), at_once[(10.0, 2.0)])
+    corridors = sorted({pipeline.corridor_key(p) for p in scenario_sets(la, "wind", "ZZZ", PROJECT_AREA["wind"]).values()}, key=repr)
+    assert len(corridors) == 3  # the width exponent differs in the three scenarios
+    made = dict(pipeline._corridor_shares(rivers, la, corridors, TRANSFORM, (H, W)))
+    for i, (exponent, exponent_range, steps) in enumerate(corridors):
+        half = corridor_half_widths_m(rivers["DIS_AV_CMS"], la.riparian.width_coefficient, exponent, steps, exponent_range)
+        np.testing.assert_array_equal(made[f"c{i}"], river_corridor_fraction(rivers, half, TRANSFORM, (H, W)))
+    files = pipeline._fraction_files(tmp_path / "corr.npz", "k", lambda: pipeline._corridor_shares(rivers, la, corridors, TRANSFORM, (H, W)))
+    assert set(files) == set(made)  # a builder that yields pairs is stored like a dict
+    np.testing.assert_array_equal(np.load(files["c1"]), made["c1"])
+    # a permissive corridor is nested in the central one and that in the restrictive one
+    assert (made["c0"] <= made["c1"] + 1e-6).all() and (made["c1"] <= made["c2"] + 1e-6).all()
+
+
+def test_a_cluster_that_crosses_several_stripes_is_one_cluster_and_the_stripe_heights_agree_on_it(world):
+    """The labels come from the whole grid, so a cluster that crosses stripes has one area: the cell tables of three stripe heights are identical, and the
+    minimum-area rules removed something in the scenarios that have them (the test would be empty otherwise)."""
+    summaries = [_build(world, n) for n in (200, 1000, 10_000_000)]
+    for tech in ("solar", "wind"):
+        removed = {s: sum_removed(summaries[0].technologies[tech].scenarios[s]) for s in ("restrictive", "central", "permissive")}
+        assert removed["permissive"] == 0.0
+        assert removed["restrictive"] > 0.0
+        for scenario in ("restrictive", "central", "permissive"):
+            base = pd.read_parquet(summaries[0].technologies[tech].scenarios[scenario].cells)
+            for other in summaries[1:]:
+                pd.testing.assert_frame_equal(pd.read_parquet(other.technologies[tech].scenarios[scenario].cells), base, check_exact=True)
+
+
+def sum_removed(scenario_summary):
+    stats = scenario_summary.min_area
+    return 0.0 if stats is None else stats["area_removed_by_pixel_floor_km2"] + stats["area_removed_by_cluster_floor_km2"]

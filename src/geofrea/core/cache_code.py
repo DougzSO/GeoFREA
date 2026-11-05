@@ -44,6 +44,7 @@ CACHE_FUNCTION_ENTRIES: dict[str, tuple[str, ...]] = {
     "aligned_layer.land_cover": ("grid_alignment.layers:build_land_cover", _ALIGNED_GRID_ENTRY),
     "aligned_layer.land_cover_counts": ("grid_alignment.layers:build_land_cover_counts", _ALIGNED_GRID_ENTRY),
     "aligned_layer.population": ("grid_alignment.layers:build_population", _ALIGNED_GRID_ENTRY),
+    "aligned_layer.settlements": ("grid_alignment.layers:build_settlements", _ALIGNED_GRID_ENTRY),
     "aligned_layer.grid": ("grid_alignment.layers:build_grid_distance", _ALIGNED_GRID_ENTRY),
     "aligned_layer.poi": ("grid_alignment.layers:build_poi", _ALIGNED_GRID_ENTRY),
     "aligned_layer.roads": ("grid_alignment.layers:build_roads", _ALIGNED_GRID_ENTRY),

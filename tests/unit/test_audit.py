@@ -226,7 +226,7 @@ def test_run_audit_phase_flags_pvout_unit_mismatch(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_path):
-    # No slope raster: threshold_deg is the strictest end of the land_availability range of the technology (2026-10-08),
+    # No slope raster: threshold_deg is the strictest slope maximum of the three land scenarios of the technology (Group 6: PV 3 %, wind 10 %),
     # max_observed_deg is None, nothing is "inactive" without data to judge that against.
     # Updated 2026-09-21: per METHODOLOGY S-02 scope (solar and wind only),
     # biomass was removed from _TECHNOLOGIES in audit.py.
@@ -234,11 +234,11 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
 
     assert set(result.slope_threshold_check.keys()) == {"solar", "wind"}
     assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(
-        10.0
-    )  # solar range 10-15
+        1.718, abs=1e-3
+    )  # solar 3 / 5 / 10 %: the strictest is 3 % = 1.718 degrees
     assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(
-        10.2
-    )  # wind range 10.2-30
+        5.711, abs=1e-3
+    )  # wind 10 / 20 / 30 %: the strictest is 10 % = 5.711 degrees
     for check in result.slope_threshold_check.values():
         assert check.max_observed_deg is None
         assert check.inactive is False
@@ -246,15 +246,15 @@ def test_run_audit_phase_slope_threshold_check_uses_per_technology_values(tmp_pa
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
-    # Strictest slope maxima: solar 10.0, wind 10.2 (low ends of the land_availability ranges). A max observed slope of 10.1
-    # is inactive for wind (10.1 < 10.2) but not for solar (10.1 is not below 10.0).
+    # Strictest slope maxima: solar 1.718 degrees (3 %), wind 5.711 degrees (10 %). A max observed slope of 3.0 degrees
+    # is inactive for wind (3.0 < 5.711) but not for solar (3.0 is not below 1.718).
     slope_path = tmp_path / "slope.tif"
-    _write_raster(slope_path, np.full((_SIZE, _SIZE), 10.1, dtype=np.float32))
+    _write_raster(slope_path, np.full((_SIZE, _SIZE), 3.0, dtype=np.float32))
 
     inputs = AuditInputs(slope_path=slope_path, country_gdf=_covering_gdf())
     result = run_audit_phase(_context(tmp_path), inputs, audit_config=_audit_config())
 
-    assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(10.1)
+    assert result.slope_threshold_check["solar"].max_observed_deg == pytest.approx(3.0)
     assert result.slope_threshold_check["solar"].inactive is False
     assert result.slope_threshold_check["wind"].inactive is True
 
@@ -264,13 +264,13 @@ def test_run_audit_phase_slope_threshold_check_varies_by_technology(tmp_path):
 
 @pytest.mark.unit
 def test_run_audit_phase_slope_threshold_check_is_the_same_for_every_country(tmp_path):
-    # The slope maxima come from the land_availability ranges, shared by all countries (2026-10-08), not from a per-country value.
+    # The slope maxima come from the land scenarios of `land_availability`, shared by all countries, not from a per-country value.
     result = run_audit_phase(
         _context(tmp_path, country_code="BRA"), AuditInputs(), audit_config=_audit_config()
     )
 
-    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(10.0)
-    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(10.2)
+    assert result.slope_threshold_check["solar"].threshold_deg == pytest.approx(1.718, abs=1e-3)
+    assert result.slope_threshold_check["wind"].threshold_deg == pytest.approx(5.711, abs=1e-3)
 
 
 @pytest.mark.unit

@@ -54,7 +54,7 @@ from pathlib import Path
 from geofrea.core.geo_utils import load_mainland_boundary
 from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.core.schemas import ResolutionsConfig
-from geofrea.data_acquisition.fetchers import copernicus_dem30, esa_worldcover
+from geofrea.data_acquisition.fetchers import copernicus_dem30, esa_worldcover, ghsl
 from geofrea.data_acquisition.fetchers.wind import GWA_HEIGHTS_M, GWA_PRODUCTS
 from geofrea.data_acquisition.schemas import (
     AcquiredLayer,
@@ -97,6 +97,14 @@ def _slope_dem_tiles(country_code: str) -> list[Path]:
         return copernicus_dem30.load_tiles(country_code)
     except (FileNotFoundError, MissingPathEnvironmentError):
         return []
+
+
+def _settlements_path() -> Path | None:
+    """The pinned GHS-SMOD raster (global, one file), or None if it was never acquired (F3 then refuses to run)."""
+    try:
+        return ghsl.raster_path()
+    except (FileNotFoundError, MissingPathEnvironmentError):
+        return None
 
 
 def _land_cover_count_tiles(country_code: str) -> list[Path]:
@@ -164,6 +172,7 @@ def acquisition_result_to_grid_alignment_inputs(
 
     return GridAlignmentInputs(
         **source_paths,
+        settlements_path=_settlements_path(),
         wind_layers=wind_layers,
         land_cover_tiles=land_cover_tiles,
         slope_dem_tiles=slope_dem_tiles,

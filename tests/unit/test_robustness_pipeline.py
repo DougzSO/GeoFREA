@@ -49,10 +49,10 @@ IDS = np.arange(500, 500 + N_CELLS)
 def _experiments(**sampler) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
     raw["sampler"].update({"initial_size": 24, **sampler})
-    # the real configuration excludes wind above 3000 m in F3 (OQ-058, COMMAND 46); these tests exercise the altitude-window machinery,
-    # which a technology with a reporting sensitivity still has, so wind reports 3000 m as a sensitivity here
+    # the real configuration limits wind altitude per scenario (2000/3000/none, Group 6); these tests exercise the altitude-window machinery,
+    # which a technology with a reporting sensitivity still has, so wind has no scenario limit and reports 3000 m as a sensitivity here
     raw["land_availability"]["technologies"]["wind"]["elevation_max_m"].update(
-        {"nominal": None, "sensitivity": 3000.0}
+        {"restrictive": None, "central": None, "permissive": None, "sensitivity": 3000.0}
     )
     raw["prim"]["bootstrap_replicates"] = (
         6  # the bootstrap of the pre-registered 200 replicates is tested apart

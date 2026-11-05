@@ -215,8 +215,8 @@ def test_a_helper_function_of_a_schema_module_counts_as_code(source_copy):
     before = _code_fingerprints(source_copy)
     _edit(
         source_copy / "config_models" / "land_availability.py",
-        "    r = params.riparian_setback_km\n",
-        "    r = params.riparian_setback_km  # same line\n    _ = 1\n",
+        "    q = la.technologies[technology].slope_max_pct\n",
+        "    q = la.technologies[technology].slope_max_pct  # same line\n    _ = 1\n",
     )
     expected = {
         p

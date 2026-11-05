@@ -4,10 +4,11 @@ Shared by `scripts/freeze_v01_fixtures.py` (writes the frozen fixtures) and `tes
 a fresh run against them), so both exercise exactly the same code path. ZZZ is deterministic and 600 pixels
 wide, so the whole run takes seconds and the fixtures are a few hundred kB (V-01, METHODOLOGY section 5).
 
-E1 protected, E2 water and E3 riparian are frozen as the excluded shares of each pixel that F3 computes
-(`land_eligibility/fractions.py`: sub-pixel coverage; E1 with every designation, E3 at the central setback and
-discharge threshold of `land_availability`). Refrozen with Douglas's authorization of 2026-10-08 (verdict G),
-replacing the binary masks of the retired legacy phase. The F2a river-distance raster stays frozen as well.
+E1 protected, E2 water, E3 river corridor and E6 settlement setback are frozen as the excluded shares of each pixel that F3 computes
+(`land_eligibility/fractions.py`: sub-pixel coverage; E1 with every designation, E3 the union of the corridors of the central scenario, E6 the central
+setback of the solar PV scenario around the GHS-SMOD settlements). Refrozen with Douglas's authorization of 2026-10-08 (verdict G),
+replacing the binary masks of the retired legacy phase, and rederived with his authorization of 2026-11-05 for Group 6 (COMMAND 97: the river
+corridor by estimated width replaces the setback, the settlement layer is new). The F2a river-distance raster stays frozen as well.
 Elevation and slope refrozen on 2026-10-19 (COMMAND 55, D-F2a-021): both are now the mean of the 30 m GLO-30 samples of each
 pixel, the elevation no longer comes from a bundled raster; no other layer changed.
 """
@@ -22,11 +23,17 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
-from geofrea.config_models.land_availability import load_land_availability, nominal_set
+from geofrea.config_models.land_availability import load_land_availability
 from geofrea.core import paths as core_paths
 from geofrea.core.config_loader import load_audit_config
 from geofrea.core.geo_utils import load_mainland_boundary, read_clipped_to_country
-from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
+from geofrea.land_eligibility.fractions import (
+    corridor_half_widths_m,
+    mask_setback_fractions,
+    polygon_coverage_fraction,
+    river_corridor_fraction,
+)
+from geofrea.land_eligibility.scenarios import scenario_set
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -72,7 +79,8 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
         transform, shape = src.transform, (src.height, src.width)
     raw = data_dir / "fixtures" / "synthetic_zzz" / "raw"
     mainland = load_mainland_boundary(next((raw / "countries_borders").rglob("gadm41_ZZZ_0.shp")))
-    central = nominal_set(load_land_availability(main.EXPERIMENTS_YAML).technologies["solar"])
+    la = load_land_availability(main.EXPERIMENTS_YAML)
+    central = scenario_set(la, "solar", "ZZZ", "central")
 
     def clipped(*parts: str):
         return read_clipped_to_country(next(raw.joinpath(*parts).glob("*.gpkg")), mainland)[0]
@@ -83,13 +91,17 @@ def run_zzz(data_dir: Path) -> dict[str, np.ndarray]:
     arrays["e2_water_share"] = polygon_coverage_fraction(
         clipped("hydrology", "lakes"), transform, shape
     ).astype(np.float64)
-    rivers = river_fractions(
-        clipped("hydrology", "rivers"),
-        transform,
-        shape,
-        [central.riparian_setback_km],
-        [central.riparian_min_discharge_m3s],
+    rivers = clipped("hydrology", "rivers")
+    half = corridor_half_widths_m(
+        rivers[la.riparian.discharge_column].to_numpy(),
+        central.river_width_coefficient,
+        central.river_width_exponent,
+        central.river_buffer_steps,
     )
-    key = (float(central.riparian_min_discharge_m3s), float(central.riparian_setback_km))
-    arrays["e3_riparian_share"] = rivers[key].astype(np.float64)
+    arrays["e3_river_corridor_share"] = river_corridor_fraction(rivers, half, transform, shape).astype(np.float64)
+    smod = arrays["f2a/ZZZ_settlements_aligned"]
+    mask = (smod != 255) & (smod >= la.settlements.min_class)
+    arrays["e6_settlement_share"] = mask_setback_fractions(mask, transform, shape, [central.settlement_setback_m])[
+        central.settlement_setback_m
+    ].astype(np.float64)
     return arrays

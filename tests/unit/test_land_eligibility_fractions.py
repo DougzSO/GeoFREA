@@ -1,4 +1,4 @@
-"""Sub-pixel excluded shares (OQ-045 option c): polygon coverage and riparian setback fractions."""
+"""Sub-pixel excluded shares (OQ-045 option c): polygon coverage, river corridors by estimated width and settlement setbacks (Group 6)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,12 @@ from rasterio.transform import from_origin
 from shapely.geometry import LineString, box
 
 from geofrea.land_eligibility.fractions import (
+    buffer_m,
+    corridor_half_widths_m,
+    mask_setback_fractions,
     polygon_coverage_fraction,
-    river_fractions,
-    river_setback_fractions,
+    river_corridor_fraction,
+    river_widths_m,
 )
 
 # 20 x 20 pixels of 0.01 degree at the equator: about 1.11 km per pixel
@@ -36,38 +39,101 @@ def test_polygon_covering_half_of_each_pixel_gives_a_share_of_one_half():
 def test_empty_or_missing_vectors_give_zero():
     assert polygon_coverage_fraction(None, TRANSFORM, SHAPE).sum() == 0
     assert polygon_coverage_fraction(_gdf(), TRANSFORM, SHAPE).sum() == 0
-    assert all(
-        f.sum() == 0 for f in river_setback_fractions(None, TRANSFORM, SHAPE, [0.5]).values()
-    )
+    assert river_corridor_fraction(None, [], TRANSFORM, SHAPE).sum() == 0
+    assert all(f.sum() == 0 for f in mask_setback_fractions(None, TRANSFORM, SHAPE, [500.0]).values())
+    assert all(f.sum() == 0 for f in mask_setback_fractions(np.zeros(SHAPE, bool), TRANSFORM, SHAPE, [500.0]).values())
 
 
-def test_a_river_excludes_only_the_share_within_the_setback_not_the_whole_pixel():
-    river = _gdf(
-        LineString([(10.095, 0.0), (10.095, 0.2)])
-    )  # a vertical line through the middle of pixel column 9
-    fr = river_setback_fractions(river, TRANSFORM, SHAPE, [0.25, 0.5, 1.0])
-    mid = fr[0.5][10, :]
-    # 0.5 km on each side is about +/-0.0045 degree: the pixel with the river holds about 0.9 of its width, neighbours little
-    assert 0.80 < mid[9] <= 1.0
+# ─── the width of a reach and the buffer of a country (eq:g6_width, tab:g6_riparian) ─────────────────────────────────────────────────────────
+
+BRA_STEPS = [(10.0, 30.0), (50.0, 50.0), (200.0, 100.0), (600.0, 200.0), (None, 500.0)]
+
+
+def test_width_is_a_power_of_the_mean_discharge():
+    q = np.array([1.0, 4.0, 100.0])
+    assert np.allclose(river_widths_m(q, 7.2, 0.50), [7.2, 14.4, 72.0])
+    assert np.allclose(river_widths_m(q, 7.2, 0.52), 7.2 * q**0.52)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        river_widths_m([1.0, float("nan")], 7.2, 0.5)
+    with pytest.raises(ValueError, match="finite and non-negative"):
+        river_widths_m([-1.0], 7.2, 0.5)
+
+
+@pytest.mark.parametrize(
+    ("q_limit", "width_limit", "below", "above"),
+    [
+        (1.93, 10.0, 30.0, 50.0),
+        (48.2, 50.0, 50.0, 100.0),
+        (771.6, 200.0, 100.0, 200.0),
+        (6944.0, 600.0, 200.0, 500.0),
+    ],
+)
+def test_the_brazilian_classes_change_at_the_synthetic_discharges_of_the_class_limits(q_limit, width_limit, below, above):
+    """Synthetic reaches at the limits of the five classes with b = 0.50: Q of about 1.93, 48.2, 771.6 and 6,944 m3/s give W of 10, 50, 200 and 600 m."""
+    q_exact = (width_limit / 7.2) ** 2
+    assert q_exact == pytest.approx(q_limit, rel=2e-3)
+    w_below = river_widths_m(q_exact * 0.995, 7.2, 0.50)
+    w_at = river_widths_m(q_exact, 7.2, 0.50)
+    w_above = river_widths_m(q_exact * 1.005, 7.2, 0.50)
+    assert w_at == pytest.approx(width_limit)
+    assert buffer_m(BRA_STEPS, w_below) == below  # narrower than the limit: the class below
+    assert buffer_m(BRA_STEPS, w_above) == above  # wider than the limit: the class above
+    assert buffer_m(BRA_STEPS, width_limit) == above  # the classes are half-open: exactly at the limit is the class above
+
+
+def test_the_half_width_of_the_corridor_is_half_the_channel_plus_the_buffer():
+    half = corridor_half_widths_m([1.0, 48.2, 7000.0], 7.2, 0.50, BRA_STEPS)
+    assert np.allclose(half, [7.2 / 2 + 30.0, 50.0 / 2 + 50.0, 602.4 / 2 + 500.0], atol=0.2)
+
+
+def test_portuguese_steps_one_class_and_none_beyond_the_last_step():
+    prt_central = [(10.0, 10.0), (None, 30.0)]
+    assert list(buffer_m(prt_central, [5.0, 10.0, 80.0])) == [10.0, 30.0, 30.0]
+    assert list(buffer_m([(None, 200.0)], [0.0, 1e6])) == [200.0, 200.0]
+
+
+# ─── river corridors ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+def test_a_river_corridor_excludes_only_the_share_within_its_half_width_not_the_whole_pixel():
+    river = _gdf(LineString([(10.095, 0.0), (10.095, 0.2)]))  # a vertical line through the middle of pixel column 9
+    shares = {h: river_corridor_fraction(river, [h], TRANSFORM, SHAPE)[10, :] for h in (250.0, 500.0, 1000.0)}
+    mid = shares[500.0]
+    # 0.5 km on each side is about +/-0.0045 degree: the pixel with the river holds about 0.9 of its width (0.8 to 0.9 by the centres of the sub-pixels), neighbours little
+    assert 0.75 < mid[9] <= 1.0
     assert mid[8] < 0.35 and mid[10] < 0.35
     assert mid[0] == 0.0 and mid[15] == 0.0
-    # monotone in the setback, and pixels beyond 1.5 pixels are untouched at 0.25 km
-    assert (fr[0.25][10] <= fr[0.5][10] + 1e-6).all() and (fr[0.5][10] <= fr[1.0][10] + 1e-6).all()
-    assert fr[0.25][10, 7] == 0.0
+    # monotone in the half-width, and pixels beyond 1.5 pixels are untouched at 0.25 km
+    assert (shares[250.0] <= shares[500.0] + 1e-6).all() and (shares[500.0] <= shares[1000.0] + 1e-6).all()
+    assert shares[250.0][7] == 0.0
 
 
-def test_setbacks_below_the_pixel_size_differ_unlike_the_pixel_level_distance():
+def test_corridors_below_the_pixel_size_differ_unlike_the_pixel_level_distance():
     river = _gdf(LineString([(10.095, 0.0), (10.095, 0.2)]))
-    fr = river_setback_fractions(river, TRANSFORM, SHAPE, [0.25, 1.0])
-    assert (
-        fr[1.0][10, 9] > fr[0.25][10, 9] + 0.1
-    )  # at pixel level both would simply be "the pixel has a river"
+    narrow = river_corridor_fraction(river, [250.0], TRANSFORM, SHAPE)
+    wide = river_corridor_fraction(river, [1000.0], TRANSFORM, SHAPE)
+    assert wide[10, 9] > narrow[10, 9] + 0.1
 
 
-def test_strips_give_the_same_result_as_one_pass():
+def test_every_reach_has_its_own_half_width_and_overlapping_corridors_are_a_union_not_a_sum():
+    big = LineString([(10.095, 0.0), (10.095, 0.2)])
+    near = LineString([(10.1, 0.0), (10.1, 0.2)])  # 0.005 degree (about 0.55 km) east of the first, overlapping its corridor
+    both = river_corridor_fraction(_gdf(big, near), [500.0, 500.0], TRANSFORM, SHAPE)
+    alone = river_corridor_fraction(_gdf(big), [500.0], TRANSFORM, SHAPE)
+    other = river_corridor_fraction(_gdf(near), [500.0], TRANSFORM, SHAPE)
+    assert (both <= 1.0 + 1e-6).all()
+    assert (both >= np.maximum(alone, other) - 1e-6).all()  # at least either corridor
+    assert (both < alone + other - 1e-3).any()  # and where they overlap less than their sum
+    wide_and_narrow = river_corridor_fraction(_gdf(big, near), [1000.0, 250.0], TRANSFORM, SHAPE)
+    assert np.allclose(wide_and_narrow[10, :8], river_corridor_fraction(_gdf(big), [1000.0], TRANSFORM, SHAPE)[10, :8], atol=1e-6)
+    with pytest.raises(ValueError, match="half-widths"):
+        river_corridor_fraction(_gdf(big, near), [500.0], TRANSFORM, SHAPE)
+
+
+def test_corridor_strips_give_the_same_result_as_one_pass():
     river = _gdf(LineString([(10.02, 0.0), (10.17, 0.2)]))
-    one = river_setback_fractions(river, TRANSFORM, SHAPE, [0.5], strip_rows=20)[0.5]
-    many = river_setback_fractions(river, TRANSFORM, SHAPE, [0.5], strip_rows=3)[0.5]
+    one = river_corridor_fraction(river, [500.0], TRANSFORM, SHAPE, strip_rows=20)
+    many = river_corridor_fraction(river, [500.0], TRANSFORM, SHAPE, strip_rows=3)
     assert np.allclose(one, many, atol=1e-6)
     poly = _gdf(box(10.013, 0.03, 10.121, 0.147))
     assert np.allclose(
@@ -77,19 +143,59 @@ def test_strips_give_the_same_result_as_one_pass():
     )
 
 
-def test_discharge_threshold_drops_small_streams_and_needs_the_column():
-    big = LineString([(10.095, 0.0), (10.095, 0.2)])
-    small = LineString([(10.045, 0.0), (10.045, 0.2)])
-    rivers = gpd.GeoDataFrame({"DIS_AV_CMS": [20.0, 0.5]}, geometry=[big, small], crs="EPSG:4326")
-    fr = river_fractions(rivers, TRANSFORM, SHAPE, [0.5], [0.0, 1.0])
-    assert (
-        fr[(0.0, 0.5)][10, 4] > 0.5 and fr[(1.0, 0.5)][10, 4] == 0.0
-    )  # the small stream only counts at q = 0
-    assert np.allclose(
-        fr[(0.0, 0.5)][10, 9], fr[(1.0, 0.5)][10, 9]
-    )  # the big one counts either way
-    with pytest.raises(ValueError, match="DIS_AV_CMS"):
-        river_fractions(_gdf(big), TRANSFORM, SHAPE, [0.5], [1.0])
+def test_the_corridor_of_a_wide_river_is_a_band_of_about_its_width():
+    """A reach with a 2 km half-width covers about 4 km of a row of pixels (3.6 pixels of 1.11 km), whatever the sub-pixel size."""
+    river = _gdf(LineString([(10.1, 0.0), (10.1, 0.2)]))
+    row = river_corridor_fraction(river, [2000.0], TRANSFORM, SHAPE)[10, :]
+    assert row.sum() == pytest.approx(4.0 / 1.1132, rel=0.05)
+
+
+# ─── settlement setbacks ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+def _mask(*cells):
+    mask = np.zeros(SHAPE, dtype=bool)
+    for r, c in cells:
+        mask[r, c] = True
+    return mask
+
+
+def test_a_setback_of_zero_excludes_the_settlement_pixels_and_nothing_else():
+    shares = mask_setback_fractions(_mask((10, 10)), TRANSFORM, SHAPE, [0.0])[0.0]
+    expected = np.zeros(SHAPE, dtype=np.float32)
+    expected[10, 10] = 1.0
+    np.testing.assert_array_equal(shares, expected)
+
+
+def test_a_setback_runs_from_the_edge_of_the_settlement_pixel_not_its_centre():
+    fr = mask_setback_fractions(_mask((10, 10)), TRANSFORM, SHAPE, [0.0, 250.0, 500.0, 1000.0])
+    assert fr[500.0][10, 10] == 1.0
+    # 500 m beyond the edge of a pixel 1.11 km wide: the neighbour holds about 0.45 of its width within the setback
+    assert 0.35 < fr[500.0][10, 11] < 0.55
+    assert fr[500.0][10, 12] == 0.0
+    assert fr[1000.0][10, 11] > 0.85
+    assert (fr[250.0] <= fr[500.0] + 1e-6).all() and (fr[500.0] <= fr[1000.0] + 1e-6).all()
+    assert fr[0.0].sum() < fr[250.0].sum() < fr[500.0].sum() < fr[1000.0].sum()
+
+
+def test_the_setback_does_not_depend_on_where_the_grid_begins_or_on_the_strip():
+    mask = _mask((3, 4), (4, 4), (12, 15))
+    a = mask_setback_fractions(mask, TRANSFORM, SHAPE, [500.0, 800.0], strip_rows=20)
+    b = mask_setback_fractions(mask, TRANSFORM, SHAPE, [500.0, 800.0], strip_rows=3)
+    for t in (500.0, 800.0):
+        assert np.allclose(a[t], b[t], atol=1e-6)
+
+
+def test_settlement_setback_by_blocks_of_columns_gives_the_shares_of_the_whole_strip():
+    rng = np.random.default_rng(97)
+    mask = rng.random(SHAPE) < 0.04
+    setbacks = [0.0, 500.0, 1000.0]
+    whole = mask_setback_fractions(mask, TRANSFORM, SHAPE, setbacks, block_subcolumns=10**9)
+    for block in (10, 30, 70):
+        blocks = mask_setback_fractions(mask, TRANSFORM, SHAPE, setbacks, block_subcolumns=block)
+        for t in setbacks:
+            np.testing.assert_array_equal(blocks[t], whole[t], err_msg=f"block {block}, setback {t}")
+    assert mask.any() and 0 < whole[1000.0].mean() < 1
 
 
 # ─── the result does not depend on the origin of the grid (COMMAND 58, E1 of IND) ────────────────────────────────────────────────────────────
@@ -185,38 +291,12 @@ def test_the_same_pixels_fall_in_the_same_strip_on_two_grids_of_the_same_lattice
     assert common and all(strip_of[("a", k)] == strip_of[("b", k)] for k in common)
 
 
-def test_riparian_shares_do_not_depend_on_where_the_grid_begins():
-    """The setback distance is measured with the km per degree at the middle of a strip: that middle is now taken on the absolute lattice."""
+def test_corridor_shares_do_not_depend_on_where_the_grid_begins():
+    """The metres per degree are taken at the middle of a strip: that middle is on the absolute lattice, so a pixel gets the same share on any grid."""
     line = _gdf(LineString([(10.02, 40.0), (10.31, 39.62), (10.55, 39.9)]))
     ta = from_origin(10.0, 40.0, 0.01, 0.01)  # top at 40.00 -> absolute row 5000
     tb = from_origin(10.0, 39.9, 0.01, 0.01)  # top 10 rows lower
-    fa = river_setback_fractions(line, ta, (60, 60), [3.0, 6.0], strip_rows=8)
-    fb = river_setback_fractions(line, tb, (50, 60), [3.0, 6.0], strip_rows=8)
-    for t in (3.0, 6.0):
-        # the rows within the setback of the north edge of the second grid do not see the river beyond it (the grid is the horizon of the strip)
-        assert np.array_equal(fa[t][22:60], fb[t][12:50]), t
-
-
-@pytest.mark.parametrize("top_lat", [0.2, 45.2])
-def test_the_distance_transform_by_blocks_of_columns_gives_the_shares_of_the_whole_strip(top_lat):
-    """COMMAND 91: blocks of sub-pixel columns with a margin of the largest setback change no share, for blocks narrower than the margin, blocks that
-    do not divide the strip, and rivers across the block edges; at 45 degrees a sub-pixel is narrower, so the margin in columns is larger."""
-    rng = np.random.default_rng(91)
-    transform = from_origin(10.0, top_lat, 0.01, 0.01)
-    lines = []
-    for _ in range(14):
-        x = rng.uniform(10.0, 10.2, size=3)
-        y = rng.uniform(top_lat - 0.2, top_lat, size=3)
-        lines.append(LineString(list(zip(x, y, strict=True))))
-    rivers = gpd.GeoDataFrame({"DIS_AV_CMS": rng.uniform(0, 20, size=14)}, geometry=lines, crs="EPSG:4326")
-    setbacks = [0.3, 1.5, 4.0]
-    whole = river_setback_fractions(rivers, transform, SHAPE, setbacks, block_subcolumns=10**9)
-    for block in (10, 30, 70, 170):
-        blocks = river_setback_fractions(rivers, transform, SHAPE, setbacks, block_subcolumns=block)
-        for t in setbacks:
-            np.testing.assert_array_equal(blocks[t], whole[t], err_msg=f"block {block}, setback {t}")
-    assert max(a.max() for a in whole.values()) > 0 and 0 < whole[4.0].mean() < 1  # the test has something to compare
-    by_discharge = river_fractions(rivers, transform, SHAPE, setbacks, [0.0, 10.0], block_subcolumns=30)
-    reference = river_fractions(rivers, transform, SHAPE, setbacks, [0.0, 10.0], block_subcolumns=10**9)
-    for key in reference:
-        np.testing.assert_array_equal(by_discharge[key], reference[key])
+    half = [3000.0]
+    fa = river_corridor_fraction(line, half, ta, (60, 60), strip_rows=8)
+    fb = river_corridor_fraction(line, half, tb, (50, 60), strip_rows=8)
+    assert np.array_equal(fa[10:60], fb[0:50])

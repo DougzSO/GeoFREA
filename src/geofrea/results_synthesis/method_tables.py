@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from geofrea.config_models.land_availability import Levels, Ranged
+from geofrea.config_models.land_availability import Levels, MinArea, ScenarioValue
 from geofrea.core.schemas import UnitCost, VerifiedValue
 from geofrea.results_synthesis.members import members_table
 from geofrea.results_synthesis.output import BuildContext, NotBuilt, write_table
@@ -92,28 +92,36 @@ def _flag(v: VerifiedValue) -> str:
     return "test value" if v.synthetic else ("proxy" if v.proxy else "")
 
 
+def _scenario_row(name: str, item: ScenarioValue) -> dict:
+    """One land parameter with a value per scenario: `nominal` is the central value, `low` the restrictive and `high` the permissive one (null: no limit)."""
+
+    return {
+        "category": "exclusion",
+        "name": name,
+        "nominal": item.central,
+        "low": item.restrictive,
+        "high": item.permissive,
+        "unit": item.unit,
+        "source": item.source,
+        "tier": item.tier,
+        "status": item.status,
+        "flag": "",
+    }
+
+
 def _land_rows(ctx: BuildContext, technology: str) -> list[dict]:
-    land = ctx.experiments.land_availability.technologies.get(technology)
+    land_availability = ctx.experiments.land_availability
+    land = land_availability.technologies.get(technology)
     if land is None:
         return []
-    rows = []
+    rows = [_scenario_row("river_width_exponent", land_availability.riparian.width_exponent)]
     for name in type(land).model_fields:
         item = getattr(land, name)
-        if isinstance(item, Ranged):
-            rows.append(
-                {
-                    "category": "exclusion",
-                    "name": name,
-                    "nominal": item.nominal,
-                    "low": item.low,
-                    "high": item.high,
-                    "unit": item.unit,
-                    "source": item.source,
-                    "tier": None,
-                    "status": item.status,
-                    "flag": "",
-                }
-            )
+        if isinstance(item, ScenarioValue):
+            rows.append(_scenario_row(name, item))
+        elif isinstance(item, MinArea):
+            rows.append(_scenario_row("min_cluster_km2", item.cluster_km2))
+            rows.append(_scenario_row("min_pixel_fraction", item.pixel_fraction))
         elif isinstance(item, Levels):
             rows.append(
                 {

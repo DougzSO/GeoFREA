@@ -58,7 +58,7 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
     "data_quality_audit": _scope(
         audit=["layers", "resolution_tolerance", "country_overrides"],
         experiments=[
-            "land_availability.technologies.*.slope_max_deg"
+            "land_availability.technologies.*.slope_max_pct"
         ],  # the strictest slope limit of the range (M-F1b)
     ),
     "grid_alignment": _scope(settings=["geospatial"]),

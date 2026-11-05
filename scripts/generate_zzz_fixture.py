@@ -148,6 +148,20 @@ def gen_population() -> None:
     _write_raster(RAW / "population" / "ZZZ" / "zzz_pop_2020.tif", arr, "float32", nodata=-1.0)
 
 
+def gen_smod() -> None:
+    """GHS-SMOD-style raster (Group 6, COMMAND 97) on the ZZZ grid, where `data_acquisition` and F2a look for the pinned product.
+
+    Class 11 (very low density rural, not a settlement) everywhere except a rural cluster (class 13) of 2 x 2 pixels, rows 12-13 and columns 25-26: grassland
+    of the middle band, so the settlement mask and its setback exclude known land from both technologies (a 500 m setback is about half a pixel). Written as
+    the real product is (int16, nodata -200) under GEOFREA_DATA_DIR/external/ghsl, as 0.01 degree cells of the ZZZ grid: nearest neighbour keeps them.
+    """
+    arr = np.full((N_ROWS, N_COLS), 11, dtype="int16")
+    arr[12:14, 25:27] = 13
+    product = "GHS_SMOD_E2020_GLOBE_R2023A_54009_1000_V2_0"
+    path = Path(os.environ["GEOFREA_DATA_DIR"]) / "external" / "ghsl" / product / f"{product}.tif"
+    _write_raster(path, arr, "int16", nodata=-200)
+
+
 def gen_land_cover() -> None:
     """Single ESA-WorldCover-style tile with three bands of whole decision cells (5 pixel rows each), known areas.
 
@@ -327,8 +341,8 @@ def gen_wind() -> None:
 
 # Synthetic plant inventory for F7b (D-F7b-006): one unit per case so that every metric is a hand computation. (row, col) are pixels of the
 # 0.01 degree grid counted from the north-west corner; the expected excluded shares follow from `gen_land_cover`, `gen_protected` and
-# `gen_population` (density = people / pixel area of about 1.2265 km2, so rows 0 to 12 stay below the 200 per km2 limit and rows 13 and
-# above exceed it).
+# `gen_smod` (the settlement of rows 12-13 and columns 25-26 and its setback of the scenario). Group 6 replaced the density limit by the settlement model: the
+# population gradient no longer excludes land.
 GEM_UNITS = [
     # (tech, status, MW, start_year, location accuracy, row, col)
     ("wind", "operating", 10.0, 2012, "exact", 2, 2),  # inside the protected block: E1 = 1
@@ -358,7 +372,7 @@ GEM_UNITS = [
         "exact",
         16,
         10,
-    ),  # tree cover (E5 = 1) and density above the limit (E6 = 1)
+    ),  # tree cover (E5 = 1); no settlement within the setback (E6 = 0)
     ("wind", "construction", 99.0, 2025, "exact", 2, 2),  # not operating: left out
     ("wind", "retired", 7.0, 2001, "exact", 7, 22),  # not operating: left out
     ("solar", "operating", 12.0, 2019, "exact", 12, 5),  # grassland: nothing excludes it
@@ -386,9 +400,9 @@ GEM_UNITS = [
         4.0,
         2022,
         "exact",
-        14,
+        12,
         25,
-    ),  # grassland, density above the limit (E6 = 1)
+    ),  # grassland, on a pixel of the settlement (E6 = 1)
     ("solar", "announced", 50.0, 2027, "exact", 12, 5),  # not operating: left out
 ]
 GEM_OUTSIDE = ("wind", "operating", 5.0, 2019, "exact", -4.90, 19.50)  # west of the country grid
@@ -445,6 +459,7 @@ def main() -> None:
     gen_elevation()
     gen_dem30()
     gen_population()
+    gen_smod()
     gen_land_cover()
     gen_protected()
     gen_rivers()

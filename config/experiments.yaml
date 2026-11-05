@@ -122,56 +122,150 @@ sampler:
   # U-04: the sample size is adopted when 1 - Jaccard of the top-k sets of two consecutive sizes is below this value
   convergence_tolerance: 0.01
 
-# Land-availability parameters as ranges (E1-E6, minimum area; Douglas, 2026-10-07)
-# Each continuous parameter has a central value (`nominal`, feeds F4-F7) and, where a source gives one, a `low`-`high` range;
-# a parameter without a sourced range keeps low/high null and is held at nominal (declared, not filled in). Categorical
-# parameters are named `levels`. Sources and the evidence behind every value: docs/_audit/2026-10_f3_parameter_research.md.
-# These ranges feed the named land-availability scenarios of METHODOLOGY U-06 (central, restrictive, permissive) and the range report; the scenario composition is recorded in docs/phases/F3_land_eligibility.md.
+# Land eligibility of Stage F3 (Group 6, COMMAND 97; docs/thesis/methods/group6_land_eligibility.tex, theory: docs/thesis/theory/ch2_land_eligibility_constraints.tex).
+# Every scenario-dependent parameter has one explicit value per land scenario (restrictive / central / permissive) with its unit, source, tier and status;
+# null means "no limit" in that scenario. A legal rule is the same in the three scenarios (the Brazilian riparian classes); where the law leaves no choice
+# the scenarios vary the uncertain estimate the rule is applied to (the width exponent). `status: verify` marks what the .tex files mark `% verify`.
+# Sources are the keys of tex/references.bib. The residual land-use factor of Group 1 (parameters.json `luf`) repeats none of these criteria.
 land_availability:
   # OQ-060 (Douglas, 2026-10-18, COMMAND 51): a cell whose elevation is missing (no eligible pixel has a DEM value) is not a candidate, for every
   # technology and every land scenario; it is counted under the reason `missing_elevation`. The altitude limit of a technology (`elevation_max_m`)
   # is then evaluated only on cells that have an elevation (reason `elevation_max`). Eligible area is not changed; the rule acts on the candidate set.
   missing_elevation: ineligible
-  riparian_discharge_grid_m3s: [0.0, 1.0, 5.0, 10.0]  # thresholds at which the riparian shares are computed; draws between them are interpolated
+  # WorldCover classes of permanent water: the river corridor is the union with them, not the sum (decision C1 of docs/_audit/group6_audit_97.md, Douglas 2026-11-05)
+  water_classes: [80]
+  riparian:
+    # W = a Q^b (eq:g6_width): channel width of a HydroRIVERS reach from its long-term mean discharge DIS_AV_CMS (Andreadis et al. 2013, fitted to bankfull
+    # discharge, so W is a width proxy that tends to underestimate the legal channel width: a limitation, LIMITATIONS). The corridor of a reach has half-width W/2 + B_c(W).
+    # The central width is a Q^0.50; the permissive and restrictive widths are the minimum and the maximum of a Q^0.48 and a Q^0.52 on each reach (Q^b falls as b
+    # grows below 1 m3/s), which nests the corridors of the three scenarios on every reach (Douglas, 2026-11-05).
+    width_coefficient: 7.2
+    discharge_column: DIS_AV_CMS
+    width_exponent:
+      restrictive: 0.52
+      central: 0.50
+      permissive: 0.48
+      unit: "1"
+      source: "andreadis2013 (W = 7.2 Q^0.50, exponent uncertainty about +/-0.02); HydroRIVERS: lehner2013"
+      tier: 2
+      status: sourced
+      note: "The published uncertainty of the exponent. The scenarios use the extremes of the width over the range 0.48 to 0.52 (permissive: the narrower, restrictive: the wider of the two), not the extreme exponents, so the corridors are nested for Q below and above 1 m3/s."
+    source: "lehner2013 (HydroRIVERS: reaches with a catchment of at least 10 km2 or a mean discharge of at least 0.1 m3/s); andreadis2013"
+    note: "The class limits of 10, 50, 200 and 600 m of the Brazilian rule are mean discharges of about 1.9, 48, 770 and 6,900 m3/s at b = 0.50. The buffer B_c is measured from the channel edge. HydroRIVERS does not distinguish ephemeral channels or navigable waters."
+    countries:
+      BRA:
+        # Forest Code (Lei 12.651/2012, art. 4, I): five width classes of natural perennial and intermittent watercourses; the same in the three scenarios
+        restrictive: &bra_classes
+          - {below_width_m: 10.0, buffer_m: 30.0}
+          - {below_width_m: 50.0, buffer_m: 50.0}
+          - {below_width_m: 200.0, buffer_m: 100.0}
+          - {below_width_m: 600.0, buffer_m: 200.0}
+          - {below_width_m: null, buffer_m: 500.0}
+        central: *bra_classes
+        permissive: *bra_classes
+        source: "brasil2012forestcode, art. 4, I"
+        tier: 1
+        status: sourced
+        note: "The law excludes ephemeral channels, which HydroRIVERS does not distinguish: every reach is treated as perennial or intermittent."
+      PRT:
+        # Lei 54/2005: margin of the public water domain 10 m (non-navigable), 30 m (navigable or floatable waters, public reservoirs), 50 m (maritime and port
+        # jurisdiction, not represented: the tidal limit is not in the river network). Navigability is not in global hydrography: the central scenario uses the
+        # estimated width as a proxy (10 m below W = 10 m, 30 m from there on; Tier 3), the permissive scenario 10 m and the restrictive 30 m everywhere.
+        restrictive:
+          - {below_width_m: null, buffer_m: 30.0}
+        central:
+          - {below_width_m: 10.0, buffer_m: 10.0}
+          - {below_width_m: null, buffer_m: 30.0}
+        permissive:
+          - {below_width_m: null, buffer_m: 10.0}
+        source: "portugal2005lei54, art. 11; the central width proxy for navigability is author judgment"
+        tier: 3
+        status: sourced
+        note: "Restrictive and permissive are the legal values (Tier 1); the central proxy of navigability is Tier 3. The 50 m margin of estuaries is not represented."
+      IND:
+        # No national statutory riparian buffer was identified: author judgment within the range used in siting studies
+        restrictive:
+          - {below_width_m: null, buffer_m: 200.0}
+        central:
+          - {below_width_m: null, buffer_m: 100.0}
+        permissive:
+          - {below_width_m: null, buffer_m: 30.0}
+        source: null
+        tier: 3
+        status: author_judgment
+        note: "No national statutory riparian buffer was identified; 30 / 100 / 200 m are author judgment (Tier 3), L-0xx of docs/LIMITATIONS.md."
+      ZZZ:
+        # synthetic country (A-06, V-08): test values with one class boundary at W = 60 m so that the ZZZ rivers (DIS_AV_CMS = 50, W = 50.9 m at b = 0.50) sit near it
+        restrictive:
+          - {below_width_m: 60.0, buffer_m: 1000.0}
+          - {below_width_m: null, buffer_m: 2000.0}
+        central:
+          - {below_width_m: 60.0, buffer_m: 500.0}
+          - {below_width_m: null, buffer_m: 1000.0}
+        permissive:
+          - {below_width_m: 60.0, buffer_m: 250.0}
+          - {below_width_m: null, buffer_m: 500.0}
+        source: null
+        tier: 3
+        status: author_judgment
+        synthetic: true
+        note: "Test values of the synthetic country; never a result."
+  settlements:
+    # GHS-SMOD R2023A, epoch 2020, 1 km, Mollweide (Degree of Urbanisation applied to the GHSL population and building-footprint surface grids). Class 30 urban centre, 23 dense urban cluster,
+    # 22 semi-dense urban cluster, 21 suburban or peri-urban, 13 rural cluster (village), 12 low density rural, 11 very low density rural, 10 water.
+    # A settlement is every cell of class 13 or above; the dispersed rural classes 11 and 12 are not excluded. The mask is the same in the three scenarios.
+    min_class: 13
+    source: "schiavina2023smod; data: GeoFREA_data/external/ghsl/GHS_SMOD_E2020_GLOBE_R2023A_54009_1000_V2_0.zip (SHA-256 in docs/phases/F2a_grid_alignment.md)"
+    note: "Status verify: the DOI of the data set is marked % verify in tex/references.bib. 1 km resolution: small villages are represented coarsely."
+  sensitivities:
+    # The former density threshold, kept as a named sensitivity (defined, not run). In a run that sets it, the density rule replaces the settlement mask.
+    population_density_200:
+      pop_density_max_per_km2: 200.0
+      run: false
+      unit: persons/km2
+      source: "project value of the former E6 (DECISIONS 2026-09-10); CEEW (mallya2024ceew) cites 250 persons/km2 second-hand via SPRF (2025), OQ open"
+      tier: 3
+      status: verify
+      note: "Replaced by the settlement model in the three scenarios (Group 6). A density threshold removes very different shares of land in countries with different rural settlement patterns, most of all in India."
   technologies:
     solar:
-      slope_max_deg:
-        nominal: 10.0
-        low: 10.0
-        high: 15.0
-        unit: degrees
-        source: "central 10 deg: MAPRE site-suitability set (Patankar et al., arXiv:2211.05062, Table B1; Owusu-Obeng et al., arXiv:2401.16626; both cite Leslie et al. and Wu et al.), also 'typical' in Ryberg et al. 2017 (arXiv:1712.07840, Table 2), >=10 deg for solar in arXiv:2504.12508 (10 m DEM, citing Leslie et al.) and >10 deg in arXiv:2511.07323. Range 10-15 deg proposed by Douglas 2026-10-07; the 15 deg end rests on a lead only (suitable slope 5-15 deg in GIS multi-criteria solar-farm studies, search snippets, not opened)"
-        status: range_set_by_douglas_literature_lead
-        note: "Literature spans 1-30 deg across renewables (Ryberg 2017 Table 2: low 30, typical 10, high 1); stricter values below 10 deg exist and are not in the range. Leads not opened: 3.1 deg (85% of the 100 largest operating PV sites) and 14.04 deg (25%)."
-      pop_density_max_per_km2:
-        nominal: 200.0
-        low: 150.0
-        high: 300.0
-        unit: persons/km2
-        source: "range 150-300 set by Douglas on 2026-10-07 (an example, not a citation) after the 100 persons/km2 of MAPRE (Table B1, US West) excluded 78% of IND; nominal 200 is the earlier project value (parameters.json pop_density_threshold, DECISIONS 2026-09-10)"
-        status: range_set_by_douglas_unsourced
-        note: "Literature range still to be found (OQ-047); 100 persons/km2 (MAPRE) is below the range."
-      riparian_setback_km:
-        nominal: 0.5
-        low: 0.25
-        high: 1.0
-        unit: km
-        source: "MAPRE Table B1 (250 m, water bodies and rivers); McKenna et al. 2022 Table 2 (water bodies 0-1 km); nominal = earlier unverified value (Brazilian Forest Code scale)"
+      slope_max_pct:
+        restrictive: 3.0
+        central: 5.0
+        permissive: 10.0
+        unit: "%"
+        source: "lopez2012 (NREL, 3 %: conservative limit; 20 % for wind), tao2024 (design slopes of about 3 to 7 %), blm2024westernsolar (excludes land steeper than 10 %)"
+        tier: 2
         status: sourced
-        note: "Computed at 100 m and aggregated as an excluded share per 0.01 degree pixel (OQ-045, option c)."
-      riparian_min_discharge_m3s:
-        nominal: 0.0
-        low: 0.0
-        high: 10.0
-        unit: m3/s
-        source: "Douglas 2026-10-07: rivers kept as they are (every HydroRIVERS stream, nominal 0) with a discharge range as a parameter; the 0-10 m3/s end is a proposal read off the PRT shares (24.5% of the land within 0.5 km of a stream at 0, 9.2% at 1, 3.8% at 5, 2.5% at 10 m3/s), not a citation"
-        status: range_set_by_douglas_unsourced
-        note: "A stream counts as a river for E3 only if its long-term mean discharge (HydroRIVERS DIS_AV_CMS) is at least this value. Literature range to be found (OQ-046)."
-      min_eligible_area_km2:
-        nominal: 0.1
-        unit: km2
-        source: "ENSPRESO 2 (JRC144438): 10 ha suitable land for one 3 MW turbine; applied to solar by analogy (no solar source)"
-        status: range_pending
+        note: "Computed from the 30 m GLO-30 samples: the share of the pixel steeper than the threshold (percent = tangent; 3 / 5 / 10 % = 1.72 / 2.86 / 5.71 deg). The 1-degree bins of F2a give an error of at most 0.33 % in the slope-eligible area (docs/_audit/group6_audit_97.md)."
+      settlement_setback_m:
+        restrictive: 1000.0
+        central: 500.0
+        permissive: 0.0
+        unit: m
+        source: "uyan2013 and watson2015 (about 500 m for both technologies); the restrictive 1,000 m is author judgment"
+        tier: 3
+        status: sourced
+        note: "Setbacks of studies in other countries: none of the three countries sets a national setback for these technologies in the sources reviewed. Measured from the edge of the settlement pixels."
+      min_area:
+        cluster_km2:
+          restrictive: project_area
+          central: 1.0
+          permissive: null
+          unit: km2
+          source: "lopez2012 (NREL removed contiguous eligible areas below 1 km2 for rural utility PV); restrictive: P_ref / PD_PV of parameters.json (Groups 3 and 1)"
+          tier: 3
+          status: sourced
+          note: "project_area is the area of the 100 MW reference project of Group 3, P_ref / PD of the restrictive PV density. The cluster is 8-connected 0.01 degree pixels with an eligible fraction above 0; its eligible area is the sum of fraction x geodesic pixel area."
+        pixel_fraction:
+          restrictive: null
+          central: null
+          permissive: null
+          unit: fraction
+          source: null
+          tier: 3
+          status: not_applicable
+          note: "No pixel floor for PV."
       excluded_classes:
         nominal: cropland_excluded
         levels:
@@ -190,53 +284,55 @@ land_availability:
         status: sourced
         note: "The ia_ib level has no source (candidate)."
     wind:
-      slope_max_deg:
-        nominal: 16.7
-        low: 10.2
-        high: 30.0
-        unit: degrees
-        source: "30% = 16.7 deg (Ryberg et al. 2020, quoted by ENSPRESO 2, JRC144438); low 18% = 10.2 deg (ENSPRESO 2); high 30 deg (upper end of McKenna et al. 2022 Table 2, 1-30 deg)"
+      slope_max_pct:
+        restrictive: 10.0
+        central: 20.0
+        permissive: 30.0
+        unit: "%"
+        source: "vanhaaren2011 (10 % from crane constraints), lopez2012 (20 %), epg2024renewland (wind slope exclusions of about 7 to 30 %); ENSPRESO 2 uses 18 % (elsner2023onshore)"
+        tier: 2
         status: sourced
-      pop_density_max_per_km2:
-        nominal: 200.0
-        low: 150.0
-        high: 300.0
-        unit: persons/km2
-        source: "same as solar"
-        status: range_set_by_douglas_unsourced
-      riparian_setback_km:
-        nominal: 0.5
-        low: 0.25
-        high: 1.0
-        unit: km
-        source: "same as solar"
-        status: sourced
-        note: "Computed at 100 m and aggregated as an excluded share per 0.01 degree pixel (OQ-045, option c)."
-      riparian_min_discharge_m3s:
-        nominal: 0.0
-        low: 0.0
-        high: 10.0
-        unit: m3/s
-        source: "Douglas 2026-10-07: rivers kept as they are (every HydroRIVERS stream, nominal 0) with a discharge range as a parameter; the 0-10 m3/s end is a proposal read off the PRT shares (24.5% of the land within 0.5 km of a stream at 0, 9.2% at 1, 3.8% at 5, 2.5% at 10 m3/s), not a citation"
-        status: range_set_by_douglas_unsourced
-        note: "A stream counts as a river for E3 only if its long-term mean discharge (HydroRIVERS DIS_AV_CMS) is at least this value. Literature range to be found (OQ-046)."
-      min_eligible_area_km2:
-        nominal: 0.1
-        unit: km2
-        source: "ENSPRESO 2 (JRC144438): 10 ha suitable land for one 3 MW turbine"
-        status: range_pending
-      # OQ-058 (Douglas, 2026-10-16, COMMAND 46): wind cells whose elevation is above `nominal` are not candidates in any land scenario
-      # (F3 excludes them, so F4 to F8 never see them). In practice only India has any (PRT and BRA stay below 2,000 m). The limit has no
-      # source (Tier 3, LIMITATIONS); the sourced criterion stays OQ-058. `sensitivity` is null: the result with the cells is the
-      # sensitivity, recorded in docs/phases/F5/fix_round_46.md from the F5 run that did not exclude them.
-      elevation_max_m:
-        nominal: 3000.0
-        sensitivity: null
+        note: "10 / 20 / 30 % = 5.71 / 11.31 / 16.70 deg, from the 30 m GLO-30 samples as for PV."
+      settlement_setback_m:
+        restrictive: 1000.0
+        central: 800.0
+        permissive: 500.0
         unit: m
-        source: null
+        source: "rediske2021 (about 1 km typical), drechsler2017 and lehmann2021 (800 m for noise limits of a 3 MW reference turbine), watson2015 (about 500 m)"
+        tier: 2
+        status: sourced
+        note: "Planning choices of studies in other countries, not universal legal limits. Measured from the edge of the settlement pixels."
+      min_area:
+        cluster_km2:
+          restrictive: project_area
+          central: null
+          permissive: null
+          unit: km2
+          source: "restrictive: P_ref / PD_wind of parameters.json (Groups 3 and 1)"
+          tier: 3
+          status: sourced
+          note: "project_area is the area of the 100 MW reference project, P_ref / PD of the restrictive wind density."
+        pixel_fraction:
+          restrictive: 0.10
+          central: 0.10
+          permissive: null
+          unit: fraction
+          source: "elsner2023onshore (ENSPRESO 2 allocates wind to a 1 km2 cell only when at least 10 % of it, 10 ha, is suitable: one 3 MW turbine)"
+          tier: 2
+          status: sourced
+          note: "A pixel with a smaller eligible fraction is dropped before the clusters are formed."
+      # OQ-058 (Douglas, 2026-10-16, COMMAND 46; Group 6 scenario values, COMMAND 97): wind cells whose elevation is above the limit of the scenario are not
+      # candidates in it (F3 excludes them, so F4 to F8 never see them). Cell elevation is the eligible-area-weighted mean of the aligned 30 m DEM.
+      # The limit stands for access, construction and cold-climate constraints: air density already enters the wind capacity factor.
+      elevation_max_m:
+        restrictive: 2000.0
+        central: 3000.0
+        permissive: null
+        unit: m
+        source: "epg2024renewland (siting studies commonly exclude land above 1,800 to 2,000 m for wind; ENSPRESO applies no elevation cutoff); the central 3,000 m has no source"
         tier: 3
-        status: excluded_unsourced
-        note: "Cell elevation is the eligible-area-weighted mean of the aligned 30 m DEM. A sourced limit (IEC site conditions, turbine datasheets, density derating) is OQ-058."
+        status: verify
+        note: "Central Tier 3 (L-025). Status verify: the English edition and year of epg2024renewland are marked % verify in tex/references.bib."
       excluded_classes:
         nominal: forest_excluded
         levels:

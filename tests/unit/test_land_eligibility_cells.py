@@ -123,8 +123,8 @@ def test_aggregation_areas_dominant_exclusion_and_candidate_filter():
     assert 0 < c01.cell_area_km2 < 5 * areas[:5].sum()  # partly inside the country: land area only
     assert pd.isna(c01.dominant_exclusion)  # nothing excluded there
 
-    keep = cells.candidate_cells(df, min_eligible_area_km2=float(c10.eligible_area_km2))
-    assert set(keep.cell_id) >= {int(c10.cell_id)} and int(c00.cell_id) not in set(keep.cell_id)
+    keep = cells.candidate_cells(df)  # any eligible area makes a candidate (Group 6): the minimum project size acts on the pixels
+    assert set(keep.cell_id) >= {int(c10.cell_id), int(c01.cell_id)} and int(c00.cell_id) not in set(keep.cell_id)
 
 
 @pytest.mark.unit

@@ -1368,16 +1368,16 @@ def _validation(zzz, name, fine=False):
 
 # hand values of `generate_zzz_fixture.GEM_UNITS`: capacity in valid pixels and the excluded share each constraint gives
 HAND_EXCLUSION = {
-    "wind": {  # units of 10 (E1), 20 (free), 30 (free) and 40 MW (E5 and E6), 100 MW in the grid, 5 MW outside it
+    "wind": {  # units of 10 (E1), 20 (free), 30 (free) and 40 MW (E5), 100 MW in the grid, 5 MW outside it; none lies near the settlement
         "E1": 0.1,
         "E2": 0.0,
         "E3": 0.0,
         "E4": 0.0,
         "E5": 0.4,
-        "E6": 0.4,
+        "E6": 0.0,
         "combined": 0.5,
     },
-    "solar": {  # units of 12 (free), 8 (E5), 6 (E1 and E5) and 4 MW (E6), 30 MW in the grid
+    "solar": {  # units of 12 (free), 8 (E5), 6 (E1 and E5) and 4 MW (E6: a pixel of the settlement), 30 MW in the grid
         "E1": 6 / 30,
         "E2": 0.0,
         "E3": 0.0,

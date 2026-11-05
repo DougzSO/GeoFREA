@@ -27,7 +27,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 DEFAULT_LAYERS = [
     "glo30", "solar", "wind_wind_speed_100m", "wind_weibull_a_150m", "wind_air_density_200m", "land_cover", "land_cover_counts",
-    "population", "grid", "poi", "roads", "lakes", "rivers", "physical",
+    "population", "settlements", "grid", "poi", "roads", "lakes", "rivers", "physical",
 ]  # fmt: skip
 POI_THRESHOLD_KV = {"BRA": 138.0, "PRT": 150.0, "IND": 220.0}
 
@@ -86,7 +86,7 @@ def job(ctx, layer: str):
     if layer.startswith("wind_"):
         return base + "build_wind", {"key": layer[5:]}, [layer], "wind"
     plain = {
-        "solar": "build_solar", "land_cover": "build_land_cover", "land_cover_counts": "build_land_cover_counts", "population": "build_population",
+        "solar": "build_solar", "land_cover": "build_land_cover", "land_cover_counts": "build_land_cover_counts", "population": "build_population", "settlements": "build_settlements",
         "grid": "build_grid_distance", "roads": "build_roads", "lakes": "build_lakes", "rivers": "build_rivers",
     }  # fmt: skip
     if layer in plain:

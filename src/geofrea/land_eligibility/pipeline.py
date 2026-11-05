@@ -5,19 +5,22 @@ Reads the aligned F2a rasters, the F2b physical layers and the vector sources (p
 
   - `cells_<tech>.parquet`: every 0.05 degree cell with at least one in-country pixel (areas, excluded area per constraint,
     dominant exclusion, resource and distance means weighted by eligible area, `candidate` flag);
-  - `candidates_<tech>.parquet`: the cells with `eligible_area_km2 >= min_eligible_area_km2` (M-F3-04/05);
+  - `candidates_<tech>.parquet`: the cells with any eligible area, an elevation and, for wind, not above the altitude limit (M-F3-04/05);
   - `cells_0p1deg_<tech>.parquet` (default scale only): the same cells grouped 2 x 2, the area check of a 0.1 degree run (V-07);
   - `admin1_units.parquet`: the GADM level-1 units that hold cells, with their cell counts (each cell table carries `admin1_id`, D-F3-012);
   - `eligible_fraction_<tech>.tif` (pixels), `eligible_area_km2_<tech>.tif` and `dominant_exclusion_<tech>.tif` (cells).
 
-The parameter set is the nominal one of `land_availability` in `config/experiments.yaml` (it feeds F4-F7); the engine itself is a
-function of one `ParameterSet`, so ranges can be sampled later without changing it.
+The parameter sets are the three scenarios of `land_availability` in `config/experiments.yaml` (the central one feeds F4-F7); the engine itself is a
+function of one `ParameterSet`. The minimum-area rules (pixel floor, cluster floor) need the eligible fraction of the whole grid, so a scenario that has
+them is computed in two passes (`min_area.py`).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,9 +37,6 @@ from geofrea.config_models.land_availability import (
     ParameterSet,
     elevation_sensitivity_m,
     load_land_availability,
-    nominal_set,
-    riparian_discharges_m3s,
-    riparian_thresholds_km,
 )
 from geofrea.core import paths as core_paths
 from geofrea.core.cache_code import cache_code
@@ -68,11 +68,17 @@ from geofrea.land_eligibility.cells import (
 from geofrea.land_eligibility.eligibility import (
     EXCLUSION_NAMES,
     EligibilityLayers,
-    riparian_shares,
+    corridor_key,
     slope_steep_shares,
 )
 from geofrea.land_eligibility.errors import LandEligibilityError, MissingRequiredLayerError
-from geofrea.land_eligibility.fractions import polygon_coverage_fraction, river_fractions
+from geofrea.land_eligibility.fractions import (
+    corridor_half_widths_m,
+    mask_setback_fractions,
+    polygon_coverage_fraction,
+    river_corridor_fraction,
+)
+from geofrea.land_eligibility.min_area import write_minimum_area
 from geofrea.land_eligibility.scenarios import (
     REASON_ELEVATION_MAX,
     REASON_MISSING_ELEVATION,
@@ -93,6 +99,7 @@ from geofrea.land_eligibility.windows import (
     ClassCountRows,
     FlagRows,
     NpyRows,
+    NpyWriter,
     RasterRows,
     ScenarioStripes,
     StripeInputs,
@@ -116,8 +123,9 @@ class ScenarioSummary(BaseModel):
 
     scenario: str
     parameter_set: dict
-    varied: dict[str, dict[str, float]]
+    varied: dict[str, dict[str, float | None]]
     held_central: dict[str, str]
+    min_area: dict | None = None  # what the minimum-area rules removed (`min_area.MinAreaStats`); None when the scenario has none
     n_candidates: int
     eligible_area_km2: float
     cells: Path
@@ -314,7 +322,7 @@ def _fraction_cache(path: Path, key: str, build) -> dict[str, np.ndarray]:
     return {name: np.load(p, allow_pickle=False) for name, p in _fraction_files(path, key, build).items()}
 
 
-SHARE_ALGORITHM_VERSION = 1
+SHARE_ALGORITHM_VERSION = 2  # 2: river corridors and settlement setbacks (Group 6, COMMAND 97)
 
 
 def _share_key(kind: str, source: Path | None, country_gdf, transform, shape, **config) -> str:
@@ -414,14 +422,83 @@ class SharedLayers:
     samples_per_pixel: int
     lakes_fraction: np.ndarray
     protected_fraction: dict[tuple[str, ...], np.ndarray]
-    riparian_fraction: dict[tuple[float, float], np.ndarray]  # the prepared grid of (discharge, setback); empty once `riparian_share` is made
-    riparian_share: dict[tuple[float, float], np.ndarray]  # E3 per (setback, discharge) of the scenarios
+    river_corridor: dict[tuple, np.ndarray]  # the corridor share of each (width exponent, buffer steps) of the scenarios
+    settlement_share: dict[float, np.ndarray]  # the share within each settlement setback (m) of the scenarios
+    settlement_valid: np.ndarray
     flags: dict[str, np.ndarray]
+
+
+@dataclass
+class _ShareNeeds:
+    """The distinct slope maxima, IUCN levels, river corridors and settlement setbacks the parameter sets of a country need."""
+
+    slope_maxima: set[float]
+    levels: list[tuple[str, ...]]
+    corridors: list[tuple]
+    setbacks_m: list[float]
+
+
+def _share_needs(parameter_sets) -> _ShareNeeds:
+    sets = list(parameter_sets)
+    levels: dict[tuple[str, ...], None] = {}
+    for p in sets:
+        levels[tuple(sorted(p.iucn_categories))] = None
+    return _ShareNeeds(
+        slope_maxima={float(p.slope_max_deg) for p in sets},
+        levels=list(levels),
+        corridors=sorted({corridor_key(p) for p in sets}, key=repr),
+        setbacks_m=sorted({float(p.settlement_setback_m) for p in sets if p.pop_density_max_per_km2 is None}),
+    )
+
+
+def _corridor_half_widths(rivers_gdf: gpd.GeoDataFrame, la: LandAvailability, key: tuple) -> np.ndarray:
+    """Half-width (m) of the corridor of every reach for a (width exponent, buffer steps) key: `W/2 + B_c(W)`, `W = a Q^b`."""
+    column = la.riparian.discharge_column
+    if column not in rivers_gdf.columns:
+        raise LandEligibilityError(
+            f"rivers have no {column} column, so the channel width cannot be estimated (Group 6, eq:g6_width)"
+        )
+    exponent, exponent_range, steps = key
+    return corridor_half_widths_m(
+        rivers_gdf[column].to_numpy(), la.riparian.width_coefficient, exponent, steps, exponent_range
+    )
+
+
+def _corridor_shares(rivers_gdf, la: LandAvailability, corridors: list[tuple], transform, shape):
+    """`(name, share)` of each corridor key (`c0`, `c1`, ... in the order of `corridors`), one at a time."""
+    for i, key in enumerate(corridors):
+        yield f"c{i}", river_corridor_fraction(rivers_gdf, _corridor_half_widths(rivers_gdf, la, key), transform, shape)
+
+
+def _settlement_mask(classes: np.ndarray, min_class: int) -> np.ndarray:
+    """True where the GHS-SMOD class is a settlement (`min_class` = rural cluster and denser); a pixel with no class is not a settlement here and not valid."""
+    with np.errstate(invalid="ignore"):
+        return np.nan_to_num(classes, nan=-1.0) >= min_class
+
+
+def _settlement_key(settlements: Path, transform, shape, la: LandAvailability, setbacks_m: list[float]) -> str:
+    return cache_key(
+        SHARE_ALGORITHM_VERSION,
+        [settlements],
+        {
+            "kind": "settlements",
+            "transform": [float(v) for v in tuple(transform)[:6]],
+            "shape": [int(v) for v in shape],
+            "min_class": int(la.settlements.min_class),
+            "setbacks_m": [float(t) for t in setbacks_m],
+        },
+        code=cache_code("subpixel_shares"),
+    )
+
+
+def _settlement_shares(mask: np.ndarray, setbacks_m: list[float], transform, shape):
+    for t, share in mask_setback_fractions(mask, transform, shape, setbacks_m).items():
+        yield f"s{t}", share
 
 
 def prepare_shared_layers(
     la: LandAvailability,
-    techs: list[str],
+    parameter_sets,
     grid_result: GridAlignmentResult,
     country_gdf: gpd.GeoDataFrame,
     protected_path: Path | None,
@@ -429,21 +506,20 @@ def prepare_shared_layers(
     rivers_path: Path | None,
     interim: Path,
 ) -> SharedLayers:
-    """Read the aligned layers and build (or load from the cache) the sub-pixel shares for the levels and setbacks of `techs`.
+    """Read the aligned layers and build (or load from the cache) the sub-pixel shares for the parameter sets given.
 
-    Used by F3 and, to evaluate the same engine at the pixels of existing plants, by F7b (M-F3-05, M-F7b-01).
+    Used by F7b, to evaluate the same engine at the pixels of existing plants, and by the tests as the oracle of the stripe engine (M-F3-05, M-F7b-01).
+
+    Args:
+        parameter_sets: Every `ParameterSet` the shares must cover (the scenarios of the technologies, or the central ones).
 
     Raises:
         LandEligibilityError: an aligned layer is missing.
         MissingRequiredLayerError: a protected-area, lake or river layer is absent.
     """
+    needs = _share_needs(parameter_sets)
     slope_counts, slope_valid = _read_slope_counts(grid_result.slope_counts)
-    slope_maxima = {
-        p.slope_max_deg
-        for t in techs
-        for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
-    }
-    slope_steep = slope_steep_shares(slope_counts, slope_maxima)
+    slope_steep = slope_steep_shares(slope_counts, needs.slope_maxima)
     del slope_counts  # 41 bins of uint16 a pixel (BRA: 1.2 GB) are not needed again
     population = _read(grid_result.population, "population")
     land_cover_counts, land_cover_classes, land_cover_valid, samples_per_pixel = _read_class_counts(
@@ -456,7 +532,7 @@ def prepare_shared_layers(
         transform, shape = src.transform, (src.height, src.width)
     pixel_area = np.repeat(pixel_row_area_km2(transform, shape[0])[:, None], shape[1], axis=1)
 
-    # shared sub-pixel shares: lakes, protected areas for every IUCN level used, riparian for every setback used
+    # shared sub-pixel shares: lakes, protected areas for every IUCN level used, river corridors, settlement setbacks
     lakes_gdf = _clipped(lakes_path, "lakes", country_gdf, interim)
     protected_gdf = _clipped(protected_path, "protected", country_gdf, interim)
     rivers_gdf = _clipped(rivers_path, "rivers", country_gdf, interim)
@@ -465,59 +541,46 @@ def prepare_shared_layers(
         _share_key("lakes", lakes_path, country_gdf, transform, shape),
         lambda: {"a": polygon_coverage_fraction(lakes_gdf, transform, shape)},
     )["a"]
-
-    level_sets: dict[tuple[str, ...], None] = {}
-    thresholds: set[float] = set()
-    for t in techs:
-        p = nominal_set(la.technologies[t])
-        level_sets[tuple(sorted(p.iucn_categories))] = None
-        thresholds.update(riparian_thresholds_km(la.technologies[t]))
     protected_fraction: dict[tuple[str, ...], np.ndarray] = {}
-    for cats in level_sets:
+    for cats in needs.levels:
         arrays = _fraction_cache(
             interim / f"protected_fraction_{'_'.join(cats).replace('*', 'any')}.npz",
-            _share_key(
-                "protected", protected_path, country_gdf, transform, shape, categories=list(cats)
-            ),
-            lambda cats=cats: {
-                "a": polygon_coverage_fraction(_iucn_subset(protected_gdf, cats), transform, shape)
-            },
+            _share_key("protected", protected_path, country_gdf, transform, shape, categories=list(cats)),
+            lambda cats=cats: {"a": polygon_coverage_fraction(_iucn_subset(protected_gdf, cats), transform, shape)},
         )
         protected_fraction[cats] = arrays["a"]
-    thr = sorted(thresholds)
-    discharges = riparian_discharges_m3s(la)
-    rip = _fraction_cache(
-        interim / "riparian_fraction.npz",
+    corridor_arrays = _fraction_cache(
+        interim / "river_corridor.npz",
         _share_key(
-            "rivers",
+            "river_corridor",
             rivers_path,
             country_gdf,
             transform,
             shape,
-            thresholds=thr,
-            discharges=[float(q) for q in discharges],
+            corridors=[repr(k) for k in needs.corridors],
+            width_coefficient=float(la.riparian.width_coefficient),
         ),
-        lambda: {
-            f"q{q}_t{t}": a
-            for (q, t), a in river_fractions(rivers_gdf, transform, shape, thr, discharges).items()
-        },
+        lambda: dict(_corridor_shares(rivers_gdf, la, needs.corridors, transform, shape)),
     )
-    riparian_fraction = {(q, t): rip[f"q{q}_t{t}"] for q in discharges for t in thr}
-    riparian_share = riparian_shares(
-        riparian_fraction,
-        {
-            (p.riparian_setback_km, p.riparian_min_discharge_m3s)
-            for t in techs
-            for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
-        },
-    )
-    del riparian_fraction, rip  # the grid of prepared shares (BRA: 12 arrays of 61 MB) is not needed again
+    river_corridor = {key: corridor_arrays[f"c{i}"] for i, key in enumerate(needs.corridors)}
+
+    settlement_class = _read(grid_result.settlements, "settlements", "float32")
+    settlement_valid = np.isfinite(settlement_class)
+    settlement_share: dict[float, np.ndarray] = {}
+    if needs.setbacks_m:
+        settlement_mask = _settlement_mask(settlement_class, la.settlements.min_class)
+        shares = _fraction_cache(
+            interim / "settlement_fraction.npz",
+            _settlement_key(Path(grid_result.settlements), transform, shape, la, needs.setbacks_m),
+            lambda: dict(_settlement_shares(settlement_mask, needs.setbacks_m, transform, shape)),
+        )
+        settlement_share = {t: shares[f"s{t}"] for t in needs.setbacks_m}
+        del settlement_mask
+    del settlement_class
 
     flags = {
-        "dist_grid_capped_share": _read(grid_result.grid_distance_capped, "grid_distance_capped")
-        == 1,
-        "dist_road_capped_share": _read(grid_result.roads_distance_capped, "roads_distance_capped")
-        == 1,
+        "dist_grid_capped_share": _read(grid_result.grid_distance_capped, "grid_distance_capped") == 1,
+        "dist_road_capped_share": _read(grid_result.roads_distance_capped, "roads_distance_capped") == 1,
         "dist_sub_capped_share": _read(grid_result.poi_distance_capped, "poi_distance_capped") == 1,
     }
 
@@ -536,8 +599,9 @@ def prepare_shared_layers(
         samples_per_pixel=samples_per_pixel,
         lakes_fraction=lakes_fraction,
         protected_fraction=protected_fraction,
-        riparian_fraction={},
-        riparian_share=riparian_share,
+        river_corridor=river_corridor,
+        settlement_share=settlement_share,
+        settlement_valid=settlement_valid,
         flags=flags,
     )
 
@@ -561,8 +625,9 @@ def technology_layers(
         samples_per_pixel=shared.samples_per_pixel,
         lakes_fraction=shared.lakes_fraction,
         protected_fraction=shared.protected_fraction,
-        riparian_fraction=shared.riparian_fraction,
-        riparian_share=shared.riparian_share,
+        river_corridor=shared.river_corridor,
+        settlement_share=shared.settlement_share,
+        settlement_valid=shared.settlement_valid,
         required_valid={name: np.isfinite(a) for name, a in resources.items()},
     )
     return layers, resources
@@ -576,21 +641,13 @@ def _require_vector(path: Path | None, name: str) -> None:
         )
 
 
-def _riparian_shares_one_by_one(rivers_gdf, transform, shape, setbacks, discharges):
-    """`(name, share)` of every (minimum discharge, setback), the shares of one discharge at a time: the same arrays as `river_fractions` on all the
-    discharges (each discharge is computed on its own subset of rivers), without the 12 of them being in memory together."""
-    for q in discharges:
-        for (qq, t), array in river_fractions(rivers_gdf, transform, shape, setbacks, [q]).items():
-            yield f"q{qq}_t{t}", array
-
-
 def _prepare_window_rows(width: int) -> int:
     return max(1, 500_000 // max(1, width))
 
 
 def prepare_stripe_inputs(
     la: LandAvailability,
-    techs: list[str],
+    parameter_sets,
     grid_result: GridAlignmentResult,
     country_gdf: gpd.GeoDataFrame,
     protected_path: Path | None,
@@ -608,12 +665,8 @@ def prepare_stripe_inputs(
         LandEligibilityError: an aligned layer is missing.
         MissingRequiredLayerError: a protected-area, lake or river layer is absent.
     """
-    slope_maxima = {
-        p.slope_max_deg
-        for t in techs
-        for p in (*scenario_sets(la.technologies[t]).values(), nominal_set(la.technologies[t]))
-    }
-    slope = prepare_slope_shares(grid_result.slope_counts, slope_maxima, scratch)
+    needs = _share_needs(parameter_sets)
+    slope = prepare_slope_shares(grid_result.slope_counts, needs.slope_maxima, scratch)
 
     grid_rows = RasterRows(grid_result.grid, "grid")
     height, width = grid_rows.shape
@@ -640,14 +693,8 @@ def prepare_stripe_inputs(
     lakes_files = _fraction_files(
         interim / "lakes_fraction.npz", _share_key("lakes", lakes_path, country_gdf, transform, shape), build_lakes
     )
-    level_sets: dict[tuple[str, ...], None] = {}
-    thresholds: set[float] = set()
-    for t in techs:
-        p = nominal_set(la.technologies[t])
-        level_sets[tuple(sorted(p.iucn_categories))] = None
-        thresholds.update(riparian_thresholds_km(la.technologies[t]))
     protected: dict[tuple[str, ...], NpyRows] = {}
-    for cats in level_sets:
+    for cats in needs.levels:
 
         def build_protected(cats=cats):
             subset = _iucn_subset(clipped_when_built(protected_path, "protected"), cats)
@@ -659,21 +706,34 @@ def prepare_stripe_inputs(
             build_protected,
         )
         protected[cats] = NpyRows(files["a"])
-    thr = sorted(thresholds)
-    discharges = riparian_discharges_m3s(la)
-    rip_files = _fraction_files(
-        interim / "riparian_fraction.npz",
+    corridor_files = _fraction_files(
+        interim / "river_corridor.npz",
         _share_key(
-            "rivers",
+            "river_corridor",
             rivers_path,
             country_gdf,
             transform,
             shape,
-            thresholds=thr,
-            discharges=[float(q) for q in discharges],
+            corridors=[repr(k) for k in needs.corridors],
+            width_coefficient=float(la.riparian.width_coefficient),
         ),
-        lambda: _riparian_shares_one_by_one(clipped_when_built(rivers_path, "rivers"), transform, shape, thr, discharges),
+        lambda: _corridor_shares(clipped_when_built(rivers_path, "rivers"), la, needs.corridors, transform, shape),
     )
+    settlement_class = RasterRows(grid_result.settlements, "settlements", "float32")
+    settlement_files: dict[str, Path] = {}
+    if needs.setbacks_m:
+
+        def build_settlements():
+            mask = np.zeros(shape, dtype=bool)
+            for r0 in range(0, height, step):
+                mask[r0 : r0 + step] = _settlement_mask(settlement_class[r0 : r0 + step], la.settlements.min_class)
+            return _settlement_shares(mask, needs.setbacks_m, transform, shape)
+
+        settlement_files = _fraction_files(
+            interim / "settlement_fraction.npz",
+            _settlement_key(Path(grid_result.settlements), transform, shape, la, needs.setbacks_m),
+            build_settlements,
+        )
     return StripeInputs(
         transform=transform,
         shape=shape,
@@ -684,7 +744,9 @@ def prepare_stripe_inputs(
         slope=slope,
         lakes=NpyRows(lakes_files["a"]),
         protected=protected,
-        riparian={(q, t): NpyRows(rip_files[f"q{q}_t{t}"]) for q in discharges for t in thr},
+        corridor={key: NpyRows(corridor_files[f"c{i}"]) for i, key in enumerate(needs.corridors)},
+        settlement={t: NpyRows(settlement_files[f"s{t}"]) for t in needs.setbacks_m},
+        settlement_class=settlement_class,
         flags={
             "dist_grid_capped_share": FlagRows(grid_result.grid_distance_capped, "grid_distance_capped"),
             "dist_road_capped_share": FlagRows(grid_result.roads_distance_capped, "roads_distance_capped"),
@@ -728,8 +790,12 @@ def build_eligibility(
     technologies: list[str] | None = None,
     zone_source: ZoneSource | None = None,
     stripe_pixels: int | None = None,
+    project_area_km2: Mapping[str, Mapping[str, float]] | None = None,
 ) -> EligibilitySummary:
-    """Eligibility, cells and candidate tables for every configured technology (nominal parameter set).
+    """Eligibility, cells and candidate tables for every configured technology, under the three land scenarios.
+
+    `project_area_km2` maps technology -> scenario -> the area of the reference project `P_ref / PD` (km2), from `parameters.json` (Group 3 and
+    Group 1): the minimum cluster of the scenario that takes the project area (`land_availability`) needs it.
 
     The pixel engine works by stripes of whole cell rows (COMMAND 91, `windows.py`): every input is read by a window, the exclusions and the
     cell sums of a window are computed, and the eligible fraction is written as it goes. `stripe_pixels` (else `GEOFREA_F3_STRIPE_PIXELS`, else
@@ -737,6 +803,9 @@ def build_eligibility(
     """
     la: LandAvailability = load_land_availability(experiments_yaml)
     techs = technologies or sorted(la.technologies)
+    sets_by_tech = {
+        tech: scenario_sets(la, tech, iso, (project_area_km2 or {}).get(tech)) for tech in techs
+    }
     out = artifacts_dir(iso)
     interim = core_paths.interim(iso, "land_eligibility")
     interim.mkdir(parents=True, exist_ok=True)
@@ -750,13 +819,34 @@ def build_eligibility(
     shutil.rmtree(scratch, ignore_errors=True)
     try:
         inputs = prepare_stripe_inputs(
-            la, techs, grid_result, country_gdf, protected_path, lakes_path, rivers_path, interim, scratch
+            la,
+            [p for sets in sets_by_tech.values() for p in sets.values()],
+            grid_result,
+            country_gdf,
+            protected_path,
+            lakes_path,
+            rivers_path,
+            interim,
+            scratch,
         )
         elevation = RasterRows(
             grid_result.elevation, "elevation", "float32"
         )  # the aligned DEM: the altitude of a cell is its eligible-area-weighted mean (OQ-058)
         return _build_tables(
-            iso, la, techs, out, units, inputs, elevation, siting_result, Path(grid_result.grid), zone_source, stripe_px
+            iso,
+            la,
+            techs,
+            sets_by_tech,
+            project_area_km2,
+            out,
+            units,
+            inputs,
+            elevation,
+            siting_result,
+            Path(grid_result.grid),
+            zone_source,
+            stripe_px,
+            scratch,
         )
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
@@ -766,6 +856,8 @@ def _build_tables(
     iso: str,
     la: LandAvailability,
     techs: list[str],
+    sets_by_tech: dict[str, dict[str, ParameterSet]],
+    project_area_km2: Mapping[str, Mapping[str, float]] | None,
     out: Path,
     units,
     inputs: StripeInputs,
@@ -774,6 +866,7 @@ def _build_tables(
     grid_ref: Path,
     zone_source: ZoneSource | None,
     stripe_px: int,
+    scratch: Path,
 ) -> EligibilitySummary:
     transform, country_mask = inputs.transform, inputs.country_mask
     admin1_by_cell: dict[int, str] = {}
@@ -781,8 +874,8 @@ def _build_tables(
 
     summaries: dict[str, TechSummary] = {}
     for tech in techs:
-        sets = scenario_sets(la.technologies[tech])
-        composition = scenario_composition(la.technologies[tech])
+        sets = sets_by_tech[tech]
+        composition = scenario_composition(la, tech, iso, (project_area_km2 or {}).get(tech))
         params: ParameterSet = sets["central"]
         resources = {
             name: RasterRows(path, name, "float32")
@@ -794,9 +887,14 @@ def _build_tables(
         n_valid = 0
         for scenario, sparams in sets.items():
             eligible_path = out / eligible_fraction_file(tech, scenario)
+            override, min_area_stats = _eligible_after_minimum_area(
+                inputs, resources, sparams, scratch, f"{tech}_{scenario}", stripe_px
+            )
             raster = _EligibleRaster(eligible_path, grid_ref)
             try:
-                stripes = ScenarioStripes(inputs, resources, elevation, sparams, on_eligible=raster.write)
+                stripes = ScenarioStripes(
+                    inputs, resources, elevation, sparams, on_eligible=raster.write, eligible_override=override
+                )
                 cells = aggregate_to_cells(
                     transform,
                     country_mask,
@@ -859,6 +957,7 @@ def _build_tables(
                 },
                 varied=composition.varied,
                 held_central=composition.held,
+                min_area=None if min_area_stats is None else dataclasses.asdict(min_area_stats),
                 n_candidates=len(candidates),
                 eligible_area_km2=float(cells["eligible_area_km2"].sum()),
                 cells=cells_path,
@@ -878,9 +977,7 @@ def _build_tables(
         check_scenario_order(tech, cells_by_scenario)
         stability_path = Path(str(out / f"candidate_stability_{tech}") + ".parquet")
         write_table(
-            candidate_stability(
-                cells_by_scenario, params.min_eligible_area_km2, params.elevation_max_m
-            ),
+            candidate_stability(cells_by_scenario, {s: p.elevation_max_m for s, p in sets.items()}),
             stability_path,
             schema_version=LAND_ELIGIBILITY_TABLE_SCHEMA_VERSION,
             row_model=CandidateStabilityRow,
@@ -906,7 +1003,7 @@ def _build_tables(
             if limit_m is None
             else int(
                 (
-                    (central["cells"]["eligible_area_km2"] >= params.min_eligible_area_km2)
+                    (central["cells"]["eligible_area_km2"] > 0)
                     & (central["cells"][ELEVATION_COLUMN] > limit_m)
                 ).sum()
             )
@@ -994,18 +1091,43 @@ def _build_tables(
 
 def _exclusion_reasons(cells: pd.DataFrame, params: ParameterSet) -> pd.Series:
     return candidate_exclusion_reasons(
-        cells["eligible_area_km2"],
-        cells[ELEVATION_COLUMN],
-        params.min_eligible_area_km2,
-        params.elevation_max_m,
+        cells["eligible_area_km2"], cells[ELEVATION_COLUMN], params.elevation_max_m
     )
 
 
 def _is_candidate(cells: pd.DataFrame, params: ParameterSet) -> pd.Series:
-    """M-F3-04: eligible area at least the minimum, an elevation (OQ-060) and, when the technology has an altitude limit, not above it (OQ-058)."""
-    return (cells["eligible_area_km2"] >= params.min_eligible_area_km2) & _exclusion_reasons(
-        cells, params
-    ).isna()
+    """M-F3-04: any eligible area, an elevation (OQ-060) and, when the technology has an altitude limit in the scenario, not above it (OQ-058)."""
+    return (cells["eligible_area_km2"] > 0) & _exclusion_reasons(cells, params).isna()
+
+
+def _eligible_after_minimum_area(
+    inputs: StripeInputs,
+    resources,
+    params: ParameterSet,
+    scratch: Path,
+    name: str,
+    stripe_px: int,
+):
+    """The eligible fraction of the whole grid after the minimum-area rules of `params` (Group 6), as a row source, with what the rules removed.
+
+    A scenario with no rule needs no first pass (None, None): the stripes of the cell sums compute its eligible fraction themselves. With a rule, the
+    first pass writes the fraction by windows to a file, the clusters are labelled on the whole grid (`min_area.py`) and the stripes of the cell sums read
+    the result. Only one scenario's files exist at a time.
+    """
+    if params.min_pixel_fraction is None and params.min_cluster_km2 is None:
+        return None, None
+    width = inputs.shape[1]
+    scratch.mkdir(parents=True, exist_ok=True)
+    raw_path = scratch / f"eligible_raw_{name}.npy"
+    first_pass = ScenarioStripes(inputs, resources, None, params)
+    writer = NpyWriter(raw_path, inputs.shape, np.float32)
+    first_pass.pass_eligible(writer.write, max(1, stripe_px // max(1, width)))
+    writer.close()
+    del first_pass
+    final, stats = write_minimum_area(NpyRows(raw_path), inputs.area_row, params, scratch / f"eligible_final_{name}.npy")
+    if final.path != raw_path:
+        raw_path.unlink(missing_ok=True)
+    return final, stats
 
 
 def _admin1_units(cells: pd.DataFrame, units: pd.DataFrame) -> pd.DataFrame:

@@ -29,8 +29,8 @@ from geofrea.land_eligibility.eligibility import (
     EXCLUSION_NAMES,
     EligibilityLayers,
     _steep_share,
+    corridor_key,
     eligible_fraction,
-    riparian_shares,
     valid_pixels,
 )
 from geofrea.land_eligibility.errors import LandEligibilityError
@@ -215,7 +215,9 @@ class StripeInputs:
     slope: SlopeShares
     lakes: NpyRows
     protected: dict[tuple[str, ...], NpyRows]
-    riparian: dict[tuple[float, float], NpyRows]  # the prepared shares by (minimum discharge, setback)
+    corridor: dict[tuple, NpyRows]  # the river-corridor shares by eligibility.corridor_key of the scenarios
+    settlement: dict[float, NpyRows]  # the settlement-setback shares by setback in metres
+    settlement_class: RasterRows | None  # the aligned GHS-SMOD class of each pixel (NaN where missing); None when only the density sensitivity runs
     flags: dict[str, FlagRows]
 
 
@@ -230,7 +232,7 @@ class RowsView:
 
 
 class _Window:
-    __slots__ = ("elevation", "eligible", "excl", "r0", "r1", "resources")
+    __slots__ = ("_valid", "area", "elevation", "eligible", "excl", "mask", "r0", "r1", "resources")
 
 
 class ScenarioStripes:
@@ -239,18 +241,24 @@ class ScenarioStripes:
     The window last asked for is kept, so that the eligible share, the six exclusions and the resources of a stripe are computed once. Beside the
     cells the stripes give: `pixel_total` (the sum of eligible area over the pixels, V-03), `n_valid` (the valid pixels, for the invalid share) and,
     through `on_eligible(first_row, eligible)`, the eligible fraction of each window for the raster that is written as it goes.
+
+    `eligible_override` (Group 6, COMMAND 97) replaces the eligible fraction of a window by the one after the minimum-area rules, which need the
+    eligible fraction of the whole grid (`min_area.py`): the first pass computes the fraction without the rules (`pass_eligible`), the second reads the
+    result and sums the cells. The six excluded shares are those of the exclusions in both.
     """
 
     def __init__(
         self,
         inputs: StripeInputs,
         resources: Mapping[str, RasterRows],
-        elevation: RasterRows,
+        elevation: RasterRows | None,
         params: ParameterSet,
         on_eligible: Callable[[int, np.ndarray], None] | None = None,
+        eligible_override: NpyRows | None = None,
     ) -> None:
         self.inputs, self.resources, self.elevation, self.params = inputs, resources, elevation, params
         self._on_eligible = on_eligible
+        self._override = eligible_override
         self._window: _Window | None = None
         self.pixel_total = 0.0
         self.n_valid = 0
@@ -264,23 +272,35 @@ class ScenarioStripes:
     def elevation_view(self) -> RowsView:
         return RowsView(lambda rows: self._get(rows).elevation)
 
-    def _get(self, rows: slice) -> _Window:
-        r0, r1 = _bounds(rows, self.inputs.shape[0])
-        w = self._window
-        if w is not None and (w.r0, w.r1) == (r0, r1):
-            return w
-        self._window = None  # the previous window goes before the next one is built
+    def pass_eligible(self, write_rows: Callable[[np.ndarray], None], window_rows: int) -> None:
+        """The eligible fraction of the whole grid in order, window by window, handed to `write_rows` (the first pass of the minimum-area rules).
+
+        The six exclusions and the validity of the resource layers are read, not the elevation. The counters of the stripes (`pixel_total`, `n_valid`) are not advanced.
+        """
+        height = self.inputs.shape[0]
+        for r0 in range(0, height, max(1, int(window_rows))):
+            r1 = min(r0 + max(1, int(window_rows)), height)
+            write_rows(self._compute(r0, r1, with_elevation=False).eligible)
+        self._window = None
+
+    def _compute(self, r0: int, r1: int, with_elevation: bool) -> _Window:
         w = _Window()
         w.r0, w.r1 = r0, r1
         inp, params = self.inputs, self.params
         width = inp.shape[1]
         w.resources = {name: src[r0:r1] for name, src in self.resources.items()}
-        w.elevation = self.elevation[r0:r1]
+        w.elevation = self.elevation[r0:r1] if (with_elevation and self.elevation is not None) else None
         counts, lc_valid = inp.land_cover[r0:r1]
         key = tuple(sorted(params.iucn_categories))
-        pair = (float(params.riparian_setback_km), float(params.riparian_min_discharge_m3s))
         mask = inp.country_mask[r0:r1]
         area = np.repeat(inp.area_row[r0:r1, None], width, axis=1)
+        density_rule = params.pop_density_max_per_km2 is not None
+        settlement = {} if density_rule else {float(params.settlement_setback_m): inp.settlement[float(params.settlement_setback_m)][r0:r1]}
+        settlement_valid = None
+        if not density_rule:
+            if inp.settlement_class is None:
+                raise LandEligibilityError("the settlement layer is required unless the density sensitivity runs")
+            settlement_valid = np.isfinite(inp.settlement_class[r0:r1])
         layers = EligibilityLayers(
             country_mask=mask,
             pixel_area_km2=area,
@@ -293,17 +313,30 @@ class ScenarioStripes:
             samples_per_pixel=inp.land_cover.samples_per_pixel,
             lakes_fraction=inp.lakes[r0:r1],
             protected_fraction={key: inp.protected[key][r0:r1]},
-            riparian_fraction={},
-            riparian_share=riparian_shares({k: v[r0:r1] for k, v in inp.riparian.items()}, {pair}),
+            river_corridor={corridor_key(params): inp.corridor[corridor_key(params)][r0:r1]},
+            settlement_share=settlement,
+            settlement_valid=settlement_valid,
             slope_steep_share={float(params.slope_max_deg): inp.slope.steep[float(params.slope_max_deg)][r0:r1]},
             required_valid={name: np.isfinite(a) for name, a in w.resources.items()},
         )
         w.eligible, w.excl = eligible_fraction(layers, params)
-        self.pixel_total += float((w.eligible * area * mask).sum())
-        self.n_valid += int(np.count_nonzero(valid_pixels(layers)))
+        w._valid = valid_pixels(layers)
+        w.area, w.mask = area, mask
+        return w
+
+    def _get(self, rows: slice) -> _Window:
+        r0, r1 = _bounds(rows, self.inputs.shape[0])
+        w = self._window
+        if w is not None and (w.r0, w.r1) == (r0, r1):
+            return w
+        self._window = None  # the previous window goes before the next one is built
+        w = self._compute(r0, r1, with_elevation=True)
+        if self._override is not None:
+            w.eligible = self._override[r0:r1]
+        self.pixel_total += float((w.eligible * w.area * w.mask).sum())
+        self.n_valid += int(np.count_nonzero(w._valid))
         if self._on_eligible is not None:
             self._on_eligible(r0, w.eligible)
         self.rows_done += r1 - r0
         self._window = w
         return w
-

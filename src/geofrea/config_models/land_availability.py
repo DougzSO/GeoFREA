@@ -1,10 +1,9 @@
-"""Land-availability parameters for E1-E6 and the candidate filter, as ranges (M-F2b-01, M-F3-04; Douglas, 2026-10-07).
+"""Land-eligibility parameters of Stage F3 (Group 6, COMMAND 97; M-F2b-01, M-F3-02, M-F3-04).
 
-Every continuous parameter is declared as `nominal` plus an optional `low`-`high` range with its source; a parameter whose range
-is not sourced yet has `low` and `high` null and is held at `nominal` (declared, never filled in). Categorical parameters
-(excluded land-cover classes, IUCN categories) are declared as named `levels` with one `nominal` level. `nominal_set()` resolves
-the central values that feed F4-F7; `ParameterSet` is one concrete choice, so a sampler can later draw many of them and the
-eligibility engine stays a pure function of one set.
+Every scenario-dependent parameter is declared with its three values (`restrictive`, `central`, `permissive`), its unit, source, tier and status, as in
+`docs/thesis/methods/group6_land_eligibility.tex`. A value that is null means "no such limit" in that scenario. A parameter that the specification marks
+`% verify` has `status: verify`. Categorical parameters (excluded land-cover classes, IUCN categories) are named `levels` with one nominal level.
+`ParameterSet` is one concrete choice for one technology and one country; the eligibility engine is a pure function of it.
 
 The values live in `config/experiments.yaml` under `land_availability`; nothing here carries a number.
 """
@@ -19,63 +18,111 @@ import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
 ELEVATION_COLUMN = "elevation_m"  # eligible-area-weighted mean of the aligned DEM, a column of the F3 cell tables (OQ-058)
+SCENARIOS = ("restrictive", "central", "permissive")
+PROJECT_AREA = "project_area"  # a minimum cluster of P_ref / PD: the area of the reference project (Group 3 and Group 1 parameters)
 
 
 class LandAvailabilityError(ValueError):
-    """The land-availability configuration is missing, incomplete or inconsistent (A-09: fail loud)."""
+    """The land-eligibility configuration is missing, incomplete or inconsistent (A-09: fail loud)."""
 
 
-class Ranged(BaseModel):
-    """A continuous parameter: central value, optional sourced range, provenance."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    nominal: float
-    low: float | None = None
-    high: float | None = None
-    unit: str
-    source: str
-    status: str  # "sourced" | "unverified" | "range_pending"
-    note: str | None = None
-
-    @model_validator(mode="after")
-    def _check(self) -> Ranged:
-        if (self.low is None) != (self.high is None):
-            raise ValueError("low and high must be given together or both left null")
-        if self.low is not None and not (self.low <= self.nominal <= self.high):
-            raise ValueError(f"nominal {self.nominal} lies outside [{self.low}, {self.high}]")
-        return self
-
-    @property
-    def has_range(self) -> bool:
-        return self.low is not None
-
-
-class ElevationCap(BaseModel):
-    """The altitude limit of a technology (OQ-058): `nominal` null means no limit in the central case.
-
-    `sensitivity` is the value F5 to F8 use for the reported sensitivity without the cells above it. It never enters a land scenario.
-    """
+class ScenarioValue(BaseModel):
+    """A parameter with one value per land scenario; null is "no limit"."""
 
     model_config = ConfigDict(extra="forbid")
 
-    nominal: float | None = None
-    sensitivity: float | None = None
+    restrictive: float | Literal["project_area"] | None
+    central: float | Literal["project_area"] | None
+    permissive: float | Literal["project_area"] | None
     unit: str
     source: str | None = None
-    tier: int | None = None
-    status: str
+    tier: Literal[1, 2, 3] | None = None
+    status: str  # "sourced" | "verify" | "author_judgment"
     note: str | None = None
+    sensitivity: float | None = None  # a value reported beside the scenarios, never a scenario (OQ-058)
 
     @model_validator(mode="after")
-    def _unsourced_values_are_declared(self) -> ElevationCap:
-        if (
-            (self.sensitivity is not None or self.nominal is not None)
-            and self.source is None
-            and self.status == "sourced"
-        ):
+    def _unsourced_values_are_declared(self) -> ScenarioValue:
+        has_value = any(v is not None for v in (self.restrictive, self.central, self.permissive))
+        if has_value and self.source is None and self.tier != 3:
+            raise ValueError("a value without a source must be declared Tier 3")
+        if self.status == "sourced" and self.source is None:
             raise ValueError("a value without a source cannot have status sourced")
         return self
+
+    def value(self, scenario: str) -> float | str | None:
+        return getattr(self, scenario)
+
+
+class WidthBuffer(BaseModel):
+    """One step of a riparian buffer rule: reaches narrower than `below_width_m` (null: every wider reach) get `buffer_m` beyond the channel edge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    below_width_m: float | None
+    buffer_m: float
+
+
+class CountryRiparian(BaseModel):
+    """The riparian buffer B_c of one country in each scenario, as steps over the estimated channel width W (m)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    restrictive: list[WidthBuffer]
+    central: list[WidthBuffer]
+    permissive: list[WidthBuffer]
+    source: str | None = None
+    tier: Literal[1, 2, 3] | None = None
+    status: str
+    note: str | None = None
+    synthetic: bool = False
+
+    @model_validator(mode="after")
+    def _steps_are_ordered(self) -> CountryRiparian:
+        for scenario in SCENARIOS:
+            steps = getattr(self, scenario)
+            if not steps or steps[-1].below_width_m is not None:
+                raise ValueError(f"{scenario}: the last step must have below_width_m null (every wider reach)")
+            widths = [s.below_width_m for s in steps[:-1]]
+            if any(w is None for w in widths) or widths != sorted(widths):
+                raise ValueError(f"{scenario}: below_width_m must increase and only the last step may be null")
+        return self
+
+class Riparian(BaseModel):
+    """Rivers (E3): channel width from the long-term mean discharge and the buffer of each country (Group 6, `eq:g6_width`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    width_coefficient: float  # a of W = a Q^b
+    width_exponent: ScenarioValue  # b per scenario
+    discharge_column: str = "DIS_AV_CMS"
+    countries: dict[str, CountryRiparian]
+    source: str
+    note: str | None = None
+
+
+class Settlements(BaseModel):
+    """The settlement mask (E6): GHS-SMOD classes at or above `min_class` (rural cluster and denser), at 1 km."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_class: int
+    source: str
+    note: str | None = None
+
+
+class Sensitivity(BaseModel):
+    """A named sensitivity that is defined and kept, but not run (`run: false`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pop_density_max_per_km2: float
+    run: bool = False
+    unit: str
+    source: str | None = None
+    tier: Literal[1, 2, 3] | None = None
+    status: str
+    note: str | None = None
 
 
 class Levels(BaseModel):
@@ -96,15 +143,22 @@ class Levels(BaseModel):
         return self
 
 
+class MinArea(BaseModel):
+    """The minimum eligible area of a technology: of a cluster of 8-connected pixels and of one pixel (`subsec:g6_minarea`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cluster_km2: ScenarioValue
+    pixel_fraction: ScenarioValue
+
+
 class TechParameters(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    slope_max_deg: Ranged
-    pop_density_max_per_km2: Ranged
-    riparian_setback_km: Ranged
-    riparian_min_discharge_m3s: Ranged
-    min_eligible_area_km2: Ranged
-    elevation_max_m: ElevationCap | None = None
+    slope_max_pct: ScenarioValue
+    settlement_setback_m: ScenarioValue
+    min_area: MinArea
+    elevation_max_m: ScenarioValue | None = None
     excluded_classes: Levels
     iucn_categories: Levels
 
@@ -114,34 +168,38 @@ class LandAvailability(BaseModel):
 
     # a cell with no elevation is not a candidate (OQ-060); the only rule, written in the configuration so that it is explicit and fingerprinted
     missing_elevation: Literal["ineligible"] = "ineligible"
-    # discharge thresholds (m3/s) at which the riparian shares are computed; a draw between them is interpolated
-    riparian_discharge_grid_m3s: list[float]
+    water_classes: list[int]  # land-cover classes whose share the river corridor is merged with (union, not sum; C1 of docs/_audit/group6_audit_97.md)
+    riparian: Riparian
+    settlements: Settlements
+    sensitivities: dict[str, Sensitivity] = {}
     technologies: dict[str, TechParameters]
-
-    @model_validator(mode="after")
-    def _grid_covers_ranges(self) -> LandAvailability:
-        grid = sorted(self.riparian_discharge_grid_m3s)
-        for tech, p in self.technologies.items():
-            q = p.riparian_min_discharge_m3s
-            lo, hi = (q.low, q.high) if q.has_range else (q.nominal, q.nominal)
-            if lo < grid[0] or hi > grid[-1]:
-                raise ValueError(f"{tech}: discharge range [{lo}, {hi}] is outside the grid {grid}")
-        return self
 
 
 @dataclass(frozen=True)
 class ParameterSet:
-    """One concrete choice of every land-availability parameter for one technology."""
+    """One concrete choice of every land-eligibility parameter for one technology in one country and one scenario."""
 
-    slope_max_deg: float
-    pop_density_max_per_km2: float
-    riparian_setback_km: float
-    min_eligible_area_km2: float
+    slope_max_pct: float
+    settlement_setback_m: float
+    river_width_coefficient: float
+    river_width_exponent: float
+    river_buffer_steps: tuple[tuple[float | None, float], ...]  # (below_width_m or None, buffer_m)
     excluded_classes: tuple[int, ...]
     iucn_categories: tuple[str, ...]
-    riparian_min_discharge_m3s: float = 0.0
+    river_width_exponent_range: tuple[float, float] | None = None  # (b_low, b_high) of the scenarios: the width is taken at the extreme of the range
+    water_classes: tuple[int, ...] = ()
+    min_cluster_km2: float | None = None  # a cluster of eligible pixels below this eligible area is dropped; None: no minimum
+    min_pixel_fraction: float | None = None  # a pixel with a smaller eligible fraction is dropped; None: no minimum
     elevation_max_m: float | None = None
-    label: str = "nominal"
+    pop_density_max_per_km2: float | None = None  # only the named sensitivity `population_density_200` sets it; no scenario does
+    label: str = "central"
+
+    @property
+    def slope_max_deg(self) -> float:
+        """The slope maximum in degrees: a percent slope is a tangent, `atan(p / 100)`."""
+        import math
+
+        return math.degrees(math.atan(self.slope_max_pct / 100.0))
 
 
 def load_land_availability(experiments_yaml: Path) -> LandAvailability:
@@ -153,59 +211,24 @@ def load_land_availability(experiments_yaml: Path) -> LandAvailability:
     try:
         return LandAvailability.model_validate(block)
     except ValueError as exc:
-        raise LandAvailabilityError(
-            f"{experiments_yaml}: invalid `land_availability`: {exc}"
-        ) from exc
-
-
-def nominal_set(params: TechParameters) -> ParameterSet:
-    """The central parameter set (feeds F4-F7)."""
-    return ParameterSet(
-        slope_max_deg=params.slope_max_deg.nominal,
-        pop_density_max_per_km2=params.pop_density_max_per_km2.nominal,
-        riparian_setback_km=params.riparian_setback_km.nominal,
-        riparian_min_discharge_m3s=params.riparian_min_discharge_m3s.nominal,
-        min_eligible_area_km2=params.min_eligible_area_km2.nominal,
-        elevation_max_m=params.elevation_max_m.nominal if params.elevation_max_m else None,
-        excluded_classes=tuple(
-            int(c) for c in params.excluded_classes.levels[params.excluded_classes.nominal]
-        ),
-        iucn_categories=tuple(
-            str(c).lower() for c in params.iucn_categories.levels[params.iucn_categories.nominal]
-        ),
-        label="nominal",
-    )
-
-
-def riparian_thresholds_km(params: TechParameters) -> list[float]:
-    """Setbacks the riparian fraction must be computed for: the nominal value and both ends of its range."""
-    r = params.riparian_setback_km
-    values = {r.nominal} | ({r.low, r.high} if r.has_range else set())
-    return sorted(values)
-
-
-def riparian_discharges_m3s(la: LandAvailability) -> list[float]:
-    """Discharge thresholds the riparian fraction must be computed for: the configured grid plus every nominal and range end."""
-    values = set(la.riparian_discharge_grid_m3s)
-    for p in la.technologies.values():
-        q = p.riparian_min_discharge_m3s
-        values |= {q.nominal} | ({q.low, q.high} if q.has_range else set())
-    return sorted(values)
+        raise LandAvailabilityError(f"{experiments_yaml}: invalid `land_availability`: {exc}") from exc
 
 
 def default_experiments_yaml() -> Path:
-    """`config/experiments.yaml` of this repository (for consumers outside F3 that need the land-availability ranges)."""
+    """`config/experiments.yaml` of this repository (for consumers outside F3 that need the land-eligibility parameters)."""
     return Path(__file__).resolve().parents[3] / "config" / "experiments.yaml"
 
 
 def strictest_slope_max_deg(la: LandAvailability, technology: str) -> float:
-    """The lowest slope maximum the technology's range allows (its `low` end, or the nominal value if it has no range).
+    """The lowest slope maximum (degrees) any scenario of the technology uses.
 
-    Used by the audit to ask whether the slope exclusion could bite at all: if even the strictest maximum is above every
-    observed slope, the exclusion is inactive for any parameter choice.
+    Used by the audit to ask whether the slope exclusion could bite at all: if even the strictest maximum is above every observed slope,
+    the exclusion is inactive for any scenario.
     """
-    q = la.technologies[technology].slope_max_deg
-    return q.low if q.has_range else q.nominal
+    import math
+
+    q = la.technologies[technology].slope_max_pct
+    return math.degrees(math.atan(min(float(v) for v in (q.restrictive, q.central, q.permissive) if v is not None) / 100.0))
 
 
 def elevation_sensitivity_m(la: LandAvailability, technology: str) -> float | None:

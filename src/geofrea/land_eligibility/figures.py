@@ -44,18 +44,18 @@ FIGURE_PHASE = "F3"
 EXCLUSION_TITLES = {
     "E1": "E1 protected areas",
     "E2": "E2 water bodies",
-    "E3": "E3 riparian setback",
+    "E3": "E3 river corridor",
     "E4": "E4 steep slope",
     "E5": "E5 land cover",
-    "E6": "E6 population",
+    "E6": "E6 settlements",
 }
 EXCLUSION_SLUGS = {
     "E1": "E1-protected",
     "E2": "E2-water",
-    "E3": "E3-riparian",
+    "E3": "E3-river-corridor",
     "E4": "E4-slope",
     "E5": "E5-land-cover",
-    "E6": "E6-population",
+    "E6": "E6-settlements",
 }
 NONE_LABEL = "None"
 DOMINANT_RULE = (

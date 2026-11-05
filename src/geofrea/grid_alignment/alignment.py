@@ -413,6 +413,11 @@ def run_grid_alignment_phase(
             "population", "population", "build_population", _exists(inputs.population_path), files=[inputs.population_path]
         )
 
+    with timer("settlements", timings):
+        aligned["settlements"] = _execute_or_load(
+            "settlements", "settlements", "build_settlements", _exists(inputs.settlements_path), files=[inputs.settlements_path]
+        )
+
     with timer("grid_distance", timings):
         aligned["grid"] = _execute_or_load(
             "grid",

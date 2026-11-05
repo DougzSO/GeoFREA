@@ -58,7 +58,7 @@ def test_the_dominant_exclusion_is_the_largest_area_the_lower_number_wins_a_tie_
     cells.loc[2, "excluded_area_km2_E1"] = 0.5
     # the cell 3 has no excluded area: None
     assert F.dominant_codes(cells).tolist() == [3, 2, 6, 0]
-    assert F.CLASS_LABELS[0] == "None" and F.CLASS_LABELS[3] == "E3 riparian setback"
+    assert F.CLASS_LABELS[0] == "None" and F.CLASS_LABELS[3] == "E3 river corridor"
     assert len(F.class_colours()) == len(F.CLASS_LABELS) == 7
 
 

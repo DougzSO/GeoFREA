@@ -1,0 +1,193 @@
+{
+ "iso": "ZZZ",
+ "reference": "pre-group6 tree 2bb1161",
+ "technologies": {
+  "solar": {
+   "central": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 410.90785089351175,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 33.11622969840026,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": null,
+     "excluded_classes": [
+      10,
+      40,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "central",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 0.5,
+     "slope_max_deg": 10.0
+    }
+   },
+   "permissive": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 425.1355785367866,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 18.397893904857714,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": null,
+     "excluded_classes": [
+      10,
+      40,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "permissive",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 0.25,
+     "slope_max_deg": 10.0
+    }
+   },
+   "restrictive": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 375.3385296652277,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 69.91206890808829,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": null,
+     "excluded_classes": [
+      10,
+      40,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "restrictive",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 1.0,
+     "slope_max_deg": 10.0
+    }
+   }
+  },
+  "wind": {
+   "central": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 410.90785089351175,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 33.11622969840026,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": 3000.0,
+     "excluded_classes": [
+      10,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "central",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 0.5,
+     "slope_max_deg": 16.7
+    }
+   },
+   "permissive": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 425.1355785367866,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 18.397893904857714,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": 3000.0,
+     "excluded_classes": [
+      10,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "permissive",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 0.25,
+     "slope_max_deg": 30.0
+    }
+   },
+   "restrictive": {
+    "cell_area_km2": 735.9164458588001,
+    "eligible_area_km2": 375.3385296652277,
+    "excluded_E1_km2": 30.666523444922966,
+    "excluded_E2_km2": 4.906040510487111,
+    "excluded_E3_km2": 69.91206890808829,
+    "excluded_E4_km2": 0.0,
+    "excluded_E5_km2": 183.95894579503647,
+    "excluded_E6_km2": 257.5463214861009,
+    "parameter_set": {
+     "elevation_max_m": 3000.0,
+     "excluded_classes": [
+      10,
+      50,
+      70,
+      80,
+      90,
+      95
+     ],
+     "iucn_categories": [
+      "*"
+     ],
+     "label": "restrictive",
+     "min_eligible_area_km2": 0.1,
+     "pop_density_max_per_km2": 200.0,
+     "riparian_min_discharge_m3s": 0.0,
+     "riparian_setback_km": 1.0,
+     "slope_max_deg": 10.2
+    }
+   }
+  }
+ }
+}

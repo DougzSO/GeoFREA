@@ -112,7 +112,7 @@ def test_main_specs_carry_the_fingerprint_only_with_a_country():
 @pytest.mark.unit
 def test_a_key_read_by_f3_changes_f3_and_the_phases_downstream_that_read_it(config_copy):
     before = _fingerprints(config_copy)
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     changed = _changed(before, _fingerprints(config_copy))
     assert set(CHAIN) <= changed  # F3, F5, F6, F7, F7b and F8 all read land_availability
     assert (
@@ -199,7 +199,7 @@ def _chain_specs(config_dir: Path, outputs: Path, calls: list[str]) -> list[Phas
             value = (
                 load_land_availability(config_dir / "experiments.yaml")
                 .technologies["wind"]
-                .elevation_max_m.nominal
+                .elevation_max_m.central
             )
             path = outputs / f"{name}.txt"
             path.write_text(f"{name}-{value}", encoding="utf-8")
@@ -254,7 +254,7 @@ def test_changing_a_key_f3_reads_reruns_f3_to_f8_and_an_unrelated_key_reruns_non
     ]  # F3 resumed; F7 ran again and, its content unchanged, its consumer stays valid
 
     calls.clear()
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     results = _orchestrator(outputs, "run-4").run(_chain_specs(config_copy, outputs, calls))
     assert (
         calls == CHAIN
@@ -271,7 +271,7 @@ def test_a_changed_fingerprint_is_recorded_and_the_next_run_resumes(tmp_path, co
     outputs.mkdir()
     calls: list[str] = []
     _orchestrator(outputs, "run-1").run(_chain_specs(config_copy, outputs, calls))
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     orch = _orchestrator(outputs, "run-2")
     orch.run(_chain_specs(config_copy, outputs, calls))
     assert (
@@ -294,7 +294,7 @@ def test_an_upstream_rerun_with_changed_content_stales_a_consumer_whose_own_conf
     specs = _chain_specs(config_copy, outputs, calls)
     # the consumers keep their recorded fingerprint, only F3 sees a new configuration: the consumers are invalidated by the new content
     specs[0] = PhaseSpec(**{**specs[0].__dict__, "config_fingerprint": "f" * 64})
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     orch = _orchestrator(outputs, "run-2", target="land_eligibility")
     orch.run(specs)
     assert orch.manifest.phases["technical_potential"].status == "stale_upstream"
@@ -320,7 +320,7 @@ def test_an_entry_without_a_fingerprint_is_resumed_once_and_adopts_the_current_o
     assert all(
         orch.manifest.phases[n].config_fingerprint == _fingerprints(config_copy)[n] for n in CHAIN
     )
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     _orchestrator(outputs, "run-3").run(_chain_specs(config_copy, outputs, calls))
     assert calls == CHAIN
 
@@ -339,7 +339,7 @@ def test_a_phase_without_a_fingerprint_is_never_checked(tmp_path, config_copy):
 
     _orchestrator(outputs, "run-1").run(bare())
     calls.clear()
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     _orchestrator(outputs, "run-2").run(bare())
     assert calls == []
 
@@ -360,7 +360,7 @@ def test_revalidate_refuses_a_phase_whose_configuration_changed(tmp_path, config
             "invalidated_in_run": "run-1",
         }
     )
-    _edit(config_copy, "experiments.yaml", "nominal: 3000.0", "nominal: 2500.0")
+    _edit(config_copy, "experiments.yaml", "central: 3000.0", "central: 2500.0")
     changed = _chain_specs(config_copy, outputs, calls)
     orch.revalidate_phases = ["technical_potential"]
     with pytest.raises(ValueError, match="configuration it reads changed"):
@@ -371,12 +371,12 @@ def test_revalidate_refuses_a_phase_whose_configuration_changed(tmp_path, config
 def test_a_slope_limit_reaches_f1b_and_a_wildcard_step_selects_every_child(config_copy):
     before = _fingerprints(config_copy)
     text = (config_copy / "experiments.yaml").read_text(encoding="utf-8")
-    start = text.index("slope_max_deg:")
-    nominal = text.index("nominal:", start)
-    end = text.index("\n", nominal)
-    value = text[nominal + len("nominal:") : end].strip()
+    start = text.index("slope_max_pct:")
+    central = text.index("central:", start)
+    end = text.index("\n", central)
+    value = text[central + len("central:") : end].strip()
     (config_copy / "experiments.yaml").write_text(
-        text[: nominal + len("nominal:")] + f" {float(value) + 1}" + text[end:], encoding="utf-8"
+        text[: central + len("central:")] + f" {float(value) + 1}" + text[end:], encoding="utf-8"
     )
     changed = _changed(before, _fingerprints(config_copy))
     assert {"data_quality_audit", "land_eligibility"} <= changed

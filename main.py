@@ -473,6 +473,7 @@ _ALIGNED_RASTER_LAYER_KEYS = (
     "land_cover_counts",
     "slope_counts",
     "population",
+    "settlements",
     "roads",
     "grid",
     "lakes",
@@ -611,6 +612,28 @@ def _build_phase_specs(
         _register_json_artifact(context, "siting_layers", result)
         return result
 
+    def _project_area_km2(context: PhaseContext) -> dict[str, dict[str, float]]:
+        """The area of the reference project per technology and land scenario, `P_ref / PD` (km2): the minimum cluster of the restrictive scenario (Group 6).
+
+        `P_ref` is `connection.reference_project_mw` (Group 3) and PD the `power_density_mw_per_km2` of the scenario (Group 1, `scenario_values`), both of
+        parameters.json and none of them copied. A technology whose density has no value, or a country with no connection block, is left out: F3 then
+        refuses to run only if a scenario needs the area.
+        """
+        params = context.country_params
+        if params is None or params.connection is None:
+            return {}
+        p_ref = params.connection.reference_project_mw.value
+        areas: dict[str, dict[str, float]] = {}
+        for tech in ("solar", "wind"):
+            entry = getattr(params.technologies, tech).power_density_mw_per_km2
+            if entry.value is None:
+                continue
+            areas[tech] = {
+                s: float(p_ref) / float(entry.value if entry.scenario_values is None else entry.scenario_values.for_scenario(s))
+                for s in LAND_SCENARIOS
+            }
+        return areas
+
     def land_eligibility_run(context: PhaseContext) -> EligibilitySummary:
         """F3: eligibility per technology, 0.05 degree cells, candidate tables (nominal land-availability parameters)."""
         acquisition = context.prior_results["data_acquisition"].output
@@ -631,6 +654,7 @@ def _build_phase_specs(
             resolved_path(layers.get("rivers")),
             resolved_path(layers.get("admin1")),
             zone_source=_zone_source(),
+            project_area_km2=_project_area_km2(context),
         )
         out_dir = artifacts_dir(context.country_code)
         for key, name in eligibility_artifact_files(
@@ -1001,6 +1025,7 @@ def _build_phase_specs(
                 "aligned/land_cover_counts",
                 "aligned/slope_counts",
                 "aligned/population",
+                "aligned/settlements",
                 "aligned/grid",
                 "aligned/grid_distance_capped",
                 "aligned/roads_distance_capped",
@@ -1161,6 +1186,7 @@ def _build_phase_specs(
                 "aligned/land_cover_counts",
                 "aligned/slope_counts",
                 "aligned/population",
+                "aligned/settlements",
                 "aligned/grid",
             }
             | {

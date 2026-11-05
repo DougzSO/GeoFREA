@@ -65,7 +65,8 @@ _SENSITIVITY_TEXT = (
     _REAL_EXPERIMENTS.read_text(encoding="utf-8")
     .replace("\r\n", "\n")
     .replace(
-        "nominal: 3000.0\n        sensitivity: null", "nominal: null\n        sensitivity: 3000.0"
+        "restrictive: 2000.0\n        central: 3000.0\n        permissive: null\n",
+        "restrictive: null\n        central: null\n        permissive: null\n        sensitivity: 3000.0\n",
     )
 )
 assert "sensitivity: 3000.0" in _SENSITIVITY_TEXT

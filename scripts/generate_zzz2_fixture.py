@@ -118,6 +118,7 @@ def main() -> None:
     base.gen_elevation()
     base.gen_dem30()
     base.gen_population()
+    base.gen_smod()
     gen_land_cover()
     base.gen_protected()
     base.gen_rivers()
