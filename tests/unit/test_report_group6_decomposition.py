@@ -99,3 +99,35 @@ def test_the_reference_summary_is_found_through_latest_json(tmp_path):
     assert target.parents[5].name == run  # `main` records the run id from this position
     with pytest.raises(g6.DecompositionError, match="no accepted round"):
         g6.reference_summary(tmp_path, "IND", None)
+
+
+OLD = {"riparian_setback_km": 0.5, "riparian_min_discharge_m3s": 0.0, "pop_density_max_per_km2": 200.0, "slope_max_deg": 10.0, "elevation_max_m": None, "min_eligible_area_km2": 0.1}
+NEW = {
+    "river_buffer_steps": [[10.0, 30.0], [50.0, 50.0], [None, 100.0]],
+    "river_width_coefficient": 7.2,
+    "river_width_exponent": 0.5,
+    "settlement_setback_m": 800.0,
+    "pop_density_max_per_km2": None,
+    "slope_max_pct": 20.0,
+    "elevation_max_m": 3000.0,
+    "min_cluster_km2": None,
+    "min_pixel_fraction": 0.1,
+}
+
+
+def test_the_old_and_the_new_limit_of_every_criterion_are_written_with_their_units():
+    t = g6.threshold_texts(OLD, NEW, 13)
+    assert set(t) == {f"{c}_{v}" for c in g6.THRESHOLD_CRITERIA for v in ("old", "new")}
+    assert t["rivers_old"] == "setback 500 m; streams with Q >= 0 m3/s"
+    assert t["rivers_new"] == "W = 7.2 Q^0.5, buffer 30/50/100 m (width < 10/50 m)"
+    assert t["settlements_old"] == "none (density rule)" and t["settlements_new"] == "GHS-SMOD class >= 13, setback 800 m"
+    assert t["density_old"] == "200 persons/km2" and t["density_new"] == "not applied"
+    assert t["slope_old"] == "10 deg (17.6 %)" and t["slope_new"] == "20 % (11.31 deg)"
+    assert t["elevation_old"] == "no limit" and t["elevation_new"] == "3000 m"
+    assert t["min_area_old"] == "cell >= 0.1 km2" and t["min_area_new"] == "pixel fraction >= 0.1"
+
+
+def test_a_single_class_river_rule_and_a_scenario_without_floors_are_written_plainly():
+    t = g6.threshold_texts(OLD, {**NEW, "river_buffer_steps": [[None, 30.0]], "min_pixel_fraction": None}, 13)
+    assert t["rivers_new"] == "W = 7.2 Q^0.5, buffer 30 m"
+    assert t["min_area_new"] == "no floor"

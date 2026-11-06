@@ -39,6 +39,7 @@ SCENARIOS = ("restrictive", "central", "permissive")
 CONSTRAINTS = ("E1", "E2", "E3", "E4", "E5", "E6")
 RELATIVE_TOLERANCE = 1e-6
 CRITERIA = ("settlements", "density_removed", "slope", "rivers", "other")
+THRESHOLD_CRITERIA = ("rivers", "settlements", "density", "slope", "elevation", "min_area")
 
 
 class DecompositionError(RuntimeError):
@@ -95,6 +96,51 @@ def snapshot(summary_path: Path, tables_dir: Path, iso: str, reference: str) -> 
             sums["parameter_set"] = sc.get("parameter_set")
             out["technologies"][tech][scenario] = sums
     return out
+
+
+def _g(value: float) -> str:
+    return f"{value:g}"
+
+
+def threshold_texts(old: dict, new: dict, settlement_min_class: int) -> dict:
+    """The old and the new limit of each criterion as text, from the `parameter_set` of the pre-Group 6 snapshot and of the new summary.
+
+    Args:
+        old: `parameter_set` of the scenario in the snapshot (slope in degrees, riparian setback in km, density, `min_eligible_area_km2`).
+        new: `parameter_set` of the scenario in the new summary (slope in percent, river width model, settlement setback, cluster and pixel floors).
+        settlement_min_class: `land_availability.settlements.min_class` (GHS-SMOD class from which a pixel is a settlement).
+
+    Returns:
+        `{<criterion>_old, <criterion>_new}` for the criteria of `THRESHOLD_CRITERIA`.
+    """
+
+    def limit(value, unit):
+        return "no limit" if value is None else f"{_g(value)} {unit}"
+
+    steps = new["river_buffer_steps"]
+    if len(steps) == 1:
+        buffers = f"buffer {_g(steps[0][1])} m"
+    else:
+        buffers = "buffer " + "/".join(_g(b) for _, b in steps) + " m (width < " + "/".join(_g(w) for w, _ in steps[:-1]) + " m)"
+    floors = []
+    if new.get("min_cluster_km2") is not None:
+        floors.append(f"cluster >= {new['min_cluster_km2']:.2f} km2")
+    if new.get("min_pixel_fraction") is not None:
+        floors.append(f"pixel fraction >= {_g(new['min_pixel_fraction'])}")
+    return {
+        "rivers_old": f"setback {_g(old['riparian_setback_km'] * 1000)} m; streams with Q >= {_g(old['riparian_min_discharge_m3s'])} m3/s",
+        "rivers_new": f"W = {_g(new['river_width_coefficient'])} Q^{_g(new['river_width_exponent'])}, {buffers}",
+        "settlements_old": "none (density rule)",
+        "settlements_new": f"GHS-SMOD class >= {settlement_min_class}, setback {_g(new['settlement_setback_m'])} m",
+        "density_old": limit(old["pop_density_max_per_km2"], "persons/km2"),
+        "density_new": limit(new["pop_density_max_per_km2"], "persons/km2") if new["pop_density_max_per_km2"] is not None else "not applied",
+        "slope_old": f"{_g(old['slope_max_deg'])} deg ({100 * math.tan(math.radians(old['slope_max_deg'])):.1f} %)",
+        "slope_new": f"{_g(new['slope_max_pct'])} % ({math.degrees(math.atan(new['slope_max_pct'] / 100)):.2f} deg)",
+        "elevation_old": limit(old["elevation_max_m"], "m"),
+        "elevation_new": limit(new["elevation_max_m"], "m"),
+        "min_area_old": f"cell >= {_g(old['min_eligible_area_km2'])} km2",
+        "min_area_new": "; ".join(floors) if floors else "no floor",
+    }
 
 
 def decompose(old: dict, new: dict, min_area: dict | None) -> dict:
@@ -155,7 +201,7 @@ def decompose(old: dict, new: dict, min_area: dict | None) -> dict:
     return row
 
 
-def build_report(snap: dict, summary_path: Path, tables_dir: Path) -> list[dict]:
+def build_report(snap: dict, summary_path: Path, tables_dir: Path, settlement_min_class: int = 13) -> list[dict]:
     """The rows (technology x scenario) of the decomposition of one country from its snapshot and its new summary and tables."""
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     rows = []
@@ -169,7 +215,8 @@ def build_report(snap: dict, summary_path: Path, tables_dir: Path) -> list[dict]
             if not math.isclose(new["eligible_area_km2"], float(sc["eligible_area_km2"]), rel_tol=RELATIVE_TOLERANCE, abs_tol=1e-6):
                 raise DecompositionError(f"{path.name} does not add up to the eligible area of the new summary")
             row = decompose(snap["technologies"][tech][scenario], new, sc.get("min_area"))
-            rows.append({"country": snap["iso"], "technology": tech, "scenario": scenario, **row})
+            limits = threshold_texts(snap["technologies"][tech][scenario]["parameter_set"], sc["parameter_set"], settlement_min_class)
+            rows.append({"country": snap["iso"], "technology": tech, "scenario": scenario, **row, **limits})
     return rows
 
 
@@ -192,8 +239,21 @@ def write_report(rows: list[dict], out_dir: Path, iso: str) -> tuple[Path, Path]
     for r in rows:
         cells = [str(r[h]) if isinstance(r[h], str) else (f"{r[h]:.2f}" if h == "change_pct" else f"{r[h]:,.1f}") for h in head]
         lines.append("| " + " | ".join(cells) + " |")
+    if all(f"{c}_old" in rows[0] for c in THRESHOLD_CRITERIA):
+        lines += ["", f"## Limits of each criterion, old (before Group 6) and new, {iso}", ""]
+        head2 = ["technology", "scenario", *[f"{c}_{v}" for c in THRESHOLD_CRITERIA for v in ("old", "new")]]
+        lines += ["| " + " | ".join(head2) + " |", "|" + "|".join("---" for _ in head2) + "|"]
+        lines += ["| " + " | ".join(str(r[h]) for h in head2) + " |" for r in rows]
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return csv_path, md_path
+
+
+def _settlement_min_class() -> int:
+    """`land_availability.settlements.min_class` of `config/experiments.yaml`."""
+    import yaml
+
+    config = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    return int(config["land_availability"]["settlements"]["min_class"])
 
 
 def _data_root() -> Path:
@@ -236,7 +296,10 @@ def main(argv: list[str] | None = None) -> int:
                 if not snapshot_path.is_file():
                     raise DecompositionError(f"no snapshot of {iso}: run `snapshot {iso}` before the Group 6 round")
                 rows = build_report(
-                    json.loads(snapshot_path.read_text(encoding="utf-8")), root / "outputs" / iso / "artifacts" / "land_eligibility.json", tables
+                    json.loads(snapshot_path.read_text(encoding="utf-8")),
+                    root / "outputs" / iso / "artifacts" / "land_eligibility.json",
+                    tables,
+                    _settlement_min_class(),
                 )
                 csv_path, md_path = write_report(rows, args.out, iso)
                 print(f"{iso}: decomposition written to {csv_path} and {md_path}")

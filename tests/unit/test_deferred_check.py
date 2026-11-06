@@ -204,8 +204,14 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     # in the three phases the Group 6 rules reach: the other phases stay under the gate.
     assert checks["PRT"].expected == {} and checks["PRT"].expected_pins == {}
     for iso in ("IND", "BRA"):
-        assert checks[iso].expected and set(checks[iso].expected.values()) == {"regras do Grupo 6 (COMANDO 97)"}
-        assert set(checks[iso].expected_pins.values()) == {"f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03"}
+        assert checks[iso].expected and set(checks[iso].expected.values()) == {"regras do Grupo 6 (COMANDO 97)", "células do Grupo 6"}
+        # the four potential_maps rasters rebuilt on the Group 6 cells are pinned to the reference of COMMAND 99, the rest to the round of the republished F2a
+        pins = {k: v for k, v in checks[iso].expected_pins.items()}
+        assert {k for k, v in checks[iso].expected.items() if v == "células do Grupo 6"} == {
+            "capacity_factor_solar", "capacity_factor_wind", "potential_density_solar", "potential_density_wind"
+        }
+        assert {pins[k] for k in pins if checks[iso].expected[k] == "células do Grupo 6"} == {"74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0"}
+        assert {pins[k] for k in pins if checks[iso].expected[k] != "células do Grupo 6"} == {"f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03"}
         assert "aligned_rasters" not in checks[iso].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
