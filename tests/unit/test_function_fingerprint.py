@@ -56,7 +56,7 @@ def test_an_edit_of_the_elevation_pass_leaves_the_reprojected_layers_current(tmp
     before = _fingerprints(root)
     _edit(root, "grid_alignment/raster_alignment.py", "_SLOPE_STRIP_GRID_ROWS", "_SLOPE_STRIP_GRID_ROWS_")  # renames the constant everywhere it is used
     after = _fingerprints(root)
-    assert {k for k in before if before[k] != after[k]} == {"aligned_layer.glo30"}
+    assert {k for k in before if before[k] != after[k]} == {"aligned_layer.glo30", "aligned_layer.fabdem_slope"}  # the slope from FABDEM runs the same strips (D-F2a-028)
 
 
 def test_a_comment_a_docstring_or_a_reformat_does_not_change_a_fingerprint(tmp_path):

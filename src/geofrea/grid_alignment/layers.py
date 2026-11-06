@@ -161,6 +161,29 @@ def build_glo30(
         )
 
 
+def build_fabdem_slope(
+    ctx: LayerContext, fabdem_tiles: list[Path], checkpoint_dir: Path | None = None, checkpoint_key: str | None = None
+) -> dict[str, Path | None]:
+    """The slope and the slope bins from FABDEM, GLO-30 for a square FABDEM does not hold (COMMAND 101, D-F2a-028); the elevation is not touched.
+
+    The rasters are `<ISO>_slope_fabdem_aligned.tif` and `<ISO>_slope_counts_fabdem_aligned.tif`; `<ISO>_slope_dem_source.json` says which squares fell back to GLO-30.
+    """
+    # imported here, not at the top: the fingerprint of every other layer holds the imports of this module
+    from geofrea.grid_alignment.fabdem_slope import SOURCE_REPORT, fabdem_slope_outputs
+
+    with gdal_quiet():
+        return fabdem_slope_outputs(
+            list(fabdem_tiles),
+            list(ctx.inputs.slope_dem_tiles),
+            ctx.grid,
+            slope_out=ctx.path("slope_fabdem"),
+            counts_out=ctx.path("slope_counts_fabdem"),
+            report_out=ctx.out_dir / f"{ctx.country_code}_{SOURCE_REPORT}",
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_key=checkpoint_key,
+        )
+
+
 def build_solar(ctx: LayerContext) -> Path:
     with gdal_quiet():
         return reproject_to_grid(

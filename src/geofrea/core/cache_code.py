@@ -82,3 +82,9 @@ def aligned_layers_code(src_root: Path | None = None) -> str:
     for name in sorted(CACHE_FUNCTION_ENTRIES):
         digest.update(f"{name}:{function_fingerprint(CACHE_FUNCTION_ENTRIES[name], root)}\n".encode())
     return digest.hexdigest()
+
+
+# The slope layer from FABDEM (COMMAND 101, D-F2a-028). It is registered here, after the definitions, and not inside the dict above: the fingerprint of an entry follows the
+# definitions it reaches, `cache_code` reaches `CACHE_FUNCTION_ENTRIES`, and one more key in that literal would change the key of every layer that clips a vector (roads, lakes,
+# rivers) although none of their code changed. This statement defines no name, so it is not part of any fingerprint (`tests/unit/test_fabdem_slope_layer.py` holds that).
+CACHE_FUNCTION_ENTRIES["aligned_layer.fabdem_slope"] = ("grid_alignment.layers:build_fabdem_slope", _ALIGNED_GRID_ENTRY)

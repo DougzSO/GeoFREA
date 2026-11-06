@@ -211,7 +211,7 @@ Counts and sizes are the files under `outputs/<ISO>/` for the phase (PRT / IND /
 
 ### Not part of the graph
 
-`scripts/acquire_*.py` fetch the large external inputs (CMIP6 resource channel, ERA5 gust and tmax, DEM, WorldCover, GEM, Natural Earth) and write their registries; `E1_explorer` is `not_started`. Fixtures (`generate_*_fixture.py`, `freeze_v01_fixtures.py`) are developer tools for `tests/`.
+`scripts/acquire_*.py` fetch the large external inputs (CMIP6 resource channel, ERA5 gust and tmax, DEM (GLO-30 for the elevation; FABDEM for the slope, `acquire_fabdem.py`, by HTTP Range, 26 GB for the three countries, CC BY-NC-SA 4.0), WorldCover, GEM, Natural Earth) and write their registries; `E1_explorer` is `not_started`. Fixtures (`generate_*_fixture.py`, `freeze_v01_fixtures.py`) are developer tools for `tests/`.
 
 
 ## 4. What each phase costs, and why

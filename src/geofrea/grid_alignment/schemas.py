@@ -204,7 +204,9 @@ class GridAlignmentResult(BaseModel):
         land_cover_counts: Per-pixel counts of 10 m WorldCover samples in each class (uint16, one band per class in
             WORLDCOVER_CLASSES, D-F2a-015), or None if no land_cover_tiles were given.
         slope_counts: Per-pixel counts of 30 m DEM samples in each 1 degree slope bin (uint16, 41 bands, D-F2a-016), or None
-            if no Copernicus GLO-30 tiles were acquired.
+            if no Copernicus GLO-30 tiles were acquired. The samples are FABDEM's where FABDEM tiles were acquired (D-F2a-028), else GLO-30's.
+        slope_source: What the slope and the bins rest on (D-F2a-028): the squares read from FABDEM, the squares that fall back to GLO-30 and the country
+            area they cover; None when FABDEM was not acquired and the slope is GLO-30's.
         population: Bilinear-reprojected float32 population raster, or
             None if population_path was missing.
         settlements: GHS-SMOD settlement class of each pixel (uint8 L2 code, 10 to 30; 255 where the source has no value), by nearest neighbour from the
@@ -237,6 +239,7 @@ class GridAlignmentResult(BaseModel):
     land_cover: Path | None = None
     land_cover_counts: Path | None = None
     slope_counts: Path | None = None
+    slope_source: dict[str, object] | None = None
     population: Path | None = None
     settlements: Path | None = None
     roads: Path | None = None

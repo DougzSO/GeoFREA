@@ -88,6 +88,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -102,7 +103,9 @@ from geofrea.core.checkpoint import clear_checkpoint
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.layer_process import LayerFailedError, LayerRecord, append_ledger, run_layer
 from geofrea.core.orchestrator import PhaseContext
+from geofrea.core.paths import MissingPathEnvironmentError
 from geofrea.core.raster_io import safe_raster_open
+from geofrea.data_acquisition.fetchers import fabdem
 from geofrea.grid_alignment.layers import LayerContext
 from geofrea.grid_alignment.layers import (
     _read_clipped_with_cache as _read_clipped_with_cache,  # noqa: PLC0414 — stays importable from here
@@ -116,6 +119,7 @@ from geofrea.grid_alignment.vector_alignment import distance_capped_path
 logger = logging.getLogger(__name__)
 
 _BUILDERS = "geofrea.grid_alignment.layers"
+_GLO30_NAME = re.compile(r"_([NS])(\d{2})_00_([EW])(\d{3})_00_DEM")
 
 # Version of the alignment logic, part of every aligned layer's cache key (OQ-026). Bump it by hand when the logic of any aligner
 # changes (resampling, masking, binning, distance rasterization), or the previous outputs would be reused.
@@ -126,6 +130,20 @@ ALIGNMENT_ALGORITHM_VERSION = (
 
 class AlignmentLayersFailedError(RuntimeError):
     """One or more layers of F2a failed; every other layer was still built and is in place (the ledger `layers.json` says which and why)."""
+
+
+def _fabdem_tiles(glo30_tiles: list[Path]) -> list[Path]:
+    """The FABDEM tiles pinned in the manifest for the squares of the GLO-30 tiles of the country (none when FABDEM was never acquired)."""
+    names = []
+    for tile in glo30_tiles:
+        m = _GLO30_NAME.search(Path(tile).name)
+        if m is not None:
+            names.append(f"{m[1]}{m[2]}{m[3]}{m[4]}")
+    try:
+        present, _ = fabdem.load_tiles(names)
+    except MissingPathEnvironmentError:
+        return []
+    return present
 
 
 def aligned_layer_key(kind: str, files, config: dict, hash_memo: FileHashMemo | None) -> str:
@@ -378,8 +396,37 @@ def run_grid_alignment_phase(
     with timer("elevation", timings):
         aligned["elevation"] = _glo30_layer("elevation")
 
+    # The slope and the slope bins come from FABDEM when its tiles were acquired (COMMAND 101, D-F2a-028), GLO-30 for a square FABDEM does not hold; the elevation
+    # stays on GLO-30 and its layer, its key and its code are not touched. Without any FABDEM tile the slope is GLO-30's, as before, and the log says so.
+    fabdem_tiles = _fabdem_tiles(dem_tiles)
+    use_fabdem = bool(dem_tiles) and bool(fabdem_tiles)
+    if dem_tiles and not use_fabdem:
+        logger.warning("  slope: no FABDEM tile is acquired (`python scripts/acquire_fabdem.py`); the slope and the slope bins come from GLO-30.")
+    fabdem_layers: dict[str, Path | None] = {}
+
+    def _fabdem_layer(label: str) -> Path | None:
+        """One pass writes the FABDEM slope and bins; the layer that is stale first runs it and the other finds its raster current (the key is the same)."""
+        key = _key("fabdem_slope", [*fabdem_tiles, *dem_tiles])
+        current = _is_current(label, key)
+        if current is not None:
+            return current
+        if not fabdem_layers:
+            checkpoint = interim_dir / "fabdem_slope_ckpt"
+            built = _build(
+                label, "fabdem_slope", "build_fabdem_slope", fabdem_tiles=fabdem_tiles, checkpoint_dir=checkpoint, checkpoint_key=key
+            )
+            fabdem_layers.update(built or {})
+            for raster in fabdem_layers.values():
+                if raster is not None:
+                    write_cache_key(raster, key)
+            if built is not None:
+                clear_checkpoint(checkpoint)
+        if fabdem_layers.get(label) is None:
+            logger.info("    %s: no data generated.", label)
+        return fabdem_layers.get(label)
+
     with timer("slope", timings):
-        aligned["slope"] = _glo30_layer("slope")
+        aligned["slope"] = _fabdem_layer("slope_fabdem") if use_fabdem else _glo30_layer("slope")
 
     with timer("solar", timings):
         aligned["solar"] = _execute_or_load(
@@ -423,7 +470,7 @@ def run_grid_alignment_phase(
         )
 
     with timer("slope_counts", timings):
-        aligned["slope_counts"] = _glo30_layer("slope_counts")
+        aligned["slope_counts"] = _fabdem_layer("slope_counts_fabdem") if use_fabdem else _glo30_layer("slope_counts")
 
     with timer("population", timings):
         aligned["population"] = _execute_or_load(
@@ -539,8 +586,21 @@ def run_grid_alignment_phase(
         if aligned.get("poi") and poi_counts_path.exists()
         else None
     )
+    slope_source = None
+    source_report = out_dir / f"{context.country_code}_slope_dem_source.json"
+    if use_fabdem and source_report.exists():
+        slope_source = json.loads(source_report.read_text(encoding="utf-8"))
+        if slope_source["squares_glo30_fallback"]:
+            logger.warning(
+                "  slope: %d squares fall back to GLO-30 (%.1f km2, %.2f %% of the country): %s",
+                len(slope_source["squares_glo30_fallback"]),
+                slope_source["fallback_area_km2"],
+                100 * slope_source["fallback_share"],
+                ", ".join(slope_source["squares_glo30_fallback"]),
+            )
     return GridAlignmentResult(
         country_code=context.country_code,
+        slope_source=slope_source,
         timestamp=timestamp,
         grid_metadata=grid_metadata,
         wind_layers=wind_layers,

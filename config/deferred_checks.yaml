@@ -6,7 +6,7 @@
 # its probable cause, to outputs/<ISO>/deferred_check.json. A phase that matched is settled and is not compared again. Delete a country to retire its check.
 #
 # baseline: `latest`, or the manifest.json of the country as it was before the change, relative to the data root. `latest` is the manifest of the round `reference_run`
-#           of the reference store: what the pipeline last accepted. `expected` is empty for the three countries since 2026-11-04 (the entries of the baseline of 2026-10-29 expired with the new round).
+#           of the reference store: what the pipeline last accepted. `expected` declares, since 2026-11-06 (COMMAND 101), the differences by design of the slope from FABDEM and of what follows from it (see the entries of each country).
 #           (outputs/<ISO>/unattended/20261029_135838/manifest_before.json: saved by scripts/run_unattended.ps1 before the first unattended round)
 # phases:   the phases to compare (F1 to F5 and the figure phases that follow)
 # expected: an artifact whose difference is accepted without a change of configuration, and why; the phase is then EXPLICADO_REVISAR
@@ -43,119 +43,197 @@ countries:
       - overview
       - technical_potential
       - potential_maps
-    expected:  # 2026-11-06 (COMMAND 98): differences by design of Group 6 (F3 rules) in land_eligibility, technical_potential and potential_maps; pinned to the round of the republished F2a. The other phases stay under the gate.
-      "land_eligibility": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_aggregates_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_aggregates_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "technical_potential": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_maps": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/admin1_units": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidate_stability_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_0p1deg_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_area_km2_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/dominant_exclusion_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidate_stability_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_0p1deg_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_area_km2_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/dominant_exclusion_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "capacity_factor_solar": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "capacity_factor_wind": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "potential_density_solar": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "potential_density_wind": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+    expected:  # 2026-11-06 (COMMAND 101): differences by design of the slope from FABDEM (F2a `slope` and `slope_counts`) and of what follows from it (F3 onwards, and the phases that read the F3 cells); pinned to the round 74931e0a. The other artifacts stay under the gate.
+      "aligned_rasters": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "aligned/slope": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "aligned/slope_counts": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "capacity_factor_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "capacity_factor_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "climate_maps": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/admin1_units": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidate_stability_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidate_stability_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_0p1deg_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_0p1deg_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/dominant_exclusion_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/dominant_exclusion_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_area_km2_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_area_km2_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "forcing": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "forcing_masked": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "hazard_context": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "land_eligibility": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "members": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "overview": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_aggregates_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_aggregates_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_density_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_density_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_maps": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "technical_potential": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
   BRA:
     baseline: latest
     reference_run: latest
     phases: *phases
-    expected:  # 2026-11-06 (COMMAND 98): differences by design of Group 6 (F3 rules) in land_eligibility, technical_potential and potential_maps; pinned to the round of the republished F2a. The other phases stay under the gate.
-      "land_eligibility": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_aggregates_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_aggregates_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "class_flag_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "technical_potential": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "potential_maps": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/admin1_units": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidate_stability_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_0p1deg_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_area_km2_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/dominant_exclusion_solar": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidate_stability_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/candidates_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/cells_0p1deg_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_area_km2_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/dominant_exclusion_wind": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "eligibility/eligible_fraction_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__central": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "ensemble_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97)", reference_run: f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03}
-      "capacity_factor_solar": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "capacity_factor_wind": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "potential_density_solar": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
-      "potential_density_wind": {reason: "células do Grupo 6", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+    expected:  # 2026-11-06 (COMMAND 101): differences by design of the slope from FABDEM (F2a `slope` and `slope_counts`) and of what follows from it (F3 onwards, and the phases that read the F3 cells); pinned to the round 74931e0a. The other artifacts stay under the gate.
+      "aligned_rasters": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "aligned/slope": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "aligned/slope_counts": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "capacity_factor_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "capacity_factor_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "class_flag_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "climate_maps": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/admin1_units": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidate_stability_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidate_stability_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/candidates_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_0p1deg_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_0p1deg_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/cells_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/dominant_exclusion_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/dominant_exclusion_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_area_km2_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_area_km2_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "eligibility/eligible_fraction_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "ensemble_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "forcing": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "forcing_masked": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "hazard_context": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "land_eligibility": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "members": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "overview": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_aggregates_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_aggregates_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_density_solar": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_density_wind": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_maps": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_solar__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__central": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__permissive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "potential_wind__restrictive": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
+      "technical_potential": {reason: "declividade pelo FABDEM (COMANDO 101)", reference_run: 74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0}
   PRT:
     baseline: latest
     reference_run: latest
     phases: *phases
-    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
+    expected:  # 2026-11-06 (COMMAND 101): PRT has not had its Group 6 round: the differences by design of the Group 6 rules and of the slope from FABDEM, in F2a (`slope`, `slope_counts`) and from F3 onwards; pinned to the round 3a1b06e0. The other artifacts stay under the gate.
+      "aligned_rasters": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "aligned/slope": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "aligned/slope_counts": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "capacity_factor_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "capacity_factor_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "class_flag_wind__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "class_flag_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "class_flag_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "climate_maps": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/admin1_units": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidate_stability_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidate_stability_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_solar__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_wind__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/candidates_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_0p1deg_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_0p1deg_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_solar__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_wind__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/cells_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/dominant_exclusion_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/dominant_exclusion_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_area_km2_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_area_km2_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "eligibility/eligible_fraction_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_solar__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_wind__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "ensemble_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "forcing": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "forcing_masked": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "hazard_context": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "land_eligibility": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "members": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "overview": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_aggregates_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_aggregates_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_density_solar": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_density_wind": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_maps": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_solar__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_solar__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_solar__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_wind__central": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_wind__permissive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "potential_wind__restrictive": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
+      "technical_potential": {reason: "regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)", reference_run: 3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4}
 
 # probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
 suspects:

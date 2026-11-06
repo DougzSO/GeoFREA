@@ -108,13 +108,13 @@ def test_the_cache_code_of_a_revision_is_that_of_its_tree():
     from geofrea.core.cache_code import aligned_layers_code
     from geofrea.core.function_fingerprint import UnknownEntryError
 
-    # A revision older than the settlements layer (Group 6, M-F2a-11) has no builder for it: the code of its tree cannot be fingerprinted, and the
-    # failure is loud (A-09) instead of a silent partial hash. The tree of a revision that has every entry gives a 64-hex code.
+    # A revision older than the settlements layer (Group 6, M-F2a-11) or than the FABDEM slope layer (COMMAND 101, D-F2a-028) has no builder for it: the code of
+    # its tree cannot be fingerprinted, and the failure is loud (A-09) instead of a silent partial hash. The tree of a revision that has every entry gives a 64-hex code.
     for revision in ("HEAD", "38e8da1"):
         try:
             code = adopt.cache_code_at(revision)
         except UnknownEntryError as error:
-            assert "build_settlements" in str(error)
+            assert "build_settlements" in str(error) or "build_fabdem_slope" in str(error)
         else:
             assert len(code) == 64
     assert isinstance(aligned_layers_code(), str)

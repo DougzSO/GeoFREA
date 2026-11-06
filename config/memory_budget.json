@@ -8,6 +8,11 @@
       "source": "measured",
       "detail": "layer 'elevation', whole BRA run of 11,117 s"
     },
+    "fabdem_slope": {
+      "peak_rss_mb": 984,
+      "source": "estimated",
+      "detail": "COMMAND 101: the same pass as glo30 without the elevation mean; to be measured in the round (D-F2a-028)"
+    },
     "solar": {
       "peak_rss_mb": 409,
       "source": "measured"
