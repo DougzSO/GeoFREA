@@ -1,0 +1,170 @@
+{
+ "artifacts": {
+  "aligned/elevation": {
+   "equal": true,
+   "new": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7",
+   "old": "tif:c338d1f05ad28b8ddd2c913030b7e3171f5e96a098d77d725ba7312806afc4d7"
+  },
+  "aligned/grid": {
+   "equal": true,
+   "new": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2",
+   "old": "tif:296e472535a50ac8bc16862556e043200d7b5ac33f62348486a4249ccb101fe2"
+  },
+  "aligned/grid_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/lakes": {
+   "equal": true,
+   "new": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd",
+   "old": "tif:ecb16cdc3c5f41de9ac986e074a3ec0af81abd708ca6495e953d010596b706cd"
+  },
+  "aligned/land_cover": {
+   "equal": true,
+   "new": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f",
+   "old": "tif:73aec3d4fd7ff41e43260bfd36c3c67343e1e8d324d98c928ecb8c5697ae020f"
+  },
+  "aligned/land_cover_counts": {
+   "equal": true,
+   "new": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a",
+   "old": "tif:f3d5dee447b3e40086853ad40589e0aa08d4600bb4dcd4a16eb914e8dfd5b83a"
+  },
+  "aligned/poi": {
+   "equal": true,
+   "new": "tif:d8a75430de17c03eecdbd0c0a384b083854242ca18cf5e54f5fe82e3e3676cf4",
+   "old": "tif:d8a75430de17c03eecdbd0c0a384b083854242ca18cf5e54f5fe82e3e3676cf4"
+  },
+  "aligned/poi_distance_capped": {
+   "equal": true,
+   "new": "tif:8e8862ad0437d1bce5e2532d5d71e35c696f472f35edab8d771b4ce97484313a",
+   "old": "tif:8e8862ad0437d1bce5e2532d5d71e35c696f472f35edab8d771b4ce97484313a"
+  },
+  "aligned/population": {
+   "equal": true,
+   "new": "tif:8fa38da7ae542c87f170d3ae1f6ec6d1ca5139f65a24f0fa2c5a9ea8f4b99c5a",
+   "old": "tif:8fa38da7ae542c87f170d3ae1f6ec6d1ca5139f65a24f0fa2c5a9ea8f4b99c5a"
+  },
+  "aligned/rivers": {
+   "equal": true,
+   "new": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c",
+   "old": "tif:62837e96ad8d7f8d3b639e55da68fba2c6f6f7ea2233a3a4e10b6ecc4ef75c1c"
+  },
+  "aligned/rivers_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/roads": {
+   "equal": true,
+   "new": "tif:bb3fc828be167335c1a793e4ff865c556ccfa35330bbd45b1f7cca7db4f6df18",
+   "old": "tif:bb3fc828be167335c1a793e4ff865c556ccfa35330bbd45b1f7cca7db4f6df18"
+  },
+  "aligned/roads_distance_capped": {
+   "equal": true,
+   "new": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9",
+   "old": "tif:dd8fd039866fa22f1e788a575484f9bc57c63762ff492752be1b6b59a61f3bb9"
+  },
+  "aligned/settlements": {
+   "equal": true,
+   "new": "tif:0250f446ce84768b89c3d772a6e21ecb5c803c43aac70043fe89bf71d1376c08",
+   "old": "tif:0250f446ce84768b89c3d772a6e21ecb5c803c43aac70043fe89bf71d1376c08"
+  },
+  "aligned/slope": {
+   "equal": true,
+   "new": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9",
+   "old": "tif:d86b80a5673bab87bfad1d27b6482a1e6915521e117d1127c3b1d093305206e9"
+  },
+  "aligned/slope_counts": {
+   "equal": true,
+   "new": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525",
+   "old": "tif:d0ee5c4166ce2e2c7ff6a3c7bfc21ad07643ec7bbc92eec92297fa83d05b4525"
+  },
+  "aligned/solar": {
+   "equal": true,
+   "new": "tif:37284674a7677ac47c0ae90dcdd1908fc01aa64b46f03c4f3a9934cb816c20c8",
+   "old": "tif:37284674a7677ac47c0ae90dcdd1908fc01aa64b46f03c4f3a9934cb816c20c8"
+  },
+  "aligned/wind_air_density_100m": {
+   "equal": true,
+   "new": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a",
+   "old": "tif:1751fea013eadec8ed9d40808ce8af5cceed6b4754bf97f27ca0461d0266854a"
+  },
+  "aligned/wind_air_density_150m": {
+   "equal": true,
+   "new": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe",
+   "old": "tif:c68cc761e8113889d6066f6789f223757ad09876a1ef8a0f6f182e92d290e8fe"
+  },
+  "aligned/wind_air_density_200m": {
+   "equal": true,
+   "new": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205",
+   "old": "tif:46c53ee95324f8782fc667b457c4cf26c238310c3cbef75fe45e3ea6e304a205"
+  },
+  "aligned/wind_weibull_a_100m": {
+   "equal": true,
+   "new": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614",
+   "old": "tif:91ceaaba805dd8c9143ceaa7117dbc7d973a3eb90628055b29f5103a93f47614"
+  },
+  "aligned/wind_weibull_a_150m": {
+   "equal": true,
+   "new": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f",
+   "old": "tif:faef7e15d86166a3ed08727c42e0eb61c4b6f8eccbcb4f5a0e41f3f26a89506f"
+  },
+  "aligned/wind_weibull_a_200m": {
+   "equal": true,
+   "new": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa",
+   "old": "tif:9b458fbea8c5c27bb9e15a91385342eed95ef80f6ea296f957b8d0a3cdbd85fa"
+  },
+  "aligned/wind_weibull_k_100m": {
+   "equal": true,
+   "new": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262",
+   "old": "tif:73589a32a17b69c4f4231729de06aef3be67ecddade1bd6667fe23bd7aa37262"
+  },
+  "aligned/wind_weibull_k_150m": {
+   "equal": true,
+   "new": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50",
+   "old": "tif:e00b839800900beee4e65b14aac62b8e553a28683fea3978aa4a0084bbdedf50"
+  },
+  "aligned/wind_weibull_k_200m": {
+   "equal": true,
+   "new": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6",
+   "old": "tif:ad5e16a50b5489af5a17e15698d7aa8b9c773dd50ff6af1e32c988adb94eaeb6"
+  },
+  "aligned/wind_wind_speed_100m": {
+   "equal": true,
+   "new": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e",
+   "old": "tif:74fdb570b8e7ae35c05290c41789fca428c24e09532d9d49b65c7632873f5c6e"
+  },
+  "aligned/wind_wind_speed_150m": {
+   "equal": true,
+   "new": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842",
+   "old": "tif:7760451f38b8a6285516f18692bff49e29dfd777068d8f86317dce74bf3dc842"
+  },
+  "aligned/wind_wind_speed_200m": {
+   "equal": true,
+   "new": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d",
+   "old": "tif:a82d31a0bbb1e0d7a30d1eb2222e60b0ef64c246151c583c0da8da8ea83a553d"
+  },
+  "aligned_rasters": {
+   "equal": true,
+   "new": "json:7de2b1b2238bef94400e8cd2fecefe522f19810397152fdc94f672230bb7a040",
+   "old": "json:7de2b1b2238bef94400e8cd2fecefe522f19810397152fdc94f672230bb7a040"
+  },
+  "reference_grid": {
+   "equal": true,
+   "new": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e",
+   "old": "json:f22724aee82e3dccce4ef871699a121bff0a0bd606b0ff582ca49a8752fb081e"
+  }
+ },
+ "equal": true,
+ "max_abs_delta_by_artifact": {},
+ "n_artifacts": 31,
+ "n_equal": 31,
+ "new_cache_code": "ad5ca280dbf29b30d07041cc95b3a5752cd09ffe77c2f47c524caf3202e2ec0c",
+ "new_revision": "working tree",
+ "old_cache_code": "5056ed129c1e60fd4824033ccb4b4871550e4fc78e25fe7c3ebbe9672a0a9f3b",
+ "old_revision": "HEAD",
+ "only_in_new": [],
+ "phase": "grid_alignment",
+ "sample": "PRT"
+}
