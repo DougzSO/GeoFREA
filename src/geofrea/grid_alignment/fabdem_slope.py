@@ -27,9 +27,9 @@ from geofrea.core.constants import NODATA_FLOAT
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.raster_io import RasterStream, open_raster_stream
 from geofrea.core.run_logging import PeriodicProgress
+from geofrea.grid_alignment import raster_alignment as _ra
 from geofrea.grid_alignment.raster_alignment import (
     _CHECKPOINT_UNIT_ROWS,
-    _GLO30_SAMPLES_PER_DEGREE,
     _OUTPUT_BLOCK_ROWS,
     _SLOPE_STRIP_GRID_ROWS,
     SLOPE_BINS,
@@ -141,7 +141,7 @@ def fabdem_slope_outputs(
         )
     if report_out is not None:
         write_text_atomic(Path(report_out), json.dumps(report, indent=1) + "\n")
-    sp = samples_per_degree or _GLO30_SAMPLES_PER_DEGREE
+    sp = samples_per_degree or _ra._GLO30_SAMPLES_PER_DEGREE  # read at the call: the tests use smaller synthetic tiles
     want_means, want_counts = slope_out is not None, counts_out is not None
     if not (want_means or want_counts):
         return {"slope": None, "slope_counts": None}

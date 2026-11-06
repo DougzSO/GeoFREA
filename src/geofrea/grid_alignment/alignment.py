@@ -119,6 +119,7 @@ from geofrea.grid_alignment.vector_alignment import distance_capped_path
 logger = logging.getLogger(__name__)
 
 _BUILDERS = "geofrea.grid_alignment.layers"
+_FABDEM_OUTPUT = {"slope_fabdem": "slope", "slope_counts_fabdem": "slope_counts"}  # layer label -> key of what `fabdem_slope_outputs` returns
 _GLO30_NAME = re.compile(r"_([NS])(\d{2})_00_([EW])(\d{3})_00_DEM")
 
 # Version of the alignment logic, part of every aligned layer's cache key (OQ-026). Bump it by hand when the logic of any aligner
@@ -421,9 +422,10 @@ def run_grid_alignment_phase(
                     write_cache_key(raster, key)
             if built is not None:
                 clear_checkpoint(checkpoint)
-        if fabdem_layers.get(label) is None:
+        raster = fabdem_layers.get(_FABDEM_OUTPUT[label])
+        if raster is None:
             logger.info("    %s: no data generated.", label)
-        return fabdem_layers.get(label)
+        return raster
 
     with timer("slope", timings):
         aligned["slope"] = _fabdem_layer("slope_fabdem") if use_fabdem else _glo30_layer("slope")

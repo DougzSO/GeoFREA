@@ -919,3 +919,70 @@ def test_the_glo30_pass_gets_its_checkpoint_and_the_phase_clears_it_once_the_ras
     assert seen["there_when_the_pass_ends"] is True
     assert not checkpoint.exists()  # cleared by the phase after the keys were written
     assert cache_is_current(result.elevation, seen["checkpoint_key"])
+
+
+# ─── COMMAND 101 (D-F2a-028): the slope from FABDEM through the phase, the elevation untouched ───
+
+
+def _fabdem_surface() -> np.ndarray:
+    rng = np.random.default_rng(101)
+    return np.cumsum(rng.normal(0, 2.0, (_SP, _SP)), axis=1) + np.cumsum(rng.normal(0, 2.0, (_SP, _SP)), axis=0) + 500.0
+
+
+def _acquire_fake_fabdem(z: np.ndarray) -> Path:
+    """One FABDEM tile (38 N, 9 W) pinned in the manifest under the data root of the test, as `scripts/acquire_fabdem.py` leaves it."""
+    import json
+
+    from geofrea.data_acquisition.fetchers import fabdem
+
+    dest = fabdem.fabdem_dir()
+    dest.mkdir(parents=True, exist_ok=True)
+    path = dest / "N38W009_FABDEM_V1-2.tif"
+    with rasterio.open(
+        path, "w", driver="GTiff", height=_SP, width=_SP, count=1, dtype="float32", crs="EPSG:4326", nodata=-9999.0,
+        transform=from_origin(-9.0 - 0.5 / _SP, 39.0 + 0.5 / _SP, 1 / _SP, 1 / _SP),
+    ) as dst:  # fmt: skip
+        dst.write(z.astype("float32"), 1)
+    (dest / "fabdem_manifest.json").write_text(json.dumps({"tiles": {"N38W009": {"bytes": path.stat().st_size}}, "absent_tiles": {}}), encoding="utf-8")
+    return path
+
+
+@pytest.mark.unit
+def test_with_a_fabdem_tile_the_phase_takes_the_slope_and_the_bins_from_it_and_leaves_the_elevation_on_glo30(tmp_path):
+    from geofrea.core.content_hash import content_hash
+
+    z = _fabdem_surface()
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, z), country_gdf=_country_gdf())
+    context = _context(tmp_path)
+    reference = run_grid_alignment_phase(context, inputs)  # no FABDEM tile acquired: GLO-30 for everything, as before
+    assert reference.slope_source is None and "fabdem" not in Path(reference.slope_counts).name
+    elevation_before = content_hash(Path(reference.elevation))
+
+    _acquire_fake_fabdem(z * 0.5)
+    result = run_grid_alignment_phase(context, inputs)
+    assert "slope_counts_fabdem" in Path(result.slope_counts).name and "slope_fabdem" in Path(result.slope).name
+    assert result.slope is not None and result.slope_counts is not None
+    assert content_hash(Path(result.elevation)) == elevation_before  # the elevation layer was not touched
+    assert result.slope_source["squares_fabdem"] == 1 and result.slope_source["squares_glo30_fallback"] == [] and result.slope_source["fallback_area_km2"] == 0.0
+    assert content_hash(Path(result.slope_counts)) != content_hash(Path(reference.slope_counts))  # the flatter surface gives other bins
+    with rasterio.open(result.slope) as a, rasterio.open(reference.slope) as b:
+        sa, sb = a.read(1), b.read(1)
+        ok = (sa != a.nodata) & (sb != b.nodata)
+        assert sa[ok].mean() < sb[ok].mean()
+
+
+@pytest.mark.unit
+def test_a_second_run_with_fabdem_finds_the_slope_layers_and_the_elevation_cached(tmp_path):
+    import json
+
+    from geofrea.core import paths as core_paths
+
+    z = _fabdem_surface()
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, z), country_gdf=_country_gdf())
+    context = _context(tmp_path)
+    _acquire_fake_fabdem(z * 0.5)
+    run_grid_alignment_phase(context, inputs)
+    run_grid_alignment_phase(context, inputs)
+    ledger = json.loads((core_paths.interim("PRT", "grid_alignment") / "layers.json").read_text(encoding="utf-8"))
+    status = {row["layer"]: row["status"] for row in ledger}
+    assert status["elevation"] == "cached" and status["slope_fabdem"] == "cached" and status["slope_counts_fabdem"] == "cached"
