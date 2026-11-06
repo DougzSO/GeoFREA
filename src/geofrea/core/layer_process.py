@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import pickle
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,7 @@ from typing import Any
 import psutil
 
 from geofrea.core import memory_guard
+from geofrea.core.atomic_io import replace_durable
 from geofrea.core.memory_guard import COMMIT_STOP_FRACTION, CommitLimitExceeded
 
 logger = logging.getLogger(__name__)
@@ -138,6 +140,7 @@ def run_layer(
     if peak_mb is not None:
         wait = memory_guard.wait_for_memory(layer, peak_mb, margin_mb=margin_mb, timeout_s=wait_timeout_s)
         record.waits, record.waited_s = wait.waits, round(wait.waited_s, 1)
+    remove_stale_work_dirs(layer, work_dir)
     with tempfile.TemporaryDirectory(prefix=f"layer_{layer}_", dir=work_dir) as tmp:
         payload, result, log = Path(tmp) / "payload.pkl", Path(tmp) / "result.pkl", Path(tmp) / "child.log"
         payload.write_bytes(pickle.dumps({"target": target, "kwargs": kwargs}, protocol=pickle.HIGHEST_PROTOCOL))
@@ -175,6 +178,26 @@ def run_layer(
         return pickle.loads(result.read_bytes()), record  # noqa: S301 — written by our own child a moment ago
 
 
+def remove_stale_work_dirs(layer: str, work_dir: Path | None) -> int:
+    """Remove the work folders (`layer_<name>_*`, with their `payload.pkl`) that an earlier run left when it was killed (COMMAND 98).
+
+    Layers run one at a time, so a folder of this kind that exists when a layer starts belongs to a process that no longer runs.
+
+    Returns:
+        The number of folders removed.
+    """
+    if work_dir is None or not Path(work_dir).is_dir():
+        return 0
+    removed = 0
+    for stale in Path(work_dir).glob(f"layer_{layer}_*"):
+        if stale.is_dir() and (stale / "payload.pkl").exists():
+            shutil.rmtree(stale, ignore_errors=True)
+            removed += 1
+    if removed:
+        logger.info("%s: %d work folder(s) of an interrupted run removed.", layer, removed)
+    return removed
+
+
 def _fill(record: LayerRecord, started: float, peak_ws: int, peak_commit: int) -> None:
     record.wall_s = round(time.perf_counter() - started, 1)
     record.peak_rss_mb = round(peak_ws / 2**20, 1)
@@ -186,7 +209,7 @@ def append_ledger(path: Path, records: list[LayerRecord]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps([asdict(r) for r in records], indent=2), encoding="utf-8")
-    tmp.replace(path)
+    replace_durable(tmp, path)
 
 
 def _child_main(payload_file: str, result_file: str) -> int:

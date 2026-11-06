@@ -35,6 +35,7 @@ from geofrea.config_models.land_availability import (
     elevation_sensitivity_m,
 )
 from geofrea.core import paths as core_paths
+from geofrea.core.checkpoint import clear_checkpoint
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
 from geofrea.core.run_logging import PeriodicProgress
 from geofrea.core.schemas import CountryParams
@@ -870,6 +871,8 @@ def run_window(
     progress = PeriodicProgress(
         logger, len(member_ids) + 1, f"{iso} {tech} {role} members", every=5
     )
+    # what the three long steps of this window finished is kept here (COMMAND 98); it is removed when the tables of the window are written
+    work = core_paths.interim(iso, "robustness_analysis") / f"{tech}_{role}_ckpt"
     evaluation = evaluate(
         cell_set.reference,
         cell_set.core,
@@ -877,6 +880,7 @@ def run_window(
         tau=decision.tau,
         block_cells=cells_per_block(max_batch_gb, n_samples),
         progress=progress.step,
+        checkpoint_dir=work / "evaluate",
     )
     ranking = compute_rankings(cell_set, evaluation, decision)
     frames: dict[str, pd.DataFrame | None] = {
@@ -921,6 +925,7 @@ def run_window(
                 logger, 1, f"{iso} {tech} {role} sample-major pass", every=1
             ).step,
             outcome=shortlist,
+            checkpoint_dir=work / "futures",
         )
         in_shortlist = None if shortlist is None else shortlist.shortlist
         frames["futures"] = futures_frame(
@@ -1015,6 +1020,7 @@ def run_window(
                     replicates=prim_cfg.bootstrap_replicates,
                     seed=derive_seed(experiments.sampler.seed),
                     percentiles=(prim_cfg.percentile_low, prim_cfg.percentile_high),
+                    checkpoint_dir=work / "bootstrap",
                 )
             )
             logger.info(
@@ -1573,6 +1579,7 @@ def run_window(
             verdicts[at] = {"rule": None, "verdict": None, "verdict_reason": H5_DESCRIPTIVE}
     frames["hypothesis"] = hypothesis_frame(statistics, verdicts, window)
     tables = _write_tables(tech, role, frames, skips, provenance_for(ranking), paths.out_dir)
+    clear_checkpoint(work)  # the tables of the window are written: nothing is left to resume
     return _window_result(role, window, cell_set, ranking, tables, excluded, drop_members)
 
 

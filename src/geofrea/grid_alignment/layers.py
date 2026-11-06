@@ -142,8 +142,13 @@ def _source(ctx: LayerContext, path: Path) -> Path:
     return clipped_source(path, ctx.grid, memo=FileHashMemo(ctx.interim_dir / "input_sha256.json"))
 
 
-def build_glo30(ctx: LayerContext) -> dict[str, Path | None]:
-    """One pass over the GLO-30 tiles writes the elevation, the slope and the slope bins (COMMAND 75)."""
+def build_glo30(
+    ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None
+) -> dict[str, Path | None]:
+    """One pass over the GLO-30 tiles writes the elevation, the slope and the slope bins (COMMAND 75).
+
+    With a checkpoint directory and the key of the layer, the groups of rows already done by an interrupted run are taken from it (COMMAND 98).
+    """
     with gdal_quiet():
         return glo30_aligned_outputs(
             list(ctx.inputs.slope_dem_tiles),
@@ -151,6 +156,8 @@ def build_glo30(ctx: LayerContext) -> dict[str, Path | None]:
             elevation_out=ctx.path("elevation"),
             slope_out=ctx.path("slope"),
             counts_out=ctx.path("slope_counts"),
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_key=checkpoint_key,
         )
 
 
@@ -174,22 +181,30 @@ def build_wind(ctx: LayerContext, key: str) -> Path:
         )
 
 
-def build_land_cover(ctx: LayerContext) -> Path | None:
+def build_land_cover(
+    ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None
+) -> Path | None:
     return mosaic_land_cover(
         ctx.inputs.land_cover_tiles,
         ctx.path("land_cover"),
         ctx.grid,
         ctx.inputs.country_gdf,
         warp_mem_limit_mb=_LAND_COVER_WARP_MEM_LIMIT_MB,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )
 
 
-def build_land_cover_counts(ctx: LayerContext) -> Path | None:
+def build_land_cover_counts(
+    ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None
+) -> Path | None:
     return land_cover_class_counts(
         ctx.inputs.land_cover_count_tiles or ctx.inputs.land_cover_tiles,
         ctx.path("land_cover_counts"),
         ctx.grid,
         ctx.inputs.country_gdf,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )
 
 

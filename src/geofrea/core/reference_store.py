@@ -39,6 +39,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from geofrea.core.atomic_io import replace_durable
+
 logger = logging.getLogger(__name__)
 
 LATEST_NAME = "latest.json"
@@ -75,7 +77,7 @@ def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    replace_durable(tmp, path)
 
 
 @dataclass
@@ -153,7 +155,7 @@ class ReferenceStore:
             target.parent.mkdir(parents=True, exist_ok=True)
             tmp = target.with_name(target.name + ".tmp")
             shutil.copyfile(source, tmp)
-            os.replace(tmp, target)
+            replace_durable(tmp, target)
         return target
 
     def _place(self, obj: Path, destination: Path) -> None:

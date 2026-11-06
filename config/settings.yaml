@@ -126,3 +126,7 @@ wind_cf_integral: table
 # The schema default is false; it is true here because the run has always been protected this way since 2026-10-14. Set it to false to let the computer
 # sleep as the power plan says (a phase suspended by the system logs hours of wall time that the CPU time of the manifest does not).
 keep_awake: true
+
+# Disk bound, in GB, of the checkpoints of one piece of work (COMMAND 98, core/checkpoint.py): the units of a long layer or phase are stored when done, so an
+# interruption loses minutes. Past the bound the units are not stored and the work goes on unprotected.
+checkpoint_max_gb: 20

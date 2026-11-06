@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -39,6 +38,7 @@ from typing import Any
 
 import yaml
 
+from geofrea.core.atomic_io import replace_durable
 from geofrea.core.reference_store import ReferenceStore, StoreConfig
 
 logger = logging.getLogger(__name__)
@@ -160,7 +160,7 @@ def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-    os.replace(tmp, path)
+    replace_durable(tmp, path)
 
 
 _WIND_LAYER = re.compile(r"(weibull_a|weibull_k|air_density)_\d+m")

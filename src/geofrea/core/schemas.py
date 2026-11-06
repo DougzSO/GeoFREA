@@ -722,6 +722,8 @@ class SettingsFile(BaseModel):
             `core/power.py`). False when the key is absent.
         wind_cf_integral: How F5 evaluates the wind capacity factor integral `I(A, k)` (D-F5-039): `table` (the exact integral on a fixed
             grid, cubic spline, error below 1e-5 in the capacity factor; the setting of the runs) or `exact` (the closed form, the validation mode).
+        checkpoint_max_gb: Bound, in GB, of the disk that the checkpoints of one piece of work may use (COMMAND 98, `core/checkpoint.py`); `main.py`
+            passes it to every layer child as `GEOFREA_CHECKPOINT_MAX_GB`. Past it the units are not stored and the work goes on unprotected.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -732,6 +734,7 @@ class SettingsFile(BaseModel):
     figures: Literal["all", "summary", "none"]
     wind_cf_integral: Literal["table", "exact"] = "exact"
     keep_awake: bool = False
+    checkpoint_max_gb: PositiveFloat = 20.0
 
 
 class GeometryRepairSummary(BaseModel):

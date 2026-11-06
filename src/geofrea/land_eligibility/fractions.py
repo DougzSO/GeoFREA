@@ -106,14 +106,24 @@ def polygon_coverage_fraction(
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
     tie_break_deg: float = TIE_BREAK_DEG,
+    checkpoint=None,
 ) -> np.ndarray:
-    """Share of each pixel covered by the polygons of `gdf` (float32 in [0, 1]); zeros when `gdf` is None or empty."""
+    """Share of each pixel covered by the polygons of `gdf` (float32 in [0, 1]); zeros when `gdf` is None or empty.
+
+    `checkpoint` (a `core.checkpoint.UnitGroup`) stores the finished rows of each strip, and a run that starts again takes them from it (COMMAND 98):
+    a strip is a function of its own geometries only, so the shares are the same value for value.
+    """
     height, width = shape
     out = np.zeros(shape, dtype=np.float32)
     if gdf is None or len(gdf) == 0:
         return out
     gdf = gdf.reset_index(drop=True)
-    for r0, r1, _ in _anchored_strips(transform, height, strip_rows):
+    for n, (r0, r1, _) in enumerate(_anchored_strips(transform, height, strip_rows)):
+        if checkpoint is not None:
+            stored = checkpoint.load(n)
+            if stored is not None and stored["rows"].shape == (r1 - r0, width):
+                out[r0:r1] = stored["rows"]
+                continue
         geoms = _strip_geoms(gdf, transform, r0, r1, width, pad_deg=0.0)
         if len(geoms) == 0:
             continue
@@ -126,6 +136,8 @@ def polygon_coverage_fraction(
             dtype=np.uint8,
         )
         out[r0:r1] = _block_mean(fine.astype(np.float32), factor)
+        if checkpoint is not None:
+            checkpoint.save(n, {"rows": out[r0:r1]})
     return out
 
 
@@ -182,6 +194,7 @@ def river_corridor_fraction(
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
     tie_break_deg: float = TIE_BREAK_DEG,
+    checkpoint=None,
 ) -> np.ndarray:
     """Share of each pixel inside the union of the river corridors: every reach buffered by its own half-width (m) around its centre line (E3).
 
@@ -193,6 +206,8 @@ def river_corridor_fraction(
     Args:
         lines: The reaches (any geometry that buffers), one row each; `None` or empty gives zeros.
         half_width_m: Half-width of the corridor of each row of `lines`, in metres.
+        checkpoint: A `core.checkpoint.UnitGroup` that stores the finished rows of each strip; a run that starts again after an interruption takes
+            them from it (COMMAND 98). A strip depends on its own reaches only, so the shares are the same value for value.
     """
     height, width = shape
     out = np.zeros(shape, dtype=np.float32)
@@ -203,7 +218,12 @@ def river_corridor_fraction(
     if half.shape != (len(lines),):
         raise ValueError(f"{len(half)} half-widths for {len(lines)} reaches")
     geometry = lines.geometry.to_numpy()
-    for r0, r1, k0 in _anchored_strips(transform, height, strip_rows):
+    for n, (r0, r1, k0) in enumerate(_anchored_strips(transform, height, strip_rows)):
+        if checkpoint is not None:
+            stored = checkpoint.load(n)
+            if stored is not None and stored["rows"].shape == (r1 - r0, width):
+                out[r0:r1] = stored["rows"]
+                continue
         lat_mid = 90.0 - (k0 + 0.5 * strip_rows) * abs(transform.e)
         lat_km, lon_km = wgs84_km_per_degree(np.array([lat_mid]))
         m_lat, m_lon = float(lat_km[0]) * 1000.0, float(lon_km[0]) * 1000.0
@@ -225,6 +245,8 @@ def river_corridor_fraction(
             dtype=np.uint8,
         )
         out[r0:r1] = _block_mean(fine.astype(np.float32), factor)
+        if checkpoint is not None:
+            checkpoint.save(n, {"rows": out[r0:r1]})
     return out
 
 
@@ -248,6 +270,7 @@ def mask_setback_fractions(
     factor: int = DEFAULT_FACTOR,
     strip_rows: int = DEFAULT_STRIP_ROWS,
     block_subcolumns: int = RIVER_BLOCK_SUBCOLUMNS,
+    checkpoint=None,
 ) -> dict[float, np.ndarray]:
     """For each setback in `setbacks_m`, the share of each pixel within that geodesic distance of the True pixels of `mask` (settlements, E6).
 
@@ -255,6 +278,9 @@ def mask_setback_fractions(
     km per degree at the middle of the strip, anchored on the absolute lattice) and the share of sub-pixels within the setback becomes the pixel's excluded
     fraction. The distance is measured from sub-pixel centres, so `HALF_SUBPIXEL` (half the smaller side of a sub-pixel) is added to the setback: the
     setback runs from the edge of the settlement pixels, and a setback of 0 excludes the settlement pixels and nothing else.
+
+    `checkpoint` (a `core.checkpoint.UnitGroup`) stores the finished rows of each strip for every setback, and a run that starts again after an
+    interruption takes them from it (COMMAND 98): a strip is a function of the mask around it only, so the shares are the same value for value.
     """
     height = shape[0]
     out = {float(t): np.zeros(shape, dtype=np.float32) for t in setbacks_m}
@@ -263,7 +289,14 @@ def mask_setback_fractions(
     mask = np.asarray(mask, dtype=bool)
     sub_deg = abs(transform.a) / factor
     max_m = max(float(t) for t in setbacks_m)
-    for r0, r1, k0 in _anchored_strips(transform, height, strip_rows):
+    names = {t: f"t{i}" for i, t in enumerate(out)}  # one stored array per setback, in the order of `setbacks_m`
+    for n, (r0, r1, k0) in enumerate(_anchored_strips(transform, height, strip_rows)):
+        if checkpoint is not None:
+            stored = checkpoint.load(n)
+            if stored is not None and all(stored.get(name) is not None and stored[name].shape == (r1 - r0, shape[1]) for name in names.values()):
+                for t, share in out.items():
+                    share[r0:r1] = stored[names[t]]
+                continue
         lat_mid = 90.0 - (k0 + 0.5 * strip_rows) * abs(transform.e)
         lat_km, lon_km = wgs84_km_per_degree(np.array([lat_mid]))
         dy_m, dx_m = sub_deg * float(lat_km[0]) * 1000.0, sub_deg * float(lon_km[0]) * 1000.0
@@ -285,4 +318,6 @@ def mask_setback_fractions(
             dist = distance_transform_edt(~fine[:, a:b], sampling=(dy_m, dx_m))[inner, c0 - a : c1 - a]
             for t, share in out.items():
                 share[r0:r1, c0 // factor : c1 // factor] = _block_mean((dist <= t + edge_m).astype(np.float32), factor)
+        if checkpoint is not None:
+            checkpoint.save(n, {names[t]: share[r0:r1] for t, share in out.items()})
     return out

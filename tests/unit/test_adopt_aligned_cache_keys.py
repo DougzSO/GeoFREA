@@ -132,6 +132,26 @@ def test_the_adoption_needs_a_proof_of_equality_for_exactly_these_two_codes():
         adopt.require_proof(good, "older", "new")
 
 
+def test_a_recomputed_layer_is_left_out_of_the_proof_and_every_other_layer_is_judged_by_itself():
+    adopt = _script()
+    rows = {
+        "aligned/grid": {"equal": True},
+        "aligned/roads": {"equal": False},
+        "aligned/roads_distance_capped": {"equal": False},
+        "aligned/poi": {"equal": False, "only_in_new": True},
+        "aligned_rasters": {"equal": False},
+    }
+    proof = {"equal": False, "n_equal": 1, "n_artifacts": 5, "sample": "PRT", "old_cache_code": "old", "new_cache_code": "new", "artifacts": rows}
+    with pytest.raises(adopt.AdoptionError, match="no adoption"):
+        adopt.require_proof(proof, "old", "new")  # without --recompute the global flag decides
+    adopt.require_proof(proof, "old", "new", ("roads",))  # roads, its capped flag, the summary and the only-in-new poi are left out
+    rows["aligned/grid"] = {"equal": False}
+    with pytest.raises(adopt.AdoptionError, match="aligned/grid"):
+        adopt.require_proof(proof, "old", "new", ("roads",))  # a layer that is not recomputed must still be equal
+    with pytest.raises(adopt.AdoptionError, match="other code"):
+        adopt.require_proof({**proof, "artifacts": {"aligned/grid": {"equal": True}}}, "older", "new", ("roads",))
+
+
 def test_the_equivalence_check_compares_the_artifacts_of_the_phase_by_content_hash():
     check = importlib.util.module_from_spec(importlib.util.spec_from_file_location("check_aligned_equivalence", SCRIPT.parent / "proofs" / "check_aligned_equivalence.py"))
     check.__spec__.loader.exec_module(check)
@@ -186,3 +206,58 @@ def test_check_mode_resolves_the_revision_and_the_proof_without_adopting_or_runn
     monkeypatch.setattr(module, "adopt", must_not_run)
     assert module.main(["PRT", "--revision", "adopt-base-75", "--proof", str(proof), "--check"]) == 0
     assert "check only" in capsys.readouterr().out
+
+
+def _check_module():
+    spec = importlib.util.spec_from_file_location("check_aligned_equivalence", SCRIPT.parent / "proofs" / "check_aligned_equivalence.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _row_manifest(**hashes):
+    return {"artifacts": {k: {"phase": "grid_alignment", "sha256": "bytes-" + v, "content_sha256": v} for k, v in hashes.items()}}
+
+
+def test_a_layer_only_the_new_tree_produces_is_not_judged_but_one_the_new_tree_loses_is():
+    check = _check_module()
+    grown = check.compare_manifests(_row_manifest(a="1"), _row_manifest(a="1", ghs="7"))
+    assert grown["equal"]
+    assert grown["only_in_new"] == ["ghs"] and grown["artifacts"]["ghs"]["only_in_new"] is True and grown["artifacts"]["ghs"]["equal"] is False
+    assert grown["n_artifacts"] == 2 and grown["n_equal"] == 1  # it is listed and counted, only left out of the verdict
+    lost = check.compare_manifests(_row_manifest(a="1", b="2"), _row_manifest(a="1"))
+    assert not lost["equal"] and lost["only_in_new"] == []  # a layer that disappeared is a difference
+    assert not check.compare_manifests(_row_manifest(), _row_manifest(ghs="7"))["equal"]  # nothing judged is not equal
+
+
+def test_apply_tolerance_leaves_the_only_in_new_layer_out_of_the_verdict(tmp_path):
+    check = _check_module()
+    old, new = _row_manifest(a="1"), _row_manifest(a="1", ghs="7")
+    verdict = check.apply_tolerance(check.compare_manifests(old, new), old, new, tmp_path, tmp_path)
+    assert verdict["equal"] and verdict["artifacts"]["ghs"]["only_in_new"] is True
+    differ = check.compare_manifests(_row_manifest(a="1"), _row_manifest(a="2", ghs="7"))
+    assert not check.apply_tolerance(differ, old, new, tmp_path, tmp_path)["equal"]  # the judged layer still decides
+
+
+def test_new_revision_runs_that_tree_instead_of_the_working_tree(tmp_path, monkeypatch):
+    check = _check_module()
+    ran: list[Path] = []
+    seen: list[tuple[bool, bool]] = []  # (has src/geofrea, has its own .git) at the moment of the run: the temporary tree is gone after main()
+
+    def fake_run(repo, data_dir, sample, real_raw, phases=check.PHASE):
+        ran.append(Path(repo))
+        seen.append(((Path(repo) / "src" / "geofrea").is_dir(), (Path(repo) / ".git").exists()))
+        return _row_manifest(a="1")
+
+    monkeypatch.setattr(check, "_run_f2a", fake_run)
+    monkeypatch.setattr(check, "cache_code_at", lambda src: str(Path(src).parent.parent.name))
+    out = tmp_path / "proof.json"
+    assert check.main(["--revision", "HEAD", "--out", str(out)]) == 0
+    assert ran[1] == check.REPO  # without the option the new tree is the working tree
+    ran.clear()
+    assert check.main(["--revision", "HEAD", "--new-revision", "HEAD", "--out", str(out)]) == 0
+    assert ran[1] != check.REPO
+    assert seen[1] == (True, True)  # a tree extracted from the revision, with a commit of its own
+    import json
+
+    assert json.loads(out.read_text(encoding="utf-8"))["new_revision"] == "HEAD"

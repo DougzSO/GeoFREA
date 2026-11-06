@@ -16,6 +16,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from pydantic import BaseModel, ValidationError
 
+from geofrea.core.atomic_io import replace_durable
+
 SCHEMA_VERSION_KEY = b"geofrea_schema_version"
 SCHEMA_NAME_KEY = b"geofrea_row_schema"
 _SAMPLE_ROWS = 200
@@ -84,7 +86,13 @@ def write_table(
     path.parent.mkdir(parents=True, exist_ok=True)
     table = pa.Table.from_pandas(df, preserve_index=False)
     table = table.cast(table_metadata(table.schema, schema_version, row_model, extra_metadata))
-    pq.write_table(table, path, compression=compression)
+    partial = path.with_name(path.name + ".partial")  # the table appears under its name whole or not at all (A-09)
+    try:
+        pq.write_table(table, partial, compression=compression)
+        replace_durable(partial, path)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
     return path
 
 
@@ -146,7 +154,7 @@ class TableWriter:
             self.write(self._empty)
         assert self._writer is not None
         self._writer.close()
-        self._partial.replace(self.path)
+        replace_durable(self._partial, self.path)
         return self.path
 
     def abort(self) -> None:

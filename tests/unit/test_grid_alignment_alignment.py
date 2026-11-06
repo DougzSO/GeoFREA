@@ -892,3 +892,30 @@ def test_a_clip_cache_survives_the_move_of_its_source_without_being_recomputed(t
     with patch.object(layers_module, "read_clipped_to_country", side_effect=fail_if_called):
         again = _read_clipped_with_cache(new, country_gdf, cache_path)
     assert len(again) == len(first)
+
+
+@pytest.mark.unit
+def test_the_glo30_pass_gets_its_checkpoint_and_the_phase_clears_it_once_the_rasters_are_recorded(tmp_path):
+    """COMMAND 98: the key of the layer is the key of the checkpoint; the groups of rows stay until the keys of the rasters are written."""
+    from pathlib import Path
+
+    from geofrea.core.cache_key import cache_is_current
+
+    inputs = _inputs(slope_dem_tiles=_write_dem_tile(tmp_path, 55.0), country_gdf=_country_gdf())
+    seen: dict = {}
+    real = layers_module.glo30_aligned_outputs
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        out = real(*args, **kwargs)
+        seen["there_when_the_pass_ends"] = Path(kwargs["checkpoint_dir"]).is_dir()
+        return out
+
+    with patch.object(layers_module, "glo30_aligned_outputs", side_effect=spy):
+        result = run_grid_alignment_phase(_context(tmp_path), inputs)
+
+    checkpoint = Path(seen["checkpoint_dir"])
+    assert checkpoint.name == "glo30_ckpt" and len(seen["checkpoint_key"]) == 64
+    assert seen["there_when_the_pass_ends"] is True
+    assert not checkpoint.exists()  # cleared by the phase after the keys were written
+    assert cache_is_current(result.elevation, seen["checkpoint_key"])

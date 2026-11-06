@@ -960,3 +960,138 @@ def test_wind_does_not_need_the_zone_so_a_cell_without_one_stays(tmp_path):
     result, _ = _run(tmp_path / "wind", "wind", n=16, no_zone_cell=110)
     assert result.n_excluded_cell_members == 0
     assert 110 in set(pd.read_parquet(result.lcoe_summary)["cell_id"])
+
+
+# -- COMMAND 98: a member is the unit of resume ------------------------------------------------------------------
+
+
+class _PowerLoss(BaseException):  # like a Ctrl+C or a kill: not an Exception
+    pass
+
+
+def _build_twice(tmp_path, tech, name, dirs, **kw):
+    registry = load_technologies(TECHNOLOGIES)
+    zzz = load_parameters(PARAMETERS).countries["ZZZ"]
+    return build_lcoe(
+        "ZZZ", registry, zzz, [tech], sampler_seed=7, sampler_size=40, max_batch_gb=1.0,
+        out_dir=tmp_path / name, elevation_sensitivity={"wind": 3000.0, "solar": None}, **dirs, **kw,
+    )  # fmt: skip
+
+
+def _fail_at_member(monkeypatch, pipeline, at_call):
+    """Make the `at_call`-th member (counting those computed in this run) raise a `_PowerLoss`; the list holds the members computed."""
+    real = pipeline.iter_member_summaries
+    computed: list[int] = []
+
+    def spy(*args, **kwargs):
+        computed.append(len(computed) + 1)
+        if at_call is not None and len(computed) == at_call:
+            raise _PowerLoss
+        yield from real(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "iter_member_summaries", spy)
+    return computed
+
+
+def _same_tables(a: Path, b: Path) -> None:
+    from geofrea.core.content_hash import content_hash
+
+    names = sorted(p.name for p in a.glob("*.parquet"))
+    assert names and names == sorted(p.name for p in b.glob("*.parquet"))
+    for name in names:
+        assert content_hash(a / name) == content_hash(b / name), name
+
+
+@pytest.mark.parametrize("tech", TECHS)
+def test_an_interruption_between_members_resumes_to_the_continuous_tables(tmp_path, monkeypatch, tech):
+    from geofrea.lcoe_modeling import pipeline
+
+    dirs = _stage(tmp_path, tech)
+    _build_twice(tmp_path, tech, "continuous", dirs)
+    _fail_at_member(monkeypatch, pipeline, 3)
+    with pytest.raises(_PowerLoss):
+        _build_twice(tmp_path, tech, "a", dirs)
+    monkeypatch.undo()
+    computed = _fail_at_member(monkeypatch, pipeline, None)
+    _build_twice(tmp_path, tech, "a", dirs)
+    assert len(computed) == 1  # the two members that were done are not computed again
+    _same_tables(tmp_path / "continuous", tmp_path / "a")
+    assert not (tmp_path / "interim").exists() or not list((tmp_path / "interim").rglob("*_ckpt"))  # the store is gone
+
+
+def test_two_interruptions_in_a_row_still_give_the_continuous_tables(tmp_path, monkeypatch):
+    from geofrea.lcoe_modeling import pipeline
+
+    dirs = _stage(tmp_path, "wind")
+    _build_twice(tmp_path, "wind", "continuous", dirs)
+    for at in (2, 2):  # the second run computes one more member (m_a) and is stopped on the next
+        _fail_at_member(monkeypatch, pipeline, at)
+        with pytest.raises(_PowerLoss):
+            _build_twice(tmp_path, "wind", "x", dirs)
+        monkeypatch.undo()
+    _fail_at_member(monkeypatch, pipeline, None)
+    _build_twice(tmp_path, "wind", "x", dirs)
+    _same_tables(tmp_path / "continuous", tmp_path / "x")
+
+
+def test_a_run_whose_members_are_all_stored_reads_no_input(tmp_path, monkeypatch):
+    from geofrea.core.checkpoint import CheckpointStore
+    from geofrea.lcoe_modeling import pipeline
+
+    dirs = _stage(tmp_path, "wind")
+    _build_twice(tmp_path, "wind", "continuous", dirs)
+    monkeypatch.setattr(CheckpointStore, "clear", lambda self: None)  # the stop comes after the last member, before the cleanup
+    _build_twice(tmp_path, "wind", "first", dirs)
+    monkeypatch.undo()
+
+    real_reader = pipeline.read_member_inputs
+
+    def refuse_the_central_scenario(*args, **kwargs):
+        if "__central" in kwargs["potential_path"].name:  # the other land scenarios have their own, unstored, tables
+            raise AssertionError("an input was read although every member is stored")
+        return real_reader(*args, **kwargs)
+
+    monkeypatch.setattr(pipeline, "read_member_inputs", refuse_the_central_scenario)
+    _build_twice(tmp_path, "wind", "second", dirs)
+    _same_tables(tmp_path / "continuous", tmp_path / "second")
+
+
+def test_a_cut_member_unit_is_computed_again_on_its_own(tmp_path, monkeypatch):
+    from geofrea.lcoe_modeling import pipeline
+
+    dirs = _stage(tmp_path, "wind")
+    _build_twice(tmp_path, "wind", "continuous", dirs)
+    _fail_at_member(monkeypatch, pipeline, 3)
+    with pytest.raises(_PowerLoss):
+        _build_twice(tmp_path, "wind", "a", dirs)
+    monkeypatch.undo()
+    victim = next((tmp_path).rglob("m0_supply.parquet"))
+    victim.write_bytes(victim.read_bytes()[:40])
+    computed = _fail_at_member(monkeypatch, pipeline, None)
+    _build_twice(tmp_path, "wind", "a", dirs)
+    assert len(computed) == 2  # m0 on its own and m_b; m_a comes from the store
+    _same_tables(tmp_path / "continuous", tmp_path / "a")
+
+
+def test_a_member_checkpoint_of_other_inputs_is_not_used(tmp_path, monkeypatch, caplog):
+    import logging
+
+    from geofrea.lcoe_modeling import pipeline
+
+    dirs = _stage(tmp_path, "wind")
+    _fail_at_member(monkeypatch, pipeline, 3)
+    with pytest.raises(_PowerLoss):
+        _build_twice(tmp_path, "wind", "a", dirs)
+    monkeypatch.undo()
+    potential = dirs["potential_dir"] / "potential_wind__central.parquet"
+    table = pd.read_parquet(potential)
+    meta = pq.read_schema(potential).metadata
+    table["P_MW"] = table["P_MW"] * 1.0001  # another F5 table: the stored members were computed from this one's predecessor
+    write_table(
+        table, potential, schema_version=POTENTIAL_TABLE_SCHEMA_VERSION, row_model=PotentialRow,
+        extra_metadata={POTENTIAL_KEY: meta[POTENTIAL_KEY.encode()].decode()},
+    )  # fmt: skip
+    computed = _fail_at_member(monkeypatch, pipeline, None)
+    with caplog.at_level(logging.WARNING):
+        _build_twice(tmp_path, "wind", "a", dirs)
+    assert len(computed) == 3 and "another computation" in caplog.text

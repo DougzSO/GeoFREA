@@ -24,6 +24,7 @@ from rasterio.enums import Resampling
 from rasterio.warp import reproject, transform_bounds
 from rasterio.windows import Window, from_bounds
 
+from geofrea.core.checkpoint import CheckpointStore, make_key
 from geofrea.core.constants import (
     NODATA_FLOAT,
     NODATA_UINT8,
@@ -473,6 +474,7 @@ _GLO30_SAMPLES_PER_DEGREE = 3600
 _GLO30_TILE_RE = re.compile(r"_([NS])(\d{2})_00_([EW])(\d{3})_00_DEM")
 _SLOPE_STRIP_GRID_ROWS = 1
 _OUTPUT_BLOCK_ROWS = 256  # rows of the grid held and written at once by `glo30_aligned_outputs`: a multiple of the strip and of the 256-pixel tile
+_CHECKPOINT_UNIT_ROWS = 32  # rows of the grid whose result is stored when done (COMMAND 98): divides the output block, so a stop loses at most this many rows
 
 
 def _glo30_tile_index(tiles: list) -> dict[tuple[int, int], Path]:
@@ -607,6 +609,8 @@ def glo30_aligned_outputs(
     counts_out=None,
     samples_per_degree: int | None = None,
     nodata_out: float = NODATA_FLOAT,
+    checkpoint_dir: Path | None = None,
+    checkpoint_key: str | None = None,
 ) -> dict[str, Path | None]:
     """The aligned elevation, the aligned slope and the slope bins of the grid from ONE pass over the Copernicus GLO-30 tiles (COMMAND 75).
 
@@ -617,6 +621,11 @@ def glo30_aligned_outputs(
 
     Returns a dict with the keys `elevation`, `slope` and `slope_counts`: the written path, or None when it was not asked for or no valid
     sample exists for it (elevation and slope: no valid elevation sample; counts: no valid slope sample).
+
+    With `checkpoint_dir` and `checkpoint_key` (the key of the layer: its inputs, grid and code) the finished result of every group of
+    `_CHECKPOINT_UNIT_ROWS` grid rows is stored (`core.checkpoint`), and a run that starts again after an interruption takes those groups from
+    the store instead of computing them: each row is a function of its own samples only, so what is written is the same, value for value. The
+    caller clears the directory once the rasters are recorded.
 
     Implements: M-F2a-07, M-F2a-08.
     """
@@ -669,6 +678,74 @@ def glo30_aligned_outputs(
     streams: dict[str, RasterStream] = {}
     any_elevation = any_counts = False
     written: dict[str, Path | None] = {"elevation": None, "slope": None, "slope_counts": None}
+    store = None
+    if checkpoint_dir is not None and checkpoint_key is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                layer=checkpoint_key,
+                outputs=[elevation_out is not None, slope_out is not None, want_counts],
+                block_rows=block_rows,
+                unit_rows=_CHECKPOINT_UNIT_ROWS,
+                strip_rows=_SLOPE_STRIP_GRID_ROWS,
+                samples_per_degree=sp,
+                nodata=nodata_out,
+                shape=[grid.height, width],
+            ),
+            label="elevation, slope and slope bins",
+        )
+
+    def compute_unit(u0: int, u1: int, handles) -> tuple[dict[str, np.ndarray], dict[str, bool]]:
+        """The final rows `u0:u1` of the elevation, the slope and the bins: the same values the whole block gave row by row."""
+        rows_u = u1 - u0
+        sums = {k: np.zeros((rows_u, width)) for k in ("z", "slope")} if want_means else {}
+        n = {k: np.zeros((rows_u, width), dtype=np.int64) for k in ("z", "slope")} if want_means else {}
+        counts = np.zeros((SLOPE_BINS, rows_u, width), dtype=np.uint16) if want_counts else None
+        for r0 in range(u0, u1, _SLOPE_STRIP_GRID_ROWS):
+            progress.step()
+            r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, u1)
+            strip = _glo30_strip_samples(index, grid, r0, r1, sp, handles)
+            if strip is None:
+                continue
+            z, slope, grow, gcol = strip
+            lo, hi = r0 - u0, r1 - u0
+            if want_means:
+                pixel = grow[:, None] * width + gcol[None, :]
+                for name, values in (("z", z), ("slope", slope)):
+                    ok = np.isfinite(values)
+                    if not ok.any():
+                        continue
+                    size = (r1 - r0) * width
+                    total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
+                    count = np.bincount(pixel[ok], minlength=size)
+                    sums[name][lo:hi] = total.reshape(r1 - r0, width)
+                    n[name][lo:hi] = count.reshape(r1 - r0, width)
+            if want_counts:
+                valid = np.isfinite(slope)
+                if not valid.any():
+                    continue
+                bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
+                key = (grow[:, None] * width + gcol[None, :]) * SLOPE_BINS + bins
+                flat = np.bincount(key[valid], minlength=(r1 - r0) * width * SLOPE_BINS)
+                counts[:, lo:hi, :] = flat.reshape(r1 - r0, width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
+        outside = ~grid.country_mask[u0:u1]
+        result: dict[str, np.ndarray] = {}
+        flags = {"has_z": False, "has_counts": False}
+        if want_means:
+            flags["has_z"] = bool(n["z"].any())
+            for name in ("z", "slope"):
+                data = np.full((rows_u, width), nodata_out, dtype=np.float32)
+                has = n[name] > 0
+                data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
+                data[outside] = nodata_out
+                result[name] = data
+        if want_counts:
+            flags["has_counts"] = bool(counts.any())
+            counts[:, outside] = SLOPE_COUNT_NODATA
+            result["counts"] = counts
+        return result, flags
+
+    resumed = 0
     with contextlib.ExitStack() as stack, contextlib.closing(_TileHandles()) as handles:
         if want_means:
             for name, out in (("elevation", elevation_out), ("slope", slope_out)):
@@ -679,52 +756,44 @@ def glo30_aligned_outputs(
         for b0 in range(0, grid.height, block_rows):
             b1 = min(b0 + block_rows, grid.height)
             rows = b1 - b0
-            sums = {k: np.zeros((rows, width)) for k in ("z", "slope")} if want_means else {}
-            n = {k: np.zeros((rows, width), dtype=np.int64) for k in ("z", "slope")} if want_means else {}
-            counts = np.zeros((SLOPE_BINS, rows, width), dtype=np.uint16) if want_counts else None
-            for r0 in range(b0, b1, _SLOPE_STRIP_GRID_ROWS):
-                progress.step()
-                r1 = min(r0 + _SLOPE_STRIP_GRID_ROWS, b1)
-                strip = _glo30_strip_samples(index, grid, r0, r1, sp, handles)
-                if strip is None:
-                    continue
-                z, slope, grow, gcol = strip
-                lo, hi = r0 - b0, r1 - b0
-                if want_means:
-                    pixel = grow[:, None] * width + gcol[None, :]
-                    for name, values in (("z", z), ("slope", slope)):
-                        ok = np.isfinite(values)
-                        if not ok.any():
-                            continue
-                        size = (r1 - r0) * width
-                        total = np.bincount(pixel[ok], weights=values[ok].astype(np.float64), minlength=size)
-                        count = np.bincount(pixel[ok], minlength=size)
-                        sums[name][lo:hi] = total.reshape(r1 - r0, width)
-                        n[name][lo:hi] = count.reshape(r1 - r0, width)
-                if want_counts:
-                    valid = np.isfinite(slope)
-                    if not valid.any():
-                        continue
-                    bins = np.clip(np.floor(np.where(valid, slope, 0)), 0, SLOPE_BINS - 1).astype(np.int32)
-                    key = (grow[:, None] * width + gcol[None, :]) * SLOPE_BINS + bins
-                    flat = np.bincount(key[valid], minlength=(r1 - r0) * width * SLOPE_BINS)
-                    counts[:, lo:hi, :] = flat.reshape(r1 - r0, width, SLOPE_BINS).transpose(2, 0, 1).astype(np.uint16)
-            window = Window(0, b0, width, rows)
-            outside = ~grid.country_mask[b0:b1]
+            block: dict[str, np.ndarray] = {}
             if want_means:
-                any_elevation = any_elevation or bool(n["z"].any())
-                for name, key_name in (("z", "elevation"), ("slope", "slope")):
-                    if key_name not in streams:
-                        continue
-                    data = np.full((rows, width), nodata_out, dtype=np.float32)
-                    has = n[name] > 0
-                    data[has] = (sums[name][has] / n[name][has]).astype(np.float32)
-                    data[outside] = nodata_out
-                    streams[key_name].dataset.write(data, 1, window=window)
+                block["z"] = np.full((rows, width), nodata_out, dtype=np.float32)
+                block["slope"] = np.full((rows, width), nodata_out, dtype=np.float32)
             if want_counts:
-                any_counts = any_counts or bool(counts.any())
-                counts[:, outside] = SLOPE_COUNT_NODATA
-                streams["slope_counts"].dataset.write(counts, window=window)
+                block["counts"] = np.zeros((SLOPE_BINS, rows, width), dtype=np.uint16)
+            for u0 in range(b0, b1, _CHECKPOINT_UNIT_ROWS):
+                u1 = min(u0 + _CHECKPOINT_UNIT_ROWS, b1)
+                lo, hi = u0 - b0, u1 - b0
+                unit = u0 // _CHECKPOINT_UNIT_ROWS
+                stored = store.load_arrays(unit) if store is not None else None
+                if stored is not None and all(
+                    stored[0].get(name) is not None and stored[0][name].shape[-2:] == (u1 - u0, width) for name in block
+                ):
+                    result, flags = stored[0], stored[1]
+                    resumed += 1
+                    for _ in range(u1 - u0):
+                        progress.step()
+                else:
+                    result, flags = compute_unit(u0, u1, handles)
+                    if store is not None:
+                        store.save_arrays(unit, result, flags)
+                if want_means:
+                    block["z"][lo:hi] = result["z"]
+                    block["slope"][lo:hi] = result["slope"]
+                    any_elevation = any_elevation or bool(flags["has_z"])
+                if want_counts:
+                    block["counts"][:, lo:hi, :] = result["counts"]
+                    any_counts = any_counts or bool(flags["has_counts"])
+            window = Window(0, b0, width, rows)
+            if want_means:
+                for name, key_name in (("z", "elevation"), ("slope", "slope")):
+                    if key_name in streams:
+                        streams[key_name].dataset.write(block[name], 1, window=window)
+            if want_counts:
+                streams["slope_counts"].dataset.write(block["counts"], window=window)
+        if resumed:
+            logger.info("elevation, slope and slope bins: %d groups of rows taken from the checkpoint.", resumed)
         if want_means and any_elevation:
             for name in ("elevation", "slope"):
                 if name in streams:
@@ -816,16 +885,25 @@ def _exact_block_factor(src, grid: GridContext) -> int | None:
     return k
 
 
-def _count_exact(src, counts: np.ndarray, grid: GridContext, k: int, lut: np.ndarray) -> bool:
-    """Block-count one tile into `counts` (class bands only); False if the tile does not touch the grid."""
-    n_classes = len(WORLDCOVER_CLASSES)
+def _count_region(src, grid: GridContext, k: int) -> tuple[int, int, int, int, int, int] | None:
+    """The window of the grid that block-counting one tile fills, `(gr0, gr1, gc0, gc1, r_t, c_t)`, or None if the tile does not touch the grid."""
     c_t = round((src.transform.c - grid.transform.c) / abs(grid.transform.a))
     r_t = round((grid.transform.f - src.transform.f) / abs(grid.transform.a))
     t_cols, t_rows = src.width // k, src.height // k
     gr0, gr1 = max(r_t, 0), min(r_t + t_rows, grid.height)
     gc0, gc1 = max(c_t, 0), min(c_t + t_cols, grid.width)
     if gr0 >= gr1 or gc0 >= gc1:
+        return None
+    return gr0, gr1, gc0, gc1, r_t, c_t
+
+
+def _count_exact(src, counts: np.ndarray, grid: GridContext, k: int, lut: np.ndarray) -> bool:
+    """Block-count one tile into `counts` (class bands only); False if the tile does not touch the grid."""
+    n_classes = len(WORLDCOVER_CLASSES)
+    region = _count_region(src, grid, k)
+    if region is None:
         return False
+    gr0, gr1, gc0, gc1, r_t, c_t = region
     n_c = gc1 - gc0
     rb = (np.arange(_STRIP_GRID_ROWS * k) // k)[:, None]
     cb = (np.arange(n_c * k) // k)[None, :]
@@ -842,7 +920,14 @@ def _count_exact(src, counts: np.ndarray, grid: GridContext, k: int, lut: np.nda
     return True
 
 
-def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country_gdf):
+def land_cover_class_counts(
+    lc_tiles: list,
+    out_path,
+    grid: GridContext,
+    country_gdf,
+    checkpoint_dir: Path | None = None,
+    checkpoint_key: str | None = None,
+):
     """Per grid pixel, how many ESA WorldCover samples fall in each class (D-F2a-015).
 
     The point-sample mosaic (`mosaic_land_cover`) labels a 1.1 km pixel with the class of the one source sample under
@@ -858,6 +943,10 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     Raises:
         LandCoverCountNotExactError: an in-country tile cannot be block-counted exactly on the grid (no approximate mode exists).
         RuntimeError: a tile that cannot be read overlaps the country, as in `mosaic_land_cover`.
+
+    With `checkpoint_dir` and `checkpoint_key` (the key of the layer) the counts of every finished tile are stored (`core.checkpoint`) and a run
+    that starts again after an interruption takes them from the store: a tile fills its own window of the grid completely, so the window is the
+    same however the tiles are ordered. The caller clears the directory once the raster is recorded.
 
     Returns the output path, or None if no tile overlapped.
     """
@@ -898,11 +987,43 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     for i, cls in enumerate(WORLDCOVER_CLASSES):
         lut[cls] = i + 1
     progress = PeriodicProgress(logger, len(in_country), "land_cover class counts")
+    block_factor = next(iter(exact_k))
+    store = None
+    if checkpoint_dir is not None and checkpoint_key is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                layer=checkpoint_key,
+                tiles=[p.name for p in in_country],
+                block_factor=block_factor,
+                shape=[n_bands, grid.height, grid.width],
+            ),
+            label="land_cover class counts",
+        )
     used = 0
     for tile_path in in_country:
         progress.step()
+        stored = store.load_arrays(tile_path.stem) if store is not None else None
+        if stored is not None:
+            arrays, meta = stored
+            if meta["touched"]:
+                gr0, gr1, gc0, gc1 = meta["window"]
+                counts[:, gr0:gr1, gc0:gc1] = arrays["counts"]
+            used += int(meta["touched"])
+            continue
         with rasterio.open(str(tile_path)) as src:
-            touched = _count_exact(src, counts, grid, next(iter(exact_k)), lut)
+            region = _count_region(src, grid, block_factor)
+            touched = _count_exact(src, counts, grid, block_factor, lut)
+        if store is not None:
+            if touched:
+                gr0, gr1, gc0, gc1 = region[:4]
+                store.save_arrays(
+                    tile_path.stem,
+                    {"counts": counts[:, gr0:gr1, gc0:gc1]},
+                    {"touched": True, "window": [gr0, gr1, gc0, gc1]},
+                )
+            else:
+                store.save_arrays(tile_path.stem, {}, {"touched": False})
         used += int(touched)
     logger.info("    Land cover class counts (exact blocks): %d tiles used.", used)
     if used == 0:
@@ -933,7 +1054,32 @@ def land_cover_class_counts(lc_tiles: list, out_path, grid: GridContext, country
     return Path(out_path)
 
 
-def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf, warp_mem_limit_mb: int = 1024):
+def _nonzero_window(part: np.ndarray) -> list[int] | None:
+    """`[row0, row1, col0, col1]` of the smallest window that holds every non-zero cell of `part`, or None when it is all zero."""
+    rows = np.flatnonzero(part.any(axis=1))
+    if rows.size == 0:
+        return None
+    cols = np.flatnonzero(part.any(axis=0))
+    return [int(rows[0]), int(rows[-1]) + 1, int(cols[0]), int(cols[-1]) + 1]
+
+
+def _merge_first_wins(lc_out: np.ndarray, part: np.ndarray, window: list[int]) -> None:
+    """Put the cells of `part` (the tile, in `window` of the mosaic) that are not zero where the mosaic is still zero: the first tile to cover a pixel keeps it."""
+    r0, r1, c0, c1 = window
+    target = lc_out[r0:r1, c0:c1]
+    fill = (part > 0) & (target == 0)
+    target[fill] = part[fill]
+
+
+def mosaic_land_cover(
+    lc_tiles: list,
+    out_path,
+    grid: GridContext,
+    country_gdf,
+    warp_mem_limit_mb: int = 1024,
+    checkpoint_dir: Path | None = None,
+    checkpoint_key: str | None = None,
+):
     """Build an ESA WorldCover mosaic from multiple tiles.
 
     Reprojects and merges tiles onto the reference grid (nearest-
@@ -966,6 +1112,10 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf, 
         country_gdf: Country GeoDataFrame, for the tile-overlap bounds check.
         warp_mem_limit_mb: Working memory of one GDAL warp chunk, MB. Nearest-neighbour takes the value of one source pixel, so the chunking
             decides the memory and never a value.
+        checkpoint_dir: With `checkpoint_key` (the key of the layer), where the part of the mosaic each finished tile contributed is stored
+            (`core.checkpoint`); a run that starts again after an interruption takes those parts from the store and merges them in the same
+            order, so the first tile to cover a pixel still keeps it. The caller clears the directory once the raster is recorded.
+        checkpoint_key: The key of the layer; the list of tiles in order and the warp memory limit are added to it.
 
     Returns:
         Path to the mosaicked land-cover raster, or None if no tile was used.
@@ -985,11 +1135,30 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf, 
     # carriage-return redraw is unreadable once the console is
     # redirected to a log file (CONVENTIONS.md "Long-running scripts").
     progress = PeriodicProgress(logger, len(lc_tiles), "land_cover mosaic")
+    store = None
+    if checkpoint_dir is not None and checkpoint_key is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                layer=checkpoint_key,
+                tiles=[Path(t).name for t in lc_tiles],  # the order decides which tile keeps a pixel two tiles cover
+                warp_mem_limit_mb=warp_mem_limit_mb,  # the chunking of a warp changed 180 pixels of BRA (COMMAND 88)
+                shape=[grid.height, grid.width],
+            ),
+            label="land_cover mosaic",
+        )
 
     for tile in lc_tiles:
         progress.step()
         tile_path = Path(tile)
         tile_bounds: tuple[float, float, float, float] | None = None
+        stored = store.load_arrays(tile_path.stem) if store is not None else None
+        if stored is not None:
+            arrays, meta = stored
+            if meta["window"] is not None:
+                _merge_first_wins(lc_out, arrays["part"], meta["window"])
+            used += 1
+            continue
         try:
             with rasterio.open(str(tile)) as src:
                 tile_bounds = tuple(float(b) for b in src.bounds)
@@ -1013,6 +1182,10 @@ def mosaic_land_cover(lc_tiles: list, out_path, grid: GridContext, country_gdf, 
                 mask_fill = (tile_reprojected > 0) & (lc_out == 0)
                 lc_out[mask_fill] = tile_reprojected[mask_fill]
                 used += 1
+                if store is not None:
+                    window = _nonzero_window(tile_reprojected)
+                    part = {} if window is None else {"part": tile_reprojected[window[0] : window[1], window[2] : window[3]]}
+                    store.save_arrays(tile_path.stem, part, {"window": window})
         except Exception as exc:
             footprint = tile_bounds or _esa_worldcover_tile_bounds(tile_path.name)
             if footprint is not None and _bbox_overlaps(footprint, bounds_main):

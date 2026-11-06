@@ -92,6 +92,7 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
 )
 from geofrea.core.artifact_json import dump_artifact
+from geofrea.core.atomic_io import write_text_atomic
 from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.core.config_fingerprint import DiskConfigSource, config_fingerprint
 from geofrea.core.config_loader import (
@@ -249,9 +250,9 @@ def _register_json_artifact(
     artifact_dir = context.outputs_dir / context.country_code / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / f"{key}.json"
-    path.write_text(
-        dump_artifact(output), encoding="utf-8"
-    )  # deterministic: the volatile fields stay in the manifest entry
+    write_text_atomic(
+        path, dump_artifact(output)
+    )  # deterministic: the volatile fields stay in the manifest entry; whole or absent (COMMAND 98)
     context.register_artifact(key, path, schema_version)
 
 
@@ -1604,6 +1605,7 @@ def _main(argv: list[str] | None = None) -> int:
     settings = load_settings(SETTINGS_YAML)
     # a fixed GDAL block cache for this process and, through the environment, for every layer child (COMMAND 88)
     os.environ["GDAL_CACHEMAX"] = str(settings.geospatial.gdal_cachemax_mb)
+    os.environ["GEOFREA_CHECKPOINT_MAX_GB"] = str(settings.checkpoint_max_gb)  # the disk bound of the checkpoints, for every layer child (COMMAND 98)
     parameters = load_parameters(PARAMETERS_JSON)
     audit_config = load_audit_config(AUDIT_YAML)
     technologies = load_technologies(TECHNOLOGIES_YAML)

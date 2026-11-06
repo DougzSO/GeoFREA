@@ -19,9 +19,12 @@ import itertools
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
+from geofrea.core.checkpoint import CheckpointStore, digest_inputs, make_key
+from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.lcoe_modeling.kernel import SampleInputs, lcoe_block
 from geofrea.robustness_analysis.evaluator import MemberWorld
 
@@ -124,6 +127,7 @@ def futures_pass(
     max_batch_gb: float,
     progress: Callable[[], None] | None = None,
     outcome: OutcomeShortlist | None = None,
+    checkpoint_dir: Path | None = None,
 ) -> FuturesResult:
     """Evaluate every core member for every draw and reduce to the statistics of H1, H3 and the PRIM outcome.
 
@@ -138,6 +142,9 @@ def futures_pass(
         max_batch_gb: The memory budget.
         progress: Called once per batch.
         outcome: The nominal shortlist of the PRIM outcome (None leaves `displaced_capacity_share` NaN).
+        checkpoint_dir: Where the columns of each finished batch of draws are kept (`core.checkpoint`, COMMAND 98). A draw is evaluated on its
+            own, so a run that starts again after an interruption takes the finished batches from the store and the statistics are the same
+            value for value. The caller clears the directory once the results are recorded.
 
     Raises:
         FuturesError: the members and labels disagree, or the nominal top-k is empty.
@@ -177,8 +184,33 @@ def futures_pass(
         stats[f"h1_jaccard_median__{slug(a)}_vs_{slug(b)}"] = np.empty(n_samples)
 
     width = batch_size(n_cells, n_members, max_batch_gb)
+    store = None
+    if checkpoint_dir is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                kind="futures",
+                code=cached_code_fingerprint("robustness_analysis"),
+                inputs=digest_inputs(list(worlds), list(labels), samples, nominal_top_k, outcome),
+                k=k,
+                batch=width,
+            ),
+            label="F7 sample-major pass",
+        )
     for start in range(0, n_samples, width):
         window = slice(start, min(start + width, n_samples))
+        if store is not None:
+            stored = store.load_arrays(f"batch_{start:08d}")
+            if stored is not None and stored[0]["share"].shape == (n_members, window.stop - window.start):
+                arrays = stored[0]
+                share[:, window] = arrays["share"]
+                jaccard_nominal[:, window] = arrays["jaccard"]
+                displaced[:, window] = arrays["displaced"]
+                for name, column in stats.items():
+                    column[window] = arrays[f"stat_{name}"]
+                if progress is not None:
+                    progress()
+                continue
         batch = samples.take(window)
         stack = np.empty((n_members, n_cells, len(batch)))
         for j, world in enumerate(worlds):
@@ -222,6 +254,10 @@ def futures_pass(
                     median_top[a], median_top[b]
                 )
         del stack
+        if store is not None:
+            columns = {"share": share[:, window], "jaccard": jaccard_nominal[:, window], "displaced": displaced[:, window]}
+            columns.update({f"stat_{name}": column[window] for name, column in stats.items()})
+            store.save_arrays(f"batch_{start:08d}", columns)
         if progress is not None:
             progress()
     return FuturesResult(

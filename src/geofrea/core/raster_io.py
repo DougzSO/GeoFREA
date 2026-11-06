@@ -14,15 +14,14 @@ geo_utils.py's module docstring).
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import rasterio
-import rasterio.shutil
-from rasterio._err import CPLE_BaseError
+
+from geofrea.core.cog_write import open_for_write, write_cog
 
 logger = logging.getLogger(__name__)
 
@@ -58,59 +57,6 @@ def safe_raster_open(file_path: str | Path) -> Generator[rasterio.DatasetReader,
         src.close()
 
 
-_WRITE_RETRY_WAITS_S = (2.0, 5.0, 10.0, 20.0)
-
-
-def _open_for_write(file_path: Path, kwargs: dict[str, Any]):
-    """rasterio.open(..., "w") that retries when Windows holds the file it must overwrite.
-
-    GDAL deletes an existing file before creating it; a search indexer or antivirus scanning a file written
-    moments earlier makes that delete fail with "Permission denied" (observed 2026-10-06 on the BRA wind layers,
-    D:). The lock clears by itself, so wait and retry a bounded number of times, then raise the original error.
-    """
-    for wait in (*_WRITE_RETRY_WAITS_S, None):
-        try:
-            return rasterio.open(str(file_path), "w", **kwargs)
-        except (rasterio.errors.RasterioIOError, CPLE_BaseError) as exc:
-            if wait is None or "Permission denied" not in str(exc):
-                raise
-            logger.warning("%s is locked (%s); retrying in %.0fs", file_path.name, exc, wait)
-            time.sleep(wait)
-    raise AssertionError("unreachable")  # pragma: no cover
-
-
-def _cog_options(kwargs: dict[str, Any]) -> dict[str, str]:
-    """GDAL COG creation options equivalent to the writer's profile (same compression, same predictor, 256 pixel blocks)."""
-    options = {
-        "COMPRESS": str(kwargs.get("compress", "lzw")).upper(),
-        "BLOCKSIZE": str(kwargs.get("blockxsize", 256)),
-        "OVERVIEW_RESAMPLING": "NEAREST",  # overviews never invent values: classes and counts stay valid
-    }
-    if kwargs.get("predictor") is not None:
-        options["PREDICTOR"] = str(kwargs["predictor"])
-    return options
-
-
-def _write_cog(tmp_path: Path, final_path: Path, kwargs: dict[str, Any]) -> None:
-    """Convert the finished GeoTIFF at `tmp_path` into a Cloud Optimized GeoTIFF at `final_path` (lossless), then drop it.
-
-    Implements: A-07.
-    """
-    options = _cog_options(kwargs)
-    for wait in (*_WRITE_RETRY_WAITS_S, None):
-        try:
-            if final_path.exists():
-                final_path.unlink()
-            rasterio.shutil.copy(str(tmp_path), str(final_path), driver="COG", **options)
-            break
-        except (rasterio.errors.RasterioIOError, CPLE_BaseError, PermissionError) as exc:
-            if wait is None or "ermission" not in str(exc):
-                raise
-            logger.warning("%s is locked (%s); retrying in %.0fs", final_path.name, exc, wait)
-            time.sleep(wait)
-    tmp_path.unlink(missing_ok=True)
-
-
 @contextmanager
 def safe_raster_write(
     file_path: str | Path, **kwargs: Any
@@ -135,7 +81,7 @@ def safe_raster_write(
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = file_path.with_name(f"{file_path.stem}.writing.tif")
-    dst = _open_for_write(tmp_path, kwargs)
+    dst = open_for_write(tmp_path, kwargs)
     try:
         yield dst
     except BaseException:
@@ -143,7 +89,7 @@ def safe_raster_write(
         tmp_path.unlink(missing_ok=True)
         raise
     dst.close()
-    _write_cog(tmp_path, file_path, kwargs)
+    write_cog(tmp_path, file_path, kwargs)
 
 
 @contextmanager
@@ -180,12 +126,12 @@ class RasterStream:
         self._final.parent.mkdir(parents=True, exist_ok=True)
         self._tmp = self._final.with_name(f"{self._final.stem}.writing.tif")
         self._kwargs = kwargs
-        self.dataset = _open_for_write(self._tmp, kwargs)
+        self.dataset = open_for_write(self._tmp, kwargs)
         self._done = False
 
     def commit(self) -> Path:
         self.dataset.close()
-        _write_cog(self._tmp, self._final, self._kwargs)
+        write_cog(self._tmp, self._final, self._kwargs)
         self._done = True
         return self._final
 

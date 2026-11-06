@@ -38,17 +38,37 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO))
 
+from geofrea.core.atomic_io import write_text_atomic
 
 
 class AdoptionError(RuntimeError):
     """A layer would be computed again, or the old fingerprint is not the one the layers were made with."""
 
 
-def require_proof(proof: dict, old_code: str, new_code: str) -> None:
-    """Stop unless `proof` (the file of `check_aligned_equivalence.py`) says that the aligned layers of the two code fingerprints are equal."""
-    if not proof.get("equal"):
+def require_proof(proof: dict, old_code: str, new_code: str, recompute: tuple[str, ...] = ()) -> None:
+    """Stop unless `proof` (the file of `check_aligned_equivalence.py`) says that the aligned layers of the two code fingerprints are equal.
+
+    `recompute` names layers (kinds) that are not adopted but built again (COMMAND 98): their artifacts, and the `aligned_rasters` summary that lists
+    them, are left out of the judgment. A layer the old tree never produced (`only_in_new`) has nothing to adopt and is left out too. Every other layer
+    must be equal by itself; the proof is judged row by row, not by its global flag.
+    """
+    left_out = {f"aligned/{kind}" for kind in recompute}
+    if recompute:
+        left_out.add("aligned_rasters")
+    judged = {
+        key: row
+        for key, row in proof.get("artifacts", {}).items()
+        if not row.get("only_in_new") and not any(key == name or key.startswith(name + "_") for name in left_out)
+    }
+    if not recompute:
+        equal = bool(proof.get("equal"))
+    else:
+        equal = bool(judged) and all(row["equal"] for row in judged.values())
+    if not equal:
+        different = sorted(key for key, row in judged.items() if not row["equal"])
         raise AdoptionError(
-            f"the equivalence check found {proof.get('n_equal')} of {proof.get('n_artifacts')} aligned artifacts equal on {proof.get('sample')}: no adoption"
+            f"the equivalence check found {proof.get('n_equal')} of {proof.get('n_artifacts')} aligned artifacts equal on {proof.get('sample')}"
+            f"{' (different: ' + ', '.join(different) + ')' if different else ''}: no adoption"
         )
     if proof.get("old_cache_code") != old_code or proof.get("new_cache_code") != new_code:
         raise AdoptionError(
@@ -72,10 +92,11 @@ def cache_code_at(revision: str) -> str:
 
 
 @contextmanager
-def pinned_to(old_code: str) -> Iterator[dict[str, str]]:
+def pinned_to(old_code: str, recompute: tuple[str, ...] = ()) -> Iterator[dict[str, str]]:
     """Inside the block the aligned-layer keys are computed under `old_code`; yields the map `old key -> key of the current code`.
 
-    A layer that exists with a key that is not the old one raises `AdoptionError` (it would be computed again).
+    A layer that exists with a key that is not the old one raises `AdoptionError` (it would be computed again), except the kinds in `recompute`, which
+    keep the key of the current code, so that a stale raster is built again and gets its own key (COMMAND 98).
     """
     from geofrea.core.cache_key import cache_is_current as real_is_current
     from geofrea.core.cache_key import cache_key
@@ -83,16 +104,20 @@ def pinned_to(old_code: str) -> Iterator[dict[str, str]]:
 
     real_key = alignment.aligned_layer_key
     recorded: dict[str, str] = {}
+    rebuilt: set[str] = set()
 
     def old_key(kind, files, config, hash_memo):
         new = real_key(kind, files, config, hash_memo)
+        if kind in recompute:
+            rebuilt.add(new)
+            return new
         old = cache_key(alignment.ALIGNMENT_ALGORITHM_VERSION, files, config, hash_memo, code=old_code)
         recorded[old] = new
         return old
 
     def must_be_current(output, key):
         current = real_is_current(output, key)
-        if not current and Path(output).exists():
+        if not current and Path(output).exists() and key not in rebuilt:
             raise AdoptionError(
                 f"{Path(output).name} was not made under the code of the revision (its key is not the old one): adopting would "
                 "compute it again. Nothing was written."
@@ -113,7 +138,7 @@ def rewrite_sidecars(artifacts: Path, recorded: dict[str, str]) -> list[str]:
         old = sidecar.read_text(encoding="utf-8").strip()
         if old in recorded:
             shutil.copy2(sidecar, sidecar.with_name(sidecar.name + ".before_adopt"))
-            sidecar.write_text(recorded[old], encoding="utf-8")
+            write_text_atomic(sidecar, recorded[old])  # whole or absent: a stop here must not leave a cut key (COMMAND 98)
             done.append(sidecar.name)
     return done
 
@@ -136,9 +161,9 @@ def phase_arguments(iso: str) -> list[str]:
     return [iso, "--phases", "grid_alignment", "--rerun", "grid_alignment"]
 
 
-def adopt(run: Callable[[], object], old_code: str, artifacts: Path) -> list[str]:
+def adopt(run: Callable[[], object], old_code: str, artifacts: Path, recompute: tuple[str, ...] = ()) -> list[str]:
     """Run `run` (the phase) with the keys pinned to `old_code`, then write the keys of the current code; returns the sidecars rewritten."""
-    with pinned_to(old_code) as recorded:
+    with pinned_to(old_code, recompute) as recorded:
         run()
     return rewrite_sidecars(artifacts, recorded)
 
@@ -154,11 +179,17 @@ def main(argv: list[str] | None = None) -> int:
         help="result of scripts/proofs/check_aligned_equivalence.py (default: the PRT sample)",
     )
     parser.add_argument(
+        "--recompute",
+        default="",
+        help="comma list of layer kinds that are built again instead of adopted (e.g. roads,poi,settlements); the proof need not be equal for them",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="resolve --revision, compute its cache code and check the proof against it and the current code; adopt nothing and run nothing",
     )
     args = parser.parse_args(argv)
+    recompute = tuple(kind for kind in args.recompute.split(",") if kind)
 
     import main as pipeline
     from geofrea.core import paths as core_paths
@@ -166,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     old_code = cache_code_at(args.revision)
     from geofrea.core.cache_code import aligned_layers_code
 
-    require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, aligned_layers_code())
+    require_proof(json.loads(args.proof.read_text(encoding="utf-8")), old_code, aligned_layers_code(), recompute)
     artifacts = core_paths.phase_dir(args.iso, "grid_alignment", "artifacts")
     print(f"aligned-layer cache code at {args.revision}: {old_code[:12]}")
     if args.check:
@@ -181,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         if code not in (0, None):
             raise AdoptionError(f"main.py returned {code}")
 
-    adopted = adopt(run_phase, old_code, artifacts)
+    adopted = adopt(run_phase, old_code, artifacts, recompute)
     print(f"{len(adopted)} aligned layers adopted under the current code:", ", ".join(adopted))
     return 0
 

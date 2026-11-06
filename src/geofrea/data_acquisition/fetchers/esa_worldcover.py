@@ -16,10 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
-import requests
 from shapely.geometry import box
 
 from geofrea.core import paths
+from geofrea.core.atomic_io import write_text_atomic
+from geofrea.core.resumable_download import DownloadError, download_resumable, existing_entry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.esa_worldcover")
 
@@ -72,28 +73,33 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _fetch(name: str, dest: Path) -> dict | None:
+def _fetch(name: str, dest: Path, recorded: dict | None = None) -> dict | None:
+    """Download one tile; None if it does not exist (open sea).
+
+    A tile already at its name is kept only if it is the whole file (the size and SHA-256 of the manifest of an earlier run, else a GeoTIFF probe); one that
+    is not is set aside as `<name>.corrupt` and fetched again. An interrupted download is continued from its `.part` (`core.resumable_download`).
+    """
     target = dest / name
     if target.exists():
-        return {"name": name, "bytes": target.stat().st_size, "sha256": _sha256(target)}
-    part = target.with_suffix(".part")
+        entry = existing_entry(target, recorded)
+        if entry is not None:
+            return {"name": name, **entry}
+        logger.warning("%s: the tile at its name is not the whole file; it is set aside and fetched again", name)
+        target.replace(target.with_name(target.name + ".corrupt"))
     try:
-        with requests.get(f"{BASE_URL}/{name}", stream=True, timeout=_TIMEOUT_S) as r:
-            if r.status_code in (403, 404):
-                return None
-            r.raise_for_status()
-            expected = int(r.headers["Content-Length"])
-            with open(part, "wb") as f:
-                f.writelines(r.iter_content(1 << 20))
-    except requests.RequestException as exc:
+        entry = download_resumable(f"{BASE_URL}/{name}", target, timeout=_TIMEOUT_S, absent_statuses=(403, 404))
+    except DownloadError as exc:
         raise WorldCoverDownloadError(f"{name}: {exc}") from exc
-    if part.stat().st_size != expected:
-        part.unlink()
-        raise WorldCoverDownloadError(
-            f"{name}: got {part.stat().st_size} bytes, expected {expected}"
-        )
-    part.replace(target)
-    return {"name": name, "bytes": expected, "sha256": _sha256(target)}
+    return None if entry is None else {"name": name, **entry}
+
+
+def _recorded_tiles(dest: Path) -> dict[str, dict]:
+    """The entries of the manifest of an earlier run, by tile name (empty when there is none or it cannot be read)."""
+    try:
+        tiles = json.loads((dest / MANIFEST).read_text(encoding="utf-8"))["tiles"]
+        return {t["name"]: t for t in tiles}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
 
 
 def fetch_country(iso: str, tile_names: list[str], workers: int = 4) -> Path:
@@ -101,8 +107,9 @@ def fetch_country(iso: str, tile_names: list[str], workers: int = 4) -> Path:
     dest = tiles_dir(iso)
     dest.mkdir(parents=True, exist_ok=True)
     logger.info("%s: %d tiles requested", iso, len(tile_names))
+    recorded = _recorded_tiles(dest)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        results = list(pool.map(lambda n: _fetch(n, dest), tile_names))
+        results = list(pool.map(lambda n: _fetch(n, dest, recorded.get(n)), tile_names))
     present = [r for r in results if r is not None]
     absent = [n for n, r in zip(tile_names, results, strict=True) if r is None]
     manifest = {
@@ -113,7 +120,7 @@ def fetch_country(iso: str, tile_names: list[str], workers: int = 4) -> Path:
         "tiles": present,
         "absent_tiles": absent,
     }
-    (dest / MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    write_text_atomic(dest / MANIFEST, json.dumps(manifest, indent=1) + "\n")
     logger.info(
         "%s: %d tiles present (%.1f GB), %d absent",
         iso,

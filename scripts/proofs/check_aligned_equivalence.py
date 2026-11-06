@@ -46,11 +46,15 @@ def compare_manifests(old: dict, new: dict, phase: str | tuple[str, ...] = PHASE
         ha = None if a is None else (a.get("content_sha256") or a["sha256"])
         hb = None if b is None else (b.get("content_sha256") or b["sha256"])
         rows[key] = {"old": ha, "new": hb, "equal": ha is not None and ha == hb}
+        if ha is None and hb is not None:
+            rows[key]["only_in_new"] = True  # a layer the old tree never produced (e.g. GHS-SMOD, COMMAND 97): nothing to compare against
+    judged = {k: r for k, r in rows.items() if not r.get("only_in_new")}
     return {
         "artifacts": rows,
         "n_artifacts": len(rows),
         "n_equal": sum(r["equal"] for r in rows.values()),
-        "equal": bool(rows) and all(r["equal"] for r in rows.values()),
+        "only_in_new": sorted(k for k, r in rows.items() if r.get("only_in_new")),
+        "equal": bool(judged) and all(r["equal"] for r in judged.values()),
     }
 
 
@@ -73,7 +77,8 @@ def apply_tolerance(verdict: dict, old: dict, new: dict, old_data: Path, new_dat
         comparison = compare_rasters(ref, got)
         row.update({"criterion": "tolerance", "comparison": comparison.as_dict(), "equal": comparison.equivalent})
     verdict["n_equal"] = sum(r["equal"] for r in verdict["artifacts"].values())
-    verdict["equal"] = bool(verdict["artifacts"]) and all(r["equal"] for r in verdict["artifacts"].values())
+    judged = [r for r in verdict["artifacts"].values() if not r.get("only_in_new")]
+    verdict["equal"] = bool(judged) and all(r["equal"] for r in judged)
     verdict["max_abs_delta_by_artifact"] = {
         k: r["comparison"]["max_abs_delta"] for k, r in verdict["artifacts"].items() if "comparison" in r
     }
@@ -91,6 +96,9 @@ def _junction(link: Path, target: Path) -> None:
 def _run_f2a(repo: Path, data_dir: Path, sample: str, real_raw: Path, phases: str = PHASE) -> dict:
     """The phases (F2a by default; a comma list runs in that order in one process) of `sample` in the tree `repo` with its own data directory; returns its manifest."""
     _junction(data_dir / "raw", real_raw)
+    ghsl_real = real_raw.parent / "external" / "ghsl"  # GHS-SMOD (COMMAND 97) lives outside raw; trees that predate it ignore it
+    if ghsl_real.is_dir():
+        _junction(data_dir / "external" / "ghsl", ghsl_real)
     env = {**os.environ, "GEOFREA_DATA_DIR": str(data_dir), "PYTHONPATH": str(repo / "src")}
     done = subprocess.run(
         [sys.executable, "main.py", sample, "--phases", phases],
@@ -111,10 +119,29 @@ def cache_code_at(tree_src: Path) -> str:
     return aligned_layers_code(tree_src / "geofrea")
 
 
+def _extract_revision(revision: str, tmp_path: Path, name: str) -> Path:
+    """The tree of `revision` (main.py, config, docs, src) extracted under `tmp_path/name` with a commit of its own (the run records `git rev-parse HEAD`)."""
+    repo = tmp_path / name
+    repo.mkdir()
+    tar = tmp_path / f"{name}.tar"
+    subprocess.run(["git", "-C", str(REPO), "archive", "--format=tar", "-o", str(tar), revision, "main.py", "config", "docs", "src"], check=True)
+    subprocess.run(["tar", "-xf", str(tar), "-C", str(repo)], check=True)
+    git = ["git", "-C", str(repo), "-c", "user.name=equiv", "-c", "user.email=equiv@localhost"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+    subprocess.run([*git, "commit", "-q", "-m", f"tree of {revision}"], check=True, capture_output=True)
+    return repo
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--revision", required=True)
     parser.add_argument("--sample", default="PRT")
+    parser.add_argument(
+        "--new-revision",
+        default=None,
+        help="git revision to run as the new tree instead of the working tree (isolates the commit that changed a layer; no adoption uses such a proof)",
+    )
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument(
         "--phases",
@@ -132,28 +159,17 @@ def main(argv: list[str] | None = None) -> int:
     out = args.out or proof_path(args.sample)
     with tempfile.TemporaryDirectory(prefix="geofrea_equiv_") as tmp:
         tmp_path = Path(tmp)
-        old_repo = tmp_path / "old_repo"
-        old_repo.mkdir()
-        tar = tmp_path / "old.tar"
-        subprocess.run(
-            ["git", "-C", str(REPO), "archive", "--format=tar", "-o", str(tar), args.revision, "main.py", "config", "docs", "src"],
-            check=True,
-        )
-        subprocess.run(["tar", "-xf", str(tar), "-C", str(old_repo)], check=True)
-        # the run records `git rev-parse HEAD`: the extracted tree needs a commit of its own (its content does not depend on it)
-        git = ["git", "-C", str(old_repo), "-c", "user.name=equiv", "-c", "user.email=equiv@localhost"]
-        subprocess.run([*git, "init", "-q"], check=True)
-        subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
-        subprocess.run([*git, "commit", "-q", "-m", f"tree of {args.revision}"], check=True, capture_output=True)
+        old_repo = _extract_revision(args.revision, tmp_path, "old_repo")
+        new_repo = REPO if args.new_revision is None else _extract_revision(args.new_revision, tmp_path, "new_repo")
         try:
             old_manifest = _run_f2a(old_repo, tmp_path / "data_old", args.sample, real_raw, args.phases)
-            new_manifest = _run_f2a(REPO, tmp_path / "data_new", args.sample, real_raw, args.phases)
+            new_manifest = _run_f2a(new_repo, tmp_path / "data_new", args.sample, real_raw, args.phases)
         finally:
             # release the junctions before the temporary tree is removed: removing a junction must not touch the real raw data
             for data in ("data_old", "data_new"):
-                link = tmp_path / data / "raw"
-                if link.exists() or link.is_symlink():
-                    os.rmdir(link) if os.name == "nt" else link.unlink()
+                for link in (tmp_path / data / "raw", tmp_path / data / "external" / "ghsl"):
+                    if link.exists() or link.is_symlink():
+                        os.rmdir(link) if os.name == "nt" else link.unlink()
         verdict = compare_manifests(old_manifest, new_manifest, tuple(args.phases.split(",")))
         verdict = apply_tolerance(verdict, old_manifest, new_manifest, tmp_path / "data_old", tmp_path / "data_new")
         verdict.update(
@@ -162,7 +178,8 @@ def main(argv: list[str] | None = None) -> int:
                 "phase": args.phases,
                 "old_revision": args.revision,
                 "old_cache_code": cache_code_at(old_repo / "src"),
-                "new_cache_code": cache_code_at(REPO / "src"),
+                "new_cache_code": cache_code_at(new_repo / "src"),
+                "new_revision": args.new_revision or "working tree",
             }
         )
     out.parent.mkdir(parents=True, exist_ok=True)

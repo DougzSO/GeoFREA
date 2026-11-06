@@ -31,6 +31,8 @@ import sys
 from functools import cache, lru_cache
 from pathlib import Path
 
+from geofrea.core.atomic_io import replace_durable
+
 PACKAGE = "geofrea"
 SRC_ROOT = Path(__file__).resolve().parents[1]  # .../src/geofrea
 
@@ -113,6 +115,22 @@ INFRASTRUCTURE_MODULES = frozenset(
         "core.memory_guard",
         "core.layer_process",
         "core.power",
+    }
+)
+
+# Modules that decide HOW bytes reach the disk (atomic replace, flush, COG conversion, checkpoints, integrity checks), never what they contain
+# (COMMAND 98). Both fingerprints skip them: the closure fingerprint of a phase or a cache and the function fingerprint of an aligned layer. So
+# a change to a write mechanic does not change a result's key and does not rebuild a cache. The list is explicit on purpose: a module is added
+# only when the content hash (core/content_hash.py) of everything it writes is proved equal before and after the change (CONVENTIONS, "Write
+# mechanics outside the fingerprints"). It is separate from `INFRASTRUCTURE_MODULES` because that list is not applied by the function
+# fingerprint: filtering it there would change the fingerprint that the earlier tree's caches were keyed with (`scripts/adopt_aligned_cache_keys.py`).
+FINGERPRINT_EXEMPT_MODULES = frozenset(
+    {
+        "core.atomic_io",
+        "core.cog_write",
+        "core.resumable_download",
+        "core.checkpoint",
+        "core.cache_integrity",
     }
 )
 
@@ -304,7 +322,7 @@ def _save_store() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(keep), encoding="utf-8")
-        tmp.replace(path)
+        replace_durable(tmp, path)
     except OSError:
         pass  # the store is an optimisation only
 
@@ -361,7 +379,7 @@ def closure_modules(roots: tuple[str, ...], src_root: Path | None = None) -> lis
     seen: set[str] = set()
     while queue:
         name = queue.pop()
-        if name in seen or name in INFRASTRUCTURE_MODULES:
+        if name in seen or name in INFRASTRUCTURE_MODULES or name in FINGERPRINT_EXEMPT_MODULES:
             continue
         path = _module_file(root, name)
         if path is None:

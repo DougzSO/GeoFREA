@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from geofrea.core import paths
+from geofrea.core.atomic_io import write_text_atomic
 from geofrea.core.http_retry import get_with_retry
 
 logger = logging.getLogger("geofrea.data_acquisition.fetchers.protected_planet")
@@ -202,7 +203,7 @@ def fetch_protected_areas(
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     feature_collection = {"type": "FeatureCollection", "features": features}
-    dest_path.write_text(json.dumps(feature_collection), encoding="utf-8")
+    write_text_atomic(dest_path, json.dumps(feature_collection))  # whole or absent (COMMAND 98)
 
     logger.info("Protected areas saved: %s (%d features)", dest_path, len(features))
     return dest_path

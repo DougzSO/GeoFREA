@@ -63,3 +63,14 @@ def test_the_ledger_is_replaced_atomically_and_keeps_every_row(tmp_path):
     rows = json.loads(path.read_text(encoding="utf-8"))
     assert [r["layer"] for r in rows] == ["a", "b"] and rows[1]["detail"] == "boom"
     assert not list(path.parent.glob("*.tmp"))
+
+
+def test_work_folders_left_by_a_killed_run_are_removed_when_the_layer_starts_again(tmp_path):
+    stale = tmp_path / "layer_echo_abc123"
+    stale.mkdir()
+    (stale / "payload.pkl").write_bytes(b"x" * 100)
+    other = tmp_path / "layer_echo_notes"  # no payload: not a work folder of ours
+    other.mkdir()
+    assert layer_process.remove_stale_work_dirs("echo", tmp_path) == 1
+    assert not stale.exists() and other.exists()
+    assert layer_process.remove_stale_work_dirs("echo", None) == 0

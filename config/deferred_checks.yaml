@@ -43,12 +43,18 @@ countries:
       - overview
       - technical_potential
       - potential_maps
-    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
+    expected:  # 2026-11-06 (COMMAND 98): the summary of the aligned layers lists the new layer `settlements` (GHS-SMOD, COMMAND 97); it is the only key of the JSON that differs from the reference, checked key by key
+      aligned_rasters:
+        reason: "the summary lists the new layer settlements (GHS-SMOD, COMMAND 97); no other key differs from the reference"
+        reference_run: 27c9336b9e3f342f868258e8535ccbf064d3abd49dbc81a57a900cc35de1059b
   BRA:
     baseline: latest
     reference_run: latest
     phases: *phases
-    expected: {}  # 2026-11-04: the entries (Group 3 by design, COMMAND 89 and the F5 summaries of COMMANDS 95 and 96) were pinned to the round 864efbcb and expired when the round of this date became the latest (scripts/list_expired_expected.py); removed
+    expected:  # 2026-11-06 (COMMAND 98): the summary of the aligned layers lists the new layer `settlements` (GHS-SMOD, COMMAND 97); it is the only key of the JSON that differs from the reference, checked key by key
+      aligned_rasters:
+        reason: "the summary lists the new layer settlements (GHS-SMOD, COMMAND 97); no other key differs from the reference"
+        reference_run: 27c9336b9e3f342f868258e8535ccbf064d3abd49dbc81a57a900cc35de1059b
   PRT:
     baseline: latest
     reference_run: latest

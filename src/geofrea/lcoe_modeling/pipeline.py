@@ -30,6 +30,9 @@ from pydantic import BaseModel, ConfigDict
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, required_channels
 from geofrea.config_models.land_availability import ELEVATION_COLUMN
 from geofrea.core import paths as core_paths
+from geofrea.core.cache_key import file_sha256
+from geofrea.core.checkpoint import CheckpointStore, make_key
+from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.core.config_schemas import TechnologiesFile
 from geofrea.core.constants import LCOE_QUANTILES, PRICE_BASE_YEAR_USD
 from geofrea.core.run_logging import PeriodicProgress
@@ -212,6 +215,53 @@ def _empty_supply_frame() -> pd.DataFrame:
     )
 
 
+def _save_member(store: CheckpointStore, result: dict) -> None:
+    """Store a finished member: its frames first and the record with its totals last, so a member is whole in the store or absent from it."""
+    name = result["member"]
+    stored = store.save_frame(f"{name}_summary", result["summary"]) if result["summary"] is not None else True
+    stored = store.save_frame(f"{name}_supply", result["supply"]) and stored
+    if result["below"] is not None:
+        stored = store.save_frame(f"{name}_below", result["below"]) and stored
+    if not stored:
+        return  # the disk bound stopped it: this member is computed again after an interruption
+    arrays = {"cell_id": result["cell_id"]}
+    if result["nominal_all"] is not None:
+        arrays["nominal_all"] = result["nominal_all"]
+    meta = {
+        key: result[key]
+        for key in ("n_rows", "n_nonfinite", "n_draw", "n_excluded", "long_distance_share", "is_reference")
+    }
+    meta["has_summary"] = result["summary"] is not None
+    meta["has_below"] = result["below"] is not None
+    store.save_arrays(f"{name}_meta", arrays, meta)
+
+
+def _member_stored(store: CheckpointStore, member: str) -> bool:
+    return store.exists(f"{member}_meta")
+
+
+def _load_member(store: CheckpointStore, member: str) -> dict | None:
+    """The stored result of a member, or None when any of its units is absent or unreadable (the member is then computed)."""
+    stored = store.load_arrays(f"{member}_meta")
+    if stored is None:
+        return None
+    arrays, meta = stored
+    summary = store.load_frame(f"{member}_summary") if meta["has_summary"] else None
+    supply = store.load_frame(f"{member}_supply")
+    below = store.load_frame(f"{member}_below") if meta["has_below"] else None
+    if (meta["has_summary"] and summary is None) or supply is None or (meta["has_below"] and below is None):
+        return None
+    return {
+        "member": member,
+        "cell_id": arrays["cell_id"],
+        "summary": summary,
+        "supply": supply,
+        "below": below,
+        "nominal_all": arrays.get("nominal_all"),
+        **{key: meta[key] for key in ("n_rows", "n_nonfinite", "n_draw", "n_excluded", "long_distance_share", "is_reference")},
+    }
+
+
 def build_scenario_nominal(
     resolved: ResolvedLcoe,
     nominal_samples: SampleInputs,
@@ -326,6 +376,86 @@ def build_technology_lcoe(
     long_distance_share: float | None = None
     seen_cells: set[int] = set()
     m0_nominal: np.ndarray | None = None
+    # the finished members are kept in `interim/<ISO>/lcoe_modeling/<tech>_ckpt` (COMMAND 98): a member does not depend on another (the draws are slices of
+    # one design matrix made from the seed), so a run that starts again after an interruption takes them from the store, in the same order
+    store = CheckpointStore(
+        core_paths.interim(iso, "lcoe_modeling") / f"{tech}_ckpt",
+        make_key(
+            provenance=provenance[PROVENANCE_KEY],
+            inputs=[file_sha256(path_) for path_ in (potential_path, candidates_path, forcing_path)],
+            members=list(members),
+            elevation_sensitivity_m=elevation_sensitivity_m,
+            code=cached_code_fingerprint("lcoe_modeling"),
+        ),
+        label=f"{iso} {tech} LCOE members",
+    )
+
+    def read_members(names: Sequence[str]) -> Iterator:
+        return read_member_inputs(
+            resolved,
+            potential_path=potential_path,
+            candidates_path=candidates_path,
+            forcing_path=forcing_path,
+            members=names,
+            x_range=x_range,
+            known_members=members,
+        )
+
+    def compute_member(item) -> dict:
+        """The summary, the supply curve and the totals of one member; stored at once."""
+        nominal_all = np.empty(len(item.cells))
+        frames = []
+        n_nonfinite = n_draw = 0
+        for window, nominal, stats in iter_member_summaries(item.cells, nominal_samples, draw_samples, block_cells):
+            _check_summary(stats, nominal, item.member)
+            nominal_all[window] = nominal
+            n_nonfinite += int((~np.isfinite(nominal)).sum())
+            n_draw += int(stats.n_nonfinite.sum())
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "cell_id": item.cell_id[window],
+                        "member": np.full(window.stop - window.start, item.member, dtype=object),
+                        "lcoe_nominal": nominal,
+                        "lcoe_mean": stats.mean,
+                        "lcoe_var": stats.var,
+                        "lcoe_p10": stats.p10,
+                        "lcoe_p50": stats.p50,
+                        "lcoe_p90": stats.p90,
+                        "n_nonfinite": stats.n_nonfinite,
+                    }
+                )
+            )
+        is_reference = item.member == REFERENCE_MEMBER_ID
+        share = None
+        if is_reference:
+            capacity = float(item.cells.p_mw.sum())
+            flag_km = resolved.group3.long_distance_flag_km if resolved.group3 else None
+            if capacity > 0 and flag_km is not None:
+                share = float(item.cells.p_mw[item.cells.dist_sub_km > flag_km].sum() / capacity)
+        below = None
+        if below_path is not None:
+            keep = elevation_of.reindex(item.cell_id).to_numpy(dtype="float64") <= elevation_sensitivity_m
+            below = supply_curve(
+                item.member, item.cell_id[keep], nominal_all[keep], item.cells.p_mw[keep], item.cells.energy_mwh[keep]
+            )
+        result = {
+            "member": item.member,
+            "cell_id": item.cell_id,
+            "summary": pd.concat(frames, ignore_index=True) if frames else None,
+            "supply": supply_curve(item.member, item.cell_id, nominal_all, item.cells.p_mw, item.cells.energy_mwh),
+            "below": below,
+            "nominal_all": nominal_all if is_reference else None,
+            "n_rows": len(item.cells),
+            "n_nonfinite": n_nonfinite,
+            "n_draw": n_draw,
+            "n_excluded": item.n_excluded,
+            "long_distance_share": share,
+            "is_reference": is_reference,
+        }
+        _save_member(store, result)
+        return result
+
     with (
         TableWriter(
             summary_path,
@@ -356,75 +486,37 @@ def build_technology_lcoe(
             )
         ) as below_writer,
     ):
-        member_inputs = read_member_inputs(
-            resolved,
-            potential_path=potential_path,
-            candidates_path=candidates_path,
-            forcing_path=forcing_path,
-            members=members,
-            x_range=x_range,
-        )
-        for item in member_inputs:
-            nominal_all = np.empty(len(item.cells))
-            for window, nominal, stats in iter_member_summaries(
-                item.cells, nominal_samples, draw_samples, block_cells
-            ):
-                _check_summary(stats, nominal, item.member)
-                nominal_all[window] = nominal
-                n_nonfinite_nominal += int((~np.isfinite(nominal)).sum())
-                n_draw_nonfinite += int(stats.n_nonfinite.sum())
-                summary_writer.write(
-                    pd.DataFrame(
-                        {
-                            "cell_id": item.cell_id[window],
-                            "member": np.full(
-                                window.stop - window.start, item.member, dtype=object
-                            ),
-                            "lcoe_nominal": nominal,
-                            "lcoe_mean": stats.mean,
-                            "lcoe_var": stats.var,
-                            "lcoe_p10": stats.p10,
-                            "lcoe_p50": stats.p50,
-                            "lcoe_p90": stats.p90,
-                            "n_nonfinite": stats.n_nonfinite,
-                        }
-                    )
-                )
-            n_rows += len(item.cells)
-            seen_cells.update(item.cell_id.tolist())
-            supply_writer.write(
-                supply_curve(
-                    item.member,
-                    item.cell_id,
-                    nominal_all,
-                    item.cells.p_mw,
-                    item.cells.energy_mwh,
-                )
-            )
+        stored = {m for m in members if _member_stored(store, m)}
+        todo = [m for m in members if m not in stored]
+        generator = read_members(todo) if todo else iter(())  # nothing is read while every member is stored
+        ahead = next(generator, None)
+        for member in members:
+            result = None
+            if member in stored:
+                result = _load_member(store, member)
+                if result is None:  # a unit went bad after it was seen: this member is computed now, on its own
+                    item = next(read_members([member]), None)
+                    result = None if item is None else compute_member(item)
+            elif ahead is not None and ahead.member == member:
+                item, ahead = ahead, next(generator, None)
+                result = compute_member(item)
+            if result is None:
+                continue  # a member with no F5 rows yields nothing
+            if result["summary"] is not None:
+                summary_writer.write(result["summary"])
+            n_rows += result["n_rows"]
+            n_nonfinite_nominal += result["n_nonfinite"]
+            n_draw_nonfinite += result["n_draw"]
+            seen_cells.update(result["cell_id"].tolist())
+            supply_writer.write(result["supply"])
             if below_writer is not None:
-                keep = (
-                    elevation_of.reindex(item.cell_id).to_numpy(dtype="float64")
-                    <= elevation_sensitivity_m
-                )
-                below_writer.write(
-                    supply_curve(
-                        item.member,
-                        item.cell_id[keep],
-                        nominal_all[keep],
-                        item.cells.p_mw[keep],
-                        item.cells.energy_mwh[keep],
-                    )
-                )
-            n_excluded_total += item.n_excluded
-            if item.member == REFERENCE_MEMBER_ID:
-                m0_nominal = nominal_all
-                capacity = float(item.cells.p_mw.sum())
-                flag_km = resolved.group3.long_distance_flag_km if resolved.group3 else None
-                if capacity > 0 and flag_km is not None:
-                    long_distance_share = float(
-                        item.cells.p_mw[item.cells.dist_sub_km > flag_km].sum() / capacity
-                    )
+                below_writer.write(result["below"])
+            n_excluded_total += result["n_excluded"]
+            if result["is_reference"]:
+                m0_nominal = result["nominal_all"]
+                long_distance_share = result["long_distance_share"]
             progress.step()
+    store.clear()  # the tables are written and closed: nothing is left to resume
     write_table(
         design.reset_index(),
         design_path,

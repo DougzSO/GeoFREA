@@ -179,7 +179,7 @@ def test_gdal_quiet_is_a_safe_noop_context_manager():
 def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(
     tmp_path, monkeypatch
 ):
-    from geofrea.core import raster_io
+    from geofrea.core import atomic_io, raster_io
 
     real_open, calls = rasterio.open, []
 
@@ -190,7 +190,7 @@ def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(
         return real_open(path, mode, **kw)
 
     monkeypatch.setattr(raster_io.rasterio, "open", flaky)
-    monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0, 0.0))
+    monkeypatch.setattr(atomic_io, "WRITE_RETRY_WAITS_S", (0.0, 0.0, 0.0))
     profile = {"driver": "GTiff", "height": 2, "width": 2, "count": 1, "dtype": "float32"}
 
     with safe_raster_write(tmp_path / "out.tif", **profile) as dst:
@@ -204,7 +204,7 @@ def test_safe_raster_write_retries_a_transient_permission_denied_then_succeeds(
 def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_waits(
     tmp_path, monkeypatch
 ):
-    from geofrea.core import raster_io
+    from geofrea.core import atomic_io, raster_io
 
     attempts = []
 
@@ -213,7 +213,7 @@ def test_safe_raster_write_does_not_retry_other_errors_and_gives_up_after_the_wa
         raise rasterio.errors.RasterioIOError("Permission denied")
 
     monkeypatch.setattr(raster_io.rasterio, "open", always)
-    monkeypatch.setattr(raster_io, "_WRITE_RETRY_WAITS_S", (0.0, 0.0))
+    monkeypatch.setattr(atomic_io, "WRITE_RETRY_WAITS_S", (0.0, 0.0))
     with (
         pytest.raises(rasterio.errors.RasterioIOError),
         safe_raster_write(tmp_path / "o.tif", driver="GTiff"),

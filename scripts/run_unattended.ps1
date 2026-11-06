@@ -23,6 +23,15 @@
 
   The round is done when the window prints "ROUND FINISHED" and the file <data>\logs\unattended_rounds\unattended_round_<stamp>.json exists.
 
+  AFTER AN INTERRUPTION (power loss, a killed process, the memory guard): run this script again with no flags. It finds the round that did not finish
+  (scripts\unattended_resume.py: the newest round log without its .json and without "ROUND FINISHED", at most 3 days old) and continues IT: the same stamp,
+  countries and phases; the manifest saved before the round is kept; a country that finished (outputs\<ISO>\unattended\<stamp>\done.json) is skipped; the
+  adoption is not made again; and the others run again, where the checkpoints (core/checkpoint.py) and the caches take them from the point they had reached.
+  Pass -NewRound to start a new round instead, or -Countries / -Phases to choose them. Before a long round after a crash, run
+  python scripts\verify_cache_integrity.py (it reads every cached file to the end and invalidates the cache key of what is cut).
+  To continue a round by itself when the user logs on, a scheduled task can run this script (see docs/PIPELINE_GUIDE.md, "After an interruption"); it is
+  documented there and not enabled.
+
 .PARAMETER Countries      Countries to run, in order (default IND, BRA).
 .PARAMETER Worktree       The tree to run (default: the one this script is in; it must be the merged main).
 .PARAMETER Python         python.exe to use (default: the .venv of the main checkout of the repository).
@@ -34,6 +43,7 @@
 .PARAMETER BaselineStamp  The round whose saved manifest_before.json is the reference of the comparison (default 20261029_135838, the manifest of before the
                       first unattended round; '' compares with the manifest at the start of this round).
 .PARAMETER SkipAdopt      Do not adopt (the layers are computed again if their key changed).
+.PARAMETER NewRound       Start a new round even if an unfinished one exists (the default continues it).
 .PARAMETER DryRun         Do the checks of the start and print what would run.
 #>
 [CmdletBinding()]
@@ -49,6 +59,7 @@ param(
     [string]$AdoptProof = 'docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json',
     [string]$BaselineStamp = '20261029_135838',
     [switch]$SkipAdopt,
+    [switch]$NewRound,
     [switch]$DryRun
 )
 
@@ -139,12 +150,24 @@ $env:PYTHONPATH = Join-Path $Worktree 'src'   # the venv is installed from the m
 $env:PYTHONUNBUFFERED = '1'
 $RoundsDir = Join-Path $Data "logs\unattended_rounds"
 New-Item -ItemType Directory -Force $RoundsDir | Out-Null
+$Resumed = $false
+if (-not $NewRound -and -not $DryRun) {
+    $unfinished = (& $Python (Join-Path $Worktree 'scripts\unattended_resume.py') --rounds-dir $RoundsDir) | Out-String
+    if ($unfinished.Trim()) {
+        $found = $unfinished | ConvertFrom-Json
+        $Stamp = $found.stamp
+        if (-not $PSBoundParameters.ContainsKey('Countries')) { $Countries = @($found.countries) }
+        if (-not $PSBoundParameters.ContainsKey('Phases') -and $found.phases) { $Phases = $found.phases }
+        $Resumed = $true
+    }
+}
 $script:RoundLog = Join-Path $RoundsDir "unattended_round_$Stamp.log"
 
 $branch = (& git -C $Worktree rev-parse --abbrev-ref HEAD).Trim()
 $head = (& git -C $Worktree rev-parse HEAD).Trim()
 $dirty = [bool](& git -C $Worktree status --porcelain -- src config main.py)
 $startFree = Get-AvailableMb
+if ($Resumed) { Write-Log "RESUMING the unfinished round $Stamp (no flags: its countries and phases are taken up again)" }
 Write-Log "round ${Stamp}: countries $($Countries -join ', '); worktree $Worktree ($branch @ $($head.Substring(0, 10))$(if ($dirty) { ', UNCOMMITTED CHANGES in src/config/main.py' }))"
 Write-Log "available memory at the start: $startFree MB (total $([int]((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1MB)) MB)"
 $others = @(Get-OtherGeoFreaProcesses)
@@ -177,11 +200,20 @@ try {
         $manifest = Join-Path $outDir 'manifest.json'
         $runDir = Join-Path $outDir "unattended\$Stamp"
         New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+        $done = Join-Path $runDir 'done.json'
+        if ($Resumed -and (Test-Path $done)) {
+            $earlier = Get-Content $done -Raw | ConvertFrom-Json
+            Write-Log "${iso}: finished in this round ($($earlier.verdict)); not run again"
+            $results += @{ country = $iso; verdict = $earlier.verdict; aborted = $earlier.aborted; different = @($earlier.different); check = $earlier.check; run_dir = $runDir }
+            continue
+        }
         $mem = Join-Path $runDir 'memory.csv'
-        Set-Content -Path $mem -Value 'time,available_mb,commit_percent' -Encoding utf8
+        if (-not (Test-Path $mem)) { Set-Content -Path $mem -Value 'time,available_mb,commit_percent' -Encoding utf8 }
         if (-not (Test-Path $manifest)) { Write-Log "${iso}: no manifest, skipped"; $results += @{ country = $iso; verdict = 'SEM_MANIFEST' }; continue }
         $baseline = Join-Path $outDir "unattended\$BaselineStamp\manifest_before.json"
-        if ($BaselineStamp -and (Test-Path $baseline) -and ($BaselineStamp -ne $Stamp)) {
+        if (Test-Path (Join-Path $runDir 'manifest_before.json')) {
+            Write-Log "${iso}: the manifest saved before this round is kept (a partial manifest never replaces it)"
+        } elseif ($BaselineStamp -and (Test-Path $baseline) -and ($BaselineStamp -ne $Stamp)) {
             Copy-Item $baseline (Join-Path $runDir 'manifest_before.json') -Force   # the manifest of before the first round: the reference of every hash
             Write-Log "${iso}: the artifacts are compared with the manifest of the round $BaselineStamp"
         } else {
@@ -193,14 +225,15 @@ try {
         Write-Log "${iso}: start; available memory $free MB; manifest saved in $runDir"
         if ((Get-CommitPercent) -gt $MaxCommitPercent) { $aborted = "the commit charge of the system is over $MaxCommitPercent % at the start of $iso" }
 
-        if (-not $aborted -and -not $SkipAdopt) {
+        $adopted = Join-Path $runDir 'adopted.ok'
+        if (-not $aborted -and -not $SkipAdopt -and -not (Test-Path $adopted)) {
             Write-Log "${iso}: adopting the aligned layers made by $AdoptRevision"
             $adopt = Invoke-Monitored @('scripts\adopt_aligned_cache_keys.py', $iso, '--revision', $AdoptRevision, '--proof', $AdoptProof) (Join-Path $runDir 'adopt.log.txt') $mem
             if ($adopt.Aborted) { $aborted = $adopt.Aborted }
             elseif ($adopt.ExitCode -ne 0) {
                 $aborted = "the adoption of the aligned layers failed (exit $($adopt.ExitCode), see $runDir\adopt.log.txt): F2a would be computed from the start, so $iso does not run"
                 Write-Log "${iso}: $aborted"
-            }
+            } else { Set-Content -Path $adopted -Value (Get-Date -Format 'o') -Encoding utf8 }   # an interrupted round does not adopt again
         }
         if (-not $aborted) {
             Write-Log "${iso}: running $Phases"
@@ -223,6 +256,7 @@ try {
             Write-Log ('  {0,-20} {1,-8} awake {2,8} s  cpu {3,8} s  peak {4,6} MB' -f $row.phase, $row.status, $row.awake_s, $row.cpu_s, $row.peak_rss_mb)
         }
         $results += @{ country = $iso; verdict = $check.verdict; aborted = $aborted; different = @($check.different); check = (Join-Path $outDir 'unattended_check.json'); run_dir = $runDir }
+        $results[-1] | ConvertTo-Json -Depth 4 | Set-Content -Path $done -Encoding utf8   # a round that is interrupted after this country does not run it again
     }
 } finally {
     [void][Win32.Power]::SetThreadExecutionState([uint32]2147483648)   # ES_CONTINUOUS: release

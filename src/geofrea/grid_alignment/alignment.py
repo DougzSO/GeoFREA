@@ -98,12 +98,15 @@ from geofrea.core import memory_budget
 from geofrea.core import paths as core_paths
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import FileHashMemo, cache_is_current, cache_key, write_cache_key
+from geofrea.core.checkpoint import clear_checkpoint
 from geofrea.core.constants import CELL_NESTING_PIXELS
 from geofrea.core.layer_process import LayerFailedError, LayerRecord, append_ledger, run_layer
 from geofrea.core.orchestrator import PhaseContext
 from geofrea.core.raster_io import safe_raster_open
 from geofrea.grid_alignment.layers import LayerContext
-from geofrea.grid_alignment.layers import _read_clipped_with_cache as _read_clipped_with_cache  # noqa: PLC0414 — stays importable from here
+from geofrea.grid_alignment.layers import (
+    _read_clipped_with_cache as _read_clipped_with_cache,  # noqa: PLC0414 — stays importable from here
+)
 from geofrea.grid_alignment.layers import gwa_crs_for as _gwa_crs_for  # noqa: F401
 from geofrea.grid_alignment.poi import POI_ALGORITHM_VERSION
 from geofrea.grid_alignment.reference_grid import GridContext, build_reference_grid
@@ -321,18 +324,26 @@ def run_grid_alignment_phase(
         p.unlink()
         return None
 
-    def _execute_or_load(label: str, kind: str, builder: str, condition: bool = True, files=(), builder_kwargs=None, **config):
+    def _execute_or_load(
+        label: str, kind: str, builder: str, condition: bool = True, files=(), builder_kwargs=None, checkpointed: bool = False, **config
+    ):
         key = _key(kind, files, **config) if condition else None
         current = _is_current(label, key)
         if current is not None:
             return current
         if not condition:
             return None
-        result = _build(label, kind, builder, **(builder_kwargs or {}))
+        kwargs = dict(builder_kwargs or {})
+        checkpoint = interim_dir / f"{label}_ckpt" if checkpointed else None  # the tiles a killed run finished (COMMAND 98); the key is the layer's own
+        if checkpoint is not None:
+            kwargs.update(checkpoint_dir=checkpoint, checkpoint_key=key)
+        result = _build(label, kind, builder, **kwargs)
         if result is None:
             logger.info("    %s: no data generated.", label)
         elif Path(result) == _path(label):
             write_cache_key(Path(result), key)
+        if checkpoint is not None and label not in failures:
+            clear_checkpoint(checkpoint)  # the raster and its key are recorded (or the layer has no data): nothing is left to resume
         return result
 
     aligned: dict[str, Path | None] = {}
@@ -352,10 +363,14 @@ def run_grid_alignment_phase(
         if current is not None:
             return current
         if not glo30:
-            glo30.update(_build(label, "glo30", "build_glo30") or {})
+            checkpoint = interim_dir / "glo30_ckpt"  # the groups of rows an interrupted pass finished (COMMAND 98); the key is the layer's own
+            built = _build(label, "glo30", "build_glo30", checkpoint_dir=checkpoint, checkpoint_key=key)
+            glo30.update(built or {})
             for raster in glo30.values():  # every raster comes from one pass over one source: each is as current as the others
                 if raster is not None:
                     write_cache_key(raster, key)
+            if built is not None:
+                clear_checkpoint(checkpoint)  # the rasters and their keys are recorded: nothing is left to resume
         if glo30.get(label) is None:
             logger.info("    %s: no data generated.", label)
         return glo30.get(label)
@@ -396,6 +411,7 @@ def run_grid_alignment_phase(
             "build_land_cover",
             bool(inputs.land_cover_tiles),
             files=inputs.land_cover_tiles,
+            checkpointed=True,
         )
         aligned["land_cover_counts"] = _execute_or_load(
             "land_cover_counts",
@@ -403,6 +419,7 @@ def run_grid_alignment_phase(
             "build_land_cover_counts",
             bool(inputs.land_cover_tiles),
             files=inputs.land_cover_count_tiles or inputs.land_cover_tiles,
+            checkpointed=True,
         )
 
     with timer("slope_counts", timings):

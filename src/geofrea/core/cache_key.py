@@ -16,6 +16,8 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
+from geofrea.core.atomic_io import write_text_atomic
+
 logger = logging.getLogger(__name__)
 
 KEY_SUFFIX = ".cachekey"
@@ -61,7 +63,7 @@ class FileHashMemo:
             return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps(self._entries, sort_keys=True), encoding="utf-8")
+            write_text_atomic(self._path, json.dumps(self._entries, sort_keys=True))
         except OSError as exc:
             logger.warning("Could not write the input hash memo %s: %s", self._path, exc)
 
@@ -113,4 +115,4 @@ def cache_is_current(output: Path | str, key: str) -> bool:
 
 
 def write_cache_key(output: Path | str, key: str) -> None:
-    key_path(output).write_text(key, encoding="utf-8")
+    write_text_atomic(key_path(output), key)

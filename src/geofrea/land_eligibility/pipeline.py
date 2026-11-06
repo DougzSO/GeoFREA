@@ -39,8 +39,10 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
 )
 from geofrea.core import paths as core_paths
+from geofrea.core.atomic_io import replace_durable, write_text_atomic
 from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import cache_key
+from geofrea.core.checkpoint import CheckpointStore, clear_checkpoint, make_key
 from geofrea.core.constants import (
     CELL_ORIGIN_LAT,
     CELL_ORIGIN_LON,
@@ -73,6 +75,8 @@ from geofrea.land_eligibility.eligibility import (
 )
 from geofrea.land_eligibility.errors import LandEligibilityError, MissingRequiredLayerError
 from geofrea.land_eligibility.fractions import (
+    DEFAULT_FACTOR,
+    DEFAULT_STRIP_ROWS,
     corridor_half_widths_m,
     mask_setback_fractions,
     polygon_coverage_fraction,
@@ -278,10 +282,20 @@ def _fraction_dir(path: Path) -> Path:
     return path.with_suffix("")
 
 
-def _fraction_files(path: Path, key: str, build) -> dict[str, Path]:
+def _save_share(path: Path, array: np.ndarray) -> None:
+    """One share as an `.npy` file that is whole or absent: written beside, flushed, moved into place (COMMAND 98)."""
+    temporary = path.with_name(path.name + ".tmp")
+    with open(temporary, "wb") as handle:
+        np.save(handle, array, allow_pickle=False)
+    replace_durable(temporary, path)
+
+
+def _fraction_files(path: Path, key: str, build, checkpointed: bool = False) -> dict[str, Path]:
     """The sub-pixel shares of a cache as `.npy` files (name -> file), valid only for the same key (inputs, thresholds, grid, code).
 
-    `build()` returns a dict of arrays or yields `(name, array)` pairs.
+    `build()` returns a dict of arrays or yields `(name, array)` pairs. With `checkpointed`, `build(store)` is called with a `CheckpointStore`
+    (`<share>_ckpt`, under the key of the share) from which a builder takes the finished strips of an interrupted build (COMMAND 98); the store is
+    cleared when the key is written.
 
     One file a share, written one at a time, so that a share can be read by rows through a memory map (`windows.NpyRows`). The key is written last:
     a directory without it, or with another, is rebuilt. A cache made by an earlier version as one `.npz` with the same key is converted, not
@@ -289,11 +303,13 @@ def _fraction_files(path: Path, key: str, build) -> dict[str, Path]:
     """
     folder = _fraction_dir(path)
     key_file = folder / "_key.txt"
+    checkpoint_dir = folder.with_name(folder.name + "_ckpt")
 
     def listed() -> dict[str, Path]:
         return {p.name[: -len(".npy")]: p for p in sorted(folder.glob("*.npy"))}
 
     if key_file.exists() and key_file.read_text(encoding="utf-8") == key:
+        clear_checkpoint(checkpoint_dir)  # a stop between the key and the cleanup leaves the strips of a build that is finished
         return listed()
     if folder.exists():
         shutil.rmtree(folder)
@@ -302,18 +318,27 @@ def _fraction_files(path: Path, key: str, build) -> dict[str, Path]:
         with np.load(path, allow_pickle=False) as data:
             if str(data["_key"]) == key:
                 for name in (k for k in data.files if k != "_key"):
-                    np.save(folder / f"{name}.npy", data[name], allow_pickle=False)
-                key_file.write_text(key, encoding="utf-8")
+                    _save_share(folder / f"{name}.npy", data[name])
+                write_text_atomic(key_file, key)
                 return listed()
-    arrays = build()
+    store = None
+    if checkpointed:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(share=key, factor=DEFAULT_FACTOR, strip_rows=DEFAULT_STRIP_ROWS),
+            label=f"share {folder.name}",
+        )
+    arrays = build(store) if checkpointed else build()
     if isinstance(arrays, dict):
         for name in list(arrays):
-            np.save(folder / f"{name}.npy", arrays.pop(name), allow_pickle=False)
+            _save_share(folder / f"{name}.npy", arrays.pop(name))
     else:  # a builder that yields (name, array) saves each share before it makes the next (the riparian grid is 12 arrays of 61 MB for BRA)
         for name, array in arrays:
-            np.save(folder / f"{name}.npy", array, allow_pickle=False)
+            _save_share(folder / f"{name}.npy", array)
             del array
-    key_file.write_text(key, encoding="utf-8")
+    write_text_atomic(key_file, key)
+    if store is not None:
+        store.clear()
     return listed()
 
 
@@ -464,10 +489,14 @@ def _corridor_half_widths(rivers_gdf: gpd.GeoDataFrame, la: LandAvailability, ke
     )
 
 
-def _corridor_shares(rivers_gdf, la: LandAvailability, corridors: list[tuple], transform, shape):
+def _corridor_shares(rivers_gdf, la: LandAvailability, corridors: list[tuple], transform, shape, store=None):
     """`(name, share)` of each corridor key (`c0`, `c1`, ... in the order of `corridors`), one at a time."""
     for i, key in enumerate(corridors):
-        yield f"c{i}", river_corridor_fraction(rivers_gdf, _corridor_half_widths(rivers_gdf, la, key), transform, shape)
+        group = None if store is None else store.group(f"c{i}")
+        yield (
+            f"c{i}",
+            river_corridor_fraction(rivers_gdf, _corridor_half_widths(rivers_gdf, la, key), transform, shape, checkpoint=group),
+        )
 
 
 def _settlement_mask(classes: np.ndarray, min_class: int) -> np.ndarray:
@@ -491,8 +520,9 @@ def _settlement_key(settlements: Path, transform, shape, la: LandAvailability, s
     )
 
 
-def _settlement_shares(mask: np.ndarray, setbacks_m: list[float], transform, shape):
-    for t, share in mask_setback_fractions(mask, transform, shape, setbacks_m).items():
+def _settlement_shares(mask: np.ndarray, setbacks_m: list[float], transform, shape, store=None):
+    group = None if store is None else store.group("s")
+    for t, share in mask_setback_fractions(mask, transform, shape, setbacks_m, checkpoint=group).items():
         yield f"s{t}", share
 
 
@@ -687,23 +717,29 @@ def prepare_stripe_inputs(
     def clipped_when_built(path_, name_):
         return _clipped(path_, name_, country_gdf, interim)
 
-    def build_lakes():
-        return {"a": polygon_coverage_fraction(clipped_when_built(lakes_path, "lakes"), transform, shape)}
+    def build_lakes(store=None):
+        group = None if store is None else store.group("a")
+        return {"a": polygon_coverage_fraction(clipped_when_built(lakes_path, "lakes"), transform, shape, checkpoint=group)}
 
     lakes_files = _fraction_files(
-        interim / "lakes_fraction.npz", _share_key("lakes", lakes_path, country_gdf, transform, shape), build_lakes
+        interim / "lakes_fraction.npz",
+        _share_key("lakes", lakes_path, country_gdf, transform, shape),
+        build_lakes,
+        checkpointed=True,
     )
     protected: dict[tuple[str, ...], NpyRows] = {}
     for cats in needs.levels:
 
-        def build_protected(cats=cats):
+        def build_protected(store=None, cats=cats):
             subset = _iucn_subset(clipped_when_built(protected_path, "protected"), cats)
-            return {"a": polygon_coverage_fraction(subset, transform, shape)}
+            group = None if store is None else store.group("a")
+            return {"a": polygon_coverage_fraction(subset, transform, shape, checkpoint=group)}
 
         files = _fraction_files(
             interim / f"protected_fraction_{'_'.join(cats).replace('*', 'any')}.npz",
             _share_key("protected", protected_path, country_gdf, transform, shape, categories=list(cats)),
             build_protected,
+            checkpointed=True,
         )
         protected[cats] = NpyRows(files["a"])
     corridor_files = _fraction_files(
@@ -717,22 +753,24 @@ def prepare_stripe_inputs(
             corridors=[repr(k) for k in needs.corridors],
             width_coefficient=float(la.riparian.width_coefficient),
         ),
-        lambda: _corridor_shares(clipped_when_built(rivers_path, "rivers"), la, needs.corridors, transform, shape),
+        lambda store: _corridor_shares(clipped_when_built(rivers_path, "rivers"), la, needs.corridors, transform, shape, store),
+        checkpointed=True,
     )
     settlement_class = RasterRows(grid_result.settlements, "settlements", "float32")
     settlement_files: dict[str, Path] = {}
     if needs.setbacks_m:
 
-        def build_settlements():
+        def build_settlements(store=None):
             mask = np.zeros(shape, dtype=bool)
             for r0 in range(0, height, step):
                 mask[r0 : r0 + step] = _settlement_mask(settlement_class[r0 : r0 + step], la.settlements.min_class)
-            return _settlement_shares(mask, needs.setbacks_m, transform, shape)
+            return _settlement_shares(mask, needs.setbacks_m, transform, shape, store)
 
         settlement_files = _fraction_files(
             interim / "settlement_fraction.npz",
             _settlement_key(Path(grid_result.settlements), transform, shape, la, needs.setbacks_m),
             build_settlements,
+            checkpointed=True,
         )
     return StripeInputs(
         transform=transform,

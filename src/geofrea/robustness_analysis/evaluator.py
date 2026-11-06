@@ -26,9 +26,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
+from geofrea.core.checkpoint import CheckpointStore, digest_inputs, make_key
+from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.core.constants import MR_QUANTILE
 from geofrea.lcoe_modeling.kernel import CellInputs, SampleInputs, lcoe_block
 from geofrea.lcoe_modeling.summary import quantiles_of_rows
@@ -178,6 +181,12 @@ class _Accumulator:
         self.potential_e = np.zeros((1 + n_members, n_samples)) if with_tau else None
 
 
+_ACCUMULATED = (
+    "nominal", "mr", "mr_clim", "p90_member", "mr_tech", "sr_count", "mean", "count", "within_ss", "lowest", "highest",
+    "potential_p", "potential_e",
+)  # the arrays of `_Accumulator` (a running total is all that passes from one member to the next)
+
+
 def _member_pass_two(
     world: MemberWorld,
     samples: SampleInputs,
@@ -249,6 +258,7 @@ def evaluate(
     tau: float | None,
     block_cells: int,
     progress: Callable[[], None] | None = None,
+    checkpoint_dir: Path | None = None,
 ) -> Evaluation:
     """Evaluate the reference member and the core members over the F7 set.
 
@@ -261,6 +271,9 @@ def evaluate(
         tau: The satisficing threshold, USD/MWh; None skips `SR` and the potential below `tau`.
         block_cells: Cells per block, from the memory budget.
         progress: Called once per member pass.
+        checkpoint_dir: Where the running totals are kept after each member (`core.checkpoint`, COMMAND 98). A run that starts again after an
+            interruption restores them and goes on with the next member: the members are evaluated in order with no random draw, so what follows
+            is the same value for value. The caller clears the directory once the results are recorded.
 
     Returns:
         The `Evaluation`; cells that fail `CF_min` in some core member have `mr = NaN`.
@@ -278,7 +291,36 @@ def evaluate(
         raise EvaluationError("at least two draws are needed")
     acc = _Accumulator(n_cells, len(core), len(samples), tau is not None)
     worlds = [reference, *core]
+    store = None
+    first_slot = 0
+    if checkpoint_dir is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                kind="evaluate",
+                code=cached_code_fingerprint("robustness_analysis"),
+                inputs=digest_inputs(worlds, samples),
+                tau=tau,
+                block_cells=block_cells,
+            ),
+            label="F7 evaluation of the members",
+        )
+        stored = store.load_arrays("totals")
+        if stored is not None and all(
+            stored[0].get(name) is not None and stored[0][name].shape == getattr(acc, name).shape
+            for name in _ACCUMULATED
+            if getattr(acc, name) is not None
+        ):
+            for name in _ACCUMULATED:
+                if getattr(acc, name) is not None:
+                    setattr(acc, name, stored[0][name])
+            first_slot = int(stored[1]["next_slot"])
+            logger.info("evaluation: %d of %d members taken from the checkpoint.", first_slot, len(worlds))
     for slot, world in enumerate(worlds):
+        if slot < first_slot:
+            if progress is not None:
+                progress()
+            continue
         lowest, highest = reference_levels(world, samples, block_cells)
         _member_pass_two(
             world,
@@ -291,6 +333,9 @@ def evaluate(
             tau=tau,
             block_cells=block_cells,
         )
+        if store is not None:
+            totals = {name: getattr(acc, name) for name in _ACCUMULATED if getattr(acc, name) is not None}
+            store.save_arrays("totals", totals, {"next_slot": slot + 1}, compress=False)
         if progress is not None:
             progress()
     if (acc.mr < -1e-12).any() or (acc.mr_tech < -1e-12).any():

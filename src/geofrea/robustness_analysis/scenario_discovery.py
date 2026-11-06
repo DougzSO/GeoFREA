@@ -13,13 +13,20 @@ the search with the same settings and rule; with the same seed the replicates ar
 
 from __future__ import annotations
 
+import logging
+import pickle
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from geofrea.core.checkpoint import CheckpointStore, digest_inputs, make_key
+from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.robustness_analysis.prim import PrimResult, PrimStep, run_prim
+
+logger = logging.getLogger("geofrea.robustness_analysis.scenario_discovery")
 
 BOX_FOUND = "box_found"
 NO_CASES = "no_cases"
@@ -98,6 +105,9 @@ def discover(x: pd.DataFrame, shares: np.ndarray, settings: DiscoverySettings) -
     return Discovery(settings, status, n, cases, result, chosen)
 
 
+BOOTSTRAP_BATCH = 10  # replicates between two stored states of the generator
+
+
 def derive_seed(sampler_seed: int) -> int:
     """The seed of the bootstrap, derived from the seed of the sampler (recorded in the provenance of the tables)."""
     return int(np.random.SeedSequence([int(sampler_seed), SEED_TAG]).generate_state(1)[0])
@@ -129,6 +139,7 @@ def bootstrap(
     replicates: int,
     seed: int,
     percentiles: tuple[float, float],
+    checkpoint_dir: Path | None = None,
 ) -> pd.DataFrame:
     """The stability of the box: the search repeated on `replicates` resamples of the futures with replacement.
 
@@ -144,9 +155,44 @@ def bootstrap(
     shares = np.asarray(shares, dtype="float64")
     rng = np.random.default_rng(seed)
     runs: list[Discovery] = []
-    for _ in range(replicates):
-        pick = rng.integers(0, len(x), len(x))
-        runs.append(discover(x.iloc[pick].reset_index(drop=True), shares[pick], settings))
+    store = None
+    done = 0
+    if checkpoint_dir is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                kind="bootstrap",
+                code=cached_code_fingerprint("robustness_analysis"),
+                inputs=digest_inputs(x, shares, settings),
+                seed=seed,
+                replicates=replicates,
+                batch=BOOTSTRAP_BATCH,
+            ),
+            label="PRIM bootstrap",
+        )
+        # the replicates draw from ONE generator, so replicate j depends on the state that j - 1 left: each stored batch carries the state of the
+        # generator after it, and a run that starts again restores the last one (never a seed per replicate: that would be another sample)
+        for batch in range(0, replicates, BOOTSTRAP_BATCH):
+            stored = store.load_arrays(f"batch_{batch:08d}")
+            if stored is None:
+                break
+            runs.extend(pickle.loads(stored[0]["runs"].tobytes()))
+            rng.bit_generator.state = stored[1]["rng_state"]
+            done = len(runs)
+        if done:
+            logger.info("PRIM bootstrap: %d of %d replicates taken from the checkpoint.", done, replicates)
+    for first in range(done, replicates, BOOTSTRAP_BATCH):
+        batch_runs = []
+        for _ in range(first, min(first + BOOTSTRAP_BATCH, replicates)):
+            pick = rng.integers(0, len(x), len(x))
+            batch_runs.append(discover(x.iloc[pick].reset_index(drop=True), shares[pick], settings))
+        runs.extend(batch_runs)
+        if store is not None:
+            store.save_arrays(
+                f"batch_{first:08d}",
+                {"runs": np.frombuffer(pickle.dumps(batch_runs, protocol=pickle.HIGHEST_PROTOCOL), dtype=np.uint8)},
+                {"rng_state": rng.bit_generator.state},
+            )
     low, high = percentiles
     rows: list[dict] = []
 

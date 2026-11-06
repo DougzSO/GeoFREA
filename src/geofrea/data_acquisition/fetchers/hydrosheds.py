@@ -66,6 +66,7 @@ import zipfile
 from pathlib import Path
 
 from geofrea.core import paths
+from geofrea.core.atomic_io import write_bytes_atomic
 from geofrea.core.config_loader import CountryMappingError, load_countries
 from geofrea.core.http_retry import get_with_retry
 
@@ -168,7 +169,7 @@ def _fetch_and_extract_shapefile(
             logger.warning("Failed to fetch %s: %s", label, exc)
             return None
         zip_path.parent.mkdir(parents=True, exist_ok=True)
-        zip_path.write_bytes(resp.content)
+        write_bytes_atomic(zip_path, resp.content)  # whole or absent: a zip cut by a stop is never found at its name (COMMAND 98)
 
     try:
         with zipfile.ZipFile(zip_path) as zf:

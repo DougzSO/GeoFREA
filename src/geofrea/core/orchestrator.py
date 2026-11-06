@@ -36,6 +36,7 @@ from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from geofrea.core.atomic_io import replace_durable
 from geofrea.core.content_hash import content_hash
 from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.peak_memory import PhasePeak
@@ -829,7 +830,7 @@ class Orchestrator:
         # out, COMMAND 78) leaves the manifest of the last phase that finished, never a truncated file
         temporary = self.manifest_path.with_name(self.manifest_path.name + ".tmp")
         temporary.write_text(self.manifest.model_dump_json(indent=2), encoding="utf-8")
-        temporary.replace(self.manifest_path)
+        replace_durable(temporary, self.manifest_path)  # flushed first: a power loss keeps the old manifest or the whole new one
 
     def _hash_with_reuse(self, key: str, path: Path) -> tuple[str, int, int, str]:
         """Hash `path` (bytes and canonical content), reusing the prior hashes for this key if size/mtime match."""

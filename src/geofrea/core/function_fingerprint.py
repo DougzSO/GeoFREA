@@ -21,6 +21,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from geofrea.core.code_fingerprint import (
+    FINGERPRINT_EXEMPT_MODULES,
     PACKAGE,
     SRC_ROOT,
     _module_file,
@@ -149,10 +150,14 @@ def reachable_definitions(entries: tuple[str, ...], src_root: Path | None = None
                     queue.append((key[0], ref))
                 if ref in module.imported_names:
                     target_module, target_name = module.imported_names[ref]
+                    if target_module in FINGERPRINT_EXEMPT_MODULES:
+                        continue
                     if target_name in _load(root, target_module).defs:
                         queue.append((target_module, target_name))
             for alias, attr in attrs:
                 target_module = module.imported_modules.get(alias)
+                if target_module in FINGERPRINT_EXEMPT_MODULES:
+                    continue
                 if target_module is not None and attr in _load(root, target_module).defs:
                     queue.append((target_module, attr))
     return sorted(f"{dotted}:{name}" for dotted, name in seen)
