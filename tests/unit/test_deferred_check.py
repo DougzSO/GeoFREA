@@ -200,8 +200,13 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases == checks["PRT"].phases
     for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
         assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
-    # the entries of `expected` (Group 3 by design, COMMANDS 89, 95 and 96) were pinned to the round of before 2026-11-04 and expired with the new round: removed
-    assert all(check.expected == {} and check.expected_pins == {} for check in checks.values())
+    # PRT declares nothing. IND and BRA declare only the Group 6 differences by design (COMMAND 98), pinned to the round of the republished F2a, and only
+    # in the three phases the Group 6 rules reach: the other phases stay under the gate.
+    assert checks["PRT"].expected == {} and checks["PRT"].expected_pins == {}
+    for iso in ("IND", "BRA"):
+        assert checks[iso].expected and set(checks[iso].expected.values()) == {"regras do Grupo 6"}
+        assert set(checks[iso].expected_pins.values()) == {"f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03"}
+        assert "aligned_rasters" not in checks[iso].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
 
