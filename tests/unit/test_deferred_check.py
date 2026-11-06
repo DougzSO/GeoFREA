@@ -204,7 +204,7 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     # in the three phases the Group 6 rules reach: the other phases stay under the gate.
     assert checks["PRT"].expected == {} and checks["PRT"].expected_pins == {}
     for iso in ("IND", "BRA"):
-        assert checks[iso].expected and set(checks[iso].expected.values()) == {"regras do Grupo 6"}
+        assert checks[iso].expected and set(checks[iso].expected.values()) == {"regras do Grupo 6 (COMANDO 97)"}
         assert set(checks[iso].expected_pins.values()) == {"f392f2c4c3ed13d24920544b65cf0eb538440f448815beaad05a51b4d12e0e03"}
         assert "aligned_rasters" not in checks[iso].expected
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
