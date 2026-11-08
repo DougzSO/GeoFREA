@@ -1,0 +1,214 @@
+% ============================================================================
+% Chapter 1: Introduction
+% Aligned with docs/METHODOLOGY.md v16.2.1 and docs/thesis/hypotheses/H1-H5.
+% Citation keys marked TODO(bib) are not yet in references.bib.
+% Proposed title (adopt in the main file if approved):
+% \titulo{GeoFREA: A Spatially Explicit Framework for Robust Renewable Energy
+%         Siting Under Climate Change and Techno-Economic Uncertainty}
+% ============================================================================
+
+\chapter{Introduction}
+\label{ch:introduction}
+
+% ============================================================================
+\section{Climate change and the pace of the energy transition}
+\label{sec:climate}
+% ============================================================================
+
+The rise in global mean surface temperature is the clearest signature of anthropogenic climate change. According to the Copernicus Climate Change Service, 2024 was the warmest year on record, at about 1.60\textdegree{}C above the 1850--1900 pre-industrial level, and 2025 was the third warmest, at 1.47\textdegree{}C; the average of 2023--2025 was the first three-year period to exceed 1.5\textdegree{}C~\cite{copernicus_gch2025}. % TODO(bib): copernicus_gch2025
+Independent observational records agree on this trend~\cite{NOAAClimateGlobalTemperature, Rohde2020, Hersbach2020, Lenssen2019}, and the Intergovernmental Panel on Climate Change (IPCC) attributes it unequivocally to human activity, mainly the combustion of fossil fuels~\cite{IPCC2023Synthesis}.
+
+The magnitude of future warming depends on cumulative greenhouse gas (GHG) emissions in the coming decades~\cite{IPCC2023Synthesis}. Global GHG emissions grew by 2.3\% in 2024, to 57.7~GtCO\textsubscript{2}e~\cite{UNEP2025EmissionsGap}. % TODO(bib): UNEP2025EmissionsGap
+The Paris Agreement is a legally binding treaty, but its temperature goal, holding warming well below 2\textdegree{}C while pursuing efforts to limit it to 1.5\textdegree{}C, is a collective aim, and the content of each Nationally Determined Contribution (NDC) is not internationally enforceable~\cite{unfccc_paris}. Ten years after its adoption, the full implementation of NDCs would lead to 2.3--2.5\textdegree{}C of warming this century and current policies to about 2.8\textdegree{}C~\cite{UNEP2025EmissionsGap}.
+
+Power generation is the sector where the low-carbon alternatives are most mature. Renewable capacity reached 5{,}149~GW in 2025, after a record addition of 692~GW (15.5\% year on year), and solar photovoltaics (PV) alone accounted for about three-quarters of the additions~\cite{irena_capacity_highlights2026}. The aggregate volume, however, conceals a strong geographic concentration: Asia accounted for 74\% of the additions and China for about three-quarters of the new wind capacity~\cite{irena_capacity_highlights2026}. Where new capacity is built, and under which conditions, matters as much for the transition as how much is built.
+
+The transition also changes the climate exposure of the power system. Hydropower and thermoelectric generation depend on water availability and cooling, and global assessments project reductions in usable capacity for 61--74\% of hydropower plants and 81--86\% of thermoelectric plants worldwide in 2040--2069~\cite{vanvliet2016_power_generation}, with more recent studies confirming widespread hydroclimatic risk across the generation fleet~\cite{yalew2020_impacts, li2026_global_hydroclimatic, chen2026_water_scarcity}. In hydro-dominated systems such as Brazil, thermal plants act as insurance when reservoir inflows decline, an arrangement that assumes that low water availability and extreme heat do not coincide~\cite{vanvliet2012_vulnerability}. A companion study by the author assessed compound heat and drought exposure of the Brazilian hydro-thermal fleet~\cite{silva2026compound}. % TODO(bib): silva2026compound (CREEI article); add one sentence with its main finding once published
+The expansion of solar and wind power, which are themselves weather-dependent, raises the complementary question addressed in this thesis: where should new solar and wind capacity be located so that it remains economically competitive under the climate in which it will operate?
+
+% ============================================================================
+\section{The policy landscape and the decision-support gap}
+\label{sec:policy}
+% ============================================================================
+
+The Paris Agreement replaced the top-down targets of the Kyoto Protocol~\cite{unfccc_kyoto} with a bottom-up architecture in which countries state their mitigation commitments in NDCs, revised every five years under a ratchet mechanism~\cite{unfccc_paris, unfccc_ndcs}. The architecture achieved near-universal participation, but it produces two distinct shortfalls~\cite{IPCC2023Synthesis}. The ambition gap is the distance between the pledges and the reductions required; the implementation gap is the distance between the enacted policies and the pledges themselves. Only 60 Parties, covering 63\% of global emissions, had submitted new NDCs with 2035 targets by the end of September 2025, and countries are not on track to meet even their 2030 NDCs~\cite{UNEP2025EmissionsGap}.
+
+Renewable power illustrates both gaps. At the 28th Conference of the Parties (COP28), Parties agreed to triple global renewable capacity by 2030, to about 11.2~TW~\cite{UNFCCC2023COP28, irena_uae_consensus2025}, % TODO(bib): irena_uae_consensus2025
+while the sum of national 2030 renewable targets stood at about 7.8~TW in October 2025~\cite{ember2025tripling}. % TODO(bib): ember2025tripling
+Meeting the tripling goal requires annual capacity growth of about 16.6\% from 2025 onwards~\cite{irena_uae_consensus2025}. If the additions of 2025 were repeated each year, installed capacity would reach about 8.6~TW in 2030; if the growth rate of 2025 were sustained, about 10.6~TW. Either way the goal is missed, by between 0.6 and 2.6~TW. COP30, held in Bel\'em in 2025, did not add a new quantitative renewable commitment; its outcome launched implementation instruments, among them the Global Implementation Accelerator and the Bel\'em Mission to 1.5~\cite{unfccc_cop30}. % TODO(bib): unfccc_cop30
+
+The shortfall is not uniform across countries. Deployment rates, policy effectiveness and, above all, the cost of capital diverge sharply between national contexts~\cite{steffen2020_cost_of_capital, IRENA_World_energy_transitions_outlook_2024}. The implementation gap is mainly political, financial and infrastructural; it is not caused by a lack of planning tools. Planning tools nonetheless determine how well the available capital is allocated. Infrastructure decisions carry multi-decadal inertia, and an assessment that ranks candidate locations on present-day resource and nominal costs alone can direct investment towards sites whose advantage does not hold under the climate and costs they will face~\cite{Workman2021Climate, Yazdanie2025Strengthening}. This thesis addresses that decision-support gap: the absence of an open, reproducible tool that tells planners and investors which locations remain competitive across plausible climate and techno-economic futures, and how much of the answer depends on each source of uncertainty.
+
+% ============================================================================
+\section{Spatial assessment of renewable potential and the methodological gap}
+\label{sec:transition}
+% ============================================================================
+
+\subsection{From resource maps to site-level supply curves}
+
+Large-scale renewable assessments follow a hierarchy of potentials: the theoretical resource, the geographic potential where construction is allowed, the technical potential that a given technology can convert, and the economic potential that is competitive at a cost criterion~\cite{mckenna2022, lopez2012, brown2015}. Global atlases describe the resource at high resolution~\cite{globalsolaratlas2023, Davis2023The}, but they do not apply national land regulations or produce costs. Exclusion-based assessments apply land constraints to the resource and compute technical potential~\cite{lopez2012, ryberg2018}, % TODO(bib): ryberg2018
+and supply-curve models add site-level costs, including the connection to the transmission network and to roads: the Renewable Energy Potential model of the National Renewable Energy Laboratory~\cite{maclaurin2021} and the Multi-criteria Analysis for Planning Renewable Energy approach, applied to Africa and India~\cite{wu2017, deshmukh2019}. % TODO(bib): wu2017, deshmukh2019
+These approaches establish that territory is best represented through legal and physical exclusions and through monetized, distance-dependent costs, rather than through weighted overlays of normalized criteria, because the result stays in physical units and can be compared across regions.
+
+Solar PV and onshore wind deployment is constrained by barriers whose severity varies by geography: land availability and tenure~\cite{Kiesecker2024Land, Dunnett2022Predicted}, grid readiness and interconnection costs~\cite{Gorman2024Grid, iea_integration2023}, social acceptance and permitting~\cite{Hogan2024Why, iea_arpe2024}, and the cost of capital, which in emerging economies can be several times that of advanced economies~\cite{steffen2020_cost_of_capital, Ameli2021Higher, Calcaterra2024Reducing}. Because these factors vary largely independently, a single set of global assumptions cannot represent site-level viability across national contexts. A framework intended for several countries must therefore be configured per country and technology, with every parameter traceable to its source.
+
+\subsection{Climate change as an input to siting}
+
+Solar and wind resources are projected to change with the climate. Projections indicate regional changes in wind power density and in the variability of wind and solar generation~\cite{tobin2016climate, reyers2016future, pryor2020climate, jerez2019future}, and changes in temperature affect PV conversion efficiency~\cite{skoplaki2009}. The energy-system community has recognized that planning models should represent non-stationary weather~\cite{craig2018review, cronin2018climate}, and studies that incorporate climate change into power-system planning find that it can alter both operation and investment~\cite{ralstonfonseca2021climate, bloomfield2021quantifying}. In most planning studies, however, climate enters through historical reanalyses, representative periods or post-processed scenario comparisons~\cite{pfenninger2017dealing, harang2020incorporating, bennett2021extending}, and climate-aware siting studies remain few~\cite{ashraf2024_climate_smart_siting}. In site-level assessments, climate change is rarely an input to the cost of each candidate site; when it is considered, it is usually a sensitivity applied after the ranking.
+
+The projected changes in mean solar and wind resources up to mid-century are often small relative to the spread among climate models and to internal variability. The relevant question for siting is therefore not whether the resource changes, but whether its change differs enough between sites to alter which sites are preferred, and whether that effect is material relative to the uncertainty in costs.
+
+\subsection{Deep uncertainty and robust siting}
+
+Future climate cannot be described by agreed probabilities: emission scenarios and climate models are plausible but unweighted futures. Techno-economic parameters, in contrast, can be sampled from sourced ranges. Decision Making under Deep Uncertainty (DMDU) provides methods for this setting~\cite{Lempert2003, marchau2019}. Robust Decision Making explores large ensembles of futures and identifies the conditions under which a strategy fails; regret-based metrics measure how far a choice falls from the best choice in each future; satisficing metrics measure how often a choice meets a performance threshold. Robustness metrics differ in what they capture and can disagree~\cite{kwakkel2016, mcphail2018}, so the metric must be chosen and justified before results are produced.
+
+\subsection{The specific gap}
+
+Combining these strands defines the gap addressed in this thesis. Site-level supply-curve frameworks integrate exclusions and connection costs, but evaluate sites under present-day resource and nominal costs. Studies of climate impacts on solar and wind quantify resource changes, but rarely translate them into site-level costs and rankings. DMDU methods are established in water and energy planning, but they are seldom applied to the spatial ranking of candidate sites, where the decision is a choice among thousands of locations rather than among a few strategies. No open framework, to the author's knowledge, evaluates the site-level levelized cost of energy (LCOE) of solar PV and onshore wind under a full ensemble of climate members and techno-economic samples, ranks the sites by a robustness metric that keeps the climate and techno-economic axes separable, and tests, with decision rules fixed in advance, whether robustness changes the selected locations across national contexts. % TODO: confirm this delta against Chapter 2 (reV, MapRE, GLAES, Ashraf et al.) before submission
+
+GeoFREA was developed to fill this gap. It is a configuration-driven pipeline in which climate change enters the capacity factor and the LCOE of every candidate cell, and in which the robustness of each cell is measured over the joint ensemble of climate and techno-economic futures. % TODO: spell out the GeoFREA acronym at first use
+
+% ============================================================================
+\section{Problem statement}
+\label{sec:problem}
+% ============================================================================
+
+Decisions on where to build solar and wind capacity are made today for assets that will operate for 25 to 30 years under a changing climate and uncertain costs. Site-level assessments rank candidate locations by present-day resource and nominal costs, and treat climate change, when at all, as a sensitivity applied after the ranking~\cite{craig2018review, ashraf2024_climate_smart_siting}. It is therefore unknown whether the sites they prioritize remain competitive across plausible futures, whether a robustness-based assessment would select materially different locations, whether national or regional aggregation hides the sites that matter, and whether climate or techno-economic uncertainty dominates the choice in a given country. Without answers to these questions, planners cannot tell whether the added complexity of climate-aware, uncertainty-aware siting changes decisions, or where it does.
+
+% ============================================================================
+\section{Scope and delimitations}
+\label{sec:scope}
+% ============================================================================
+
+The scope of the thesis is summarized in Table~\ref{tab:scope}. Two definitions frame the remaining sections. The decision unit is a cell of 0.05\textdegree{}, and a siting priority is the shortlist of the best cells of a country, ranked by a criterion, that holds a fixed share of the candidate cells (the top-$k$ set). A capacity target can replace the share as the size of the shortlist, which gives the reading of an expansion strategy; it is used as a sensitivity.
+
+\begin{table}[htbp]
+\centering
+\caption{Scope of the thesis.}
+\label{tab:scope}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.24\textwidth} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Item} & \textbf{Decision} \\
+\midrule
+Countries & Brazil, Portugal and India, selected for contrasting resource climates, land constraints and cost of capital. \\
+Technologies & Utility-scale ground-mounted solar PV and onshore wind. \\
+Decision unit & Cell of 0.05\textdegree{} (25 pixels of the 0.01\textdegree{} analysis grid); 0.1\textdegree{} as a scale sensitivity. \\
+Land & Legal and physical exclusions and land-utilization factors, in three named land-availability scenarios (central, restrictive, permissive), reported as a range and not sampled as an uncertainty of the futures. \\
+Economic metric & Site-level LCOE in constant 2024 USD, including the radial connection to the nearest eligible substation; 2024 technology vintage. \\
+Climate & CMIP6 ensemble of six general circulation models (five for wind), SSP1-2.6, SSP3-7.0 and SSP5-8.5; core window 2041--2070, sensitivity window 2071--2100; reference 1995--2014; annual-mean change factors applied to high-resolution atlas baselines. \\
+Techno-economic uncertainty & Latin hypercube samples of capital cost, operation and maintenance, discount rate, lifetime, degradation, connection costs and technology-specific losses, from sourced ranges. \\
+Robustness & Maximum relative regret on LCOE (primary), satisficing robustness under a minimum-generation constraint (secondary), and scenario discovery with the Patient Rule Induction Method (PRIM). \\
+Climate hazards & Extreme heat, extreme precipitation and extreme wind as exposure indicators; they enter costs only where a loss function with Tier 1 or Tier 2 evidence exists. \\
+Not modelled & Hourly dispatch, storage, curtailment, upstream network reinforcement and available grid capacity, electricity demand, GHG abatement, biomass and other technologies, sea-level rise, wildfire and seismic hazard. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The LCOE is a site-level screening metric. It does not capture the system value of generation, its correlation with demand and with other plants, or integration costs~\cite{ueckerdt2013}. The results of this thesis identify where generation is cheap and robust to uncertainty; they do not determine the optimal capacity mix of a power system, which requires system-level modelling.
+
+% ============================================================================
+\section{Research questions}
+\label{sec:questions}
+% ============================================================================
+
+The central question of the thesis is:
+
+\begin{quote}
+\textbf{RQ0.} To what extent does a spatially explicit assessment that treats climate change and techno-economic uncertainty jointly change the siting priorities for solar PV and onshore wind, compared with an assessment based on present conditions, and how can that robustness be measured while keeping the two sources of uncertainty separable?
+\end{quote}
+
+RQ0 has a methodological part, how to measure site-level robustness, and an empirical part, how much it changes the selected locations. It is decomposed into five secondary questions:
+
+\begin{enumerate}
+    \item[\textbf{RQ1.}] How large is the technical potential of solar PV and onshore wind in each country under a common, configurable eligibility protocol, and how wide is the range induced by the land-eligibility assumptions?
+    \item[\textbf{RQ2.}] How do territory-dependent connection costs, combined with techno-economic parameters, shape the site-level LCOE and the supply curve of each country?
+    \item[\textbf{RQ3.}] How do multi-model CMIP6 projections change the capacity factor, the potential and the LCOE of sites not yet built, and how much of the economically viable potential that supports national targets is affected?
+    \item[\textbf{RQ4.}] Which robustness formulation is adequate for ranking sites under deep climate uncertainty and parametric techno-economic uncertainty, and how much does planning for robustness change the selected locations and their cost?
+    \item[\textbf{RQ5.}] Do the answers to RQ3 and RQ4 hold across Brazil, Portugal and India, or are they specific to each national context?
+\end{enumerate}
+
+% ============================================================================
+\section{Research objectives and hypotheses}
+\label{sec:objectives}
+% ============================================================================
+
+\subsection{Objectives}
+
+The general objective of the thesis is to develop and apply an open, spatially explicit framework that identifies solar PV and onshore wind siting priorities that remain competitive across climate and techno-economic futures, and to evaluate it in three national contexts. The specific objectives map one to one to the secondary questions:
+
+\begin{enumerate}
+    \item[\textbf{RO1.}] Quantify the technical potential of solar PV and onshore wind per cell in Brazil, Portugal and India from open data, under three land-availability scenarios (RQ1).
+    \item[\textbf{RO2.}] Integrate land-eligibility constraints and spatially explicit connection costs with techno-economic parameters into a site-level LCOE and national supply curves (RQ2).
+    \item[\textbf{RO3.}] Quantify how SSP1-2.6, SSP3-7.0 and SSP5-8.5 projections from a CMIP6 ensemble change the resource, the potential and the LCOE of candidate cells in 2041--2070 and 2071--2100, and the exposure of the economic potential to climate hazards (RQ3).
+    \item[\textbf{RO4.}] Develop a site-level robustness assessment over the full factorial of climate members and techno-economic samples, with maximum relative regret as the primary metric, satisficing robustness as the secondary metric and PRIM scenario discovery, keeping the climate and techno-economic axes separable (RQ4).
+    \item[\textbf{RO5.}] Evaluate the framework in Brazil, Portugal and India through a cross-country comparison and plausibility checks against existing plants and published potential estimates, and provide a precomputed explorer of the results (RQ5).
+\end{enumerate}
+
+\subsection{Hypotheses}
+
+Five hypotheses translate the questions into testable statements. Each has a primary statistic, a reference value that shows what the statistic would be by chance or by construction, and a decision threshold. The thresholds and decision rules were fixed before any result was produced for a real country, and are presented in full in Chapter~\ref{ch:methodology}. % TODO: confirm label of the methodology chapter
+Every verdict is issued per country and technology (H4 per technology across countries), from the primary configuration; sensitivity variants are reported beside it and a change of verdict in a variant is reported as a dependence on that choice.
+
+\begin{enumerate}
+    \item[\textbf{H1.}] \textit{Climate robustness of the site ranking.} H1a: a majority of the sites that are robust under one SSP are robust under all three (the core share of the three top-$k$ sets is at least 0.60). H1b: at least one in five of the sites that are optimal under present conditions leave the top $2k$ under at least one SSP when only the climate changes.
+    \item[\textbf{H2.}] \textit{Spatial aggregation bias.} Selecting the same capacity by first-level administrative region instead of by cell retains less than 30\% of the capacity of the robust cell-level selection.
+    \item[\textbf{H3.}] \textit{Robust versus nominal siting.} At least 20\% of the capacity of the robust shortlist lies in cells that a shortlist based on present conditions would not reach within twice its size.
+    \item[\textbf{H4.}] \textit{Context-dependent dominance of uncertainty.} The uncertainty axis that displaces the site ranking most is not the same in every country: for a technology, at least one country is climate-dominated and another techno-economic-dominated (climate share of the displacement above 0.60 and below 0.40, respectively).
+    \item[\textbf{H5.}] \textit{Climate pressure on national targets.} Climate change reduces the yield of the economic potential (H5a), or places it in cells where hazard indicators exceed physical thresholds (H5b), by at least one-fifth of the margin of that potential over the national target.
+\end{enumerate}
+
+The hypotheses are formulated so that a negative verdict is informative. If H1b, H3 and H5 are not supported, a present-day assessment already identifies sites that are robust to the futures considered, and climate change, as represented, does not threaten the national targets through the channels modelled; given the small mean changes of the resource expected up to mid-century, this outcome is plausible and would answer RQ0 as clearly as a positive one. Table~\ref{tab:mapping} links questions, objectives, hypotheses and chapters.
+
+\begin{table}[htbp]
+\centering
+\caption{Correspondence between research questions, objectives, hypotheses and chapters.}
+\label{tab:mapping}
+\small
+\begin{tabular}{@{}lllp{.42\textwidth}@{}}
+\toprule
+\textbf{Question} & \textbf{Objective} & \textbf{Hypotheses} & \textbf{Chapter} \\
+\midrule
+RQ0 & General & H2, H3 & Chapters~5 and~6 \\
+RQ1 & RO1 & none & Chapter~4 \\
+RQ2 & RO2 & none & Chapter~4 \\
+RQ3 & RO3 & H1, H5 & Chapter~5 \\
+RQ4 & RO4 & H1, H3, H4 & Chapter~5 \\
+RQ5 & RO5 & H4 & Chapter~6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Contribution and significance}
+\label{sec:contribution}
+% ============================================================================
+
+The thesis makes four contributions.
+
+\begin{enumerate}
+    \item A spatially explicit pipeline in which climate change enters the capacity factor and the LCOE of every candidate site for each climate member, so that the climate is an input to the ranking rather than a sensitivity applied after it.
+    \item A site-level robustness assessment that treats climate and techno-economic uncertainty jointly while keeping the two axes separable, with decision-relevant statistics defined on the selected capacity rather than on the variance of costs, and decision rules fixed before the results.
+    \item An empirical comparison of Brazil, Portugal and India that tests whether robustness changes siting decisions, whether regional aggregation hides the robust sites and whether the dominant source of uncertainty depends on the national context, with plausibility checks against existing plants.
+    \item An open, configuration-driven implementation in which every parameter carries its nominal value, range, source and evidence tier, shared by the analysis and the explorer.
+\end{enumerate}
+
+The empirical claims are restricted to the three countries studied. The architecture is designed for extension to other countries and technologies without changes to the code, but that extension is not tested in this thesis.
+
+% ============================================================================
+\section{Thesis structure}
+\label{sec:structure}
+% ============================================================================
+
+\textbf{Chapter~2} reviews renewable potential assessment, spatial supply-curve models, climate impacts on solar and wind resources, and decision making under deep uncertainty, and justifies the robustness formulation adopted.
+
+\textbf{Chapter~3} presents GeoFREA: the data, the pipeline from land eligibility to LCOE, the climate forcing, the design of the futures, the robustness metrics and the decision rules of the hypotheses.
+
+\textbf{Chapter~4} reports the technical and economic potential of the three countries under present conditions, its land range, the supply curves and the plausibility checks (RO1, RO2).
+
+\textbf{Chapter~5} reports the effect of climate change on the potential and the costs, and the robustness of the site rankings (RO3, RO4; H1 to H5).
+
+\textbf{Chapter~6} compares the three countries, discusses the results against the literature, and states the limitations of the framework (RO5).
+
+\textbf{Chapter~7} summarizes the answers to the research questions and the directions for further work.
