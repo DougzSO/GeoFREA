@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 18.0.0 |
+| Version | 18.0.1 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-11-06 |
+| Updated | 2026-11-08 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -578,6 +578,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 18.0.1 | 2026-11-08 | PATCH (record of a scope exclusion; COMMAND 104; no result changes: the REN was never applied and still is not, so no result definition changes and no number moves; `docs/_audit/ren_source_audit.md`): the restrictive scenario of PRT does not apply the REN because the official vector could not be obtained complete (D-F3-030, L-065); OQ-072 widened to the REN licence. Records corrected: D-F3-029 (wind in the restrictive scenario) and its permissive PRT solar figure (19,527 km2). |
 | 18.0.0 | 2026-11-06 | MAJOR (changes a result definition; COMMAND 101, Douglas's authorization; `docs/_audit/slope_dem_test_100.md`): the slope DEM becomes FABDEM V1-2 instead of GLO-30 for E4 in the three countries (the slope and the slope bins change, and with them the eligible area and everything downstream), the elevation stays on GLO-30; a square with no FABDEM tile falls back to GLO-30 and is recorded. FABDEM is a model-corrected DEM and its licence is CC BY-NC-SA 4.0 (L-064, OQ-072). Items altered: M-F1-02, M-F2a-07, M-F2a-08. |
 | 17.0.0 | 2026-11-05 | MAJOR (changes result definitions; COMMAND 97, Group 6, Douglas's authorization; `docs/_audit/group6_audit_97.md`): E3 becomes the union of river corridors of half-width `W/2 + B_c(W)` with `W = 7.2 Q^b` from the HydroRIVERS discharge and the buffer of each country, merged with the land-cover water by union (decision C1); E6 becomes a setback around the settlements of GHS-SMOD R2023A (new aligned layer, M-F2a-11) in place of the density threshold, which stays as the named sensitivity `population_density_200`; E4 is read from percent slopes (PV 3 / 5 / 10 %, wind 10 / 20 / 30 %); the altitude limit of wind is 2,000 / 3,000 m / none; the minimum eligible area acts on clusters of pixels (new M-F3-07) and the 0.1 km2 cell filter is removed (a candidate has any eligible area); the land parameters have one value per scenario and no ranges (M-F2b-06), and the full-factorial range report of M-F3-02 is retired. Items altered: M-F2b-01, M-F2b-06, M-F3-01, M-F3-02, M-F3-04; items added: M-F2a-11, M-F3-07. |
 | 16.3.0 | 2026-11-04 | MINOR (COMMAND 96, OQ-069; `docs/_audit/members_per_cell_95.md`, D-F7-064, D-F5-041; no result is recomputed here): F5 writes `ensemble_<tech>__<scenario>.parquet` with the members each cell has and the flag `incomplete_ensemble`, and keeps the cells that lack a member in the potential tables (BRA wind: 7,436 candidates, 1.86% of the capacity); F6 is unchanged; F7 analyses only the cells with the complete ensemble of the technology (class `incomplete_ensemble`, reported with its capacity and energy) and repeats a window on the common ensemble (the members that miss cells dropped, every cell kept) as a sensitivity. Items altered: M-F5-06, M-F7-01. |

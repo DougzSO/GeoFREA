@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "18.0.0",
-  "last_updated": "2026-11-06",
+  "methodology_version": "18.0.1",
+  "last_updated": "2026-11-08",
   "current_milestone": "MS-6",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},

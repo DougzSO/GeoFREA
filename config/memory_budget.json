@@ -71,5 +71,10 @@
     "peak_rss_mb": 1438,
     "source": "measured",
     "detail": "phase land_eligibility of BRA through the pipeline, 1,128 s, round of 2026-11-04 (COMMAND 91, F3 by stripes of rows; D-F3-024); profile harness: 1,260 MB with the share caches current, 1,218 MB with them rebuilt. Before: 3,337 MB. IND 834 MB (2,097 before), PRT 337 MB (342)"
+  },
+  "f3_phase_fabdem_round": {
+    "peak_rss_mb": 1243,
+    "source": "measured",
+    "detail": "phase land_eligibility of BRA in the round 9c2dc3c8 (FABDEM slope, COMMAND 101), 578 s, outputs/BRA/unattended_check.json: the peak per phase of the unattended runner, not per process. It does not replace the 1,438 MB of f3_phase (COMMAND 91); until a per-process measure exists the decision ceiling is the larger value (1,438 MB)"
   }
 }

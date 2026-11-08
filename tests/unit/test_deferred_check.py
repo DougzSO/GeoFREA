@@ -200,18 +200,10 @@ def test_the_shipped_configuration_lists_prt_ind_and_bra_with_the_twelve_phases_
     assert len(checks["IND"].phases) == 12 and checks["IND"].phases == checks["BRA"].phases == checks["PRT"].phases
     for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
         assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
-    # COMMAND 101: the three countries declare the differences by design of the slope from FABDEM (F2a `slope` and `slope_counts`, and `aligned_rasters` that lists them) and of
-    # what follows (F3 onwards, and the phases that read the F3 cells); PRT also those of the Group 6 rules it has not had a round for. Each is pinned to the reference of its
-    # country at the time (IND and BRA: the round 74931e0a; PRT: 3a1b06e0). The other artifacts (F1, F1b, the other aligned layers, F2b) stay under the gate.
-    pins = {"IND": "74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0", "BRA": "74931e0a24f00a184ad0bfa87371872105f641177e03457d8bb3aef6ccf4ada0", "PRT": "3a1b06e04c67118279bd49bfb24bacaae88ef7918a0309b33052c033ce415aa4"}
-    reasons = {"IND": {"declividade pelo FABDEM (COMANDO 101)"}, "BRA": {"declividade pelo FABDEM (COMANDO 101)"}, "PRT": {"regras do Grupo 6 (COMANDO 97) e declividade pelo FABDEM (COMANDO 101)"}}
+    # 2026-11-08 (COMMAND 104): the entries of COMMAND 101 (pinned to 74931e0a and 3a1b06e0) expired when the round 9c2dc3c8 was accepted and were removed, not
+    # re-issued: no country declares a difference by design until a new round needs one.
     for iso in ("IND", "BRA", "PRT"):
-        assert set(checks[iso].expected.values()) == reasons[iso]
-        assert set(checks[iso].expected_pins.values()) == {pins[iso]}
-        assert len(checks[iso].expected) == 60
-        assert {"aligned_rasters", "aligned/slope", "aligned/slope_counts", "land_eligibility", "technical_potential", "potential_maps"} <= set(checks[iso].expected)
-        assert not any(k.startswith("aligned/") and k not in ("aligned/slope", "aligned/slope_counts") for k in checks[iso].expected)  # the other aligned layers stay under the gate
-        assert not {"aligned/elevation", "aligned/land_cover", "aligned/population"} & set(checks[iso].expected)  # in particular the elevation
+        assert checks[iso].expected == {} and checks[iso].expected_pins == {}, iso
     assert all(phase in checks["IND"].suspects for phase in checks["IND"].phases)
 
 
@@ -387,7 +379,7 @@ def test_the_shipped_configuration_has_no_manual_entry_for_a_last_bit_difference
     for iso in ("IND", "BRA"):
         spec = config["countries"][iso]
         assert spec["reference_run"] == "latest", iso  # the last accepted round of the store, not a backup directory
-        assert not [k for k in spec["expected"] if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso
+        assert not [k for k in (spec.get("expected") or {}) if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso
 
 
 # --- the entries of `expected` are pinned to the reference they were declared against (COMMAND 96) --------------------------------------------------
