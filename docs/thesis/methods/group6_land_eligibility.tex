@@ -86,6 +86,17 @@ reaches between width classes. With $b=0.50$, the class limits of 10, 50,
 200 and 600~m correspond to mean discharges of about 1.9, 48, 770 and
 6\,900~m$^3$/s.
 
+In Portugal, the National Ecological Reserve (REN), which protects
+flood-prone areas, river beds and margins, steep slopes and coastal
+systems, is not represented in any scenario. Its regime admits renewable
+plants in several of its typologies under prior communication or
+authorization \cite{portugal2008ren}, so it is not a general prohibition.
+% verify: admissible uses of renewable plants per REN typology (RJREN annex)
+The vector layer published by the Directorate-General for the Territory
+was not available in complete form when the analysis was run, and a
+partial layer was not used, because it would exclude some municipalities
+and not others.
+
 \subsection{Settlements}
 \label{subsec:g6_settlements}
 
@@ -113,19 +124,30 @@ the setback around it (Table~\ref{tab:g6_setback}).
     \end{tabular}
 \end{table}
 
-This criterion replaces the population-density threshold. A density
+Settlements are not defined by a population-density threshold. A density
 threshold applied uniformly would remove very different shares of land in
-countries with different rural settlement patterns, most of all in
-India, while the settlement classes combine density with contiguity and
-minimum population. The former threshold of 200 inhabitants/km$^2$ is
-kept only as a sensitivity.
+countries with different rural settlement patterns, while the settlement
+classes combine density with contiguity and minimum population. A
+threshold of 200 inhabitants/km$^2$ is run as a sensitivity.
 
 \subsection{Terrain and Elevation}
 \label{subsec:g6_terrain}
 
-Slope is computed in percent from the GLO-30 elevation model at its
-native resolution, and a pixel's eligible fraction excludes the share of
-its area steeper than the threshold. Elevation limits apply only to wind,
+Slope is computed in percent at 30~m from FABDEM, a version of the
+Copernicus GLO-30 model with forests and buildings removed
+\cite{hawker2022fabdem}, and a pixel's eligible fraction excludes the
+share of its area steeper than the threshold. GLO-30 is a surface model:
+vegetation and buildings add relief that, at a 30~m spacing, exceeds the
+low slope limits of PV. Over the three countries, the PV-eligible area
+obtained with FABDEM is 1.12 to 1.34 times the area obtained with GLO-30
+at the central limit and 1.24 to 1.63 times at the restrictive limit.
+For wind the two models differ by 0.1 to 2.1\,\% at the central and
+permissive limits; at the restrictive limit of 10\,\% the FABDEM area is
+larger by 4.2\,\% in Brazil, 1.6\,\% in India and 11.1\,\% in Portugal.
+The two results bound the sensitivity of eligibility to the elevation
+model, and FABDEM is the model adopted. Elevation, used for air density and the wind
+elevation limit, remains from GLO-30, where the height of vegetation is
+immaterial. Elevation limits apply only to wind,
 because air density already enters the wind capacity factor
 (Section~\ref{sec:params_group1}); the limit stands for access,
 construction and cold-climate constraints, and the permissive scenario
@@ -155,7 +177,9 @@ pixels with a positive eligible fraction, and a cluster is kept only if
 its eligible area reaches a minimum $A_{\min}$. For PV, the central value
 is 1~km$^2$ \cite{lopez2012}. For wind, the central scenario additionally
 discards pixels whose eligible fraction is below 10\,\%, the share needed
-for one turbine per square kilometre \cite{elsner2023onshore}. The
+for one turbine per square kilometre \cite{elsner2023onshore}. Because
+the pixel area varies with latitude, 10\,\% corresponds to about 9 to
+12~ha across the study area, against the 10~ha of the original rule. The
 restrictive scenario sets $A_{\min}$ to the area of the 100~MW reference
 project of Section~\ref{subsec:g3_boundary}, $A_{\min} =
 P_{\mathrm{ref}}/\mathrm{PD}$, with the power density PD of each
@@ -185,12 +209,14 @@ the connection cost refers. The permissive scenario applies no minimum.
 Channel widths are estimated from mean discharge with a bankfull
 relation, which underestimates the legal width, and HydroRIVERS omits
 small streams and does not distinguish ephemeral channels or navigable
-waters. The Indian riparian buffers and several scenario bounds are
-author judgment. Settlement setbacks come from studies in other
+waters. In Portugal, the REN and flood zones are not represented, so the
+restrictive scenario is an upper bound with respect to them. The Indian
+riparian buffers and several scenario bounds are author judgment. Settlement setbacks come from studies in other
 countries, since none of the three countries sets a national setback for
 these technologies in the sources reviewed. The settlement model has a
 1~km resolution, so small villages are represented coarsely. Slope
-thresholds depend on the resolution of the elevation model. Clusters are
+thresholds depend on the resolution of the elevation model, and FABDEM
+removes vegetation and buildings by a model rather than by observation. Clusters are
 formed from pixels with any eligible fraction, so a cluster of
 fragmented pixels can pass the area test without being contiguous at the
 sub-pixel scale.
