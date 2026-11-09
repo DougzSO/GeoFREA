@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # tests/unit/test_adopt_aligned_cache_keys.py archives an older revision (38e8da1) with `git archive`: a shallow clone does not have it
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

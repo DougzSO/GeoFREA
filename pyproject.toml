@@ -55,6 +55,7 @@ markers = [
     "unit: fast tests with no external data dependency",
     "regression: V-01 frozen regression on the synthetic ZZZ country (tests/fixtures/v01)",
     "synthetic: F1 to F5 end to end on the synthetic ZZZ country with no network (A-06, V-08)",
+    "requires_data: reads files of the real data directory (GEOFREA_DATA_DIR of .env); skipped when that key is absent (CI); deselect with -m \"not requires_data\"",
     "slow: builds a synthetic world (minutes); deselect with -m \"not slow\" for the fast loop and the unit job of CI",
 ]
 

@@ -22,6 +22,22 @@ from geofrea.lcoe_modeling.connection import (
 from geofrea.lcoe_modeling.inputs import LcoeMissingInputError, resolve_technology_costs
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def _real_data_dir() -> Path | None:
+    """The real data directory, read from the key `GEOFREA_DATA_DIR` of `.env` (the autouse fixture of conftest points the variable at a temporary directory)."""
+    env = REPO / ".env"
+    values = dict(
+        line.split("=", 1) for line in env.read_text(encoding="utf-8").splitlines() if line.startswith("GEOFREA_DATA_DIR=")
+    ) if env.is_file() else {}
+    value = values.get("GEOFREA_DATA_DIR", "").strip().strip('"')
+    return Path(value) if value else None
+
+
+_skip_without_real_data = pytest.mark.skipif(
+    _real_data_dir() is None,
+    reason="GEOFREA_DATA_DIR is not set in .env: the test reads files of the real data directory (fleet file, World Bank indices), which CI does not have",
+)
 PARAMETERS = REPO / "config" / "parameters.json"
 TECHNOLOGIES = REPO / "config" / "technologies.yaml"
 
@@ -244,15 +260,14 @@ def test_the_efficiency_report_floors_at_zero_and_counts_cells_below_ninety_perc
 
 
 @pytest.mark.unit
+@pytest.mark.requires_data
+@_skip_without_real_data
 def test_the_fleet_file_of_the_degradation_zones_is_present_and_the_conversion_indices_are_loadable():
     """The fleet file and the World Bank indices live in GEOFREA_DATA_DIR/external: a missing file fails this test (pending for Douglas)."""
     # the autouse fixture of conftest points GEOFREA_DATA_DIR at a temporary directory: the real one is read from the key of `.env` (only that key)
-    env = REPO / ".env"
-    values = dict(
-        line.split("=", 1) for line in env.read_text(encoding="utf-8").splitlines() if line.startswith("GEOFREA_DATA_DIR=")
-    ) if env.is_file() else {}
-    assert values.get("GEOFREA_DATA_DIR"), "GEOFREA_DATA_DIR is not set in .env"
-    root = Path(values["GEOFREA_DATA_DIR"].strip().strip('"'))
+    root_dir = _real_data_dir()
+    assert root_dir is not None
+    root = root_dir
     fleet = root / "external" / "pv_degradation" / "Fleet_results_public_2022_02_02.csv"
     assert fleet.is_file(), f"fleet data absent: {fleet}"
     indices = root / "external" / "world_bank" / "conversion_indices.json"
@@ -275,14 +290,13 @@ def test_an_excluded_road_resolves_for_f6_with_a_fixed_zero_in_the_design(parame
 
 
 @pytest.mark.unit
+@pytest.mark.requires_data
+@_skip_without_real_data
 def test_the_real_countries_resolve_to_2024_usd_with_the_world_bank_indices_of_the_data_dir(parameters):
     """The costs of the three countries convert with the indices written by `scripts/fetch_conversion_indices.py` (read from the key of `.env`)."""
-    env = REPO / ".env"
-    values = dict(
-        line.split("=", 1) for line in env.read_text(encoding="utf-8").splitlines() if line.startswith("GEOFREA_DATA_DIR=")
-    ) if env.is_file() else {}
-    assert values.get("GEOFREA_DATA_DIR"), "GEOFREA_DATA_DIR is not set in .env"
-    indices_file = Path(values["GEOFREA_DATA_DIR"].strip().strip('"')) / "external" / "world_bank" / "conversion_indices.json"
+    root_dir = _real_data_dir()
+    assert root_dir is not None
+    indices_file = root_dir / "external" / "world_bank" / "conversion_indices.json"
     for iso in ("BRA", "IND", "PRT"):
         country = parameters.countries[iso]
         indices = load_conversion_indices(indices_file, iso)
