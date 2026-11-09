@@ -1120,8 +1120,8 @@ def test_the_scan_in_blocks_samples_a_fractional_window_as_the_single_read_does(
     country = gpd.GeoDataFrame(geometry=[polygon], crs="EPSG:4326")
     monkeypatch.setattr(raster_inspection, "_SCAN_BLOCK_PIXELS", block_pixels)
     with rasterio.open(path) as src:
-        shape, transform_ref, values, per_row = _reference_scan(src, country)
-        got_shape, got_transform, got_values, got_per_row, inside_px = raster_inspection._scan_windowed(src, country, src.crs)
+        shape, _transform_ref, values, per_row = _reference_scan(src, country)
+        got_shape, _got_transform, got_values, got_per_row, _inside_px = raster_inspection._scan_windowed(src, country, src.crs)
     assert shape == got_shape and shape[0] > 600
     np.testing.assert_array_equal(got_values, values)
     np.testing.assert_array_equal(got_per_row, per_row)

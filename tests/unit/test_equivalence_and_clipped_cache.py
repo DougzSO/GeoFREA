@@ -105,7 +105,7 @@ def test_a_source_that_the_window_nearly_covers_is_not_copied(tmp_path):
     grid = _grid()
     left, top = grid.transform * (0, 0)
     right, bottom = grid.transform * (grid.width, grid.height)
-    cols, rows = int(round((right - left + 0.22) / 0.01)), int(round((top - bottom + 0.22) / 0.01))
+    cols, rows = round((right - left + 0.22) / 0.01), round((top - bottom + 0.22) / 0.01)
     tight = tmp_path / "tight.tif"
     with rasterio.open(tight, "w", driver="GTiff", height=rows, width=cols, count=1, dtype="float32", crs="EPSG:4326",
                        transform=from_origin(left - 0.11, top + 0.11, 0.01, 0.01)) as dst:  # fmt: skip

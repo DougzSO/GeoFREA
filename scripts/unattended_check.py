@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -30,7 +30,7 @@ sys.path.insert(0, str(REPO / "src"))
 
 
 # the comparison itself is the one the pipeline applies in its deferred check (core/deferred_check.py, D-core-050)
-from geofrea.core.deferred_check import compare_artifacts, content_of  # noqa: E402,F401
+from geofrea.core.deferred_check import compare_artifacts, content_of  # noqa: F401
 
 
 def _local(stamp: str) -> datetime:
@@ -93,7 +93,7 @@ def build_report(
     if started:
         since = datetime.fromisoformat(started)
         if since.tzinfo is None:  # the script gives UTC without an offset
-            since = since.replace(tzinfo=timezone.utc)
+            since = since.replace(tzinfo=UTC)
         ran = [p for p in ran if after["phases"][p].get("finished_at") and datetime.fromisoformat(after["phases"][p]["finished_at"]) >= since]
     artifacts = compare_artifacts(before, after, ran)
     different = {k: r for k, r in artifacts.items() if r["status"] == "DIFERENTE"}

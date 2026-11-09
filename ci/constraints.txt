@@ -1,0 +1,6 @@
+# Versions pinned for CI (COMMAND 106; docs/_audit/ci_red_audit.md). Used as: pip install -c ci/constraints.txt -e ".[dev]"
+# Nothing else is pinned and pyproject.toml is unchanged. Each pin is lifted when its open question is resolved (docs/OPEN_QUESTIONS.md OQ-073 to OQ-075).
+ruff==0.17.4
+geopandas==1.1.2
+Pillow==12.1.0
+matplotlib==3.10.8

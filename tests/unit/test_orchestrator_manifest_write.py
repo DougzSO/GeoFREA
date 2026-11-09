@@ -13,7 +13,7 @@ def test_write_manifest_goes_through_a_temporary_file_and_leaves_no_residue(tmp_
     class Fake:
         manifest_path = tmp_path / "outputs" / "PRT" / "manifest.json"
 
-        class manifest:  # noqa: N801 - a stand-in object with the one method used
+        class manifest:
             @staticmethod
             def model_dump_json(indent=2):
                 return '{"ok": true}'
@@ -40,7 +40,7 @@ def test_a_failure_while_writing_keeps_the_previous_manifest(tmp_path, monkeypat
     class Fake:
         manifest_path = path
 
-        class manifest:  # noqa: N801
+        class manifest:
             @staticmethod
             def model_dump_json(indent=2):
                 raise RuntimeError("killed while serialising")

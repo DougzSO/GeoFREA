@@ -17,7 +17,7 @@ The benchmark must not compete with the round that is running (COMMAND 75), so t
 The exit code of the command is passed through when it ends by itself.
 """
 
-# ruff: noqa: DTZ005 - local wall-clock stamps of the machine that runs the benchmark
+
 from __future__ import annotations
 
 import argparse

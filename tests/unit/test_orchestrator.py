@@ -1039,7 +1039,7 @@ def test_a_manifest_of_schema_2_6_is_readable_and_has_no_peak_memory(tmp_path):
 def _entry(**kw):
     from geofrea.core.orchestrator import PhaseManifestEntry
 
-    base = dict(phase="p", status="success", output={}, error=None, started_at="t0", finished_at="t1")
+    base = {"phase": "p", "status": "success", "output": {}, "error": None, "started_at": "t0", "finished_at": "t1"}
     return PhaseManifestEntry(**{**base, **kw})
 
 
@@ -1105,7 +1105,6 @@ def test_an_entry_of_manifest_2_7_offers_its_last_execution_when_the_code_is_the
 def test_the_manifest_keeps_the_cold_figures_through_a_cached_rerun_a_failure_and_a_resume(tmp_path):
     import time as time_module
 
-    call_log: list[str] = []
     state = {"sleep": 0.3}
 
     def slow_then_fast(context):

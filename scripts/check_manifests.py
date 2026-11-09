@@ -18,8 +18,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from geofrea.core.content_hash import content_hash  # noqa: E402
-from geofrea.core.paths import data_root  # noqa: E402
+from geofrea.core.content_hash import content_hash
+from geofrea.core.paths import data_root
 
 
 def _bytes_sha(path: Path) -> str:

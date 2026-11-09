@@ -29,7 +29,7 @@ from tests.unit.test_technical_potential_pixels import (
     SETTINGS,
     _mean_columns,
     _pixels,
-    world,
+    world,  # noqa: F401 - pytest fixture, used through the argument name of the tests
 )
 
 pytestmark = pytest.mark.unit
@@ -130,7 +130,7 @@ def test_the_member_capacity_factor_with_the_table_is_within_the_tolerance_of_th
     assert np.abs(tabulated - exact).max() <= TOLERANCE * 0.866
 
 
-def test_the_cell_value_aggregated_from_the_pixels_agrees_between_the_table_and_the_exact_integral(world):
+def test_the_cell_value_aggregated_from_the_pixels_agrees_between_the_table_and_the_exact_integral(world):  # noqa: F811 - imported pytest fixture, used as an argument
     """The cell energy follows the tolerance as well: the aggregation is a weighted mean, so the error of the mean is at most the largest pixel error."""
     pixels = _pixels(world)
     candidates = _mean_columns(world, pixels)
@@ -148,9 +148,8 @@ def test_the_cell_value_aggregated_from_the_pixels_agrees_between_the_table_and_
 def test_the_option_of_the_settings_file_is_validated_and_defaults_to_the_exact_integral():
     from pydantic import ValidationError
 
-    from geofrea.core.schemas import SettingsFile
-
     from geofrea.core.config_loader import load_settings
+    from geofrea.core.schemas import SettingsFile
 
     settings = load_settings(REPO / "config" / "settings.yaml")
     assert settings.wind_cf_integral == "table"  # the setting of the runs

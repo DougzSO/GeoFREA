@@ -141,7 +141,7 @@ class RasterStream:
             self._tmp.unlink(missing_ok=True)
             self._done = True
 
-    def __enter__(self) -> RasterStream:
+    def __enter__(self) -> RasterStream:  # noqa: PYI034 - kept as is: a code change would alter the phase fingerprints (OQ-073)
         return self
 
     def __exit__(self, *exc_info: object) -> None:

@@ -175,7 +175,7 @@ def run_layer(
             error.record = record  # the peak the child reached is still wanted when it was stopped from outside
             raise error
         record.status = "ok"
-        return pickle.loads(result.read_bytes()), record  # noqa: S301 — written by our own child a moment ago
+        return pickle.loads(result.read_bytes()), record
 
 
 def remove_stale_work_dirs(layer: str, work_dir: Path | None) -> int:
@@ -213,7 +213,7 @@ def append_ledger(path: Path, records: list[LayerRecord]) -> None:
 
 
 def _child_main(payload_file: str, result_file: str) -> int:
-    request = pickle.loads(Path(payload_file).read_bytes())  # noqa: S301 — written by the parent of this very call
+    request = pickle.loads(Path(payload_file).read_bytes())
     module_name, _, function_name = request["target"].partition(":")
     function = getattr(importlib.import_module(module_name), function_name)
     try:

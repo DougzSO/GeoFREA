@@ -230,9 +230,9 @@ def aggregate_to_cells(
         rows = slice(g0, g1)
 
         def block_sum(a: np.ndarray) -> np.ndarray:
-            padded = np.zeros(((c1 - c0) * k, window.n_cols * k), dtype=float)
+            padded = np.zeros(((c1 - c0) * k, window.n_cols * k), dtype=float)  # noqa: B023 - false positive: block_sum is called inside the iteration that binds these names; kept as is to keep the fingerprints (OQ-073)
             padded[
-                g0 - lat0 : g1 - lat0, window.pad_left : window.pad_left + window.width
+                g0 - lat0 : g1 - lat0, window.pad_left : window.pad_left + window.width  # noqa: B023 - false positive: block_sum is called inside the iteration that binds these names; kept as is to keep the fingerprints (OQ-073)
             ] = np.asarray(a, dtype=float)
             return _block_sum(padded, k)
 

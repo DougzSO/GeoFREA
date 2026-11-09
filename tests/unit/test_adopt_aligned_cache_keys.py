@@ -60,13 +60,13 @@ def _calls(run) -> int:
 
 def _layers_made_under(monkeypatch, tmp_path, code):
     monkeypatch.setattr(alignment_module, "cache_code", lambda name: code)
-    context, inputs, run = _phase(tmp_path)
+    context, _inputs, run = _phase(tmp_path)
     assert _calls(run) == 1
     return context, run
 
 
 def test_without_the_adoption_a_new_code_computes_every_layer_again(tmp_path, monkeypatch):
-    context, run = _layers_made_under(monkeypatch, tmp_path, "code-before")
+    _context, run = _layers_made_under(monkeypatch, tmp_path, "code-before")
     monkeypatch.setattr(alignment_module, "cache_code", lambda name: "code-after")
     assert _calls(run) == 1
 

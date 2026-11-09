@@ -18,7 +18,7 @@ def _load():
 
 def _manifest(artifacts: dict[str, tuple[str, str]], configs: dict[str, str] | None = None, wall: float = 100.0) -> dict:
     phases = {}
-    for _, (phase, _) in artifacts.items():
+    for (phase, _) in artifacts.values():
         phases.setdefault(
             phase,
             {

@@ -71,7 +71,7 @@ def test_an_artifact_altered_by_hand_stops_the_run_and_is_named(tmp_path):
         )
         zzz_run.refuse_network(patch)
 
-        ok, orchestrator, _ = _run(main, data, [])  # the run that makes the reference
+        ok, _orchestrator, _ = _run(main, data, [])  # the run that makes the reference
         assert ok
         manifest_path = data / "outputs" / "ZZZ" / "manifest.json"
         reference = json.loads(manifest_path.read_text(encoding="utf-8"))

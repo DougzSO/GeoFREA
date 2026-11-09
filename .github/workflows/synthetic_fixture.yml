@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install GeoFREA (editable, dev extras)
-        run: pip install -e ".[dev]"
+        run: pip install -c ci/constraints.txt -e ".[dev]"
 
       - name: Run ZZZ end to end (F1 to F8, no network)
         # tests/synthetic generates the fixture and its miniature CMIP6, ISIMIP3b and ERA5 inputs (D13b) into a scratch
@@ -61,7 +61,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install GeoFREA (editable, dev extras)
-        run: pip install -e ".[dev]"
+        run: pip install -c ci/constraints.txt -e ".[dev]"
 
       - name: Run F1 to F8 on ZZZ and ZZZ2 (the data directories are kept for the validation)
         # --basetemp keeps the module fixtures' directories: zzz_data0 (ZZZ) and zzz2_data0 (ZZZ2)

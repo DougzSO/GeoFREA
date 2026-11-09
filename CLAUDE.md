@@ -63,6 +63,8 @@ At the end of every session that changed code or documents:
 - Never commit or push without explicit authorization from Douglas for that specific commit, after presenting the diff.
 - Review and approval of a change and the commit itself happen in separate steps.
 - Temporary CI infrastructure or debug scripts (even gated to `workflow_dispatch` and planned for removal) need approval before each commit or push, and their creation and removal (with commit SHAs) are recorded in the related phase record.
+- Before every commit or push, read the state of the CI on `main` with `gh run list --branch main --limit 6` and report to the author the conclusion of each workflow for the current HEAD and the last green commit of each. A red workflow is never carried silently: say which commit turned it red. After each push, wait for the workflows of the new HEAD and report them before the next command.
+- Before a commit that changes code under `src`, run locally what the local suite does not cover: the two synthetic end-to-end tests (`tests/synthetic/test_zzz_end_to_end.py::test_every_phase_from_f1_to_f6_runs_and_succeeds` and `tests/synthetic/test_zzz2_end_to_end.py::test_every_phase_from_f1_to_f8_runs_and_succeeds`, as in the `synthetic-fixture` workflow) and the hand validator of the four cases (`docs/_audit/2026-10_pre_research_audit_scripts/validate_zzz_by_hand.py <dir> <wind|solar> <zzz|zzz2>`, as in the `hand-validation` job), and report the result with the diff.
 
 ## Read-only locations
 

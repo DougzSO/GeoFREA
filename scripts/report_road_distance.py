@@ -43,7 +43,7 @@ def summarize(frame: pd.DataFrame) -> dict[str, float]:
     values = valid["dist_road_km"].to_numpy(dtype="float64")
     weights = valid["eligible_area_km2"].to_numpy(dtype="float64")
     return {
-        "cells": int(len(valid)),
+        "cells": len(valid),
         "eligible_area_km2": float(weights.sum()),
         "median_km": weighted_quantile(values, weights, 0.5),
         "p90_km": weighted_quantile(values, weights, 0.9),

@@ -378,13 +378,13 @@ def test_the_external_connection_cost_follows_the_analytic_formula_per_megawatt(
     d_sub, d_road = 30.0, 6.0
     c_line, bay, c_road, tau_g, tau_r, p_ref = 400_000.0, 3_000_000.0, 60_000.0, 1.25, 1.3, 100.0
     cells = _cells(p, d_sub, d_road, e)
-    kw = dict(
-        capex_usd_per_kw=1000.0,
-        opex_fixed_frac=0.0,
-        discount_rate=0.0,
-        lifetime_years=float(n),
-        energy_parameter=0.9,
-    )
+    kw = {
+        "capex_usd_per_kw": 1000.0,
+        "opex_fixed_frac": 0.0,
+        "discount_rate": 0.0,
+        "lifetime_years": float(n),
+        "energy_parameter": 0.9,
+    }
     with_conn = lcoe_block(
         cells,
         _samples(

@@ -6,7 +6,12 @@ import contextlib
 
 import pytest
 
-from geofrea.core.memory_guard import COLD_GATED_PHASES, MIN_AVAILABLE_GB, cold_start_shortfall, is_cold
+from geofrea.core.memory_guard import (
+    COLD_GATED_PHASES,
+    MIN_AVAILABLE_GB,
+    cold_start_shortfall,
+    is_cold,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -70,7 +75,7 @@ def test_main_leaves_with_the_not_started_code_before_any_phase(monkeypatch):
 
 # ─── COMMAND 88, item 5: wait for the memory a layer needs; stop only on the commit charge ───────────────────────────────────────────
 
-from geofrea.core.memory_guard import (  # noqa: E402
+from geofrea.core.memory_guard import (
     COMMIT_STOP_FRACTION,
     CommitLimitExceeded,
     MemoryWaitTimeout,

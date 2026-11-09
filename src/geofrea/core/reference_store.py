@@ -35,7 +35,7 @@ import logging
 import os
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +70,7 @@ def _sha256(path: Path) -> str:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -193,7 +193,7 @@ class ReferenceStore:
             entries[rel] = {"sha256": sha, "size_bytes": source.stat().st_size, **info}
         run_dir = self.round_dir(iso, run_id)
         if run_dir.exists():  # the same pair (run_id, country) kept again: the earlier round is set aside, not deleted
-            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
             run_dir.rename(run_dir.with_name(f"{run_dir.name}.superseded_{stamp}"))
         for rel, (source, sha) in staged.items():
             self._place(self._keep_bytes(source, sha), run_dir / "files" / rel)

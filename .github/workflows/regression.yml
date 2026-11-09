@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install GeoFREA (editable, dev extras)
-        run: pip install -e ".[dev]"
+        run: pip install -c ci/constraints.txt -e ".[dev]"
 
       - name: Run V-01 regression
         run: pytest tests/regression -m regression -q

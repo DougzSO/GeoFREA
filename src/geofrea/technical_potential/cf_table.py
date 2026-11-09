@@ -51,8 +51,8 @@ Integral = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 def _grids() -> tuple[np.ndarray, np.ndarray]:
     a_top, k_low, k_top = A_MAX_MS + _MARGIN_A_MS, K_MIN - _MARGIN_K, K_MAX + _MARGIN_K
-    n_a = int(round(a_top / A_STEP_MS)) + 1
-    n_k = int(round((k_top - k_low) / K_STEP)) + 1
+    n_a = int(round(a_top / A_STEP_MS)) + 1  # noqa: RUF046 - kept as is: a code change would alter the phase fingerprints (OQ-073)
+    n_k = int(round((k_top - k_low) / K_STEP)) + 1  # noqa: RUF046 - kept as is: a code change would alter the phase fingerprints (OQ-073)
     return np.linspace(0.0, a_top, n_a), np.linspace(k_low, k_top, n_k)
 
 

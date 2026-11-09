@@ -17,14 +17,15 @@ import argparse
 import ast
 import subprocess
 import sys
-from functools import lru_cache
+from contextlib import suppress
+from functools import cache
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src"
 sys.path.insert(0, str(SRC))
 
-from geofrea.core.code_fingerprint import closure_modules  # noqa: E402
+from geofrea.core.code_fingerprint import closure_modules
 
 
 def changed_files(base: str) -> list[str]:
@@ -48,7 +49,7 @@ def module_of(path: str) -> str | None:
     return ".".join(["geofrea", *parts]) if parts else "geofrea"
 
 
-@lru_cache(maxsize=None)
+@cache
 def imported_roots(test_path: str) -> tuple[str, ...]:
     """The `geofrea` modules a test file imports directly, as `pkg.mod` (the form `closure_modules` takes, without the `geofrea.` prefix)."""
     tree = ast.parse((REPO / test_path).read_text(encoding="utf-8"))
@@ -62,15 +63,13 @@ def imported_roots(test_path: str) -> tuple[str, ...]:
     return tuple(sorted(r.removeprefix("geofrea.") for r in roots if r != "geofrea"))
 
 
-@lru_cache(maxsize=None)
+@cache
 def closure_of_test(test_path: str) -> frozenset[str]:
     """Every `geofrea` module the test reaches through its imports (`geofrea.pkg.mod`)."""
     reached: set[str] = set()
     for root in imported_roots(test_path):
-        try:
+        with suppress(Exception):  # a name that is a function or a class, not a module: its module was added by the parent
             reached.update(f"geofrea.{m}" for m in closure_modules((root,)))
-        except Exception:  # noqa: BLE001 - a name that is a function or a class, not a module: its module was added by the parent
-            continue
     return frozenset(reached)
 
 
@@ -80,13 +79,7 @@ def affected(changed: list[str], tests: list[str]) -> list[str]:
     selected = set()
     for test in tests:
         text = (REPO / test).read_text(encoding="utf-8")
-        if test in changed:
-            selected.add(test)
-        elif changed_modules & closure_of_test(test):
-            selected.add(test)
-        elif any(name in text for name in other):
-            selected.add(test)
-        elif "main.py" in changed and ("import main" in text or "from main import" in text):
+        if test in changed or changed_modules & closure_of_test(test) or any(name in text for name in other) or "main.py" in changed and ("import main" in text or "from main import" in text):
             selected.add(test)
     return sorted(selected)
 

@@ -29,7 +29,7 @@ its wall time only. A step is therefore classified by the ratio cpu/wall of the 
   revision       the last commit (any branch, committer date) at or before the start of the run: an approximation, a run on a dirty tree is not told apart.
 """
 
-# ruff: noqa: DTZ007 - the logs and the Windows event log carry naive local times; they are compared with each other only
+
 from __future__ import annotations
 
 import argparse

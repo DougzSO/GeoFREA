@@ -150,9 +150,9 @@ def measure(iso: str, layers: list[str], rows_path: Path, max_seconds: float, co
 
 
 def _kill_children() -> None:
-    from geofrea.core import layer_process
-
     import psutil
+
+    from geofrea.core import layer_process
 
     for child in psutil.Process().children(recursive=False):
         layer_process.kill_tree(child)

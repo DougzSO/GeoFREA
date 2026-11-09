@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
+import rasterio
 from rasterio.transform import from_origin
 
 from geofrea.data_quality_audit.raster_inspection import row_area_km2
@@ -172,7 +173,7 @@ def test_the_pixel_fraction_file_of_the_central_scenario_keeps_its_name_and_the_
 # --- COMMAND 75: the cells are summed in stripes and give what the whole grid gave ---------------------------------------------------------
 
 # the function as it was before the stripes (the whole grid in float64 work arrays): the oracle of the equality below
-from geofrea.land_eligibility.cells import (  # noqa: E402
+from geofrea.land_eligibility.cells import (
     _block_sum,
     cell_center,
     cell_id,
@@ -180,6 +181,7 @@ from geofrea.land_eligibility.cells import (  # noqa: E402
     pad_to_window,
     pixel_row_area_km2,
 )
+
 
 def reference_aggregate_to_cells(
     transform: rasterio.Affine,

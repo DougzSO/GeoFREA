@@ -20,7 +20,7 @@ MAX_SAMPLE = 150_000
 TYPE_NAMES = {1: "LineString", 2: "LinearRing", 5: "MultiLineString"}
 
 
-def has_repeated_points(geoms) -> "list[bool]":
+def has_repeated_points(geoms) -> list[bool]:
     import shapely
 
     out = []
@@ -75,10 +75,10 @@ def diagnose(iso: str, layer: str, paths: dict, country_gdf) -> dict:
         exact = original
     same = shapely.equals_exact(original, exact, tolerance=0)
     res = {
-        "n_matched": int(len(geoms)),
+        "n_matched": len(geoms),
         "n_lines": int(lines.sum()),
         "n_covered": int(n_covered),
-        "n_checked": int(len(idx)),
+        "n_checked": len(idx),
         "n_differ": int((~same).sum()),
         "by_original_type": {},
     }
