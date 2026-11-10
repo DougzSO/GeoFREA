@@ -3,7 +3,7 @@
 % File: docs/thesis/methods/group3_connection_degradation.tex
 % Group 3: grid connection, access road, transmission losses, degradation (Stage F6).
 % Theory: docs/thesis/theory/ch2_grid_access_degradation.tex
-% Values must match config/parameters.json. Lines marked % verify or % pending are open.
+% Values must match config/parameters.json. Lines marked % verify are open.
 % ============================================================================
 
 \section{Grid Connection and Degradation (Stage F6)}
@@ -35,9 +35,15 @@ admits 132~kV terminal bays \cite{cerc2022gna}, a sensitivity uses a
 lines that reach them; substations with no inferable voltage are
 excluded, and their number is reported per country.
 
-Distances are computed with the same geodesic distance transform used for
-the other distance layers (Stage F2a), on the 0.01$^\circ$ grid, and
-aggregated to each 0.05$^\circ$ cell as the mean over its eligible area.
+Distances are geodesic distances on the WGS84 ellipsoid, computed in
+Stage F2a for each pixel of the 0.01$^\circ$ grid. $D_{\mathrm{sub}}$ is the
+distance from the pixel centre to the nearest eligible substation, located
+by its own coordinates (a substation mapped as a polygon is represented by
+its representative point), and $D_{\mathrm{road}}$ is the distance to the
+nearest point of the primary or secondary road network, represented by
+vertices at most 100~m apart.
+Pixel values are aggregated to each 0.05$^\circ$ cell as the mean over its
+eligible area.
 The connection length is the distance corrected by a tortuosity factor:
 \begin{equation}
     L_{\mathrm{grid},i} = \tau_{\mathrm{grid}}\, D_{\mathrm{sub},i},
@@ -62,7 +68,9 @@ therefore gives an optimistic, lower-bound connection length.
 
 Line, bay and road costs are incurred per project, not per megawatt.
 They are converted to cost per unit capacity with a reference project of
-$P_{\mathrm{ref}}=100$~MW for both technologies. This is a modelling
+$P_{\mathrm{ref}}=100$~MW for both technologies; for PV the reference
+capacity is expressed in DC, the basis of the capital cost per kW
+(Section~\ref{subsec:g2_capex}). This is a modelling
 convention: it does not assume that every cell hosts a 100~MW plant, and
 it is applied identically in all cells so that sites are compared on the
 same basis.
@@ -82,6 +90,7 @@ interconnection cost per unit capacity
     \quad [\mathrm{USD/MW}],
     \label{eq:g3_inter}
 \end{equation}
+% verify: treating 100 MW as DC for PV spreads the fixed connection cost over more nominal capacity than an AC basis would, so the cost per kW is lower than the AC reading (OQ-079); confirm the direction and size of the effect before the thesis text is frozen
 with $c_{\mathrm{line}}$ the cost of a single-circuit overhead line at
 $V_{\mathrm{th},c}$ (USD/km), $C_{\mathrm{bay}}$ the cost of the
 connection works at the receiving substation (USD) and
@@ -116,9 +125,13 @@ table.
 
 The access road is excluded from the central case, because no source
 covers an unpaved access road in the three countries and the term is
-small: the median distance from eligible land to the nearest road is a
-few kilometres in every country, and less than one percent of eligible
-area lies more than 30~km away. The central LCOE is therefore a lower
+small: in the scenarios tested with the exact geodesic distance, the
+median distance from eligible land to the nearest road is about 1.7~km in
+Portugal, 2.1 to 3.4~km in India and 5.4 to 6.6~km in Brazil, and the
+share of eligible area more than 30~km from a road is 0.0\,\% in Portugal,
+0.8 to 3.7\,\% in India and 3.9 to 6.2\,\% in Brazil.
+% verify: the report gives these figures for the scenarios it tested only (Portugal for the central solar case); recompute all scenarios, weighted by eligible area, before stating them as ranges per country
+The central LCOE is therefore a lower
 bound with respect to this term. A sensitivity applies the DNIT cost of a
 paved road \cite{dnit2016}, an upper bound for an access road, to the
 three countries.
@@ -203,9 +216,11 @@ crystalline-silicon systems (1505 systems), whose medians reproduce the
 published values for cooler and hotter climates within 0.15 percentage
 points. The public fleet has no systems in zones T1 or T7: cells in T1
 and T2 take the T3 rate, and cells in T7 or hotter take the T6 rate.
-This matters, because zone T7 or hotter holds 43.7\,\% of the PV
-potential of Brazil and 81.6\,\% of that of India, and none of
-Portugal's. A deterministic sensitivity therefore applies the global
+This matters, because in the central eligibility scenario zone T7 or
+hotter holds 50.9\,\% of the PV potential of Brazil and 85.0\,\% of that
+of India, and none of Portugal's.
+% verify: shares from the central scenario of the FABDEM-slope rerun; confirm the restrictive and permissive shares before citing them
+A deterministic sensitivity therefore applies the global
 meta-analysis median of 0.94\,\%/yr \cite{straubmuck2025} to these
 cells.
 
@@ -297,7 +312,10 @@ come from European indicators, with the line taken from a higher voltage
 class and the substation term covering an upgrade rather than a single
 bay. The capital-cost
 boundary of IRENA is stated for PV and assumed for onshore wind.
-Degradation rates come from United States fleets, whose hottest zone is
-the most common one in Brazil and India; the PV zone is fixed at the
-historical climate, and wind uses a single vintage. Transmission losses
-are not modelled in the central case.
+Degradation rates come from United States fleets, which have no systems
+in the hottest zones (T7 and above) that hold most of the PV potential of
+India and a large share of that of Brazil; the PV zone is fixed at the
+historical climate, and wind uses a single vintage. Distances are
+evaluated at pixel centres, so the position of eligible land inside a
+0.01$^\circ$ pixel is not resolved, an error of at most about 0.8~km.
+Transmission losses are not modelled in the central case.
