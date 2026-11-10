@@ -5,7 +5,6 @@ from __future__ import annotations
 import http.server
 import json
 import shutil
-import sys
 import threading
 import zipfile
 from pathlib import Path
@@ -44,10 +43,6 @@ def _fingerprints(root: Path) -> dict[str, str]:
     return {name: ff.function_fingerprint(entries, root) for name, entries in CACHE_FUNCTION_ENTRIES.items()}
 
 
-@pytest.mark.skipif(
-    sys.version_info[:2] != (3, 11),
-    reason="the fingerprint hashes ast.dump, and Python 3.12 adds `type_params=[]` to every function and class definition: the same code has another hash outside 3.11 (OQ-077)",
-)
 def test_the_code_fingerprint_in_the_key_of_the_elevation_layer_is_the_one_it_had_before_command_101():
     assert cache_code("aligned_layer.glo30") == GLO30_KEY_CODE_BEFORE_COMMAND_101
 

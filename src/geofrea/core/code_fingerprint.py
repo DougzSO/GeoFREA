@@ -419,3 +419,76 @@ def cached_closure_fingerprint(roots: tuple[str, ...]) -> str:
 def cached_code_fingerprint(phase: str) -> str:
     """`code_fingerprint(phase)` of the installed source, computed once per process."""
     return code_fingerprint(phase)
+
+
+# ─── the text that is hashed does not depend on the Python version (OQ-077, COMMAND 120) ────────────────────────────────────────────────────
+#
+# `ast.dump` is not stable across versions: Python 3.12 writes `type_params=[]` in every function and class definition and 3.13 leaves out the
+# empty and the `None` fields, so the same file had another digest outside 3.11 and every fingerprint (and the cache keys that hold them) was
+# valid on one Python only. `canonical_dump` writes the text of `ast.dump(annotate_fields=True, include_attributes=False)` of Python 3.11 on any
+# version, and `stable_ast` is the `ast` module with that `dump`; the last statement of this file and of `function_fingerprint.py` puts it in
+# the place of `ast` in their namespaces.
+#
+# It is done by a statement that defines no name, and not by editing `normalised_source` or `_normalised`, for the reason written in
+# `cache_code.py` beside `aligned_layer.fabdem_slope`: the fingerprint of a layer follows the definitions its code reaches, `cache_code` reaches
+# these two modules, and an edit of any definition in them would change the key of `roads`, `lakes` and `rivers` in every country although no
+# result changed. So no definition that those fingerprints read is touched here: the definitions below are reached by nothing but this
+# statement. On Python 3.11 the text is the one `ast.dump` always wrote, every fingerprint keeps its value and no cache is invalidated.
+#
+# `FINGERPRINT_ALGO_VERSION` is the version of this algorithm. Version 1 is the 3.11 text, and adds nothing to what is hashed, so that the
+# fingerprints recorded before the version existed stay valid. A later version is written at the head of every normalised text (`algo:<n>`):
+# every digest, every fingerprint and every key that holds one changes, which is the point of changing the algorithm. Change it when the
+# algorithm changes, never for a change of code, and record it in METHODOLOGY (OQ-077).
+FINGERPRINT_ALGO_VERSION = 1
+
+_FIELDS_NOT_IN_PYTHON_311 = frozenset({"type_params"})
+_REAL_AST = ast
+
+
+def canonical_dump(node, annotate_fields=True, include_attributes=False):
+    """The text of `ast.dump(node, annotate_fields=True, include_attributes=False)` as Python 3.11 writes it, on any Python version.
+
+    A node is `Name(field=value, ...)` in the order of its `_fields`, a field whose value is `None` and whose class default is `None` is left
+    out, a list is `[a, b]`, any other value is its `repr`; the fields of `_FIELDS_NOT_IN_PYTHON_311` are left out. Only that call of `ast.dump`
+    is written (the arguments are there so that it can stand in for it), anything else is refused.
+    """
+    if not annotate_fields or include_attributes:
+        raise ValueError("canonical_dump writes the form annotate_fields=True, include_attributes=False only")
+
+    def fmt(value):
+        if isinstance(value, _REAL_AST.AST):
+            cls = type(value)
+            parts = []
+            for name in value._fields:
+                if name in _FIELDS_NOT_IN_PYTHON_311:
+                    continue
+                try:
+                    field = getattr(value, name)
+                except AttributeError:
+                    continue
+                if field is None and getattr(cls, name, ...) is None:
+                    continue
+                parts.append(f"{name}={fmt(field)}")
+            return f"{cls.__name__}({', '.join(parts)})"
+        if isinstance(value, list):
+            return "[" + ", ".join(fmt(item) for item in value) + "]"
+        return repr(value)
+
+    text = fmt(node)
+    return text if FINGERPRINT_ALGO_VERSION == 1 else f"algo:{FINGERPRINT_ALGO_VERSION}\n{text}"
+
+
+class _StableAst:
+    """The `ast` module with `dump` replaced by `canonical_dump`; every other name is the one of `ast`."""
+
+    dump = staticmethod(canonical_dump)
+
+    def __getattr__(self, name):
+        return getattr(_REAL_AST, name)
+
+
+def stable_ast():
+    return _StableAst()
+
+
+globals()["ast"] = stable_ast()  # defines no name: see above
