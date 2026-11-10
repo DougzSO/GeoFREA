@@ -40,7 +40,7 @@ from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
-from geofrea.core.tables import write_table
+from geofrea.core.tables import TableWriter, write_table
 from geofrea.land_eligibility.cells import eligible_fraction_file
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
@@ -94,6 +94,8 @@ PROVENANCE_KEY = "geofrea_potential_provenance"
 CAPACITY_PARAMETER_KEYS = ("luf", "power_density_mw_per_km2")
 # the capacity parameters that are paired with the land scenarios and not sampled (U-06): their value per scenario is `scenario_values`
 SCENARIO_PARAMETER_KEYS = CAPACITY_PARAMETER_KEYS
+# rows of a Parquet row group in pyarrow's `write_table` (its default `row_group_size`, 1024 * 1024)
+ROW_GROUP_ROWS = 1024 * 1024
 
 
 class ScenarioPotential(BaseModel):
@@ -355,6 +357,68 @@ def _provenance(
     return {PROVENANCE_KEY: json.dumps(payload, sort_keys=True)}
 
 
+def _empty_potential_table(members: Sequence[str]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "cell_id": pd.Series(dtype="int64"),
+            "member": pd.Categorical([], categories=list(members)),
+            "P_MW": pd.Series(dtype="float64"),
+            "CF": pd.Series(dtype="float64"),
+            "E_MWh": pd.Series(dtype="float64"),
+        }
+    )
+
+
+def _write_potential_in_blocks(
+    pieces: list[pd.DataFrame], path: Path, members: Sequence[str], *, extra_metadata: dict[str, str]
+) -> int:
+    """Write the pieces (one per member, in member order) as one potential table, without the concatenated copy; return the rows written.
+
+    The file is the one `write_table` gives for `pd.concat(pieces, ignore_index=True)`: the same rows in the same order and the same row groups
+    (pyarrow's default of `ROW_GROUP_ROWS` rows, so the writer is fed in blocks of exactly that many rows, the last one shorter). The pieces are
+    taken off the list as they are consumed, so the memory holds the pieces not yet written and one block, not all the pieces and their
+    concatenation (COMMAND 126; byte equality in `tests/unit/test_f5_memory_equivalence.py`). A table without rows goes through `write_table`.
+    """
+    if not pieces:
+        write_table(
+            _empty_potential_table(members),
+            path,
+            schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
+            row_model=PotentialRow,
+            compression="zstd",
+            extra_metadata=extra_metadata,
+        )
+        return 0
+    with TableWriter(
+        path,
+        schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
+        row_model=PotentialRow,
+        compression="zstd",
+        extra_metadata=extra_metadata,
+    ) as writer:
+        pending: list[pd.DataFrame] = []
+        pending_rows = 0
+        while pieces:
+            piece = pieces.pop(0)
+            pending.append(piece)
+            pending_rows += len(piece)
+            del piece
+            if pending_rows < ROW_GROUP_ROWS:
+                continue
+            block = pd.concat(pending, ignore_index=True)
+            pending.clear()
+            while len(block) >= ROW_GROUP_ROWS:
+                writer.write(block.iloc[:ROW_GROUP_ROWS])
+                block = block.iloc[ROW_GROUP_ROWS:]
+            if len(block):
+                pending.append(block.reset_index(drop=True))
+            pending_rows = len(block)
+            del block
+        if pending:
+            writer.write(pd.concat(pending, ignore_index=True))
+        return writer.n_rows
+
+
 def build_technology_potential(
     iso: str,
     resolved: ResolvedTechnology,
@@ -508,28 +572,15 @@ def build_technology_potential(
             energy_by_member[member] = energy
             absent_by_member[member] = int(len(frame) - len(rows))
             n_present[rows] += 1
-        if pieces:
-            table = pd.concat(pieces, ignore_index=True)
-        else:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
+        if not pieces:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
             logger.warning(
                 "%s %s [%s]: no candidate cells, the potential is zero", iso, tech, scenario
             )
-            table = pd.DataFrame(
-                {
-                    "cell_id": pd.Series(dtype="int64"),
-                    "member": pd.Categorical([], categories=list(members)),
-                    "P_MW": pd.Series(dtype="float64"),
-                    "CF": pd.Series(dtype="float64"),
-                    "E_MWh": pd.Series(dtype="float64"),
-                }
-            )
         path = Path(out_dir) / f"potential_{tech}__{scenario}.parquet"
-        write_table(
-            table,
+        n_rows = _write_potential_in_blocks(
+            pieces,
             path,
-            schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
-            row_model=PotentialRow,
-            compression="zstd",
+            members,
             extra_metadata=_provenance(resolved, scenario, absent_by_member, production),
         )
         incomplete = n_present < len(members)
@@ -616,7 +667,7 @@ def build_technology_potential(
         scenario_results[scenario] = ScenarioPotential(
             scenario=scenario,
             path=path,
-            n_rows=len(table),
+            n_rows=n_rows,
             n_candidate_cells=len(frame),
             n_absent_cell_members=int(sum(absent_by_member.values())),
             p_gw_reference=float(ref["P_GW"]),
@@ -640,11 +691,15 @@ def build_technology_potential(
             scenario,
             len(frame),
             len(members),
-            len(table),
+            n_rows,
             sum(absent_by_member.values()),
             ref["P_GW"],
             ref["E_TWh"],
         )
+        # what this scenario held is released before the next scenario reads its pixels (COMMAND 126): the pieces, the prepared pixel
+        # arrays and the per-member energies were all alive during the next read_cell_pixels
+        del pieces, prepared, energy_by_member, qc, aggregate, p_mw, area, cell_ids
+        factors = taken = position = rows = cf = e_mwh = energy = None
     weibull_path: Path | None = None
     report = weibull_distribution_report(candidates[CENTRAL_SCENARIO])
     if len(report):
