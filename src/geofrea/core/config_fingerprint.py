@@ -88,7 +88,7 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
         technologies=[WHOLE],
         parameters=[f"countries.{_ISO}"],
         experiments=["gcm_ensemble", "land_availability"],
-        audit=["derived_ranges"],
+        audit=["derived_ranges", "country_overrides"],  # country_overrides: siting_layers/sanity.py (OQ-085)
         settings=["run.technologies", "wind_cf_integral"],
         turbines=[WHOLE],
     ),
@@ -132,6 +132,8 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
     ),
     "robustness_maps": _scope(experiments=["windows"], settings=["figures", "run.technologies"]),
     "potential_maps": _scope(
+        technologies=[WHOLE],  # the maps recompute the capacity factor and the potential per technology (OQ-085)
+        parameters=[f"countries.{_ISO}.technologies"],
         experiments=["absolute_maps"],
         settings=["figures", "run.technologies", "wind_cf_integral"],
     ),

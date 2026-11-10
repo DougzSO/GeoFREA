@@ -2401,18 +2401,5 @@ def test_every_key_a_phase_reads_is_in_its_scope(zzz):
     assert {"grid_alignment", "land_eligibility", "technical_potential", "lcoe_modeling"} <= ran, sorted(ran)
     assert sum(len(v) for v in CONFIG_TRACE.reads.values()) > 50  # the recorder saw the run, not an empty set
     missing = uncovered(CONFIG_TRACE, "ZZZ")
-    # the two gaps the recorder found beyond F2a and F3 (OQ-085); they are named here so that the test still stops every new one, and it fails
-    # when one of them is closed, so the entry is removed with the fix
-    known = {
-        "technical_potential": ("audit:country_overrides",),
-        "potential_maps": ("parameters:countries.ZZZ.technologies.", "technologies:technologies."),
-    }
-    unexpected = {
-        phase: [k for k in keys if not k.startswith(known.get(phase, ()))] for phase, keys in missing.items()
-    }
-    unexpected = {phase: keys for phase, keys in unexpected.items() if keys}
-    report = [f"  {phase}: {key}" for phase, keys in unexpected.items() for key in keys]
-    assert not unexpected, "keys read by a phase that its PHASE_CONFIG_SCOPE does not name: " + "; ".join(report)
-    for phase, prefixes in known.items():
-        for prefix in prefixes:
-            assert any(k.startswith(prefix) for k in missing.get(phase, [])), f"OQ-085: {phase} no longer reads {prefix} outside its scope; remove it from `known`"
+    report = [f"  {phase}: {key}" for phase, keys in missing.items() for key in keys]
+    assert not missing, "keys read by a phase that its PHASE_CONFIG_SCOPE does not name: " + "; ".join(report)
