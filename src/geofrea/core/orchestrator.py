@@ -31,6 +31,7 @@ import traceback
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Generic, Literal, TypeVar
 
@@ -51,7 +52,10 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.9"
+_MANIFEST_SCHEMA_VERSION = "2.10"
+# 2.10 (COMMAND 128, A-02, OQ-084): every PhaseManifestEntry written from now on records `environment`: the versions of Python, pyarrow, pandas,
+# numpy, geopandas, rasterio and pyproj the process ran under (`runtime_environment`). It is outside every fingerprint: it never makes a phase run
+# again, it only says under which libraries the files of the entry were written. Entries written before 2.10 have an empty mapping.
 # 2.9 (COMMAND 127, A-02, defect 1): every PhaseManifestEntry also carries `config_rebaselines`, the proofs under which its `config_fingerprint` was
 # rewritten without running the phase again (`core.config_rebaseline`): the scope of the phase gained keys it already read, the values of those keys
 # are the same now as in the commit in force on the date of each execution, and the new fingerprint is recorded with that proof. Only the script
@@ -82,8 +86,30 @@ _MANIFEST_SCHEMA_VERSION = "2.9"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", _MANIFEST_SCHEMA_VERSION}
 )
+
+
+ENVIRONMENT_PACKAGES = ("pyarrow", "pandas", "numpy", "geopandas", "rasterio", "pyproj")
+
+
+@lru_cache(maxsize=1)
+def _environment() -> tuple[tuple[str, str], ...]:
+    import platform
+    from importlib import metadata
+
+    versions = [("python", platform.python_version())]
+    for name in ENVIRONMENT_PACKAGES:
+        try:
+            versions.append((name, metadata.version(name)))
+        except metadata.PackageNotFoundError:
+            versions.append((name, "not installed"))
+    return tuple(versions)
+
+
+def runtime_environment() -> dict[str, str]:
+    """The versions of Python and of the libraries that decide the bytes and the values of the files a phase writes (OQ-084)."""
+    return dict(_environment())
 
 
 def _now_iso() -> str:
@@ -374,6 +400,7 @@ class PhaseManifestEntry(BaseModel):
     cold_started_at: str | None = None
     cold_code_fingerprint: str | None = None
     config_rebaselines: list[ConfigRebaseline] = []
+    environment: dict[str, str] = {}
 
 
 COLD_FIELDS = (
@@ -471,7 +498,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.9"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.10"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -1106,6 +1133,7 @@ class Orchestrator:
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
+                    environment=runtime_environment(),
                     **result.model_dump(),
                     methodology_version=self.methodology_version,
                     **carry_cold(self.manifest.phases.get(spec.name)),
@@ -1321,6 +1349,7 @@ class Orchestrator:
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
+                    environment=runtime_environment(),
                     **result.model_dump(),
                     methodology_version=self.methodology_version,
                     **carry_cold(self.manifest.phases.get(spec.name)),
@@ -1368,6 +1397,7 @@ class Orchestrator:
             }
             cold = cold_figures(self.manifest.phases.get(spec.name), result, spec.code_fingerprint)
             self.manifest.phases[spec.name] = PhaseManifestEntry(
+                environment=runtime_environment(),
                 phase=spec.name,
                 status="success",
                 output=output.model_dump(mode="json"),
