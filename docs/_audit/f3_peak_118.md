@@ -29,8 +29,20 @@ Nothing that the code fingerprint sees. The fingerprint of `land_eligibility` is
 3. **Content of the distance rasters.** The new distances are real numbers where the old ones were multiples of one scale (and exact zeros at the burnt pixels); the compression of the rasters read by windows and the number of distinct values in the output tables differ. The tables have 286,043 rows, the output rasters are written by stripes: no arithmetic here accounts for +238 MB, so this is a weak hypothesis.
 4. **The machine at the time.** Round 1d34ab23 ran with VS Code open (the session of Claude Code runs in it), the round 9c2dc3c8 is recorded in `config/memory_budget.json` as the peak of the unattended runner (`run_unattended.ps1`, which asks for VS Code and the browser closed); that this was how it ran is taken from that note, not checked. Windows trims the working set of a process under memory pressure, which lowers a measured working-set peak, and changes how much of the freed heap stays resident. The direction of the effect is not known and the free memory during F3 was not recorded in this round, and it was not looked for in the files of the earlier one.
 
-## Conclusion and what would settle it
+## Measurement (COMMAND 119, item 4): F3 of BRA alone, in a new process
 
-The cause is **not determined**. What is established: same code, same configuration, same work (CPU), a higher process-wide peak, and a margin of 55 MB under the 1,536 MB cap. What is not: whether the +238 MB belongs to F3 or to the process around it.
+Run in scratch directories outside the official outputs (`GEOFREA_DATA_DIR` pointed at a copy of `outputs/BRA` and `interim/BRA`; `raw` and `external` joined by junctions, removed afterwards; no official output was written, the manifest of `outputs/BRA` kept its date). `main.py BRA --phases land_eligibility --rerun land_eligibility`: every phase upstream resumed from its manifest entry, only `land_eligibility` executed, so the process held nothing but F3.
 
-Two measurements, neither run (both rerun F3 of BRA, about 10 minutes, and write its outputs): F3 alone in a fresh process on the current inputs, and the same on the inputs of the snapshot of 9c2dc3c8 (`work/pre116/BRA`). If the peak of F3 alone is the same (about 1,240 MB) on both, the rise is the process around it; if it differs between the two inputs, it is the data. They need the author's authorization because the second one overwrites the current outputs of BRA unless it is pointed at a scratch directory.
+| inputs | peak | wall | CPU |
+|---|---|---|---|
+| current (round 1d34ab23: exact distances) | **1,363 MB** | 662 s | 581 s |
+| of 9c2dc3c8 (snapshot `work/pre116/BRA`: isotropic distances) | **1,376 MB** | 639 s | 574 s |
+
+For the second run the manifest copy of the scratch directory had the code fingerprint of `grid_alignment` set to the current one (otherwise the orchestrator executes `grid_alignment` again and replaces the old rasters); the old `dist_sub_km.tif` was confirmed unchanged by hash (50e4ee1f6781 in the snapshot and in the scratch directory, 6155eb13d8c3 in the current outputs). Two earlier attempts of this run failed on the command line (`--revalidate` accepts only a `stale_upstream` entry) and a third started `grid_alignment` and was stopped; none left output.
+
+## What it settles
+
+- **The data (hypothesis 3) is rejected:** the old and the new distances give 1,376 and 1,363 MB, 13 MB apart, with the same code and the same work.
+- **The process around F3 (hypothesis 2) accounts for part of it:** F3 inside the round peaked at 1,481 MB, alone at 1,363 MB: **about 118 MB** is what the earlier phases of the same process left resident.
+- **What is not explained:** F3 alone peaks at about 1,370 MB now, against the 1,243 MB recorded for the round 9c2dc3c8 for the same code fingerprint (20835176) and the same configuration: **about 120 to 130 MB** that neither the inputs nor the process around account for. What is left: the state of the share caches in `interim/BRA/land_eligibility` (the profile of COMMAND 91 measured 1,260 MB with them current and 1,218 with them rebuilt, a 40 MB spread), the versions of the libraries (pandas, pyarrow, rasterio, numpy) on the machine on 2026-11-07 against today (not compared), and the way the peak of the round 9c2dc3c8 was taken. None of the three was investigated.
+- **For the budget:** F3 of BRA is 1,363 to 1,376 MB alone and 1,481 MB inside a run that executes the earlier phases first: 55 MB under the cap in the second case, 160 MB in the first. The `f3_phase` ceiling of 1,438 MB is passed only in the in-run case.
