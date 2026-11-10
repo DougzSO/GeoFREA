@@ -28,7 +28,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from geofrea.climate_forcing.forcing import assert_forcing_usable
+from geofrea.climate_forcing.forcing import ForcingContractError, assert_forcing_usable
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, load_ensemble, required_channels
 from geofrea.config_models.audit import AuditConfig
 from geofrea.config_models.land_availability import (
@@ -419,6 +419,88 @@ def _write_potential_in_blocks(
         return writer.n_rows
 
 
+def _has_string_member_codes(forcing: pd.DataFrame, members: Sequence[str]) -> bool:
+    """The `member` column is a categorical of unique strings with no missing value, and `members` has no repeated name (COMMAND 127, item c).
+
+    Then the members can be read from the integer codes, and `forcing["member"].astype(str)` (a string per row, about 1 GB of transient for
+    10.6 M rows) is never made. Any other column (strings, a missing member, categories that are not strings) takes the old path.
+    """
+    column = forcing["member"]
+    if not isinstance(column.dtype, pd.CategoricalDtype):
+        return False
+    categories = column.cat.categories
+    return (
+        bool(pd.api.types.is_string_dtype(categories))
+        and bool(categories.is_unique)
+        and not bool((column.cat.codes < 0).any())
+        and len(set(members)) == len(members)
+    )
+
+
+def _members_in_use(forcing: pd.DataFrame) -> list[str]:
+    """The member names that have at least one row, as strings."""
+    column = forcing["member"]
+    if isinstance(column.dtype, pd.CategoricalDtype) and not column.cat.codes.lt(0).any():
+        used = np.unique(column.cat.codes.to_numpy())
+        return [str(column.cat.categories[i]) for i in used]
+    return [str(m) for m in pd.unique(column)]
+
+
+def _assert_usable_by_member(
+    forcing: pd.DataFrame,
+    masked: pd.DataFrame,
+    cell_ids: np.ndarray,
+    members: list[str],
+    wind_valid_range: tuple[float, float],
+    channels: tuple[str, ...],
+) -> None:
+    """`assert_forcing_usable` on one member at a time, so the guard never turns the whole `member` column into strings.
+
+    Every check of the guard is a condition on the rows of one (cell, member), and the number of cell-members it expects is the sum over the
+    members, so the guard passes on the whole forcing exactly when it passes on each member. If a member fails, the guard is called again on
+    the whole forcing with the member as a string, as before, so the error raised is the one of the unchanged code (message and counts).
+    `climate_forcing/forcing.py` is not changed.
+    """
+    codes = forcing["member"].cat.codes.to_numpy()
+    categories = forcing["member"].cat.categories
+    index = {str(name): i for i, name in enumerate(categories)}
+    try:
+        for member in members:
+            if member in index:
+                view = forcing[codes == index[member]]
+            else:
+                view = forcing.iloc[:0]
+            assert_forcing_usable(view, masked, cell_ids, [member], wind_valid_range, channels)
+    except ForcingContractError:
+        whole = forcing.assign(member=forcing["member"].astype(str))
+        assert_forcing_usable(whole, masked, cell_ids, members, wind_valid_range, channels)
+        raise  # the whole forcing passes although a member failed: cannot happen; do not hide it
+
+
+def _forcing_by_member(forcing: pd.DataFrame, coded: bool) -> dict[str, pd.DataFrame]:
+    """The factor table of every member, indexed by `cell_id`, in the order the members first appear in the forcing.
+
+    With `coded` the groups are cut by the integer codes of the categorical and their `member` column is not kept (nothing reads it).
+    """
+    by_member: dict[str, pd.DataFrame] = {}
+    if not coded:
+        for member, group in forcing.groupby("member", sort=False):
+            if group["cell_id"].duplicated().any():
+                raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
+            by_member[str(member)] = group.set_index("cell_id")
+        return by_member
+    codes = forcing["member"].cat.codes.to_numpy()
+    categories = forcing["member"].cat.categories
+    present, first = np.unique(codes, return_index=True)
+    for code in present[np.argsort(first, kind="stable")]:
+        member = categories[code]
+        group = forcing[codes == code].drop(columns="member")
+        if group["cell_id"].duplicated().any():
+            raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
+        by_member[str(member)] = group.set_index("cell_id")
+    return by_member
+
+
 def build_technology_potential(
     iso: str,
     resolved: ResolvedTechnology,
@@ -464,9 +546,11 @@ def build_technology_potential(
     ]
     uses_wind = "resource_wind" in channels
     forcing = pd.read_parquet(forcing_path)
-    forcing["member"] = forcing["member"].astype(str)
     masked = pd.read_parquet(forcing_masked_path)
-    unknown = sorted(set(forcing["member"]) - set(all_members))
+    coded = _has_string_member_codes(forcing, members)
+    if not coded:
+        forcing["member"] = forcing["member"].astype(str)
+    unknown = sorted(set(_members_in_use(forcing)) - set(all_members))
     if unknown:
         raise CfModelError(f"forcing.parquet has members not listed in members.yaml: {unknown}")
 
@@ -478,21 +562,23 @@ def build_technology_potential(
             raise CfModelError(f"{path.name}: duplicated cell_id")
         validate_candidates(iso, tech, scenario, frame, input_ranges)
         # the forcing guard comes first: nothing is computed on a forcing that breaks the contract (M-F4-07)
-        assert_forcing_usable(
-            forcing,
-            masked,
-            frame["cell_id"].to_numpy(),
-            list(members),
-            wind_valid_range,
-            channels,
-        )
+        if coded:
+            _assert_usable_by_member(
+                forcing, masked, frame["cell_id"].to_numpy(), list(members), wind_valid_range, channels
+            )
+        else:
+            assert_forcing_usable(
+                forcing,
+                masked,
+                frame["cell_id"].to_numpy(),
+                list(members),
+                wind_valid_range,
+                channels,
+            )
         candidates[scenario] = frame
 
-    by_member: dict[str, pd.DataFrame] = {}
-    for member, group in forcing.groupby("member", sort=False):
-        if group["cell_id"].duplicated().any():
-            raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
-        by_member[str(member)] = group.set_index("cell_id")
+    by_member = _forcing_by_member(forcing, coded)
+    del forcing
 
     scenario_results: dict[str, ScenarioPotential] = {}
     aggregate_frames: list[pd.DataFrame] = []
