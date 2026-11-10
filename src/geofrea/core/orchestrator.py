@@ -51,7 +51,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.8"
+_MANIFEST_SCHEMA_VERSION = "2.9"
+# 2.9 (COMMAND 127, A-02, defect 1): every PhaseManifestEntry also carries `config_rebaselines`, the proofs under which its `config_fingerprint` was
+# rewritten without running the phase again (`core.config_rebaseline`): the scope of the phase gained keys it already read, the values of those keys
+# are the same now as in the commit in force on the date of each execution, and the new fingerprint is recorded with that proof. Only the script
+# `scripts/rebaseline_config_fingerprint.py` writes it; the orchestrator never does. Entries written before 2.9 have an empty list.
 # 2.8 (COMMAND 75, A-02, R73-03): every PhaseManifestEntry also records the cold figures of the phase, `cold_wall_s`, `cold_cpu_s`,
 # `cold_peak_rss_mb`, `cold_started_at` and `cold_code_fingerprint`: the slowest execution of the phase under its current code. A run that
 # finds its caches current replaces `wall_s` (the last execution) and leaves the cold figures; a change of the code starts them again.
@@ -78,7 +82,7 @@ _MANIFEST_SCHEMA_VERSION = "2.8"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -274,6 +278,43 @@ class PhaseResult(BaseModel, Generic[T]):
     peak_rss_mb: float | None = None
 
 
+class ConfigRebaselineExecution(BaseModel):
+    """One execution date of a phase and the commit in force on it (`core.config_rebaseline`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str  # "started_at" or "cold_started_at"
+    date: str
+    commit: str
+
+
+class ConfigRebaselineKey(BaseModel):
+    """A key the scope gained: its value in the commit of each execution and now (JSON text, so a value of any type is kept as it was read)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    file: str
+    selector: str
+    value_now: str
+    value_at: dict[str, str]  # execution label -> value in the commit of that execution
+
+
+class ConfigRebaseline(BaseModel):
+    """The proof under which a `config_fingerprint` was rewritten without running the phase again."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    change_id: str  # the entry of `core.config_rebaseline.SCOPE_CHANGES`
+    rebaselined_at: str
+    previous_fingerprint: str
+    new_fingerprint: str
+    executions: list[ConfigRebaselineExecution]
+    keys: list[ConfigRebaselineKey]
+    old_scope_fingerprint_now: str  # the fingerprint of the old scope on the current files: equal to `previous_fingerprint`
+    manifest_dirty: bool  # the manifest said its run had a dirty working tree: the commit is then the reference, not a certainty
+    proof_sha256: str  # SHA-256 of the canonical JSON of every field above
+
+
 class PhaseManifestEntry(BaseModel):
     """The on-disk (manifest.json) record of one phase's outcome.
 
@@ -332,6 +373,7 @@ class PhaseManifestEntry(BaseModel):
     cold_peak_rss_mb: float | None = None
     cold_started_at: str | None = None
     cold_code_fingerprint: str | None = None
+    config_rebaselines: list[ConfigRebaseline] = []
 
 
 COLD_FIELDS = (
@@ -429,7 +471,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.8"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.9"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str

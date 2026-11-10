@@ -31,6 +31,7 @@ import yaml
 
 from geofrea.core.config_loader import load_audit_config, load_settings
 from geofrea.land_eligibility.cells import pixel_row_area_km2
+from tests.synthetic.config_trace import ConfigTrace, uncovered
 
 pytestmark = pytest.mark.slow  # the module builds the synthetic world once (minutes)
 
@@ -87,6 +88,9 @@ def _the_ipsl_futures_displace_the_shortlist(patch):
         return replace(result, displaced_capacity_share=np.broadcast_to(shares, shape).copy())
 
     patch.setattr(pipeline, "futures_pass", rule)
+
+
+CONFIG_TRACE = ConfigTrace()
 
 
 @pytest.fixture(scope="module")
@@ -150,21 +154,23 @@ def zzz(tmp_path_factory):
         settings = load_settings(main.SETTINGS_YAML)
         patch.setattr(socket.socket, "connect", _no_network)
         patch.setattr(socket, "create_connection", _no_network)
-        ok, _orchestrator, results = main.run_geofrea(
-            "ZZZ",
-            PHASES,
-            [],
-            settings.geospatial.resolutions,
-            settings.geospatial.distance_cap_km,
-            load_audit_config(main.AUDIT_YAML),
-            "zzz-end-to-end",
-            False,
-            None,
-            tuple(settings.run.technologies),
-            False,
-            "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
-            settings.memory.max_batch_gb,
-        )
+        # the configuration keys each phase reads while it runs (COMMAND 127, item 5b): see `test_every_key_a_phase_reads_is_in_its_scope`
+        with CONFIG_TRACE.installed({"experiments": experiments.read_text(encoding="utf-8")}):
+            ok, _orchestrator, results = main.run_geofrea(
+                "ZZZ",
+                PHASES,
+                [],
+                settings.geospatial.resolutions,
+                settings.geospatial.distance_cap_km,
+                load_audit_config(main.AUDIT_YAML),
+                "zzz-end-to-end",
+                False,
+                None,
+                tuple(settings.run.technologies),
+                False,
+                "all",  # the tests read the figures the setting `all` draws; the development default is `summary`
+                settings.memory.max_batch_gb,
+            )
         assert ok, {k: (v.status, getattr(v, "error", None)) for k, v in results.items() if v.status != "success"}
         # what main.main does after the country runs: the support phase cross_country_h4, then the thesis outputs again
         from geofrea.results_synthesis.runner import build_thesis
@@ -2366,7 +2372,7 @@ def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_pea
     import json
 
     manifest = json.loads((zzz[0] / "outputs" / "ZZZ" / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["schema_version"] == "2.8"
+    assert manifest["schema_version"] == "2.9"
     artifacts = manifest["artifacts"]
 
     siting = {k for k in artifacts if k.startswith("siting/")}
@@ -2386,3 +2392,27 @@ def test_the_manifest_2_7_registers_every_file_of_f2b_and_f3_and_records_the_pea
     assert executed
     for name, entry in executed.items():
         assert entry["peak_rss_mb"] is not None and entry["peak_rss_mb"] > 0, name
+
+
+def test_every_key_a_phase_reads_is_in_its_scope(zzz):
+    """Defect 1 (generality audit), COMMAND 127 item 5b: a phase that reads a config key its `PHASE_CONFIG_SCOPE` does not name would not run again when the
+    key changes. The reads were recorded while the pipeline ran on ZZZ (`tests/synthetic/config_trace.py`); each leaf must be under a selector of the phase."""
+    ran = set(CONFIG_TRACE.reads)
+    assert {"grid_alignment", "land_eligibility", "technical_potential", "lcoe_modeling"} <= ran, sorted(ran)
+    assert sum(len(v) for v in CONFIG_TRACE.reads.values()) > 50  # the recorder saw the run, not an empty set
+    missing = uncovered(CONFIG_TRACE, "ZZZ")
+    # the two gaps the recorder found beyond F2a and F3 (OQ-085); they are named here so that the test still stops every new one, and it fails
+    # when one of them is closed, so the entry is removed with the fix
+    known = {
+        "technical_potential": ("audit:country_overrides",),
+        "potential_maps": ("parameters:countries.ZZZ.technologies.", "technologies:technologies."),
+    }
+    unexpected = {
+        phase: [k for k in keys if not k.startswith(known.get(phase, ()))] for phase, keys in missing.items()
+    }
+    unexpected = {phase: keys for phase, keys in unexpected.items() if keys}
+    report = [f"  {phase}: {key}" for phase, keys in unexpected.items() for key in keys]
+    assert not unexpected, "keys read by a phase that its PHASE_CONFIG_SCOPE does not name: " + "; ".join(report)
+    for phase, prefixes in known.items():
+        for prefix in prefixes:
+            assert any(k.startswith(prefix) for k in missing.get(phase, [])), f"OQ-085: {phase} no longer reads {prefix} outside its scope; remove it from `known`"

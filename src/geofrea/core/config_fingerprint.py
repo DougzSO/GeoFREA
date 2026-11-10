@@ -61,10 +61,26 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
             "land_availability.technologies.*.slope_max_pct"
         ],  # the strictest slope limit of the range (M-F1b)
     ),
-    "grid_alignment": _scope(settings=["geospatial"]),
+    "grid_alignment": _scope(
+        settings=["geospatial"],
+        # the substation thresholds of the country (`_build_grid_alignment_inputs`); COMMAND 127, defect 1
+        parameters=[
+            f"countries.{_ISO}.connection.poi_voltage_threshold_kv",
+            f"countries.{_ISO}.connection.poi_sensitivity_threshold_kv",
+        ],
+    ),
     "external_inputs": _scope(experiments=["gcm_ensemble"]),
     "siting_layers": _scope(),
-    "land_eligibility": _scope(experiments=["land_availability"]),
+    "land_eligibility": _scope(
+        experiments=["land_availability"],
+        # the reference project and the power density that give the area of the minimum cluster (`_project_area_km2`) and the PVCZ points and
+        # their lookup distance (`_zone_source`); COMMAND 127, defect 1
+        parameters=[
+            f"countries.{_ISO}.connection.reference_project_mw",
+            f"countries.{_ISO}.technologies.*.power_density_mw_per_km2",
+        ],
+        settings=["geospatial.pvcz_csv", "geospatial.pvcz_max_distance_km"],
+    ),
     "climate_forcing": _scope(experiments=["gcm_ensemble"]),
     "hazard_context": _scope(experiments=["gcm_ensemble", "hazard_indicators"]),
     "climate_maps": _scope(settings=["figures"]),
@@ -211,13 +227,18 @@ def _select(doc: Any, path: str) -> Any:
     return node
 
 
-def phase_config_payload(phase: str, country_code: str, source: ConfigSource) -> dict[str, Any]:
+def phase_config_payload(
+    phase: str, country_code: str, source: ConfigSource, scope: Mapping[str, list[str]] | None = None
+) -> dict[str, Any]:
     """The values behind the fingerprint of `phase`: file key -> {selector: value}.
+
+    `scope` replaces the scope of the phase (the fingerprint it had before a scope change: `core.config_rebaseline`); None is the scope of the code.
 
     Raises:
         KeyError: `phase` has no entry in PHASE_CONFIG_SCOPE (a registered phase must declare what it reads).
     """
-    scope = PHASE_CONFIG_SCOPE[phase]
+    if scope is None:
+        scope = PHASE_CONFIG_SCOPE[phase]
     payload: dict[str, Any] = {}
     for key, selectors in scope.items():
         if key == TURBINES:
@@ -234,10 +255,12 @@ def phase_config_payload(phase: str, country_code: str, source: ConfigSource) ->
     return payload
 
 
-def config_fingerprint(phase: str, country_code: str, source: ConfigSource) -> str:
+def config_fingerprint(
+    phase: str, country_code: str, source: ConfigSource, scope: Mapping[str, list[str]] | None = None
+) -> str:
     """SHA-256 of the configuration `phase` reads for `country_code` (canonical JSON of `phase_config_payload`)."""
     blob = json.dumps(
-        phase_config_payload(phase, country_code, source),
+        phase_config_payload(phase, country_code, source, scope),
         sort_keys=True,
         separators=(",", ":"),
         default=str,
