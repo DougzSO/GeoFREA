@@ -26,6 +26,7 @@ from geofrea.core.code_fingerprint import (
     SRC_ROOT,
     _module_file,
     _strip_docstrings,
+    stable_ast,
 )
 
 _Def = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
@@ -172,3 +173,6 @@ def function_fingerprint(entries: tuple[str, ...], src_root: Path | None = None)
         body = "".join(_normalised(stmt) for stmt in _load(root, dotted).defs[name])
         digest.update(f"{qualified}:{hashlib.sha256(body.encode('utf-8')).hexdigest()}\n".encode())
     return digest.hexdigest()
+
+
+globals()["ast"] = stable_ast()  # the `ast.dump` of Python 3.11 on any version; defines no name (see code_fingerprint.py, OQ-077)
