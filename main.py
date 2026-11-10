@@ -72,6 +72,7 @@ from datetime import datetime
 from pathlib import Path
 
 import geopandas as gpd
+import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
@@ -102,6 +103,13 @@ from geofrea.core.config_loader import (
     load_parameters,
     load_settings,
     load_technologies,
+)
+from geofrea.core.country_guard import (
+    AntimeridianCountryError,
+    CountryConfigError,
+    refuse_antimeridian_countries,
+    validate_countries_config,
+    validate_country_names,
 )
 from geofrea.core.deferred_check import for_country as deferred_check_for
 from geofrea.core.deferred_check import load_store as reference_store_for
@@ -214,6 +222,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(REPO_ROOT / ".env", override=False)
 
 COUNTRIES_YAML = REPO_ROOT / "config" / "countries.yaml"
+COUNTRY_NAMES_YAML = REPO_ROOT / "config" / "country_names.yaml"
 DEFERRED_CHECKS_YAML = REPO_ROOT / "config" / "deferred_checks.yaml"  # D-core-050: content check against a reference manifest, per country
 PARAMETERS_JSON = REPO_ROOT / "config" / "parameters.json"
 SETTINGS_YAML = REPO_ROOT / "config" / "settings.yaml"
@@ -1625,6 +1634,13 @@ def _main(argv: list[str] | None = None) -> int:
     # settings.yaml's own comment — that default is about scope, not a
     # requirement every country must satisfy.
     countries_config = load_countries(COUNTRIES_YAML)
+    # Schema of the two country files (extra keys forbidden, COMMAND 126): a misspelled key is an error here, not a silent default.
+    try:
+        country_entries = validate_countries_config(countries_config)
+        validate_country_names(yaml.safe_load(COUNTRY_NAMES_YAML.read_text(encoding="utf-8")))
+    except CountryConfigError as exc:
+        logger.error("%s", exc)
+        return 1
     # A synthetic country (countries.yaml's synthetic_fixture_root, A-06/
     # D-core-017/D-core-018/OQ-032 verdict) is a test fixture, never a
     # thesis country — it must never enter the default "every country
@@ -1649,6 +1665,16 @@ def _main(argv: list[str] | None = None) -> int:
             ),
         )
         return 1
+    # A country whose polygon crosses 180 degrees is refused before any phase (COMMAND 126; docs/LIMITATIONS.md).
+    try:
+        unchecked = refuse_antimeridian_countries(countries, country_entries, data_root() / "raw" / "gadm")
+    except AntimeridianCountryError as exc:
+        logger.error("%s", exc)
+        return 1
+    if unchecked:
+        logger.warning(
+            "Antimeridian check not made for %s: no local GADM level-0 polygon before data_acquisition (docs/LIMITATIONS.md)", unchecked
+        )
     target_phases = (
         [p.strip() for p in args.phases.split(",") if p.strip()]
         if args.phases
