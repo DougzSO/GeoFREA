@@ -28,7 +28,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from geofrea.climate_forcing.forcing import assert_forcing_usable
+from geofrea.climate_forcing.forcing import ForcingContractError, assert_forcing_usable
 from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID, load_ensemble, required_channels
 from geofrea.config_models.audit import AuditConfig
 from geofrea.config_models.land_availability import (
@@ -40,7 +40,7 @@ from geofrea.core import paths as core_paths
 from geofrea.core.config_schemas import TechnologiesFile, TechnologyConfig
 from geofrea.core.constants import HOURS_PER_DAY, HOURS_PER_YEAR, ISA_T0_K, RHO0_KG_M3
 from geofrea.core.schemas import CountryParams
-from geofrea.core.tables import write_table
+from geofrea.core.tables import TableWriter, write_table
 from geofrea.land_eligibility.cells import eligible_fraction_file
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS
 from geofrea.siting_layers.sanity import CountryGeometry, load_country_geometry
@@ -94,6 +94,8 @@ PROVENANCE_KEY = "geofrea_potential_provenance"
 CAPACITY_PARAMETER_KEYS = ("luf", "power_density_mw_per_km2")
 # the capacity parameters that are paired with the land scenarios and not sampled (U-06): their value per scenario is `scenario_values`
 SCENARIO_PARAMETER_KEYS = CAPACITY_PARAMETER_KEYS
+# rows of a Parquet row group in pyarrow's `write_table` (its default `row_group_size`, 1024 * 1024)
+ROW_GROUP_ROWS = 1024 * 1024
 
 
 class ScenarioPotential(BaseModel):
@@ -355,6 +357,150 @@ def _provenance(
     return {PROVENANCE_KEY: json.dumps(payload, sort_keys=True)}
 
 
+def _empty_potential_table(members: Sequence[str]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "cell_id": pd.Series(dtype="int64"),
+            "member": pd.Categorical([], categories=list(members)),
+            "P_MW": pd.Series(dtype="float64"),
+            "CF": pd.Series(dtype="float64"),
+            "E_MWh": pd.Series(dtype="float64"),
+        }
+    )
+
+
+def _write_potential_in_blocks(
+    pieces: list[pd.DataFrame], path: Path, members: Sequence[str], *, extra_metadata: dict[str, str]
+) -> int:
+    """Write the pieces (one per member, in member order) as one potential table, without the concatenated copy; return the rows written.
+
+    The file is the one `write_table` gives for `pd.concat(pieces, ignore_index=True)`: the same rows in the same order and the same row groups
+    (pyarrow's default of `ROW_GROUP_ROWS` rows, so the writer is fed in blocks of exactly that many rows, the last one shorter). The pieces are
+    taken off the list as they are consumed, so the memory holds the pieces not yet written and one block, not all the pieces and their
+    concatenation (COMMAND 126; byte equality in `tests/unit/test_f5_memory_equivalence.py`). A table without rows goes through `write_table`.
+    """
+    if not pieces:
+        write_table(
+            _empty_potential_table(members),
+            path,
+            schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
+            row_model=PotentialRow,
+            compression="zstd",
+            extra_metadata=extra_metadata,
+        )
+        return 0
+    with TableWriter(
+        path,
+        schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
+        row_model=PotentialRow,
+        compression="zstd",
+        extra_metadata=extra_metadata,
+    ) as writer:
+        pending: list[pd.DataFrame] = []
+        pending_rows = 0
+        while pieces:
+            piece = pieces.pop(0)
+            pending.append(piece)
+            pending_rows += len(piece)
+            del piece
+            if pending_rows < ROW_GROUP_ROWS:
+                continue
+            block = pd.concat(pending, ignore_index=True)
+            pending.clear()
+            while len(block) >= ROW_GROUP_ROWS:
+                writer.write(block.iloc[:ROW_GROUP_ROWS])
+                block = block.iloc[ROW_GROUP_ROWS:]
+            if len(block):
+                pending.append(block.reset_index(drop=True))
+            pending_rows = len(block)
+            del block
+        if pending:
+            writer.write(pd.concat(pending, ignore_index=True))
+        return writer.n_rows
+
+
+def _has_string_member_codes(forcing: pd.DataFrame, members: Sequence[str]) -> bool:
+    """The `member` column is a categorical of unique strings with no missing value, and `members` has no repeated name (COMMAND 127, item c).
+
+    Then the members can be read from the integer codes, and `forcing["member"].astype(str)` (a string per row, about 1 GB of transient for
+    10.6 M rows) is never made. Any other column (strings, a missing member, categories that are not strings) takes the old path.
+    """
+    column = forcing["member"]
+    if not isinstance(column.dtype, pd.CategoricalDtype):
+        return False
+    categories = column.cat.categories
+    return (
+        bool(pd.api.types.is_string_dtype(categories))
+        and bool(categories.is_unique)
+        and not bool((column.cat.codes < 0).any())
+        and len(set(members)) == len(members)
+    )
+
+
+def _members_in_use(forcing: pd.DataFrame) -> list[str]:
+    """The member names that have at least one row, as strings."""
+    column = forcing["member"]
+    if isinstance(column.dtype, pd.CategoricalDtype) and not column.cat.codes.lt(0).any():
+        used = np.unique(column.cat.codes.to_numpy())
+        return [str(column.cat.categories[i]) for i in used]
+    return [str(m) for m in pd.unique(column)]
+
+
+def _assert_usable_by_member(
+    forcing: pd.DataFrame,
+    masked: pd.DataFrame,
+    cell_ids: np.ndarray,
+    members: list[str],
+    wind_valid_range: tuple[float, float],
+    channels: tuple[str, ...],
+) -> None:
+    """`assert_forcing_usable` on one member at a time, so the guard never turns the whole `member` column into strings.
+
+    Every check of the guard is a condition on the rows of one (cell, member), and the number of cell-members it expects is the sum over the
+    members, so the guard passes on the whole forcing exactly when it passes on each member. If a member fails, the guard is called again on
+    the whole forcing with the member as a string, as before, so the error raised is the one of the unchanged code (message and counts).
+    `climate_forcing/forcing.py` is not changed.
+    """
+    codes = forcing["member"].cat.codes.to_numpy()
+    categories = forcing["member"].cat.categories
+    index = {str(name): i for i, name in enumerate(categories)}
+    try:
+        for member in members:
+            if member in index:
+                view = forcing[codes == index[member]]
+            else:
+                view = forcing.iloc[:0]
+            assert_forcing_usable(view, masked, cell_ids, [member], wind_valid_range, channels)
+    except ForcingContractError:
+        whole = forcing.assign(member=forcing["member"].astype(str))
+        assert_forcing_usable(whole, masked, cell_ids, members, wind_valid_range, channels)
+        raise  # the whole forcing passes although a member failed: cannot happen; do not hide it
+
+
+def _forcing_by_member(forcing: pd.DataFrame, coded: bool) -> dict[str, pd.DataFrame]:
+    """The factor table of every member, indexed by `cell_id`, in the order the members first appear in the forcing.
+
+    With `coded` the groups are cut by the integer codes of the categorical and their `member` column is not kept (nothing reads it).
+    """
+    by_member: dict[str, pd.DataFrame] = {}
+    if not coded:
+        for member, group in forcing.groupby("member", sort=False):
+            if group["cell_id"].duplicated().any():
+                raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
+            by_member[str(member)] = group.set_index("cell_id")
+        return by_member
+    codes = forcing["member"].cat.codes.to_numpy()
+    categories = forcing["member"].cat.categories
+    present, first = np.unique(codes, return_index=True)
+    for code in present[np.argsort(first, kind="stable")]:
+        member = categories[code]
+        group = forcing[codes == code].drop(columns="member")
+        if group["cell_id"].duplicated().any():
+            raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
+        by_member[str(member)] = group.set_index("cell_id")
+    return by_member
+
+
 def build_technology_potential(
     iso: str,
     resolved: ResolvedTechnology,
@@ -400,9 +546,11 @@ def build_technology_potential(
     ]
     uses_wind = "resource_wind" in channels
     forcing = pd.read_parquet(forcing_path)
-    forcing["member"] = forcing["member"].astype(str)
     masked = pd.read_parquet(forcing_masked_path)
-    unknown = sorted(set(forcing["member"]) - set(all_members))
+    coded = _has_string_member_codes(forcing, members)
+    if not coded:
+        forcing["member"] = forcing["member"].astype(str)
+    unknown = sorted(set(_members_in_use(forcing)) - set(all_members))
     if unknown:
         raise CfModelError(f"forcing.parquet has members not listed in members.yaml: {unknown}")
 
@@ -414,21 +562,23 @@ def build_technology_potential(
             raise CfModelError(f"{path.name}: duplicated cell_id")
         validate_candidates(iso, tech, scenario, frame, input_ranges)
         # the forcing guard comes first: nothing is computed on a forcing that breaks the contract (M-F4-07)
-        assert_forcing_usable(
-            forcing,
-            masked,
-            frame["cell_id"].to_numpy(),
-            list(members),
-            wind_valid_range,
-            channels,
-        )
+        if coded:
+            _assert_usable_by_member(
+                forcing, masked, frame["cell_id"].to_numpy(), list(members), wind_valid_range, channels
+            )
+        else:
+            assert_forcing_usable(
+                forcing,
+                masked,
+                frame["cell_id"].to_numpy(),
+                list(members),
+                wind_valid_range,
+                channels,
+            )
         candidates[scenario] = frame
 
-    by_member: dict[str, pd.DataFrame] = {}
-    for member, group in forcing.groupby("member", sort=False):
-        if group["cell_id"].duplicated().any():
-            raise CfModelError(f"forcing.parquet: duplicated cell_id in member {member}")
-        by_member[str(member)] = group.set_index("cell_id")
+    by_member = _forcing_by_member(forcing, coded)
+    del forcing
 
     scenario_results: dict[str, ScenarioPotential] = {}
     aggregate_frames: list[pd.DataFrame] = []
@@ -508,28 +658,15 @@ def build_technology_potential(
             energy_by_member[member] = energy
             absent_by_member[member] = int(len(frame) - len(rows))
             n_present[rows] += 1
-        if pieces:
-            table = pd.concat(pieces, ignore_index=True)
-        else:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
+        if not pieces:  # a scenario without candidate cells has no rows: zero potential, written as an empty table
             logger.warning(
                 "%s %s [%s]: no candidate cells, the potential is zero", iso, tech, scenario
             )
-            table = pd.DataFrame(
-                {
-                    "cell_id": pd.Series(dtype="int64"),
-                    "member": pd.Categorical([], categories=list(members)),
-                    "P_MW": pd.Series(dtype="float64"),
-                    "CF": pd.Series(dtype="float64"),
-                    "E_MWh": pd.Series(dtype="float64"),
-                }
-            )
         path = Path(out_dir) / f"potential_{tech}__{scenario}.parquet"
-        write_table(
-            table,
+        n_rows = _write_potential_in_blocks(
+            pieces,
             path,
-            schema_version=POTENTIAL_TABLE_SCHEMA_VERSION,
-            row_model=PotentialRow,
-            compression="zstd",
+            members,
             extra_metadata=_provenance(resolved, scenario, absent_by_member, production),
         )
         incomplete = n_present < len(members)
@@ -616,7 +753,7 @@ def build_technology_potential(
         scenario_results[scenario] = ScenarioPotential(
             scenario=scenario,
             path=path,
-            n_rows=len(table),
+            n_rows=n_rows,
             n_candidate_cells=len(frame),
             n_absent_cell_members=int(sum(absent_by_member.values())),
             p_gw_reference=float(ref["P_GW"]),
@@ -640,11 +777,15 @@ def build_technology_potential(
             scenario,
             len(frame),
             len(members),
-            len(table),
+            n_rows,
             sum(absent_by_member.values()),
             ref["P_GW"],
             ref["E_TWh"],
         )
+        # what this scenario held is released before the next scenario reads its pixels (COMMAND 126): the pieces, the prepared pixel
+        # arrays and the per-member energies were all alive during the next read_cell_pixels
+        del pieces, prepared, energy_by_member, qc, aggregate, p_mw, area, cell_ids
+        factors = taken = position = rows = cf = e_mwh = energy = None
     weibull_path: Path | None = None
     report = weibull_distribution_report(candidates[CENTRAL_SCENARIO])
     if len(report):
