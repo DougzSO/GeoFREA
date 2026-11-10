@@ -60,16 +60,18 @@ flagged there as pending).
 from __future__ import annotations
 
 import logging
-import math
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import shapely
+from pyproj import Geod
 from rasterio.features import rasterize
-from scipy import ndimage
+from scipy.spatial import cKDTree
 from shapely.geometry import mapping
 from shapely.strtree import STRtree
 
+from geofrea.core.checkpoint import CheckpointStore, digest_inputs, make_key
 from geofrea.core.constants import NODATA_FLOAT, NODATA_UINT8
 from geofrea.core.geodesy import wgs84_km_per_degree
 from geofrea.core.geometry_memo import country_union
@@ -140,64 +142,205 @@ def filter_road_classes(gdf: gpd.GeoDataFrame | None, classes) -> gpd.GeoDataFra
     return kept if not kept.empty else None
 
 
-def calculate_wgs84_isotropic_distance(
-    feature_mask_inv: np.ndarray, grid: GridContext
-) -> np.ndarray:
-    """Compute Euclidean distance with a WGS84 ellipsoid correction.
+_GEOD = Geod(ellps="WGS84")
+_DENSIFY_M = 100.0  # the longest stretch between two vertices of a line, in metres (M-F2a-03)
+_FEATURE_CHUNK = 20_000  # features densified and converted to vertices at a time (COMMAND 88: the memory of a layer is its own working set)
+_STRIP_ROWS = 64  # rows of pixels whose distance is computed (and stored in the checkpoint) at a time
+# Most vertices a nearest-neighbour tree holds at once (about 60 bytes each). The grid, roads and substations of IND, BRA and PRT (at most 5.8 million
+# vertices) fit in one block; the 26.5 million vertices of the rivers of BRA go in five, so that the process of the layer stays under the cap.
+_BLOCK_VERTICES = 6_000_000
+# The rivers have 5 to 25 times more vertices than any other layer and their process also holds the vector: smaller blocks (2 million, about 150 MB of tree),
+# so that the process of the layer stays under 1,300 MB on BRA (COMMAND 117).
+_RIVER_BLOCK_VERTICES = 2_000_000
+_SEED_STEP = 32  # every 32nd vertex gives each pixel an upper bound (a real vertex) for the search in the blocks
 
-    Converts a pixel-space distance transform to kilometres using
-    core.geodesy.wgs84_km_per_degree() at the grid's centroid latitude
-    — centralized 2026-09-09 (see docs/_archive/2026-09/DECISIONS.md same date,
-    grid_alignment Passo 4 item 1; this function previously carried its
-    own 3-term-truncated copy of the same Bowring-series formula, one
-    of three independently-truncated variants found across the
-    codebase — see docs/_archive/2026-09/architecture/grid_alignment.md sec b).
 
-    Args:
-        feature_mask_inv: Binary array, 0=feature, 1=background.
-        grid: GridContext for transform and dimensions.
+def _ecef(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
+    """Earth-centred Cartesian coordinates (metres) of geodetic points on the WGS84 ellipsoid, shape `(n, 3)`."""
+    phi, lam = np.radians(lat), np.radians(lon)
+    prime_vertical = _GEOD.a / np.sqrt(1.0 - _GEOD.es * np.sin(phi) ** 2)
+    return np.column_stack(
+        [
+            prime_vertical * np.cos(phi) * np.cos(lam),
+            prime_vertical * np.cos(phi) * np.sin(lam),
+            prime_vertical * (1.0 - _GEOD.es) * np.sin(phi),
+        ]
+    )
 
-    Returns:
-        Float32 array of distances, in kilometres.
+
+def densify_step_deg(grid: GridContext) -> float:
+    """The `segmentize` step in degrees: 100 m along a meridian, shortened where a degree of longitude is longer, over the latitudes of the grid.
+
+    A segment of this many degrees measures at most `_DENSIFY_M` metres in any direction, so the distance to a densified line differs from the
+    distance to the line by at most s^2 / (8 D) (s the step, D the distance to the line).
     """
-    dist_pixels = ndimage.distance_transform_edt(feature_mask_inv)
-
-    lat_center = grid.transform.f + grid.transform.e * (grid.height / 2)
-    lat_km_deg, lon_km_deg = wgs84_km_per_degree(lat_center)
-
-    px_scale_km = math.sqrt(abs(grid.transform.a) * lon_km_deg * abs(grid.transform.e) * lat_km_deg)
-    return (dist_pixels * px_scale_km).astype(np.float32)
+    south = grid.transform.f + grid.transform.e * grid.height
+    north = grid.transform.f
+    lat_km, lon_km = wgs84_km_per_degree(np.linspace(min(south, north), max(south, north), 33))
+    return _DENSIFY_M / 1000.0 / float(max(lat_km.max(), lon_km.max()))
 
 
-_RASTERIZE_CHUNK = 20_000  # features simplified, converted and rasterized at a time
+def feature_vertices(
+    geometries, grid: GridContext, *, within_country: bool
+) -> tuple[np.ndarray, np.ndarray]:
+    """Longitude and latitude (float64) of the points a distance to `geometries` is measured to, without rasterizing them.
 
+    A point is itself; a line is densified to at most 100 m between vertices (`densify_step_deg`) and contributes its vertices; a polygon
+    contributes the vertices of its rings. A vertex counts when the pixel that contains it is on the grid and, with `within_country`, in the
+    country mask: the rule by which a burnt pixel outside the country mask was dropped (roads, grid, substations), a pixel outside the grid never
+    having been burnt (rivers: `within_country=False`). The features go `_FEATURE_CHUNK` at a time, and the vertices of a chunk that are exactly
+    equal to one another are kept once (a vertex shared by two chunks stays twice: the distance does not change, only the count).
 
-def rasterize_in_chunks(geometries, grid: GridContext, tolerance: float) -> tuple[np.ndarray, int]:
-    """The mask (1 where a pixel is touched by a feature) of `geometries` simplified at `tolerance`, built `_RASTERIZE_CHUNK` features at a time.
-
-    Each feature is simplified and burnt on its own, and the mask is the union of what the features burn, so a chunk of any size gives the mask
-    of all of them at once (COMMAND 88). What changes is the memory: the simplified copy of the whole layer, its list of GeoJSON dictionaries
-    and the rasterizer's own copy were 1.5 GB for the rivers of BRA.
+    Implements: M-F2a-03.
     """
-    mask = np.zeros((grid.height, grid.width), dtype=np.uint8)
-    n_shapes = 0
-    geometries = list(geometries) if not hasattr(geometries, "iloc") else geometries
-    for start in range(0, len(geometries), _RASTERIZE_CHUNK):
-        chunk = geometries.iloc[start : start + _RASTERIZE_CHUNK] if hasattr(geometries, "iloc") else geometries[start : start + _RASTERIZE_CHUNK]
-        shapes = [(mapping(g), 1) for g in chunk.simplify(tolerance) if g is not None and not g.is_empty]
-        if not shapes:
+    step = densify_step_deg(grid)
+    transform = grid.transform
+    lons: list[np.ndarray] = []
+    lats: list[np.ndarray] = []
+    values = np.asarray(geometries.values if hasattr(geometries, "values") else geometries, dtype=object)
+    for start in range(0, len(values), _FEATURE_CHUNK):
+        chunk = shapely.segmentize(values[start : start + _FEATURE_CHUNK], step)
+        coords = shapely.get_coordinates(chunk)
+        if not len(coords):
             continue
-        n_shapes += len(shapes)
-        mask |= rasterize(
-            shapes=shapes,
-            out_shape=(grid.height, grid.width),
-            transform=grid.transform,
-            fill=0,
-            all_touched=True,
-            dtype=np.uint8,
+        col = np.floor((coords[:, 0] - transform.c) / transform.a).astype(np.int64)
+        row = np.floor((coords[:, 1] - transform.f) / transform.e).astype(np.int64)
+        keep = (col >= 0) & (col < grid.width) & (row >= 0) & (row < grid.height)
+        if within_country:
+            keep[keep] = grid.country_mask[row[keep], col[keep]]
+        xy = np.ascontiguousarray(coords[keep])
+        if len(xy):
+            # exactly equal vertices (the end shared by two neighbouring features) are one target; no distinct vertex is touched
+            _, first = np.unique(xy.view(np.dtype((np.void, 16))).ravel(), return_index=True)
+            first.sort()
+            xy = xy[first]
+        lons.append(xy[:, 0].copy())
+        lats.append(xy[:, 1].copy())
+        del chunk, coords, xy
+    if not lons:
+        return np.empty(0), np.empty(0)
+    lon_all = np.concatenate(lons)
+    del lons
+    lat_all = np.concatenate(lats)
+    return lon_all, lat_all
+
+
+def geodesic_distance_to_vertices(
+    lon: np.ndarray,
+    lat: np.ndarray,
+    grid: GridContext,
+    *,
+    checkpoint_dir: Path | str | None = None,
+    checkpoint_key: str | None = None,
+    strip_rows: int = _STRIP_ROWS,
+    block_vertices: int = _BLOCK_VERTICES,
+) -> np.ndarray:
+    """Distance in km from the centre of each country pixel to the nearest of the points `lon`, `lat`, on the WGS84 ellipsoid.
+
+    The nearest point is found by nearest neighbour among the points in Earth-centred coordinates (a `cKDTree`); the distance is the WGS84
+    geodesic (`pyproj.Geod`) from the pixel centre to that point alone, never an approximation. The chord and the geodesic order the points
+    the same way except between points whose distances differ by less than about 1e-6 of the distance. Pixels outside the country mask are NaN.
+
+    With at most `block_vertices` points there is one tree and the rows go `strip_rows` at a time; with a checkpoint directory and the key of the
+    layer, the strips an interrupted run finished are taken from it (core/checkpoint.py), and the tree is not built when every strip is done.
+    With more points they are split in blocks of `block_vertices`: one tree is alive at a time, and for every country pixel the vertex with the
+    smallest chord (the first one on a tie) is kept across the blocks; the geodesic is then computed once, to that winner. The checkpoint keeps
+    the state (winner and chord of every pixel) after each block. Either way the result is the same.
+
+    Implements: M-F2a-03.
+    """
+    if not len(lon):
+        raise ValueError("no point to measure the distance to")
+    if block_vertices < 1:
+        raise ValueError("block_vertices must be positive")
+    transform = grid.transform
+    out = np.full((grid.height, grid.width), np.nan, dtype=np.float32)
+    store = None
+    if checkpoint_dir is not None and checkpoint_key is not None:
+        store = CheckpointStore(
+            checkpoint_dir,
+            make_key(
+                layer=checkpoint_key, strip_rows=strip_rows, block_vertices=block_vertices, points=digest_inputs(lon, lat)
+            ),
+            label="distance",
         )
-        del shapes
-    return mask, n_shapes
+    if len(lon) <= block_vertices:
+        tree = None
+        for r0 in range(0, grid.height, strip_rows):
+            r1 = min(grid.height, r0 + strip_rows)
+            rr, cc = np.nonzero(grid.country_mask[r0:r1])
+            if not len(rr):
+                continue
+            unit = f"strip_{r0:08d}"
+            stored = store.load_arrays(unit) if store is not None else None
+            if stored is not None and stored[0]["d"].shape == (len(rr),):
+                out[r0 + rr, cc] = stored[0]["d"]
+                continue
+            if tree is None:
+                tree = cKDTree(_ecef(lon, lat), balanced_tree=False)
+            centre_lon = transform.c + (cc + 0.5) * transform.a
+            centre_lat = transform.f + (r0 + rr + 0.5) * transform.e
+            _, nearest = tree.query(_ecef(centre_lon, centre_lat))
+            metres = _GEOD.inv(centre_lon, centre_lat, lon[nearest], lat[nearest])[2]
+            strip = (metres / 1000.0).astype(np.float32)
+            out[r0 + rr, cc] = strip
+            if store is not None:
+                store.save_arrays(unit, {"d": strip})
+        return out
+
+    # several blocks: the winner of each country pixel (index of the vertex and chord to it) over the blocks, in the order of the pixels by row
+    pixels = np.flatnonzero(grid.country_mask.ravel())
+    first_of_row = np.searchsorted(pixels, np.arange(0, grid.height + strip_rows, strip_rows) * grid.width)
+    n_blocks = -(-len(lon) // block_vertices)
+
+    def centres(lo: int, hi: int) -> np.ndarray:
+        rows, cols = np.divmod(pixels[lo:hi], grid.width)
+        return _ecef(transform.c + (cols + 0.5) * transform.a, transform.f + (rows + 0.5) * transform.e)
+
+    done = 0
+    stored = store.load_arrays("state") if store is not None else None
+    if stored is not None and stored[0]["chord"].shape == (len(pixels),):
+        best_chord, best_vertex, done = stored[0]["chord"], stored[0]["vertex"], int(stored[1]["blocks_done"])
+    else:
+        # Every pixel starts with a real vertex (every `_SEED_STEP`-th one) and its chord: an upper bound of the nearest chord that is never below
+        # it. A block is then searched only within the largest bound of the strip (`distance_upper_bound`), which a tree far from a pixel cannot
+        # otherwise tell: it would visit most of its nodes. A vertex that is not nearer than the bound cannot be the nearest, so the result is the
+        # same as without the bound.
+        seeds = np.arange(0, len(lon), _SEED_STEP)
+        seed_tree = cKDTree(_ecef(lon[seeds], lat[seeds]), balanced_tree=False)
+        best_chord = np.empty(len(pixels))
+        best_vertex = np.empty(len(pixels), dtype=np.int64)
+        for k in range(len(first_of_row) - 1):
+            lo, hi = first_of_row[k], first_of_row[k + 1]
+            if lo < hi:
+                best_chord[lo:hi], nearest = seed_tree.query(centres(lo, hi))
+                best_vertex[lo:hi] = seeds[nearest]
+        del seed_tree
+    for block in range(done, n_blocks):
+        a, b = block * block_vertices, min(len(lon), (block + 1) * block_vertices)
+        tree = cKDTree(_ecef(lon[a:b], lat[a:b]), balanced_tree=False)
+        for k in range(len(first_of_row) - 1):
+            lo, hi = first_of_row[k], first_of_row[k + 1]
+            if lo == hi:
+                continue
+            bound = float(best_chord[lo:hi].max()) * (1.0 + 1e-12) + 1e-9
+            chord, nearest = tree.query(centres(lo, hi), distance_upper_bound=bound)
+            better = chord < best_chord[lo:hi]  # a vertex beyond the bound has chord inf: never better
+            best_chord[lo:hi][better] = chord[better]
+            best_vertex[lo:hi][better] = nearest[better] + a
+        del tree
+        if store is not None:
+            store.save_arrays("state", {"chord": best_chord, "vertex": best_vertex}, {"blocks_done": block + 1}, compress=False)
+    for k in range(len(first_of_row) - 1):
+        lo, hi = first_of_row[k], first_of_row[k + 1]
+        if lo == hi:
+            continue
+        rows, cols = np.divmod(pixels[lo:hi], grid.width)
+        centre_lon = transform.c + (cols + 0.5) * transform.a
+        centre_lat = transform.f + (rows + 0.5) * transform.e
+        winner = best_vertex[lo:hi]
+        out[rows, cols] = (_GEOD.inv(centre_lon, centre_lat, lon[winner], lat[winner])[2] / 1000.0).astype(np.float32)
+    return out
 
 
 def distance_capped_path(distance_path) -> Path:
@@ -247,8 +390,13 @@ def rasterize_linear_distance(
     grid: GridContext,
     label: str,
     distance_cap_km: float,
+    checkpoint_dir: Path | str | None = None,
+    checkpoint_key: str | None = None,
 ) -> object | None:
-    """Rasterize linear features and compute a geodesic distance-to-feature raster.
+    """Write the geodesic distance from each country pixel to the nearest feature (lines, or points), and its `distance_capped` flag raster.
+
+    The features are not rasterized: the distance is measured to their exact vertices (points as they are, lines densified to 100 m), see
+    `feature_vertices` and `geodesic_distance_to_vertices` (M-F2a-03).
 
     Shared by both `roads` (gdf already clipped via
     read_clipped_to_country(), see module docstring) and `grid` (gdf
@@ -267,6 +415,8 @@ def rasterize_linear_distance(
         distance_cap_km: Threshold of the `distance_capped` flag raster written beside the distance raster, in
             kilometres (M-F2a-03). It never truncates the stored distance (OQ-040, METHODOLOGY 1.4.0): the
             connection-cost model bills the real distance. No default, so the value stays visible at every call site.
+        checkpoint_dir: With `checkpoint_key`, where the strips of rows already computed by an interrupted run are kept (core/checkpoint.py).
+        checkpoint_key: The validity key of the layer.
 
     Returns:
         Path to the output distance raster, or None if gdf is empty/None
@@ -281,13 +431,13 @@ def rasterize_linear_distance(
         if len(intersect_indices) == 0:
             return None
 
-        gdf_intersect = gdf.iloc[intersect_indices]
-        tolerance = abs(grid.transform.a) * 0.5
-        feature_mask, _ = rasterize_in_chunks(gdf_intersect.geometry, grid, tolerance)
-        del gdf_intersect, tree
-        feature_mask = feature_mask & grid.country_mask.astype(np.uint8)
+        lon, lat = feature_vertices(gdf.geometry.iloc[intersect_indices], grid, within_country=True)
+        del tree, gdf
+        if not len(lon):
+            return None
 
-        dist_km = calculate_wgs84_isotropic_distance((feature_mask == 0).astype(np.uint8), grid)
+        dist_km = geodesic_distance_to_vertices(lon, lat, grid, checkpoint_dir=checkpoint_dir, checkpoint_key=checkpoint_key)
+        del lon, lat
         _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
 
         return out_path
@@ -342,9 +492,14 @@ def align_lakes(lakes_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext)
 
 
 def align_rivers(
-    rivers_gdf: gpd.GeoDataFrame | None, out_path, grid: GridContext, distance_cap_km: float
+    rivers_gdf: gpd.GeoDataFrame | None,
+    out_path,
+    grid: GridContext,
+    distance_cap_km: float,
+    checkpoint_dir: Path | str | None = None,
+    checkpoint_key: str | None = None,
 ) -> object | None:
-    """Rasterize river networks and compute a geodesic distance-to-river raster.
+    """Write the geodesic distance from each country pixel to the nearest river (exact vertices of the densified lines), and its flag raster.
 
     Deliberately NOT unified with rasterize_linear_distance() on the
     STRtree-prefilter/country-mask structural asymmetry — see module
@@ -362,6 +517,8 @@ def align_rivers(
         grid: Target GridContext.
         distance_cap_km: Threshold of the `distance_capped` flag raster, in kilometres — see
             rasterize_linear_distance()'s docstring.
+        checkpoint_dir: See rasterize_linear_distance().
+        checkpoint_key: See rasterize_linear_distance().
 
     Returns:
         Path to the output distance raster, or None if no rivers were found.
@@ -369,14 +526,14 @@ def align_rivers(
     if rivers_gdf is None or rivers_gdf.empty:
         return None
 
-    tolerance = abs(grid.transform.a) * 0.5
-    river_mask, n_shapes = rasterize_in_chunks(rivers_gdf.geometry, grid, tolerance)
-    if n_shapes == 0:
+    lon, lat = feature_vertices(rivers_gdf.geometry, grid, within_country=False)
+    del rivers_gdf  # the vector (about 400 MB for BRA) is not needed once its vertices are: its reference here is the last one
+    if not len(lon):
         return None
 
-    background = (river_mask == 0).astype(np.uint8)
-    del river_mask
-    dist_km = calculate_wgs84_isotropic_distance(background, grid)
-    del background
+    dist_km = geodesic_distance_to_vertices(
+        lon, lat, grid, checkpoint_dir=checkpoint_dir, checkpoint_key=checkpoint_key, block_vertices=_RIVER_BLOCK_VERTICES
+    )
+    del lon, lat
     _write_distance_and_flag(dist_km, out_path, grid, distance_cap_km)
     return out_path

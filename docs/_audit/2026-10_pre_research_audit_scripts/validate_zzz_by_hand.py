@@ -167,58 +167,21 @@ def check_group3_layers(cell: pd.Series) -> None:
         and f["geometry"]["type"] == "Point"
         and float(f["properties"]["voltage"]) / 1000.0 >= threshold
     ]
-    # The POI layer is a raster: the substation is burnt into the one pixel of the fixture grid that contains it and the distance is measured from that pixel
-    # (COMMAND 107, class (c): the expectation models the rasterisation). The grid is the one the fixture declares (MANIFEST.json: west and south edges, pixels
-    # of PIXEL_DEG), not read from an output raster. A point on the edge of two pixels belongs to the one east and north of the edge (south-west edges inclusive).
-    # ZZZ writes the extent into MANIFEST.json; the ZZZ2 generator rewrites that file without it, and both worlds use the same extent (WEST, SOUTH of
-    # scripts/generate_zzz_fixture.py and scripts/zzz2_world.py), so the same values apply when the manifest does not declare one.
-    manifest = json.loads((DATA / "fixtures" / "synthetic_zzz" / "MANIFEST.json").read_text(encoding="utf-8"))
-    extent = manifest.get("extent", {"west": 20.00, "south": -5.00})
-    sub_centres = sorted(
-        {
-            (
-                extent["west"] + (math.floor(round((sx - extent["west"]) / PIXEL_DEG, 9)) + 0.5) * PIXEL_DEG,
-                extent["south"] + (math.floor(round((sy - extent["south"]) / PIXEL_DEG, 9)) + 0.5) * PIXEL_DEG,
-            )
-            for sx, sy in subs
-        }
-    )
+    # The POI layer measures the geodesic distance from the centre of each pixel to the exact point of the substation (COMMAND 115, M-F2a-03): the point is not
+    # moved to a pixel centre. The pixel centres of the cell come from CELL_PIXELS; the substations are the points of the fixture at or above the threshold
+    # (all of them lie in the country of the fixture, so the rule "the pixel that holds the point is in the country mask" keeps every one).
     geod = Geod(ellps="WGS84")
-
-    def geodesic_km(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
-        return geod.inv(lon1, lat1, lon2, lat2)[2] / 1000.0
-
     total_w = sum(w for _, _, w in CELL_PIXELS)
-    EXPECT["substation_pixel_centres"] = [list(c) for c in sub_centres]
+    EXPECT["substation_points"] = [list(c) for c in sorted(subs)]
     label = f"F3 cell {int(cell['cell_id'])}: dist_sub_km"
-    # (a) the documented method of the layer: Euclidean distance in pixels from the pixel of the nearest substation, times one isotropic scale
-    # (geometric mean of the km per degree of longitude and of latitude, WGS84, at the latitude of the centre of the grid), weighted by eligible area.
-    # The km per degree come from pyproj.Geod over a short step (1e-3 degree) along the parallel and the meridian, expressed per degree.
-    lat_mid = (float(extent["south"]) + float(extent.get("north", -4.80))) / 2.0
-    step = 1e-3
-    lon_km_deg = geod.inv(0.0, lat_mid, step, lat_mid)[2] / 1000.0 / step
-    lat_km_deg = geod.inv(0.0, lat_mid - step / 2, 0.0, lat_mid + step / 2)[2] / 1000.0 / step
-    px_scale_km = math.sqrt(PIXEL_DEG * lon_km_deg * PIXEL_DEG * lat_km_deg)
-    lons = np.array([c[0] for c in CELL_PIXELS])
-    lats = np.array([c[1] for c in CELL_PIXELS])
-    weights = np.array([c[2] for c in CELL_PIXELS])
-    pixel_dist = np.min(
-        [np.hypot((lons - sx) / PIXEL_DEG, (lats - sy) / PIXEL_DEG) for sx, sy in sub_centres], axis=0
-    )
-    method = float(np.sum(weights * pixel_dist * px_scale_km) / weights.sum())
+    # The eligible-area mean of the minimum, over the substations, of the WGS84 geodesic (pyproj.Geod, independent of the nearest-neighbour tree of the layer)
+    # from each pixel centre to the exact substation point.
+    mean = sum(w * min(geod.inv(lon, lat, sx, sy)[2] / 1000.0 for sx, sy in subs) for lon, lat, w in CELL_PIXELS) / total_w
     check(
-        f"{label} (conformity with the documented method: pixel Euclidean distance from the substation pixel x isotropic scale {px_scale_km:.6f} km/pixel at latitude {lat_mid:g}, eligible-area mean)",
-        method,
-        float(cell["dist_sub_km"]),
-        1e-6,
-    )
-    # (b) sanity against the geodesic
-    mean = sum(w * min(geodesic_km(lon, lat, sx, sy) for sx, sy in sub_centres) for lon, lat, w in CELL_PIXELS) / total_w
-    check(
-        f"{label} (sanity against the WGS84 geodesic (pyproj.Geod) from the substation pixel centre(s) {sub_centres}; insensitive to an error of latitude scale at this point of the fixture (about -4.9 degrees))",
+        f"{label} (eligible-area mean of the WGS84 geodesic (pyproj.Geod) from each pixel centre to the nearest exact substation point of {sorted(subs)})",
         mean,
         float(cell["dist_sub_km"]),
-        5e-3,
+        1e-6,
     )
     points = pd.read_csv(DATA / "external" / "pvcz" / "pvcz_2019_ver0p2_t_equiv_rack_1p1eV_zone.csv")
     nearest = min(

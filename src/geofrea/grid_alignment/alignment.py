@@ -491,6 +491,7 @@ def run_grid_alignment_phase(
             "build_grid_distance",
             _exists(inputs.grid_source),
             files=[inputs.grid_source],
+            checkpointed=True,
             distance_cap_km=inputs.distance_cap_km,
         )
 
@@ -504,6 +505,7 @@ def run_grid_alignment_phase(
             files=[inputs.grid_source]
             + ([] if inputs.poi_substation_source is None else [inputs.poi_substation_source]),
             builder_kwargs={"name": "poi", "threshold_kv": inputs.poi_voltage_threshold_kv, "counts_path": poi_counts_path},
+            checkpointed=True,
             distance_cap_km=inputs.distance_cap_km,
             poi_voltage_threshold_kv=inputs.poi_voltage_threshold_kv,
             poi_line_tolerance_m=inputs.poi_line_tolerance_m,
@@ -527,6 +529,7 @@ def run_grid_alignment_phase(
                     "threshold_kv": inputs.poi_sensitivity_threshold_kv,
                     "counts_path": poi_sensitivity_counts_path,
                 },
+                checkpointed=True,
                 distance_cap_km=inputs.distance_cap_km,
                 poi_voltage_threshold_kv=inputs.poi_sensitivity_threshold_kv,
                 poi_line_tolerance_m=inputs.poi_line_tolerance_m,
@@ -540,6 +543,7 @@ def run_grid_alignment_phase(
             "build_roads",
             _exists(inputs.roads_source),
             files=[inputs.roads_source],
+            checkpointed=True,
             distance_cap_km=inputs.distance_cap_km,
             road_classes=None
             if inputs.road_classes is None
@@ -558,6 +562,7 @@ def run_grid_alignment_phase(
             "build_rivers",
             _exists(inputs.rivers_path),
             files=[inputs.rivers_path],
+            checkpointed=True,
             distance_cap_km=inputs.distance_cap_km,
         )
 

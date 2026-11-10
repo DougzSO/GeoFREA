@@ -857,23 +857,6 @@ def test_glo30_outputs_do_not_depend_on_the_strip_height(tmp_path, monkeypatch):
             np.testing.assert_array_equal(a.read(), b.read())
 
 
-@pytest.mark.unit
-def test_chunked_rasterization_gives_the_mask_of_all_the_features_at_once(monkeypatch):
-    from shapely.geometry import LineString
-
-    from geofrea.grid_alignment import vector_alignment as va
-
-    grid = _grid()
-    rng = np.random.default_rng(5)
-    lines = [LineString(rng.uniform([-8.95, 38.55], [-8.6, 38.95], (4, 2))) for _ in range(60)]
-    series = gpd.GeoSeries(lines, crs="EPSG:4326")
-    whole, n_whole = va.rasterize_in_chunks(series, grid, 0.005)
-    monkeypatch.setattr(va, "_RASTERIZE_CHUNK", 7)
-    chunked, n_chunked = va.rasterize_in_chunks(series, grid, 0.005)
-    np.testing.assert_array_equal(whole, chunked)
-    assert n_whole == n_chunked == 60 and whole.any()
-
-
 def _shifted_count_source(path: Path, rng: np.random.Generator):
     """A count raster 12 pixels per target pixel on a grid shifted by a little under half a source pixel (the BRA population: 0.4996), with nodata and NaN."""
     fine = _RES / 12 * (1 + 4e-9)

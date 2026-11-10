@@ -4,8 +4,7 @@ A substation is eligible when its nominal voltage is at least the country thresh
 The voltage comes from the OSM `voltage` tag; a substation without one takes the highest voltage of the OSM lines that reach it (within
 `tolerance_m`); a substation whose voltage cannot be inferred is excluded. A polygon is represented by `representative_point`.
 
-The functions are pure (frames in, frames and counts out); the geodesic distance transform stays in `vector_alignment.py` and is reused by
-`alignment.py` on the points returned here.
+The functions are pure (frames in, frames and counts out); the geodesic distance to the points returned here (exact coordinates, no pixel) is computed in `vector_alignment.py`.
 
 Implements: M-F2a-09 (Group 3 POI layer, `docs/thesis/methods/group3_connection_degradation.tex`, subsection "Point of Interconnection").
 """

@@ -42,24 +42,28 @@
       "detail": "reproject_to_grid, nearest neighbour, uint8, inside the layer process; BRA 314.6 MB in 4.1 s, PRT 159 MB (COMMAND 97, scripts/profiling/measure_layer_memory.py)"
     },
     "grid": {
-      "peak_rss_mb": 772,
-      "source": "measured"
+      "peak_rss_mb": 744,
+      "source": "measured",
+      "detail": "exact WGS84 geodesic distance (COMMANDS 115 to 117, METHODOLOGY 19.0.0), round of 2026-11-09, layers.json of BRA; 278 s; was 772 MB with the isotropic transform"
     },
     "poi": {
-      "peak_rss_mb": 777,
-      "source": "measured"
+      "peak_rss_mb": 449,
+      "source": "measured",
+      "detail": "exact WGS84 geodesic distance (COMMANDS 115 to 117, METHODOLOGY 19.0.0), round of 2026-11-09, layers.json of BRA; 49 s; was 777 MB"
     },
     "roads": {
-      "peak_rss_mb": 887,
-      "source": "measured"
+      "peak_rss_mb": 848,
+      "source": "measured",
+      "detail": "exact WGS84 geodesic distance (COMMANDS 115 to 117, METHODOLOGY 19.0.0), round of 2026-11-09, layers.json of BRA; 106 s; was 887 MB"
     },
     "lakes": {
       "peak_rss_mb": 376,
       "source": "measured"
     },
     "rivers": {
-      "peak_rss_mb": 1064,
-      "source": "measured"
+      "peak_rss_mb": 1221,
+      "source": "measured",
+      "detail": "exact WGS84 geodesic distance (COMMANDS 115 to 117, METHODOLOGY 19.0.0), round of 2026-11-09, layers.json of BRA; 159 s; was 1,064 MB. 26.5 million vertices in blocks of 2 million (one tree alive), vector freed after its vertices; the first version, one block of 6 million with the vector held, peaked at 1,583 MB and did not finish in 1,400 s"
     },
     "physical": {
       "peak_rss_mb": 295,
@@ -76,5 +80,10 @@
     "peak_rss_mb": 1243,
     "source": "measured",
     "detail": "phase land_eligibility of BRA in the round 9c2dc3c8 (FABDEM slope, COMMAND 101), 578 s, outputs/BRA/unattended_check.json: the peak per phase of the unattended runner, not per process. It does not replace the 1,438 MB of f3_phase (COMMAND 91); until a per-process measure exists the decision ceiling is the larger value (1,438 MB)"
+  },
+  "f3_phase_distance_round": {
+    "peak_rss_mb": 1481,
+    "source": "measured",
+    "detail": "phase land_eligibility of BRA in the round of 2026-11-09 (exact geodesic distances), 601 s, manifest peak_rss_mb of the phase (the unattended-runner kind of measure, as f3_phase_fabdem_round). 55 MB under the 1,536 MB cap and above the 1,438 MB of f3_phase (COMMAND 91): the margin is thin"
   }
 }

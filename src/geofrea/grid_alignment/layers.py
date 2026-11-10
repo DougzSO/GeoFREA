@@ -259,7 +259,7 @@ def build_settlements(ctx: LayerContext) -> Path:
         )
 
 
-def build_grid_distance(ctx: LayerContext) -> Path | None:
+def build_grid_distance(ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None) -> Path | None:
     return rasterize_linear_distance(
         load_vector_bbox(ctx.inputs.grid_source, ctx.inputs.country_gdf, "grid"),
         ctx.path("grid"),
@@ -267,6 +267,8 @@ def build_grid_distance(ctx: LayerContext) -> Path | None:
         ctx.grid,
         "grid",
         ctx.inputs.distance_cap_km,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )
 
 
@@ -291,7 +293,9 @@ def _poi_points(ctx: LayerContext, threshold_kv: float, counts_path: Path) -> ob
     return points
 
 
-def build_poi(ctx: LayerContext, name: str, threshold_kv: float, counts_path: Path) -> Path | None:
+def build_poi(
+    ctx: LayerContext, name: str, threshold_kv: float, counts_path: Path, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None
+) -> Path | None:
     """The distance to the nearest eligible substation (`name` is "poi" or "poi_sensitivity", the latter at another voltage threshold)."""
     points = _poi_points(ctx, threshold_kv, counts_path)
     if points is None:
@@ -303,10 +307,12 @@ def build_poi(ctx: LayerContext, name: str, threshold_kv: float, counts_path: Pa
         ctx.grid,
         name,
         ctx.inputs.distance_cap_km,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )
 
 
-def build_roads(ctx: LayerContext) -> Path | None:
+def build_roads(ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None) -> Path | None:
     inputs = ctx.inputs
     return rasterize_linear_distance(
         filter_road_classes(_clipped_gdf(ctx, inputs.roads_source, "roads"), inputs.road_classes),
@@ -315,6 +321,8 @@ def build_roads(ctx: LayerContext) -> Path | None:
         ctx.grid,
         "roads",
         inputs.distance_cap_km,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )
 
 
@@ -322,7 +330,12 @@ def build_lakes(ctx: LayerContext) -> Path | None:
     return align_lakes(_clipped_gdf(ctx, ctx.inputs.lakes_path, "lakes"), ctx.path("lakes"), ctx.grid)
 
 
-def build_rivers(ctx: LayerContext) -> Path | None:
+def build_rivers(ctx: LayerContext, checkpoint_dir: Path | None = None, checkpoint_key: str | None = None) -> Path | None:
     return align_rivers(
-        _clipped_gdf(ctx, ctx.inputs.rivers_path, "rivers"), ctx.path("rivers"), ctx.grid, ctx.inputs.distance_cap_km
+        _clipped_gdf(ctx, ctx.inputs.rivers_path, "rivers"),
+        ctx.path("rivers"),
+        ctx.grid,
+        ctx.inputs.distance_cap_km,
+        checkpoint_dir=checkpoint_dir,
+        checkpoint_key=checkpoint_key,
     )

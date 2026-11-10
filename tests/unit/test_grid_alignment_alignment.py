@@ -763,14 +763,14 @@ def test_run_grid_alignment_phase_passes_inputs_distance_cap_km_to_roads_and_riv
     real_align_rivers = layers_module.align_rivers
     captured: dict[str, float] = {}
 
-    def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km):
+    def spy_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km, **checkpoint):
         if label == "roads":
             captured["roads"] = distance_cap_km
-        return real_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km)
+        return real_rasterize(gdf, out_path, country_gdf_arg, grid, label, distance_cap_km, **checkpoint)
 
-    def spy_align_rivers(gdf, out_path, grid, distance_cap_km):
+    def spy_align_rivers(gdf, out_path, grid, distance_cap_km, **checkpoint):
         captured["rivers"] = distance_cap_km
-        return real_align_rivers(gdf, out_path, grid, distance_cap_km)
+        return real_align_rivers(gdf, out_path, grid, distance_cap_km, **checkpoint)
 
     with (
         patch.object(layers_module, "rasterize_linear_distance", side_effect=spy_rasterize),
