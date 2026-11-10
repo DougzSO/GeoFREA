@@ -1,6 +1,11 @@
 # Versions pinned for CI (COMMAND 106; docs/_audit/ci_red_audit.md). Used as: pip install -c ci/constraints.txt -e ".[dev]"
-# Nothing else is pinned and pyproject.toml is unchanged. Each pin is lifted when its open question is resolved (docs/OPEN_QUESTIONS.md OQ-073 to OQ-075).
+# Nothing else is pinned and pyproject.toml is unchanged. From COMMAND 128 (OQ-084) numpy, pandas, pyarrow, rasterio and pyproj are pinned to the versions of the local environment, so the CI and the author write the same parquet files. Each pin is lifted when its open question is resolved (docs/OPEN_QUESTIONS.md OQ-073 to OQ-075).
 ruff==0.17.4
 geopandas==1.1.2
 Pillow==12.1.0
 matplotlib==3.10.8
+pyarrow==25.0.1
+pandas==3.0.6
+numpy==2.4.6
+rasterio==1.4.4
+pyproj==3.7.2
