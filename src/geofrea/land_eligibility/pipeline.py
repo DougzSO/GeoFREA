@@ -412,23 +412,6 @@ def _cell_raster(path: Path, values: np.ndarray, row0: int, col0: int, dtype: st
     return path
 
 
-def _pixel_raster(path: Path, values: np.ndarray, like: Path) -> Path:
-    with safe_raster_open(like) as ref:
-        profile = {"crs": ref.crs, "transform": ref.transform}
-    with safe_raster_write(
-        path,
-        driver="GTiff",
-        dtype="float32",
-        width=values.shape[1],
-        height=values.shape[0],
-        count=1,
-        nodata=NODATA_FLOAT,
-        **profile,
-    ) as dst:
-        dst.write(np.where(np.isfinite(values), values, NODATA_FLOAT).astype("float32"), 1)
-    return path
-
-
 @dataclass
 class SharedLayers:
     """The aligned layers and sub-pixel shares that every technology of a country reads (M-F3-01)."""
@@ -794,7 +777,7 @@ def prepare_stripe_inputs(
 
 
 class _EligibleRaster:
-    """The pixel eligible fraction of a scenario, written window by window (what `_pixel_raster` wrote from the whole array)."""
+    """The pixel eligible fraction of a scenario, written window by window (the whole-array writer it replaced was removed in COMMAND 132)."""
 
     def __init__(self, path: Path, like: Path) -> None:
         with safe_raster_open(like) as ref:

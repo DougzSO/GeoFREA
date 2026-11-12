@@ -29,7 +29,6 @@ from geofrea.climate_forcing.members import (
     VARIABLES,
     Gcm,
     Member,
-    MemberResolutionError,
 )
 from geofrea.climate_forcing.table_schemas import CLIMATE_TABLE_SCHEMA_VERSION, ForcingRow
 from geofrea.core.constants import REFERENCE_PERIOD
@@ -78,26 +77,47 @@ def country_cells(mask_path: Path) -> pd.DataFrame:
 def _subset(
     da: xr.DataArray, lat_range: tuple[float, float], lon_range: tuple[float, float]
 ) -> xr.DataArray:
-    """Native-grid subset covering the ranges plus a margin; lon_range in the file's own convention."""
+    """Native-grid subset covering the ranges plus a margin; lon_range in the file's own convention.
+
+    A range with `lo > hi` is circular: the box crosses the seam of the file's longitude convention (the Greenwich meridian of a 0..360 file, the
+    antimeridian of a -180..180 one). The columns of both sides of the seam are kept and the longitude axis is made continuous, in ascending order:
+    in a 0..360 file the columns east of the seam (values near 360) are written as negative longitudes, so the axis reads -0.4, -0.2, 0.0, 0.2; in a
+    -180..180 file the columns west of the seam are written above 180. The values are the file's own and nothing is interpolated here.
+    """
     lat = da["lat"].values
     lon = da["lon"].values
+    if lon_range[0] <= lon_range[1]:
+        dlat = float(np.abs(np.diff(np.sort(lat))).mean())
+        dlon = float(np.abs(np.diff(np.sort(lon))).mean())
+        lat_sel = (lat >= lat_range[0] - _MARGIN_NATIVE_CELLS * dlat) & (
+            lat <= lat_range[1] + _MARGIN_NATIVE_CELLS * dlat
+        )
+        lon_sel = (lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon) & (
+            lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon
+        )
+        return da.isel(lat=np.flatnonzero(lat_sel), lon=np.flatnonzero(lon_sel))
     dlat = float(np.abs(np.diff(np.sort(lat))).mean())
-    dlon = float(np.abs(np.diff(np.sort(lon))).mean())
+    wrapped = np.where(lon > 180.0, lon - 360.0, lon) if float(lon.max()) > 180.0 else lon
+    dlon = float(np.abs(np.diff(np.sort(wrapped))).mean())
     lat_sel = (lat >= lat_range[0] - _MARGIN_NATIVE_CELLS * dlat) & (
         lat <= lat_range[1] + _MARGIN_NATIVE_CELLS * dlat
     )
-    lon_sel = (lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon) & (
-        lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon
-    )
-    return da.isel(lat=np.flatnonzero(lat_sel), lon=np.flatnonzero(lon_sel))
+    upper = lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon  # west of the seam in the file's order of values
+    lower = lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon
+    sub = da.isel(lat=np.flatnonzero(lat_sel), lon=np.flatnonzero(upper | lower))
+    sub_lon = sub["lon"].values
+    if float(lon.max()) > 180.0:  # 0..360 file: the side near 360 becomes negative
+        shifted = np.where(sub_lon >= lon_range[0] - _MARGIN_NATIVE_CELLS * dlon, sub_lon - 360.0, sub_lon)
+    else:  # -180..180 file: the side near -180 goes above 180
+        shifted = np.where(sub_lon <= lon_range[1] + _MARGIN_NATIVE_CELLS * dlon, sub_lon + 360.0, sub_lon)
+    return sub.assign_coords(lon=shifted).sortby("lon")
 
 
 def _to_file_lon(lon_range: tuple[float, float], file_lon: np.ndarray) -> tuple[float, float]:
+    """The longitude range of a box (-180..180) in the file's convention; `lo > hi` in the result means the box crosses the seam (see `_subset`)."""
     lo, hi = lon_range
     if float(file_lon.max()) > 180.0:
         lo, hi = (lo + 360.0 if lo < 0 else lo), (hi + 360.0 if hi < 0 else hi)
-    if lo > hi:
-        raise MemberResolutionError("a bounding box that crosses the 0/360 seam is not supported")
     return lo, hi
 
 

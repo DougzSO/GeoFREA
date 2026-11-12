@@ -594,7 +594,7 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW. For PV the 100 MW is a DC capacity, like p_mw of the cell and the capex per kW DC (OQ-079, D-F6-028).",
           "status": null,
           "synthetic": false,
           "proxy": false
@@ -1350,7 +1350,7 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW. For PV the 100 MW is a DC capacity, like p_mw of the cell and the capex per kW DC (OQ-079, D-F6-028).",
           "status": null,
           "synthetic": false,
           "proxy": false
@@ -2106,7 +2106,7 @@
           "verified_by": null,
           "verified_date": null,
           "verification_method": "unverified",
-          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW.",
+          "note": "Modelling convention: spreads per-project connection costs over a common capacity; not an assumption that every cell hosts 100 MW. For PV the 100 MW is a DC capacity, like p_mw of the cell and the capex per kW DC (OQ-079, D-F6-028).",
           "status": null,
           "synthetic": false,
           "proxy": false

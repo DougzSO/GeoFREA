@@ -185,3 +185,24 @@ ZZZ:
   grip4_region_file: "GRIP4_region9.shp"
   gadm_dir: "Synthetica"
   gadm_level0_sha256: null  # Fixture is regenerated freely; no frozen checksum to pin against.
+
+# ZZA, ZZB and ZZC are the three miniatures of COMMAND 132 (tests/unit/test_zzz3_miniatures.py, scripts/zzz3_world.py): ZZZ3, ZZZ3b and ZZZ3c of the
+# command. A country code is three capital letters (core/country_guard.py), so the names became ZZA, ZZB and ZZC. Like ZZZ they sit outside any real ISO
+# assignment. Each entry has ONLY the keys the schema requires (no optional key of the schema) and
+# the marker `synthetic_fixture_root`. ZZA lies at 45 degrees west and its grid carries no voltage attribute; ZZB straddles the Greenwich meridian
+# (-0.15 to 0.15) with climate files in 0..360; ZZC lies at 65 degrees north.
+ZZA:
+  synthetic_fixture_root: "fixtures/synthetic_zza/raw"
+  hydrosheds_region: null
+  grip4_region_dir: null
+  grip4_region_file: null
+ZZB:
+  synthetic_fixture_root: "fixtures/synthetic_zzb/raw"
+  hydrosheds_region: null
+  grip4_region_dir: null
+  grip4_region_file: null
+ZZC:
+  synthetic_fixture_root: "fixtures/synthetic_zzc/raw"
+  hydrosheds_region: null
+  grip4_region_dir: null
+  grip4_region_file: null

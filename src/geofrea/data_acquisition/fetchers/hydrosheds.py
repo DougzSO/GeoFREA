@@ -23,9 +23,9 @@ not assumed:
 
 Region mapping (HydroRIVERS only) is inherent to the SOURCE's own
 tiling scheme (continent-based, not country-based) — not a GeoFREA
-invention. _COUNTRY_TO_REGION only covers GeoFREA's current 2
-countries (PRT, BRA); adding a new country requires adding its region
-code here (see the 9 codes in the module docstring above) — flagged
+invention. The region of a country is `hydrosheds_region` of its entry in
+`config/countries.yaml`; adding a new country requires giving it its region
+code there (see the 9 codes in the module docstring above) — flagged
 explicitly rather than silently limited, since a KeyError on an
 unmapped country is intentional (see fetch_rivers()'s docstring).
 

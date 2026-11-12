@@ -7,8 +7,6 @@ convention as test_fetchers_cmip6.py.
 
 from __future__ import annotations
 
-import sys
-
 import geopandas as gpd
 import numpy as np
 import pandas as pd
@@ -248,10 +246,6 @@ def test_compute_daily_maxima_reduces_hourly_to_one_value_per_utc_day(tmp_path):
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(
-    sys.platform.startswith("linux"),
-    reason="the watchdog worker of write_annual_maxima_from_hourly hangs for 900 s on Linux CI (default start method fork); not edited because era5.py is in the fingerprint of data_acquisition (OQ-078)",
-)
 def test_write_annual_maxima_from_hourly_persists_a_readable_netcdf(tmp_path):
     path = tmp_path / "hourly.nc"
     hours = pd.date_range("2010-01-01 00:00", "2010-01-02 23:00", freq="h")
