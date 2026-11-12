@@ -27,10 +27,10 @@ reference_store:
 
 
 countries:
-  # IND left the check on 2026-11-12 (COMMAND 134): its F4 was IDENTICO to the state before COMMAND 77 and to the reference 1d34ab23 (`docs/_audit/round_133.md`).
-  # BRA stays for its F1b: the `audit_report` before COMMAND 77 is no longer on disk (only its hash), and the oldest copy that is (round 27c9336b) differs from the
-  # current one in `slope_threshold_check` (a change of configuration), not only in `geometry_types`; its F4 was IDENTICO and is settled.
-  BRA:
+  # IND (settled on 2026-11-12, COMMAND 134) and BRA (F1b explained by commit 9dd49df, COMMAND 135) left the check once the round 6ec04875 was published as the
+  # reference (2026-11-12, COMMAND 135): the gate gave IDENTICO in the 12 phases of each country, and the three entries of `expected` for `forcing_masked`
+  # (pinned to 1d34ab23, Arrow type large_string -> string) expired with that reference and were removed. PRT stays.
+  PRT:
     baseline: latest
     reference_run: latest
     phases: &phases
@@ -46,10 +46,6 @@ countries:
       - overview
       - technical_potential
       - potential_maps
-  PRT:
-    baseline: latest
-    reference_run: latest
-    phases: *phases
 
 # probable cause of an unexplained difference, by phase (what the work of COMMANDS 75 to 77 touched upstream of its artifacts)
 suspects:

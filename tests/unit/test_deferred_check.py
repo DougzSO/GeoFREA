@@ -194,17 +194,17 @@ def test_compare_artifacts_reports_absent_artifacts_and_config_change():
     assert all(r["config_changed"] for r in rows.values())
 
 
-def test_the_shipped_configuration_lists_prt_and_bra_with_the_twelve_phases_against_the_latest_round():
+def test_the_shipped_configuration_lists_prt_with_the_twelve_phases_against_the_latest_round():
     checks = load_checks(REPO_ROOT / "config" / "deferred_checks.yaml", Path("D:/data"))
-    assert set(checks) == {"PRT", "BRA"}  # IND left the check on 2026-11-12 (COMMAND 134); BRA stays for its F1b (docs/_audit/round_133.md)
-    assert len(checks["BRA"].phases) == 12 and checks["BRA"].phases == checks["PRT"].phases
+    assert set(checks) == {"PRT"}  # IND and BRA left the check on 2026-11-12 (COMMANDS 134 and 135, docs/_audit/round_133.md)
+    assert len(checks["PRT"].phases) == 12
     for check in checks.values():  # the manifest and the rasters of the last accepted round of the reference store (COMMAND 91), not a backup directory
         assert check.baseline is None and check.reference_run == "latest" and check.baseline_label == "references/latest"
     # 2026-11-08 (COMMAND 104): the entries of COMMAND 101 (pinned to 74931e0a and 3a1b06e0) expired when the round 9c2dc3c8 was accepted and were removed, not
     # re-issued: no country declares a difference by design until a new round needs one.
-    for iso in ("BRA", "PRT"):
+    for iso in ("PRT",):
         assert checks[iso].expected == {} and checks[iso].expected_pins == {}, iso
-    assert all(phase in checks["BRA"].suspects for phase in checks["BRA"].phases)
+    assert all(phase in checks["PRT"].suspects for phase in checks["PRT"].phases)
 
 
 def test_seed_records_only_the_phases_that_were_identical_and_leaves_the_rest_pending(tmp_path):
@@ -376,7 +376,7 @@ def test_the_shipped_configuration_configures_the_reference_store():
 
 def test_the_shipped_configuration_has_no_manual_entry_for_a_last_bit_difference():
     config = yaml.safe_load((REPO_ROOT / "config" / "deferred_checks.yaml").read_text(encoding="utf-8"))
-    for iso in ("BRA",):
+    for iso in ("PRT",):
         spec = config["countries"][iso]
         assert spec["reference_run"] == "latest", iso  # the last accepted round of the store, not a backup directory
         assert not [k for k in (spec.get("expected") or {}) if re.fullmatch(r"siting/(weibull_a|weibull_k|air_density)_\d+m|siting/pvout_kwh_kwp_day", k)], iso

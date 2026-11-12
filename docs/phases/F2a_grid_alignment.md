@@ -101,3 +101,4 @@ None.
 - 2026-10-19: contiguous mask and GLO-30 elevation (D-F2a-021); V-01 refrozen for the elevation and slope layers.
 - 2026-11-03 (D-F2a-026, COMMAND 89): population summed exactly by area, replacing GDAL's `Resampling.sum` (D-F2a-014 keeps the reason for summing).
 - 2026-10-30 (D-F2a-022, COMMANDS 75 and 77): one pass over the GLO-30 tiles with the tiles kept open; adoption of aligned layers under D-core-044.
+- 2026-11-12 (D-F2a-030, COMMANDS 132 and 135): the 12 GLO30 slope rasters (`<ISO>_slope_aligned.tif` and `<ISO>_slope_counts_aligned.tif`, with their `.cachekey` and `.cachekey.before_adopt`, 0.373 GB) are kept by decision of the author, although the manifest registers the FABDEM layers instead; the 18 obsolete clip `.key` were deleted in COMMAND 132. Closes OQ-083.
