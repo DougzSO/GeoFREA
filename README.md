@@ -26,6 +26,8 @@ python main.py PRT IND BRA --phases external_validation                    # F7b
 python main.py PRT IND BRA --phases results_synthesis                      # F8 (reads the results of every country)
 ```
 
+The reference store (`GeoFREA_data/references/`, what `config/deferred_checks.yaml` compares a run with) is never written by a run of the pipeline. After a round that you accept, publish it explicitly: `python main.py PRT IND BRA --publish-reference`, or `python scripts/publish_reference.py PRT IND BRA --note "..."` (`--first` for a country with no reference, `--allow-without-reference <phase>` for a new phase). Both compare every phase of the round with the current reference and refuse, writing nothing, if one is different or has no comparison (OQ-080, `docs/phases/core.md` D-core-054).
+
 Why they are outside `target_phases` (`config/settings.yaml`): F5 and the phases after it fail loudly, by name, when a parameter they consume has no value, and F6 onward need F5 tables and the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019); a plain `python main.py PRT` therefore runs what has values and is safe to repeat, and the later phases are asked for by name. `--production` refuses to start when a consumed parameter is a proxy. F5 and `potential_maps` have run on PRT, IND and BRA; F6 and the phases after it have not run on a real country (`docs/PROGRESS.json`). The phase caps of `config/memory_budget.json` were measured with one country per process (as in the clean round of COMMAND 133), so for BRA run `python main.py BRA ...` on its own; the caps bind the run (`GEOFREA_MEMORY_CAPS=0 switches them off).
 
 ## The synthetic country ZZZ

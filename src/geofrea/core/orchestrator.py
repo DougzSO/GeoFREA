@@ -785,8 +785,6 @@ class Orchestrator:
         deferred_check: An object with `after_phase(manifest, phase) -> str | None` (`core.deferred_check.DeferredCheck`), called after each phase that
             was executed (not resumed) and whose manifest entry is written. A message stops the run: the phases that follow are reported as
             `skipped_upstream_failed` in the results (their manifest entries are left as they were) and the message is logged as an error.
-        reference_store: An object with `publish(manifest, manifest_path, results, deferred_check)` (`core.reference_store.ReferenceStore`), called once
-            at the end of the run: it keeps the summaries and the layers of the round in the reference store if the round is accepted (D-core-051).
     """
 
     outputs_dir: Path
@@ -801,7 +799,6 @@ class Orchestrator:
     prune_unregistered: bool = False
     revalidate_phases: Sequence[str] = ()
     deferred_check: Any = None
-    reference_store: Any = None
     memory_caps: bool = False
 
     def __post_init__(self) -> None:
@@ -1518,6 +1515,4 @@ class Orchestrator:
                     logger.error("%s", blocked_by_check)
 
         self._write_manifest()  # records this run's run_id and dirty even when every phase resumed
-        if self.reference_store is not None:
-            self.reference_store.publish(self.manifest, self.manifest_path, results, self.deferred_check)
         return results

@@ -111,6 +111,7 @@ from geofrea.core.country_guard import (
     validate_countries_config,
     validate_country_names,
 )
+from geofrea.core.deferred_check import PublicationRefused, publish_with_gate
 from geofrea.core.deferred_check import for_country as deferred_check_for
 from geofrea.core.deferred_check import load_store as reference_store_for
 from geofrea.core.geo_utils import load_mainland_boundary
@@ -119,6 +120,7 @@ from geofrea.core.orchestrator import (
     Orchestrator,
     PhaseContext,
     PhaseSpec,
+    RunManifest,
     compute_dirty,
     compute_git_commit,
     compute_run_id,
@@ -1506,7 +1508,6 @@ def _run_geofrea(
         prune_unregistered=True,
         revalidate_phases=revalidate_phases or [],
         deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
-        reference_store=reference_store_for(DEFERRED_CHECKS_YAML, data_root()),
         # the caps of config/memory_budget.json apply to a run of the pipeline, not to the tests (COMMAND 131); GEOFREA_MEMORY_CAPS=0 switches them off
         memory_caps=os.environ.get("GEOFREA_MEMORY_CAPS", "1") != "0",
     )
@@ -1581,6 +1582,13 @@ def _parse_args(argv: list[str]):
         choices=sorted(SCALES),
         default=DEFAULT_SCALE.scale_id,
         help="cell size of the run: 0p05deg (default, S-06) or 0p1deg, the scale check of V-07 (same code, files under <phase>__0p1deg)",
+    )
+    parser.add_argument(
+        "--publish-reference",
+        action="store_true",
+        help="after the run, keep the state of each country that ended with every target phase `success` as the reference of the store, if the gate passes "
+        "(OQ-080: every phase of the round is compared with the reference, none is skipped; a DIFERENTE phase or a phase with no comparison refuses it). "
+        "Without this flag the pipeline never moves the reference; scripts/publish_reference.py does the same by hand, with the options for a first reference",
     )
     parser.add_argument(
         "--rerun",
@@ -1769,6 +1777,20 @@ def _main(argv: list[str] | None = None) -> int:
                     "artifact_count": artifact_count,
                 }
             )
+
+    if args.publish_reference:
+        store = reference_store_for(DEFERRED_CHECKS_YAML, data_root())
+        for country_code in countries:
+            manifest_path = outputs_dir() / country_code / "manifest.json"
+            try:
+                manifest = RunManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+                run_dir, gate = publish_with_gate(
+                    manifest, manifest_path, store, DEFERRED_CHECKS_YAML, data_root(), note=f"--publish-reference of the run {run_id}"
+                )
+                logger.info("reference kept for %s at %s; verdicts %s", country_code, run_dir, gate.verdicts())
+            except (PublicationRefused, ValueError, OSError) as exc:
+                logger.error("the reference of %s was NOT published: %s", country_code, exc)
+                all_ok = False
 
     # One table, phase x status x elapsed time x artifact count per
     # country, plus the run id — COMMAND ADJ-7 action 6. Logged (not

@@ -30,8 +30,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -409,6 +410,151 @@ def seed_from_comparison(check: CountryCheck, report_path: Path, comparison: dic
         recorded.append(phase)
     guard._finish(report)
     return recorded
+
+
+
+class PublicationRefused(ValueError):
+    """The gate of a publication stopped it; `summary` is the record of what the gate found (it is not written anywhere)."""
+
+    def __init__(self, message: str, summary: dict) -> None:
+        super().__init__(message)
+        self.summary = summary
+
+
+@dataclass(frozen=True)
+class PublicationGate:
+    """What the gate found for the phases of a round about to become the reference (COMMAND 137, OQ-080).
+
+    It answers to `verdicts` and `blocked_phases` like a `DeferredCheck`, which is what `ReferenceStore.publish_state` asks of it.
+    """
+
+    iso: str
+    reference_run: str | None
+    first: bool
+    phases: dict[str, dict]  # phase -> the entry `after_phase` wrote (verdict, counts, ...)
+    without_reference: tuple[str, ...]  # the phases that have no comparison and that the caller allowed
+    refused: tuple[str, ...]  # the reasons, empty when the publication may go on
+    gated_at: str
+
+    def verdicts(self) -> dict[str, str]:
+        return {p: e["verdict"] for p, e in self.phases.items()}
+
+    def blocked_phases(self) -> list[str]:
+        return [p for p, v in self.verdicts().items() if v == "DIFERENTE"]
+
+    def summary(self) -> dict:
+        """The record kept in the index of the reference: the verdict of every phase of the round and what explains it."""
+        verdicts = self.verdicts()
+        return {
+            "country": self.iso,
+            "gated_at": self.gated_at,
+            "reference_run": self.reference_run,
+            "first_reference": self.first,
+            "verdicts": verdicts,
+            "counts": {v: sum(1 for x in verdicts.values() if x == v) for v in sorted(set(verdicts.values()))},
+            "phases": {
+                p: {
+                    "verdict": e["verdict"],
+                    "n_artifacts": e.get("n_artifacts"),
+                    "n_identico": e.get("n_identico"),
+                    "different_with_config_change": e.get("different_with_config_change", []),
+                    "different_expected": e.get("different_expected", {}),
+                    "different_equivalent": sorted(e.get("different_equivalent", {})),
+                    "different_unexplained": sorted(e.get("different_unexplained", {})),
+                    "new": e.get("new", []),
+                    "note": e.get("note"),
+                }
+                for p, e in self.phases.items()
+            },
+            "allowed_without_reference": list(self.without_reference),
+        }
+
+
+def gate_for_publication(
+    iso: str,
+    manifest: Any,
+    store: ReferenceStore,
+    yaml_path: Path,
+    data_root: Path,
+    *,
+    first: bool = False,
+    without_reference: tuple[str, ...] = (),
+) -> PublicationGate:
+    """Compare EVERY phase of the manifest that ended `success` with the reference of the country; nothing is skipped and nothing is written to the data root.
+
+    The gate of the pipeline (`DeferredCheck.after_phase`) does not compare again a phase whose verdict is settled and compares only the phases the yaml lists.
+    This one starts from an empty report, so a settled verdict of an earlier round counts for nothing, and takes all the phases of the round. The entries of
+    `expected` and the `suspects` of the country (when the yaml lists it) are used as the gate of the pipeline uses them: an entry pinned to the reference of
+    now leaves the phase EXPLICADO_REVISAR. The publication is refused (the reasons are in `refused`) when:
+
+    - a phase is DIFERENTE;
+    - a phase has no comparison (`SEM_REFERENCIA`: the phase is not in the reference round) and is not named in `without_reference`;
+    - `first` is set and the country already has a reference, or `first` is not set and there is none (the first publication is explicit);
+    - the manifest has no phase that ended `success`.
+    """
+    iso = iso.upper()
+    phases = sorted(name for name, entry in manifest.phases.items() if entry.status == "success")
+    listed = load_checks(yaml_path, data_root).get(iso)
+    check = (
+        replace(listed, phases=tuple(phases))
+        if listed is not None
+        else CountryCheck(iso=iso, baseline=None, baseline_label="references/latest", phases=tuple(phases))
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        gate = DeferredCheck(check, Path(tmp) / REPORT_NAME, store)
+        for phase in phases:
+            gate.after_phase(manifest, phase)
+        report = gate._load_report()
+        entries = {p: report["phases"][p] for p in phases if p in report["phases"]}
+        reference_run = gate.reference_run_id()
+    refused: list[str] = []
+    if not phases:
+        refused.append("no phase of the manifest ended success")
+    exists = True if check.baseline is not None else store.resolve(iso, check.reference_run) is not None
+    if first and exists:
+        refused.append(f"--first was given but {iso} already has a reference ({reference_run}); publish without --first")
+    if not first and not exists:
+        refused.append(f"{iso} has no reference round to compare with; the first publication is explicit (--first)")
+    allowed = tuple(sorted(p for p in without_reference if entries.get(p, {}).get("verdict") == "SEM_REFERENCIA"))
+    for phase in phases:
+        verdict = entries.get(phase, {}).get("verdict")
+        if verdict == "DIFERENTE":
+            unexplained = sorted(entries[phase].get("different_unexplained", {}))
+            refused.append(f"{phase}: DIFERENTE ({len(unexplained)} artifacts: {', '.join(unexplained[:MAX_LISTED])})")
+        elif verdict not in SETTLED and not (verdict == "SEM_REFERENCIA" and (first or phase in allowed)):
+            refused.append(f"{phase}: no comparison ({verdict or 'not compared'}); name it in --allow-without-reference if it is new")
+    return PublicationGate(
+        iso=iso,
+        reference_run=reference_run,
+        first=first,
+        phases=entries,
+        without_reference=tuple(phases) if first else allowed,
+        refused=tuple(refused),
+        gated_at=_now(),
+    )
+
+
+def publish_with_gate(
+    manifest: Any,
+    manifest_path: Path,
+    store: ReferenceStore,
+    yaml_path: Path,
+    data_root: Path,
+    *,
+    note: str,
+    first: bool = False,
+    without_reference: tuple[str, ...] = (),
+) -> tuple[Path | None, PublicationGate]:
+    """Run the gate over every phase of the round and, if it passes, keep the round as the reference with the summary of the verdicts in its index.
+
+    This is the only way the reference moves (OQ-080): the pipeline no longer publishes by itself. Raises `PublicationRefused` (nothing is written) when the
+    gate refuses, and the `ValueError` of the store for a phase of the manifest that failed.
+    """
+    gate = gate_for_publication(manifest.country_code, manifest, store, yaml_path, data_root, first=first, without_reference=without_reference)
+    if gate.refused:
+        raise PublicationRefused(f"{manifest.country_code}: publication refused: " + "; ".join(gate.refused), gate.summary())
+    run_dir = store.publish_state(manifest, manifest_path, gate, evidence={"note": note, "gate": gate.summary()})
+    return run_dir, gate
 
 
 def for_country(iso: str, yaml_path: Path, data_root: Path, outputs_dir: Path) -> DeferredCheck | None:

@@ -31,10 +31,6 @@ def _tif(path: Path, value: float) -> Path:
     return path
 
 
-def _result(status="success", wall_s=1.0):
-    return SimpleNamespace(status=status, wall_s=wall_s)
-
-
 # --- the store itself ------------------------------------------------------------------------------------------------------------------
 
 
@@ -77,27 +73,7 @@ def test_an_imported_directory_is_a_round_that_is_not_latest(tmp_path):
     assert store.find("ZZZ", "seed_1", "ZZZ_solar_aligned.tif") is not None
 
 
-def test_a_round_is_accepted_only_if_it_executed_something_and_nothing_failed_or_was_blocked():
-    accepts = ReferenceStore.accepts
-
-    class Check:
-        def __init__(self, blocked):
-            self._blocked = blocked
-
-        def blocked_phases(self):
-            return self._blocked
-
-    assert accepts({"a": _result(), "b": _result(wall_s=None)})[0]
-    assert not accepts({})[0]
-    assert "did not end success" in accepts({"a": _result(), "b": _result("failed")})[1]
-    assert "skipped_upstream_failed" not in accepts({"a": _result("skipped_upstream_failed")})[1] and not accepts({"a": _result("skipped_upstream_failed")})[0]
-    assert "resumed" in accepts({"a": _result(wall_s=None)})[1]
-    assert accepts({"a": _result()}, Check([]))[0]
-    ok, why = accepts({"a": _result()}, Check(["land_eligibility"]))
-    assert not ok and "land_eligibility" in why
-
-
-# --- the pipeline keeps the round when it is accepted ----------------------------------------------------------------------------------
+# --- helpers of the tests of the state of a country --------------------------------------------------------------------------------------
 
 
 class Out(BaseModel):
@@ -129,7 +105,7 @@ def _specs(fail: bool = False) -> list[PhaseSpec]:
     ]
 
 
-def _orchestrator(outputs: Path, store, run_id: str, check=None):
+def _orchestrator(outputs: Path, run_id: str, check=None):
     return Orchestrator(
         outputs_dir=outputs,
         country_code="ZZZ",
@@ -140,51 +116,7 @@ def _orchestrator(outputs: Path, store, run_id: str, check=None):
         methodology_version="test",
         dirty=False,
         deferred_check=check,
-        reference_store=store,
     )
-
-
-def test_the_orchestrator_keeps_the_summaries_and_the_layers_of_an_accepted_round_and_not_the_tables(tmp_path):
-    outputs = tmp_path / "data" / "outputs"
-    (outputs / "ZZZ").mkdir(parents=True)
-    store = ReferenceStore(tmp_path / "data" / "references", StoreConfig(raster_phases=("a",)))
-    _orchestrator(outputs, store, "run-1").run(_specs())
-    assert store.latest("ZZZ") == "run-1"
-    index = store.index("ZZZ", "run-1")
-    kept = sorted(Path(rel).name for rel in index["files"])
-    assert kept == ["a_layer.tif", "a_summary.json", "b_summary.json"]  # b's layer is of a phase that is not in raster_phases; no .txt table
-    assert (store.round_dir("ZZZ", "run-1") / "manifest.json").is_file() and set(index["phases"]) == {"a", "b"}
-    assert store.json_summary("ZZZ", "latest", "b_summary.json") == {"phase": "b"}
-    # a round that only resumes keeps nothing new
-    _orchestrator(outputs, store, "run-2").run(_specs())
-    assert store.latest("ZZZ") == "run-1" and not store.round_dir("ZZZ", "run-2").exists()
-
-
-def test_a_round_with_a_failed_phase_is_not_kept(tmp_path):
-    outputs = tmp_path / "data" / "outputs"
-    (outputs / "ZZZ").mkdir(parents=True)
-    store = ReferenceStore(tmp_path / "data" / "references")
-    _orchestrator(outputs, store, "run-1").run(_specs(fail=True))
-    assert store.latest("ZZZ") is None and not store.round_dir("ZZZ", "run-1").exists()
-
-
-def test_a_round_with_a_phase_the_check_found_different_is_not_kept(tmp_path):
-    outputs = tmp_path / "data" / "outputs"
-    (outputs / "ZZZ").mkdir(parents=True)
-    store = ReferenceStore(tmp_path / "data" / "references")
-
-    class Blocked:
-        def after_phase(self, manifest, phase):
-            return None
-
-        def blocked_phases(self):
-            return ["a"]
-
-        def verdicts(self):
-            return {"a": "DIFERENTE"}
-
-    _orchestrator(outputs, store, "run-1", Blocked()).run(_specs())
-    assert store.latest("ZZZ") is None
 
 
 def test_the_store_of_the_shipped_configuration_is_under_the_data_root(tmp_path):
@@ -221,7 +153,7 @@ def _manifest_with_a_stale_phase(tmp_path):
 
     outputs = tmp_path / "data" / "outputs"
     (outputs / "ZZZ").mkdir(parents=True)
-    _orchestrator(outputs, None, "run-1").run(_specs())
+    _orchestrator(outputs, "run-1").run(_specs())
     path = outputs / "ZZZ" / "manifest.json"
     manifest = RunManifest.model_validate_json(path.read_text(encoding="utf-8"))
     return manifest, path

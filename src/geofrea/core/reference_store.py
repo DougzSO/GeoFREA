@@ -22,9 +22,10 @@ What is kept (`StoreConfig`): the JSON artifacts, that is the summaries of the p
 `raster_phases` (the aligned and the F2b layers, which are the ones compared by tolerance). The tables are not kept: they are large and the check compares
 them by hash.
 
-A round is accepted (`accepts`) when it executed at least one phase, every phase of its results ended `success` and, for a country with a deferred check,
-no phase of the check has the verdict DIFERENTE. `publish` is called by the orchestrator at the end of a run and does nothing for a round that is not
-accepted. A file is copied only if its SHA-256 is the one the manifest recorded for it: a reference never holds a file that is not the one of the run.
+The reference moves only by an explicit act (OQ-080, COMMAND 137): `core.deferred_check.publish_with_gate`, called by `scripts/publish_reference.py` or by
+`main.py --publish-reference`, runs the gate over every phase of the round and keeps it (`publish_state`) only if no phase is DIFERENTE and every phase has a
+comparison. The pipeline does not publish by itself any more: a run that passes its own gate is not thereby the reference.
+A file is copied only if its SHA-256 is the one the manifest recorded for it: a reference never holds a file that is not the one of the run.
 """
 
 from __future__ import annotations
@@ -227,33 +228,6 @@ class ReferenceStore:
         return self.publish_files(
             iso, run_id, files, extra={"status": "imported", "imported_from": [str(d) for d in directories], "note": note}, make_latest=False
         )
-
-    # --- the acceptance of a round -------------------------------------------------------------------------------------------------------
-
-    @staticmethod
-    def accepts(results: dict[str, Any], deferred_check: Any = None) -> tuple[bool, str]:
-        """(accepted, why not): the round executed a phase, every result is `success`, and the deferred check has no phase DIFERENTE."""
-        if not results:
-            return False, "no phase in the results"
-        bad = sorted(name for name, r in results.items() if r.status != "success")
-        if bad:
-            return False, f"phases that did not end success: {', '.join(bad)}"
-        if not any(r.wall_s is not None for r in results.values()):
-            return False, "every phase was resumed, nothing was executed"
-        if deferred_check is not None:
-            blocked = deferred_check.blocked_phases()
-            if blocked:
-                return False, f"the deferred check has phases DIFERENTE: {', '.join(blocked)}"
-        return True, ""
-
-    def publish(self, manifest: Any, manifest_path: Path, results: dict[str, Any], deferred_check: Any = None) -> Path | None:
-        """Keep the round that has just ended if it is accepted; returns the directory, or None. An error here never stops the pipeline."""
-        accepted, why = self.accepts(results, deferred_check)
-        if not accepted:
-            logger.info("reference store: the round %s of %s is not kept (%s)", manifest.run_id, manifest.country_code, why)
-            return None
-        executed = {name: r.wall_s is not None for name, r in results.items()}
-        return self._publish_manifest(manifest, manifest_path, executed, deferred_check, {"status": "accepted"})
 
     def publish_state(self, manifest: Any, manifest_path: Path, deferred_check: Any = None, *, evidence: dict) -> Path | None:
         """Keep the state a country has on disk as an accepted round, by hand (COMMAND 91): the state of the manifest, with the evidence that it is clean.
