@@ -40,6 +40,7 @@ IN_PROCESS_ENV = "GEOFREA_LAYERS_IN_PROCESS"  # "1" runs the layers in the calli
 POLL_S = 0.5
 GDAL_CACHEMAX_MB = 256  # when the environment has none; main.py sets GDAL_CACHEMAX from settings.yaml `geospatial.gdal_cachemax_mb`
 _LOG_TAIL_LINES = 12
+KILL_WAIT_S = 10.0  # how long `kill_tree` waits for the processes it ended to be gone
 
 
 class LayerFailedError(RuntimeError):
@@ -94,6 +95,9 @@ def kill_tree(process: psutil.Process) -> None:
             victim.kill()
         except psutil.Error:
             pass
+    # wait until they are gone: a killed child still holds its log file for a moment, and on Windows the work folder cannot be removed while it does
+    # (seen with three test workers and no free memory, COMMAND 131)
+    psutil.wait_procs(victims, timeout=KILL_WAIT_S)
 
 
 def child_environment(src_root: Path | None = None) -> dict[str, str]:

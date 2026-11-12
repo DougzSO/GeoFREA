@@ -12,7 +12,9 @@ phase its own cap and the rule that applies it:
 * at `cap x 1.25` (the hard limit), or when the free memory does not cover the excess and the reserve, the phase is stopped: `MemoryCapExceeded` is
   raised in the thread that runs it and the orchestrator records the phase as failed, as for any other error.
 
-Limits, stated: the memory read is the working set of the whole process (what the manifest has always recorded), sampled every 0.25 s; the
+The caps bind the runs of `main.py` and not the tests; `GEOFREA_MEMORY_CAPS=0` in the environment switches them off for a run (the measurement and `peak_rss_mb` stay).
+
+Limits, stated: the memory read is the working set of the whole process (what the manifest has always recorded), sampled every 0.25 s, so a phase that starts in a process that earlier phases of the same run have grown carries that memory into its figure (the peaks the caps come from were measured in runs of one or a few phases: a first full BRA chain in one process is the test of whether the caps leave room for it); the
 exception is delivered at the next Python instruction of the phase, so a long call into C code (a GDAL warp, a Parquet write) ends first; a phase that
 finishes before the stop is delivered is not failed (its result is complete) and carries `peak_over_cap` and a warning. The module changes no result
 and it is outside every code fingerprint: only `core.orchestrator` and `core.peak_memory` import it and the closures do not enter them. It is not in

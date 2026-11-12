@@ -27,6 +27,8 @@ def setup_test_environment():
     os.environ.setdefault("CRAEI_BASELINE_DIR", str(test_tmp_base / "craei"))
     # The layers of F2a run in a child process in a real run (COMMAND 88); the unit tests patch module attributes, which only the calling process sees
     os.environ.setdefault("GEOFREA_LAYERS_IN_PROCESS", "1")
+    # the memory caps of core/memory_cap.py bind the runs of main.py; a test process holds whatever the tests before it left, so they are off here (COMMAND 131)
+    os.environ.setdefault("GEOFREA_MEMORY_CAPS", "0")
 
     yield
 

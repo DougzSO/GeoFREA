@@ -199,3 +199,13 @@ def test_a_phase_within_its_cap_has_the_cap_and_no_excess(tmp_path, monkeypatch)
 def test_a_run_that_does_not_ask_for_caps_applies_none(tmp_path, monkeypatch):
     entry = _run_one(tmp_path, monkeypatch, caps=False, cap_mb=1000, hold_mb=5000)
     assert entry.status == "success" and entry.memory_cap_mb is None and entry.peak_over_cap is None
+
+
+def test_main_applies_the_caps_unless_the_environment_switches_them_off(monkeypatch):
+    """`main._run_geofrea` builds the orchestrator with `memory_caps` from `GEOFREA_MEMORY_CAPS` (default on; the test suite sets it to 0)."""
+    import inspect
+
+    import main
+
+    source = inspect.getsource(main._run_geofrea)
+    assert 'memory_caps=os.environ.get("GEOFREA_MEMORY_CAPS", "1") != "0"' in source
