@@ -46,4 +46,4 @@ def test_a_manifest_of_an_older_schema_is_read_with_an_empty_environment_and_kee
     second = _orchestrator(tmp_path, ["phase_a"])
     second.run([spec])  # resumed, not executed: the entry is the one of the old run
     assert second.manifest.phases["phase_a"].environment == {}
-    assert second.manifest.schema_version == "2.11"
+    assert second.manifest.schema_version == "2.12"

@@ -27,7 +27,10 @@ reference_store:
 
 
 countries:
-  IND:
+  # IND left the check on 2026-11-12 (COMMAND 134): its F4 was IDENTICO to the state before COMMAND 77 and to the reference 1d34ab23 (`docs/_audit/round_133.md`).
+  # BRA stays for its F1b: the `audit_report` before COMMAND 77 is no longer on disk (only its hash), and the oldest copy that is (round 27c9336b) differs from the
+  # current one in `slope_threshold_check` (a change of configuration), not only in `geometry_types`; its F4 was IDENTICO and is settled.
+  BRA:
     baseline: latest
     reference_run: latest
     phases: &phases
@@ -43,10 +46,6 @@ countries:
       - overview
       - technical_potential
       - potential_maps
-  BRA:
-    baseline: latest
-    reference_run: latest
-    phases: *phases
   PRT:
     baseline: latest
     reference_run: latest

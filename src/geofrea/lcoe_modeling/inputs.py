@@ -254,6 +254,26 @@ class MemberCells:
     n_excluded: int = 0  # cell-members left out because the distance or the thermal zone is missing (Group 3)
 
 
+def _no_substation_note(candidates_path: Path) -> str | None:
+    """Why `dist_sub_km` cannot exist when the cause is a country with no eligible substation (`poi_counts.json` of F2a), else None (OQ-086, L-069)."""
+    for parent in candidates_path.parents:
+        counts_file = parent / "grid_alignment" / "artifacts" / "poi_counts.json"
+        if not counts_file.is_file():
+            continue
+        try:
+            counts = json.loads(counts_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if counts.get("eligible") != 0:
+            return None
+        return (
+            f"the country has no eligible substation (poi_counts.json: {counts.get('total', '?')} found, {counts.get('excluded_no_voltage', '?')} without a voltage, "
+            "0 eligible), so the layer `poi` and the distance `dist_sub_km` do not exist and the connection cost has no substation to be measured to; "
+            "this is not a stale table: a country with no eligible substation is refused by design, with no fallback (OQ-086, L-069)"
+        )
+    return None
+
+
 def read_member_inputs(
     resolved: ResolvedLcoe,
     *,
@@ -282,6 +302,9 @@ def read_member_inputs(
     available = set(pq.read_schema(candidates_path).names)
     absent = [c for c in ("dist_sub_km", "dist_road_km") if c not in available]
     if absent:
+        no_substation = _no_substation_note(candidates_path)
+        if no_substation is not None:
+            raise LcoeInputError(f"{candidates_path.name} lacks {absent}: {no_substation}")
         raise LcoeInputError(
             f"{candidates_path.name} lacks {absent}: F2a, F2b and F3 must run again with the Group 3 layers (COMMAND 83)"
         )

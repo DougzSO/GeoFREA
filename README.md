@@ -13,6 +13,21 @@ F1 data acquisition, F1b data quality audit, F2a grid alignment, F2b siting laye
 3. `python main.py PRT` (one country, every phase in `config/settings.yaml`), or `python main.py BRA --phases technical_potential`; upstream phases that are stale are added automatically. `python main.py --help` lists the options.
 4. `pytest -n 3` runs the suite; see "Tests" below for the time and the memory.
 
+### The whole pipeline, in the order a real country is run
+
+`python main.py <ISO3>` runs only the phases listed in `run.target_phases` of `config/settings.yaml`, and what they require: F1 `data_acquisition`, F1b `data_quality_audit`, F2a `grid_alignment`, F2b `siting_layers`, F3 `land_eligibility`, `external_inputs`, F4 `climate_forcing`, `hazard_context`, `climate_maps`, and `overview`. The later phases are registered in `main.py` and are named with `--phases`; the orchestrator adds the upstream phases that are stale, so each line below can be run alone, in this order:
+
+```
+python main.py PRT IND BRA                                                  # F1 to F4, F3 and the figures of the default list
+python main.py PRT IND BRA --phases technical_potential,potential_maps     # F5 (the two parameter-dependent phases) and its maps
+python main.py PRT IND BRA --phases lcoe_modeling,lcoe_maps                # F6
+python main.py PRT IND BRA --phases robustness_analysis,sample_size_convergence,robustness_maps   # F7
+python main.py PRT IND BRA --phases external_validation                    # F7b (needs the plant inventory, OQ-057)
+python main.py PRT IND BRA --phases results_synthesis                      # F8 (reads the results of every country)
+```
+
+Why they are outside `target_phases` (`config/settings.yaml`): F5 and the phases after it fail loudly, by name, when a parameter they consume has no value, and F6 onward need F5 tables and the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019); a plain `python main.py PRT` therefore runs what has values and is safe to repeat, and the later phases are asked for by name. `--production` refuses to start when a consumed parameter is a proxy. F5 and `potential_maps` have run on PRT, IND and BRA; F6 and the phases after it have not run on a real country (`docs/PROGRESS.json`). The phase caps of `config/memory_budget.json` were measured with one country per process (as in the clean round of COMMAND 133), so for BRA run `python main.py BRA ...` on its own; the caps bind the run (`GEOFREA_MEMORY_CAPS=0 switches them off).
+
 ## The synthetic country ZZZ
 
 ZZZ is a 30 x 20 pixel country built by hand so every result can be computed by hand (METHODOLOGY A-06). To build its inputs and run the pipeline on it from a clean clone:

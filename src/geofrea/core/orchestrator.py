@@ -53,7 +53,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.11"
+_MANIFEST_SCHEMA_VERSION = "2.12"
+# 2.12 (COMMAND 134, A-02, OQ-084): the manifest also carries `hash_restamps`, the proofs under which the recorded content hash of an artifact was changed from
+# the kind `parquet:` to `parquet2:` without running the phase again (`scripts/restamp_parquet2.py`): the file on disk is the registered one (its byte hash
+# is the recorded one), its value equals that of the file of a reference copy, and the new hash is of the current file. Only that script writes it; the
+# orchestrator never does. Manifests written before 2.12 have an empty list. It is outside every fingerprint.
 # 2.11 (COMMAND 131, A-02, OQ-068, L-067): every PhaseManifestEntry also records `memory_cap_mb`, the cap the phase ran under, and `peak_over_cap`,
 # the excess of its peak over that cap in MB (None when the peak is within it): the cap is per phase (`core.memory_cap`, `config/memory_budget.json`
 # `phase_caps`) and a phase may go up to 25 % above it while the free memory covers the excess and a reserve. Entries written before 2.11 have
@@ -91,7 +95,7 @@ _MANIFEST_SCHEMA_VERSION = "2.11"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -494,6 +498,24 @@ class ArtifactEntry(BaseModel):
     content_sha256: str | None = None
 
 
+class HashRestamp(BaseModel):
+    """The proof under which the content hash of an artifact was rewritten from `parquet:` to `parquet2:` without running its phase again."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artifact_key: str
+    restamped_at: str
+    previous_content_sha256: str  # kind `parquet:`, as it was recorded: it equals the hash of the file today (the file is the registered one)
+    new_content_sha256: str  # kind `parquet2:`, of the file today
+    file_sha256: str  # SHA-256 of the bytes of the file, equal to the one recorded in the artifact entry
+    reference_copy: str  # the file the value was compared with (relative to the data root)
+    reference_copy_sha256: str
+    compared: str  # "value": every column equal row by row, the Arrow type ignored
+    n_rows: int
+    n_columns: int
+    proof_sha256: str  # SHA-256 of the canonical JSON of every field above
+
+
 class RunManifest(BaseModel):
     """Root schema for manifest.json (GEOFREA_DATA_DIR/outputs/<country_code>/).
 
@@ -509,7 +531,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.11"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.12"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -518,6 +540,7 @@ class RunManifest(BaseModel):
     seeds: dict[
         str, int
     ] = {}  # random seeds of the run by name (A-12); recorded with `Orchestrator.record_seed`
+    hash_restamps: list[HashRestamp] = []  # 2.12: the proofs of the hashes moved from `parquet:` to `parquet2:` (`scripts/restamp_parquet2.py`)
 
 
 @dataclass(frozen=True)
