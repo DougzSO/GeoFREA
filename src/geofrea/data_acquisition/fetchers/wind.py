@@ -230,6 +230,30 @@ def _lattice_offset(
     return round(col), round(row)
 
 
+_STRIP_MASK_MEMO: dict = {}  # (mask identity, CRS, strip transform, strip shape) -> (packed bits, shape): the polygon of a country is rasterised once per grid
+_STRIP_MASK_MEMO_MAX_BYTES = 256 * 1024 * 1024  # beyond this nothing more is kept (the strip is rasterised again), so the memory stays bounded
+
+
+def _strip_mask(memo_key: tuple, geoms: list, shape: tuple[int, int], tf: rasterio.Affine) -> np.ndarray:
+    """`geometry_mask(geoms, shape, tf, invert=True, all_touched=True)`, rasterised once for every file that asks for the same strip.
+
+    The files of one Global Wind Atlas product share one lattice, so the 12 layers of a country ask for the same strips: the key holds the mask, the CRS
+    and the exact affine and shape of the strip, and a hit returns the very array the rasteriser gave (kept as packed bits, one bit per pixel).
+    A mask different from the one in the memory empties it, so only the country at hand is kept.
+    """
+    key = (*memo_key, tuple(tf)[:6], shape)
+    if _STRIP_MASK_MEMO and next(iter(_STRIP_MASK_MEMO))[:2] != memo_key:
+        _STRIP_MASK_MEMO.clear()
+    hit = _STRIP_MASK_MEMO.get(key)
+    if hit is not None:
+        n = shape[0] * shape[1]
+        return np.unpackbits(hit, count=n).astype(bool).reshape(shape)
+    inside = geometry_mask(geoms, out_shape=shape, transform=tf, invert=True, all_touched=True)
+    if sum(v.nbytes for v in _STRIP_MASK_MEMO.values()) + inside.size // 8 + 1 <= _STRIP_MASK_MEMO_MAX_BYTES:
+        _STRIP_MASK_MEMO[key] = np.packbits(inside)
+    return inside
+
+
 def mask_coverage_pct(path: Path, mask: gpd.GeoDataFrame) -> float:
     """Percentage of the pixels inside `mask` (pixel touched by the polygon) that hold a valid value in the raster at `path`.
 
@@ -238,6 +262,7 @@ def mask_coverage_pct(path: Path, mask: gpd.GeoDataFrame) -> float:
     with rasterio.open(path) as src:
         projected = mask.to_crs(src.crs if src.crs is not None else "EPSG:4326")
         geoms = list(projected.geometry)
+        memo_key = (_mask_identity(mask), src.crs.to_wkt() if src.crs is not None else "EPSG:4326")
         minx, miny, maxx, maxy = projected.total_bounds
         res = abs(src.transform.a)
         c0 = int(np.floor((minx - src.transform.c) / res))
@@ -255,9 +280,7 @@ def mask_coverage_pct(path: Path, mask: gpd.GeoDataFrame) -> float:
                 src.transform.e,
                 src.transform.f + ra * src.transform.e,
             )
-            inside = geometry_mask(
-                geoms, out_shape=(rb - ra, c1 - c0), transform=tf, invert=True, all_touched=True
-            )
+            inside = _strip_mask(memo_key, geoms, (rb - ra, c1 - c0), tf)
             data = np.full((rb - ra, c1 - c0), np.nan, dtype="float32")
             ra2, rb2, ca2, cb2 = max(ra, 0), min(rb, src.height), max(c0, 0), min(c1, src.width)
             if ra2 < rb2 and ca2 < cb2:

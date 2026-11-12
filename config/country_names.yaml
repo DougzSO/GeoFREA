@@ -10,6 +10,9 @@ en:
   IDN: "Indonesia"
   LUX: "Luxembourg"
   ZZZ: "Synthetic country ZZZ"
+  ZZA: "Synthetic country ZZA (ZZZ3)"
+  ZZB: "Synthetic country ZZB (ZZZ3b)"
+  ZZC: "Synthetic country ZZC (ZZZ3c)"
 pt:
   BRA: "Brasil"
   PRT: "Portugal"
@@ -19,3 +22,6 @@ pt:
   IDN: "Indonésia"
   LUX: "Luxemburgo"
   ZZZ: "País sintético ZZZ"
+  ZZA: "País sintético ZZA (ZZZ3)"
+  ZZB: "País sintético ZZB (ZZZ3b)"
+  ZZC: "País sintético ZZC (ZZZ3c)"

@@ -69,6 +69,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -138,7 +139,7 @@ class DataAcquisitionLayerFailedError(RuntimeError):
 # already catches its own network/parsing failures internally and
 # returns None rather than raising (see fetchers/*.py) — deliberate
 # exceptions are hydrosheds.fetch_rivers() raising KeyError for a
-# country outside _COUNTRY_TO_REGION, and protected_planet.
+# country with no `hydrosheds_region` in countries.yaml, and protected_planet.
 # fetch_protected_areas() raising ProtectedPlanetTokenMissingError when
 # no token is configured. Both are intentionally NOT caught here
 # either: an unmapped country or a missing token are configuration
@@ -500,6 +501,8 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
         error_type: str | None = None
         error_location: str | None = None
         error_message: str | None = None
+        layer_started = time.monotonic()
+        resolve_s = hash_s = 0.0
         try:
             # A synthetic country (countries.yaml's synthetic_fixture_root,
             # A-06/D-core-017/OQ-032 verdict, playbook COMMAND ADJ-3) takes
@@ -537,7 +540,9 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 paths = local_multi_handler(context.country_code, borders_gdf)
 
             hashed_files = [path] if (path is not None and not is_multi_file) else paths
+            resolve_s = time.monotonic() - layer_started
             source_sha256, source_sha256_skipped_reason = _hash_layer_files(hashed_files, layer_memo)
+            hash_s = time.monotonic() - layer_started - resolve_s
         except Exception as exc:  # noqa: BLE001 — one layer's failure must not abort the others
             path = None
             paths = []
@@ -557,6 +562,18 @@ def run_acquisition_phase(context: PhaseContext) -> AcquisitionResult:
                 error_message,
             )
 
+        # Observability only (COMMAND 132): the time of each layer goes to the log, never to the registry (a wall time in the artifact would change its
+        # content hash at every run).
+        logger.info(
+            "data_acquisition: layer '%s' [%s] %s in %.1fs (resolve %.1fs, hash %.1fs of %d file(s))",
+            spec.layer_name,
+            context.country_code,
+            resolution_status,
+            time.monotonic() - layer_started,
+            resolve_s,
+            hash_s,
+            len(paths) if is_multi_file else int(path is not None),
+        )
         layers.append(
             AcquiredLayer(
                 layer_name=spec.layer_name,

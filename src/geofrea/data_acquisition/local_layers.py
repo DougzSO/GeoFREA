@@ -41,10 +41,10 @@ exactly what "local_only" already means.
 
 Two DIFFERENT failure modes, deliberately handled differently (Douglas,
 explicit instruction this stage — not symmetric by oversight):
-  - country_code missing from _ELEVATION_COUNTRY_DIRS /
-    _LAND_COVER_COUNTRY_DIRS (the two lookup tables below): a
-    CONFIGURATION gap — the same class of problem as hydrosheds.py's
-    _COUNTRY_TO_REGION KeyError for an unmapped country. Raises
+  - country_code missing from `config/countries.yaml`, or a key a
+    layer needs (`hydrosheds_region`, `gadm_dir`, ...) absent from its
+    entry: a CONFIGURATION gap — the same class of problem as
+    hydrosheds.py's KeyError for a country with no region. Raises
     KeyError, uncaught, so it surfaces loudly via the Orchestrator's own
     a failed phase instead of silently producing path=None for a
     country nobody remembered to add to the table.
@@ -74,9 +74,9 @@ GEOFREA_DATA_DIR, not assumed from a naming convention:
     use the ISO3 code itself as the directory name, while every other
     country (Brazil, China, India, Russia, South Africa) uses the full
     English name instead. Confirmed by listing, not a typo in this
-    module — _ELEVATION_COUNTRY_DIRS reflects what is actually on disk.
+    module — the per-country directory names of `config/countries.yaml` reflect what is actually on disk.
 
-Both tables cover only the 7 countries physically present in the local
+The countries of `config/countries.yaml` cover only those physically present in the local
 database today (BRA, CHN, EGY, IND, PRT, RUS, ZAF) — parameters.json
 currently only runs PRT/BRA, so the other 5 are unexercised head start
 for a future scope expansion, not dead code to prune. Adding an 8th
@@ -97,8 +97,8 @@ actual per-country clip at inspection time, not here. This module does
 no clipping itself — same boundary as every other resolver in this
 file, "locate a path, don't process it."
 
-_ROADS_COUNTRY_REGION_DIRS is DELIBERATELY restricted to BRA/PRT only,
-not all 7 countries like the tables above — GEOFREA_DATA_DIR also
+The GRIP4 region of the roads (`grip4_region_dir` and `grip4_region_file` of `config/countries.yaml`) was DELIBERATELY restricted to BRA/PRT only
+at first, not all 7 countries — GEOFREA_DATA_DIR also
 ships a regions_lookup.json meant to map every country to its GRIP4
 region, but it was found (2026-09-08) to DISAGREE with the actual
 region number embedded in each shapefile's own `gp_gripreg` attribute
@@ -305,23 +305,23 @@ def _country_raw_root(country_code: str) -> Path | None:
 # power_plants resolution is completely unaffected, still calling its
 # real fetcher exactly as before.
 _SYNTHETIC_FETCHED_LAYER_RELPATHS: dict[str, str] = {
-    "borders": "countries_borders/Synthetica/gadm41_ZZZ_0.shp",
-    "admin1": "countries_borders/Synthetica/gadm41_ZZZ_1.shp",
+    "borders": "countries_borders/Synthetica/gadm41_{iso}_0.shp",
+    "admin1": "countries_borders/Synthetica/gadm41_{iso}_1.shp",
     "protected": "protected_areas/wdpa_synthetic.gpkg",
-    "lakes": "hydrology/lakes/zzz_lakes.gpkg",
-    "rivers": "hydrology/rivers/zzz_rivers.gpkg",
-    "wind": "wind/gwa/ZZZ_wind_speed_100m.tif",
-    "wind_speed_150m": "wind/gwa/ZZZ_wind_speed_150m.tif",
-    "wind_speed_200m": "wind/gwa/ZZZ_wind_speed_200m.tif",
-    "weibull_a_100m": "wind/gwa/ZZZ_combined_weibull_a_100m.tif",
-    "weibull_a_150m": "wind/gwa/ZZZ_combined_weibull_a_150m.tif",
-    "weibull_a_200m": "wind/gwa/ZZZ_combined_weibull_a_200m.tif",
-    "weibull_k_100m": "wind/gwa/ZZZ_combined_weibull_k_100m.tif",
-    "weibull_k_150m": "wind/gwa/ZZZ_combined_weibull_k_150m.tif",
-    "weibull_k_200m": "wind/gwa/ZZZ_combined_weibull_k_200m.tif",
-    "air_density_100m": "wind/gwa/ZZZ_air_density_100m.tif",
-    "air_density_150m": "wind/gwa/ZZZ_air_density_150m.tif",
-    "air_density_200m": "wind/gwa/ZZZ_air_density_200m.tif",
+    "lakes": "hydrology/lakes/{iso_lower}_lakes.gpkg",
+    "rivers": "hydrology/rivers/{iso_lower}_rivers.gpkg",
+    "wind": "wind/gwa/{iso}_wind_speed_100m.tif",
+    "wind_speed_150m": "wind/gwa/{iso}_wind_speed_150m.tif",
+    "wind_speed_200m": "wind/gwa/{iso}_wind_speed_200m.tif",
+    "weibull_a_100m": "wind/gwa/{iso}_combined_weibull_a_100m.tif",
+    "weibull_a_150m": "wind/gwa/{iso}_combined_weibull_a_150m.tif",
+    "weibull_a_200m": "wind/gwa/{iso}_combined_weibull_a_200m.tif",
+    "weibull_k_100m": "wind/gwa/{iso}_combined_weibull_k_100m.tif",
+    "weibull_k_150m": "wind/gwa/{iso}_combined_weibull_k_150m.tif",
+    "weibull_k_200m": "wind/gwa/{iso}_combined_weibull_k_200m.tif",
+    "air_density_100m": "wind/gwa/{iso}_air_density_100m.tif",
+    "air_density_150m": "wind/gwa/{iso}_air_density_150m.tif",
+    "air_density_200m": "wind/gwa/{iso}_air_density_200m.tif",
 }
 
 
@@ -343,6 +343,7 @@ def resolve_synthetic_fetched_layer(country_code: str, layer_name: str) -> Path 
     rel = _SYNTHETIC_FETCHED_LAYER_RELPATHS.get(layer_name)
     if rel is None:
         return None
+    rel = rel.format(iso=country_code, iso_lower=country_code.lower())  # every synthetic country names its fixture files by its own code
 
     path = paths.data_root() / fixture_rel / rel
     if not path.exists():

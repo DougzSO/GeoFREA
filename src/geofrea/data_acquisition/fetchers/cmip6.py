@@ -356,7 +356,17 @@ def crop_to_country_polygon(
         lat_keep = mask.any(axis=1)
         lon_keep = mask.any(axis=0)
         cropped = ds.isel(lat=lat_keep, lon=lon_keep)
-        sub_mask = xr.DataArray(mask[np.ix_(lat_keep, lon_keep)], dims=("lat", "lon"))
+        sub_columns = mask[np.ix_(lat_keep, lon_keep)]
+        kept = np.flatnonzero(lon_keep)
+        kept_wrapped = lon_wrapped[kept]
+        if bool(np.any(np.diff(kept_wrapped) < 0)) and float(kept_wrapped.max() - kept_wrapped.min()) < 180.0:
+            # The country crosses the seam of the file's longitude axis (the Greenwich meridian of a 0..360 file): the kept columns sit at both ends of
+            # the axis, so their longitudes in -180..180 are not ascending in the order of the file. They are put in -180..180 and in ascending order, so the cropped axis is continuous. A country that does not cross the seam
+            # never gets here, and its cropped file is written exactly as before (COMMAND 132).
+            order = np.argsort(kept_wrapped, kind="stable")
+            cropped = cropped.assign_coords(lon=kept_wrapped).isel(lon=order)
+            sub_columns = sub_columns[:, order]
+        sub_mask = xr.DataArray(sub_columns, dims=("lat", "lon"))
 
         # Mask only variables that actually vary over (lat, lon) — a
         # blanket Dataset.where() also touches ancillary, non-spatial

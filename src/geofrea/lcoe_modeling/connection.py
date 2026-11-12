@@ -158,7 +158,7 @@ class Group3:
     road_high_usd_per_km: float | None = None  # the named scenario `road_cost_high`, in 2024 USD per km, when its cost has a value
 
 
-def group3_problems(iso: str, technology: str, connection: ConnectionParams | None, tech_params: object, indices_dir: Path | None = None) -> list[str]:
+def group3_problems(iso: str, technology: str, connection: ConnectionParams | None, tech_params: object) -> list[str]:
     """Every reason Group 3 cannot feed F6 for this country and technology, as messages for `LcoeMissingInputError` (empty when it can).
 
     Implements: A-09, M-F6-08.
