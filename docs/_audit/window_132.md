@@ -75,4 +75,4 @@ The code of the pixel area has a relative error of about 9e-7 against the exact 
 
 Ruff 0.17.4: `ruff check src tests scripts main.py` clean. Whole suite once with `-n 2` on the branch: **2,559 passed, 1 skipped, 31 min 51 s**, summed RSS 2,639 MB, lowest free memory 41 MB. A first complete run (2,556 passed, 3 failed) found three consequences of the change, all fixed before the run reported here: the per-layer log called `time.perf_counter`, which a test of the hash replaces by a finite clock (the log now uses `time.monotonic`); the literal `ZZZ` that I put in `local_layers.py` (the fixture names now use `{iso}`); and the word `gem_country_name` in a comment of `countries.yaml`, which the V-06 test reads as a plant-derived value.
 
-CI_RESULT
+CI by `workflow_dispatch` on `window-132` (commit before this note): `Unit tests and lint` passed on Python 3.11 and 3.12 on Linux (2,423 passed, 3 skipped each, ruff clean; **`test_write_annual_maxima_from_hourly_persists_a_readable_netcdf` now runs on Linux and passes**, which was the question of OQ-078), `Synthetic fixture (ZZZ)` and `Regression` passed.
