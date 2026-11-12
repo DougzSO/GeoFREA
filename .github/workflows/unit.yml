@@ -2,7 +2,8 @@ name: Unit tests and lint
 
 # R71-27 (audit 71, COMMAND 73): the unit suite and ruff run on every push and pull request, on the two Python versions the project meets:
 # 3.11 (the development machine, `target-version` of ruff) and 3.12 (the other workflows). The synthetic worlds are the job of
-# synthetic_fixture.yml and regression.yml; `-m "not slow"` keeps them out of this one.
+# synthetic_fixture.yml and regression.yml; `-m "not slow"` keeps them out of this one. `-n 3` (pytest-xdist, COMMAND 131): the whole suite passed twice in
+# parallel on the development machine (24 min against 46 in one process); the runner has 4 cores and 16 GB.
 on:
   push:
     branches: [main]
@@ -37,4 +38,4 @@ jobs:
         run: ruff check src tests scripts main.py
 
       - name: Unit tests
-        run: pytest tests/unit -m "not slow" -p no:cacheprovider -q
+        run: pytest tests/unit -m "not slow" -n 3 -p no:cacheprovider -q

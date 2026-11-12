@@ -11,7 +11,7 @@ F1 data acquisition, F1b data quality audit, F2a grid alignment, F2b siting laye
 1. Copy `.env.example` to `.env` and set the data directories (`GEOFREA_DATA_DIR` at least).
 2. `pip install -c ci/constraints.txt -e ".[dev]"`. The constraints file pins the libraries the tests and the manifests were made with (pandas, pyarrow, numpy, geopandas, rasterio, pyproj, ruff); a plain `pip install -e ".[dev]"` takes the newest ones, and geopandas 1.2.0 breaks 52 figure tests (OQ-074).
 3. `python main.py PRT` (one country, every phase in `config/settings.yaml`), or `python main.py BRA --phases technical_potential`; upstream phases that are stale are added automatically. `python main.py --help` lists the options.
-4. `pytest` runs the suite; see "Tests" below for the time and the parallel run.
+4. `pytest -n 3` runs the suite; see "Tests" below for the time and the memory.
 
 ## The synthetic country ZZZ
 
@@ -23,8 +23,9 @@ ZZZ is a 30 x 20 pixel country built by hand so every result can be computed by 
 
 ## Tests
 
-- `pytest tests/unit -m "not slow"` is what the CI runs on every push (Python 3.11 and 3.12, with the constraints above).
-- The complete suite (`pytest`, 2,500 tests, about 40 minutes in one process on the development machine) includes the synthetic worlds and the frozen V-01 regression. Close other applications first: it holds 1 to 2 GB.
+- `pytest -n 3` runs the whole suite in three processes: about 24 minutes against 46 in one (2,541 tests; the second of two runs on the development machine passed all of them). Three workers hold up to 2.7 GB, so on a machine with 6 GB close the browser and the editor first, or use `-n 2`.
+- `pytest tests/unit -m "not slow" -n 3` is what the CI unit job runs on every push (Python 3.11 and 3.12, with the constraints above). The synthetic worlds and the frozen V-01 regression have their own workflows.
+- The memory caps of the pipeline (`config/memory_budget.json`, `phase_caps`) bind `python main.py`, not the tests; `GEOFREA_MEMORY_CAPS=0` switches them off for a run.
 
 ## Where things are
 

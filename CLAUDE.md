@@ -82,6 +82,7 @@ Note: All pipeline data lives in GEOFREA_DATA_DIR (external directory). No data 
 - Fixtures are refrozen only with Douglas's authorization, recorded in the phase record with the reason.
 - Phases F3 onward are tested by analytical cases, invariants, and sanity ranges (V-02 to V-04), not by legacy parity.
 - Every new method item needs at least one test that fails if the item is violated.
+- The suite runs in parallel with `pytest -n 3` (pytest-xdist, in the dev extras): the whole suite takes about 24 minutes against 46 in one process on the same day (COMMAND 131: 2,541 passed and 1 skipped in the second of two runs, 2,539 passed and 1 failed in the first, the failure being a Windows race in `layer_process.kill_tree` that is now fixed). Three workers hold up to 2.7 GB between them (the BRA-sized synthetic tests and the ZZZ fixtures): on a machine with 6 GB close the browser and the editor first, or use `-n 2`; free memory fell to 8 MB in one of the two runs. The unit job of the CI uses `-n 3`. The memory caps of `core/memory_cap.py` bind the runs of `main.py` only: `tests/conftest.py` sets `GEOFREA_MEMORY_CAPS=0`.
 
 ## Concurrency
 
