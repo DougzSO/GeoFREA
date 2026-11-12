@@ -203,10 +203,10 @@ def test_zzc_pixel_area_at_65_north_is_the_hand_value():
     areas = pixel_row_area_km2(transform, 20)
     # top row, centre at 65.195: 1.1125 km (0.01 degree of latitude) by 0.4693 km (0.01 degree of longitude) = 0.5221 km2; the hand value to 15 digits is
     # the closed form above at that latitude
-    assert areas[0] == pytest.approx(0.522148688014309, rel=5e-6)  # the Bowring series of the code is within 1e-6 of the exact ellipsoid
-    assert areas[19] == pytest.approx(0.5258743515524604, rel=5e-6)  # row 19, centre 65.005
+    assert areas[0] == pytest.approx(0.522148688014309, rel=2e-6)  # the Bowring series of the code is within 1e-6 of the exact ellipsoid
+    assert areas[19] == pytest.approx(0.5258743515524604, rel=2e-6)  # row 19, centre 65.005
     for r in (0, 7, 19):
-        assert areas[r] == pytest.approx(_pixel_km2_exact(65.195 - 0.01 * r), rel=5e-6)  # the series of the code against the closed form
+        assert areas[r] == pytest.approx(_pixel_km2_exact(65.195 - 0.01 * r), rel=2e-6)  # the series of the code against the closed form
     assert areas[0] < areas[19]  # a pixel is smaller toward the pole
 
 
@@ -215,7 +215,7 @@ def test_zzc_decision_cell_area_is_the_sum_of_its_25_pixels_and_the_exact_band_a
 
     transform = rasterio.Affine(0.01, 0, 10.00, 0, -0.01, 65.20)
     cell = float(pixel_row_area_km2(transform, 20)[:5].sum() * 5)  # the top cell row: 5 pixel rows of 5 pixels
-    assert cell == pytest.approx(13.063528350511788, rel=5e-6)
+    assert cell == pytest.approx(13.063528350511788, rel=2e-6)
     # the exact area of the band between 65.15 and 65.20 over 0.05 degrees (authalic formula): the pixel series is within 1e-6
     e = np.sqrt(E2)
 
@@ -224,7 +224,7 @@ def test_zzc_decision_cell_area_is_the_sum_of_its_25_pixels_and_the_exact_band_a
         return (1 - E2) * (s / (1 - E2 * s * s) - np.log((1 - e * s) / (1 + e * s)) / (2 * e))
 
     exact = A_WGS84**2 / 2 * np.radians(0.05) * (q(65.20) - q(65.15)) / 1e6
-    assert cell == pytest.approx(exact, rel=5e-6)
+    assert cell == pytest.approx(exact, rel=2e-6)
     assert 13.06 < cell < 13.07  # 5.56 km by 2.35 km
 
 

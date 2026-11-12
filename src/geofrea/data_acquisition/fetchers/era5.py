@@ -81,10 +81,6 @@ from geofrea.core.cache_code import cache_code
 from geofrea.core.cache_key import file_sha256
 from geofrea.data_acquisition.acquisition_area import acquisition_bbox, cds_area
 
-# The worker processes start with `spawn` on every platform (OQ-078): under `fork` (the default on Linux) a child inherits the locks of the threads of the
-# parent (dask scheduler, HDF5) and `write_annual_maxima_from_hourly` hung there; Windows already used `spawn`.
-_SPAWN = mp.get_context("spawn")
-
 # 2026-10-09, root cause found (py-spy dump of a frozen merge worker, reproduced about once in a dozen runs of
 # `test_merge_yearly_files_concatenates_along_time`): a lock deadlock inside xarray's netCDF4 backend, not an OS or drive
 # stall. With the default threaded dask scheduler, one worker thread waits for the write lock in
@@ -325,9 +321,9 @@ def _run_worker_with_watchdog(
     `result_queue` is given, it is appended as the final argument and
     `target` must `.put()` its return value onto it.
     """
-    mp_progress = _SPAWN.Value("l", -1)
+    mp_progress = mp.Value("l", -1)
     full_args = (*args, mp_progress) if result_queue is None else (*args, mp_progress, result_queue)
-    proc = _SPAWN.Process(target=target, args=full_args)
+    proc = mp.Process(target=target, args=full_args)
     proc.start()
     try:
         last_value = -1
@@ -645,7 +641,7 @@ def _crop_to(
     tmp_path = out_path.with_suffix(".part.nc")
     if tmp_path.exists():
         tmp_path.unlink()
-    result_queue: mp.Queue = _SPAWN.Queue()
+    result_queue: mp.Queue = mp.Queue()
     _run_worker_with_watchdog(
         _crop_worker,
         (bbox_path, country_polygon_path, tmp_path, year_range),

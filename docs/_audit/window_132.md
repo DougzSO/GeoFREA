@@ -8,7 +8,7 @@ Written for: the author, to decide whether to merge. **The branch is not merged.
 |---|---|---|
 | 4a | one log line per layer of `data_acquisition`: resolve time, hash time, number of files. Not in the registry: a wall time there would change the content hash of `layer_registry` at every run | `data_acquisition/phase.py` |
 | 4b | F4: `_subset` takes a circular longitude range (a box across the 0/360 seam of a 0..360 file): both sides are kept and the axis is made continuous in -180..180 and ascending; `_to_file_lon` no longer raises "crosses the 0/360 seam". A range with `lo <= hi` goes through the same code as before. F1: `crop_to_country_polygon` reorders the cropped axis to -180..180 only when the longitudes of the kept columns, wrapped, are not ascending in the order of the file (a country across Greenwich); every other country is cropped exactly as before | `climate_forcing/forcing.py`, `data_acquisition/fetchers/cmip6.py` |
-| 4c | the DC note in the three `reference_project_mw` of `parameters.json` (OQ-079); OQ-073: `cf_table._grids` without `int(...)` and `cells.block_sum` with its names bound as default arguments, their `noqa` removed; OQ-078: `_SPAWN = mp.get_context("spawn")` for the `Value`, `Process` and `Queue` of `era5.py`, and the Linux skip of the test removed; dead code: `land_eligibility/pipeline.py::_pixel_raster` and the unused `indices_dir` of `group3_problems`; docstrings of `local_layers.py`, `hydrosheds.py` and `phase.py` no longer name tables that do not exist | `config/parameters.json`, `technical_potential/cf_table.py`, `land_eligibility/cells.py`, `land_eligibility/pipeline.py`, `lcoe_modeling/connection.py`, `data_acquisition/fetchers/era5.py`, docstrings |
+| 4c | the DC note in the three `reference_project_mw` of `parameters.json` (OQ-079); OQ-073: `cf_table._grids` without `int(...)` and `cells.block_sum` with its names bound as default arguments, their `noqa` removed; OQ-078: the `spawn` context of `era5.py` was tried and removed in COMMAND 133 (it rebuilds `era5_reduction`); dead code: `land_eligibility/pipeline.py::_pixel_raster` and the unused `indices_dir` of `group3_problems`; docstrings of `local_layers.py`, `hydrosheds.py` and `phase.py` no longer name tables that do not exist | `config/parameters.json`, `technical_potential/cf_table.py`, `land_eligibility/cells.py`, `land_eligibility/pipeline.py`, `lcoe_modeling/connection.py`, `data_acquisition/fetchers/era5.py`, docstrings |
 | 4d | ZZZ3, ZZZ3b, ZZZ3c as ZZA, ZZB, ZZC (section 4) | `config/countries.yaml`, `config/country_names.yaml`, `scripts/zzz3_world.py`, `tests/unit/test_zzz3_miniatures.py`, `data_acquisition/local_layers.py` (fixture names by country code) |
 
 **Not done, and why.** The `Self` return of `RasterStream.__enter__` (OQ-073, `core/raster_io.py`) was tried: it changes the function fingerprint of `aligned_layer.glo30` and `aligned_layer.fabdem_slope` (the layers that took 11,117 s and 4,177 s on BRA) and `aligned_layers`, and the closure of nine phases. It was reverted; one `noqa` stays. The dead-code candidates `draw_backdrop` and `draw_overlay` (`overview/style.py`) are imported by `results_synthesis/style.py`, and `_start_state`, `_posttask` and the `dsk`, `worker_id`, `exc_info` arguments are the signatures the dask callbacks and `__exit__` require: vulture reports them and they stay. No change touches `core/geo_utils`, `core/tables` or `core/paths`.
@@ -19,7 +19,7 @@ Written for: the author, to decide whether to merge. **The branch is not merged.
 
 | phase | ran on real data | moves because of |
 |---|---|---|
-| data_acquisition | yes | `phase.py` (log), `local_layers.py`, `era5.py` (spawn), `cmip6.py` (crop) |
+| data_acquisition | yes | `phase.py` (log), `local_layers.py`, `cmip6.py` (crop); `era5.py` (spawn) was removed in COMMAND 133 |
 | climate_forcing | yes | `forcing.py` (4b) |
 | hazard_context | yes | `forcing.py` (through F4) |
 | climate_maps | yes | `forcing.py` |
@@ -32,7 +32,7 @@ Written for: the author, to decide whether to merge. **The branch is not merged.
 
 Unchanged: `data_quality_audit`, `external_inputs`, `grid_alignment`, `siting_layers`, `overview`, `results_synthesis`.
 
-**Caches:** `cf_table` (cheap) and `era5_reduction` (spawn change in `era5.py`: the ERA5 reduction is rebuilt) change. Unchanged: `clip`, `dem30_extremes`, `gadm_mainland`, `gwa_mask_mosaic`, `land_cover_tiles`, `raster_audit`, `subpixel_shares`, **and the 13 function fingerprints, so no aligned layer is rebuilt** (`aligned_layer.glo30` and `fabdem_slope` included).
+**Caches:** `cf_table` (cheap) changes; `era5_reduction` does not (the spawn change was removed in COMMAND 133, see OQ-078). Unchanged: `clip`, `dem30_extremes`, `gadm_mainland`, `gwa_mask_mosaic`, `land_cover_tiles`, `raster_audit`, `subpixel_shares`, **and the 13 function fingerprints, so no aligned layer is rebuilt** (`aligned_layer.glo30` and `fabdem_slope` included).
 
 **Configuration fingerprints** (the DC note in `parameters.json`; the whole country block of the parameters is read by these phases), in PRT, IND and BRA: `land_eligibility`, `technical_potential`, `lcoe_modeling`, `robustness_analysis`, `sample_size_convergence`, `results_synthesis`. The window list of COMMAND 131 said "land_eligibility and F6"; the measurement says six phases. Of them `land_eligibility` and `technical_potential` have run on real data; the other four (`lcoe_modeling`, `robustness_analysis`, `sample_size_convergence`, `results_synthesis`) have not.
 
@@ -65,11 +65,11 @@ The three codes are ZZA (ZZZ3), ZZB (ZZZ3b) and ZZC (ZZZ3c): `core/country_guard
 | ZZB | F1 crop of a polygon across Greenwich in a 0..360 file: axis `-1, 0, 1`, no NaN, values equal the formula | pass |
 | ZZA/F1 | F1 crop of a polygon that does not cross the seam: axis `315, 316`, still 0..360 | pass (unchanged behaviour) |
 | ZZA/F4 | a box that does not cross the seam is subset with the file's own values, ascending, no shift | pass |
-| ZZC, 65 N | pixel area at 65.195 N: hand value 0.522148688 km2 (1.1125 km by 0.4693 km); the Bowring series of the code is within 1e-6 of the exact ellipsoid (0.5221482 against 0.5221487); row 19 at 65.005: 0.5258744 | pass at 5e-6 |
+| ZZC, 65 N | pixel area at 65.195 N: hand value 0.522148688 km2 (1.1125 km by 0.4693 km); the Bowring series of the code is within 1e-6 of the exact ellipsoid (0.5221482 against 0.5221487); row 19 at 65.005: 0.5258744 | pass at 2e-6 |
 | ZZC | the cell (5 x 5 pixels): 13.0635 km2 and the exact authalic band area 13.0635 km2 within 1e-6 | pass |
 | antimeridian | a polygon drawn past 180, one cut at the seam and one drawn the long way round are refused by `refuse_antimeridian_countries` with the country named; the three miniatures are not | pass |
 
-The code of the pixel area has a relative error of about 9e-7 against the exact ellipsoid (the truncated series of `wgs84_km_per_degree`); the tests pin it at 5e-6. That is a finding of the miniature, not a change.
+The code of the pixel area has a relative error of about 9e-7 against the exact ellipsoid (the truncated series of `wgs84_km_per_degree`); the tests pin it at 2e-6. That is a finding of the miniature, not a change.
 
 ## 5. The suite and the CI
 
