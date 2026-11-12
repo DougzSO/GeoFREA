@@ -47,7 +47,7 @@ def test_a_parquet_rewritten_with_other_metadata_has_other_bytes_and_the_same_co
     _write_parquet(b, _frame(), "run-2 at another time", compression="zstd")
     assert a.read_bytes() != b.read_bytes()
     assert content_hash(a) == content_hash(b)
-    assert content_hash(a).startswith("parquet:")
+    assert content_hash(a).startswith("parquet2:")
 
 
 def test_a_parquet_with_one_value_or_one_type_changed_has_another_content_hash(tmp_path):
@@ -252,3 +252,80 @@ def test_an_entry_of_an_older_manifest_without_a_content_hash_is_compared_by_byt
         _specs(outputs, calls, counter, [1, 2, 3])
     )
     assert calls == ["land_eligibility"]  # now the content hash is recorded
+
+
+# -- COMMAND 131, OQ-084: `parquet2:` hashes the logical type; `parquet:` is kept for the hashes already recorded -------------------------
+
+
+def _write_table(path: Path, table: pa.Table) -> None:
+    pq.write_table(table, path)
+
+
+def _string_table(kind) -> pa.Table:
+    return pa.table({"id": pa.array([1, 2, 3], pa.int64()), "name": pa.array(["a", "b", None], kind)})
+
+
+def test_the_same_data_written_as_large_string_or_string_has_one_parquet2_hash_and_two_parquet_hashes(tmp_path):
+    from geofrea.core.content_hash import content_hash_like
+
+    narrow, wide = tmp_path / "narrow.parquet", tmp_path / "wide.parquet"
+    _write_table(narrow, _string_table(pa.string()))
+    _write_table(wide, _string_table(pa.large_string()))
+    assert content_hash(narrow).startswith("parquet2:") and content_hash(narrow) == content_hash(wide)
+    legacy_narrow, legacy_wide = content_hash(narrow, "parquet"), content_hash(wide, "parquet")
+    assert legacy_narrow.startswith("parquet:") and legacy_narrow != legacy_wide  # the defect of OQ-084, kept for the recorded values
+    assert content_hash_like(wide, legacy_narrow) == legacy_wide and content_hash_like(wide, content_hash(narrow)) == content_hash(wide)
+
+
+def test_large_binary_and_large_list_are_logical_too_and_another_value_still_changes_the_hash(tmp_path):
+    a, b, c = (tmp_path / n for n in ("a.parquet", "b.parquet", "c.parquet"))
+    _write_table(a, pa.table({"x": pa.array([[1, 2], [3]], pa.list_(pa.int64())), "y": pa.array([b"p", b"q"], pa.binary())}))
+    _write_table(b, pa.table({"x": pa.array([[1, 2], [3]], pa.large_list(pa.int64())), "y": pa.array([b"p", b"q"], pa.large_binary())}))
+    _write_table(c, pa.table({"x": pa.array([[1, 2], [4]], pa.large_list(pa.int64())), "y": pa.array([b"p", b"q"], pa.large_binary())}))
+    assert content_hash(a) == content_hash(b) and content_hash(a) != content_hash(c)
+
+
+def test_a_nested_large_string_is_logical_and_a_different_type_is_not_confused(tmp_path):
+    a, b, c = (tmp_path / n for n in ("a.parquet", "b.parquet", "c.parquet"))
+    _write_table(a, pa.table({"s": pa.array([{"k": "v"}], pa.struct([("k", pa.string())]))}))
+    _write_table(b, pa.table({"s": pa.array([{"k": "v"}], pa.struct([("k", pa.large_string())]))}))
+    _write_table(c, pa.table({"s": pa.array([{"k": 1}], pa.struct([("k", pa.int64())]))}))
+    assert content_hash(a) == content_hash(b) and content_hash(a) != content_hash(c)
+
+
+def test_without_a_wide_type_the_two_parquet_kinds_have_the_same_digest(tmp_path):
+    path = tmp_path / "plain.parquet"
+    _write_table(path, pa.table({"i": pa.array([1, 2], pa.int32()), "f": pa.array([0.5, 1.5], pa.float64())}))
+    assert content_hash(path).split(":")[1] == content_hash(path, "parquet").split(":")[1]
+
+
+def test_a_recorded_hash_of_another_kind_is_not_asked_of_a_file_that_is_not_that_kind(tmp_path):
+    from geofrea.core.content_hash import content_hash_like, kind_of
+
+    j = tmp_path / "d.json"
+    j.write_text('{"a": 1}', encoding="utf-8")
+    assert content_hash_like(j, "parquet:abc") == content_hash(j)  # a JSON file is hashed as JSON whatever the recorded kind
+    assert kind_of("parquet:abc") == "parquet" and kind_of("parquet2:abc") == "parquet2" and kind_of("deadbeef") == "bytes"
+
+
+def test_the_orchestrator_keeps_the_kind_of_a_recorded_artifact_and_gives_a_new_one_the_current_kind(tmp_path):
+    from tests.unit.test_orchestrator import _make_spec, _orchestrator
+
+    log: list[str] = []
+    first = _orchestrator(tmp_path, ["p"])
+    spec = _make_spec("p", log, produces=frozenset({"k"}))
+    first.run([spec])
+    path = first.manifest.artifacts["k"].path  # a .txt: the kind is `bytes`, so use a parquet registered by hand below
+    assert path is not None
+    table_path = tmp_path / "t.parquet"
+    _write_table(table_path, _string_table(pa.large_string()))
+    new = first._hash_with_reuse("t", table_path)[3]
+    assert new.startswith("parquet2:")
+    from geofrea.core.orchestrator import ArtifactEntry
+    from geofrea.core.paths import to_stored_path
+
+    legacy = content_hash(table_path, "parquet")
+    first.manifest.artifacts["t"] = ArtifactEntry(
+        key="t", path=to_stored_path(table_path), sha256="0", size_bytes=0, mtime_ns=0, content_sha256=legacy, schema_version="1.0", phase="p", run_id="r"
+    )
+    assert first._hash_with_reuse("t", table_path)[3] == legacy  # the recorded kind is kept, so the comparison with the old entry is like with like

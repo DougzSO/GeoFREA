@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
-from geofrea.core.content_hash import content_hash
+from geofrea.core.content_hash import content_hash_like
 from geofrea.core.paths import data_root
 
 
@@ -45,7 +45,7 @@ def check_country(iso: str, data_dir: Path, by_bytes: bool) -> dict:
             continue
         expected = entry.get("content_sha256")
         if expected:
-            if content_hash(path) != expected:
+            if content_hash_like(path, expected) != expected:
                 problems.append({"key": key, "path": where["rel"], "problem": "content hash differs"})
         elif _bytes_sha(path) != entry.get("sha256"):
             problems.append({"key": key, "path": where["rel"], "problem": "byte hash differs (no content hash registered)"})

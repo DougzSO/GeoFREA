@@ -85,5 +85,131 @@
     "peak_rss_mb": 1481,
     "source": "measured",
     "detail": "phase land_eligibility of BRA in the round of 2026-11-09 (exact geodesic distances), 601 s, manifest peak_rss_mb of the phase (the unattended-runner kind of measure, as f3_phase_fabdem_round). 55 MB under the 1,536 MB cap and above the 1,438 MB of f3_phase (COMMAND 91): the margin is thin"
+  },
+  "phase_caps": {
+    "note": "Cap per phase of the pipeline (COMMAND 131, core/memory_cap.py): cap_mb = ceil(1.25 x the peak measured on BRA, the largest country) rounded up to a multiple of 64 MB; a phase may go up to 25% above it while the free memory covers the excess plus over_cap_reserve_mb (the excess is written to the manifest as peak_over_cap); the hard limit is cap_mb x 1.25. A phase with no entry here has `cap_mb` of the file (1,536 MB). peak_rss_mb is the larger of the manifest's `peak_rss_mb` and `cold_peak_rss_mb` of the phase in outputs/BRA/manifest.json on measured_on; the peaks of technical_potential and potential_maps are those of COMMAND 129 (BRA 1,579 and 1,676, IND 1,018 and 1,207, PRT 338 and 657). The phases of F6 to F8 and the support phases were never run on real data and have the default.",
+    "over_cap_reserve_mb": 300,
+    "phases": {
+      "data_acquisition": {
+        "peak_rss_mb": 782,
+        "country": "BRA",
+        "measured_on": "2026-11-06",
+        "cap_mb": 1024,
+        "other_countries_mb": {
+          "IND": 1004,
+          "PRT": 322
+        }
+      },
+      "data_quality_audit": {
+        "peak_rss_mb": 1152,
+        "country": "BRA",
+        "measured_on": "2026-11-06",
+        "cap_mb": 1472,
+        "other_countries_mb": {
+          "IND": 1186,
+          "PRT": 535
+        }
+      },
+      "grid_alignment": {
+        "peak_rss_mb": 437,
+        "country": "BRA",
+        "measured_on": "2026-11-09",
+        "cap_mb": 576,
+        "other_countries_mb": {
+          "IND": 360,
+          "PRT": 283
+        }
+      },
+      "climate_forcing": {
+        "peak_rss_mb": 565,
+        "country": "BRA",
+        "measured_on": "2026-11-07",
+        "cap_mb": 768,
+        "other_countries_mb": {
+          "IND": 514,
+          "PRT": 281
+        }
+      },
+      "climate_maps": {
+        "peak_rss_mb": 2333,
+        "country": "BRA",
+        "measured_on": "2026-11-07",
+        "cap_mb": 2944,
+        "other_countries_mb": {
+          "IND": 1513,
+          "PRT": 645
+        }
+      },
+      "hazard_context": {
+        "peak_rss_mb": 2798,
+        "country": "BRA",
+        "measured_on": "2026-11-06",
+        "cap_mb": 3520,
+        "other_countries_mb": {
+          "IND": 2003,
+          "PRT": 931
+        }
+      },
+      "siting_layers": {
+        "peak_rss_mb": 888,
+        "country": "BRA",
+        "measured_on": "2026-11-07",
+        "cap_mb": 1152,
+        "other_countries_mb": {
+          "IND": 275,
+          "PRT": 274
+        }
+      },
+      "external_inputs": {
+        "peak_rss_mb": 303,
+        "country": "BRA",
+        "measured_on": "2026-11-06",
+        "cap_mb": 384,
+        "other_countries_mb": {
+          "IND": 311,
+          "PRT": 275
+        }
+      },
+      "overview": {
+        "peak_rss_mb": 2041,
+        "country": "BRA",
+        "measured_on": "2026-11-07",
+        "cap_mb": 2560,
+        "other_countries_mb": {
+          "IND": 1568,
+          "PRT": 743
+        }
+      },
+      "land_eligibility": {
+        "peak_rss_mb": 1481,
+        "country": "BRA",
+        "measured_on": "2026-11-09",
+        "cap_mb": 1856,
+        "other_countries_mb": {
+          "IND": 864,
+          "PRT": 562
+        }
+      },
+      "technical_potential": {
+        "peak_rss_mb": 1579,
+        "country": "BRA",
+        "measured_on": "2026-11-10",
+        "cap_mb": 1984,
+        "other_countries_mb": {
+          "IND": 1018,
+          "PRT": 338
+        }
+      },
+      "potential_maps": {
+        "peak_rss_mb": 1676,
+        "country": "BRA",
+        "measured_on": "2026-11-10",
+        "cap_mb": 2112,
+        "other_countries_mb": {
+          "IND": 1207,
+          "PRT": 665
+        }
+      }
+    }
   }
 }

@@ -29,7 +29,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from geofrea.core.cache_key import KEY_SUFFIX, file_sha256
-from geofrea.core.content_hash import content_hash
+from geofrea.core.content_hash import content_hash_like
 
 OK = "ok"
 PROBLEM_STATUSES = frozenset(
@@ -242,7 +242,7 @@ def _check_file(
     if sha256 is not None and file_sha256(path) != sha256:
         return found("hash_mismatch", "the SHA-256 of the bytes is not the recorded one")
     if content_sha256 is not None:
-        actual = content_hash(path)
+        actual = content_hash_like(path, content_sha256)
         if actual != content_sha256:
             return found(
                 "content_mismatch",

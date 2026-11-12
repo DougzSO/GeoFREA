@@ -38,7 +38,8 @@ from typing import Any, Generic, Literal, TypeVar
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from geofrea.core.atomic_io import replace_durable
-from geofrea.core.content_hash import content_hash
+from geofrea.core.content_hash import content_hash, content_hash_like
+from geofrea.core.memory_cap import phase_cap
 from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.peak_memory import PhasePeak
 from geofrea.core.scale import manifest_file_name
@@ -52,7 +53,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.10"
+_MANIFEST_SCHEMA_VERSION = "2.11"
+# 2.11 (COMMAND 131, A-02, OQ-068, L-067): every PhaseManifestEntry also records `memory_cap_mb`, the cap the phase ran under, and `peak_over_cap`,
+# the excess of its peak over that cap in MB (None when the peak is within it): the cap is per phase (`core.memory_cap`, `config/memory_budget.json`
+# `phase_caps`) and a phase may go up to 25 % above it while the free memory covers the excess and a reserve. Entries written before 2.11 have
+# neither (None). Both are outside every fingerprint.
 # 2.10 (COMMAND 128, A-02, OQ-084): every PhaseManifestEntry written from now on records `environment`: the versions of Python, pyarrow, pandas,
 # numpy, geopandas, rasterio and pyproj the process ran under (`runtime_environment`). It is outside every fingerprint: it never makes a phase run
 # again, it only says under which libraries the files of the entry were written. Entries written before 2.10 have an empty mapping.
@@ -86,7 +91,7 @@ _MANIFEST_SCHEMA_VERSION = "2.10"
 # schema_version is a Literal["2.3"]) rather than running a migration
 # step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -289,6 +294,8 @@ class PhaseResult(BaseModel, Generic[T]):
         wall_s: Wall-clock seconds of the execution (None for a phase that was resumed or not attempted).
         cpu_s: CPU seconds of the process during the execution (None as `wall_s`).
         peak_rss_mb: Peak resident memory of the process during the execution, MB (None as `wall_s`; `core.peak_memory`).
+        memory_cap_mb: The memory cap the phase ran under, MB (`core.memory_cap`); None when no cap was applied (the run was not started by `main.py`).
+        peak_over_cap: Excess of `peak_rss_mb` over `memory_cap_mb`, MB; None when the peak is within the cap.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -302,6 +309,8 @@ class PhaseResult(BaseModel, Generic[T]):
     wall_s: float | None = None
     cpu_s: float | None = None
     peak_rss_mb: float | None = None
+    memory_cap_mb: float | None = None
+    peak_over_cap: float | None = None
 
 
 class ConfigRebaselineExecution(BaseModel):
@@ -394,6 +403,8 @@ class PhaseManifestEntry(BaseModel):
     config_fingerprint: str | None = None
     code_fingerprint: str | None = None
     peak_rss_mb: float | None = None
+    memory_cap_mb: float | None = None
+    peak_over_cap: float | None = None
     cold_wall_s: float | None = None
     cold_cpu_s: float | None = None
     cold_peak_rss_mb: float | None = None
@@ -498,7 +509,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.10"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.11"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -768,6 +779,7 @@ class Orchestrator:
     revalidate_phases: Sequence[str] = ()
     deferred_check: Any = None
     reference_store: Any = None
+    memory_caps: bool = False
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
@@ -915,7 +927,10 @@ class Orchestrator:
             and existing.content_sha256 is not None
         ):
             return existing.sha256, size_bytes, mtime_ns, existing.content_sha256
-        return _sha256_file(path), size_bytes, mtime_ns, content_hash(path)
+        # an artifact that already has a hash keeps its kind (`parquet:` stays `parquet:`), so the comparison of the old and the new registration
+        # (`_same_content`) is between hashes of one kind; a new artifact gets the current kind (`parquet2:`)
+        recorded = existing.content_sha256 if existing is not None else None
+        return _sha256_file(path), size_bytes, mtime_ns, content_hash_like(path, recorded) if recorded else content_hash(path)
 
     def _check_resume_is_not_stale(self, spec: PhaseSpec) -> None:
         """Raise StaleManifestEntryError if spec's recorded entry no longer fits spec.
@@ -1251,7 +1266,8 @@ class Orchestrator:
             started_at = _now_iso()
             start_monotonic = time.monotonic()
             start_cpu = time.process_time()
-            peak = PhasePeak()
+            cap = phase_cap(spec.name) if self.memory_caps else None
+            peak = PhasePeak(cap=cap)
 
             try:
                 with peak:
@@ -1346,6 +1362,8 @@ class Orchestrator:
                     wall_s=time.monotonic() - start_monotonic,
                     cpu_s=time.process_time() - start_cpu,
                     peak_rss_mb=peak.peak_rss_mb,
+                    memory_cap_mb=cap.cap_mb if cap else None,
+                    peak_over_cap=peak.peak_over_cap_mb,
                 )
                 results[spec.name] = result
                 self.manifest.phases[spec.name] = PhaseManifestEntry(
@@ -1388,6 +1406,8 @@ class Orchestrator:
                 wall_s=time.monotonic() - start_monotonic,
                 cpu_s=time.process_time() - start_cpu,
                 peak_rss_mb=peak.peak_rss_mb,
+                memory_cap_mb=cap.cap_mb if cap else None,
+                peak_over_cap=peak.peak_over_cap_mb,
             )
             results[spec.name] = result
             consumed_run_ids = {
@@ -1409,6 +1429,8 @@ class Orchestrator:
                 wall_s=result.wall_s,
                 cpu_s=result.cpu_s,
                 peak_rss_mb=result.peak_rss_mb,
+                memory_cap_mb=result.memory_cap_mb,
+                peak_over_cap=result.peak_over_cap,
                 config_fingerprint=spec.config_fingerprint,
                 code_fingerprint=spec.code_fingerprint,
                 **cold,

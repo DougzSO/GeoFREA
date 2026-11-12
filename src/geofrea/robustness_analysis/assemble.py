@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -20,7 +19,7 @@ from geofrea.robustness_analysis.h5_climate_pressure import H5Variant
 from geofrea.robustness_analysis.hypotheses import Statistic
 from geofrea.robustness_analysis.prim import PrimResult, PrimStep
 from geofrea.robustness_analysis.rankings import (
-    TopK,
+    Rankings,
     capacity_target_set,
     order_by,
     ranks_from_order,
@@ -28,34 +27,6 @@ from geofrea.robustness_analysis.rankings import (
     top_k_size,
 )
 from geofrea.robustness_analysis.scenario_discovery import Discovery, restricted_descriptors
-
-
-@dataclass(frozen=True)
-class Rankings:
-    """The orderings and top-k sets over the F7 set; `None` where the decision parameter that needs them is null."""
-
-    k: int | None
-    nominal_order: np.ndarray
-    robust_order: np.ndarray
-    climate_order: np.ndarray
-    techno_order: np.ndarray
-    nominal_rank: np.ndarray
-    robust_rank: np.ndarray
-    climate_rank: np.ndarray
-    techno_rank: np.ndarray
-    top_nominal: TopK | None
-    top_robust: TopK | None
-    top_climate: TopK | None
-    top_techno: TopK | None
-    capacity_mask: np.ndarray | None
-    target_reached: bool | None
-
-    @property
-    def top_k_truncated(self) -> bool:
-        return any(
-            t is not None and t.truncated
-            for t in (self.top_robust, self.top_climate, self.top_techno)
-        )
 
 
 def compute_rankings(cell_set: CellSet, evaluation: Evaluation, decision: TechDecision) -> Rankings:

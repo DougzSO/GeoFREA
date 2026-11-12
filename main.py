@@ -1507,6 +1507,7 @@ def _run_geofrea(
         revalidate_phases=revalidate_phases or [],
         deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
         reference_store=reference_store_for(DEFERRED_CHECKS_YAML, data_root()),
+        memory_caps=True,  # the caps of config/memory_budget.json apply to a run of the pipeline, not to the tests (COMMAND 131)
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)

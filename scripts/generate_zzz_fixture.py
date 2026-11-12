@@ -15,8 +15,8 @@ The climate inputs F4 reads (D13b) are written by `zzz_climate_fixture.py` under
 `core.paths.fetched_raw` looks); set ZZZ_CLIMATE=0 to skip them, and use a scratch GEOFREA_DATA_DIR for them (a real
 registry is never overwritten).
 
-Run once, from the repository root, with GEOFREA_DATA_DIR set:
-    python generate_zzz_fixture.py
+Run once, from the repository root, with GEOFREA_DATA_DIR set in the environment or in the repository `.env` (the script reads it as `main.py` does):
+    python scripts/generate_zzz_fixture.py
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
+from dotenv import load_dotenv
 from rasterio.transform import from_origin
 from shapely.geometry import LineString, Point, box
 from zzz_climate_fixture import write_climate_fixture
@@ -43,6 +44,7 @@ N_ROWS = round((NORTH - SOUTH) / PIXEL_DEG)  # 20
 N_CELLS_X = round((EAST - WEST) / DECISION_CELL_DEG)  # 6
 N_CELLS_Y = round((NORTH - SOUTH) / DECISION_CELL_DEG)  # 4
 
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)  # as main.py: the data directory may be in the repository .env (COMMAND 131)
 FIXTURE_ROOT = Path(os.environ["GEOFREA_DATA_DIR"]) / "fixtures" / "synthetic_zzz"
 RAW = FIXTURE_ROOT / "raw"
 

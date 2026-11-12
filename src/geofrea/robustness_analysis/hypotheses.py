@@ -14,7 +14,6 @@ import logging
 import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy.stats import kendalltau
@@ -31,10 +30,7 @@ from geofrea.robustness_analysis.h3_robust_vs_nominal import (
 )
 from geofrea.robustness_analysis.h4_axis_dominance import H4Variant
 from geofrea.robustness_analysis.h5_climate_pressure import TESTED, H5Variant
-from geofrea.robustness_analysis.rankings import jaccard_masks
-
-if TYPE_CHECKING:
-    from geofrea.robustness_analysis.assemble import Rankings
+from geofrea.robustness_analysis.rankings import Rankings, jaccard_masks
 
 logger = logging.getLogger("geofrea.robustness_analysis.hypotheses")
 
