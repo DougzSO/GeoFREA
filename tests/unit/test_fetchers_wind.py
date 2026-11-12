@@ -320,3 +320,25 @@ def test_the_registry_handlers_complete_every_wind_layer_to_the_mask(monkeypatch
         ("wind_speed", 100, Path("own_wind")),
         ("weibull_k", 150, Path("own_weibull_k_150")),
     ]
+
+
+@pytest.mark.unit
+def test_strip_mask_memo_returns_the_array_the_rasteriser_gives_and_is_bounded():
+    import rasterio
+    from rasterio.features import geometry_mask
+    from shapely.geometry import Polygon
+
+    from geofrea.data_acquisition.fetchers import wind
+
+    geoms = [Polygon([(0.2, 0.3), (7.9, 0.1), (6.5, 5.7), (1.1, 4.4)])]
+    tf = rasterio.Affine(0.25, 0, 0.0, 0, -0.25, 8.0)
+    shape = (33, 33)
+    want = geometry_mask(geoms, out_shape=shape, transform=tf, invert=True, all_touched=True)
+    wind._STRIP_MASK_MEMO.clear()
+    first = wind._strip_mask(("m", "EPSG:4326"), geoms, shape, tf)
+    again = wind._strip_mask(("m", "EPSG:4326"), geoms, shape, tf)  # a hit: unpacked from the bits
+    assert np.array_equal(first, want) and np.array_equal(again, want) and again.dtype == bool
+    assert len(wind._STRIP_MASK_MEMO) == 1
+    wind._strip_mask(("other", "EPSG:4326"), geoms, shape, tf)  # another mask empties the memory
+    assert [k[0] for k in wind._STRIP_MASK_MEMO] == ["other"]
+    wind._STRIP_MASK_MEMO.clear()
