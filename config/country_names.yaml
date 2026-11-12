@@ -9,6 +9,7 @@ en:
   CHE: "Switzerland"
   IDN: "Indonesia"
   LUX: "Luxembourg"
+  ZZZ: "Synthetic country ZZZ"
 pt:
   BRA: "Brasil"
   PRT: "Portugal"
@@ -17,3 +18,4 @@ pt:
   CHE: "Suíça"
   IDN: "Indonésia"
   LUX: "Luxemburgo"
+  ZZZ: "País sintético ZZZ"
