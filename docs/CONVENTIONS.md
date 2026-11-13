@@ -4,7 +4,7 @@ Coding conventions for this repository. Scientific method and architecture requi
 
 ## Language
 
-US English for code, identifiers, comments, docstrings, documentation, and commit messages.
+US English for code, identifiers, comments, docstrings, `docs/METHODOLOGY.md`, `docs/CONVENTIONS.md`, `docs/LIMITATIONS.md`, `docs/OPEN_QUESTIONS.md`, the records of `docs/phases/`, and commit messages. Portuguese for `docs/DECISIONS.md` and for the reports of `docs/_audit/`.
 
 ## Phase and module names
 
@@ -44,12 +44,33 @@ The status of a phase, of a country run and of a milestone lives only in `docs/P
 
 - METHODOLOGY Section 12 holds milestones, content and gates, with no state column and no sentence about the state. A milestone is described by what it contains and what closes it.
 - Comments in `config/*.yaml` and docstrings in `src/` do not assert state: no "not built yet", "pending", "in progress" or a date of state. They say what a key or function does and which question (OQ) sets a value.
-- Phase records (`docs/phases/`) record decisions, their reasons and their tests, not the current status of the phase.
+- Phase records (`docs/phases/`) record implementation decisions (`D-*`), their reasons and their tests, not the current status of the phase. The place of each kind of record is in the table of the section Decision records.
 - `test_status_lives_only_in_progress` enforces this for METHODOLOGY Section 12 and the config files.
 
 ## Decision records
 
-A decision is recorded once, in the record of its phase (`docs/phases/<phase>.md`), as one bullet that starts `- **D-<phase>-<number> — Title (date, command).**`, or as a table row that starts `| D-<phase>-<number> |`. A later paragraph about the same decision is a continuation of that bullet or cites the ID without starting with it. IDs rise in the order of the file. `scripts/find_decision.py D-<phase>-<number>` prints the defining lines of an ID.
+Each kind of record has one place (DEC-069, decision of the author, 2026-11-13):
+
+| Type | Place | ID |
+|---|---|---|
+| Decision of the author | `docs/DECISIONS.md`, in Portuguese, append-only | `DEC-nnn`, the position of the heading in the file |
+| Rule of method | `docs/METHODOLOGY.md` | `M-<phase>-<nn>` and the other IDs of that document |
+| Implementation decision | `docs/phases/<phase>.md`, not copied to `docs/DECISIONS.md` | `D-<phase>-<number>` |
+| Open question | `docs/OPEN_QUESTIONS.md`; a resolved one leaves the table and a pointer stays | `OQ-nnn` |
+| Limitation | `docs/LIMITATIONS.md`, with its origin | `L-nnn` |
+| State | `docs/PROGRESS.json` | none |
+| Reports | `docs/_audit/` | none |
+
+Rules that go with the table (DEC-069):
+
+- A decision that supersedes another says so in a `Substitui:` field of the new entry; the superseded entry is not edited.
+- Active docs cite a symbol and a key, not a line number or a value.
+- New method logic enters with an `M-` item in the same change.
+- A new `L-` entry carries its origin (a phase, a rule or an OQ).
+- A resolved OQ leaves the table and a pointer stays.
+- An obsolete file goes to `docs/_archive` and is deleted only at the end, when everything is green.
+
+An implementation decision is recorded once, in the record of its phase (`docs/phases/<phase>.md`), as one bullet that starts `- **D-<phase>-<number> — Title (date, command).**`, or as a table row that starts `| D-<phase>-<number> |`. A later paragraph about the same decision is a continuation of that bullet or cites the ID without starting with it. IDs rise in the order of the file. `scripts/find_decision.py D-<phase>-<number>` prints the defining lines of an ID.
 
 ## Docstrings
 
@@ -71,7 +92,7 @@ def weibull_capacity_factor(A: np.ndarray, k: np.ndarray, curve: PowerCurve) -> 
     """
 ```
 
-Implementation decisions are cited as `See docs/phases/F5_technical_potential.md D-F5-003.`
+Implementation decisions are cited as `See docs/phases/F5_technical_potential.md D-F5-003.` A decision of the author is cited by its ID, as `See docs/DECISIONS.md DEC-069.`
 
 ## Parameters
 
@@ -172,17 +193,16 @@ def some_function(...) -> ...:
     """
 ```
 
-Filled example, approved F1-1 (2026-09-23) against a real CRAEI function — illustrates the header mechanics only, not a wind adaptation (CRAEI has no wind module to adapt; see `docs/phases/F1_data_acquisition.md`, M-F1-03 row):
+Model of the header (a model: the names in angle brackets are placeholders, not a real repository, path or commit):
 
 ```python
-# Adapted from CRAEI: https://github.com/<douglas-org>/craei
-# Commit: baae8816f65d3a0b3c2379461639e20a375b14d6  Original path: src/craei/acquire/auxiliary.py:57 (run_hydrobasins)
-# Adaptation: per-country download-loop and manifest-registration pattern adapted for
-# CMIP6/ERA5 fetch jobs; region/URL construction and payload handling are new.
-def run_hydrobasins(manifest: Manifest, raw_dir: Path) -> list[dict]:
-    """Download HydroBASINS level 6 zips per country region.
+# Adapted from <repo>: <url>
+# Commit: <sha>  Original path: <repo>/<path>:<line> (<function>)
+# Adaptation: <what was kept and what is new>
+def <function>(...) -> ...:
+    """<One-line summary>.
 
-    Implements: M-F1-04.
+    Implements: M-<item>.
     ...
     """
 ```
@@ -191,8 +211,8 @@ Every later adaptation follows this format: provenance comment above the `def`, 
 
 ## Tests
 
-- `pytest`, `ruff` clean before any commit proposal.
+- `pytest` and `ruff check` clean before any commit proposal. `ruff check` is the gate; `ruff format` is not enforced.
 - Test names state the property tested (`test_regret_is_non_negative`).
 - Tests that need external data (raw, legacy baseline, reference repositories) are marked and skipped when required env vars are unset; the synthetic country fixture covers CI.
 - Development loop (COMMAND 75): while developing, run only the tests the change can reach: `python scripts/affected_tests.py --run` selects the test files whose import closure (the one that fingerprints a phase's code) contains a changed module, plus the changed tests and the tests that name a changed non-Python file; `pytest --testmon` (pytest-testmon) is the alternative that learns the selection from coverage. Both can miss a test that reaches code through a string (a path, a registry).
-- The full suite is mandatory before every merge, and it is the only gate. pytest-xdist with 2 workers (`-n 2 --dist loadgroup`) was evaluated: 15% faster than one worker (22:47 against 26:41) with a process-tree peak of 3.04 GB (decimal), at the 3 GB limit of the machine; it is not the default.
+- The full suite is mandatory before every merge, and it is the only gate. CI runs it with pytest-xdist; the options are in `.github/workflows/unit.yml`.

@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "19.4.0",
-  "last_updated": "2026-11-12",
+  "methodology_version": "19.4.1",
+  "last_updated": "2026-11-13",
   "current_milestone": "MS-6",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -71,6 +71,9 @@
   "pending_verifications": [
     {
       "id": "PV-77",
+      "status": "closed",
+      "closed": "2026-11-13",
+      "closed_by": "DEC-068 in docs/DECISIONS.md (decision of the author: the content check of IND and BRA after COMMANDS 75 to 79 is concluded)",
       "what": "Content of F1 to F5 of IND and BRA after the performance work of COMMANDS 75 to 79: the artifacts have not yet been compared by hash with the state before the work.",
       "countries": [
         "IND",
