@@ -1,6 +1,6 @@
 # Provenance of the transmission-grid data (OQ-063)
 
-Written for Douglas, who completes the fields marked **[AUTHOR]**. Draft of COMMAND 58, completed in COMMAND 63 (2026-10-21). Nothing in the code uses
+Written for Douglas, who completes the fields marked **[AUTHOR]**. Draft of COMMAND 58, completed in COMMAND 63 (2026-10-21); the checksum was compared in COMMAND 138 (2026-11-12): **the local file is the file `grid.gpkg` of Zenodo 10.5281/zenodo.3628142 v1.1.1** (section 2). Nothing in the code uses
 `grid.gpkg`: F2b reads the per-country OSM extract (`raw/infrastructure_grid/<ISO3>/<ISO3>_grid_osm.geojson`, `resolve_grid_path`). **The source of
 the grid is not changed here.** Which source and which voltage level are the connection target is a decision of Group 3 (OQ-063, OQ-041).
 
@@ -10,6 +10,8 @@ the grid is not changed here.** Which source and which voltage level are the con
 |---|---|---|
 | Path | `D:\Douglas\DOUTORADO\database\raw\infrastructure\grid\grid.gpkg` | `GEOFREA_DATA_DIR/raw/infrastructure_grid/<ISO3>/` |
 | Size | 724,566,016 bytes (724.6 MB) | PRT 4.5 MB, IND 34.8 MB, BRA 38.5 MB |
+| Checksums (COMMAND 138, 2026-11-12) | MD5 `e5d0e9bd8ce4de851e65c6adae1af386`; SHA-256 `3401040224c402a0fb8fe56db83e0d249ae02d2af9df9dd853df34e86ce58639` | not computed |
+| Date of the file on disk | last modified 2026-03-05 11:42:26; created on this disk 2026-03-17 19:04:29 (local time of the machine; these are dates of the copy, not of the data) | see below |
 | Content | one layer `grid`, LineString, EPSG:4326, 3,678,243 lines, one field `source` | LineString (power lines) and Point (substations), OSM tags as properties (`power`, `voltage`, `operator`, ...) |
 | Source attribute | `source` = `gridfinder` (1,858,899 lines) or `openstreetmap` (1,819,344 lines) | OSM tags; every line has `power=line` and a `voltage` tag |
 | Date in the file | `gpkg_contents.last_change` = 2019-11-12T08:13:25Z; no version or origin attribute | none; the newest dated tags are `survey:date` 2025-05-10 and `check_date` 2024-12-08 (PRT), so the extract is from 2025-05 or later; the files were placed on 2026-10-14 (date of the copy) |
@@ -18,11 +20,12 @@ the grid is not changed here.** Which source and which voltage level are the con
 ## 2. Source, version, licence and citation
 
 ### `source = gridfinder` and the file as a whole
-- The file matches the file `grid.gpkg` of the dataset *Data from: Predictive mapping of the global power system using open data*: Zenodo record
-  10.5281/zenodo.3628142, **version 1.1.1, published 2020-01-16**, which lists `grid.gpkg` at 724.6 MB (the local file has 724,566,016 bytes) and describes it as
-  "vectorized predicted distribution and transmission line network, with existing OpenStreetMap lines tagged in the `source` column". The checksum was not
-  compared (the record page read on 2026-10-21 does not show one in the text that was retrieved): **[AUTHOR]** confirm the MD5 of the Zenodo file against the local one.
-- **Licence of the data:** Creative Commons Attribution 4.0 International (CC BY 4.0), as the Zenodo record states.
+- **Identified by hash (COMMAND 138, 2026-11-12).** The MD5 of the local file, `e5d0e9bd8ce4de851e65c6adae1af386`, equals the MD5 of the file `grid.gpkg` of the dataset
+  *Data from: Predictive mapping of the global power system using open data*: Zenodo record 10.5281/zenodo.3628142, **version 1.1.1, published 2020-01-16**, which lists
+  `grid.gpkg` at 724.6 MB (the local file has 724,566,016 bytes) and describes it as "vectorized predicted distribution and transmission line network, with existing
+  OpenStreetMap lines tagged in the `source` column". The MD5 of the record is the one the author supplied for the command; it was not read from the Zenodo page by the
+  assistant. **The origin of the download was not noted when the file was obtained; the source is identified by this hash, not by a record of the download.**
+- **Licence of the data:** Creative Commons Attribution 4.0 International (CC BY 4.0), as the Zenodo record states. **Version:** 1.1.1. **Published:** 2020-01-16.
 - **Citation:** Arderne, C., Zorn, C., Nicolas, C. & Koks, E. E. (2020). Predictive mapping of the global power system using open data. *Scientific Data* 7, 19.
   https://doi.org/10.1038/s41597-019-0347-4. Data: Arderne, C., Nicolas, C., Zorn, C. & Koks, E. E. (2020). Data from: Predictive mapping of the global power system
   using open data (v1.1.1). Zenodo. https://doi.org/10.5281/zenodo.3628142.
@@ -30,6 +33,9 @@ the grid is not changed here.** Which source and which voltage level are the con
   What the paper says about which voltage levels the prediction covers is not in the file; **[AUTHOR]** confirm from the paper (section "Methods") before it is quoted.
 
 ### `source = openstreetmap` in `grid.gpkg` and the per-country extracts
+- **The file carries OpenStreetMap rows** (column `source` = `openstreetmap`, 1,819,344 of the 3,678,243 lines), so the CC BY 4.0 of the dataset does not cover them alone: the
+  attribution "(c) OpenStreetMap contributors" and the ODbL terms below apply to anything derived from those rows. **Taken to the list of OQ-072** (what is published or
+  deposited), COMMAND 138.
 - OpenStreetMap lines: (c) OpenStreetMap contributors, **Open Database Licence (ODbL) 1.0**; attribution and share-alike apply to a database derived from them.
 - Date of the OSM data in `grid.gpkg`: not in the file; the dataset is of 2019-2020 (last change 2019-11-12, record of 2020-01-16).
 - Date of the per-country extracts: **[AUTHOR]** the date and the method (Overpass query, Geofabrik file) of the extraction. The newest tags in the PRT file are of 2025-05.
@@ -86,7 +92,8 @@ cap, M-F2a-03). `grid.gpkg` has 11,394 km there, 27% of it mapped. This is the n
 
 | Item | Who |
 |---|---|
-| MD5 of the local `grid.gpkg` against the Zenodo record 3628142 v1.1.1 | **[AUTHOR]** |
+| ~~MD5 of the local `grid.gpkg` against the Zenodo record 3628142 v1.1.1~~ done in COMMAND 138: equal | closed |
+| OpenStreetMap attribution and ODbL terms for anything published or deposited that derives from the OSM rows of `grid.gpkg` or from the per-country extracts | OQ-072 |
 | Method and date of the per-country OSM extracts; whether to refresh them | **[AUTHOR]** |
 | What the paper says about the voltage levels that gridfinder predicts, if it is quoted in the thesis | **[AUTHOR]** |
 | Whether the connection target uses the OSM extract, `grid.gpkg` or both, and the voltage level that counts as the target (OQ-041, OQ-063) | Group 3 |

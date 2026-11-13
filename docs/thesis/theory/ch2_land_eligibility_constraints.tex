@@ -81,11 +81,12 @@ equivalent: density depends on the resolution and allocation method of
 the population grid, and a dense pattern of rural households can exceed
 a threshold without forming a settlement. A uniform density threshold
 therefore excludes very different shares of land in countries with
-different settlement structures. In India, where productive rural
-districts commonly exceed 400 inhabitants/km$^2$, a threshold of
-250 inhabitants/km$^2$ removes most of the onshore wind potential
-\cite{mallya2024ceew}.
-% verify: share of wind potential retained under 250 inh/km2 in CEEW (2024); cited second-hand via SPRF (2025)
+different settlement structures. For India, a CEEW assessment on 5\,km pixels reports
+that only 29\,\% of the onshore wind potential and 27\,\% of the solar
+potential lie in areas below 250 inhabitants/km$^2$, so a threshold at
+that value would leave out the remaining 71 and 73\,\% of the potential
+estimated by that study \cite{mallya2024ceew}.
+% verify: figures read on the CEEW publication page (Sept 2024); confirm page and table in the report PDF
 The Degree of Urbanisation, adopted by
 the UN Statistical Commission and implemented globally in the GHS
 settlement model, avoids part of this problem by classifying grid cells
@@ -109,8 +110,13 @@ studies reports wind slope exclusions from about 7 to 30\,\%
 \cite{epg2024renewland}. Values reported in degrees and in
 percent must be converted before comparison: 15$^\circ$ corresponds to
 26.8\,\%, and 15\,\% to 8.5$^\circ$. Slope also depends on the
-resolution of the elevation model, so a threshold is tied to the data
-on which it was defined.
+resolution and kind of elevation model, so a threshold is tied to the
+data on which it was defined. Global 30~m models such as Copernicus
+GLO-30 are surface models that include vegetation and buildings; at that
+spacing, a height difference of 1~m between neighbouring pixels is a
+slope of 3.3\,\%, the order of the limits used for PV. FABDEM removes forests and
+buildings from GLO-30 with a machine-learning correction and gives a
+terrain model closer to the bare ground \cite{hawker2022fabdem}.
 
 Elevation affects wind power through air density, since the power in the
 wind is proportional to $\rho\,v^3$, and through logistics and cold

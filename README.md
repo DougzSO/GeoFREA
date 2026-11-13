@@ -44,6 +44,16 @@ ZZZ is a 30 x 20 pixel country built by hand so every result can be computed by 
 - `pytest tests/unit -m "not slow" -n 3` is what the CI unit job runs on every push (Python 3.11 and 3.12, with the constraints above). The synthetic worlds and the frozen V-01 regression have their own workflows.
 - The memory caps of the pipeline (`config/memory_budget.json`, `phase_caps`) bind `python main.py`, not the tests; `GEOFREA_MEMORY_CAPS=0` switches them off for a run.
 
+## The ERA5 hourly files
+
+The hourly `fg10` files (the per-year bbox files in `GeoFREA_data/raw/era5/_global`, and `BRA/BRA_fg10_hourly.nc`, `PRT/PRT_fg10_hourly.nc`; 63 files, 38.65 GB) are in `GeoFREA_data/raw/era5`, copied back from the archive of COMMAND 37 on 2026-11-12 (COMMAND 138). The archive keeps its own copy, with the SHA-256 of each file in `manifest.json`: `D:\Douglas\DOUTORADO\database\archive\geofrea_2026-10\raw\era5`. The pipeline does not read them (it reads the annual maxima `<ISO3>_fg10_annual_max.nc`); they are the input of `scripts/acquire_era5_gust.py` and of a rebuild of the cache `era5_reduction` (about 27 min of computing, no download). To check the hashes (read-only):
+
+```
+python scripts/verify_era5_hourly.py --archive D:\Douglas\DOUTORADO\database\archive\geofrea_2026-10
+```
+
+It compares every `year_sha256` and `reduced_sha256` of `era5_registry.json` and, with `--archive`, each file against the manifest (`GEOFREA_DATA_DIR` or `--data-root` gives the data directory); exit code 0 when all agree.
+
 ## Where things are
 
 - How the pipeline works, what each phase reads, writes and costs, and how to run it: [`docs/PIPELINE_GUIDE.md`](docs/PIPELINE_GUIDE.md) (living document).

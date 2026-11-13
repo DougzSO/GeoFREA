@@ -1,8 +1,8 @@
-"""The key of the cache `era5_reduction` is pinned (COMMAND 134, item 1; OQ-078, L-068).
+"""The key of the cache `era5_reduction` is pinned (COMMAND 134, item 1; OQ-078, L-068; message corrected in COMMAND 138).
 
-The year checkpoints and the annual-maximum products of ERA5 carry `cache_code("era5_reduction")`. The hourly year files they come from are no longer on disk
-for BRA, PRT and the first IND product, so a change of this key makes a rebuild of the reduction depend on a new download from the CDS (a queue of 0 to
-17 h per job, a request refused above two years of hourly fg10). This test fails when the key changes, so the change is made knowingly.
+The year checkpoints and the annual-maximum products of ERA5 carry `cache_code("era5_reduction")`. A change of this key makes a rebuild of the reduction worth doing: it
+is recomputed locally from the hourly year files (kept in `raw/era5`, copied back from the archive in COMMAND 138; no download), about 27 minutes of computing in all
+(estimate of COMMAND 133: BRA 12.5 min, IND 13 min, PRT 1.5 min). This test fails when the key changes, so the change is made knowingly. The pin stays.
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ def test_the_key_of_the_era5_reduction_cache_has_not_changed():
     now = cache_code("era5_reduction")
     assert now == PINNED_ERA5_REDUCTION, (
         "the key of the cache `era5_reduction` changed (the code of `data_acquisition.fetchers.era5` or of a module it imports): "
-        "rebuilding the reduction of the ERA5 gust needs the hourly year files, which are not on disk for BRA, PRT and the original IND, "
-        "so it means a RE-DOWNLOAD from the CDS (queue of 0 to 17 h per job, two years of hourly fg10 per request, days in all). "
+        "the reduction of the ERA5 gust would have to be rebuilt, which is a LOCAL recompute of about 27 min of computation "
+        "(estimate of COMMAND 133; the hourly year files are in `raw/era5`, see L-068 and the README), not a download. "
         "If the change is wanted, say so in OQ-078 / L-068, then update PINNED_ERA5_REDUCTION to the new key: "
         f"{now}"
     )
