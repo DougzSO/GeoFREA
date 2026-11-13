@@ -1,16 +1,23 @@
 # DECISIONS.md — GeoFREA
 
-Log de decisões arquiteturais e metodológicas do GeoFREA. Append-only: nunca editar ou apagar uma entrada existente — se uma decisão substituir outra, a antiga ganha `Status: Superseded by <data>`, não é removida.
+Log de decisões arquiteturais e metodológicas do GeoFREA. Append-only: nunca editar ou apagar uma entrada existente — se uma decisão substituir outra, a entrada nova diz em `Substitui:` qual (DEC-nnn e uma frase) e a antiga fica como foi escrita, sem ser editada nem removida.
 
 Template de entrada:
 
-## [data] - [nome do módulo]
+## [data] DEC-nnn - [nome do módulo]
 Tipo: STRUCTURAL_PRESERVE | METHODOLOGY_REVISION | VERIFICATION_UPDATE
 Descrição:
 Justificativa (se METHODOLOGY_REVISION):
 Referência (literatura/discussão, se aplicável):
+Fase: (fase afetada, ex.: F2a; opcional)
+Implementa: (D-... do registro de fase que aplica a decisão; opcional)
+Substitui: (DEC-nnn e uma frase sobre o que deixa de valer; opcional. A entrada substituída não é editada)
+
+ID: `DEC-nnn`, onde nnn é a posição do cabeçalho no arquivo (o primeiro cabeçalho de entrada é DEC-001), escrito no cabeçalho das entradas a partir de DEC-059. As entradas DEC-001 a DEC-058 têm o ID implícito pela posição e não foram alteradas. Os campos `Fase:`, `Implementa:` e `Substitui:` valem para as entradas novas.
 
 VERIFICATION_UPDATE — the decision itself is unchanged; only the confidence/verification status of a cited source or value is updated (e.g. a value moves from unverified to independently confirmed).
+
+STRUCTURAL_PRESERVE também cobre a decisão de estrutura dos registros (onde cada tipo de registro vive), como DEC-069.
 
 ---
 
@@ -1570,7 +1577,7 @@ Referência (literatura/discussão, se aplicável): docs/DECISIONS.md 2026-09-11
 
 (fim das decisões registradas até o momento)
 
-## [2026-11-13] - restauração do DECISIONS.md como arquivo vivo
+## [2026-11-13] DEC-059 - restauração do DECISIONS.md como arquivo vivo
 Tipo: STRUCTURAL_PRESERVE
 Descrição: Este arquivo foi restaurado de docs/_archive/2026-09/DECISIONS.md (git mv, 0 linhas alteradas) por decisão do autor em 13/11/2026 (COMANDO 144). O arquivo tinha sido movido para o arquivo morto no commit 2726333 (15/09/2026). As decisões D-F* posteriores a 15/09/2026 estão em docs/phases/*.md e seguem lá; este arquivo recebe, daqui em diante, as decisões do autor no formato abaixo.
 Justificativa (se METHODOLOGY_REVISION): n/a — restauração de arquivo, nenhuma decisão metodológica alterada.
@@ -1579,7 +1586,7 @@ Consequência no código ou na configuração (ainda não aplicada): nenhuma no 
 
 ---
 
-## [2026-11-13] - F7: τ ancorado no IRENA
+## [2026-11-13] DEC-060 - F7: τ ancorado no IRENA
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). O limiar de LCOE satisfatório τ (`tau_lcoe_usd_per_mwh`, M-F7-04) é ancorado no IRENA (D1, opção b). Precedência: país > região > global. Portugal usa a linha da Europa (Tier 2, declarado).
 Justificativa (se METHODOLOGY_REVISION): decisão do autor sobre a âncora de τ; para Portugal aplica-se uma transferência regional, por isso Tier 2 declarado.
@@ -1588,7 +1595,7 @@ Consequência no código ou na configuração (ainda não aplicada): `tau_lcoe_u
 
 ---
 
-## [2026-11-13] - F6/F7: parâmetros de decisão fora do LHS
+## [2026-11-13] DEC-061 - F6/F7: parâmetros de decisão fora do LHS
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). τ, CF_min, q_ref e p_k ficam fora do Latin hypercube e são varridos como sensibilidade. WACC, capex, O&M e clima ficam no LHS.
 Justificativa (se METHODOLOGY_REVISION): os parâmetros de decisão não são incertezas físicas ou econômicas do projeto; varrê-los à parte mantém o LHS sobre o que é incerto.
@@ -1597,7 +1604,7 @@ Consequência no código ou na configuração (ainda não aplicada): hoje `uncer
 
 ---
 
-## [2026-11-13] - valores monetários na configuração
+## [2026-11-13] DEC-062 - valores monetários na configuração
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). Os valores monetários entram na configuração já em USD de 2024 (o F6 exige `price_year` 2024, D-F6-008), com valor, moeda, ano e fonte nativos registrados na nota do parâmetro.
 Justificativa (se METHODOLOGY_REVISION): o F6 recusa custo cujo `price_year` seja nulo ou diferente de 2024; a nota do parâmetro preserva a rastreabilidade do valor original.
@@ -1606,7 +1613,7 @@ Consequência no código ou na configuração (ainda não aplicada): a conversã
 
 ---
 
-## [2026-11-13] - metas nacionais de H5
+## [2026-11-13] DEC-063 - metas nacionais de H5
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). Usar o horizonte mais distante disponível por país e tecnologia, sem extrapolar para 2041 a 2070. Só capacidade utility-scale.
 Justificativa (se METHODOLOGY_REVISION): decisão do autor; extrapolar o planejamento oficial além do seu horizonte criaria um valor sem fonte.
@@ -1615,7 +1622,7 @@ Consequência no código ou na configuração (ainda não aplicada): `national_t
 
 ---
 
-## [2026-11-13] - preços de leilão
+## [2026-11-13] DEC-064 - preços de leilão
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). Preços de leilão entram só como sensibilidade, convertidos com câmbio e deflator com fonte; não entram no τ primário.
 Justificativa (se METHODOLOGY_REVISION): decisão do autor.
@@ -1624,7 +1631,7 @@ Consequência no código ou na configuração (ainda não aplicada): nenhuma ide
 
 ---
 
-## [2026-11-13] - Group 5: exposição sem perda; canal de rajada
+## [2026-11-13] DEC-065 - Group 5: exposição sem perda; canal de rajada
 Tipo: METHODOLOGY_REVISION
 Descrição: FECHADA (autor, 13/11/2026). O F5 não pontua perdas climáticas: só exposição. O canal de rajada (`gust_mean_annual_max_ms`) é contexto, sem limiar. OQ-051 segue aberta.
 Justificativa (se METHODOLOGY_REVISION): decisão do autor; as limitações correspondentes estão em L-229 e L-232.
@@ -1633,11 +1640,68 @@ Consequência no código ou na configuração (ainda não aplicada): `hazard_thr
 
 ---
 
-## [2026-11-13] - fato registrado: curtailment e CF_min
+## [2026-11-13] DEC-066 - fato registrado: curtailment e CF_min
 Tipo: VERIFICATION_UPDATE
 Descrição: Fato, não decisão (registrado em 13/11/2026). O F6 não modela curtailment (L-033). O fator de capacidade do modelo é bruto; os valores de frota, que são líquidos, dão um piso permissivo para o CF_min.
 Justificativa (se METHODOLOGY_REVISION): n/a — registro de fato.
 Referência (literatura/discussão, se aplicável): docs/LIMITATIONS.md L-033 e L-226; docs/thesis/methods/grupo4.tex.
 Consequência no código ou na configuração (ainda não aplicada): nenhuma. `cf_min` está `null` em PRT, BRA e IND; a ponta primária da faixa está em OQ-090.
+
+---
+
+## [2026-11-13] DEC-067 - retificação do log: o que cada entrada antiga registrava e o que vale hoje
+Tipo: VERIFICATION_UPDATE
+Descrição: Retificação por entrada nova, sem editar as entradas antigas (que seguem como foram escritas). Cada linha diz o que a entrada registrava, o que vale hoje e a fonte; o texto "o que vale hoje" repete o que a fonte diz. O que não tem fonte está marcado "sem fonte, aguardando veredito do autor".
+
+| DEC | o que registrava | o que vale hoje | fonte |
+|---|---|---|---|
+| 001 | exclusão uniforme das categorias IUCN Ia, Ib e II | o nominal é `all_designated` (todo polígono WDPA, também os sem categoria IUCN); `ia_ib_ii` e `ia_ib` são níveis de sensibilidade | `config/experiments.yaml` (`land_availability`, chave `all_designated`); METHODOLOGY M-F2b-06 e M-F2b-01 (E1) |
+| 002 a 006 | parâmetros de biomassa (CAPEX, OPEX, vida útil, taxa de desconto) | biomassa está fora do escopo e `parameters.json` não tem a chave `biomass` | METHODOLOGY S-08 |
+| 008 | `run.phases`, um booleano por módulo | `run.target_phases` | METHODOLOGY A-03; `config/settings.yaml` (`run.target_phases`) |
+| 011 | `slope_threshold_deg` por tecnologia e país em `parameters.json` | a declividade máxima está em `land_availability`/`slope_max_pct` de `experiments.yaml`, faixa comum a todos os países; a chave não existe em `parameters.json` | METHODOLOGY M-F2b-01 e M-F2b-06; `config/experiments.yaml` (`slope_max_pct`); docstring do schema de `land_availability` em `core/schemas.py` |
+| 013 | onde `protected` entra no GeoFREA, pendente até a fase de critérios ser desenhada | `protected` entra no F3 como o termo E1 (áreas WDPA, toda designação no caso central) | METHODOLOGY M-F2b-01 (E1); `docs/phases/F3_land_eligibility.md` D-F3-020 |
+| 030 | `grid.gpkg` como possível fonte mais completa que `{ISO3}_grid_osm.geojson`; troca não aplicada | o código lê o extrato por país, `{ISO3}_grid_osm.geojson` (`resolve_grid_path`); se a troca por `grid.gpkg` foi decidida: sem fonte, aguardando veredito do autor | `src/geofrea/data_acquisition/local_layers.py` (`resolve_grid_path`); `docs/data/grid_provenance.md` |
+| 034 item 4 | manter a matriz AHP da combinação de alturas de vento | a combinação AHP foi removida; o vento é alinhado por altura | `docs/phases/F2a_grid_alignment.md` D-F2a-005 (G-2, 2026-10-06); METHODOLOGY M-F2a-04 |
+| 054 | rivers/roads de BRA 1,8x mais lentos em produção, causa não confirmada | fechamento da investigação: sem fonte, aguardando veredito do autor (nenhum D-F2a nem arquivo de `docs/_audit` a fecha; `docs/phases/F1_data_acquisition.md` ainda diz "root cause unconfirmed") | `docs/phases/F1_data_acquisition.md` (Known issues) |
+| 055 | baseline de fixtures de 380 MB num GitHub Release, com o CI falhando sem ele | o baseline foi aposentado em 2026-10-06; não há download externo; V-01 foi recongelado no país sintético ZZZ | `docs/phases/F2a_grid_alignment.md` D-F2a-010 (G-4); `.github/workflows/regression.yml` |
+| 062 | valores monetários entram na configuração "já em USD de 2024" | valores em USD entram em USD de 2024 (D-F6-008 exige `price_year` 2024 em `capex_usd_per_kw` e `opex_var_usd_per_mwh`); custos de conexão em outra moeda ficam na moeda e no ano nativos em `parameters.json`, e o F6 os converte por `to_usd_2024` | `docs/phases/F6_lcoe_modeling.md` D-F6-008; METHODOLOGY M-F6-08; `src/geofrea/lcoe_modeling/connection.py` (`to_usd_2024`) |
+
+Justificativa (se METHODOLOGY_REVISION): n/a — registro de verificação; nenhuma decisão do autor muda.
+Referência (literatura/discussão, se aplicável): `docs/_audit/2026-11_docs_audit/03_decisions_audit.md` (item 3), `05_methodology_vs_code_F6_F8.md` (ponto d).
+Fase: F1, F2a, F2b, F3, F6
+Substitui: DEC-001 (IUCN Ia/Ib/II uniforme → nominal `all_designated`); DEC-002 a DEC-006 (biomassa fora do escopo, S-08); DEC-008 (`run.target_phases`); DEC-011 (`slope_max_pct` em `land_availability`); DEC-013 (`protected` entra no F3 como E1); DEC-034 item 4 (AHP removida); DEC-055 (baseline em Release aposentado); DEC-062 (conversão de moeda como descrita acima). DEC-030 e DEC-054 não são substituídas: faltam fontes.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma. As entradas antigas continuam no texto original.
+
+---
+
+## [2026-11-13] DEC-068 - PV-77 fechada pelo autor
+Tipo: VERIFICATION_UPDATE
+Descrição: Decisão do autor, 13/11/2026: a PV-77 está fechada. A verificação de conteúdo posterior ao COMANDO 77, de IND e BRA, é considerada concluída.
+Justificativa (se METHODOLOGY_REVISION): n/a — registro de verificação.
+Referência (literatura/discussão, se aplicável): `docs/_audit/2026-11_docs_audit/06_other_records_audit.md` (item 5: CONVENTIONS l. 39 e PROGRESS).
+Fase: F1 a F5 (IND e BRA)
+Consequência no código ou na configuração (ainda não aplicada): `docs/PROGRESS.json` ainda traz a PV-77 aberta para IND e BRA e `docs/CONVENTIONS.md` (l. 39) ainda manda o país ficar em `awaiting_content_check_post_77`; nenhum dos dois foi alterado.
+
+---
+
+## [2026-11-13] DEC-069 - estrutura dos registros: um lugar por tipo
+Tipo: STRUCTURAL_PRESERVE
+Descrição: Decisão do autor, 13/11/2026. Cada tipo de registro tem um lugar só:
+1. decisão do autor: `docs/DECISIONS.md`, em português, só acréscimo, com ID `DEC-nnn` pela posição do cabeçalho;
+2. regra de método: `docs/METHODOLOGY.md`;
+3. decisão de implementação: `docs/phases` como `D-*`, sem copiar para o DECISIONS.md;
+4. pergunta aberta: `docs/OPEN_QUESTIONS.md`; a resolvida sai de lá e deixa um ponteiro;
+5. limitação: `docs/LIMITATIONS.md`, com a origem;
+6. estado: `docs/PROGRESS.json`;
+7. relatórios: `docs/_audit`.
+
+Regras que acompanham:
+- uma decisão que supera outra o diz em `Substitui:` na entrada nova, e a antiga não é editada;
+- os docs ativos citam símbolo e chave, não número de linha nem valor;
+- lógica de método nova entra com um `M-` na mesma mudança;
+- arquivo obsoleto vai para `docs/_archive` e só é apagado no fim, depois de tudo verde.
+Justificativa (se METHODOLOGY_REVISION): n/a — decisão de organização dos registros, sem efeito em resultado.
+Referência (literatura/discussão, se aplicável): `docs/_audit/2026-11_docs_audit/07_proposal.md`; `docs/_audit/2026-11_docs_audit/06_other_records_audit.md` (item 5).
+Consequência no código ou na configuração (ainda não aplicada): `docs/CONVENTIONS.md` (l. 47, 52 e 74) ainda diz que a decisão fica só no registro da fase; não foi alterado.
 
 ---
