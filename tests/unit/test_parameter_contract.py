@@ -23,6 +23,9 @@ from geofrea.core.schemas import ParameterRange, VerifiedValue
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 _MAX_TEXT_BYTES = 5_000_000
+# Paths exempt from the legacy-name check, besides `_archive` and the dated audit records: historical and append-only records, where the
+# retired name is a quotation of what was decided then and not a use of it (docs/DECISIONS.md is append-only; docs/_audit/ holds audit records).
+_HISTORICAL_RECORDS = ("docs/DECISIONS.md", "docs/_audit/")
 PARAMETERS = REPO_ROOT / "config" / "parameters.json"
 TECHNOLOGIES = REPO_ROOT / "config" / "technologies.yaml"
 EXPERIMENTS = REPO_ROOT / "config" / "experiments.yaml"
@@ -187,6 +190,8 @@ def test_no_legacy_opex_names():
         parts = Path(rel_path).parts
         if "_archive" in parts or not path.is_file():
             continue
+        if rel_path.startswith(_HISTORICAL_RECORDS):
+            continue  # historical records (see _HISTORICAL_RECORDS)
         if path.name.endswith((".pyc", ".tif", ".parquet", ".npz", ".png", ".gpkg", ".gz", ".nc")):
             continue
         if parts[:2] == ("docs", "_audit") and path.name[:4].isdigit() and path.name[4] == "-":
