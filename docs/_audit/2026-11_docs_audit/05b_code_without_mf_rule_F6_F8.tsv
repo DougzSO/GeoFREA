@@ -1,0 +1,7 @@
+fase	arquivo	simbolo	linhas	id
+F6	lcoe_modeling/maps.py	build_lcoe_maps	123	só D-/A-/OQ-
+F7	robustness_analysis/decision.py	skipped_outputs	87	só D-/A-/OQ-
+F7	robustness_analysis/maps.py	build_robustness_maps	72	só D-/A-/OQ-
+F8	results_synthesis/dag.py	t_m1	105	só D-/A-/OQ-
+F8	results_synthesis/method_tables.py	t_m2	60	só D-/A-/OQ-
+F8	results_synthesis/method_tables.py	t_m3	58	só D-/A-/OQ-

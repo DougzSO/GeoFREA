@@ -1,0 +1,39 @@
+linha	padrao	trecho	com_data
+66	percentil ou desvio medido	bers of r at s0`) and `D_tec` (`Z_tec = P90 over s >= 1 of r at m0`). The dominance ratio `rho =	False
+192	percentil ou desvio medido	 the grid, which was off by up to 18 % (P95 8 to 15 % in the three countries, `do	True
+277	percentil ou desvio medido	t each height, the number of cells, P1, P50, P99, the extremes and, for k, the	False
+307	percentil ou desvio medido	arameter samples s of r_i,(m,s) )`, the P90 taken over the draws `s >= 1` only; the nominal vector `s0	False
+310	percentil ou desvio medido	and the techno-economic axis `Z_tec_i = P90 over draws s >= 1 of r_i,(m0,s)` (`MR_tec`; the climate at	False
+312	percentil ou desvio medido	-02: `MR_i,sigma = max over GCMs g of ( P90 over draws s >= 1 of r_i,(g,sigma,w_core),s )` 	False
+86	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	ference climatology 1995-2014. The 2071-2100 members have resource rows (M-F4-03) 	False
+87	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	on unit | 0.05 degree cell, exactly 5 x 5 pixels of the 0.01 degree analysis g	False
+176	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	nd cover, elevation (the Copernicus GLO-30 tiles, M-F2a-08, read by F2a from `	False
+190	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	hat 0.05 degree cells nest exactly (5 x 5 pixels). The country mask is the **c	False
+192	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	 equal to one another within a chunk of 20,000 features are one target (the end share	True
+192	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	that target alone. A layer of more than 6 million targets (only the rivers of BRA, 26.5	True
+196	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	bution, not a pixel mean: the FABDEM V1-2 tiles (30 m; Copernicus GLO-30 with	False
+197	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	 is the mean of the 30 m Copernicus GLO-30 samples inside each grid pixel (a sam	False
+224	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	** Cell aggregation to 0.05 degree (5 x 5 pixels). Per cell and technology:	False
+234	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	r of the run, `scale` (0.05 degree, 5 x 5 pixels, the default; or 0.1 degree, 	False
+234	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	ixels, the default; or 0.1 degree, 10 x 10 pixels). F3 aggregates the same pixe	False
+234	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	ech>.parquet`, the exact sum of the 2 x 2 cells, as an area check of the 0.1 	False
+374	contagem de dados (células, candidatos, pixels, feições, amostras, membros, arquivos)	U-04. Sample size.** Protocol: start at 500 samples, double until `1 - Jaccard` o	False
+177	percentual medido	 file holds a valid value in fewer than 99% of the mask pixels, F1 comple	False
+185	percentual medido	overage_pct`) and raises an alert below 99%.	False
+192	percentual medido	tre of the grid, which was off by up to 18 % (P95 8 to 15 % in the three c	True
+192	percentual medido	, which was off by up to 18 % (P95 8 to 15 % in the three countries, `docs	True
+212	percentual medido	 slope in percent (the tangent: 3 / 5 / 10 % PV and 10 / 20 / 30 % wind in	True
+212	percentual medido	 tangent: 3 / 5 / 10 % PV and 10 / 20 / 30 % wind in the restrictive / cen	True
+212	percentual medido	e error of that reading was measured at 0.33 % of the slope-eligible area at	True
+236	percentual medido	 pixels with an eligible fraction below 10 % are dropped (the share needed	False
+247	percentual medido	 MIROC6 over Brazil is below 0.5 m/s in 50.3% of its native land cells (min	True
+247	percentual medido	 land cells (minimum 0.001 m/s) against 0% in four of the other five GCM	True
+247	percentual medido	inst 0% in four of the other five GCMs (18.8% in IPSL-CM6A-LR), and its med	True
+278	percentual medido	al the F5 national total of `m0` within 0.1% in each scenario, or the phas	False
+298	percentual medido	3 tables (`pvcz_zone`). Wind: `d_low` = 0.17 %/yr (newer vintages), `d_high`	True
+298	percentual medido	 0.17 %/yr (newer vintages), `d_high` = 0.53 %/yr (older vintages), Hamilton	True
+298	percentual medido	he complex-terrain rate of Kim and Kim (0.72 %/yr) is a deterministic sensit	True
+298	percentual medido	he rate of every cell of T7 or above by 0.94 %/yr (the global median of Stra	True
+299	percentual medido	nsmission_losses` (`alpha_loss` 0.03 to 0.05 %/km, with a warning if a cell 	False
+411	percentual medido	h no measurement; a phase goes on up to 25 % above its cap while the free 	False
+218	valor por país com unidade	the highest wind candidate is 1356 m in PRT and 1922 m in BRA). `sensitivity` is nul	False

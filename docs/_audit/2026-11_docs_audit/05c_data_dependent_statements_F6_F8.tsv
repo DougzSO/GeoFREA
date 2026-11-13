@@ -1,0 +1,6 @@
+linha	padrao	trecho	com_data
+298	percentual	3 tables (`pvcz_zone`). Wind: `d_low` = 0.17 %/yr (newer vintages), `d_high`	True
+298	percentual	 0.17 %/yr (newer vintages), `d_high` = 0.53 %/yr (older vintages), Hamilton	True
+298	percentual	he complex-terrain rate of Kim and Kim (0.72 %/yr) is a deterministic sensit	True
+298	percentual	he rate of every cell of T7 or above by 0.94 %/yr (the global median of Stra	True
+299	percentual	nsmission_losses` (`alpha_loss` 0.03 to 0.05 %/km, with a warning if a cell 	False
