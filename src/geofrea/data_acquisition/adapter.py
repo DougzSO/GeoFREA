@@ -225,7 +225,7 @@ def _load_mainland_boundary(layer: AcquiredLayer | None) -> gpd.GeoDataFrame | N
     when country_gdf is missing (AuditInputs.country_gdf is Optional —
     see that field's docstring). The mechanical read+mainland-filter
     itself is shared via core.geo_utils.load_mainland_boundary() (
-    extracted 2026-09-08, see docs/_archive/2026-09/DECISIONS.md same date) —
+    extracted 2026-09-08, see docs/DECISIONS.md same date) —
     grid_alignment/adapter.py calls the SAME shared function but
     raises instead of returning None when borders is missing, since it
     has no equivalent degraded mode.

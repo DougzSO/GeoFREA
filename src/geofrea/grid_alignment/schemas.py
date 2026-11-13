@@ -7,7 +7,7 @@ single reference grid (same CRS/transform/dimensions), a prerequisite
 for siting_layers (F2b) — see module-mapping.md.
 
 Design corrected from the legacy shape during the read-only audit that
-preceded this schema (2026-09-08, see docs/_archive/2026-09/DECISIONS.md same date —
+preceded this schema (2026-09-08, see docs/DECISIONS.md same date —
 grid_alignment contract, roads_source/grid_source vs. data_quality_audit's
 cache_path): GridAlignmentInputs.roads_source/grid_source are always
 the RAW, unclipped acquisition source — the same AcquiredLayer.path

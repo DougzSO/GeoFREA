@@ -7,7 +7,7 @@ lat_km, 3 in lon_km — the most complete of the three, kept here as the
 one true precision level), grid_alignment/vector_alignment.py::
 calculate_wgs84_isotropic_distance() (3 terms in lat_km, missing
 cos(6*phi)), and grid_alignment/alignment.py's adaptive-resolution
-calculation (2 terms in each). See docs/_archive/2026-09/DECISIONS.md 2026-09-09,
+calculation (2 terms in each). See docs/DECISIONS.md 2026-09-09,
 grid_alignment Passo 4 item 1.
 
 Measured error from using the two more-truncated variants instead of

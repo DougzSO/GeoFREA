@@ -2,7 +2,7 @@
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
 (`_reproject_to_grid()` L196-261, `_mosaic_land_cover()` L458-543)
-with no logic changes — see docs/_archive/2026-09/DECISIONS.md 2026-09-08,
+with no logic changes — see docs/DECISIONS.md 2026-09-08,
 grid_alignment Passo 3.
 
 Wind products are aligned per height by `reproject_to_grid()` (M-F2a-04); the legacy AHP combination across heights
@@ -129,7 +129,7 @@ def reproject_to_grid(
         src_res = max(abs(src.transform.a), 1e-12)
         pad_px = int(np.ceil(abs(grid.transform.a) / src_res)) + 4
 
-        # Data-integrity guard (docs/_archive/2026-09/DECISIONS.md 2026-09-11, "elevation
+        # Data-integrity guard (docs/DECISIONS.md 2026-09-11, "elevation
         # NaN leak"): some source rasters declare a finite nodata
         # sentinel (e.g. -9999) but actually encode nodata as literal
         # IEEE NaN cells instead -- a mismatch between the file's own
@@ -319,7 +319,7 @@ def derive_slope_from_dem(dem_path, out_path):
     elevation — see run_grid_alignment_phase(). Computing slope on the
     native DEM and then resampling (rather than resampling the DEM first
     and computing slope on the target grid) is the legacy's deliberate
-    order; kept as STRUCTURAL_PRESERVE (docs/_archive/2026-09/DECISIONS.md 2026-09-11).
+    order; kept as STRUCTURAL_PRESERVE (docs/DECISIONS.md 2026-09-11).
 
     Method (STRUCTURAL_PRESERVE except the pixel spacing, see G-1 below):
       - central-difference gradient via numpy.gradient, NOT the Horn
@@ -339,7 +339,7 @@ def derive_slope_from_dem(dem_path, out_path):
 
     Data-integrity correction (DELIBERATE DIVERGENCE from legacy — same
     class of fix applied this session to solar_pvout_weight and
-    biomass_resource's land_cover==255; see docs/_archive/2026-09/DECISIONS.md 2026-09-11):
+    biomass_resource's land_cover==255; see docs/DECISIONS.md 2026-09-11):
     the legacy fed the raw nodata sentinel (-9999) into numpy.gradient as
     if it were a real elevation, so every VALID pixel adjacent to a
     nodata pixel got a garbage-contaminated slope. Here the DEM's nodata
@@ -1087,7 +1087,7 @@ def mosaic_land_cover(
     country are skipped without being opened for reprojection.
 
     A tile that fails to open/read/reproject (corrupted file) is a
-    different matter (docs/_archive/2026-09/DECISIONS.md 2026-09-11, "mosaic_land_cover
+    different matter (docs/DECISIONS.md 2026-09-11, "mosaic_land_cover
     fail-loud on in-country gaps" — same fail-loud policy as the WDPA
     data-integrity check): if its footprint overlaps the country being
     processed, this raises rather than silently leaving that area at

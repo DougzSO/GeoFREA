@@ -1,7 +1,7 @@
 """Pydantic schemas for GeoFREA's parameters.json and settings.yaml.
 
 "biomass", "solar", and "wind" are all modeled and populated in
-config/parameters.json (see docs/_archive/2026-09/DECISIONS.md 2026-08-20 entries).
+config/parameters.json (see docs/DECISIONS.md 2026-08-20 entries).
 Everything lives in one module because the three technology models
 share one common shape; splitting by domain is deferred until that
 stops being true, per docs/CONVENTIONS.md "Parameters" (no schemas
@@ -456,7 +456,7 @@ class _TechnologySitingParams(BaseModel):
     that happens to also be per-technology-per-country. Splitting the
     base keeps _TechnologyEconomicParams's name accurate and lets more
     siting constraints be added later (e.g. a wind setback distance)
-    without touching the economic base. See docs/_archive/2026-09/DECISIONS.md
+    without touching the economic base. See docs/DECISIONS.md
     2026-08-20 - slope_threshold_deg moved to parameters.json.
 
     The slope maximum used to live here (a per-technology, per-country value for the audit's slope-inactivity diagnostic). It
@@ -470,7 +470,7 @@ class _TechnologySitingParams(BaseModel):
 class SolarParams(_RejectsRenamedKeys, _TechnologyEconomicParams, _TechnologySitingParams):
     """Solar PV technology parameters for a single country.
 
-    See docs/_archive/2026-09/DECISIONS.md 2026-08-20 - solar and wind parameters
+    See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
     populated (IRENA 2024/2025) and - slope_threshold_deg moved to
     parameters.json, for provenance of every field's value.
 
@@ -500,7 +500,7 @@ class SolarParams(_RejectsRenamedKeys, _TechnologyEconomicParams, _TechnologySit
 class WindParams(_RejectsRenamedKeys, _TechnologyEconomicParams, _TechnologySitingParams):
     """Onshore wind technology parameters for a single country.
 
-    See docs/_archive/2026-09/DECISIONS.md 2026-08-20 - solar and wind parameters
+    See docs/DECISIONS.md 2026-08-20 - solar and wind parameters
     populated (IRENA 2024/2025) and - slope_threshold_deg moved to
     parameters.json, for provenance of every field's value. Same
     opex_var_usd_per_mwh and discount_rate_increment caveats as

@@ -21,7 +21,7 @@ never defaulted.
 
 slope_threshold_deg is technology-specific (CountryParams.technologies.
 <tech>.slope_threshold_deg), not the legacy's single hardcoded 15.0°
-per-country fallback — see docs/_archive/2026-09/DECISIONS.md 2026-08-20 -
+per-country fallback — see docs/DECISIONS.md 2026-08-20 -
 slope_threshold_deg moved to parameters.json. The slope-inactivity
 check therefore runs once per technology (biomass/solar/wind), not
 once per country.

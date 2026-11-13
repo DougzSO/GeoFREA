@@ -31,7 +31,7 @@ def row_area_km2(shape: tuple[int, int], transform: rasterio.Affine) -> np.ndarr
     Returns a 1D array (height,) rather than a full 2D grid to avoid
     memory issues with large tiles. WGS84 scale factors come from
     core.geodesy.wgs84_km_per_degree() — centralized 2026-09-09 (see
-    docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
+    docs/DECISIONS.md same date, grid_alignment Passo 4 item 1; this
     was the most complete of three previously-divergent truncations,
     now the shared one).
     """

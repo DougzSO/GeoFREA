@@ -220,7 +220,7 @@ class SlopeThresholdCheck(BaseModel):
 
     Each technology now carries its own slope_threshold_deg
     (CountryParams.technologies.<tech>.slope_threshold_deg, see
-    docs/_archive/2026-09/DECISIONS.md 2026-08-20 - slope_threshold_deg moved to
+    docs/DECISIONS.md 2026-08-20 - slope_threshold_deg moved to
     parameters.json) — there is no single per-country threshold
     anymore, so this check runs once per technology, not once per
     country.

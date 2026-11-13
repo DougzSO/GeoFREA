@@ -67,7 +67,7 @@ run:
   rerun_phases: []
 
 # grid_alignment's target grid resolution. Added 2026-09-09 (see
-# docs/_archive/2026-09/DECISIONS.md same date, grid_alignment Passo 4 item 3).
+# docs/DECISIONS.md same date, grid_alignment Passo 4 item 3).
 geospatial:
   # Threshold of the `distance_capped` QC flag raster beside the distance-to-grid/roads/rivers
   # rasters (M-F2a-03, OQ-040). It NEVER truncates a distance: rasters store the real geodesic

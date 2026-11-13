@@ -113,7 +113,7 @@ class ClipRequiresCountryGdfError(ValueError):
     per-file data problem — it must fail loudly (propagate out of this
     function), not degrade into result["error"] like a corrupt file
     would, so it cannot be silently ignored in a JSON blob. See
-    docs/_archive/2026-09/DECISIONS.md 2026-08-26 for the full incident writeup.
+    docs/DECISIONS.md 2026-08-26 for the full incident writeup.
     """
 
 

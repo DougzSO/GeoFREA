@@ -53,7 +53,7 @@ logger = logging.getLogger("geofrea.data_quality_audit.raster_inspection")
 _CHUNK_ROWS = 4_000  # at most this many rows in a chunk of `_stats_chunked`
 _CHUNK_PIXELS = 48_000_000  # and at most this many pixels (192 MB as float32): a chunk of a wide raster is cut by rows (COMMAND 75)
 
-# Real incident, 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date, "wire das 5
+# Real incident, 2026-09-08 (see docs/DECISIONS.md same date, "wire das 5
 # camadas restantes a partir do banco local, Fase 2 - roads", RAM finding):
 # running the real end-to-end pipeline for BRA, _mask_raster_by_polygon()'s
 # single float32 read of the country-bbox window for `population`
@@ -125,7 +125,7 @@ def _country_window(
     """Compute the raster window covering a country's bbox, clipped to the raster's own extent.
 
     Single source of truth for this computation, added 2026-09-08 (see
-    docs/_archive/2026-09/DECISIONS.md same date) after _mask_raster_by_polygon() and
+    docs/DECISIONS.md same date) after _mask_raster_by_polygon() and
     _stats_chunked() were found to have silently diverged: each
     computed this window independently (or, for _stats_chunked(),
     didn't compute it at all — it used to chunk over the FULL raster
@@ -366,7 +366,7 @@ def _stats_chunked(
     Fallback for rasters too large to mask in one windowed read (e.g. a
     ~3.4 GB WorldPop 100m tile for Brazil).
 
-    total_px scoping fixed 2026-09-08 (see docs/_archive/2026-09/DECISIONS.md same date):
+    total_px scoping fixed 2026-09-08 (see docs/DECISIONS.md same date):
     this function used to chunk over the FULL raster extent
     (src.height/src.width) regardless of country_gdf, while
     _mask_raster_by_polygon() (the windowed-read strategy this falls
