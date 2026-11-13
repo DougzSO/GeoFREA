@@ -1,0 +1,148 @@
+%% requires: \providecommand{\vfy}{\textsuperscript{[v]}}  (marks a value still to be verified)
+% ============================================================
+% GROUP 4: Pre-registered decision parameters (feeds F6 and F7)
+% Place: Literature Review (section 1) and Methodology (section 2).
+% Needs: booktabs, graphicx not required. Cite keys are in refs_grupos_4_5_7.bib.
+% Marks: "% verify" = value or claim not yet checked against its primary source.
+% Currency: constant 2024 USD, real. USD 2025 values are multiplied by 0.9744 (CPI-U).
+% ============================================================
+
+\section{Literature Review: Thresholds and Reference Points in Robustness Analysis}
+\label{sec:g4-lit}
+
+\subsection{Why the threshold is a parameter of the analysis}
+Robustness metrics do not measure a property of a design alone. A satisficing (domain) criterion counts the share of plausible futures in which performance meets a required level, so its result depends directly on that level \citep{herman2015,mcphail2018}. Regret-based criteria depend on the reference against which regret is measured \citep{savage1951,lempert2006}. Different robustness metrics can also rank the same options differently, which is why the choice of metric and its reference values must be fixed and reported, not tuned after the results are seen \citep{mcphail2018}. In this work the LCOE threshold, the minimum capacity factor, the regret reference and the top-$k$ fraction are therefore treated as \emph{decision parameters}: they are not drawn inside the uncertain design (the Latin hypercube) and they are swept as explicit sensitivity axes.
+
+\subsection{An external anchor for the LCOE threshold}
+A threshold for economic viability can be chosen in several ways: from auction prices, from a reference technology such as the marginal fossil plant, or from an observed cost benchmark. Auction prices depend on country-specific contract terms, remuneration schemes, currency and timing, and are published in different currencies and price years, which makes a like-for-like comparison hard. This work instead anchors the threshold on the global benchmark compiled by IRENA: the LCOE of newly commissioned utility-scale projects, reported as a weighted average with 5th and 95th percentiles for the countries and regions where data allow \citep{irena2025costs24,irena2026costs25es}. IRENA's values embed a real, after-tax cost of capital by region and report country-level LCOE for Brazil and India, while Portugal has no country row in the 2024 tables and is represented by the European aggregate. The regional cost of capital in the 2024 edition ranged from 3.8\% in Europe to 12\% in Africa, reflecting the country risk and macroeconomic conditions of 2023 \citep{irena2025costs24}. Because the financing share of LCOE grows with the cost of capital, a threshold built from one country's capital cost cannot be compared with LCOE computed under another \citep{irena2025costs24}. This is addressed by an explicit calibration check (Section~\ref{sec:g4-tau}).
+
+\subsection{Capacity-factor benchmarks and the AC and DC basis}
+Capacity factors are reported on different bases. IRENA reports the PV capacity factor as an AC-DC value, that is, AC energy over DC module capacity, because its installed cost data are per kW of DC capacity \citep{irena2025costs24}. The same report notes that high DC to AC ratios depress AC-side capacity factors and that this effect is not corrected in its metrics. Grid operators and energy agencies, by contrast, publish fleet statistics on an AC basis (the connection or inverter capacity) \citep{epe2024nt011,ren2025dados,mnre2026stats}. A fleet capacity factor reported by an operator therefore has to be divided by the DC to AC ratio before it can be compared with a DC-based modelled value.
+
+\subsection{Planning figures as comparators}
+National expansion plans are scenario outputs for system planning, not technical potentials. In Brazil the ten-year plan and the 2050 plan give capacity ranges by technology \citep{epe2026pde,epe2020pne}; in India the National Electricity Plan gives capacity for 2031--32 \citep{cea2023nep}; in Portugal the updated National Energy and Climate Plan gives 2030 values \citep{pnec2025}. These horizons end before the 2041--2070 window used here. They are used as order-of-magnitude comparators for the robust potential, and they are not extrapolated.
+
+\section{Methodology: Pre-registered Decision Parameters}
+\label{sec:g4-method}
+
+\subsection{Registration protocol}
+\label{sec:g4-reg}
+All decision parameters in this section are stored in the version-controlled configuration, together with the source, the evidence tier and the price base of each value. The SHA-256 digest of this registered subset of keys is recorded in the run manifest, and the repository is tagged before the first production run of F6. F7 refuses to run if the digest of the subset differs from the registered one, and the subset cannot be re-baselined. Any change after the tag is reported as a deviation. % verify: mechanism to be implemented (see implementation commands)
+
+Evidence tiers follow the project convention: Tier~1 is a primary source for the country and technology or a physical norm; Tier~2 is a primary source transferred to the case with a stated justification; Tier~3 is author judgment and is listed in the limitations.
+
+\subsection{Decision parameters and states of the world}
+The uncertain design (Latin hypercube sampling) contains the states of the world: capital cost, operation and maintenance cost, cost of capital, climate scenario and related factors. The decision parameters listed below sit outside it. The cost of capital enters the sampling as a range, not a point: for each country and technology the range is the union of the regional IRENA value of the 2024 edition plus or minus one percentage point (author judgment, Tier~3) and, where IRENA publishes one, the country value. % verify: IRENA country values for 2021 (Brazil 6.3\%, India 5.9\% for PV) come from a secondary reading of the IRENA financing data appendix \citep{irena2023finance}.
+
+\subsection{LCOE threshold $\tau$}
+\label{sec:g4-tau}
+The threshold $\tau_{c,t}$ for country $c$ and technology $t$ is set by rule, in this order: (i) the IRENA weighted-average LCOE of the most recent edition for the country; (ii) if the country has no row, the value of its region; (iii) if the region has none, the global value. The tier used is stored with each value. The satisficing score is reported as a curve over a range of $\tau$, whose limits are the 5th and 95th percentiles of the same IRENA distribution; the weighted average is the point value.
+
+\begin{table}[ht]
+\centering
+\caption{IRENA LCOE benchmarks used to anchor $\tau$ (USD/MWh). The 2024 edition is in 2024 USD and gives the 5th percentile, weighted average and 95th percentile. The 2025 value is the weighted average in 2025 USD from the Executive Summary, converted to 2024 USD with the factor 0.9744.}
+\label{tab:g4-tau}
+\small
+\begin{tabular}{llcccc}
+\toprule
+Country & Technology & 2024 p5 & 2024 avg & 2024 p95 & 2025 avg (2024 USD) \\
+\midrule
+Brazil   & Solar PV      & 36 & 48 & 77  & 36 \\
+India    & Solar PV      & 32 & 38 & 59  & 34 \\
+Portugal (Europe row) & Solar PV & 41 & 60 & 103 & 57$^{a}$ \\
+Brazil   & Onshore wind  & 24 & 30 & 37  & 30$^{b}$ \\
+India    & Onshore wind  & 43 & 48 & 53  & 42$^{b}$ \\
+Portugal (Europe row) & Onshore wind & 34 & 51 & 75 & 53$^{a}$ \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+\footnotesize $^{a}$ European 2025 values (59 and 54 USD/MWh in 2025 USD) come from secondary compilations and must be confirmed in the full 2025 report. % verify
+$^{b}$ Attribution of the 2025 wind values to Brazil (31) and India (43) in Figure S3 of the Executive Summary to be confirmed against the figure image. % verify
+\end{table}
+
+Two limitations of this anchor are declared. First, the annual country LCOE is a weighted average over the projects commissioned in that year, so it varies with the project mix; Brazilian solar PV falls from 48 to about 36 USD/MWh in 2024 USD between the two editions, which is partly a sampling effect. The inter-edition spread is therefore reported next to the point value. Second, Portugal uses the European row as a Tier~2 proxy. The European 95th percentile (103 USD/MWh for PV, 75 for wind) is wide and is not adopted as the upper limit for Portugal without a separate decision. % open: upper limit of the Portugal range
+
+\paragraph{Calibration against the model.} The IRENA values embed the cost of capital of the IRENA data, which differs from the model's value for some countries. A quick check with the Indian wind benchmark, assuming 35 USD/kW per year for operation and maintenance, installed cost of 1,172 USD/kW and a 31\% capacity factor, gives about 40 USD/MWh at a 3.8\% cost of capital and about 46 USD/MWh at 5.9\%, against 43 USD/MWh published. % verify: author calculation with an assumed O\&M
+Before the first production run, the model's own LCOE function is therefore evaluated at the IRENA installed cost and capacity factor with the model's cost of capital, and the difference from the published LCOE is reported per country and technology. If the difference exceeds the half-width of the $\tau$ range, the choice between the published $\tau$ and a $\tau$ expressed on the model's cost basis is referred to the author before the tag. % open: decision rule
+
+\subsection{Minimum capacity factor}
+\label{sec:g4-cf}
+$\mathrm{CF}_{\min}$ is the lowest capacity factor at which a cell is treated as viable. It is evaluated on the capacity factor of the cell in the nominal scenario, and a cell below it is excluded from the ranking. It is a decision parameter, given as a range per country and technology. The permissive end is the lowest documented operating or normative value; the strict end is the 5th percentile of the capacity factor of newly commissioned IRENA projects for the country or region. The permissive end is the primary value, so that a screen based on an unverified high floor does not remove cells before the economic criterion acts. For PV all values are on a DC basis: $\mathrm{CF}_{\mathrm{DC}} = \mathrm{CF}_{\mathrm{AC}} / r_{\mathrm{DC/AC}}$, where $r_{\mathrm{DC/AC}}$ is the DC to AC ratio, consistent with the DC reference power of the model.
+
+\begin{table}[ht]
+\centering
+\caption{Permissive floor candidates for $\mathrm{CF}_{\min}$ and the typical level of new projects, for context. PV values on DC basis. Operator values are fleet averages and include operational curtailment.}
+\label{tab:g4-cf}
+\small
+\begin{tabular}{llp{3.6cm}p{3.1cm}p{2.9cm}}
+\toprule
+Country & Tech. & Permissive floor (\%) & Basis & Typical new project (IRENA, \%) \\
+\midrule
+Brazil   & PV   & 15.7 & 21.5\% AC fleet, DC/AC 1.37\vfy{} & pending \\
+India    & PV   & 15.0 & 21\% AC regulatory floor, DC/AC 1.40\vfy{} & 17 to 19 (AC-DC) \\
+Portugal & PV   & 13.3 & 17.2\% AC fleet, DC/AC 1.29\vfy{} & 14 to 15 (EU, AC-DC) \\
+Brazil   & Wind & 37.0 & North and Northeast fleet\vfy{} & 56 (2024) \\
+India    & Wind & 22   & lowest regulatory value at 100 m\vfy{} & about 29\vfy{} \\
+Portugal & Wind & 27.4 & grid-connected fleet\vfy{} & 34 (Europe region) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three points qualify these values. (i) The fleet averages are net of curtailment, which was substantial in Brazil after 2023 \citep{ons2025cortes}, whereas the model does not represent curtailment, so its capacity factors are gross. A floor taken from net fleet values is therefore permissive by construction.
+(ii) For India wind, the fleet average of 17.8 to 21.5\% is dominated by older, low-hub-height turbines and is not used as a floor for new plants. (iii) A secondary source reports a PV capacity factor of 21.5\% for Brazilian new projects, identical to the operator fleet value in the same period; this is treated as possibly conflated and is left pending until the full IRENA 2025 report is read.
+
+\subsection{National planning figures}
+\label{sec:g4-targets}
+For each country and technology the figure with the latest horizon is used, with its horizon declared. No figure is extrapolated to 2041--2070. Only utility-scale capacity is compared, because the model does not represent distributed generation.
+
+\begin{table}[ht]
+\centering
+\caption{Official planning figures used as comparators (GW).}
+\label{tab:g4-targets}
+\small
+\begin{tabular}{llp{2.2cm}cp{4.0cm}}
+\toprule
+Country & Tech. & Figure (GW) & Horizon & Document \\
+\midrule
+Brazil   & Wind & 110 to 195 & 2050 & \citet{epe2020pne} \\
+Brazil   & Wind & 50 & 2035 & \citet{epe2026pde}\vfy{} \\
+Brazil   & PV (central) & 27 to 90 & 2050 & \citet{epe2020pne} \\
+Brazil   & PV (central) & 29 & 2035 & \citet{epe2026pde}\vfy{} \\
+India    & PV   & 364.6 & 2031--32 & \citet{cea2023nep}; may include rooftop\vfy{} \\
+India    & PV   & 447 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} \\
+India    & Wind & 121.9 & 2031--32 & \citet{cea2023nep} \\
+India    & Wind & 138 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} \\
+Portugal & PV (central) & 15.1 & 2030 & \citet{pnec2025} \\
+Portugal & Wind & 10.4 & 2030 & \citet{pnec2025} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Brazilian and Indian figures are planning scenarios, not targets, and are labeled as such. The 2034--35 Indian values are a projection of required capacity from a planning study of the national grid authority, and are used only after confirmation in that document.
+
+\subsection{Regret reference and top-$k$ fraction}
+\label{sec:g4-q}
+The regret of cell $i$ in future $s$ is relative to a reference LCOE $L^{*}_{s}$, the $q$-quantile of the LCOE over the eligible cells of the country in that future:
+\begin{equation}
+R(i,s) = \frac{C(i,s) - L^{*}_{s}}{L^{*}_{s}}, \qquad L^{*}_{s} = Q_{q}\!\big(C(\cdot,s)\big),
+\end{equation}
+where $C(i,s)$ is the LCOE. For $q = 0$ the reference is the minimum and the regret is non-negative by construction. The default is $q = 0$ (the minimum), as in the F7 specification, and $q = 0.01$ is tested as a sensitivity (OQ-020). The minimum is set by a single cell and can be unstable under data artifacts and under changes of spatial aggregation, so the rule for adopting $q = 0.01$ instead, based on the overlap of the top-$k$ sets obtained with the two values, is registered before the results are seen. % open: A5
+A reference at 5\% is not used: it would give zero regret to the best cells, which are those to be discriminated, and it would coincide with the smallest top-$k$ fraction. The fraction $p_k$ takes the values 5, 10 and 20\%, so $q < p_k$ always holds. For $q > 0$, cells cheaper than the quantile have negative regret; the convention for them (clipping at zero) and the change that lets the current implementation, which accepts only $q = 0$, run $q = 0.01$ are open decisions. % open: A5
+
+The ranking stability between $q = 0.01$ and $q = 0$ is reported through the overlap of the top-$k$ sets and the rank correlation. Neither value is chosen after seeing the results. The number of cells represented by 1\% in Portugal is checked, because a small number makes the quantile unstable.
+
+\subsection{Currency and price base}
+\label{sec:g4-currency}
+Every monetary value is converted to constant 2024 USD when it enters the configuration, as the cost model requires, and its native value, currency, price year and source are kept in the note of the parameter. The conversion uses a single index table. Values in 2025 USD are multiplied by the ratio of the 2024 and 2025 price indices of the United States. The CPI-U annual averages \citep{bls_cpiu} give $313.689/321.943 = 0.9744$, and the GDP deflator gives 0.9725, a difference of 0.2\%. The choice of index is open. % open: A7
+The CPI-U value for October 2025 is missing in the BLS table because of a lapse in appropriations, and the BLS does not state how the annual average was formed. % verify
+Auction prices, where used, enter only as a sensitivity and are converted with a sourced exchange rate and deflator; they are not mixed into the primary $\tau$.
+
+\subsection{Limitations specific to Group 4}
+\begin{itemize}
+\item The width of the cost-of-capital range ($\pm 1$ percentage point) is Tier~3.
+\item The Portugal $\tau$ and capacity-factor benchmarks are Tier~2 transfers from a European aggregate.
+\item Fleet capacity factors are net of curtailment and include legacy plants, while model capacity factors are gross; the CF range is a permissive screen, not a forecast.
+\item Planning figures have horizons that end before the analysis window.
+\item Several 2025 values come from secondary compilations and are marked for verification.
+\end{itemize}

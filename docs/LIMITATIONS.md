@@ -116,3 +116,23 @@ Entry format: ID, statement, affected items, why it is accepted, where it is dec
 | L-222 | land_availability.technologies.solar.settlement_setback_m (restrictive) | 1,000 m | author judgment above the 500 m of the studies reviewed | group6_land_eligibility tab:g6_setback |
 | L-223 | land_availability.sensitivities.population_density_200 | 200 persons/km2 (named sensitivity, not run; status verify) | the project value of the former density threshold; the 250 persons/km2 of CEEW (2024) is cited second-hand (OQ-070) | group6_land_eligibility subsec:g6_settlements |
 | L-211 | audit.derived_ranges.weibull_a and weibull_k (`validity_range`) | A in (0, 25] m/s and k in (0, 10] at 100, 150 and 200 m; a cell outside stops F5 | author judgment, Tier 3, no source; the limits test validity (a scale and a shape are positive and the caps are far above any observed value), not plausibility. In the first real run no cell of PRT, IND or BRA is outside them at any height, and k below 1 (down to 0.56) and above 4 (up to 5.4, in BRA) are physical and are only reported in the distribution file `weibull_distribution_wind.csv` (OQ-053 closed) | group1_technical_potential subsec:g1_gwa |
+
+## Limitations specific to Groups 4, 5 and 7
+
+Copied literally by script from the sections "Limitations specific to Group N" of `docs/thesis/methods/grupo4.tex`, `grupo5.tex` and `grupo7.tex` (COMMAND 144). The "Why accepted" cell is empty: the sections do not state it.
+
+| ID | Statement | Affects | Why accepted | Thesis section |
+|---|---|---|---|---|
+| L-224 | The width of the cost-of-capital range ($\pm 1$ percentage point) is Tier~3. | Group 4 | | grupo4.tex, Limitations specific to Group 4 |
+| L-225 | The Portugal $\tau$ and capacity-factor benchmarks are Tier~2 transfers from a European aggregate. | Group 4 | | grupo4.tex, Limitations specific to Group 4 |
+| L-226 | Fleet capacity factors are net of curtailment and include legacy plants, while model capacity factors are gross; the CF range is a permissive screen, not a forecast. | Group 4 | | grupo4.tex, Limitations specific to Group 4 |
+| L-227 | Planning figures have horizons that end before the analysis window. | Group 4 | | grupo4.tex, Limitations specific to Group 4 |
+| L-228 | Several 2025 values come from secondary compilations and are marked for verification. | Group 4 | | grupo4.tex, Limitations specific to Group 4 |
+| L-229 | Exposure is not converted into loss; hazard and economic results are read together. | Group 5 | | grupo5.tex, Limitations specific to Group 5 |
+| L-230 | The 35 and $40\,^{\circ}\mathrm{C}$ thresholds are simple counts; only the latter has a physical anchor for wind. | Group 5 | | grupo5.tex, Limitations specific to Group 5 |
+| L-231 | The wind-factor range is a Tier~3 guard; no CMIP6 per-cell ratio was found for the study regions. | Group 5 | | grupo5.tex, Limitations specific to Group 5 |
+| L-232 | Gust exposure is context only and is not comparable with design wind speeds. | Group 5 | | grupo5.tex, Limitations specific to Group 5 |
+| L-233 | Published potentials differ in hub height, density and exclusions, so ratios are indicative. | Group 7 | | grupo7.tex, Limitations specific to Group 7 |
+| L-234 | No area-based potential was found for Portugal. | Group 7 | | grupo7.tex, Limitations specific to Group 7 |
+| L-235 | The 143~GW value belongs to the 2001 atlas at 50~m and is not a value of the 2013 simulation edition, which publishes no national total in the sources read. | Group 7 | | grupo7.tex, Limitations specific to Group 7 |
+| L-236 | The reduction to $n+1$ scenarios is not available for discrete cell ranking; the full scenario set is used. | Group 7 | | grupo7.tex, Limitations specific to Group 7 |

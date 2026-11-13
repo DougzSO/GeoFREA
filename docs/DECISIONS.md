@@ -1569,3 +1569,75 @@ Referência (literatura/discussão, se aplicável): docs/DECISIONS.md 2026-09-11
 ---
 
 (fim das decisões registradas até o momento)
+
+## [2026-11-13] - restauração do DECISIONS.md como arquivo vivo
+Tipo: STRUCTURAL_PRESERVE
+Descrição: Este arquivo foi restaurado de docs/_archive/2026-09/DECISIONS.md (git mv, 0 linhas alteradas) por decisão do autor em 13/11/2026 (COMANDO 144). O arquivo tinha sido movido para o arquivo morto no commit 2726333 (15/09/2026). As decisões D-F* posteriores a 15/09/2026 estão em docs/phases/*.md e seguem lá; este arquivo recebe, daqui em diante, as decisões do autor no formato abaixo.
+Justificativa (se METHODOLOGY_REVISION): n/a — restauração de arquivo, nenhuma decisão metodológica alterada.
+Referência (literatura/discussão, se aplicável): COMANDO 143 (itens 1 e 2), docs/CONVENTIONS.md linhas 47 e 74, docs/phases/core.md linhas 42-49.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma no código; a restauração não toca em CONVENTIONS.md, METHODOLOGY.md nem nos registros de fase.
+
+---
+
+## [2026-11-13] - F7: τ ancorado no IRENA
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). O limiar de LCOE satisfatório τ (`tau_lcoe_usd_per_mwh`, M-F7-04) é ancorado no IRENA (D1, opção b). Precedência: país > região > global. Portugal usa a linha da Europa (Tier 2, declarado).
+Justificativa (se METHODOLOGY_REVISION): decisão do autor sobre a âncora de τ; para Portugal aplica-se uma transferência regional, por isso Tier 2 declarado.
+Referência (literatura/discussão, se aplicável): OQ-008; IRENA (2025), Renewable Power Generation Costs in 2024; docs/thesis/methods/grupo4.tex.
+Consequência no código ou na configuração (ainda não aplicada): `tau_lcoe_usd_per_mwh` está `null` em PRT, BRA e IND em config/parameters.json; nenhum valor foi escrito. O valor primário e a faixa seguem em OQ-087 e OQ-088.
+
+---
+
+## [2026-11-13] - F6/F7: parâmetros de decisão fora do LHS
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). τ, CF_min, q_ref e p_k ficam fora do Latin hypercube e são varridos como sensibilidade. WACC, capex, O&M e clima ficam no LHS.
+Justificativa (se METHODOLOGY_REVISION): os parâmetros de decisão não são incertezas físicas ou econômicas do projeto; varrê-los à parte mantém o LHS sobre o que é incerto.
+Referência (literatura/discussão, se aplicável): decisão do autor.
+Consequência no código ou na configuração (ainda não aplicada): hoje `uncertain_parameters` de config/experiments.yaml lista `discount_rate` e `capex_usd_per_kw` e não lista τ, CF_min nem p_k (COMANDO 141, item 1). O eixo de sensibilidade desses quatro parâmetros não está implementado.
+
+---
+
+## [2026-11-13] - valores monetários na configuração
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). Os valores monetários entram na configuração já em USD de 2024 (o F6 exige `price_year` 2024, D-F6-008), com valor, moeda, ano e fonte nativos registrados na nota do parâmetro.
+Justificativa (se METHODOLOGY_REVISION): o F6 recusa custo cujo `price_year` seja nulo ou diferente de 2024; a nota do parâmetro preserva a rastreabilidade do valor original.
+Referência (literatura/discussão, se aplicável): docs/phases/F6_lcoe_modeling.md D-F6-008; docs/thesis/methods/grupo4.tex (sec:g4-currency).
+Consequência no código ou na configuração (ainda não aplicada): a conversão de USD de 2025 para 2024 depende de um índice dos EUA que o código não tem (o arquivo de índices só traz BRA, IND e PRT); a escolha do índice está em aberto em OQ-093.
+
+---
+
+## [2026-11-13] - metas nacionais de H5
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). Usar o horizonte mais distante disponível por país e tecnologia, sem extrapolar para 2041 a 2070. Só capacidade utility-scale.
+Justificativa (se METHODOLOGY_REVISION): decisão do autor; extrapolar o planejamento oficial além do seu horizonte criaria um valor sem fonte.
+Referência (literatura/discussão, se aplicável): OQ-010; docs/thesis/methods/grupo4.tex.
+Consequência no código ou na configuração (ainda não aplicada): `national_targets` de config/experiments.yaml está todo `null`; nenhuma meta foi escrita. A meta da Índia de 2034 a 35 está em OQ-092.
+
+---
+
+## [2026-11-13] - preços de leilão
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). Preços de leilão entram só como sensibilidade, convertidos com câmbio e deflator com fonte; não entram no τ primário.
+Justificativa (se METHODOLOGY_REVISION): decisão do autor.
+Referência (literatura/discussão, se aplicável): docs/thesis/methods/grupo4.tex.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma identificada na configuração atual.
+
+---
+
+## [2026-11-13] - Group 5: exposição sem perda; canal de rajada
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA (autor, 13/11/2026). O F5 não pontua perdas climáticas: só exposição. O canal de rajada (`gust_mean_annual_max_ms`) é contexto, sem limiar. OQ-051 segue aberta.
+Justificativa (se METHODOLOGY_REVISION): decisão do autor; as limitações correspondentes estão em L-229 e L-232.
+Referência (literatura/discussão, se aplicável): docs/thesis/methods/grupo5.tex; OQ-051.
+Consequência no código ou na configuração (ainda não aplicada): `hazard_thresholds.gust_mean_annual_max_ms` permanece `null` em config/experiments.yaml.
+
+---
+
+## [2026-11-13] - fato registrado: curtailment e CF_min
+Tipo: VERIFICATION_UPDATE
+Descrição: Fato, não decisão (registrado em 13/11/2026). O F6 não modela curtailment (L-033). O fator de capacidade do modelo é bruto; os valores de frota, que são líquidos, dão um piso permissivo para o CF_min.
+Justificativa (se METHODOLOGY_REVISION): n/a — registro de fato.
+Referência (literatura/discussão, se aplicável): docs/LIMITATIONS.md L-033 e L-226; docs/thesis/methods/grupo4.tex.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma. `cf_min` está `null` em PRT, BRA e IND; a ponta primária da faixa está em OQ-090.
+
+---

@@ -1,0 +1,74 @@
+%% requires: \providecommand{\vfy}{\textsuperscript{[v]}}  (marks a value still to be verified)
+% ============================================================
+% GROUP 7: Potentials, validation (F7b) and robust ranking (F7)
+% Place: Literature Review (section 1) and Methodology (section 2).
+% Dropped from the agent draft: the NPV(K,s) formula, the chapter 3 equations (1) to (5)
+% as written, and the Cabrera and Gianetti MAUP references (off topic).
+% ============================================================
+
+\section{Literature Review: Potentials, Spatial Scale and Robust Decision Rules}
+\label{sec:g7-lit}
+
+\subsection{Technical potential is a range that depends on premises}
+Potential estimates follow a hierarchy from theoretical to technical, economic and feasible potential, and published values differ by orders of magnitude because of resolution, reanalysis data and assumptions on power density and exclusions \citep{angliviel2023}. The values available for the three study countries illustrate this (Table~\ref{tab:g7-pot}). For Brazilian onshore wind, the first national atlas reports 143~GW at 50~m \citep{amarante2001}, state atlases compiled in the 2050 plan sum to about 315~GW at 100~m and 598~GW at 150~m for twelve states \citep{epe2020pne}, and a global estimate with 5~MW/km$^2$ over 31\% of the territory gives 14.58~TW \citep{eurek2017}. For Indian wind, the national assessments rise with hub height from 302~GW at 100~m to 695.5~GW at 120~m and about 1164~GW at 150~m \citep{niwe_atlas}. These values are not comparable without harmonizing hub height, power density, exclusion rules and the capacity-factor cutoff. A difference between a modeled potential and a published one is therefore expected and is explained by premises, not treated as an error.
+
+\begin{table}[ht]
+\centering
+\caption{Published technical potentials used as validation bands, with their premises.}
+\label{tab:g7-pot}
+\footnotesize
+\begin{tabular}{p{1.5cm}p{1.1cm}p{2.0cm}p{5.8cm}p{2.0cm}}
+\toprule
+Country & Tech. & Potential & Main premises & Source \\
+\midrule
+Brazil & Wind & 143~GW & 50~m, 1~km grid, mean wind above 7~m/s (2001) & \citet{amarante2001} \\
+Brazil & Wind & 315~GW; 598~GW & Twelve state atlases at 100~m; 150~m & \citet{epe2020pne}\vfy{} \\
+Brazil & Wind & 14.58~TW (22.22~PWh/yr) & 3.5~MW, 90~m, 5~MW/km$^2$, 0.95 availability, 31\% of area available & \citet{eurek2017} \\
+Brazil & PV & 307~GWp (506~TWh/yr) & Best irradiation band (6.0 to 6.2~kWh/m$^2$/day), anthropized areas only, 70~MWp/km$^2$, CF$_{\mathrm{DC}}$ 18.84\% & \citet{epe2018potencial,denholm2008} \\
+Brazil & PV & 28\,519~GWp (43\,857~TWh/yr) & Eight irradiation bands, 407\,437~km$^2$; an area-based ceiling, not a deployable level & \citet{epe2018potencial} \\
+India & PV & 748~GWp & 3\% of wasteland area (2014) & \citet{mnre2024pib748}\vfy{} \\
+India & PV & about 3\,343~GWp & Ground-mounted, updated assessment (2025) & \citet{nise2025ground}\vfy{} \\
+India & Wind & 302; 695.5; about 1\,164~GW & 100~m; 120~m; 150~m & \citet{niwe_atlas}\vfy{} \\
+Portugal & PV, wind & not available & Area of low-sensitivity sites mapped; no totals found & \citet{simoes2023lneg}\vfy{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Spatial aggregation}
+Gridded results depend on the size and shape of the spatial unit. This modifiable areal unit problem has a scale effect and a zoning effect \citep{openshaw1984}. Simulation shows that units that are too coarse lose efficiency and misclassify, while units that are too fine relative to the data-generating process add attenuation bias \citep{avelino2016}. In a downscaling application the scale effect was larger than the zoning effect, and spatially clustered variables were less affected \citep{dare2020}. A formal criterion for the information lost by aggregating between scales has been proposed using a multiscale expansion \citep{bradley_cage}. For a 0.05$^{\circ}$ grid (about 5.5~km) these results motivate a sensitivity test of the ranking to coarser aggregation, not a single fixed resolution.
+
+\subsection{Regret, satisficing and scenario discovery}
+Under deep uncertainty, expected-value optimization is replaced by robustness criteria. Minimax regret chooses the option with the smallest worst-case loss relative to the best option in each future \citep{savage1951,lempert2006}. Satisficing or domain criteria count the share of futures in which performance meets a required level \citep{herman2015,mcphail2018}, and info-gap theory expresses the same idea as the size of the uncertainty horizon that can be tolerated \citep{benhaim2006}. Patient rule induction (PRIM) finds boxes in the space of uncertain factors where a failure outcome concentrates \citep{friedman1999,bryant2010}. Many-objective and adaptive variants are reviewed in the decision-making literature \citep{kasprzyk2013,hamarat2013,marchau2019}. In energy, minimax regret has been applied to greenhouse gas abatement strategies \citep{loulou1999}, regret and info-gap have been compared for climate policy \citep{hall2012}, and exploratory robust design has been applied to energy transitions \citep{hamarat2013}. Among the sources reviewed for this work, no peer-reviewed application combining regret, satisficing and PRIM for spatial siting of wind or PV on a grid was identified. This is a statement about the sources reviewed, not a claim of novelty.
+
+Minimax regret has known limits. It can violate independence of irrelevant alternatives and can produce non-transitive rankings, and for a continuous, convex decision set with quasi-convex regret the optimum is determined by at most $n+1$ scenarios, where $n$ is the dimension of the decision. That reduction is shown not to hold for discrete choices \citep{andersonzachary}. % verify: reading of the theorem taken from the research agent's summary of the PDF
+A ranking of grid cells is a discrete choice, so a small set of extreme scenarios cannot be assumed to determine it. The framework therefore reports the ranking from the full scenario set and tests its sensitivity to dropping single scenarios.
+
+\section{Methodology: Robust Ranking and Validation}
+\label{sec:g7-method}
+
+\subsection{Metrics}
+Let $M$ be the eligible cells of a country and $S$ the set of futures from the Latin hypercube design. For cell $i$ and future $s$, $C(i,s)$ is the LCOE. The regret uses the reference of Section~\ref{sec:g4-q}:
+\begin{align}
+R(i,s) &= \frac{C(i,s) - L^{*}_{s}}{L^{*}_{s}}, \qquad L^{*}_{s} = Q_{q}\!\big(C(\cdot,s)\big), \label{eq:g7-regret}\\
+Z(i)   &= \max_{s \in S} R(i,s), \label{eq:g7-mmr}\\
+\mathrm{Sat}(i;\tau) &= \frac{1}{|S|} \sum_{s \in S} \mathbf{1}\!\left[C(i,s) \le \tau\right]. \label{eq:g7-sat}
+\end{align}
+Cells are ranked by $Z(i)$ (lower is better) and by $\mathrm{Sat}(i;\tau)$ (higher is better) with $\tau$ and $q$ from Group~4. The top fraction $p_k \in \{5, 10, 20\}\%$ defines the robust set. The worst-case score $Z$ is sensitive to a few extreme futures, so the satisficing share is always reported with it, and the ranking is also reported after removing each future in turn.
+
+\subsection{Scenario discovery}
+PRIM is applied to the space of uncertain factors, and the unit is the future (a draw of the uncertain design combined with a climate scenario), not the cell. The nominal shortlist is the $k$ cells with the lowest nominal LCOE. A future is a case of interest when the share of the shortlist's capacity held by cells whose relative-regret rank in that future exceeds $2k$ reaches a threshold of 0.20. The box that maximizes the density of such futures subject to a minimum coverage is reported with its coverage and density. % transcribed from M-F7-08
+
+\subsection{Validation against published potentials (F7b)}
+For each country and technology, the modeled technical potential is compared with the bands of Table~\ref{tab:g7-pot} after harmonizing hub height, power density, exclusions and the DC or AC basis. The result is reported as a ratio to each band with its premises, and it is not a pass or fail test. The pipeline hub height is 100~m for all three countries, so the 100~m values are the primary comparators, and the 150~m layer is run once per country as a sensitivity. Capacity in operation from the Global Energy Monitor is compared with the modeled cell capacity as a second check. % verify: confirm GEM version in F7b
+For Portugal no published area totals were found, so validation there rests on installed capacity and on the planning figure of Group~4, which is declared as a limitation.
+
+\subsection{Spatial aggregation test}
+The ranking is recomputed on a coarser aggregation of the 0.05$^{\circ}$ grid, and the overlap of the top-$k$ sets and the rank correlation between resolutions are reported. % verify: aggregation levels as defined in OQ-064
+
+\subsection{Limitations specific to Group 7}
+\begin{itemize}
+\item Published potentials differ in hub height, density and exclusions, so ratios are indicative.
+\item No area-based potential was found for Portugal.
+\item The 143~GW value belongs to the 2001 atlas at 50~m and is not a value of the 2013 simulation edition, which publishes no national total in the sources read.
+\item The reduction to $n+1$ scenarios is not available for discrete cell ranking; the full scenario set is used.
+\end{itemize}
