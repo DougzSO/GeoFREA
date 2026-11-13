@@ -56,7 +56,13 @@ the nearest eligible substation and to the nearest primary or secondary
 road. Cells whose substation distance exceeds 100~km are flagged as
 requiring transmission development rather than a radial spur; they remain
 in the analysis with the same cost formula, and the share of potential
-they hold is reported.
+they hold is reported. Over the three eligibility scenarios and both
+technologies, the median distance to the nearest eligible substation is
+14 to 16~km in Portugal, 18 to 21~km in India and 32 to 40~km in Brazil,
+and the cells beyond 100~km hold 0.0\,\% of the potential in Portugal,
+0.1 to 1.2\,\% in India and 4.8 to 8.0\,\% in Brazil (installed
+capacity). The medians are taken over the 0.05$^\circ$ cells, weighted by
+eligible area, of the cell-mean distances.
 
 As a sensitivity, the substation distance is replaced by the distance to
 the nearest line of the predictive network layer (gridfinder combined
@@ -125,12 +131,12 @@ table.
 
 The access road is excluded from the central case, because no source
 covers an unpaved access road in the three countries and the term is
-small: in the scenarios tested with the exact geodesic distance, the
-median distance from eligible land to the nearest road is about 1.7~km in
-Portugal, 2.1 to 3.4~km in India and 5.6 to 6.6~km in Brazil, and the
+small: over the three eligibility scenarios and both technologies, the
+median distance from eligible land to the nearest road is 1.6 to 1.8~km
+in Portugal, 2.1 to 3.4~km in India and 5.6 to 6.6~km in Brazil, and the
 share of eligible area more than 30~km from a road is 0.0\,\% in Portugal,
-0.8 to 3.7\,\% in India and 3.9 to 6.2\,\% in Brazil.
-% verify: the report gives these figures for the scenarios it tested only (Portugal for the central solar case); recompute all scenarios, weighted by eligible area, before stating them as ranges per country
+0.7 to 3.7\,\% in India and 3.8 to 6.2\,\% in Brazil (medians of cell-mean
+distances, weighted by eligible area).
 The central LCOE is therefore a lower
 bound with respect to this term. A sensitivity applies the DNIT cost of a
 paved road \cite{dnit2016}, an upper bound for an access road, to the
@@ -218,8 +224,8 @@ points. The public fleet has no systems in zones T1 or T7: cells in T1
 and T2 take the T3 rate, and cells in T7 or hotter take the T6 rate.
 This matters, because in the central eligibility scenario zone T7 or
 hotter holds 50.9\,\% of the PV potential of Brazil and 85.0\,\% of that
-of India, and none of Portugal's.
-% verify: shares from the central scenario of the FABDEM-slope rerun; confirm the restrictive and permissive shares before citing them
+of India, and none of Portugal's; across the three scenarios the shares
+are 46.7 to 54.4\,\% for Brazil and 83.3 to 85.0\,\% for India.
 A deterministic sensitivity therefore applies the global
 meta-analysis median of 0.94\,\%/yr \cite{straubmuck2025} to these
 cells.
