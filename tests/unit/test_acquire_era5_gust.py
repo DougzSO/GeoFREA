@@ -64,19 +64,22 @@ def test_queue_and_download_timeouts_are_independent(tmp_path, monkeypatch):
     """The exact F4-2 false-positive (D-F1-018): a slow queue phase must not
     steal time from the download phase's own budget.
 
-    Queue phase takes 90% of QUEUE_TIMEOUT_S; download phase then takes
-    90% of DOWNLOAD_TIMEOUT_S. Combined, this exceeds either timeout
+    Queue phase takes 60% of QUEUE_TIMEOUT_S; download phase then takes
+    60% of DOWNLOAD_TIMEOUT_S. Combined (120%), this exceeds either timeout
     alone (the old, single shared timeout would have killed this), but
-    under the separated policy both phases fit their own budget.
+    under the separated policy both phases fit their own budget. The
+    timeouts are 1 s so that the 0.4 s margin of each phase absorbs the
+    scheduling delay of a loaded machine (the first version had a 10 ms
+    margin and failed 7 runs in 20 under load).
     """
-    monkeypatch.setattr(acquire_era5_gust, "QUEUE_TIMEOUT_S", 0.1)
-    monkeypatch.setattr(acquire_era5_gust, "DOWNLOAD_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(acquire_era5_gust, "QUEUE_TIMEOUT_S", 1.0)
+    monkeypatch.setattr(acquire_era5_gust, "DOWNLOAD_TIMEOUT_S", 1.0)
 
     downloaded_to = {}
 
     class FakeResult:
         def download(self, target):
-            time.sleep(0.09)  # 90% of DOWNLOAD_TIMEOUT_S
+            time.sleep(0.6)  # 60% of DOWNLOAD_TIMEOUT_S
             Path(target).write_bytes(b"fake netcdf bytes")
             downloaded_to["path"] = target
             return target
@@ -84,7 +87,7 @@ def test_queue_and_download_timeouts_are_independent(tmp_path, monkeypatch):
     class FakeClient:
         def retrieve(self, name, request, target):
             assert target is None  # poll-only phase, no download here
-            time.sleep(0.09)  # 90% of QUEUE_TIMEOUT_S
+            time.sleep(0.6)  # 60% of QUEUE_TIMEOUT_S
             return FakeResult()
 
     request = {"variable": "fg10"}
