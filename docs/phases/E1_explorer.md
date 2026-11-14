@@ -14,11 +14,3 @@ Requires: F3 variants, F5, F6, F7 artifacts. Produces: static explorer bundle.
 ## Active implementation decisions
 
 None yet.
-
-## Known issues
-
-None yet.
-
-## History
-
-None.

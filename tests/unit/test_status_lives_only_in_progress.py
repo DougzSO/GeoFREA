@@ -71,3 +71,28 @@ def test_the_status_line_detector_flags_the_forms_the_records_used():
     assert status_lines("**Status:** built") == ["**Status:** built"]
     assert status_lines("  state: done") == ["  state: done"]
     assert status_lines("The status of the phase is recorded elsewhere.") == []
+
+
+STATE_SECTION = re.compile(r"^##\s+(history|known issues)\b", re.IGNORECASE | re.MULTILINE)
+
+
+def state_sections(text: str) -> list[str]:
+    """The headings of the sections a phase record no longer has: History and Known issues (decisions live in D-* bullets, state in PROGRESS)."""
+    return [m.group(0).strip() for m in STATE_SECTION.finditer(text)]
+
+
+def test_phase_records_have_no_history_or_known_issues_section():
+    offenders = {}
+    for path in sorted((REPO / "docs" / "phases").glob("*.md")):
+        found = state_sections(path.read_text(encoding="utf-8"))
+        if found:
+            offenders[path.name] = found
+    assert not offenders, (
+        "a phase record holds Contract, Conformance and its D-* decisions; dates belong to the D-* bullets, "
+        f"limitations to LIMITATIONS, open items to OPEN_QUESTIONS: {offenders}"
+    )
+
+
+def test_the_state_section_detector_flags_both_headings():
+    assert state_sections("## History\n- x\n## Known issues\n- y\n") == ["## History", "## Known issues"]
+    assert state_sections("## Active implementation decisions\n- **D-F1-001 — x (history of y).**") == []
