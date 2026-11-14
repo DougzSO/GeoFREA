@@ -6,7 +6,7 @@ F3 hid the E1 fix). Every cache key therefore holds the code fingerprint of the 
 `CACHE_CODE_ROOTS[name]` and of everything those modules import, transitively (`code_fingerprint.closure_fingerprint`). A calculation line changes
 it, a comment, a docstring or a reformat does not.
 
-`CACHE_CODE_ROOTS` is the inventory of the caches that hold a computed result; `docs/phases/core/resume_integrity_58.md` lists them with the other stores.
+`CACHE_CODE_ROOTS` is the inventory of the caches that hold a computed result; `docs/_audit/resume_integrity_58.md` lists them with the other stores.
 """
 
 from __future__ import annotations

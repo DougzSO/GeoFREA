@@ -139,12 +139,12 @@ def test_unchanged_text_and_changelog_edits_change_no_item():
 def test_an_item_missing_from_the_last_changelog_row_is_reported():
     new = OLD.replace("- **M-F5-01.** Capacity.", "- **M-F5-01.** Capacity per cell.").replace(
         "| 1.0.0 | 2026-01-01 | first |",
-        "| 1.0.1 | 2026-02-01 | M-F5-010 and T-R1 reworded |\n| 1.0.0 | 2026-01-01 | first |",
+        "| 1.0.1 | 2026-02-01 | M-F5-010 and T-R1 reworded |\n| 1.0.0 | 2026-01-01 | first |",  # <!-- lint: skip -->
     )
     assert missing_from_changelog(OLD, new) == [
         "M-F5-01"
-    ]  # M-F5-010 is another ID: no prefix match
-    fixed = new.replace("M-F5-010 and", "M-F5-01 and")
+    ]  # M-F5-010 is another ID: no prefix match <!-- lint: skip -->
+    fixed = new.replace("M-F5-010 and", "M-F5-01 and")  # <!-- lint: skip -->
     assert missing_from_changelog(OLD, fixed) == []
 
 

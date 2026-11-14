@@ -3,9 +3,9 @@
 Read-only: it reads the artifacts of F3, F4 and F5 of the final round and `config/parameters.json`, writes nothing to the pipeline outputs, and imports nothing
 from the pipeline. One country at a time:
 
-    python scripts/audit_potential.py PRT [--out docs/phases/F5/audit_potential_65]
+    python scripts/audit_potential.py PRT [--out docs/_audit/audit_potential_65]
 
-writes `<out>/<ISO3>.json` (every number of the report) and the curves `<out>/<ISO3>_supply_curves.png`. `docs/phases/F5/audit_potential_65.md` is written
+writes `<out>/<ISO3>.json` (every number of the report) and the curves `<out>/<ISO3>_supply_curves.png`. `docs/_audit/audit_potential_65.md` is written
 from the three JSON files.
 
 Items (T-14): 1 wind against solar; 2 area weighting; 3 supply curves and CF bands, with no resource cut; 4 plausibility of the totals; 5 effective
@@ -597,7 +597,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("iso")
     ap.add_argument(
-        "--out", default=str(REPO_ROOT / "docs" / "phases" / "F5" / "audit_potential_65")
+        "--out", default=str(REPO_ROOT / "docs" / "_audit" / "audit_potential_65")
     )
     ap.add_argument("--items", default="1,2,3,4,5,6")
     args = ap.parse_args(argv)

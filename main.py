@@ -512,8 +512,8 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
     A layer that resolved to None (no source data for this country) is
     not registered — see _ALIGNED_RASTER_LAYER_KEYS' docstring note for
     why this is safe for PRT/BRA today, and the known limitation this
-    creates for a future country missing one of these layers (recorded
-    in docs/phases/core.md Known issues).
+    creates for a future country missing one of these layers (OQ-102 in
+    docs/OPEN_QUESTIONS.md).
     """
     for layer_key in _ALIGNED_RASTER_LAYER_KEYS:
         path = getattr(result, layer_key)

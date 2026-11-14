@@ -1,6 +1,6 @@
 """The Group 1 and Group 2 values recorded in `config/parameters.json` against the tables of the .tex (M-F5-01, M-F5-03, M-F6-07, U-05).
 
-Not a check of the sources (the audit `docs/phases/F5/audit_groups1-2.md` did that); a check that the file holds what the tables say,
+Not a check of the sources (the audit `docs/_audit/audit_groups1-2.md` did that); a check that the file holds what the tables say,
 with the schema of U-05, and that the F6 sampler reproduces the IRENA mean (eq:g2_capex_interval).
 """
 

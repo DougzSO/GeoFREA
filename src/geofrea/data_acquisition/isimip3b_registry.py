@@ -3,7 +3,7 @@
 OQ-036 (resolved 2026-10-05, route b): the hazard channel's per-country
 ISIMIP3b crops are reused from CRAEI (A-11, code-and-data copy of the
 projection channel only -- the W5E5 reference channel has no mapped
-consumer in any M-F4-0x and was not copied) rather than read in place from
+consumer in any M-F4 item and was not copied) rather than read in place from
 CRAEI_BASELINE_DIR. This registry records the one-time copy so a later run
 can verify it is still intact without re-hashing 180 files, and so
 `members.yaml` (M-F4-01, task J-1) has a single place to look up which

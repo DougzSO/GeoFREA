@@ -2,7 +2,7 @@
 
 The validity limit (A in (0, 25] m/s, k in (0, 10], `audit.yaml`) is checked by `input_ranges.validate_candidates` and stops the phase. This report
 describes what lies inside it: no value of it is a plausibility threshold, so nothing here is a warning. The counts of k below 1 and above 4 are the
-two values the first real run looked at (`docs/phases/F5/fix_round_46.md`).
+two values the first real run looked at (`docs/_audit/fix_round_46.md`).
 """
 
 from __future__ import annotations
