@@ -37,5 +37,9 @@ jobs:
       - name: Ruff (lint)
         run: ruff check src tests scripts main.py
 
+      - name: Lint of the documents
+        if: matrix.python-version == '3.12'
+        run: python scripts/lint_docs.py
+
       - name: Unit tests
         run: pytest tests/unit -m "not slow" -n 3 -p no:cacheprovider -q
