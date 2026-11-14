@@ -3,7 +3,7 @@
 ## 0. Como usar este documento
 
 - Código e documentação ficam no repositório `GeoFREA` (exemplos em `docs/figures/`). `GeoFREA_data` é a pasta de dados e saídas (`outputs/<ISO>/.../figures`), não um repositório.
-- **Antes de editar qualquer coisa**: leia `docs/figures/inventory.md` e `src/geofrea/viz/mapstyle.py` (comando 56) e o código dos mapas v2 da F5 (comando 60). A infraestrutura nova evolui `mapstyle.py` (renomear ou envolver como `MapFigure`), não cria um segundo módulo paralelo. Não assuma nomes de arquivo ou funções deste documento; eles são descritos por comportamento.
+- **Antes de editar qualquer coisa**: leia `docs/figures/migration_68.md` (as figuras de cada família hoje) e `src/geofrea/viz/mapstyle.py` (comando 56) e o código dos mapas v2 da F5 (comando 60). A infraestrutura nova evolui `mapstyle.py` (renomear ou envolver como `MapFigure`), não cria um segundo módulo paralelo. Não assuma nomes de arquivo ou funções deste documento; eles são descritos por comportamento.
 - Nenhuma execução pesada (auditoria sobre dados reais, regeneração de figuras, suíte completa) enquanto a rodada final de um país estiver em curso.
 - Saída de figuras: **somente PNG** (decisão do autor). Nada de SVG ou PDF.
 - Os exemplos visuais são do Brasil (BRA), mas **toda regra vale para qualquer país**: nada de constantes hardcoded por país (limites, posições de elementos, tamanhos, ticks).

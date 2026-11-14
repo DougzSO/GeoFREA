@@ -40,7 +40,7 @@ The CF of a cell in F5 is the model applied to the eligible-area-weighted *mean*
 | `docs/phases/core/coverage_alignment_54/` | 12 | 54 |
 | `docs/phases/F5/potential_maps_v2/` | 8 | 58, 60 |
 | `docs/phases/F5/potential_maps_absolute/` | 2 | 58, 60 |
-| `docs/phases/F5/audit_potential_65/` | 3 | 65 |
+| `docs/_audit/audit_potential_65/` | 3 | 65 |
 | `docs/figures/examples/` | 6 | 67, 67b (the examples of the style guide; kept by design) |
 | `docs/figures/migration_68/` | 8 | 68 |
 | `docs/figures/display_layers_70/` | 4 | 70 (this report) |

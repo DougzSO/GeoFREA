@@ -269,7 +269,7 @@ Statuses (docs/CONVENTIONS.md: `ran_with_issues` when the last run logged a warn
 
 ## 7. Records and decisions
 
-- METHODOLOGY 15.2.0 (M-F2a-01, M-F2a-08; M-F1-02 and M-F2a-07 reworded), D-F2a-021, D-F1-027, OQ-061 closed (removed from the register), OQ-039 stays closed (its verdict, islands out, stands; the polygon rule changed, D-F1-027), L-045 and L-046 retired, L-047 (the boundary as GADM publishes it, and the layers that do not reach the blocks), OQ-062 opened.
+- METHODOLOGY 15.2.0 (M-F2a-01, M-F2a-08; M-F1-02 and M-F2a-07 reworded), D-F2a-021, D-F1-032, OQ-061 closed (removed from the register), OQ-039 stays closed (its verdict, islands out, stands; the polygon rule changed, D-F1-027), L-045 and L-046 retired, L-047 (the boundary as GADM publishes it, and the layers that do not reach the blocks), OQ-062 opened.
 - The F1 registry still locates `raw/elevation/<ISO>/<ISO>_elevation.tif` and F1b still audits it; no computation reads it. I did not remove the layer from the registry (the tests of the acquisition phase and the audit depend on it); say if you want it out.
 - V-01 was refrozen for the elevation and slope of ZZZ, which the rule of that fixture says needs your authorization; it follows directly from step 4 and nothing else in the fixture changed. If you do not accept it, the fixture can be restored with `git revert` of that line of `zzz.npz` and the test then fails by design.
 - Not done and not requested: a content-based staleness for the manifest; a code-version component in the fingerprint (the cause of the manual `--rerun` above).
