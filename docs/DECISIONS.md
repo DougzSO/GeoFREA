@@ -1765,3 +1765,75 @@ Substitui: nenhuma decisão anterior.
 Consequência no código ou na configuração (ainda não aplicada): nenhuma; `regret_quantile: 0` de config/experiments.yaml fica como está. OQ-020 segue aberta como o teste de sensibilidade com 0,01, e M-F7-02 continua dizendo que só `q_ref = 0` é construído.
 
 ---
+
+## [2026-11-15] DEC-075 - F7: fonte das metas do PNE 2050
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor delegada ao assistente em 15/11/2026, vetável no R. A fonte do PNE 2050 é o Relatório Final. A solar centralizada de 27 a 90 GW em 2050 são os extremos de cenário (Estagnação e Desafio da Expansão), não uma projeção central, e entra com `kind` `technical_planning`. A geração distribuída fica fora, porque o GeoFREA é utility-scale. O valor de 91 GW da Consulta Pública 95/2020 é só divergência de arredondamento. As outras fontes do PNE ficam sem decisão.
+Justificativa (se METHODOLOGY_REVISION): DEC-063 manda usar o horizonte mais distante disponível e só capacidade utility-scale; os extremos de cenário não são uma meta central e por isso são rotulados como planejamento técnico.
+Referência (literatura/discussão, se aplicável): DEC-063; DEC-070; OQ-010; PNE 2050, Relatório Final (EPE); Consulta Pública 95/2020.
+Fase: F7 (H5)
+Implementa: nenhum D-* ainda; `national_targets` de config/experiments.yaml segue `null` até o COMANDO 162.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora.
+
+---
+
+## [2026-11-15] DEC-076 - F6/F7: base primária da calibração do IRENA
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor delegada ao assistente em 15/11/2026, vetável no R. A edição irena_rpgc_2024 (Renewable power generation costs in 2024) é a base primária da calibração: TIC, CF, O&M, LCOE e WACC dela. A edição irena_rpgc_2025 só alimenta verificação secundária, convertida por `to_usd_2024` (DEC-071). É proibido combinar TIC, CF ou O&M de uma edição com o LCOE da outra no resultado primário. Os valores estão em docs/_audit/2026-11_docs_audit/11_irena_inputs.md.
+Justificativa (se METHODOLOGY_REVISION): a edição 2024 traz TIC, CF e O&M e o LCOE na mesma base (USD reais de 2024, vida útil de 25 anos); a de 2025 traz só o LCOE nacional, em USD de 2025.
+Referência (literatura/discussão, se aplicável): IRENA (2025), Renewable Power Generation Costs in 2024; IRENA (2026), Renewable Power Generation Costs in 2025 (Figura S3); DEC-060; DEC-071.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora.
+
+---
+
+## [2026-11-15] DEC-077 - F7: CF eólico primário do IRENA para Brasil e Índia
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor delegada ao assistente em 15/11/2026, vetável no R. O CF eólico primário é 53% para o Brasil e 29% para a Índia (Figuras 1.4 e 1.15 da edição 2024). Os valores da Tabela 2.2 (56% e 39%) entram como sensibilidade.
+Justificativa (se METHODOLOGY_REVISION): com 39% o LCOE publicado da Índia (48 USD/MWh) exigiria um WACC próximo de 12% (conta aproximada do assistente, sem degradação); no Brasil a conta não decide, e a mesma regra se aplica aos dois países.
+Referência (literatura/discussão, se aplicável): IRENA (2025), Renewable Power Generation Costs in 2024, Figuras 1.4 e 1.15 e Tabela 2.2; DEC-076.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora.
+
+---
+
+## [2026-11-15] DEC-078 - F7: Portugal pela linha Europa do IRENA
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor delegada ao assistente em 15/11/2026, vetável no R. Portugal usa a linha Europe do IRENA (Tabelas 2.1, 2.3, 2.4, 3.1 e 3.3) para TIC, CF eólico, LCOE e percentis. O O&M eólico primário é 45 (outros países da OCDE, Tabela A3) e 29 (Espanha) é sensibilidade; o O&M solar é 20,73. O CF solar de Portugal é a média da UE (15%), com a marca `regional_proxy`. O par PRT solar roda no script do COMANDO 159, mas fica fora de qualquer média agregada do viés de tau.
+Justificativa (se METHODOLOGY_REVISION): o IRENA não publica linha nacional para Portugal; a transferência regional é Tier 2, como em DEC-060, e o CF solar de Portugal é um proxy da UE.
+Referência (literatura/discussão, se aplicável): IRENA (2025), Renewable Power Generation Costs in 2024; DEC-060; DEC-076.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. A limitação do CF solar de Portugal está em L-242.
+
+---
+
+## [2026-11-15] DEC-079 - F6/F7: base CA do IRENA contra capacidade DC do F6
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor delegada ao assistente em 15/11/2026, vetável no R. TIC, CF e O&M do IRENA estão em base CA (nota 4 da edição 2024; o CF solar é afetado pela razão de carga do inversor, o inverter loading ratio). O script do COMANDO 159 usa TIC e CF do IRENA juntos, sem converter. A conversão DC/AC ao aplicar tau às células do F6, cuja capacidade é DC (D-F6-028), fica em aberto (OQ-105).
+Justificativa (se METHODOLOGY_REVISION): TIC e CF na mesma base CA dão um LCOE coerente com o publicado; converter só um dos dois quebraria essa coerência.
+Referência (literatura/discussão, se aplicável): IRENA (2025), Renewable Power Generation Costs in 2024, nota 4; D-F6-028; DEC-073; OQ-105.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. A limitação está em L-241.
+
+---
+
+## [2026-11-15] DEC-080 - conferências feitas pelo autor em 15/11/2026
+Tipo: VERIFICATION_UPDATE
+Descrição: Fato, não decisão. O autor conferiu em 15/11/2026: os 447 GW, 138 GW e 1.029 GW do MoP e a nota do PIB (DEC-070); os números de curtailment do RT ONS DGL 0189/2025 (DEC-073); o Data Appendix do IRENA 2023, Figura A1 (DEC-072); a base CA ou DC do CF solar; o CF e o O&M do IRENA; a atribuição dos valores 31 e 43 da Figura S3 da edição 2025; e os dados do .bib do MoP e do ONS. Com isso, o que DEC-070, DEC-072 e DEC-073 deixaram "a conferir" ou `verified: false` está conferido; as entradas antigas não são editadas.
+Justificativa (se METHODOLOGY_REVISION): n/a — registro de fato.
+Referência (literatura/discussão, se aplicável): DEC-070; DEC-072; DEC-073; docs/_audit/2026-11_docs_audit/11_irena_inputs.md.
+Fase: F6, F7
+Implementa: nenhum D-*.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma; o `.bib` entra no COMANDO 165.
+
+---
