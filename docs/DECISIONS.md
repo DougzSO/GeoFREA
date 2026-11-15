@@ -1705,3 +1705,63 @@ Referência (literatura/discussão, se aplicável): `docs/_audit/2026-11_docs_au
 Consequência no código ou na configuração (ainda não aplicada): `docs/CONVENTIONS.md` (l. 47, 52 e 74) ainda diz que a decisão fica só no registro da fase; não foi alterado.
 
 ---
+
+## [2026-11-15] DEC-070 - F7: metas da Índia para 2034-35 (OQ-092)
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor, delegada ao assistente em 15/11/2026, vetável no R. As metas da Índia para 2034-35 (447 GW de solar fotovoltaica e 138 GW de eólica, dentro de 1.029 GW de capacidade total) entram em H5 como horizonte técnico de planejamento do CEA e do Ministério de Energia (MoP), rotuladas `technical_planning`: não são meta estatutária e não são NDC. Fontes indicadas pelo autor: Annual Report 2025-26 do Ministry of Power (os números atribuídos aos estudos do CEA) e a resposta parlamentar divulgada pelo PIB em 04/02/2026. A conferir: em 15/11/2026 nenhum dos dois documentos pôde ser aberto (HTTP 403 em powermin.gov.in e em pib.gov.in), então a presença dos números 447, 138 e 1.029 em cada um não foi verificada, e o título da nota do PIB informado pelo autor trata de energia nuclear, o que não confirma que ela traga esses números. Uma busca na web não achou a nota; achou uma notícia (Down To Earth) que cita para o plano do CEA outros números (1.200 GW de solar e 400 a 450 GW de eólica), não conferida. Enquanto isso não for conferido, os valores ficam `verified: false`.
+Justificativa (se METHODOLOGY_REVISION): DEC-063 manda usar o horizonte mais distante disponível por país e tecnologia; para a Índia, o planejamento do CEA/MoP para 2034-35 é esse horizonte, e o rótulo evita ler o valor como compromisso legal ou NDC.
+Referência (literatura/discussão, se aplicável): OQ-092; OQ-010; DEC-063; docs/thesis/methods/grupo4.tex. Annual Report 2025-26 do MoP e resposta parlamentar do PIB de 04/02/2026: a conferir (sem acesso em 15/11/2026).
+Fase: F7 (H5)
+Implementa: nenhum D-* ainda; `national_targets` de config/experiments.yaml segue `null` até o COMANDO 162.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. Quando a configuração receber as metas, o campo `kind` é `technical_planning`.
+
+---
+
+## [2026-11-15] DEC-071 - F6: índice dos EUA para converter USD 2025 em USD 2024 (OQ-093)
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor, delegada ao assistente em 15/11/2026, vetável no R. O índice dos EUA é o deflator do PIB do Banco Mundial (`NY.GDP.DEFL.ZS`): 2024 = 119,03 e 2025 = 122,36 (valores informados pelo autor). Conferência: a API do Banco Mundial (indicador `NY.GDP.DEFL.ZS`, país USA), consultada em 15/11/2026 (última atualização da série informada pela API: 11/11/2026), devolveu 2024 = 119,027387038617 e 2025 = 122,361624831936 (e 2023 = 116,144257693854). A razão 2024/2025 é 0,97275, aproximadamente 0,9728. O fator 0,9725 usado antes em OQ-093 e em docs/thesis/methods/grupo4.tex vinha de uma série de outra base, não dessa. O valor de 2025 pode ser provisório e ser revisado pelo Banco Mundial; a data de coleta fica registrada para isso.
+Justificativa (se METHODOLOGY_REVISION): é o mesmo método e a mesma série do `to_usd_2024` (`lcoe_modeling/connection.py`, `DEFLATOR = "NY.GDP.DEFL.ZS"`), cobre investimento e não só consumo, e não tem a lacuna de outubro de 2025 do CPI-U.
+Referência (literatura/discussão, se aplicável): OQ-093; DEC-062; World Bank, NY.GDP.DEFL.ZS (EUA), coleta de 15/11/2026; scripts/fetch_conversion_indices.py.
+Fase: F6
+Implementa: nenhum D-* ainda; a série dos EUA entra em scripts/fetch_conversion_indices.py e no arquivo de índices no COMANDO 158.
+Substitui: a escolha de CPI-U do BLS (fator 0,9744 = 313,689 / 321,943), que aparece como comentário em docs/thesis/methods/grupo4.tex e como opção 1 de OQ-093; não há entrada DEC-nnn dessa escolha. Ela deixa de valer.
+Consequência no código ou na configuração (ainda não aplicada): o arquivo de índices só traz BRA, IND e PRT; a série dos EUA ainda não está nele.
+
+---
+
+## [2026-11-15] DEC-072 - F6/F7: faixa de WACC por país e tecnologia (OQ-089)
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor, delegada ao assistente em 15/11/2026, vetável no R. A faixa de WACC de cada par país-tecnologia é a união de [regional 2024 menos 1 p.p., regional 2024 mais 1 p.p.] com o ponto do país em 2021 do apêndice de dados do IRENA (2023), Figura A1. A regra é a mesma para os seis pares (independência de país). Valores em % reais pós-impostos, informados pelo autor, a conferir no PDF. Pontos de 2021: BRA solar 6,30 e eólica 4,90; IND 5,90 e 5,90; PRT 4,20 e 3,20. Regionais de 2024 (Figura 1.13): América do Sul 7,7 e 7,7; Europa 4,2 e 3,7; Ásia 4,0 e 3,8. Faixas resultantes: BRA solar [6,30; 8,70], BRA eólica [4,90; 8,70], PRT solar [3,20; 5,20], PRT eólica [2,70; 4,70], IND solar [3,00; 5,90], IND eólica [2,80; 5,90]. O caso central continua o valor regional. Ressalvas: (1) o ponto 4,90 de BRA eólica é de 2021 e fica abaixo do que a Figura S7 de 2024 mostra para o Brasil; (2) a distribuição uniforme numa faixa assimétrica desloca a média do hipercubo latino em relação ao valor central regional. Os valores continuam `verified: false` até o autor conferir no PDF.
+Justificativa (se METHODOLOGY_REVISION): a regra única não deixa um país com faixa mais larga por ter mais fontes, e a união mantém o ponto de país publicado dentro da faixa.
+Referência (literatura/discussão, se aplicável): OQ-089; DEC-061; IRENA (2023), The cost of financing for renewable power, e seu apêndice de dados (Figura A1); IRENA (2025), Renewable Power Generation Costs in 2024 (Figuras 1.13 e S7).
+Fase: F6, F7
+Implementa: nenhum D-* ainda. Um `M-` novo e a configuração entram juntos no COMANDO 161; `discount_rate` está em `uncertain_parameters` de config/experiments.yaml sem essa regra.
+Substitui: nenhuma decisão anterior; a regra anterior (mais ou menos 1 p.p. em torno do valor regional, Tier 3) deixa de ser a regra em avaliação de OQ-089 e passa a ser um dos dois termos da união.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma; config/parameters.json e config/experiments.yaml não foram tocados.
+
+---
+
+## [2026-11-15] DEC-073 - F7: ponta primária da faixa de CF_min (OQ-090)
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor, delegada ao assistente em 15/11/2026, vetável no R. A ponta primária da faixa de `CF_min` é a estrita (CF ex-ante, de projeto, bruto). A ponta permissiva (CF de frota, líquido de curtailment) fica como sensibilidade. Conferência no código em 15/11/2026: o CF modelado é bruto. O solar é `CF0 = pvout_kwh_kwp_day / 24` com a correção de membro (M-F5-02), sem corte do inversor nem curtailment (L-033); o eólico usa a retenção `eta_loss` (esteira, disponibilidade, perdas elétricas e sujeira) e nenhum curtailment (M-F5-03). O CF solar do modelo tem como denominador a capacidade DC (kWh por kWp, D-F6-028) e o IRENA, segundo docs/thesis/methods/grupo4.tex (a conferir no relatório), publica o CF solar como energia AC sobre capacidade DC; se a energia de PVOUT já está depois do inversor não foi verificado aqui, e o corte do inversor não é modelado (L-033). Isso não diverge do que a decisão supõe: o CF do modelo é bruto de curtailment. Evidência de contexto, a conferir no documento: curtailment renovável variável no Brasil de 0,5% (2022), 3,6% (2023) e 9,3% (2024), no RT DGL-ONS 0189/2025 (não aberto em 15/11/2026).
+Justificativa (se METHODOLOGY_REVISION): um piso de CF de frota, que é líquido de curtailment, admitiria sítios que a frota real não sustenta quando comparado com o CF bruto do modelo (L-226).
+Referência (literatura/discussão, se aplicável): OQ-090; DEC-066; L-033; L-226; M-F7-01; RT DGL-ONS 0189/2025 (a conferir).
+Fase: F7
+Implementa: nenhum D-* ainda; `cf_min` segue `null` em PRT, BRA e IND até o COMANDO 162.
+Substitui: nenhuma decisão anterior (DEC-066 registrou o fato e deixou a ponta para OQ-090).
+Consequência no código ou na configuração (ainda não aplicada): nenhuma.
+
+---
+
+## [2026-11-15] DEC-074 - F7: `q_ref` continua 0 (OQ-091)
+Tipo: METHODOLOGY_REVISION
+Descrição: FECHADA. Decisão do autor, delegada ao assistente em 15/11/2026, vetável no R. Pela regra "manter o que já está implementado e testado, salvo se a pergunta ou a decisão registrar que o autor já escolheu a mudança", `q_ref` continua 0 (a referência é o mínimo). Nenhum registro mostra que o autor escolheu 0,01; D-F7-009 implementa só `q_ref = 0` e recusa outro valor, e OQ-020 fixa a regra (padrão 0, teste com 0,01, adotar o mínimo salvo se os extremos dominarem). Com isso, o guarda V-03 de `evaluate` em evaluator.py não muda, não há convenção a decidir para regret negativo e F7 não passa a aceitar `q_ref` diferente de 0. O COMANDO 160 para no item 1.
+Justificativa (se METHODOLOGY_REVISION): o estado atual está implementado e testado, e a troca para 0,01 não tem decisão do autor que a peça.
+Referência (literatura/discussão, se aplicável): OQ-091; OQ-020; D-F7-009; docs/thesis/methods/grupo4.tex.
+Fase: F7
+Implementa: D-F7-009
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma; `regret_quantile: 0` de config/experiments.yaml fica como está. OQ-020 segue aberta como o teste de sensibilidade com 0,01, e M-F7-02 continua dizendo que só `q_ref = 0` é construído.
+
+---
