@@ -1,0 +1,55 @@
+{
+ "origin": {
+  "what": "protected-area footprint of the real data, PRT and BRA, computed with land_eligibility.fractions.polygon_coverage_fraction and land_eligibility.pipeline._iucn_subset on the aligned 0.01 degree grid of F2a",
+  "command": "COMANDO 148 (docs audit closure), tests/regression/protected_footprint.py::footprint",
+  "date": "2026-11-15",
+  "code_fingerprint_land_eligibility": "44726ec374ead54fdff2ecb8b8bd160153c8e7eea49b0d69952d4b8997ebf7a4",
+  "git_head": "b73b95f1d02c38cae91ff258d43b05ed2fd961ab",
+  "data": "Protected Planet / WDPA API v4 (api.protectedplanet.net/v4), file of the real data directory; the WDPA release is not recorded in the file or in the layer registry, so the version is the sha256",
+  "levels": {
+   "any": "every polygon, whatever its IUCN category",
+   "ia_ib_ii": "IUCN categories Ia, Ib and II"
+  },
+  "area_km2": "sum of the share of each pixel times the area of its row (pixel_row_area_km2); compared with a relative tolerance of 1e-9, the counts exactly"
+ },
+ "countries": {
+  "PRT": {
+   "wdpa_file": "raw/wdpa/PRT/PRT_protected_areas_wdpa.geojson",
+   "wdpa_sha256": "0ec36767ec11ef04162f8ce1d64df093ff6f980fbbab0305249669013080d865",
+   "wdpa_bytes": 409086,
+   "grid_file": "outputs/PRT/grid_alignment/artifacts/PRT_elevation_aligned.tif",
+   "grid_sha256": "66e70f1d9617006295d7287d436ad464480e44262337f3ac4b839b701b775a3a",
+   "footprint": {
+    "any": {
+     "pixels_above_0": 36100,
+     "pixels_at_least_half": 31181,
+     "area_km2": 29753.16373053578
+    },
+    "ia_ib_ii": {
+     "pixels_above_0": 883,
+     "pixels_at_least_half": 751,
+     "area_km2": 695.335321989514
+    }
+   }
+  },
+  "BRA": {
+   "wdpa_file": "raw/wdpa/BRA/BRA_protected_areas_wdpa.geojson",
+   "wdpa_sha256": "b4f1d1c91c579ab752a2cfcf8960c3af17788d4f00748a66178087a8904204fc",
+   "wdpa_bytes": 5218514,
+   "grid_file": "outputs/BRA/grid_alignment/artifacts/BRA_elevation_aligned.tif",
+   "grid_sha256": "cd64ef78fb72f2faa9f608224dd2dc4edd001fa312ea5de92735097b501c4e06",
+   "footprint": {
+    "any": {
+     "pixels_above_0": 2330856,
+     "pixels_at_least_half": 2233136,
+     "area_km2": 2712025.1659309766
+    },
+    "ia_ib_ii": {
+     "pixels_above_0": 604318,
+     "pixels_at_least_half": 564938,
+     "area_km2": 686542.1754021558
+    }
+   }
+  }
+ }
+}
