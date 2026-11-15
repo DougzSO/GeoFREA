@@ -10,13 +10,13 @@ Requires: `acquisition_registry`. Produces: `audit_report` (per-layer summaries,
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
-| M-F1b-01 | Expected resolutions and sanity ranges in configuration | `config_models/audit.py::AuditConfig`; `data_quality_audit/audit.py::run_audit_phase` | not found | pass |
-| M-F1b-01 | PVOUT unit reported as kWh/kWp/day | not found | not found | pass |
+| M-F1b-01 | Expected resolutions and sanity ranges in configuration | `config_models/audit.py::AuditConfig`; `data_quality_audit/audit.py::run_audit_phase` | `tests/unit/test_raster_inspection.py::test_diagnose_consistency_flags_unexpected_resolution` | pass |
+| M-F1b-01 | PVOUT unit reported as kWh/kWp/day | `data_quality_audit/audit.py::run_audit_phase` (the PVOUT unit check) | `tests/unit/test_audit.py::test_run_audit_phase_flags_pvout_unit_mismatch` | pass |
 | M-F1b-01 | Wind expected resolution matches GWA native grid | not found | not found | pass |
 | M-F1b-01 | Audit covers new layers (Weibull, air density, CMIP6, ERA5, GEM) | not found | not found | partial |
-| M-F1b-01 | Audit runs for every acquired country | `data_quality_audit/audit.py::run_audit_phase` | not found | pass |
-| M-F1b-02 | Reports, never blocks | `data_quality_audit/audit.py::run_audit_phase`; `config_models/audit.py::AuditInputs` | not found | pass |
-| A-02 (vector clip path) | Invalid-geometry repair unconditional for every clip-path caller, not just suitability_criteria | `vector_inspection.py::_read_clipped_with_cache`; `core/geo_utils.py::read_clipped_to_country`; `data_quality_audit/vector_inspection.py::inspect_vector_layer` | not found | pass |
+| M-F1b-01 | Audit runs for every acquired country | `data_quality_audit/audit.py::run_audit_phase` | `tests/unit/test_main.py::test_audit_run_reflects_data_acquisition_output_end_to_end` | pass |
+| M-F1b-02 | Reports, never blocks | `data_quality_audit/audit.py::run_audit_phase`; `config_models/audit.py::AuditInputs` | `tests/unit/test_audit.py::test_run_audit_phase_with_no_inputs_reports_every_layer_missing` | pass |
+| A-02 (vector clip path) | Invalid-geometry repair unconditional for every clip-path caller, not just suitability_criteria | `vector_inspection.py::_read_clipped_with_cache`; `core/geo_utils.py::read_clipped_to_country`; `data_quality_audit/vector_inspection.py::inspect_vector_layer` | `tests/unit/test_geo_utils.py::test_clip_vector_to_country_repairs_bowtie_feature_without_raising` | pass |
 
 ## Active implementation decisions
 

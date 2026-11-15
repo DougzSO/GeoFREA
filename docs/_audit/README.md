@@ -1,6 +1,6 @@
 # docs/_audit: index by theme
 
-Audit, measurement and phase reports. Each file is a dated record of what was true when it was written; it is not kept up to date. Files are cited by path from code comments, scripts and active docs, so they are not renamed. Files that nothing cited were moved on 2026-11-13 to `docs/_archive/2026-11/` (see its README). The audit of the documents of 2026-11-13 is in `2026-11_docs_audit/` (reports 01 to 08 and their tables).
+Audit, measurement and phase reports. Each file is a dated record of what was true when it was written; it is not kept up to date. Files are cited by path from code comments, scripts and active docs, so they are not renamed. Files that nothing cited were moved on 2026-11-13 to `docs/_archive/2026-11/` (see its README). The audit of the documents of 2026-11-13 is in `2026-11_docs_audit/` (reports 01 to 10 and their tables; report 09 is the 35 conformance rows that said `not found`, report 10 what stays open).
 
 ## General audits and repository state
 

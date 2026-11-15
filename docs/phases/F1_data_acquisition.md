@@ -10,14 +10,14 @@ Requires: configuration. Produces: layer registry artifact (`acquisition_registr
 
 | Item | Requirement | Implementation (module:function) | Test | Status |
 |---|---|---|---|---|
-| M-F1-01 | Registry with provenance | `data_acquisition/schemas.py::fetch_status`; `data_acquisition/phase.py::run_acquisition_phase` | not found | pass |
-| M-F1-02 | Active layer set | `config_models/audit.py::AuditInputs`; `grid_alignment/schemas.py::GridAlignmentInputs` | not found | pass |
-| M-F1-03 | GWA Weibull A/k, air density, wind speed at 100/150/200 m | `fetchers/wind.py::fetch_gwa_product` | not found | pass |
+| M-F1-01 | Registry with provenance | `data_acquisition/schemas.py::fetch_status`; `data_acquisition/phase.py::run_acquisition_phase` | `tests/unit/test_data_acquisition_phase.py::test_run_acquisition_phase_fetch_status_split_2026_09_11` | pass |
+| M-F1-02 | Active layer set | `config_models/audit.py::AuditInputs`; `grid_alignment/schemas.py::GridAlignmentInputs` | `tests/unit/test_data_acquisition_adapter.py::test_adapter_maps_single_path_fields`; `tests/unit/test_grid_alignment_adapter.py::test_adapter_with_only_borders_produces_mainland_filtered_country_gdf` | pass |
+| M-F1-03 | GWA Weibull A/k, air density, wind speed at 100/150/200 m | `fetchers/wind.py::fetch_gwa_product` | `tests/unit/test_fetchers_wind.py::test_fetch_gwa_product_url_uses_product_slug_and_height` | pass |
 | M-F1-04 | CMIP6 monthly rsds/tas/sfcWind and daily tasmax/pr | `data_acquisition/schemas.py::AcquiredLayer` | not found | partial |
 | M-F1-05 | ERA5 gust, annual max of `fg10`, 1995-2014 | `data_acquisition/fetchers/era5.py::write_annual_maxima_incremental` | not found | pass |
 | M-F1-06 | GEM solar and wind trackers Note: acquired and clipped; the consumer is F7b `external_validation/inventory.py` | `fetchers/gem_trackers.py` (`import_snapshot`, `build_country`), `scripts/acquire_gem_trackers.py`; pinned snapshot 2026-08-09, sha256 in `raw/gem/_global/gem_snapshot.json` (D-F1-026) | `tests/unit/test_gem_trackers.py` | pass |
 | M-F1-07 | GADM local-first with checksum | `fetchers/gadm.py::_local_database_level0`; `data_acquisition/fetchers/gadm.py::GadmChecksumMismatchError` | `test_fetchers_gadm.py::test_fetch_borders_local_database_hit_performs_no_network_call` | pass |
-| A-05 | Country mappings in config | `local_layers.py::_load_countries_config`; `fetchers/hydrosheds.py::_get_hydrosheds_region` | not found | pass |
+| A-05 | Country mappings in config | `local_layers.py::_load_countries_config`; `fetchers/hydrosheds.py::_get_hydrosheds_region` | `tests/unit/test_fetchers_gadm.py::test_fetch_borders_local_database_hit_performs_no_network_call`; `tests/unit/test_fetchers_hydrosheds.py::test_fetch_rivers_happy_path_uses_correct_region_tile` | pass |
 
 ## Active implementation decisions
 

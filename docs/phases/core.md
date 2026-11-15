@@ -13,31 +13,31 @@ Provides to all phases: DAG orchestrator, artifact registry and manifest, config
 | A-01 | `requires`/`produces`, topological order, startup validation | `core/orchestrator.py::PhaseSpec`; `core/orchestrator.py::_validate_and_order` | `test_orchestrator.py::test_shuffled_spec_list_produces_the_same_order` | pass |
 | A-02 | Artifact registry with paths, hashes, schema versions; upstream loaded from manifest | `main.py::_register_json_artifact`; `main.py::_register_aligned_rasters`; `core/orchestrator.py::ArtifactEntry` | `test_orchestrator.py::test_declared_artifact_not_registered_raises` | pass |
 | A-03 | Run targeting | `core/schemas.py::RunConfig` | `test_schemas.py::test_run_config_accepts_valid_payload`; `test_orchestrator.py::test_rerun_phases_reexecutes_only_the_named_phase` | pass |
-| A-04 | Technology registry | `core/schemas.py::TechnologyParams`; `core/schemas.py::SolarParams`; `core/schemas.py::WindParams` | not found | pass |
+| A-04 | Technology registry | `core/schemas.py::TechnologyParams`; `core/schemas.py::SolarParams`; `core/schemas.py::WindParams` | `tests/unit/test_schemas.py::test_technology_params_accepts_valid_payload` | pass |
 | A-05 | Country mappings in `config/countries.yaml`; ISO3 literal test | `data_acquisition/local_layers.py::_load_countries_config`; `data_acquisition/fetchers/hydrosheds.py::_get_hydrosheds_region` | `test_iso3_literals.py`; `test_iso3_literals.py::test_no_iso3_literals_in_src` | pass |
-| A-06 | Synthetic country fixture | not found | `test_zzz_end_to_end.py` | pass |
-| A-07 | Formats: COG rasters, parquet with schema_version, run ID = hash of config/methodology/commit | `land_eligibility/map_raster.py::write_cog`; `core/orchestrator.py::compute_run_id` | not found | partial |
-| A-08 | Outputs layout: `raw/<source>/<ISO3\|_global>/`, `interim/<ISO3>/<layer>/`, `outputs/<ISO3>/<phase>/<kind>/` | `paths.py::phase_dir`; `paths.py::thesis_dir` | not found | partial |
+| A-06 | Synthetic country fixture | `scripts/generate_zzz_fixture.py` | `test_zzz_end_to_end.py` | pass |
+| A-07 | Formats: COG rasters, parquet with schema_version, run ID = hash of config/methodology/commit | `land_eligibility/map_raster.py::write_cog`; `core/orchestrator.py::compute_run_id` | `tests/unit/test_main.py::test_the_run_id_depends_on_the_scale` | partial |
+| A-08 | Outputs layout: `raw/<source>/<ISO3\|_global>/`, `interim/<ISO3>/<layer>/`, `outputs/<ISO3>/<phase>/<kind>/` | `paths.py::phase_dir`; `paths.py::thesis_dir` | `tests/unit/test_scale.py::test_only_the_phases_that_depend_on_the_cell_size_change_directory_and_the_manifest_is_named_by_the_scale` | partial |
 | A-09 | Failure stops dependents only | `main.py::run_geofrea`; `core/orchestrator.py::PhaseResult` | `test_orchestrator.py::test_failure_in_one_branch_does_not_block_an_independent_branch`; `test_main.py::test_run_geofrea_returns_false_when_a_target_phase_fails` | pass |
 | A-10 | F6/F7 batch processing under `memory.max_batch_gb` | `core/schemas.py::MemoryConfig` | `test_the_streaming_evaluation_equals_the_brute_force_definition_whatever_the_block_size` | pass |
 | A-11 | Reuse from reference repositories (CRAEI copy-and-adapt, provenance header) | not found | not found | pass |
-| A-12 | Determinism: env vars declared in `.env.example`, loaded at startup, not assumed from shell state | `core/orchestrator.py::compute_run_id`; `core/orchestrator.py::RunManifest`; `core/orchestrator.py::record_seed` | not found | pass |
+| A-12 | Determinism: env vars declared in `.env.example`, loaded at startup, not assumed from shell state | `core/orchestrator.py::compute_run_id`; `core/orchestrator.py::RunManifest`; `core/orchestrator.py::record_seed` | `tests/unit/test_orchestrator.py::test_seed_is_recorded_in_the_manifest_and_survives_a_reload` | pass |
 | A-13 | Traceability: `Implements: M-<item>.` in docstrings of functions implementing a methodology item | not found | not found | partial |
-| U-01 | Futures: full factorial of climate members and techno-economic samples, both axes preserved in every F6/F7 artifact | not found | not found | pass |
+| U-01 | Futures: full factorial of climate members and techno-economic samples, both axes preserved in every F6/F7 artifact | not found | `tests/unit/test_climate_forcing_forcing.py::test_members_are_the_reference_plus_the_full_factorial_with_unique_ids`; `tests/unit/test_robustness_pipeline.py::test_the_futures_table_has_one_row_per_member_and_sample_with_sample_zero_nominal` | pass |
 | U-02 | Monte Carlo scope: sampling only within the parameter axis | not found | not found | pass |
-| U-03 | Uncertain parameters declared in `config/experiments.yaml` | `core/production.py::validate_registry`; `core/config_loader.py::load_experiments` | not found | pass |
-| U-04 | Sample size convergence protocol Note: not run on a real country | not found | not found | pass |
+| U-03 | Uncertain parameters declared in `config/experiments.yaml` | `core/production.py::validate_registry`; `core/config_loader.py::load_experiments` | `tests/unit/test_parameter_contract.py::test_a_technology_listing_an_undeclared_uncertain_parameter_is_rejected` | pass |
+| U-04 | Sample size convergence protocol Note: not run on a real country | not found | `tests/unit/test_robustness_convergence.py::test_the_protocol_doubles_the_size_and_adopts_the_larger_of_the_first_pair_that_agrees` | pass |
 | U-06 | Land-availability variants (`central`/`strict`/`lenient`) in `config/experiments.yaml` | not found | not found | pass |
 | U-07 | Evidence tiers 1-3, Tier 3 listed in `docs/LIMITATIONS.md` | `core/schemas.py::VerifiedValue` | not found | pass |
 | U-05 | Parameter schema with `unit`, `tier`, `range` | `core/schemas.py::ParameterRange` | `test_schemas.py::test_verified_value_accepts_valid_payload` | pass |
 | V-02 | Analytical tests: CRF/LCOE closed forms, Weibull CF, PVOUT-to-CF, geodesic areas, power-law height interpolation | not found | not found | pass |
-| V-03 | Invariants: `R_i,f >= 0`, `0 <= SR <= 1`, `0 <= CF <= 1`, `eligible_area <= cell_area`, capacity sums correctly | not found | not found | pass |
-| V-04 | Sanity ranges per resource layer, F1b reports violations, F5 raises on them | not found | not found | pass |
-| V-05 | Convergence (U-04) Note: not run on a real country | not found | not found | pass |
+| V-03 | Invariants: `R_i,f >= 0`, `0 <= SR <= 1`, `0 <= CF <= 1`, `eligible_area <= cell_area`, capacity sums correctly | not found | `tests/unit/test_robustness_evaluator.py::test_v03_invariants_hold`; `tests/unit/test_technical_potential_pipeline.py::test_invariants_cf_range_capacity_constant_across_members_and_sum_equals_aggregate`; `tests/synthetic/test_zzz_end_to_end.py::test_eligible_area_never_exceeds_the_cell_area` | pass |
+| V-04 | Sanity ranges per resource layer, F1b reports violations, F5 raises on them | not found | `tests/unit/test_technical_potential_pipeline.py::test_an_input_outside_its_sanity_range_raises_a_named_error_and_writes_nothing`; `tests/unit/test_audit.py::test_run_audit_phase_flags_pvout_unit_mismatch` | pass |
+| V-05 | Convergence (U-04) Note: not run on a real country | not found | `tests/unit/test_robustness_convergence.py::test_the_protocol_doubles_the_size_and_adopts_the_larger_of_the_first_pair_that_agrees` | pass |
 | V-06 | No calibration on validation data | not found | `test_external_validation.py` | pass |
 | V-07 | Scale check: F5-F7 rerun at 0.1 degree Note: ZZZ only | not found | not found | pass |
-| V-08 | Synthetic end-to-end (A-06 in CI) | not found | not found | pass |
-| Section 9 | `experiments.yaml`, `technologies.yaml`, `countries.yaml` | `core/config_loader.py::load_countries`; `core/config_loader.py::load_technologies`; `core/config_loader.py::load_experiments` | not found | pass |
+| V-08 | Synthetic end-to-end (A-06 in CI) | `.github/workflows/synthetic_fixture.yml` | `tests/synthetic/test_zzz_end_to_end.py::test_every_phase_from_f1_to_f6_runs_and_succeeds` | pass |
+| Section 9 | `experiments.yaml`, `technologies.yaml`, `countries.yaml` | `core/config_loader.py::load_countries`; `core/config_loader.py::load_technologies`; `core/config_loader.py::load_experiments` | `tests/unit/test_parameter_contract.py::test_loaders_validate_the_real_registry_and_experiments` | pass |
 
 ## Active implementation decisions
 
