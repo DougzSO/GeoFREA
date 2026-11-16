@@ -1873,3 +1873,22 @@ Substitui: nenhuma decisão anterior; DEC-072 stands.
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The rules of items b and c enter METHODOLOGY in the PATCH of COMMAND 161; the limitation of item a is L-245.
 
 ---
+
+## [2026-11-16] DEC-083 - Scope of India's 2034-35 national targets (closes OQ-108)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+Decision: the India targets for 2034-35 registered in DEC-070, 447 GW solar and 138 GW wind, are national totals by source, `kind: technical_planning`.
+Solar: the 447 GW is read as the national solar total including rooftop. The Ministry of Power Annual Report 2025-26 ties the 447 GW to the national solar capacity of 135.81 GW at 2025-12-31 (135,809.94 MW), an aggregate national figure. In the MNRE Renewable Energy Statistics 2024-25, the national solar aggregate (105,646.49 MW at 2025-03-31) is the sum of ground mounted 81,011.66 MW, hybrid 2,874.50 MW, rooftop 17,017.44 MW (16.11%) and off-grid/KUSUM 4,742.89 MW (4.49%). The CEA National Electricity Plan 2022-32 (Vol. I) gives 364,566 MW of solar for 2031-32 (Vol. II: 385,153 MW), with a footnote stating that it includes 60,207 MW of rooftop. The inclusion of rooftop in the 447 GW is therefore inferred from the accounting convention; the 2034-35 sources do not disaggregate it.
+Wind: the 138 GW carries the aggregate label "Wind". The installed base cited with it (54.51 GW at 2025-12-31) is onshore, since the MNRE viability gap funding for the first 1 GW of offshore was notified in September 2024. The NEP 2022-32 aggregate for 2031-32 (121,895 MW) includes 1,500 MW of offshore additions for 2027-32 (Table 12.4) next to 47,500 MW onshore additions. The offshore share of the 138 GW is not isolated in the available sources.
+Registered scope: solar `national_total_incl_rooftop`; wind `national_total_offshore_unspecified`. If the schema's `scope` accepts other values only, use the nearest and put the exact text in the note.
+Not registered: the shares derived from the 2031-32 NEP (solar excluding rooftop 304.36 GW; wind excluding offshore 120.40 GW) are context only and are not applied to the 2034-35 targets.
+Not available: the CEA National Generation Adequacy Plan 2026-27 to 2035-36 (published 2026-03-16 according to JMK Research) is not among the available sources. If obtained, the rooftop and offshore splits can be registered by a new DEC.
+Consequence: GeoFREA potential covers ground-mounted and onshore only, so potential/target ratios against these targets are lower bounds of the coverage of the comparable segment (L-246).
+Justificativa (se METHODOLOGY_REVISION): DEC-081 item f needs a `scope` for every filled target value; the author states it here from the accounting convention of the sources, since the 2034-35 documents do not disaggregate rooftop or offshore.
+Referência (literatura/discussão, se aplicável): DEC-070; DEC-075; DEC-081 (f); DEC-082; OQ-108; L-246; METHODOLOGY S-02; COMMAND 161C.
+Fase: F7 (H5)
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior; completes DEC-070 and closes item f of DEC-081.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The schema `scope` of `national_targets` accepts `centralized` or `total` only (DEC-081 f), so COMMAND 162 registers `scope: total` for both India targets, the nearest value, and puts the exact registered text in `source` or `status`.
+
+---
