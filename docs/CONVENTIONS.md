@@ -68,7 +68,7 @@ Rules that go with the table (DEC-069):
 - New method logic enters with an `M-` item in the same change.
 - A new `L-` entry carries its origin (a phase, a rule or an OQ).
 - A resolved OQ leaves the table and a pointer stays.
-- An obsolete file goes to `docs/_archive` and is deleted only at the end, when everything is green.
+- An obsolete file is deleted when everything is green. The archive `docs/_archive` was removed in D10; its content is recoverable in commit 2726333.
 
 An implementation decision is recorded once, in the record of its phase (`docs/phases/<phase>.md`), as one bullet that starts `- **D-<phase>-<number> — Title (date, command).**`, or as a table row that starts `| D-<phase>-<number> |`. A later paragraph about the same decision is a continuation of that bullet or cites the ID without starting with it. IDs rise in the order of the file. `scripts/find_decision.py D-<phase>-<number>` prints the defining lines of an ID.
 

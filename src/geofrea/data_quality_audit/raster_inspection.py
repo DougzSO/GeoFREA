@@ -1,9 +1,8 @@
 """Raster/vector/tabular inspection helpers for the data_quality_audit phase.
 
 Ported near-verbatim from geoworld_framework's
-src/processors/data_auditor.py (module-level functions, L79-837 — see
-docs/_archive/2026-09/architecture/data_quality_audit.md for the formulas and their exact
-legacy line numbers). Each function still returns a plain dict, matching
+src/processors/data_auditor.py (module-level functions, L79-837 — the
+legacy notes with the formulas and their exact line numbers were removed in D10). Each function still returns a plain dict, matching
 the legacy signatures; audit.py is the boundary that validates the
 assembled dict against this phase's Pydantic schemas (AuditResult and
 friends) — see DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit

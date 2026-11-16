@@ -13,7 +13,7 @@ capex_usd_per_kw and lifetime_years for biomass have a direct legacy
 equivalent to compare against — geoworld_framework's
 lcoe_calculator.py::DEFAULT_LCOE_PARAMS["biomass"], as documented in
 docs/DECISIONS.md 2026-08-19 (capex=2720, opex=109 flat, lifetime=20,
-dr=0.07). Note: docs/_archive/2026-09/architecture/module-mapping.md itself does not
+dr=0.07). Note: the legacy module-mapping note (removed in D10) did not
 carry these per-technology numeric legacy values (it only records that
 DEFAULT_LCOE_PARAMS exists as a hardcoded fallback — see
 lcoe_modeling.md sec c.1); the biomass numbers used below trace back to

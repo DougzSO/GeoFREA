@@ -123,8 +123,8 @@ class AuditConfig(BaseModel):
 class AuditInputs(BaseModel):
     """Raw, already-resolved geodata paths/objects the audit phase inspects.
 
-    Mirrors DataAuditor.run()'s parameter list exactly (see
-    docs/_archive/2026-09/architecture/data_quality_audit.md sec a). GeoFREA has no data
+    Mirrors DataAuditor.run()'s parameter list exactly (the
+    legacy parameter list, removed from the repository in D10). GeoFREA has no data
     acquisition layer yet (legacy's DataFetcher/DataManager/DataOrchestrator
     are not ported — out of scope for this stage), so main.py currently
     has no way to populate these with real values; every field left at

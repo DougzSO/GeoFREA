@@ -15,7 +15,7 @@ Read, in this order, before proposing or doing anything:
 3. `docs/phases/<phase>.md` for the phase being touched
 4. `docs/OPEN_QUESTIONS.md` entries that block the phase
 
-Do not load archived records (`docs/_archive/`) unless the task explicitly asks for historical rationale.
+The archived records (`docs/_archive/`) were removed in D10; they are recoverable in commit 2726333.
 
 ## Authority and change rules
 

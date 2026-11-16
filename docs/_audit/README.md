@@ -1,6 +1,6 @@
 # docs/_audit: index by theme
 
-Audit, measurement and phase reports. Each file is a dated record of what was true when it was written; it is not kept up to date. Files are cited by path from code comments, scripts and active docs, so they are not renamed. Files that nothing cited were moved on 2026-11-13 to `docs/_archive/2026-11/` (see its README). The audit of the documents of 2026-11-13 is in `2026-11_docs_audit/` (reports 01 to 10 and their tables; report 09 is the 35 conformance rows that said `not found`, report 10 what stays open).
+Audit, measurement and phase reports. Each file is a dated record of what was true when it was written; it is not kept up to date. Files are cited by path from code comments, scripts and active docs, so they are not renamed. Files that nothing cited were moved on 2026-11-13 to `docs/_archive/2026-11/`; that archive was removed in D10 and is recoverable in commit 2726333. The audit of the documents of 2026-11-13 is in `2026-11_docs_audit/` (reports 01 to 10 and their tables; report 09 is the 35 conformance rows that said `not found`, report 10 what stays open).
 
 ## General audits and repository state
 
@@ -98,7 +98,7 @@ Audit, measurement and phase reports. Each file is a dated record of what was tr
 
 | File | What it is |
 |---|---|
-| `profile_76.md`, `profile_76_tables/` | where time and memory are (COMMAND 76); the tables come from `scripts/profiling/parse_logs.py`, and `bench/*/bench_log.jsonl` are the benchmark logs (the JSON of each measure is in the archive) |
+| `profile_76.md`, `profile_76_tables/` | where time and memory are (COMMAND 76); the tables come from `scripts/profiling/parse_logs.py`, and `bench/*/bench_log.jsonl` are the benchmark logs (the JSON of each measure was in the archive removed in D10, recoverable in commit 2726333) |
 | `performance_75.md` | what the pipeline costs and the proof that results did not change |
 | `optimizations_77.md` | optimizations item by item, with proof and gain |
 | `optimization_gain_82.md` | before and after COMMANDS 75 and 77, from logs and manifests |

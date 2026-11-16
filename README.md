@@ -61,4 +61,4 @@ It compares every `year_sha256` and `reduced_sha256` of `era5_registry.json` and
 - Status per phase and country: [`docs/PROGRESS.json`](docs/PROGRESS.json); open items in [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md); limits in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md); decisions per phase in `docs/phases/`.
 - Conventions: [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) and [`CLAUDE.md`](CLAUDE.md).
 - Data and outputs live outside the repository, in `GeoFREA_data/` (`raw`, `interim`, `outputs`, `logs`, `archive`); audit and performance records are in `docs/_audit/` (index in its README).
-- The legacy port documents of September 2026 are kept in [`docs/_archive/2026-09/`](docs/_archive/2026-09/).
+- The legacy port documents of September 2026 were removed in D10 and are recoverable in commit 2726333.

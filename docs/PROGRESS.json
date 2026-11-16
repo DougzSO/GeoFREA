@@ -98,7 +98,7 @@
   },
   "open_questions": "docs/OPEN_QUESTIONS.md",
   "limitations": "docs/LIMITATIONS.md",
-  "archived_records": "docs/_archive/2026-09/",
+  "archived_records": "removed in D10; recoverable in commit 2726333",
   "planning_audits": [
     "docs/_audit/2026-09_F1-F2b.md",
     "docs/_audit/2026-09_parameters.md",

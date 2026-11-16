@@ -1,7 +1,7 @@
 """data_quality_audit phase entry point.
 
-Ports geoworld_framework's DataAuditor.run() (see
-docs/_archive/2026-09/architecture/data_quality_audit.md) into GeoFREA's orchestrator
+Ports geoworld_framework's DataAuditor.run() (legacy
+document removed in D10) into GeoFREA's orchestrator
 contract: run_audit_phase(context, inputs, audit_config) -> AuditResult,
 a validated Pydantic model, instead of legacy's ad hoc dict. See
 DECISIONS.md 2026-08-20 - orchestrator + data_quality_audit phase.
@@ -711,7 +711,7 @@ def _save_report(text: str, code: str, ts: datetime, outputs_dir: Path) -> Path:
 
     Legacy saved to a repo-root outputs/reports/ directory, which its own
     skip-check glob (outputs/<code>/audit/) never matched — a real bug
-    flagged in docs/_archive/2026-09/architecture/data_quality_audit.md sec d (BLOCKER-015).
+    flagged in the legacy audit notes (BLOCKER-015).
     GeoFREA doesn't inherit this bug: the manifest-based resumability in
     core/orchestrator.py replaces the glob-based skip-check entirely, and
     the report is saved under the same outputs/<code>/ tree the manifest

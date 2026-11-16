@@ -48,7 +48,7 @@ schemas.py's ResolutionsConfig) drives this, not a hardcoded value.
 Default is 0.01 fixed (~1km), matching legacy's own actual configured
 value ("~1 km, consistent with global climate datasets") — the one
 that generated the frozen PRT/BRA baseline
-(docs/_archive/2026-09/architecture/baseline-manifest.md). Legacy's "adaptive" code path
+(legacy baseline manifest, removed in D10). Legacy's "adaptive" code path
 existed but was never the value legacy's real settings.yaml used;
 GeoFREA had ported that unused code path as its only, hardcoded
 behavior until this fix — measured divergence from the baseline before

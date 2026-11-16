@@ -97,7 +97,7 @@ geospatial:
     # Pixel size of the aligned layers of F2a, degrees (M-F2a-01). The key keeps its legacy name `suitability`; it is the
     # 0.01 degree (~1 km) pixel, not the analysis cell. The analysis cell is 0.05 degree (S-06, OQ-064) and nests exactly
     # 5 x 5 pixels, because the grid is snapped to it. The value generated the retired legacy PRT/BRA baseline
-    # (docs/_archive/2026-09/architecture/baseline-manifest.md). The legacy "adaptive" mode was removed in G-3 (2026-10-06).
+    # (legacy baseline manifest, removed in D10). The legacy "adaptive" mode was removed in G-3 (2026-10-06).
     suitability: 0.01
 
 # Memory budget of the batch phases (METHODOLOGY A-10, D-F6-005). F6 sizes its blocks of cells so that the live

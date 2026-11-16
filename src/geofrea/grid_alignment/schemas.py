@@ -1,7 +1,7 @@
 """Pydantic schemas for the grid_alignment phase.
 
 Ported from geoworld_framework's src/processors/grid_aligner.py
-(`GridAligner.run()`, 1213 lines — see docs/_archive/2026-09/architecture/grid_alignment.md).
+(`GridAligner.run()`, 1213 lines — legacy notes removed in D10).
 This phase reprojects every raw layer data_acquisition resolved onto a
 single reference grid (same CRS/transform/dimensions), a prerequisite
 for siting_layers (F2b) — see module-mapping.md.
