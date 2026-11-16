@@ -7,6 +7,7 @@ and only when every requested phase of that country is proved. See `geofrea.core
     python scripts/rebaseline_config_fingerprint.py --change scope-127-f2a-f3 --countries PRT --apply          # writes outputs/PRT/manifest.json
 
 Exit status: 0 when every requested entry is proved or already current, 1 when any is refused (nothing is written for that country).
+When the annotated tag `prereg-v1` exists and the pre-registered subset of a requested country differs from it (`core.preregistration`), nothing is rebaselined.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 
 from geofrea.core import config_rebaseline as rb
+from geofrea.core import preregistration as prereg
 from geofrea.core.config_fingerprint import CONFIG_FILES, DiskConfigSource
 from geofrea.core.paths import manifest_path
 
@@ -46,6 +48,13 @@ def main(argv: list[str] | None = None) -> int:
     current = DiskConfigSource(
         {key: args.config_dir / name for key, name in CONFIG_FILES.items()}, args.config_dir / "turbines"
     )
+    # once the tag `prereg-v1` exists, a change of the pre-registered subset is a deviation and is never rebaselined (DEC-081 item g); without the tag
+    # the behaviour is the one it always had
+    conflict = prereg.tag_conflict(args.countries, current, args.repo)
+    if conflict:
+        print(f"REFUSED  the pre-registered subset differs from the tag {prereg.TAG_NAME}; it is not rebaselined:")
+        print("\n".join(f"  {line}" for line in conflict))
+        return 1
     failed = False
     for iso in args.countries:
         path = args.manifest or manifest_path(iso)

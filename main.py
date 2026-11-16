@@ -128,6 +128,7 @@ from geofrea.core.orchestrator import (
 )
 from geofrea.core.paths import data_root, interim, log_path, outputs_dir, phase_dir
 from geofrea.core.power import keep_awake
+from geofrea.core.preregistration import verify as verify_preregistration
 from geofrea.core.production import (
     ConfigConsistencyError,
     ProductionRunError,
@@ -329,6 +330,22 @@ def _summarize_grid_alignment(output: GridAlignmentResult) -> str:
     return (
         f"{meta.width}x{meta.height} px, resolution {meta.resolution_deg} deg, "
         f"origin ({origin_x:.4f}, {origin_y:.4f}), crs {meta.crs}"
+    )
+
+
+def _config_source() -> DiskConfigSource:
+    """The config files of this repository as the run reads them."""
+    return DiskConfigSource(
+        {
+            "experiments": EXPERIMENTS_YAML,
+            "parameters": PARAMETERS_JSON,
+            "audit": AUDIT_YAML,
+            "technologies": TECHNOLOGIES_YAML,
+            "settings": SETTINGS_YAML,
+            "countries": COUNTRIES_YAML,
+            "published_potential": PUBLISHED_POTENTIAL_YAML,
+        },
+        POWER_CURVES_DIR,
     )
 
 
@@ -1510,6 +1527,8 @@ def _run_geofrea(
         deferred_check=deferred_check_for(country_code, DEFERRED_CHECKS_YAML, data_root(), outputs_dir()),
         # the caps of config/memory_budget.json apply to a run of the pipeline, not to the tests (COMMAND 131); GEOFREA_MEMORY_CAPS=0 switches them off
         memory_caps=os.environ.get("GEOFREA_MEMORY_CAPS", "1") != "0",
+        # F6 and F7 on real data run only against the annotated tag `prereg-v1` (DEC-081 item g); a synthetic country is ignored
+        preregistration_guard=lambda _phase: verify_preregistration(country_code, _config_source(), REPO_ROOT),
     )
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)

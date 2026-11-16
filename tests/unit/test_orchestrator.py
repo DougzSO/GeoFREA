@@ -669,7 +669,7 @@ def test_manifest_written_on_success(tmp_path):
     entry = orchestrator.manifest.phases["phase_a"]
     assert entry.status == "success"
     assert entry.output == {"value": 7}
-    assert orchestrator.manifest.schema_version == "2.12"
+    assert orchestrator.manifest.schema_version == "2.13"
 
 
 @pytest.mark.unit
@@ -683,7 +683,7 @@ def test_manifest_records_methodology_version(tmp_path):
     orchestrator.run([ok, bad])
 
     on_disk = json.loads(orchestrator.manifest_path.read_text(encoding="utf-8"))
-    assert on_disk["schema_version"] == "2.12"
+    assert on_disk["schema_version"] == "2.13"
     assert {n: e["methodology_version"] for n, e in on_disk["phases"].items()} == {
         "phase_ok": "test-1.0.0",
         "phase_bad": "test-1.0.0",
@@ -990,7 +990,7 @@ def test_a_manifest_of_schema_2_3_is_readable_and_its_phases_have_no_times(tmp_p
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.12"
+    assert reloaded.manifest.schema_version == "2.13"
     assert reloaded.manifest.phases["phase_a"].wall_s is None
     assert reloaded.manifest.phases["phase_a"].cpu_s is None
 
@@ -1029,7 +1029,7 @@ def test_a_manifest_of_schema_2_6_is_readable_and_has_no_peak_memory(tmp_path):
 
     reloaded = _orchestrator(tmp_path, ["phase_a"])
 
-    assert reloaded.manifest.schema_version == "2.12"
+    assert reloaded.manifest.schema_version == "2.13"
     assert reloaded.manifest.phases["phase_a"].peak_rss_mb is None
 
 
@@ -1221,3 +1221,25 @@ def test_a_producer_that_fails_leaving_its_artifact_absent_or_partial_marks_cons
     reloaded = _orchestrator(tmp_path, ["a"], run_id="run-3").manifest
     assert reloaded.phases["a"].status == "failed"
     assert reloaded.phases["b"].status == "stale_upstream"
+
+
+@pytest.mark.unit
+def test_a_manifest_of_schema_2_12_is_still_readable_and_has_no_preregistration(tmp_path):
+    """2.13 added `preregistration` (DEC-081 item g); a manifest written under 2.12 loads, its field is None, and it is written as 2.13 from then on."""
+    call_log: list[str] = []
+    spec = _make_spec("phase_a", call_log, produces=frozenset({"a_out"}))
+    first = _orchestrator(tmp_path, ["phase_a"])
+    first.run([spec])
+    data = json.loads(first.manifest_path.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "2.13"
+    data["schema_version"] = "2.12"
+    data.pop("preregistration", None)
+    first.manifest_path.write_text(json.dumps(data), encoding="utf-8")
+
+    reloaded = _orchestrator(tmp_path, ["phase_a"])
+
+    assert reloaded.manifest.schema_version == "2.13"
+    assert reloaded.manifest.preregistration is None
+    assert reloaded.manifest.phases["phase_a"].status == "success"
+    reloaded.run([spec])
+    assert json.loads(reloaded.manifest_path.read_text(encoding="utf-8"))["schema_version"] == "2.13"

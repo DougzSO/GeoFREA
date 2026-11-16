@@ -53,7 +53,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.12"
+_MANIFEST_SCHEMA_VERSION = "2.13"
+# 2.13 (COMMAND 155B, DEC-081 item g): the manifest also carries `preregistration`, written when F6 or F7 runs on real data: `digest_live`, the digest of the
+# pre-registered subset of the configuration for the country, and `digest_tag`, the digest of the same subset in the message of the annotated tag
+# `prereg-v1` (`core.preregistration`). The phase is refused, and nothing is recorded, when the tag is absent or the two differ. Manifests written
+# before 2.13 have None. It is outside every fingerprint.
 # 2.12 (COMMAND 134, A-02, OQ-084): the manifest also carries `hash_restamps`, the proofs under which the recorded content hash of an artifact was changed from
 # the kind `parquet:` to `parquet2:` without running the phase again (`scripts/restamp_parquet2.py`): the file on disk is the registered one (its byte hash
 # is the recorded one), its value equals that of the file of a reference copy, and the new hash is of the current file. Only that script writes it; the
@@ -95,7 +99,7 @@ _MANIFEST_SCHEMA_VERSION = "2.12"
 # (RunManifest's schema_version is a Literal of _MANIFEST_SCHEMA_VERSION)
 # rather than running a migration step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -516,6 +520,19 @@ class HashRestamp(BaseModel):
     proof_sha256: str  # SHA-256 of the canonical JSON of every field above
 
 
+# the phases that a real run refuses while the pre-registered subset differs from the one in the tag `prereg-v1` (F6 and F7, DEC-081 item g)
+PREREGISTERED_PHASES = frozenset({"lcoe_modeling", "sample_size_convergence", "robustness_analysis"})
+
+
+class Preregistration(BaseModel):
+    """The two digests of the pre-registered subset that a run of F6 or F7 on real data compared (`core.preregistration`, DEC-081 item g)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    digest_live: str  # the subset of the configuration the run read, for this country
+    digest_tag: str | None  # the digest of the same country in the message of the tag `prereg-v1`
+
+
 class RunManifest(BaseModel):
     """Root schema for manifest.json (GEOFREA_DATA_DIR/outputs/<country_code>/).
 
@@ -531,7 +548,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.12"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.13"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
@@ -541,6 +558,7 @@ class RunManifest(BaseModel):
         str, int
     ] = {}  # random seeds of the run by name (A-12); recorded with `Orchestrator.record_seed`
     hash_restamps: list[HashRestamp] = []  # 2.12: the proofs of the hashes moved from `parquet:` to `parquet2:` (`scripts/restamp_parquet2.py`)
+    preregistration: Preregistration | None = None  # 2.13: the digests compared by the last run of F6 or F7 on real data (DEC-081 item g)
 
 
 @dataclass(frozen=True)
@@ -785,6 +803,9 @@ class Orchestrator:
         deferred_check: An object with `after_phase(manifest, phase) -> str | None` (`core.deferred_check.DeferredCheck`), called after each phase that
             was executed (not resumed) and whose manifest entry is written. A message stops the run: the phases that follow are reported as
             `skipped_upstream_failed` in the results (their manifest entries are left as they were) and the message is logged as an error.
+        preregistration_guard: A callable `phase -> Preregistration | None`, called before a phase of `PREREGISTERED_PHASES` runs. It raises to refuse the
+            phase (the phase then fails and its consumers are skipped); a `Preregistration` it returns is recorded in the manifest, None records nothing
+            (a synthetic country). None, the default: no guard (the tests, and any caller that is not `main.py`).
     """
 
     outputs_dir: Path
@@ -800,6 +821,7 @@ class Orchestrator:
     revalidate_phases: Sequence[str] = ()
     deferred_check: Any = None
     memory_caps: bool = False
+    preregistration_guard: Any = None
 
     def __post_init__(self) -> None:
         self.manifest = self._load_manifest()
@@ -923,6 +945,13 @@ class Orchestrator:
                 f"seed {name!r} is recorded as {recorded}; refusing to overwrite it with {seed}"
             )
         self.manifest.seeds[name] = seed
+        self._write_manifest()
+
+    def record_preregistration(self, record: Preregistration | None) -> None:
+        """Record the digests a run of F6 or F7 compared with the tag `prereg-v1` and persist them (DEC-081 item g); None records nothing."""
+        if record is None:
+            return
+        self.manifest.preregistration = record
         self._write_manifest()
 
     def _write_manifest(self) -> None:
@@ -1290,6 +1319,8 @@ class Orchestrator:
             peak = PhasePeak(cap=cap)
 
             try:
+                if self.preregistration_guard is not None and spec.name in PREREGISTERED_PHASES:
+                    self.record_preregistration(self.preregistration_guard(spec.name))
                 with peak:
                     output = spec.run(context)
 
