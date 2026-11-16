@@ -1892,3 +1892,19 @@ Substitui: nenhuma decisão anterior; completes DEC-070 and closes item f of DEC
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The schema `scope` of `national_targets` accepts `centralized` or `total` only (DEC-081 f), so COMMAND 162 registers `scope: total` for both India targets, the nearest value, and puts the exact registered text in `source` or `status`.
 
 ---
+
+## [2026-11-16] DEC-084 - Pre-registration conventions derived from the field inventory (COMMAND 161B)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+a) Structural absences are not pending nulls. `hot_zone_sensitivity` for wind (BRA, PRT, IND) and `poi_sensitivity_threshold_kv` for PRT and BRA have no value by design: the first exists only for solar and the second only for the India grid layer. The tag step counts only pending nulls.
+b) A national target pair without a referenced value is registered with `value: null`, `status: no_target` and a `source` stating that no value is registered (DEC-082 c). The status means that no value is registered, not that the target does not exist.
+c) BRA solar target (PNE 2050, centralized, DEC-075): the primary `value` is the upper scenario extreme, 90 GW, and the lower extreme, 27 GW, goes in `alternatives`. The upper extreme gives the lowest potential/target ratio, so the primary comparison is the strict one, in line with DEC-073.
+d) India targets: `scope: total`, because the schema accepts only `centralized` or `total`, with the exact scope text of DEC-083 in the `source` note.
+Justificativa (se METHODOLOGY_REVISION): the inventory of COMMAND 161B showed fields of the pre-registered subset that are null by design, pairs without a referenced target, a scenario range that the single `value` of a target cannot hold, and a schema narrower than the scope of DEC-083; the author fixes the convention of each before COMMAND 162.
+Referência (literatura/discussão, se aplicável): DEC-073; DEC-075; DEC-077; DEC-078; DEC-081; DEC-082; DEC-083; OQ-111; OQ-112; COMMAND 161B; COMMAND 161H.
+Fase: F7 (H5)
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. Items b and c enter METHODOLOGY as M-F7-15 and M-F7-16 (version 19.4.6); COMMAND 162 applies the values.
+
+---
