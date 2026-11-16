@@ -91,9 +91,9 @@ _MANIFEST_SCHEMA_VERSION = "2.12"
 # 2.1 and 2.2 manifests are readable without migration: PhaseManifestEntry's new
 # fields (invalidated_by, invalidated_in_run, methodology_version) default to None, so old
 # JSON missing them still validates. _load_manifest() normalizes the
-# on-disk tag to "2.3" in memory before validating (RunManifest's
-# schema_version is a Literal["2.3"]) rather than running a migration
-# step. Versions before 2.1 still raise LegacyManifestError.
+# on-disk tag to _MANIFEST_SCHEMA_VERSION in memory before validating
+# (RunManifest's schema_version is a Literal of _MANIFEST_SCHEMA_VERSION)
+# rather than running a migration step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
     {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", _MANIFEST_SCHEMA_VERSION}
 )
@@ -827,9 +827,9 @@ class Orchestrator:
                 "There is no migration path — delete this manifest and rerun the "
                 "pipeline for this country from scratch."
             )
-        # A "2.1" or "2.2" manifest validates as-is against the "2.3" schema (its
-        # new fields are optional); normalize the tag itself since
-        # RunManifest.schema_version is a Literal["2.3"].
+        # An older readable manifest (2.1 up to the previous version) validates as-is against the current schema (its
+        # new fields are optional); normalize the tag itself since RunManifest.schema_version is a Literal of
+        # _MANIFEST_SCHEMA_VERSION only.
         data["schema_version"] = _MANIFEST_SCHEMA_VERSION
         return RunManifest.model_validate(data)
 
@@ -1338,6 +1338,9 @@ class Orchestrator:
                 # logged and dropped, not persisted, so a secondary
                 # problem can't mask the real one.
                 new_artifacts: dict[str, ArtifactEntry] = {}
+                # Keys the failed phase registered and that may no longer match what its consumers read: a registered file that
+                # cannot be hashed (absent or partial) counts as changed; so does one whose content differs (COMMAND 149).
+                changed_keys: set[str] = set()
                 for key, (path, schema_version) in context._artifact_sink.items():
                     if key not in spec.produces:
                         logger.warning(
@@ -1359,6 +1362,8 @@ class Orchestrator:
                             key,
                             path,
                         )
+                        if key in self.manifest.artifacts:
+                            changed_keys.add(key)
                         continue
                     new_artifacts[key] = ArtifactEntry(
                         key=key,
@@ -1392,7 +1397,17 @@ class Orchestrator:
                     methodology_version=self.methodology_version,
                     **carry_cold(self.manifest.phases.get(spec.name)),
                 )
+                # Same rule as the success branch (A-02): a consumer is invalidated by an artifact whose content changed; an
+                # artifact re-registered with identical content keeps the run_id that first produced it. The marking comes
+                # before the write, so one manifest write carries the failure and the staleness of the consumers.
+                for key, entry_new in list(new_artifacts.items()):
+                    old = self.manifest.artifacts.get(key)
+                    if old is not None and _same_content(old, entry_new):
+                        new_artifacts[key] = entry_new.model_copy(update={"run_id": old.run_id})
+                    else:
+                        changed_keys.add(key)
                 self.manifest.artifacts.update(new_artifacts)
+                self._mark_manifest_consumers_stale(changed_keys, spec.name)
                 self._write_manifest()
 
                 # One block naming what failed, where, and what it takes

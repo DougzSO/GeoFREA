@@ -1138,3 +1138,86 @@ def test_the_manifest_keeps_the_cold_figures_through_a_cached_rerun_a_failure_an
     fourth.run([failing])
     assert fourth.manifest.phases["phase_a"].status == "failed"
     assert fourth.manifest.phases["phase_a"].cold_wall_s == cold_wall  # the failure does not erase it
+
+
+@pytest.mark.unit
+def test_a_producer_that_fails_after_changing_its_artifact_marks_its_consumers_stale(tmp_path):
+    """COMMAND 148: the failure branch must invalidate consumers of a changed artifact.
+
+    The producer registers its artifact with new content and then raises. The
+    failure branch persists that artifact in the manifest (new content hash) but
+    never calls _mark_manifest_consumers_stale (only the success path does), so
+    the consumer keeps status "success" with a lineage that no longer matches the
+    artifact. This test is expected to FAIL until the orchestrator is fixed.
+    """
+    call_log: list[str] = []
+    a_ok = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+
+    first = _orchestrator(tmp_path, ["b"], run_id="run-1")
+    first.run([a_ok, b])
+    assert first.manifest.phases["a"].status == "success"
+    assert first.manifest.phases["b"].status == "success"
+    old_hash = first.manifest.artifacts["a_out"].content_sha256
+
+    def run_a_failing(context):
+        call_log.append("a")
+        path = context.outputs_dir / "a_out.txt"
+        path.write_text("a_out-CHANGED", encoding="utf-8")
+        context.register_artifact("a_out", path, "1.0")
+        raise ValueError("a boom after changing a_out")
+
+    a_failing = PhaseSpec(
+        name="a",
+        output_model=DummyOutput,
+        run=run_a_failing,
+        produces=frozenset({"a_out"}),
+    )
+
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"], run_id="run-2")
+    results = second.run([a_failing, b])
+
+    assert results["a"].status == "failed"
+    # Precondition: the artifact content did change in the manifest.
+    assert second.manifest.artifacts["a_out"].content_sha256 != old_hash
+    # The consumer must no longer read as a valid success.
+    assert second.manifest.phases["b"].status == "stale_upstream", (
+        f"consumer 'b' is still {second.manifest.phases['b'].status!r} after its "
+        "producer failed with a changed artifact"
+    )
+    assert second.manifest.phases["b"].invalidated_by == "a"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("damage", ["absent", "partial"])
+def test_a_producer_that_fails_leaving_its_artifact_absent_or_partial_marks_consumers_stale(
+    tmp_path, damage
+):
+    """COMMAND 149: an absent or incomplete artifact still invalidates the consumers, before the manifest is written."""
+    call_log: list[str] = []
+    a_ok = _make_spec("a", call_log, produces=frozenset({"a_out"}))
+    b = _make_spec("b", call_log, requires=frozenset({"a_out"}), produces=frozenset({"b_out"}))
+    _orchestrator(tmp_path, ["b"], run_id="run-1").run([a_ok, b])
+
+    def run_a_failing(context):
+        path = context.outputs_dir / "a_out.txt"
+        context.register_artifact("a_out", path, "1.0")
+        if damage == "absent":
+            path.unlink()
+        else:
+            path.write_text("a_out-", encoding="utf-8")  # truncated write
+        raise OSError("disk full")
+
+    a_failing = PhaseSpec(
+        name="a", output_model=DummyOutput, run=run_a_failing, produces=frozenset({"a_out"})
+    )
+    second = _orchestrator(tmp_path, ["a"], rerun_phases=["a"], run_id="run-2")
+    results = second.run([a_failing, b])
+
+    assert results["a"].status == "failed"
+    assert second.manifest.phases["b"].status == "stale_upstream"
+    assert second.manifest.phases["b"].invalidated_by == "a"
+    # The staleness is already in the manifest on disk (one write carries failure and marking).
+    reloaded = _orchestrator(tmp_path, ["a"], run_id="run-3").manifest
+    assert reloaded.phases["a"].status == "failed"
+    assert reloaded.phases["b"].status == "stale_upstream"
