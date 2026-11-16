@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import BaseModel, ConfigDict
 
 import main as geofrea_main
@@ -383,3 +384,66 @@ def test_a_slope_limit_reaches_f1b_and_a_wildcard_step_selects_every_child(confi
     payload = phase_config_payload("data_quality_audit", "PRT", _source(config_copy))
     (selector,) = payload["experiments"]
     assert set(payload["experiments"][selector]) == {"solar", "wind"}
+
+
+# ─── scope of the F1b (COMMAND 152) ──────────────────────────────────────
+
+_SLOPE_PATH = "land_availability.technologies.{technology}.slope_max_pct.{scenario}"
+
+
+def _bump_key(config_dir: Path, dotted: str) -> None:
+    """Add 1 to the number at a key path of experiments.yaml (the file is re-dumped: the fingerprint reads the parsed values)."""
+    path = config_dir / "experiments.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    node = data
+    keys = dotted.split(".")
+    for depth, key in enumerate(keys[:-1]):
+        assert isinstance(node, dict) and key in node, f"key path not found: {dotted!r} (missing {'.'.join(keys[: depth + 1])!r})"
+        node = node[key]
+    assert isinstance(node, dict) and keys[-1] in node, f"key path not found: {dotted!r}"
+    assert isinstance(node[keys[-1]], (int, float)), f"{dotted!r} is not a number: {node[keys[-1]]!r}"
+    node[keys[-1]] = float(node[keys[-1]]) + 1.0
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("technology", "scenario"),
+    [(t, s) for t in ("solar", "wind") for s in ("restrictive", "central", "permissive")],
+)
+def test_the_slope_limit_of_any_technology_and_scenario_changes_the_f1b_fingerprint(
+    config_copy, technology, scenario
+):
+    before = _fingerprints(config_copy)
+    _bump_key(config_copy, _SLOPE_PATH.format(technology=technology, scenario=scenario))
+    after = _fingerprints(config_copy)
+    assert "data_quality_audit" in _changed(before, after)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("dotted", ["land_availability.riparian.width_coefficient"])
+def test_another_key_of_land_availability_does_not_change_the_f1b_fingerprint(config_copy, dotted):
+    before = _fingerprints(config_copy)
+    _bump_key(config_copy, dotted)
+    changed = _changed(before, _fingerprints(config_copy))
+    assert "data_quality_audit" not in changed
+    assert "land_eligibility" in changed  # the key is real: the phase that reads the section sees it
+
+
+@pytest.mark.unit
+def test_a_list_key_of_land_availability_does_not_change_the_f1b_fingerprint(config_copy):
+    before = _fingerprints(config_copy)
+    path = config_copy / "experiments.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert "water_classes" in data["land_availability"], "key path not found: 'land_availability.water_classes'"
+    data["land_availability"]["water_classes"] = [*data["land_availability"]["water_classes"], 90]
+    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    changed = _changed(before, _fingerprints(config_copy))
+    assert "data_quality_audit" not in changed
+    assert "land_eligibility" in changed
+
+
+@pytest.mark.unit
+def test_a_missing_key_path_fails_naming_the_path(config_copy):
+    with pytest.raises(AssertionError, match=r"land_availability\.technologies\.hydro\.slope_max_pct\.central"):
+        _bump_key(config_copy, _SLOPE_PATH.format(technology="hydro", scenario="central"))
