@@ -306,3 +306,14 @@ def test_the_real_countries_resolve_to_2024_usd_with_the_world_bank_indices_of_t
             assert 5e4 < g3.nominal["line_cost_usd_per_km"] < 1e6  # BRA 111 thousand, IND 130 thousand, PRT 411 thousand USD/km
             assert 1e5 < g3.nominal["bay_cost_usd"] < 5e6
             assert g3.road_high_usd_per_km is not None and g3.road_high_usd_per_km > 5e5  # the sensitivity road_cost_high
+
+
+@pytest.mark.unit
+def test_a_reporting_range_on_an_uncertain_parameter_is_listed_as_missing_and_never_sampled(parameters, registry):
+    """DEC-081 item c: the run is refused with a listed input, not with a `SamplingError` when the specs are built."""
+    bra = parameters.countries["BRA"]
+    capex = bra.technologies.wind.capex_usd_per_kw
+    reporting = capex.range.model_copy(update={"distribution": "reporting"})
+    wind = bra.technologies.wind.model_copy(update={"capex_usd_per_kw": capex.model_copy(update={"range": reporting})})
+    with pytest.raises(LcoeMissingInputError, match="capex_usd_per_kw range .*reporting"):
+        resolve_technology_costs("BRA", "wind", registry.technologies["wind"], wind, bra.connection)

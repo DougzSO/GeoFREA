@@ -167,7 +167,9 @@ def resolve_technology_costs(
                 missing.append(f"{key} range (no range in parameters.json, U-05)")
             elif entry.value is not None:
                 problem = _range_problem(key, entry.range.min, entry.range.max)
-                if problem is not None:
+                if entry.range.distribution == "reporting":
+                    missing.append(f"{key} range (a 'reporting' range is never sampled, DEC-081 item c)")
+                elif problem is not None:
                     missing.append(
                         f"{key} range [{entry.range.min}, {entry.range.max}] ({problem})"
                     )

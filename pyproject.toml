@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Reconstruction of the GeoWorld renewable-energy siting pipeline"
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.7,<3",
+    "pydantic>=2.12,<3",  # `Field(exclude_if=...)` (DEC-081 item a)
     "PyYAML>=6",
     "numpy>=1.26",
     "pandas>=2.2",

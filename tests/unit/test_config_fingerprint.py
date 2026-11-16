@@ -447,3 +447,89 @@ def test_a_list_key_of_land_availability_does_not_change_the_f1b_fingerprint(con
 def test_a_missing_key_path_fails_naming_the_path(config_copy):
     with pytest.raises(AssertionError, match=r"land_availability\.technologies\.hydro\.slope_max_pct\.central"):
         _bump_key(config_copy, _SLOPE_PATH.format(technology="hydro", scenario="central"))
+
+
+# --- the new schema fields leave every fingerprint as it was (DEC-081 item a, COMMAND 155) -------------------
+
+# the keys of a `VerifiedValue` and of a `TargetValue` as they were dumped before the pre-registration fields existed
+_OLD_VERIFIED_VALUE_KEYS = frozenset(
+    {
+        "value", "unit", "source", "tier", "range", "verified", "verified_by", "verified_date", "verification_method", "note", "status",
+        "synthetic", "proxy", "scenario_values", "price_year",
+    }
+)  # fmt: skip
+_OLD_TARGET_KEYS = frozenset({"value", "unit", "source", "horizon", "alternatives"})
+_NEW_KEYS = frozenset({"currency", "primary_bound"})
+
+
+def _walk_verified_values(node, path=""):
+    """Yield (path, keys) of every dict of the dump that is a `VerifiedValue` (it has `verification_method` and `unit`)."""
+    if isinstance(node, dict):
+        if "verification_method" in node and "unit" in node:
+            yield path, set(node)
+        for key, child in node.items():
+            yield from _walk_verified_values(child, f"{path}/{key}")
+    elif isinstance(node, list):
+        for i, child in enumerate(node):
+            yield from _walk_verified_values(child, f"{path}/{i}")
+
+
+@pytest.mark.parametrize("iso", ["PRT", "IND", "BRA"])
+def test_the_fingerprint_payload_of_a_real_country_has_none_of_the_new_fields(iso):
+    """Every value of a real country is null in the new fields, so the payload that is hashed is the one the manifests recorded."""
+    source = _source(CONFIG)
+    seen = 0
+    for phase in PHASE_CONFIG_SCOPE:
+        payload = phase_config_payload(phase, iso, source)
+        for key in ("parameters", "experiments"):
+            for selector, value in payload.get(key, {}).items():
+                for path, keys in _walk_verified_values(value, selector):
+                    if "ZZZ" in path:  # `results_synthesis` reads the whole file, the fixture country included: it sets `currency` on tau
+                        continue
+                    seen += 1
+                    assert keys <= _OLD_VERIFIED_VALUE_KEYS, (phase, path, sorted(keys - _OLD_VERIFIED_VALUE_KEYS))
+    assert seen > 100  # the walk saw the values, not an empty payload
+    targets = phase_config_payload("robustness_analysis", iso, source)["experiments"]["national_targets"]
+    assert targets, "robustness_analysis reads national_targets"
+    for by_tech in targets.values():
+        for target in by_tech.values():
+            assert set(target) == _OLD_TARGET_KEYS
+
+
+def test_the_new_fields_of_the_zzz_config_are_only_the_currency_of_its_two_taus():
+    """The test values of ZZZ set `currency` on tau (DEC-081 item e) and nothing else new: the fixture carries no baseline to keep."""
+    payload = phase_config_payload("robustness_analysis", "ZZZ", _source(CONFIG))["parameters"]
+    with_new = {path for value in payload.values() for path, keys in _walk_verified_values(value) if keys & _NEW_KEYS}
+    assert with_new == {
+        "/technologies/solar/tau_lcoe_usd_per_mwh",
+        "/technologies/wind/tau_lcoe_usd_per_mwh",
+    }
+
+
+def test_setting_primary_bound_changes_the_fingerprint_of_the_phases_that_read_the_value_and_no_other(config_copy):
+    """The omission is only for null: a registered `primary_bound` is a real change and moves the phases that read the value."""
+    before = _fingerprints(config_copy)
+    text = (config_copy / "parameters.json").read_text(encoding="utf-8")
+    i = text.index('"cf_min"')  # the first cf_min is PRT solar
+    assert '"primary_bound"' not in text
+    j = text.index('"unit": "fraction",', i)
+    (config_copy / "parameters.json").write_text(
+        text[:j] + '"primary_bound": "max",\n            ' + text[j:], encoding="utf-8"
+    )
+    after = _fingerprints(config_copy)
+    assert _changed(before, after) == {"technical_potential", "potential_maps"} | {
+        phase
+        for phase, scope in PHASE_CONFIG_SCOPE.items()
+        if "parameters" in scope and any(s in ("*", "countries.{iso}") for s in scope["parameters"])
+    }
+
+
+def test_setting_status_on_a_target_moves_only_the_phases_that_read_national_targets(config_copy):
+    before = _fingerprints(config_copy)
+    _edit(
+        config_copy,
+        "experiments.yaml",
+        "  PRT:\n    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}",
+        "  PRT:\n    solar: {value: null, unit: null, source: null, horizon: null, status: draft, alternatives: []}",
+    )
+    assert _changed(before, _fingerprints(config_copy)) == {"robustness_analysis"}

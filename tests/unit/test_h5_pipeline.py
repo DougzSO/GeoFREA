@@ -48,7 +48,14 @@ def _experiments(target=None, thresholds=None, rule=True, alternatives=()) -> Ex
 
 
 def _target(value, unit="TWh/year"):
-    return {"value": value, "unit": unit, "source": "test plan", "horizon": 2040}
+    return {
+        "value": value,
+        "unit": unit,
+        "source": "test plan",
+        "horizon": 2040,
+        "kind": "technical_planning",
+        "scope": "total",
+    }
 
 
 def _summary(entry, role="core") -> pd.DataFrame:

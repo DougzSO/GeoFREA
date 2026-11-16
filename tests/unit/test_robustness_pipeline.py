@@ -73,6 +73,8 @@ def _target_of(experiments: ExperimentsFile, value, unit="GW", tech="wind") -> E
                 "unit": unit,
                 "source": "test plan",
                 "horizon": 2040,
+                "kind": "technical_planning",
+                "scope": "total",
                 "alternatives": [],
             },
         }

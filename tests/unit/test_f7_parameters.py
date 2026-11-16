@@ -313,7 +313,18 @@ def test_a_national_target_value_needs_its_unit_source_and_horizon():
         "unit": "GW",
         "source": "test source",
         "horizon": 2030,
-        "alternatives": [{"value": 2.5, "unit": "TWh/year", "source": "test", "horizon": 2035}],
+        "kind": "technical_planning",
+        "scope": "total",
+        "alternatives": [
+            {
+                "value": 2.5,
+                "unit": "TWh/year",
+                "source": "test",
+                "horizon": 2035,
+                "kind": "ndc",
+                "scope": "centralized",
+            }
+        ],
     }
     target = ExperimentsFile.model_validate(ok).national_targets["PRT"]["solar"]
     assert (target.value, target.unit, target.horizon) == (8.0, "GW", 2030)
@@ -331,6 +342,63 @@ def test_a_national_target_value_needs_its_unit_source_and_horizon():
     negative["national_targets"]["PRT"]["solar"]["value"] = -1.0
     with pytest.raises(ValueError):
         ExperimentsFile.model_validate(negative)
+
+
+def _with_target(**changes):
+    """experiments.yaml with a filled PRT solar target (kind and scope set) and `changes` applied to it."""
+    raw = json.loads(
+        json.dumps(yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8")))
+    )
+    raw["national_targets"]["PRT"]["solar"] = {
+        "value": 8.0,
+        "unit": "GW",
+        "source": "test source",
+        "horizon": 2030,
+        "kind": "technical_planning",
+        "scope": "total",
+        "alternatives": [],
+    }
+    raw["national_targets"]["PRT"]["solar"].update(changes)
+    return raw
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("missing", ["kind", "scope"])
+def test_a_filled_national_target_needs_its_kind_and_scope(missing):
+    with pytest.raises(ValueError, match="kind and scope"):
+        ExperimentsFile.model_validate(_with_target(**{missing: None}))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("changes", [{"kind": "law"}, {"scope": "rooftop"}, {"tier": 4}])
+def test_a_national_target_refuses_an_unknown_kind_scope_or_tier(changes):
+    with pytest.raises(ValueError):
+        ExperimentsFile.model_validate(_with_target(**changes))
+
+
+@pytest.mark.unit
+def test_an_empty_national_target_needs_no_kind_or_scope_and_dumps_without_the_new_fields():
+    """The six targets of the file are null: they validate without the new fields, and the dump has none of them (DEC-081 items a and f)."""
+    raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    dumped = ExperimentsFile.model_validate(raw).model_dump(mode="json")["national_targets"]
+    for by_tech in dumped.values():
+        for target in by_tech.values():
+            assert set(target) == {"value", "unit", "source", "horizon", "alternatives"}
+
+
+@pytest.mark.unit
+def test_a_target_with_new_fields_dumps_them_and_a_fiscal_year_keeps_its_label_in_the_source():
+    """`horizon` is the calendar year in which the fiscal year ends; `source` keeps the fiscal year (DEC-081 item b)."""
+    raw = _with_target(horizon=2035, source="CEA/MoP, plan for 2034-35", tier=2, status="draft")
+    target = ExperimentsFile.model_validate(raw).model_dump(mode="json")["national_targets"]["PRT"]["solar"]
+    assert (target["horizon"], target["kind"], target["scope"], target["tier"], target["status"]) == (
+        2035,
+        "technical_planning",
+        "total",
+        2,
+        "draft",
+    )
+    assert "2034-35" in target["source"]
 
 
 @pytest.mark.unit

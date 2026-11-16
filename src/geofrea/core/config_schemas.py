@@ -189,7 +189,22 @@ class H5Rule(BaseModel):
 
 
 class TargetValue(BaseModel):
-    """One national target of a technology: a value, its unit, its source and the year it refers to (OQ-010)."""
+    """One national target of a technology: a value, its unit, its source and the year it refers to (OQ-010).
+
+    Args:
+        value: The target in `unit`, or null while the author has not set it.
+        unit: `GW` or `TWh/year`.
+        source: The document and passage; a fiscal-year target keeps the fiscal year here ("2034-35").
+        horizon: The calendar year the target refers to; for a fiscal year, the calendar year in which it ends (DEC-081 item b). It plays the role of a
+            `target_year`; no other field is created.
+        kind: `statutory`, `ndc` or `technical_planning` (DEC-070, DEC-081 item f).
+        scope: `centralized` or `total` (DEC-081 item f).
+        tier: Evidence tier of the value (U-07).
+        status: Free-text status of the value (for example `pending_research`).
+
+    A filled value needs its unit, source and horizon (OQ-010) and its `kind` and `scope` (DEC-081 item f). `kind`, `scope`, `tier` and `status`
+    are left out of the dump while null (`Field(exclude_if=...)`), so the fingerprint of a configuration that does not use them is the one it had before (DEC-081 item a).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -197,11 +212,21 @@ class TargetValue(BaseModel):
     unit: Literal["GW", "TWh/year"] | None
     source: str | None
     horizon: int | None = Field(ge=1900, le=2200)
+    kind: Literal["statutory", "ndc", "technical_planning"] | None = Field(default=None, exclude_if=lambda v: v is None)
+    scope: Literal["centralized", "total"] | None = Field(default=None, exclude_if=lambda v: v is None)
+    tier: Literal[1, 2, 3] | None = Field(default=None, exclude_if=lambda v: v is None)
+    status: str | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _a_value_has_unit_source_and_horizon(self) -> TargetValue:
         if self.value is not None and (not self.unit or not self.source or self.horizon is None):
             raise ValueError("a national target value needs its unit, source and horizon (OQ-010)")
+        return self
+
+    @model_validator(mode="after")
+    def _a_value_has_kind_and_scope(self) -> TargetValue:
+        if self.value is not None and (self.kind is None or self.scope is None):
+            raise ValueError("a national target value needs its kind and scope (DEC-081 item f)")
         return self
 
 

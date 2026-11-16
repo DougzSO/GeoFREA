@@ -65,8 +65,8 @@ def experiments_text(
             (
                 "national_targets:\n"
                 f"  {country}:\n"
-                f'    solar: {{value: {target_gw}, unit: GW, source: "synthetic test value", horizon: 2040, alternatives: []}}\n'
-                f'    wind: {{value: {target_gw}, unit: GW, source: "synthetic test value", horizon: 2040, alternatives: []}}\n'
+                f'    solar: {{value: {target_gw}, unit: GW, source: "synthetic test value", horizon: 2040, kind: technical_planning, scope: total, alternatives: []}}\n'
+                f'    wind: {{value: {target_gw}, unit: GW, source: "synthetic test value", horizon: 2040, kind: technical_planning, scope: total, alternatives: []}}\n'
             ),
         ),
         ("bootstrap_replicates: 200", "bootstrap_replicates: 10"),

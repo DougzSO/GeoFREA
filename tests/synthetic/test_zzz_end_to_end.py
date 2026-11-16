@@ -117,8 +117,8 @@ def zzz(tmp_path_factory):
             (
                 "national_targets:\n"
                 "  ZZZ:\n"
-                '    solar: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
-                '    wind: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, alternatives: []}\n'
+                '    solar: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, kind: technical_planning, scope: total, alternatives: []}\n'
+                '    wind: {value: 0.0001, unit: GW, source: "ZZZ test value", horizon: 2040, kind: technical_planning, scope: total, alternatives: []}\n'
             ),
         ),
         (

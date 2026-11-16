@@ -245,3 +245,20 @@ def test_experiments_and_technologies_forbid_unknown_keys(tmp_path):
     bad_t.write_text(yaml.safe_dump(tech), encoding="utf-8")
     with pytest.raises(ValidationError, match="capacity_factor"):
         load_technologies(bad_t)
+
+
+@pytest.mark.unit
+def test_a_reporting_range_outside_uncertain_parameters_is_no_finding_and_inside_it_is_an_audit_error():
+    """DEC-081 item c: tau carries a 'reporting' range that is never sampled; on an uncertain parameter it is an audit item, not a SamplingError."""
+    parameters, technologies = load_parameters(PARAMETERS), load_technologies(TECHNOLOGIES)
+    reporting = {"min": 30.0, "max": 80.0, "distribution": "reporting", "source": "IRENA p5 to p95", "tier": 2}
+    on_tau = _patched(
+        parameters, "PRT", "solar", "tau_lcoe_usd_per_mwh", value=48.0, range=reporting, price_year=2024, currency="USD"
+    )
+    audit = audit_parameters(on_tau, technologies, ["PRT"], ["solar"])
+    assert not any("reporting" in message for message in audit.errors)
+    broken = _patched(parameters, "PRT", "solar", "discount_rate", range={**reporting, "min": 0.03, "max": 0.05})
+    audit = audit_parameters(broken, technologies, ["PRT"], ["solar"])
+    assert any("PRT solar discount_rate" in e and "'reporting' range" in e for e in audit.errors)
+    with pytest.raises(ProductionRunError, match="reporting"):
+        enforce_production(audit)

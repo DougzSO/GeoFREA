@@ -2471,7 +2471,8 @@
             "note": "Test value: inside the spread of the synthetic LCOE draws, so the satisficing share is neither 0 nor 1.",
             "status": null,
             "synthetic": true,
-            "price_year": 2024
+            "price_year": 2024,
+            "currency": "USD"
           },
           "top_k_percent": {
             "value": 25.0,
@@ -2740,7 +2741,8 @@
             "note": "Test value: inside the spread of the synthetic LCOE draws, so the satisficing share is neither 0 nor 1.",
             "status": null,
             "synthetic": true,
-            "price_year": 2024
+            "price_year": 2024,
+            "currency": "USD"
           },
           "top_k_percent": {
             "value": 25.0,

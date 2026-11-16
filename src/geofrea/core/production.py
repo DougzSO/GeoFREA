@@ -122,6 +122,10 @@ def audit_parameters(
                     audit.errors.append(f"{where}: uncertain parameter has no value")
                 elif vv.range is None:
                     audit.errors.append(f"{where}: uncertain parameter has no range (U-05)")
+                elif vv.range.distribution == "reporting":
+                    audit.errors.append(
+                        f"{where}: uncertain parameter has a 'reporting' range, which is reported and never sampled (DEC-081 item c)"
+                    )
             if tech == "solar" and getattr(params, "degradation_by_zone", None) is None:
                 audit.errors.append(
                     f"{iso} {tech} degradation_by_zone: no PV zone rates (scripts/derive_pv_degradation_by_zone.py)"

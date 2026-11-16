@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from geofrea.core.schemas import (
     CountryParams,
+    ParameterRange,
     ParametersFile,
     RunConfig,
     SettingsFile,
@@ -428,3 +429,87 @@ def test_real_parameters_json_validates_and_has_no_criteria_block():
     # ZZZ (synthetic fixture, A-06/OQ-032) joined 2026-09-24 -- see
     # docs/phases/core.md D-core-018.
     assert set(result.countries) == {"PRT", "BRA", "IND", "ZZZ"}
+
+
+# --- Pre-registration fields (DEC-081) ---------------------------------
+
+
+def _solar_with(**values):
+    """VALID_SOLAR with the entries of `values` replaced (a dict is the entry as it is written in parameters.json)."""
+    return {**VALID_SOLAR, **values}
+
+
+def _tau(**changes):
+    return {**VALID_VERIFIED_VALUE, "unit": "USD/MWh", "value": 50.0, **changes}
+
+
+@pytest.mark.unit
+def test_currency_accepts_usd_only_and_a_value_without_it_dumps_without_the_key():
+    assert VerifiedValue[float].model_validate({**VALID_VERIFIED_VALUE, "currency": "USD"}).currency == "USD"
+    with pytest.raises(ValidationError):
+        VerifiedValue[float].model_validate({**VALID_VERIFIED_VALUE, "currency": "EUR"})
+    plain = VerifiedValue[float].model_validate(VALID_VERIFIED_VALUE)
+    assert plain.currency is None
+    assert "currency" not in plain.model_dump(mode="json")
+    assert "currency" not in plain.model_dump()
+    assert VerifiedValue[float].model_validate({**VALID_VERIFIED_VALUE, "currency": "USD"}).model_dump()["currency"] == "USD"
+
+
+@pytest.mark.unit
+def test_the_threshold_tau_needs_its_currency_when_it_has_a_price_year():
+    with pytest.raises(ValidationError, match="currency is required"):
+        SolarParams.model_validate(_solar_with(tau_lcoe_usd_per_mwh=_tau(price_year=2024)))
+    solar = SolarParams.model_validate(_solar_with(tau_lcoe_usd_per_mwh=_tau(price_year=2024, currency="USD")))
+    assert solar.tau_lcoe_usd_per_mwh.model_dump(mode="json")["currency"] == "USD"
+    # no price year, no currency: the pending value of the real countries
+    pending = SolarParams.model_validate(_solar_with(tau_lcoe_usd_per_mwh=_tau(value=None)))
+    assert "currency" not in pending.tau_lcoe_usd_per_mwh.model_dump(mode="json")
+
+
+@pytest.mark.unit
+def test_wind_params_apply_the_same_two_rules():
+    wind = {**VALID_WIND, "tau_lcoe_usd_per_mwh": _tau(price_year=2024)}
+    with pytest.raises(ValidationError, match="currency is required"):
+        WindParams.model_validate(wind)
+    bad_bound = {**VALID_WIND, "capex_usd_per_kw": {**VALID_VERIFIED_VALUE, "value": 1100, "primary_bound": "max"}}
+    with pytest.raises(ValidationError, match="primary_bound exists only on cf_min"):
+        WindParams.model_validate(bad_bound)
+
+
+@pytest.mark.unit
+def test_a_value_other_than_tau_with_a_price_year_still_validates_without_a_currency():
+    """About thirty real values carry a `price_year` and no `currency`; requiring it there would move fingerprints (DEC-081 item a)."""
+    capex = {**VALID_VERIFIED_VALUE, "value": 823, "price_year": 2024}
+    solar = SolarParams.model_validate(_solar_with(capex_usd_per_kw=capex))
+    assert solar.capex_usd_per_kw.currency is None
+    assert "currency" not in solar.capex_usd_per_kw.model_dump(mode="json")
+
+
+@pytest.mark.unit
+def test_primary_bound_is_accepted_on_cf_min_only_and_is_left_out_of_the_dump_while_null():
+    floor = {**VALID_VERIFIED_VALUE, "value": 0.2}
+    plain = SolarParams.model_validate(_solar_with(cf_min=floor))
+    assert plain.cf_min.primary_bound is None
+    assert "primary_bound" not in plain.cf_min.model_dump(mode="json")
+    strict = SolarParams.model_validate(_solar_with(cf_min={**floor, "primary_bound": "max"}))
+    assert strict.cf_min.model_dump(mode="json")["primary_bound"] == "max"
+    with pytest.raises(ValidationError):
+        SolarParams.model_validate(_solar_with(cf_min={**floor, "primary_bound": "strict"}))
+    for other in ("capex_usd_per_kw", "discount_rate", "top_k_percent"):
+        entry = {**VALID_VERIFIED_VALUE, "value": 1.0, "primary_bound": "max"}
+        with pytest.raises(ValidationError, match="primary_bound exists only on cf_min"):
+            SolarParams.model_validate(_solar_with(**{other: entry}))
+
+
+@pytest.mark.unit
+def test_a_reporting_range_is_accepted_by_the_schema_and_keeps_its_bounds():
+    reporting = ParameterRange.model_validate(
+        {"min": 36.0, "max": 77.0, "distribution": "reporting", "source": "IRENA p5 to p95", "tier": 2}
+    )
+    assert reporting.distribution == "reporting"
+    value = VerifiedValue[float].model_validate({**VALID_VERIFIED_VALUE, "value": 48.0, "range": reporting.model_dump()})
+    assert value.range is not None and (value.range.min, value.range.max) == (36.0, 77.0)
+    with pytest.raises(ValidationError, match="must be within range"):
+        VerifiedValue[float].model_validate({**VALID_VERIFIED_VALUE, "value": 80.0, "range": reporting.model_dump()})
+    with pytest.raises(ValidationError):
+        ParameterRange.model_validate({"min": 1.0, "max": 2.0, "distribution": "gaussian", "source": "x"})

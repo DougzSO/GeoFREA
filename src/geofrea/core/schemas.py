@@ -58,7 +58,9 @@ class ParameterRange(BaseModel):
         min: Minimum value in the range.
         max: Maximum value in the range. Must be >= min.
         distribution: Distribution type: 'uniform', 'triangular', or 'discrete_uniform' (the integers from min to max with equal
-            probability, for a count of whole years such as the lifetime; min and max are integers).
+            probability, for a count of whole years such as the lifetime; min and max are integers), or 'reporting': a range that is
+            reported and never sampled (the IRENA p5 to p95 range of the LCOE threshold tau, DEC-081 item c). A parameter listed in
+            `uncertain_parameters` cannot have it: the parameter audit reports it (`core/production.py`).
         source: Citation for where the range comes from.
         tier: Evidence tier (1, 2, 3, or null) for the range itself
             (may differ from the nominal value's tier).
@@ -68,7 +70,7 @@ class ParameterRange(BaseModel):
 
     min: float
     max: float
-    distribution: Literal["uniform", "triangular", "discrete_uniform"]
+    distribution: Literal["uniform", "triangular", "discrete_uniform", "reporting"]
     source: str
     tier: Literal[1, 2, 3] | None = None
 
@@ -173,6 +175,15 @@ class VerifiedValue(BaseModel, Generic[T]):
         price_year: Price base year of a cost value in USD (S-07: constant 2024 USD).
             Null where the value is not a cost in USD or the year is not yet audited;
             F6 refuses a cost parameter whose year is null or not 2024 (D-F6-008).
+        currency: Currency of a cost value in USD (ISO 4217), next to `price_year` (DEC-081 item e). Null where it is not stated. It is required on
+            the LCOE threshold tau when `price_year` is set (`_TechnologyEconomicParams`); the other values carry the currency in their `unit`.
+        primary_bound: The end of `range` that is the primary floor, `min`, `point` or `max`. Only `cf_min` may set it (`_TechnologyEconomicParams`):
+            `max` is the strict end of DEC-073 (the gross, ex-ante capacity factor of the project, the higher floor), `min` the permissive end
+            (the fleet capacity factor, net of curtailment), which is the sensitivity.
+
+    `currency` and `primary_bound` are left out of the dump while they are null (`Field(exclude_if=...)`), so the validated dump that the
+    configuration fingerprint hashes is the one it was before the fields existed, and the fingerprint of no phase moves because of the schema
+    (DEC-081 item a). A value that sets one is dumped with it, so a real change still moves the fingerprint.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -192,6 +203,8 @@ class VerifiedValue(BaseModel, Generic[T]):
     proxy: bool = False
     scenario_values: ScenarioValues | None = None
     price_year: int | None = None
+    currency: Literal["USD"] | None = Field(default=None, exclude_if=lambda v: v is None)
+    primary_bound: Literal["min", "point", "max"] | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def _scenario_values_central_is_the_value(self) -> VerifiedValue:
@@ -445,6 +458,18 @@ class _TechnologyEconomicParams(BaseModel):
     discount_rate: VerifiedValue[NonNegativeFloat | None]  # null where the rate has no source; a production run refuses it
     discount_rate_increment: VerifiedValue[float | None]
     commissioning_year: VerifiedValue[PositiveInt] | None = None  # t_ref of the technology vintage (OQ-018); not read by the kernel
+
+    @model_validator(mode="after")
+    def _preregistration_fields_sit_where_decided(self) -> _TechnologyEconomicParams:
+        """`primary_bound` only on `cf_min`; `currency` required on `tau_lcoe_usd_per_mwh` when it has a `price_year` (DEC-081 items e and f)."""
+        for name, value in self.__dict__.items():
+            if not isinstance(value, VerifiedValue):
+                continue
+            if name != "cf_min" and value.primary_bound is not None:
+                raise ValueError(f"{name}: primary_bound exists only on cf_min (DEC-081 item e)")
+            if name == "tau_lcoe_usd_per_mwh" and value.price_year is not None and value.currency is None:
+                raise ValueError("tau_lcoe_usd_per_mwh: price_year is set, so currency is required (DEC-081 item e)")
+        return self
 
 
 class _TechnologySitingParams(BaseModel):
