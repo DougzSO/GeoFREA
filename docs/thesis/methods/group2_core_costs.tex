@@ -158,18 +158,25 @@ also publishes regional values, which GeoFREA uses:
         \toprule
         Country & IRENA region & Tech. & Central & Sampling range & Tier (value / range) \\
         \midrule
-        BRA & South America & PV   & 7.7\% & 6.7--8.7\% & 2 / 3 \\
-            &               & Wind & 7.7\% & 6.7--8.7\% & 2 / 3 \\
-        IND & Asia          & PV   & 4.0\% & 3.0--5.0\% & 2 / 3 \\
-            &               & Wind & 3.8\% & 2.8--4.8\% & 2 / 3 \\
+        BRA & South America & PV   & 7.7\% & 6.3--8.7\% & 2 / 3 \\
+            &               & Wind & 7.7\% & 4.9--8.7\% & 2 / 3 \\
+        IND & Asia          & PV   & 4.0\% & 3.0--5.9\% & 2 / 3 \\
+            &               & Wind & 3.8\% & 2.8--5.9\% & 2 / 3 \\
         PRT & Europe        & PV   & 4.2\% & 3.2--5.2\% & 2 / 3 \\
             &               & Wind & 3.7\% & 2.7--4.7\% & 2 / 3 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
-The sampling range is $\pm1$ percentage point around the regional value,
-by author judgment. The Asian value is dominated by China and likely
+The sampling range is the union of two intervals: the regional 2024 value
+$\pm1$ percentage point, by author judgment, and the 2021 country point of
+IRENA's cost-of-financing report (BRA 6.3\% for PV and 4.9\% for wind, IND 5.9\%
+for both, PRT 4.2\% for PV and 3.2\% for wind). The draws are uniform on the
+range. A range built by union is not centred on the central value, so the mean
+of the Latin hypercube draws, which is the midpoint of the range, differs from
+the central value in four pairs: BRA PV (7.5\% against 7.7\%), BRA wind (6.8\%
+against 7.7\%), IND PV (4.45\% against 4.0\%) and IND wind (4.35\% against
+3.8\%). The Asian value is dominated by China and likely
 understates the cost of capital in India. It is consistent, however, with
 IRENA's earlier country estimates for India (7.1\% for PV and 8.4\% for
 wind, nominal, 2019--2021) once converted with the Reserve Bank of India
@@ -230,7 +237,7 @@ regional averages; the Asian rate is likely low for India. The truncated
 upper tail of the capital-cost distribution removes the most expensive
 projects, which is consistent only if Group 3 represents the connection
 costs that drive them. Some ranges are author judgment ($\pm20\%$ for
-single O\&M values, $\pm1$ percentage point for discount rates). Treating
+single O\&M values, the width of $\pm1$ percentage point of the discount-rate ranges). Treating
 O\&M as a fraction of capital cost makes absolute O\&M scale with sampled
 capital cost. Discount rates reflect 2023 financial conditions and are
 held constant over the plant life.

@@ -127,10 +127,8 @@ The regret of cell $i$ in future $s$ is relative to a reference LCOE $L^{*}_{s}$
 \begin{equation}
 R(i,s) = \frac{C(i,s) - L^{*}_{s}}{L^{*}_{s}}, \qquad L^{*}_{s} = Q_{q}\!\big(C(\cdot,s)\big),
 \end{equation}
-where $C(i,s)$ is the LCOE. For $q = 0$ the reference is the minimum and the regret is non-negative by construction. The default is $q = 0$ (the minimum), as in the F7 specification, and $q = 0.01$ is tested as a sensitivity (OQ-020). The minimum is set by a single cell and can be unstable under data artifacts and under changes of spatial aggregation, so the rule for adopting $q = 0.01$ instead, based on the overlap of the top-$k$ sets obtained with the two values, is registered before the results are seen. % open: A5
-A reference at 5\% is not used: it would give zero regret to the best cells, which are those to be discriminated, and it would coincide with the smallest top-$k$ fraction. The fraction $p_k$ takes the values 5, 10 and 20\%, so $q < p_k$ always holds. For $q > 0$, cells cheaper than the quantile have negative regret; the convention for them (clipping at zero) and the change that lets the current implementation, which accepts only $q = 0$, run $q = 0.01$ are open decisions. % open: A5
-
-The ranking stability between $q = 0.01$ and $q = 0$ is reported through the overlap of the top-$k$ sets and the rank correlation. Neither value is chosen after seeing the results. The number of cells represented by 1\% in Portugal is checked, because a small number makes the quantile unstable.
+where $C(i,s)$ is the LCOE. For $q = 0$ the reference is the minimum and the regret is non-negative by construction. The regret reference is the minimum LCOE ($q_{\mathrm{ref}} = 0$), as in the F7 specification.
+A reference at 5\% is not used: it would give zero regret to the best cells, which are those to be discriminated, and it would coincide with the smallest top-$k$ fraction.
 
 \subsection{Currency and price base}
 \label{sec:g4-currency}

@@ -357,9 +357,9 @@ land_availability:
 # target (OQ-010) has one source, `national_targets` below.
 thresholds:
   # Regret quantile (M-F7-02)
-  # q_ref for the "optimal" LCOE definition (default 0 = minimum)
-  # OQ-020: Decision on q_ref
-  regret_quantile: 0  # Set by OQ-020 (0 = minimum)
+  # q_ref for the "optimal" LCOE definition (0 = minimum)
+  # only 0 (minimum) is built (DEC-074, D-F7-009)
+  regret_quantile: 0  # only 0 (minimum) is built (DEC-074, D-F7-009)
 
 # F7 hypothesis decision rules (METHODOLOGY M-F7-07, OQ-050). One list of rules per hypothesis; a rule compares one statistic F7 writes
 # (`hypothesis_<ISO3>_<tech>.parquet`, column `statistic`) with a threshold: `comparison` is ge, gt, le or lt and the rule is met when

@@ -65,7 +65,7 @@ For cell $i$ in future $f$, the relative regret is
     \label{eq:h1_relative_regret}
 \end{equation}
 where $L^{*}_{f}$ is the reference LCOE of future $f$ over $\mathcal{I}$
-(the minimum, or the low quantile $q_{\mathrm{ref}}$ fixed in OQ-020). The
+(the minimum LCOE, $q_{\mathrm{ref}} = 0$). The
 relative form removes cost shifts common to every cell, so that the regret
 reflects differences between sites rather than the general level of costs.
 
@@ -294,7 +294,7 @@ least one scenario through climate change alone.
         $p$ (RBO) & $1-1/k$ & Descriptive metric only; expected depth equal
         to $k$. \\
         \addlinespace
-        $q_{\mathrm{ref}}$ & OQ-020 & Reference quantile of $L^{*}_{f}$. \\
+        $q_{\mathrm{ref}}$ & DEC-074 & Reference quantile of $L^{*}_{f}$; $q_{\mathrm{ref}} = 0$, the minimum LCOE. \\
         \bottomrule
     \end{tabularx}
 \end{table}
