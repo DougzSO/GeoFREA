@@ -6,7 +6,13 @@ The connection costs are stored per project in the currency and price year of th
 
     usd_2024 = amount * scale * deflator[2024] / deflator[price_year] / fx[2024]
 
-and the sampling range is converted the same way. A value in USD of price year 2024 needs no index. Nothing is estimated: a missing index, a missing
+and the sampling range is converted the same way. A value in USD of price year 2024 needs no index. A value in USD of another price year (the IRENA edition
+of 2025 is in 2025 USD, DEC-071) is converted with the GDP deflator of the United States, the same World Bank series, from the same file (`USA` under `NY.GDP.DEFL.ZS`),
+and needs no exchange rate:
+
+    usd_2024 = amount * scale * us_deflator[2024] / us_deflator[price_year]
+
+Nothing is estimated: a missing index, a missing
 price year or a cost still `to_be_sourced` is a problem, and F6 refuses to run while one exists (`group3_problems`).
 
 Implements: M-F6-08 (Group 3 connection cost and degradation, `docs/thesis/methods/group3_connection_degradation.tex`), A-09.
@@ -16,7 +22,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -27,6 +33,7 @@ from geofrea.core.schemas import ConnectionParams, UnitCost
 
 DEFLATOR = "NY.GDP.DEFL.ZS"
 EXCHANGE_RATE = "PA.NUS.FCRF"
+US = "USA"  # the series of the United States in the deflator indicator: it converts a USD cost of a price year other than 2024 (DEC-071)
 LONG_DISTANCE_SHARE_OF = "dist_sub_capped_share"
 # the kernel keys that Group 3 provides, in the order of `KERNEL_PARAMETER_KEYS`
 SAMPLED_KEYS = (
@@ -54,6 +61,16 @@ class ConversionIndices:
     exchange_rate: Mapping[int, float]
     source: str
     accessed: str
+    us_deflator: Mapping[int, float] = field(default_factory=dict)  # `NY.GDP.DEFL.ZS` of the United States, by year (empty when the file has no USA series)
+
+    def usd_factor(self, price_year: int, target_year: int = PRICE_BASE_YEAR_USD) -> float:
+        """US-dollar amount of `price_year` to 2024 US dollars, as a multiplier (the ratio of the US GDP deflators)."""
+        if not self.us_deflator:
+            raise ConversionError("a USD cost of a price year other than 2024 needs a US deflator, which is not loaded")
+        missing = [f"{DEFLATOR} {US} {y}" for y in (price_year, target_year) if y not in self.us_deflator]
+        if missing:
+            raise ConversionError(f"{self.iso}: conversion index missing: {', '.join(missing)}")
+        return self.us_deflator[target_year] / self.us_deflator[price_year]
 
     def factor(self, price_year: int, target_year: int = PRICE_BASE_YEAR_USD) -> float:
         """Local-currency amount of `price_year` to 2024 US dollars, as a multiplier."""
@@ -82,7 +99,13 @@ def load_conversion_indices(path: Path, iso: str) -> ConversionIndices:
         fx = {int(y): float(v) for y, v in data["indicators"][EXCHANGE_RATE]["values"][iso].items()}
     except KeyError as exc:
         raise ConversionError(f"{path}: no {exc} series for {iso}") from exc
-    return ConversionIndices(iso, deflator, fx, data.get("source", ""), data.get("accessed", ""))
+    # the United States: the series of the API, and, for a year the API does not give, the entry recorded by hand (`indicators[NY.GDP.DEFL.ZS].manual.USA`:
+    # `values`, `source`, `collected` and a `note`, written by `scripts/fetch_conversion_indices.py --manual-us-deflator`); the API value is never replaced
+    indicator = data["indicators"][DEFLATOR]
+    us = {int(y): float(v) for y, v in indicator["values"].get(US, {}).items()}
+    for y, v in indicator.get("manual", {}).get(US, {}).get("values", {}).items():
+        us.setdefault(int(y), float(v))
+    return ConversionIndices(iso, deflator, fx, data.get("source", ""), data.get("accessed", ""), us)
 
 
 def to_usd_2024(amount: float, cost: UnitCost, indices: ConversionIndices | None) -> float:
@@ -99,7 +122,7 @@ def to_usd_2024(amount: float, cost: UnitCost, indices: ConversionIndices | None
     if indices is None:
         raise ConversionError("no conversion indices")
     if cost.currency == "USD":
-        raise ConversionError("a USD cost of a price year other than 2024 needs a US deflator, which is not loaded")
+        return in_currency * indices.usd_factor(cost.price_year)
     return in_currency * indices.factor(cost.price_year)
 
 

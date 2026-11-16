@@ -317,3 +317,80 @@ def test_a_reporting_range_on_an_uncertain_parameter_is_listed_as_missing_and_ne
     wind = bra.technologies.wind.model_copy(update={"capex_usd_per_kw": capex.model_copy(update={"range": reporting})})
     with pytest.raises(LcoeMissingInputError, match="capex_usd_per_kw range .*reporting"):
         resolve_technology_costs("BRA", "wind", registry.technologies["wind"], wind, bra.connection)
+
+
+# --- the US deflator: a USD cost of a price year other than 2024 (COMMAND 158, DEC-071) ---------------------------------
+
+US_2024, US_2025 = 119.027387038617, 122.361624831936  # World Bank NY.GDP.DEFL.ZS, USA, collected 2026-11-15 (DEC-071)
+
+
+def _indices_file_with_us(tmp_path, us=None, manual=None):
+    """The synthetic series of XXX plus the United States (and, when given, the entry recorded by hand)."""
+    data = json.loads(_indices_file(tmp_path).read_text(encoding="utf-8"))
+    data["indicators"]["NY.GDP.DEFL.ZS"]["values"]["USA"] = us if us is not None else {"2023": 116.144257693854, "2024": US_2024, "2025": US_2025}
+    if manual is not None:
+        data["indicators"]["NY.GDP.DEFL.ZS"]["manual"] = {"USA": manual}
+    path = tmp_path / "indices_us.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+@pytest.mark.unit
+def test_a_usd_cost_of_2025_is_converted_with_the_us_deflator(tmp_path):
+    indices = load_conversion_indices(_indices_file_with_us(tmp_path), "XXX")
+    usd_2025 = _cost(currency="USD", scale=1.0, price_year=2025)
+    converted = to_usd_2024(37.0, usd_2025, indices)
+    assert converted == pytest.approx(37 * US_2024 / US_2025, abs=0.01)
+    assert converted == pytest.approx(35.99, abs=0.01)
+    assert indices.usd_factor(2025) == pytest.approx(0.97275, abs=1e-5)
+    # the scale of the unit applies as for any currency; a 2024 value still needs no index and an older year uses the same series
+    assert to_usd_2024(2.0, _cost(currency="USD", scale=1.0e6, price_year=2025), indices) == pytest.approx(2.0e6 * US_2024 / US_2025)
+    assert to_usd_2024(5.0, _cost(currency="USD", scale=1.0, price_year=2024), None) == 5.0
+    assert to_usd_2024(10.0, _cost(currency="USD", scale=1.0, price_year=2023), indices) == pytest.approx(10 * US_2024 / 116.144257693854)
+
+
+@pytest.mark.unit
+def test_a_usd_cost_whose_year_has_no_us_index_is_refused_and_so_is_a_file_without_the_series(tmp_path):
+    indices = load_conversion_indices(_indices_file_with_us(tmp_path), "XXX")
+    with pytest.raises(ConversionError, match="NY.GDP.DEFL.ZS USA 2022"):
+        to_usd_2024(1.0, _cost(currency="USD", scale=1.0, price_year=2022), indices)
+    without_us = load_conversion_indices(_indices_file(tmp_path), "XXX")
+    assert without_us.us_deflator == {}
+    with pytest.raises(ConversionError, match="needs a US deflator, which is not loaded"):
+        to_usd_2024(1.0, _cost(currency="USD", scale=1.0, price_year=2025), without_us)
+    with pytest.raises(ConversionError, match="no conversion indices"):
+        to_usd_2024(1.0, _cost(currency="USD", scale=1.0, price_year=2025), None)
+
+
+@pytest.mark.unit
+def test_the_conversions_of_other_currencies_do_not_depend_on_the_us_series(tmp_path):
+    with_us = load_conversion_indices(_indices_file_with_us(tmp_path), "XXX")
+    without = load_conversion_indices(_indices_file(tmp_path), "XXX")
+    for indices in (with_us, without):
+        assert to_usd_2024(2.0, _cost(), indices) == pytest.approx(1.0e6)
+        assert indices.factor(2024) == pytest.approx(0.25)
+
+
+@pytest.mark.unit
+def test_a_manual_us_value_fills_a_year_the_api_lacks_and_never_replaces_an_api_value(tmp_path):
+    manual = {
+        "values": {"2024": 100.0, "2025": US_2025},
+        "source": "World Bank NY.GDP.DEFL.ZS, USA, read by the author",
+        "collected": "2026-11-16",
+        "note": "2025 may be provisional",
+    }
+    api_without_2025 = {"2023": 116.144257693854, "2024": US_2024}
+    indices = load_conversion_indices(_indices_file_with_us(tmp_path, us=api_without_2025, manual=manual), "XXX")
+    assert indices.us_deflator[2025] == US_2025  # the manual value fills the gap
+    assert indices.us_deflator[2024] == US_2024  # the API value stays
+    assert to_usd_2024(37.0, _cost(currency="USD", scale=1.0, price_year=2025), indices) == pytest.approx(37 * US_2024 / US_2025)
+
+
+@pytest.mark.unit
+def test_d_f6_008_still_refuses_a_cost_parameter_in_usd_of_a_year_other_than_2024(parameters, registry):
+    """The US deflator converts the connection costs (`UnitCost`); a `VerifiedValue` cost whose `price_year` is not 2024 is still listed as missing."""
+    bra = parameters.countries["BRA"]
+    capex = bra.technologies.wind.capex_usd_per_kw
+    wind = bra.technologies.wind.model_copy(update={"capex_usd_per_kw": capex.model_copy(update={"price_year": 2025})})
+    with pytest.raises(LcoeMissingInputError, match=r"capex_usd_per_kw price_year \(is 2025, S-07 needs 2024\)"):
+        resolve_technology_costs("BRA", "wind", registry.technologies["wind"], wind, bra.connection)
