@@ -1908,3 +1908,22 @@ Substitui: nenhuma decisão anterior.
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. Items b and c enter METHODOLOGY as M-F7-15 and M-F7-16 (version 19.4.6); COMMAND 162 applies the values.
 
 ---
+
+## [2026-11-16] DEC-085 - Verdicts on tau, top_k and wind cf_min (COMMAND 161I)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+a) OQ-087 closed. The primary tau is the LCOE that the F6 kernel gives for the IRENA 2024 reference plant (IRENA TIC, CF, O&M and 25-year life, as published on the AC basis; DEC-072 central discount rate; degradation 0), for all six pairs. The published IRENA 2024 average is a registered sensitivity. Tau is a threshold on the LCOE that F6 computes for the cells, so it is taken on the same cost basis, and one rule for the six pairs keeps the countries comparable (same principle as DEC-072). The conditional rule of OQ-087 (F6 basis only where the calibration bias exceeds the half-width of the published p5 to p95 range) would select the F6 basis for IND wind only (bias 11.57 against half-width 5.0); the other pairs are inside the half-width (BRA solar 4.03 against 20.5, BRA wind 1.95 against 6.5, IND solar 9.74 against 13.5, PRT solar 5.47 against 31.0, PRT wind 1.36 against 20.5). A mixed basis would make tau incomparable across pairs, so the uniform rule is adopted. The reported range is the IRENA 2024 p5 to p95 (distribution "reporting") and does not have to contain the primary: for IND wind the primary (36.43) lies below the published p5 (43).
+b) OQ-110 closed. Tau keeps degradation 0 as a stated offset. F6 applies degradation to the energy of the cells, which raises their LCOE (wind +0.5 to +0.9 USD/MWh; PRT solar +2.2 to +5.2 USD/MWh). Solar degradation depends on the thermal zone (0.0040 to 0.0094 per year), so no single tau with degradation exists per pair. The offset makes the satisficing test stricter than tau alone suggests.
+c) OQ-088 closed. The tau range for Portugal keeps the Europe line p5 to p95 (solar 41 to 103, wind 34 to 75 USD/MWh, 2024 USD), Tier 2. No cap: a cap would be a value without a source. The range is reported, not sampled (DEC-081 c).
+d) OQ-021 closed. top_k_percent: primary 10, with 5 and 20 as sensitivities (the constants of DEC-081 d). Author judgment, Tier 3, declared before any result.
+e) OQ-112 closed. Wind cf_min is registered with the strict ends only (BRA 53, IND 29, PRT 34 percent; DEC-077, DEC-078). The permissive ends are not registered; any comparison that uses them is post hoc and labeled exploratory.
+f) `prim.outcome_threshold` = 0.20 and its sensitivities take M-F7-08 as their source. `transmission_loss_per_km_sensitivity` (0.0004, range 0.0003 to 0.0005) is author judgment, Tier 3.
+g) Open: solar cf_min (OQ-111, OQ-105). No solar cf_min value is registered until the basis of the IRENA solar CF is settled, because DEC-073 and DEC-079 state it differently.
+Justificativa (se METHODOLOGY_REVISION): the author's verdicts on the open questions that block the pre-registered values (COMMAND 161I); the reason of each is in its item.
+Referência (literatura/discussão, se aplicável): DEC-071; DEC-072; DEC-073; DEC-077; DEC-078; DEC-079; DEC-081; DEC-084; OQ-008; OQ-021; OQ-087; OQ-088; OQ-105; OQ-110; OQ-111; OQ-112; L-247; COMMAND 161I; COMMAND 161J.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The rules of items a, b, d and e enter METHODOLOGY as M-F7-17 to M-F7-20 (version 19.4.7); COMMAND 162 applies the values.
+
+---
