@@ -89,7 +89,7 @@
               "min": 0.032,
               "max": 0.052,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (PRT solar: 4.2%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,
@@ -375,7 +375,7 @@
               "min": 0.027,
               "max": 0.047,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (PRT wind: 3.2%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,
@@ -842,10 +842,10 @@
             "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: South America",
             "tier": 2,
             "range": {
-              "min": 0.067,
+              "min": 0.063,
               "max": 0.087,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (BRA solar: 6.3%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,
@@ -1128,10 +1128,10 @@
             "source": "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13 (regional real after-tax WACC, 2024 cohort); region: South America",
             "tier": 2,
             "range": {
-              "min": 0.067,
+              "min": 0.049,
               "max": 0.087,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (BRA wind: 4.9%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,
@@ -1599,9 +1599,9 @@
             "tier": 2,
             "range": {
               "min": 0.03,
-              "max": 0.05,
+              "max": 0.059,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (IND solar: 5.9%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,
@@ -1885,9 +1885,9 @@
             "tier": 2,
             "range": {
               "min": 0.028,
-              "max": 0.048,
+              "max": 0.059,
               "distribution": "uniform",
-              "source": "Author judgment: plus or minus 1 percentage point around the regional value (docs/thesis/methods/group2_core_costs.tex subsec:g2_wacc)",
+              "source": "DEC-072 union rule: the regional 2024 value of IRENA (2025), Figure 1.13, plus or minus 1 percentage point, joined with the 2021 country point of IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1 (IND wind: 5.9%); DEC-082 a keeps it",
               "tier": 3
             },
             "verified": false,

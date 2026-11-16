@@ -57,11 +57,11 @@ OPEX = {  # central, min, max of tab:g2_opex; PRT wind from the European rows of
     ("wind", "PRT"): (41 / 1659, 29 / 1659, 53 / 1659),
 }
 
-DISCOUNT = {  # central, min, max of tab:g2_wacc (IRENA 2024 regional real after-tax WACC)
-    ("solar", "BRA"): (0.077, 0.067, 0.087),
-    ("wind", "BRA"): (0.077, 0.067, 0.087),
-    ("solar", "IND"): (0.040, 0.030, 0.050),
-    ("wind", "IND"): (0.038, 0.028, 0.048),
+DISCOUNT = {  # central (regional 2024), min, max: the union of regional +-1 p.p. and the 2021 country point (DEC-072, DEC-082 a; M-F6-11)
+    ("solar", "BRA"): (0.077, 0.063, 0.087),
+    ("wind", "BRA"): (0.077, 0.049, 0.087),
+    ("solar", "IND"): (0.040, 0.030, 0.059),
+    ("wind", "IND"): (0.038, 0.028, 0.059),
     ("solar", "PRT"): (0.042, 0.032, 0.052),
     ("wind", "PRT"): (0.037, 0.027, 0.047),
 }
@@ -237,3 +237,18 @@ def test_the_discrete_uniform_lifetime_gives_each_whole_year_from_25_to_30_a_fre
 def test_a_discrete_uniform_range_needs_integer_bounds():
     with pytest.raises(Exception, match="integer"):
         UncertainSpec("lifetime_years", 30.0, 25.5, 30.0, "discrete_uniform")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+@pytest.mark.parametrize("iso", COUNTRIES)
+def test_the_lhs_draws_of_the_discount_rate_stay_inside_its_range_and_the_central_value_is_inside_it(tech, iso):
+    """COMMAND 161: the min and the max of the draws are inside the range of each of the six pairs; the nominal sample is the central value."""
+    r = _tech(iso, tech).discount_rate
+    assert r.range.min <= r.value <= r.range.max
+    spec = UncertainSpec("discount_rate", r.value, r.range.min, r.range.max, r.range.distribution)
+    column = draw_lhs([spec], 10_000, seed=20261116)["discount_rate"].to_numpy()
+    assert column[0] == r.value  # row 0 is the nominal vector
+    draws = column[1:]
+    assert r.range.min <= draws.min() and draws.max() <= r.range.max
+    assert draws.mean() == pytest.approx((r.range.min + r.range.max) / 2, abs=1e-4)  # uniform: the mean is the midpoint, not the central value
