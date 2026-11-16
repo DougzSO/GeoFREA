@@ -1858,3 +1858,18 @@ Substitui: nenhuma decisão anterior (item g keeps the tag of the `grupo4.tex` p
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. Implementation commands: new optional fields in `VerifiedValue`, `ParameterRange` and `TargetValue` with serialization only when not `None`; `kind`, `scope`, `tier` and `status` validator; "reporting" guard in the parameter audit; extraction and digest of the subset; the tag `prereg-v1` (COMMAND 162T) and the two digests in the manifest; guard in F6 and F7; unit test of the tag; refusal in `scripts/rebaseline_config_fingerprint.py`.
 
 ---
+
+## [2026-11-16] DEC-082 - Verdicts after the tau calibration table (COMMAND 159)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+(a) OQ-104 closed: DEC-072 stands. The WACC ranges remain the union of the regional 2024 range and the 2021 country point, plus or minus 1 p.p. COMMAND 159 gives the discount rate that equates the F6 LCOE to the published IRENA 2024 LCOE: BRA solar 8.91%, BRA wind 6.81%, IND solar 7.95%, IND wind 7.43%, PRT solar 5.51% (regional proxy), PRT wind 4.06%. Four pairs (BRA solar, IND solar, IND wind, PRT solar) fall above the DEC-072 ceiling. This is recorded as a limitation and is not a reason to widen the ranges.
+(b) OQ-107 closed: each target keeps the horizon label of its source (2035 for the India targets of DEC-070). The comparison with the technical potential, computed under the climate window 2041-2070, is a plausibility benchmark and not a same-year test. METHODOLOGY states this.
+(c) National targets: only targets with a referenced value are registered (DEC-070, DEC-075 and the India scope entry that closes OQ-108). Pairs without a referenced value are registered as "no target" in the pre-registered subset. Targets added after the framework is complete are evaluated post hoc and labeled exploratory.
+Justificativa (se METHODOLOGY_REVISION): the author's verdicts on the table printed by COMMAND 159 (`scripts/calibrate_tau_irena.py`, `config/irena_reference.yaml`); the reason of each is in its item.
+Referência (literatura/discussão, se aplicável): DEC-070; DEC-072; DEC-075; DEC-076; DEC-079; DEC-081; OQ-104; OQ-107; L-245; COMMAND 159.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior; DEC-072 stands.
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The rules of items b and c enter METHODOLOGY in the PATCH of COMMAND 161; the limitation of item a is L-245.
+
+---

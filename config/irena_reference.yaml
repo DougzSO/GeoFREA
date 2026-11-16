@@ -1,0 +1,373 @@
+# IRENA reference values for the calibration of tau (COMMAND 159; DEC-072, DEC-075 to DEC-080).
+#
+# The values are those of docs/_audit/2026-11_docs_audit/11_irena_inputs.md (report 11), registered by the author on 2026-11-15, copied here without change. Percentages of the
+# source are written as fractions. A value that has no number in the table is `null`; the script `scripts/calibrate_tau_irena.py` refuses only the pairs that need a `null` and lists
+# the fields. Nothing here is read by a phase: it is the input of the calibration script, outside every phase fingerprint.
+#
+# Every entry carries `currency`, `price_year`, `edition`, `source`, `status` and `verified`. `verified: true` on every numeric value of the table of report 11: the flag reflects
+# the check that the author made of the table of docs/_audit/2026-11_docs_audit/11_irena_inputs.md against the IRENA documents (COMMAND 159B, 2026-11-16; DEC-080 lists part of it).
+# A value with no number (`null`) stays `verified: false`. The solar capacity factor of Portugal keeps the mark `regional_proxy` (DEC-078, L-242). The basis of TIC, CF and O&M is
+# alternating current (DEC-079); F6 works on DC capacity (D-F6-028, OQ-105).
+#
+# Units: tic_usd_per_kw in USD/kW, cf as a fraction (AC energy over AC capacity, DEC-079), om_usd_per_kw_yr in USD/kW per year, lcoe_usd_per_mwh in USD/MWh, wacc as a real after-tax fraction.
+# p5 and p95 are the 5th and 95th percentiles of the published distribution.
+
+schema_version: 1
+
+# country -> the IRENA region whose WACC of 2024 applies (DEC-072)
+region_of: {BRA: south_america, IND: asia, PRT: europe}
+
+# countries whose IRENA row is another row: Portugal takes the Europe row (DEC-078); the solar capacity factor of Portugal is the EU average and is a proxy (L-242)
+row_of: {BRA: BRA, IND: IND, PRT: Europe}
+
+editions:
+  irena_rpgc_2024:
+    report: "IRENA (2025), Renewable Power Generation Costs in 2024 (published July 2025)"
+    basis: "real USD of 2024, lifetime 25 years, capacity and capacity factor on an AC basis (note 4)"
+    life_years:
+      value: 25
+      unit: years
+      currency: null
+      price_year: null
+      edition: irena_rpgc_2024
+      source: "IRENA (2025), Renewable Power Generation Costs in 2024, as registered in report 11 (lifetime of 25 years)"
+      status: registered
+      verified: true
+    pairs:
+      BRA:
+        solar:
+          tic_usd_per_kw:
+            value: 724
+            p5: 503
+            p95: 1152
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11 (table not stated there)"
+            status: registered
+            verified: true
+          cf:
+            value: 0.20
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11"
+            status: registered
+            verified: true
+          om_usd_per_kw_yr:
+            value: 10.95
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; non-OECD O&M, as registered in report 11"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 48
+            p5: 36
+            p95: 77
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11"
+            status: registered
+            verified: true
+        wind:
+          tic_usd_per_kw:
+            value: 1307
+            p5: 1015
+            p95: 1628
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11 (table not stated there)"
+            status: registered
+            verified: true
+          cf:
+            value: 0.53
+            alternative: {value: 0.56, source: "Table 2.2 (sensitivity, DEC-077)"}
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figures 1.4 and 1.15 (DEC-077); Table 2.2 gives 56%"
+            status: registered
+            verified: true
+          om_usd_per_kw_yr:
+            value: 29
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 30
+            p5: 24
+            p95: 37
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Brazil row, as registered in report 11"
+            status: registered
+            verified: true
+      IND:
+        solar:
+          tic_usd_per_kw:
+            value: 525
+            p5: 415
+            p95: 831
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11 (table not stated there)"
+            status: registered
+            verified: true
+          cf:
+            value: 0.18
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11"
+            status: registered
+            verified: true
+          om_usd_per_kw_yr:
+            value: 10.95
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; non-OECD O&M, as registered in report 11"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 38
+            p5: 32
+            p95: 59
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11"
+            status: registered
+            verified: true
+        wind:
+          tic_usd_per_kw:
+            value: 1110
+            p5: 984
+            p95: 1270
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11 (table not stated there)"
+            status: registered
+            verified: true
+          cf:
+            value: 0.29
+            alternative: {value: 0.39, source: "Table 2.2 (sensitivity, DEC-077)"}
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figures 1.4 and 1.15 (DEC-077); Table 2.2 gives 39%"
+            status: registered
+            verified: true
+          om_usd_per_kw_yr:
+            value: 23
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 48
+            p5: 43
+            p95: 53
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; India row, as registered in report 11"
+            status: registered
+            verified: true
+      PRT:  # the Europe row (DEC-078)
+        solar:
+          tic_usd_per_kw:
+            value: 779
+            p5: 524
+            p95: 1312
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Europe row (Tables 2.1, 2.3, 2.4, 3.1 and 3.3, DEC-078), as registered in report 11"
+            status: registered
+            verified: true
+          cf:
+            value: 0.15
+            regional_proxy: true
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.4: EU average, a proxy for Portugal (DEC-078, L-242)"
+            status: regional_proxy
+            verified: true
+          om_usd_per_kw_yr:
+            value: 20.73
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; OECD O&M, as registered in report 11"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 60
+            p5: 41
+            p95: 103
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Europe row, as registered in report 11"
+            status: registered
+            verified: true
+        wind:
+          tic_usd_per_kw:
+            value: 1659
+            p5: 1211
+            p95: 2232
+            unit: USD/kW
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Europe row (DEC-078), as registered in report 11"
+            status: registered
+            verified: true
+          cf:
+            value: 0.34
+            p5: 0.25
+            p95: 0.43
+            unit: fraction
+            currency: null
+            price_year: null
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Europe row (DEC-078), as registered in report 11"
+            status: registered
+            verified: true
+          om_usd_per_kw_yr:
+            value: 45
+            alternative: {value: 29, source: "Spain (sensitivity, DEC-078)"}
+            unit: USD/kW/yr
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024, Table A3: other OECD countries (DEC-078); Spain gives 29"
+            status: registered
+            verified: true
+          lcoe_usd_per_mwh:
+            value: 51
+            p5: 34
+            p95: 75
+            unit: USD/MWh
+            currency: USD
+            price_year: 2024
+            edition: irena_rpgc_2024
+            source: "IRENA (2025), Renewable Power Generation Costs in 2024; Europe row, as registered in report 11"
+            status: registered
+            verified: true
+
+  irena_rpgc_2025:
+    report: "IRENA (2026), Renewable Power Generation Costs in 2025 (published 2026)"
+    basis: "USD of 2025; only the national LCOE (Figure S3); a secondary check, never combined with TIC, CF or O&M of another edition (DEC-076)"
+    pairs:
+      BRA:
+        solar:
+          lcoe_usd_per_mwh:
+            value: 37
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3 (national LCOE), as registered in report 11"
+            status: registered
+            verified: true
+        wind:
+          lcoe_usd_per_mwh:
+            value: 31
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3 (national LCOE; the attribution of 31 to Brazil was checked by the author, DEC-080)"
+            status: registered
+            verified: true
+      IND:
+        solar:
+          lcoe_usd_per_mwh:
+            value: 35
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3 (national LCOE), as registered in report 11"
+            status: registered
+            verified: true
+        wind:
+          lcoe_usd_per_mwh:
+            value: 43
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3 (national LCOE; the attribution of 43 to India was checked by the author, DEC-080)"
+            status: registered
+            verified: true
+      PRT:  # the 2025 edition has no national line for Portugal in the table of report 11
+        solar:
+          lcoe_usd_per_mwh:
+            value: null
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3: no national value for Portugal in report 11"
+            status: not_available
+            verified: false
+        wind:
+          lcoe_usd_per_mwh:
+            value: null
+            unit: USD/MWh
+            currency: USD
+            price_year: 2025
+            edition: irena_rpgc_2025
+            source: "IRENA (2026), Renewable Power Generation Costs in 2025, Figure S3: no national value for Portugal in report 11"
+            status: not_available
+            verified: false
+    global:
+      solar: {lcoe_usd_per_mwh: {value: 44, unit: USD/MWh, currency: USD, price_year: 2025, edition: irena_rpgc_2025, source: "IRENA (2026), Figure S3 (global), as registered in report 11", status: registered, verified: true}}
+      wind: {lcoe_usd_per_mwh: {value: 33, unit: USD/MWh, currency: USD, price_year: 2025, edition: irena_rpgc_2025, source: "IRENA (2026), Figure S3 (global), as registered in report 11", status: registered, verified: true}}
+
+# Real after-tax WACC (DEC-072). The regional values of 2024 are in percent in the source; here as fractions.
+wacc:
+  regional_2024:  # IRENA (2025), Figure 1.13, 2024 cohort
+    south_america: {solar: {value: 0.077, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}, wind: {value: 0.077, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}}
+    europe: {solar: {value: 0.042, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}, wind: {value: 0.037, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}}
+    asia: {solar: {value: 0.040, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}, wind: {value: 0.038, currency: null, price_year: null, edition: irena_rpgc_2024, source: "IRENA (2025), Renewable Power Generation Costs in 2024, Figure 1.13", status: registered, verified: true}}
+  country_2021:  # IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1
+    BRA: {solar: {value: 0.063, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}, wind: {value: 0.049, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}}
+    IND: {solar: {value: 0.059, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}, wind: {value: 0.059, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}}
+    PRT: {solar: {value: 0.042, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}, wind: {value: 0.032, currency: null, price_year: null, edition: irena_finance_2023, source: "IRENA (2023), The cost of financing for renewable power, data appendix, Figure A1", status: registered, verified: true}}
