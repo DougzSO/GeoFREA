@@ -132,7 +132,7 @@ A reference at 5\% is not used: it would give zero regret to the best cells, whi
 
 \subsection{Currency and price base}
 \label{sec:g4-currency}
-Every monetary value is converted to constant 2024 USD when it enters the configuration, as the cost model requires, and its native value, currency, price year and source are kept in the note of the parameter. The conversion uses a single index table. Values in 2025 USD are multiplied by the ratio of the 2024 and 2025 price indices of the United States. The CPI-U annual averages \citep{bls_cpiu} give $313.689/321.943 = 0.9744$, and the GDP deflator gives 0.9728, a difference of 0.2\%. The choice of index is open. % open: A7
+Every monetary value is converted to constant 2024 USD when it enters the configuration, as the cost model requires, and its native value, currency, price year and source are kept in the note of the parameter. The conversion uses a single index table. Values in 2025 USD are multiplied by the ratio of the 2024 and 2025 price indices of the United States. The CPI-U annual averages \citep{bls_cpiu} give $313.689/321.943 = 0.9744$, and the GDP deflator gives 0.9728, a difference of 0.2\%. The conversion uses the GDP deflator of the United States from the World Bank (NY.GDP.DEFL.ZS), with the factor 0.97275 from 2025 to 2024 (DEC-071).
 The CPI-U value for October 2025 is missing in the BLS table because of a lapse in appropriations, and the BLS does not state how the annual average was formed. % verify
 Auction prices, where used, enter only as a sensitivity and are converted with a sourced exchange rate and deflator; they are not mixed into the primary $\tau$.
 
