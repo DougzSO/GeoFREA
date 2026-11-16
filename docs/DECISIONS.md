@@ -1927,3 +1927,20 @@ Substitui: nenhuma decisão anterior.
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The rules of items a, b, d and e enter METHODOLOGY as M-F7-17 to M-F7-20 (version 19.4.7); COMMAND 162 applies the values.
 
 ---
+
+## [2026-11-16] DEC-086 - Basis of the IRENA solar CF and its consequences (COMMAND 161K)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+a) The IRENA 2024 solar TIC, O&M and CF are read on the AC basis (AC energy over AC capacity; note 4 of the edition, DEC-079). DEC-079 prevails over the sentence of DEC-073 that reads the IRENA CF as AC energy over DC capacity, and over the statement of M-F6-07 that the IRENA TIC is per kW DC.
+b) Finding of COMMAND 161K: `config/parameters.json` carries the IRENA solar TIC as `USD/kW_dc` (BRA 724, IND 525, PRT 779) and the F6 cell CF is per kWp (DC). If the TIC is per kW AC, F6 treats an AC-based cost as a DC-based one and overstates the capex per kWp by about the inverter loading ratio (1.29 to 1.40, unverified). The LCOE of the calibration uses the IRENA TIC and CF together, both AC, so it is internally consistent and tau is not affected. This is inferred from the units, not measured. It is OQ-105 and must be settled before the first real F6 run.
+c) Direction for OQ-105, not yet applied: convert the F6 capex and O&M from per kW AC to per kWp DC by dividing by the verified inverter loading ratio of each country; tau stays on the AC basis. It requires a verified ratio per country.
+d) Solar cf_min (OQ-111): on the AC reading, the candidates on the DC basis are the fleet floors of tab:g4-cf (BRA 15.7, IND 15.0, PRT 13.3) and the IRENA values converted by the ratio (BRA 14.6, IND 12.9, PRT 11.6). The ordering of DEC-073 is inverted for solar in the three countries, so the highest verified DC candidate, which is the fleet floor, is the primary (`primary_bound: "max"` holds literally) and the IRENA-derived value is the alternative. Registration waits for the author to verify the fleet CF and the ratios (all marked `\vfy`).
+e) Context from the eligible cells (central scenario, reference member): the P10 of the solar CF on the DC basis is 16.80% (PRT), 16.82% (IND) and 16.59% (BRA), above every candidate of item d, so the solar cf_min excludes few cells under these candidates.
+Justificativa (se METHODOLOGY_REVISION): the author's reading of the facts printed by COMMAND 161K on the basis of the IRENA solar CF; the reason of each item is in it.
+Referência (literatura/discussão, se aplicável): DEC-071; DEC-073; DEC-079; DEC-080; M-F6-07; OQ-105; OQ-111; COMMAND 161K; COMMAND 161L.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão anterior; DEC-079 prevails over the cited sentence of DEC-073 (the old entry is not edited).
+Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The conversion of item c is OQ-105 and waits for a verified inverter loading ratio per country.
+
+---
