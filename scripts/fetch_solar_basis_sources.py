@@ -110,6 +110,30 @@ SOURCES: tuple[dict[str, Any], ...] = (
         "title": "Dados Técnicos 2024: Sistema Elétrico Nacional (REN)",
         "urls": ("https://datahub.ren.pt/media/vizdjf5o/dados-t%C3%A9cnicos-2024.pdf",),
     },
+    {
+        "id": "epe_nt_dee_re_004_2019",
+        "country": "BRA",
+        "role": "EPE note on the physical guarantee of solar plants (capacity factor and DC/AC ratio of its parameters); an alternative to the EPE note that answers 404",
+        "bib_key": "not-in-bib-yet",
+        "title": "Nota Técnica EPE-DEE-RE-004/2019-r0 (EPE), annexed to NT 94/2018/DPE/SPE (MME)",
+        "urls": ("https://www.gov.br/mme/pt-br/arquivos/nota-t-cnica-epe-dee-re-004-2019-r0.pdf",),
+    },
+    {
+        "id": "abeeolica_boletim_anual_2025",
+        "country": "BRA",
+        "role": "Brazilian wind fleet: capacity and generation by year (fleet CF) and the curtailment of 2024",
+        "bib_key": "not-in-bib-yet",
+        "title": "Boletim Anual de Geração Eólica 2025 (ABEEólica)",
+        "urls": ("https://abeeolica.org.br/wp-content/uploads/2025/05/424_ABEEOLICA_BOLETIM-ANUAL-2025_PT_Final-Aprovado.pdf",),
+    },
+    {
+        "id": "cstep_onshore_wind_potential_2016",
+        "country": "IND",
+        "role": "minimum CUF of the onshore wind potential at 100 m (an independent study, not a regulation)",
+        "bib_key": "not-in-bib-yet",
+        "title": "Re-assessment of India's On-shore Wind Power Potential (CSTEP, 2016)",
+        "urls": ("https://cstep.in/drupal/sites/default/files/2019-07/CSTEP_PB_onshore_wind_power_potential_June2016.pdf",),
+    },
 )
 
 Fetch = Callable[[str], bytes]
