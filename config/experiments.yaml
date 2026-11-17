@@ -420,14 +420,47 @@ hypothesis_rules:
 # target: the capacity target of the top-k sensitivity is derived from it when the unit is GW and is not testable when it is TWh/year.
 national_targets:
   BRA:
-    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
-    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    solar:
+      value: 90
+      unit: GW
+      source: "PNE 2050, Relatorio Final (EPE): centralized solar, upper scenario extreme (Desafio da Expansao), 90 GW in 2050; the lower extreme, 27 GW (Estagnacao), is in alternatives; distributed generation is outside the scope (DEC-075, DEC-084 c)"
+      horizon: 2050
+      kind: technical_planning
+      scope: centralized
+      tier: 1
+      alternatives:
+        - value: 27
+          unit: GW
+          source: "PNE 2050, Relatorio Final (EPE): centralized solar, lower scenario extreme (Estagnacao), 27 GW in 2050 (DEC-075, DEC-084 c)"
+          horizon: 2050
+          kind: technical_planning
+          scope: centralized
+          tier: 1
+    wind: {value: null, unit: null, source: "No referenced national target is registered for this pair (DEC-082 c, DEC-084 b). The status means that no value is registered, not that the target does not exist.", horizon: null, status: no_target, alternatives: []}
   PRT:
-    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
-    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    solar: {value: null, unit: null, source: "No referenced national target is registered for this pair (DEC-082 c, DEC-084 b). The status means that no value is registered, not that the target does not exist.", horizon: null, status: no_target, alternatives: []}
+    wind: {value: null, unit: null, source: "No referenced national target is registered for this pair (DEC-082 c, DEC-084 b). The status means that no value is registered, not that the target does not exist.", horizon: null, status: no_target, alternatives: []}
   IND:
-    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}
-    wind: {value: null, unit: null, source: null, horizon: null, alternatives: []}
+    solar:
+      value: 447
+      unit: GW
+      source: "Ministry of Power, Annual Report 2025-26 (CEA studies): 447 GW of solar in 2034-35, within 1,029 GW of total capacity (DEC-070). Registered scope (DEC-083): national_total_incl_rooftop; the 447 GW is read as the national solar total including rooftop, inferred from the accounting convention, since the 2034-35 sources do not disaggregate it. `scope: total` is the nearest value of the schema (DEC-084 d)"
+      horizon: 2035
+      kind: technical_planning
+      scope: total
+      tier: 1
+      status: "values of DEC-070 not checked against the 2034-35 documents, which could not be opened (HTTP 403); scope of DEC-083"
+      alternatives: []
+    wind:
+      value: 138
+      unit: GW
+      source: "Ministry of Power, Annual Report 2025-26 (CEA studies): 138 GW of wind in 2034-35, within 1,029 GW of total capacity (DEC-070). Registered scope (DEC-083): national_total_offshore_unspecified; the 138 GW carries the aggregate label Wind and the offshore share is not isolated in the available sources. `scope: total` is the nearest value of the schema (DEC-084 d)"
+      horizon: 2035
+      kind: technical_planning
+      scope: total
+      tier: 1
+      status: "values of DEC-070 not checked against the 2034-35 documents, which could not be opened (HTTP 403); scope of DEC-083"
+      alternatives: []
 
 # Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
 # Source and tier are the author's; the wording is "exposed". The author sets each threshold (OQ-051). The indicators are those of hazard_context.

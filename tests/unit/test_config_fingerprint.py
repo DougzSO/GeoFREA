@@ -475,8 +475,8 @@ def _walk_verified_values(node, path=""):
 
 
 @pytest.mark.parametrize("iso", ["PRT", "IND", "BRA"])
-def test_the_fingerprint_payload_of_a_real_country_has_none_of_the_new_fields(iso):
-    """Every value of a real country is null in the new fields, so the payload that is hashed is the one the manifests recorded."""
+def test_the_fingerprint_payload_of_a_real_country_has_the_new_fields_only_where_a_value_is_registered(iso):
+    """The new fields are omitted while null (DEC-081 item a): in a real country only the registered tau carries `currency` (DEC-081 item e) and only a registered or no_target target carries the target fields; `primary_bound` is nowhere."""
     source = _source(CONFIG)
     seen = 0
     for phase in PHASE_CONFIG_SCOPE:
@@ -487,13 +487,20 @@ def test_the_fingerprint_payload_of_a_real_country_has_none_of_the_new_fields(is
                     if "ZZZ" in path:  # `results_synthesis` reads the whole file, the fixture country included: it sets `currency` on tau
                         continue
                     seen += 1
-                    assert keys <= _OLD_VERIFIED_VALUE_KEYS, (phase, path, sorted(keys - _OLD_VERIFIED_VALUE_KEYS))
+                    new = keys - _OLD_VERIFIED_VALUE_KEYS
+                    if new:
+                        assert new == {"currency"} and path.endswith("/tau_lcoe_usd_per_mwh"), (phase, path, sorted(new))
     assert seen > 100  # the walk saw the values, not an empty payload
     targets = phase_config_payload("robustness_analysis", iso, source)["experiments"]["national_targets"]
     assert targets, "robustness_analysis reads national_targets"
     for by_tech in targets.values():
         for target in by_tech.values():
-            assert set(target) == _OLD_TARGET_KEYS
+            extra = set(target) - _OLD_TARGET_KEYS
+            if target["value"] is None:  # no_target (DEC-084 b): only the status is new
+                assert extra == {"status"}, extra
+            else:  # a registered value has its kind and scope (DEC-081 item f)
+                assert {"kind", "scope"} <= extra <= {"kind", "scope", "tier", "status"}, extra
+            assert set(target) >= _OLD_TARGET_KEYS
 
 
 def test_the_new_fields_of_the_zzz_config_are_only_the_currency_of_its_two_taus():
@@ -526,10 +533,11 @@ def test_setting_primary_bound_changes_the_fingerprint_of_the_phases_that_read_t
 
 def test_setting_status_on_a_target_moves_only_the_phases_that_read_national_targets(config_copy):
     before = _fingerprints(config_copy)
-    _edit(
-        config_copy,
-        "experiments.yaml",
-        "  PRT:\n    solar: {value: null, unit: null, source: null, horizon: null, alternatives: []}",
-        "  PRT:\n    solar: {value: null, unit: null, source: null, horizon: null, status: draft, alternatives: []}",
-    )
+    path = config_copy / "experiments.yaml"  # PRT solar is registered as no_target: its status changes from no_target to draft
+    text = path.read_text(encoding="utf-8")
+    marker = "  PRT:\n    solar: {"
+    i = text.index(marker) + len(marker)
+    j = text.index("status: no_target", i)
+    assert text.count(marker) == 1 and "\n" not in text[i:j], "the status belongs to the PRT solar line"
+    path.write_text(text[:j] + "status: draft" + text[j + len("status: no_target") :], encoding="utf-8")
     assert _changed(before, _fingerprints(config_copy)) == {"robustness_analysis"}

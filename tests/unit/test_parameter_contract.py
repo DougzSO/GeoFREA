@@ -164,7 +164,10 @@ def test_required_f5_parameters_block_production_while_null():
 
 @pytest.mark.unit
 def test_main_refuses_a_production_run_before_any_phase_starts(monkeypatch):
+    """A required parameter without a value refuses the run. The live file registers every decision value (COMMANDS 162 and 162B), so the violation is set here: PRT wind tau has no value."""
     called = []
+    parameters = _patched(load_parameters(PARAMETERS), "PRT", "wind", "tau_lcoe_usd_per_mwh", value=None)
+    monkeypatch.setattr(main, "load_parameters", lambda _path: parameters)
     monkeypatch.setattr(main, "run_geofrea", lambda *a, **k: called.append(a) or (True, None, {}))
     assert main.main(["PRT", "--production"]) == 1
     assert called == []

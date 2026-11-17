@@ -64,12 +64,13 @@ def _edit(config_dir: Path, name: str, old: str, new: str) -> None:
     path.write_text(text.replace(old, new), encoding="utf-8")
 
 
-def _fill_prt_solar_top_k(config_dir: Path) -> None:
-    """PRT solar `top_k_percent` from null to 10: a value of the subset is filled after the tag."""
+def _change_prt_solar_top_k(config_dir: Path) -> None:
+    """PRT solar `top_k_percent` from its registered 10 to 20: a value of the subset is changed after the tag."""
     text = (config_dir / "parameters.json").read_text(encoding="utf-8")
     i = text.index('"top_k_percent"')  # the first one is PRT solar
-    j = text.index('"value": null', i)
-    (config_dir / "parameters.json").write_text(text[:j] + '"value": 10.0' + text[j + len('"value": null') :], encoding="utf-8")
+    j = text.index('"value": 10', i)
+    assert j - i < 200, "the first value after the key is the one of PRT solar"
+    (config_dir / "parameters.json").write_text(text[:j] + '"value": 20' + text[j + len('"value": 10') :], encoding="utf-8")
 
 
 class _Out(BaseModel):
@@ -124,7 +125,7 @@ def test_a_subset_equal_to_the_tag_passes_and_the_manifest_records_both_digests(
 @pytest.mark.unit
 def test_a_subset_changed_after_the_tag_makes_f7_refuse_and_names_the_key(tmp_path, config_copy):
     repo = _repo(tmp_path, config_copy)
-    _fill_prt_solar_top_k(config_copy)
+    _change_prt_solar_top_k(config_copy)
     calls: list[str] = []
     orchestrator = _orchestrator(tmp_path, "PRT", "robustness_analysis", config_copy, repo)
 
@@ -140,7 +141,7 @@ def test_a_subset_changed_after_the_tag_makes_f7_refuse_and_names_the_key(tmp_pa
 @pytest.mark.unit
 def test_the_rebaseline_script_refuses_a_changed_subset_when_the_tag_exists(tmp_path, config_copy):
     repo = _repo(tmp_path, config_copy)
-    _fill_prt_solar_top_k(config_copy)
+    _change_prt_solar_top_k(config_copy)
 
     done = subprocess.run(
         [sys.executable, str(REBASELINE), "--change", "scope-127-f2a-f3", "--countries", "PRT", "--repo", str(repo), "--config-dir", str(config_copy)],

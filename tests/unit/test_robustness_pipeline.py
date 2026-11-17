@@ -457,10 +457,19 @@ def test_without_cf_min_or_with_another_q_ref_f7_refuses_before_reading_anything
 def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
     registry = load_technologies(REPO / "config" / "technologies.yaml")
     parameters = load_parameters(REPO / "config" / "parameters.json")
+    # the live file registers the F7 decision values (COMMANDS 162 and 162B): the decision parameters are set to no value here, as they were before
+    unregistered = parameters.model_dump(mode="json")
+    for iso in ("BRA", "PRT", "IND"):
+        for tech in ("solar", "wind"):
+            for key in ("cf_min", "tau_lcoe_usd_per_mwh", "top_k_percent"):
+                unregistered["countries"][iso]["technologies"][tech][key].update(
+                    value=None, range=None, status="pending_research"
+                )
+    unregistered = type(parameters).model_validate(unregistered)
     for iso in ("BRA", "PRT", "IND"):
         with pytest.raises(RobustnessMissingInputError) as info:
             build_robustness(
-                iso, registry, parameters.countries[iso], ["solar", "wind"], _experiments(),
+                iso, registry, unregistered.countries[iso], ["solar", "wind"], _experiments(),
                 max_batch_gb=1.0, scale_id="0p05deg",
             )  # fmt: skip
         text = str(info.value)
@@ -471,6 +480,16 @@ def test_the_real_countries_fail_loud_with_the_f6_items_and_cf_min(tmp_path):
             "conversion to 2024 USD" in text
         )  # COMMAND 86: no cost is open; the test data dir has no conversion indices
         assert "capex_usd_per_kw" not in text and len(info.value.missing) >= 4
+    # with the registered values the decision items are gone and only the F6 conversion item of each technology is left
+    for iso in ("BRA", "PRT", "IND"):
+        with pytest.raises(RobustnessMissingInputError) as info:
+            build_robustness(
+                iso, registry, parameters.countries[iso], ["solar", "wind"], _experiments(),
+                max_batch_gb=1.0, scale_id="0p05deg",
+            )  # fmt: skip
+        text = str(info.value)
+        assert "cf_min" not in text and "OQ-008" not in text, iso
+        assert "conversion to 2024 USD" in text and len(info.value.missing) == 2, iso
 
 
 # -- the s0 invariant, determinism, memory, windows ---------------------------------------------------------

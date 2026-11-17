@@ -1976,3 +1976,31 @@ Substitui: nenhuma decisão; DEC-085 a) is corrected in wording by item d) (the 
 Consequência no código ou na configuração (ainda não aplicada): cf_min of the six pairs in `config/parameters.json` (fraction: solar 0.115, wind 0) is written by COMMAND 162; no value of any phase changes in this entry.
 
 ---
+
+## [2026-11-17] DEC-089 - Tau range rule and measured solar cf_min exclusion (COMMAND 162B)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-17. Decided by the author.
+a) The registered tau range is the IRENA p5 to p95 distribution ("reporting") extended to include the primary tau: range = [min(p5, tau), max(p95, tau)]. It changes only IND solar (to [28.26, 59]) and IND wind (to [36.43, 53]); the other four pairs are unchanged. The schema requires the primary inside the range, and in the two IND pairs the primary is below the IRENA p5, because the F6-kernel LCOE with the DEC-072 rates is below the published distribution (L-245). The published p5 and p95 stay in the note of each pair. The IND range has no point below the primary. The validator is not changed.
+b) Measured on the eligible cells (central scenario, reference member), the solar cf_min of 0.115 (DEC-088 a) excludes 0 of 3,415 cells in PRT, 0 of 190,521 in BRA and 127 of 93,701 in IND (0.1355%). The "0%" of DEC-088 a) is read as these measured numbers.
+Justificativa (se METHODOLOGY_REVISION): the registered range has to hold the primary tau for the configuration to load, and the published p5 does not hold it in two IND pairs; extending the range to the primary keeps the validator and every phase fingerprint as they are and keeps the published values visible in the note.
+Referência (literatura/discussão, se aplicável): DEC-081 c; DEC-085 a; DEC-088 a; M-F7-17; L-245; COMMANDS 162 and 162B; IRENA (2025), Renewable Power Generation Costs in 2024.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; DEC-085 a) is completed, not edited (its remark on IND wind also holds for IND solar), and the "0%" of DEC-088 a) is read as the numbers of item b).
+Consequência no código ou na configuração (ainda não aplicada): the tau of IND solar and IND wind and their ranges in `config/parameters.json` are written by COMMAND 162B; no validator changes.
+
+---
+
+## [2026-11-17] DEC-090 - Published IRENA LCOE is a reference inside the tau range, not a separate run (COMMAND 162R5)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-17. Decided by the author.
+a) The wording "registered sensitivity" for the published IRENA 2024 national LCOE in DEC-085 a) and in the tau notes is read as: the published value lies inside the registered tau range (BRA solar 48 in [36, 77], BRA wind 30 in [24, 37], IND solar 38 in [28.26, 59], IND wind 48 in [36.43, 53], PRT solar 60 in [41, 103], PRT wind 51 in [34, 75]), and the range is the tau sensitivity of H5. No separate point run at the published value is registered.
+b) OQ-094 (axis rule of the sensitivities of tau, cf_min and q_ref) stays open. OQ-020 (q_ref above 0) stays optional and is not part of the pre-registration. The wind cf_min sensitivity is post hoc, after OQ-114 (DEC-088 b).
+Justificativa (se METHODOLOGY_REVISION): no code runs a separate point sensitivity at the published value; H5 evaluates tau at the two ends of the registered range (tau_min and tau_max), and the published value lies inside that range.
+Referência (literatura/discussão, se aplicável): DEC-085 a; DEC-088 b; DEC-089 a; M-F7-17; OQ-020; OQ-094; OQ-114; COMMAND 162R5; IRENA (2025), Renewable Power Generation Costs in 2024.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; the wording of DEC-085 a) is read as in item a) (the old entry is not edited).
+Consequência no código ou na configuração (ainda não aplicada): the six tau notes in `config/parameters.json` and M-F7-17 are written by COMMAND 162R5; no value changes.
+
+---

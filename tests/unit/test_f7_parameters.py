@@ -33,13 +33,36 @@ def _entries(parameters: ParametersFile, countries):
             yield iso, tech, getattr(parameters.countries[iso].technologies, tech)
 
 
+# the values registered in the live file (COMMANDS 162 and 162B; DEC-085, DEC-088, DEC-089): tau in USD/MWh with the IRENA p5 to p95 range extended to the primary
+TAU = {
+    ("BRA", "solar"): (43.97, 36.0, 77.0, 1),
+    ("BRA", "wind"): (31.95, 24.0, 37.0, 1),
+    ("IND", "solar"): (28.26, 28.26, 59.0, 1),
+    ("IND", "wind"): (36.43, 36.43, 53.0, 1),
+    ("PRT", "solar"): (54.53, 41.0, 103.0, 2),
+    ("PRT", "wind"): (49.64, 34.0, 75.0, 2),
+}
+CF_MIN = {"solar": (0.115, 2), "wind": (0.0, 3)}  # fraction, tier (DEC-088)
+
+
 @pytest.mark.unit
-def test_real_countries_carry_the_decision_keys_pending_with_no_value(parameters):
+def test_real_countries_carry_the_registered_decision_values(parameters):
     for iso, tech, params in _entries(parameters, REAL_COUNTRIES):
         for key, unit in DECISION_KEYS.items():
             entry = getattr(params, key)
-            assert entry.value is None and entry.status == "pending_research", f"{iso} {tech} {key}"
-            assert entry.unit == unit and not entry.synthetic and entry.range is None
+            assert entry.unit == unit and not entry.synthetic and not entry.proxy, f"{iso} {tech} {key}"
+            assert entry.value is not None and entry.status is None and entry.source and entry.tier is not None, f"{iso} {tech} {key}"
+        tau, low, high, tier = TAU[(iso, tech)]
+        entry = params.tau_lcoe_usd_per_mwh
+        assert entry.value == tau and entry.tier == tier, f"{iso} {tech}"
+        assert (entry.currency, entry.price_year) == ("USD", 2024), f"{iso} {tech}"  # S-07
+        assert entry.range is not None and entry.range.distribution == "reporting" and entry.range.tier == tier
+        assert (entry.range.min, entry.range.max) == (low, high), f"{iso} {tech}"  # DEC-089 a: [min(p5, tau), max(p95, tau)]
+        assert entry.range.min <= entry.value <= entry.range.max
+        cf_min, cf_tier = CF_MIN[tech]
+        assert params.cf_min.value == cf_min and params.cf_min.tier == cf_tier, f"{iso} {tech}"
+        assert params.cf_min.range is None and params.cf_min.primary_bound is None, f"{iso} {tech}"  # DEC-088: no range, no primary_bound
+        assert params.top_k_percent.value == 10 and params.top_k_percent.tier == 3 and params.top_k_percent.range is None  # DEC-085 d
 
 
 @pytest.mark.unit
@@ -65,7 +88,7 @@ def test_the_registry_requires_the_decision_keys_so_a_production_run_refuses_a_n
 
 
 @pytest.mark.unit
-def test_the_experiment_blocks_of_f7_are_null_in_the_shipped_file():
+def test_the_experiment_blocks_of_f7_hold_the_registered_values_in_the_shipped_file():
     experiments = load_experiments(REPO / "config" / "experiments.yaml")
     assert set(experiments.hypothesis_rules) == {"H1", "H2", "H3", "H4", "H5"}
     h1 = experiments.hypothesis_rules["H1"]  # pre-registered 2026-10-13 (OQ-050, H1)
@@ -104,17 +127,28 @@ def test_the_experiment_blocks_of_f7_are_null_in_the_shipped_file():
         "hazard_channel",
     )
     assert h5.source == "OQ-050 (H5), pre-registered 2026-10-14"
-    assert set(experiments.national_targets) == {"BRA", "PRT", "IND"}  # OQ-010: no value yet
+    assert set(experiments.national_targets) == {"BRA", "PRT", "IND"}  # OQ-010
     for by_tech in experiments.national_targets.values():
         assert set(by_tech) == {"solar", "wind"}
-        assert all(
-            t.value is None
-            and t.unit is None
-            and t.source is None
-            and t.horizon is None
-            and t.alternatives == []
-            for t in by_tech.values()
-        )
+    targets = experiments.national_targets
+    # registered targets (COMMAND 162; DEC-070, DEC-075, DEC-083, DEC-084): value, unit, horizon, kind, scope, tier
+    registered = {
+        ("BRA", "solar"): (90.0, "GW", 2050, "technical_planning", "centralized", 1),
+        ("IND", "solar"): (447.0, "GW", 2035, "technical_planning", "total", 1),
+        ("IND", "wind"): (138.0, "GW", 2035, "technical_planning", "total", 1),
+    }
+    for (iso, tech), expected in registered.items():
+        t = targets[iso][tech]
+        assert (t.value, t.unit, t.horizon, t.kind, t.scope, t.tier) == expected, f"{iso} {tech}"
+        assert t.source, f"{iso} {tech}"
+    bra = targets["BRA"]["solar"]
+    assert [(a.value, a.unit, a.horizon, a.kind, a.scope) for a in bra.alternatives] == [(27.0, "GW", 2050, "technical_planning", "centralized")]
+    assert "DEC-083" in targets["IND"]["solar"].source and "DEC-083" in targets["IND"]["wind"].source
+    # the pairs without a referenced value are registered as no_target (DEC-084 b): no value, no kind, scope or tier
+    for iso, tech in (("BRA", "wind"), ("PRT", "solar"), ("PRT", "wind")):
+        t = targets[iso][tech]
+        assert t.value is None and t.unit is None and t.horizon is None and t.alternatives == [], f"{iso} {tech}"
+        assert t.status == "no_target" and t.source and t.kind is None and t.scope is None and t.tier is None, f"{iso} {tech}"
     assert set(experiments.hazard_thresholds) == {
         "tx35_days",
         "tx40_days",
@@ -378,8 +412,11 @@ def test_a_national_target_refuses_an_unknown_kind_scope_or_tier(changes):
 
 @pytest.mark.unit
 def test_an_empty_national_target_needs_no_kind_or_scope_and_dumps_without_the_new_fields():
-    """The six targets of the file are null: they validate without the new fields, and the dump has none of them (DEC-081 items a and f)."""
+    """An empty target validates without the new fields, and the dump has none of them (DEC-081 items a and f); the six targets are set empty here, whatever the live file registers."""
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
+    for by_tech in raw["national_targets"].values():
+        for tech in by_tech:
+            by_tech[tech] = {"value": None, "unit": None, "source": None, "horizon": None, "alternatives": []}
     dumped = ExperimentsFile.model_validate(raw).model_dump(mode="json")["national_targets"]
     for by_tech in dumped.values():
         for target in by_tech.values():
