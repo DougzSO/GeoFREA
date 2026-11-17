@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from rasterio.transform import from_origin
 
+from geofrea.core.tables import write_table
 from geofrea.external_validation.enrichment import enrichment_rows, weighted_deciles
 from geofrea.external_validation.exclusion import exclusion_rows
 from geofrea.external_validation.inventory import (
@@ -22,6 +23,10 @@ from geofrea.external_validation.published import (
     PublishedEntry,
     comparison_rows,
     load_published,
+)
+from geofrea.external_validation.table_schemas import (
+    VALIDATION_TABLE_SCHEMA_VERSION,
+    PublishedComparisonRow,
 )
 
 REPO = Path(__file__).resolve().parents[2]
@@ -232,8 +237,16 @@ def test_a_missing_inventory_or_column_fails_loudly(tmp_path, monkeypatch):
 
 
 @pytest.mark.unit
-def test_the_shipped_published_file_is_empty_and_only_f7b_reads_it():
-    assert load_published() == []
+def test_the_shipped_published_file_registers_only_verified_values_and_only_f7b_reads_it():
+    entries = load_published()
+    registered = [e for e in entries if e.status == "registered"]
+    pending = [e for e in entries if e.status == "pending"]
+    assert registered and pending
+    assert all(e.value is not None and e.year is not None and e.source for e in registered)
+    assert all(e.value is None for e in pending)  # no value without a verified source
+    assert {e.country for e in entries} == {"BRA", "IND", "PRT"}
+    assert {e.technology for e in entries if e.country == "PRT"} == {"solar", "wind"}
+    assert all(e.status == "pending" for e in entries if e.country == "PRT")
     readers = [
         p.relative_to(SRC).as_posix()
         for p in SRC.rglob("*.py")
@@ -285,6 +298,51 @@ def test_the_comparison_puts_the_estimate_beside_f5_at_the_reference_member_and_
     assert (gw["f5_central_m0"], gw["f5_restrictive_m0"], gw["f5_permissive_m0"]) == (3.0, 1.5, 6.0)
     assert gw["definition_matches"] is True and twh["definition_matches"] is False
     assert twh["f5_central_m0"] == pytest.approx(4.0) and gw["published_value"] == 3.5
+
+
+@pytest.mark.unit
+def test_a_pending_entry_has_no_value_and_a_registered_entry_needs_a_value_and_a_year():
+    pending = _entry(value=None, status="pending", year=None)
+    assert pending.value is None and pending.status == "pending"
+    with pytest.raises(ValueError):
+        _entry(value=None)  # registered without a value
+    with pytest.raises(ValueError):
+        _entry(year=None)  # registered without a year
+    with pytest.raises(ValueError):
+        _entry(status="pending")  # pending with a value
+
+
+@pytest.mark.unit
+def test_a_pending_entry_comes_out_as_pending_beside_f5_with_no_error_and_no_number_from_it(
+    tmp_path,
+):
+    table = pd.DataFrame({"member": ["m0"], "P_MW": [2000.0], "E_MWh": [3.0e6]})
+    potentials = {"solar": {"central": table, "restrictive": table, "permissive": table}}
+    entries = [
+        _entry(
+            country="PRT",
+            technology="solar",
+            value=None,
+            status="pending",
+            year=2023,
+            note="no total found",
+        )
+    ]
+    (row,) = comparison_rows(entries, "PRT", potentials, "m0")
+    assert row["status"] == "pending" and row["published_value"] is None
+    assert row["f5_central_m0"] == pytest.approx(
+        2.0
+    )  # F5's number stays; nothing is derived from the null
+    assert set(row) == set(PublishedComparisonRow.model_fields)
+    write_table(
+        pd.DataFrame([row]),
+        tmp_path / "published_comparison.parquet",
+        schema_version=VALIDATION_TABLE_SCHEMA_VERSION,
+        row_model=PublishedComparisonRow,
+        compression="zstd",
+        extra_metadata={},
+    )
+    assert (tmp_path / "published_comparison.parquet").is_file()
 
 
 @pytest.mark.unit

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-VALIDATION_TABLE_SCHEMA_VERSION = "1.0"
+VALIDATION_TABLE_SCHEMA_VERSION = "1.1"  # 1.1: published_comparison gains status, premises and hub_height_m, and published_value may be null
 
 
 class ExclusionRow(BaseModel):
@@ -63,18 +63,21 @@ class PublishedComparisonRow(BaseModel):
     """A published national estimate beside F5's central-scenario potential at `m0` (M-F7b-03, D-F7b-004).
 
     The F5 columns are the national sum over the cells of the central scenario, and the restrictive and permissive land scenarios give the
-    interval. No number is computed from the published value; `definition_matches` says whether the estimate is a technical potential.
+    interval. No number is computed from the published value (null while `status` is `pending`); `definition_matches` says whether the estimate is a technical potential.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     technology: str
     source: str
-    year: int
+    year: int | None
     definition: str
     tier: str
     unit: str
-    published_value: float
+    status: str
+    premises: str | None
+    hub_height_m: float | None
+    published_value: float | None
     f5_central_m0: float
     f5_restrictive_m0: float
     f5_permissive_m0: float

@@ -1,5 +1,165 @@
 # Published national estimates of technical potential, for the comparison table of F7b (M-F7b-03, D-F7b-004, OQ-057).
-# Read only by the external_validation phase. Empty until the author records the estimates; no value is assumed.
-# Each entry: country (ISO3), technology (registry id), value, unit (GW or TWh_per_year), source, year,
-# definition (technical | economic | resource | other), tier (evidence tier of the source), note (optional).
-entries: []
+# Read only by the external_validation phase. The phase puts each estimate beside the potential of F5 at the reference member and computes
+# nothing from it (no ratio, no pass or fail). A potential compared with a national target cites L-246: the scope of the target (for India
+# it includes rooftop solar and does not isolate offshore wind) differs from the scope of the potential (ground-mounted and onshore).
+# Each entry: country (ISO3), technology (registry id), value (null when there is no verified value), unit (GW or TWh_per_year), source, year, definition
+# (technical | economic | resource | other), tier (evidence tier of the source), status (registered, or the value that marks an entry with no verified value), premises, hub_height_m
+# and note (optional). `status: registered` needs a value from a verified source and a year; the other status value has `value: null` and says why in `note`.
+# The values of the table of docs/thesis/methods/grupo7.tex that carry the mark vfy there have no value here. PV values are GWp (DC).
+entries:
+  - country: BRA
+    technology: wind
+    value: 143
+    unit: GW
+    source: "AMARANTE, Odilon A. Camargo do et al. Atlas do Potencial Eolico Brasileiro. Brasilia: MME/Eletrobras/CEPEL, 2001."
+    year: 2001
+    definition: technical
+    tier: "1"
+    status: registered
+    premises: "50 m hub height, 1 km grid, mean wind speed above 7 m/s"
+    hub_height_m: 50
+    note: null
+  - country: BRA
+    technology: wind
+    value: null
+    unit: GW
+    source: "MINISTERIO DE MINAS E ENERGIA; EMPRESA DE PESQUISA ENERGETICA. Plano Nacional de Energia 2050. Brasilia: MME/EPE, 2020."
+    year: 2020
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "Twelve state atlases compiled in the plan, 100 m hub height"
+    hub_height_m: 100
+    note: "The value in grupo7.tex (315 GW) is not verified against the plan (mark vfy there)."
+  - country: BRA
+    technology: wind
+    value: null
+    unit: GW
+    source: "MINISTERIO DE MINAS E ENERGIA; EMPRESA DE PESQUISA ENERGETICA. Plano Nacional de Energia 2050. Brasilia: MME/EPE, 2020."
+    year: 2020
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "Twelve state atlases compiled in the plan, 150 m hub height"
+    hub_height_m: 150
+    note: "The value in grupo7.tex (598 GW) is not verified against the plan (mark vfy there)."
+  - country: BRA
+    technology: wind
+    value: 14580
+    unit: GW
+    source: "EUREK, Kelly et al. An improved global wind resource estimate for integrated assessment models. Energy Economics, v. 64, p. 552-567, 2017."
+    year: 2017
+    definition: technical
+    tier: "2"
+    status: registered
+    premises: "3.5 MW turbine, 90 m hub height, 5 MW/km2, availability 0.95, 31% of the area available"
+    hub_height_m: 90
+    note: "14.58 TW; the same estimate is 22.22 PWh per year (22220 TWh per year). A global estimate transferred to Brazil."
+  - country: BRA
+    technology: solar
+    value: 307
+    unit: GW
+    source: "EMPRESA DE PESQUISA ENERGETICA. Potencial dos Recursos Energeticos no Horizonte 2050. Nota Tecnica PR 04/18. Rio de Janeiro: EPE, 2018."
+    year: 2018
+    definition: technical
+    tier: "1"
+    status: registered
+    premises: "Best irradiation band (6.0 to 6.2 kWh/m2/day), anthropized areas only, 70 MWp/km2 (power density after Denholm and Margolis, 2008), CF DC 18.84%"
+    hub_height_m: null
+    note: "307 GWp, 506 TWh per year."
+  - country: BRA
+    technology: solar
+    value: 28519
+    unit: GW
+    source: "EMPRESA DE PESQUISA ENERGETICA. Potencial dos Recursos Energeticos no Horizonte 2050. Nota Tecnica PR 04/18. Rio de Janeiro: EPE, 2018."
+    year: 2018
+    definition: resource
+    tier: "1"
+    status: registered
+    premises: "Eight irradiation bands, 407437 km2; an area-based ceiling, not a deployable level"
+    hub_height_m: null
+    note: "28519 GWp, 43857 TWh per year."
+  - country: IND
+    technology: solar
+    value: null
+    unit: GW
+    source: "MINISTRY OF NEW AND RENEWABLE ENERGY. India's solar energy potential is estimated to be 748 GWp. Press Information Bureau, 7 February 2024."
+    year: 2024
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "3% of the wasteland area (assessment of 2014)"
+    hub_height_m: null
+    note: "The value in grupo7.tex (748 GWp) is not verified (mark vfy there)."
+  - country: IND
+    technology: solar
+    value: null
+    unit: GW
+    source: "NATIONAL INSTITUTE OF SOLAR ENERGY. Solar PV potential of India: ground mounted. Gurugram: Ministry of New and Renewable Energy, 2025."
+    year: 2025
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "Ground-mounted, updated assessment"
+    hub_height_m: null
+    note: "The value in grupo7.tex (about 3343 GWp) is not verified (mark vfy there)."
+  - country: IND
+    technology: wind
+    value: null
+    unit: GW
+    source: "NATIONAL INSTITUTE OF WIND ENERGY. India's wind potential atlas at 150 m agl. Chennai: NIWE; Ministry of New and Renewable Energy."
+    year: null
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "100 m hub height"
+    hub_height_m: 100
+    note: "The value in grupo7.tex (302 GW) is not verified (mark vfy there); the atlas has no year in the bibliography entry."
+  - country: IND
+    technology: wind
+    value: null
+    unit: GW
+    source: "NATIONAL INSTITUTE OF WIND ENERGY. India's wind potential atlas at 150 m agl. Chennai: NIWE; Ministry of New and Renewable Energy."
+    year: null
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "120 m hub height"
+    hub_height_m: 120
+    note: "The value in grupo7.tex (695.5 GW) is not verified (mark vfy there); the atlas has no year in the bibliography entry."
+  - country: IND
+    technology: wind
+    value: null
+    unit: GW
+    source: "NATIONAL INSTITUTE OF WIND ENERGY. India's wind potential atlas at 150 m agl. Chennai: NIWE; Ministry of New and Renewable Energy."
+    year: null
+    definition: technical
+    tier: "1"
+    status: pending
+    premises: "150 m hub height"
+    hub_height_m: 150
+    note: "The value in grupo7.tex (about 1164 GW) is not verified (mark vfy there); the atlas has no year in the bibliography entry."
+  - country: PRT
+    technology: solar
+    value: null
+    unit: GW
+    source: "SIMOES, S. G. et al. Identificacao de areas candidatas a Go-To Areas para localizacao de unidades de producao de energia renovavel. Relatorio Tecnico. Amadora: LNEG, 2023."
+    year: 2023
+    definition: other
+    tier: "2"
+    status: pending
+    premises: "Area of low-sensitivity sites mapped"
+    hub_height_m: null
+    note: "No national total of potential was found (grupo7.tex, mark vfy there)."
+  - country: PRT
+    technology: wind
+    value: null
+    unit: GW
+    source: "SIMOES, S. G. et al. Identificacao de areas candidatas a Go-To Areas para localizacao de unidades de producao de energia renovavel. Relatorio Tecnico. Amadora: LNEG, 2023."
+    year: 2023
+    definition: other
+    tier: "2"
+    status: pending
+    premises: "Area of low-sensitivity sites mapped"
+    hub_height_m: null
+    note: "No national total of potential was found (grupo7.tex, mark vfy there)."

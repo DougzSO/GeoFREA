@@ -1,8 +1,10 @@
 """Published national estimates beside F5's potential (M-F7b-03, D-F7b-004, OQ-057).
 
-`config/published_potential.yaml` holds the author's entries (source, year, definition, tier); it is empty until OQ-057 closes and only F7b reads
+`config/published_potential.yaml` holds the author's entries (source, year, definition, tier, premises, hub height, status) and only F7b reads
 it. Nothing is computed from a published number: the table puts it beside F5's central-scenario potential at `m0` and the land interval, and
-says whether the definition is a technical potential, as F5's is.
+says whether the definition is a technical potential, as F5's is. An entry with `status: pending` has no value (`value: null`): its source or
+its number is not verified yet (OQ-057), and the table shows it as pending. Any comparison of a potential with a national target cites L-246
+(the scope of the target differs from the scope of the potential).
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from typing import Literal
 
 import pandas as pd
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 DEFAULT_PATH = Path(__file__).resolve().parents[3] / "config" / "published_potential.yaml"
 UNITS = ("GW", "TWh_per_year")
@@ -23,13 +25,25 @@ class PublishedEntry(BaseModel):
 
     country: str
     technology: str
-    value: float
+    value: float | None
     unit: Literal["GW", "TWh_per_year"]
     source: str
-    year: int
+    year: int | None
     definition: Literal["technical", "economic", "resource", "other"]
     tier: str
+    status: Literal["registered", "pending"] = "registered"
+    premises: str | None = None
+    hub_height_m: float | None = None
     note: str | None = None
+
+    @model_validator(mode="after")
+    def _value_only_when_registered(self) -> PublishedEntry:
+        """A value needs a verified source and a year; a pending entry carries neither a value nor a computed number."""
+        if self.status == "registered" and (self.value is None or self.year is None):
+            raise ValueError("a registered entry needs value and year")
+        if self.status == "pending" and self.value is not None:
+            raise ValueError("a pending entry has value null: no value without a verified source")
+        return self
 
 
 class PublishedFile(BaseModel):
@@ -79,6 +93,9 @@ def comparison_rows(
                 "definition": entry.definition,
                 "tier": entry.tier,
                 "unit": entry.unit,
+                "status": entry.status,
+                "premises": entry.premises,
+                "hub_height_m": entry.hub_height_m,
                 "published_value": entry.value,
                 "f5_central_m0": value["central"],
                 "f5_restrictive_m0": value["restrictive"],
