@@ -8,8 +8,8 @@ Prints a table and files nothing: no production result is created, tau is not fi
 
 The primary run (edition `irena_rpgc_2024`, DEC-076) builds, for each pair, one reference cell (`p_mw` = `reference_project_mw` of the country, distances zero,
 `energy_mwh` = CF x 8760 x p_mw) and one sample (`capex_usd_per_kw` = the IRENA TIC, `opex_fixed_frac` = the IRENA O&M over the TIC, no variable O&M, the lifetime of the
-edition, no connection cost: the TIC is total, no degradation: the inputs of the published LCOE), and calls `lcoe_block`. TIC and CF enter together, on the AC basis of IRENA,
-without conversion (DEC-079). The F6 LCOE is evaluated at the central discount rate of F6 for the pair (`parameters.json`); the discount rate that gives the published LCOE is
+edition, no connection cost: the TIC is total, no degradation: the inputs of the published LCOE), and calls `lcoe_block`. TIC and CF enter together, as IRENA publishes them,
+without conversion: for solar the TIC is per kW DC and the CF is AC energy over DC capacity, the DC basis of F6 (DEC-087); for wind both are AC-to-AC. The F6 LCOE is evaluated at the central discount rate of F6 for the pair (`parameters.json`); the discount rate that gives the published LCOE is
 found by root search (Brent) between 0 and 60 %. The DEC-072 range (the union of the regional WACC of 2024 plus or minus one point and the country point of 2021) is printed
 with the rate, to say whether the rate is above its ceiling (OQ-104).
 
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:  # noqa: BLE001 - the environment is not set: the secondary lines say so
             indices_path = None
 
-    print("PRIMARY RUN: edition irena_rpgc_2024 (TIC, CF, O&M, LCOE, lifetime of the same edition, DEC-076); TIC and CF on the AC basis of IRENA, unconverted (DEC-079)")
+    print("PRIMARY RUN: edition irena_rpgc_2024 (TIC, CF, O&M, LCOE, lifetime of the same edition, DEC-076); TIC and CF as published by IRENA, unconverted (solar: per kW DC and AC-DC; wind: AC-to-AC; DEC-087)")
     print("F6 LCOE = lcoe_block on one reference cell (distances 0, E = CF x 8760 x p_mw), no connection cost, no degradation; evaluated at the F6 central discount rate of the pair.\n")
     header = f"{'pair':<10}{'F6 LCOE':>9}{'published':>10}{'diff':>8}{'rate F6':>9}{'rate equal':>11}{'DEC-072 range':>16}  note"
     print(header)
@@ -223,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     note = next(iter(rows.values()))["params"].discount_rate.note if sample else ""
     print(f"(a) discount_rate of F6 is REAL, not nominal: parameters.json says \"{note}\"; the kernel discounts constant-price cash flows, with no inflation escalation (`lcoe_modeling/kernel.py`).")
     print("(b) the power basis of `lcoe_block` is none by itself: it divides P x 1000 x capex by the energy it is given. F6 gives it DC capacity (D-F6-028: the solar capacity factor is PVOUT in kWh/kWp/day / 24, per kW DC);")
-    print("    the calibration gives it the TIC and the CF of IRENA together, on the AC basis of IRENA (DEC-079), unconverted; the DC/AC conversion when tau is applied to the cells is OQ-105.")
+    print("    the calibration gives it the TIC and the CF of IRENA together, as published and unconverted: the solar TIC per kW DC and the solar CF AC-DC (IRENA 2024, p. 92 footnote 27 and p. 99 footnote 32), the same DC basis as F6, so no DC/AC conversion applies when tau is applied to the cells (DEC-087, OQ-105).")
     print("(c) construction period: none. The capital cost is spent at t = 0, undiscounted, and O&M and energy run for t = 1..n with the factor (1 + r)^-t (kernel docstring, M-F6-01); there is no interest during construction.")
     print("    degradation: the energy of year t is E x (1 - d)^(t - 1), from the first year, with d = d_low + w (d_high - d_low) per cell and sample; the central rate is the lower bound (median of the PV zone, newer vintages for wind).")
     print("    The calibration uses d = 0 (the inputs of the published LCOE). For comparison, the F6 LCOE at its own central rate with the F6 degradation (not used above):")

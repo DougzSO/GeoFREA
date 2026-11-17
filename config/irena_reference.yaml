@@ -6,10 +6,11 @@
 #
 # Every entry carries `currency`, `price_year`, `edition`, `source`, `status` and `verified`. `verified: true` on every numeric value of the table of report 11: the flag reflects
 # the check that the author made of the table of docs/_audit/2026-11_docs_audit/11_irena_inputs.md against the IRENA documents (COMMAND 159B, 2026-11-16; DEC-080 lists part of it).
-# A value with no number (`null`) stays `verified: false`. The solar capacity factor of Portugal keeps the mark `regional_proxy` (DEC-078, L-242). The basis of TIC, CF and O&M is
-# alternating current (DEC-079); F6 works on DC capacity (D-F6-028, OQ-105).
+# A value with no number (`null`) stays `verified: false`. The solar capacity factor of Portugal keeps the mark `regional_proxy` (DEC-078, L-242). The basis of the 2024 edition (DEC-087):
+# the solar TIC is per kW DC (p. 92, footnote 27) and the solar CF is an AC-DC value, AC energy over DC capacity (p. 99, footnote 32); the capacity and the CF of the other
+# technologies are AC-to-AC. F6 works on DC capacity (D-F6-028), the same basis as the solar values.
 #
-# Units: tic_usd_per_kw in USD/kW, cf as a fraction (AC energy over AC capacity, DEC-079), om_usd_per_kw_yr in USD/kW per year, lcoe_usd_per_mwh in USD/MWh, wacc as a real after-tax fraction.
+# Units: tic_usd_per_kw in USD/kW, cf as a fraction (solar: AC energy over DC capacity; wind: AC-to-AC; DEC-087), om_usd_per_kw_yr in USD/kW per year, lcoe_usd_per_mwh in USD/MWh, wacc as a real after-tax fraction.
 # p5 and p95 are the 5th and 95th percentiles of the published distribution.
 
 schema_version: 1
@@ -23,7 +24,7 @@ row_of: {BRA: BRA, IND: IND, PRT: Europe}
 editions:
   irena_rpgc_2024:
     report: "IRENA (2025), Renewable Power Generation Costs in 2024 (published July 2025)"
-    basis: "real USD of 2024, lifetime 25 years, capacity and capacity factor on an AC basis (note 4)"
+    basis: "real USD of 2024, lifetime 25 years; solar TIC per kW DC (p. 92, footnote 27) and solar capacity factor AC-DC (p. 99, footnote 32); capacity and capacity factor of the other technologies AC-to-AC"
     life_years:
       value: 25
       unit: years

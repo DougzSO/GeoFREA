@@ -16,3 +16,7 @@ WACC real pos-impostos: regional 2024 (Fig 1.13, solar/eolica): Am. Sul 7,7/7,7;
 ```
 
 Where these values go: DEC-076 makes the 2024 edition the primary base of the calibration and the 2025 edition a secondary check only (converted with `to_usd_2024`, DEC-071); DEC-077 and DEC-078 say which capacity factor and which O&M are primary; DEC-079 says that TIC and CF are on an AC basis while F6 works on DC capacity (D-F6-028), which stays open in OQ-105. The question that these values raise about the WACC ranges of DEC-072 is OQ-104.
+
+## Correction of 2026-11-16 (COMMAND 161P, DEC-087)
+
+The header of the table above says that capacity and CF are on an AC basis ("base CA", DEC-079). The primary text of the IRENA 2024 report says otherwise for solar: the solar TIC is per kW DC (p. 92, footnote 27) and the solar CF is an AC-DC value, AC energy over DC capacity (p. 99, footnote 32); only the other technologies are AC-to-AC, and the "note 4" is footnote 4 on p. 15, which says that the renewable capacity of the report is expressed in AC. The values of the table are unchanged; only the statement of their basis is corrected. The body above is kept as the author registered it.

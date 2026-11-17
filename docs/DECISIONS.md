@@ -1944,3 +1944,19 @@ Substitui: nenhuma decisão anterior; DEC-079 prevails over the cited sentence o
 Consequência no código ou na configuração (ainda não aplicada): nenhuma agora. The conversion of item c is OQ-105 and waits for a verified inverter loading ratio per country.
 
 ---
+
+## [2026-11-16] DEC-087 - Correction of the IRENA solar basis and review of cf_min (COMMANDS 161M, 161N)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author. Supersedes DEC-079 and DEC-086 a) to c).
+a) IRENA 2024 and the 2025 full report state that the solar TIC is per kW DC (2024, p. 92, footnote 27) and that the solar capacity factor is an AC-DC value, meaning AC energy over DC capacity (2024, p. 99, footnote 32); the capacity factors of the other technologies are AC-to-AC. The "note 4" cited in DEC-079 is footnote 4 on p. 15, which says only that the renewable capacity of the report is expressed in AC. The report gives no numeric DC/AC ratio.
+b) OQ-105 closed. No DC/AC conversion is needed: the F6 capex per kW DC (`USD/kW_dc`, M-F6-07) and the F6 cell CF per kWp are on the same basis as the IRENA solar TIC and CF, and the calibration of tau, which takes TIC and CF together, is unaffected. The residual difference is inverter efficiency and clipping, which F6 does not model (L-033). Items b) and c) of DEC-086 (capex overstated by the inverter loading ratio; division by the ratio) do not apply.
+c) The IRENA values used as strict ends of cf_min are averages of new projects, not minima. On the eligible cells (central scenario, reference member) the fraction below the strict wind ends of DEC-085 e) is 99.9% (BRA, 53), 97.2% (IND, 29) and 91.4% (PRT, 34), and below the IRENA solar values it is 97.5% (BRA, 20), 45.3% (IND, 18) and 0% (PRT, 15). DEC-085 e) is not applied to the registration. The primary end of cf_min is reopened (OQ-113).
+d) The distribution of the cell CF was viewed on 2026-11-16 before any cf_min value was registered, so any later cf_min choice is informed by it.
+Justificativa (se METHODOLOGY_REVISION): the primary text of the IRENA reports (COMMANDS 161M and 161N) states the basis of the solar TIC and CF, which the reading of DEC-079 and DEC-086 had not; the cell distribution shows that the IRENA averages cannot serve as primary floors.
+Referência (literatura/discussão, se aplicável): DEC-073; DEC-076; DEC-079; DEC-085; DEC-086; M-F6-07; M-F7-12; M-F7-20; L-033; L-241; OQ-008; OQ-105; OQ-111; OQ-112; OQ-113; IRENA (2025), Renewable Power Generation Costs in 2024, p. 15 fn 4, p. 92 fn 27, p. 99 fn 32.
+Fase: F6, F7
+Implementa: nenhum D-* ainda.
+Substitui: DEC-079 and DEC-086 a) to c) (the old entries are not edited).
+Consequência no código ou na configuração (ainda não aplicada): nenhuma nos valores. The texts that said AC-to-AC for the solar values are corrected in COMMAND 161P (irena_reference.yaml, the calibration script, METHODOLOGY M-F6-12 and M-F7-12, L-241); no cf_min value is registered until OQ-113 is decided.
+
+---
