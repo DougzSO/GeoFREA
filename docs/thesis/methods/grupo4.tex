@@ -36,11 +36,11 @@ The uncertain design (Latin hypercube sampling) contains the states of the world
 
 \subsection{LCOE threshold $\tau$}
 \label{sec:g4-tau}
-The threshold $\tau_{c,t}$ for country $c$ and technology $t$ is set by rule, in this order: (i) the IRENA weighted-average LCOE of the most recent edition for the country; (ii) if the country has no row, the value of its region; (iii) if the region has none, the global value. The tier used is stored with each value. The satisficing score is reported as a curve over a range of $\tau$, whose limits are the 5th and 95th percentiles of the same IRENA distribution; the weighted average is the point value.
+The primary threshold $\tau_{c,t}$ for country $c$ and technology $t$ is the LCOE that the F6 kernel gives for the IRENA 2024 reference plant of the pair: the installed cost, capacity factor, operation and maintenance cost and 25-year life as published by IRENA (solar: installed cost per kW DC and capacity factor AC-DC; wind: AC-to-AC), the central cost of capital of DEC-072 and degradation 0 (DEC-085a, DEC-087a, L-247). One rule serves the six pairs, so the countries stay comparable. The IRENA weighted-average LCOE published for the country is a reference that lies inside the registered range, which is the sensitivity of $\tau$ in the test of H5, not a separate run (DEC-090). The registered range is the 5th to 95th percentile of the same IRENA 2024 distribution, extended to include the primary $\tau$ (DEC-089a); for Portugal it is the European row, without a cap (DEC-085c). The range is reported and is not sampled.
 
 \begin{table}[ht]
 \centering
-\caption{IRENA LCOE benchmarks used to anchor $\tau$ (USD/MWh). The 2024 edition is in 2024 USD and gives the 5th percentile, weighted average and 95th percentile. The 2025 value is the weighted average in 2025 USD from the Executive Summary, converted to 2024 USD with the factor 0.9728. The registered range is the published 5th to 95th percentile extended to include the primary $\tau$, which lies below the 5th percentile in India.}
+\caption{IRENA LCOE benchmarks that give the registered range of $\tau$ (USD/MWh). The 2024 edition is in 2024 USD and gives the 5th percentile, weighted average and 95th percentile. The 2025 value is the weighted average in 2025 USD from the Executive Summary, converted to 2024 USD with the factor 0.9728. The registered range is the published 5th to 95th percentile extended to include the primary $\tau$, which lies below the 5th percentile in India.}
 \label{tab:g4-tau}
 \small
 \begin{tabular}{llcccc}
@@ -58,39 +58,38 @@ Portugal (Europe row) & Onshore wind & 34 & 51 & 75 & 53$^{a}$ \\
 
 \vspace{2pt}
 \footnotesize $^{a}$ European 2025 values (59 and 54 USD/MWh in 2025 USD) come from secondary compilations and must be confirmed in the full 2025 report. % verify
-$^{b}$ Attribution of the 2025 wind values to Brazil (31) and India (43) in Figure S3 of the Executive Summary to be confirmed against the figure image. % verify
+$^{b}$ Attribution of the 2025 wind values to Brazil (31) and India (43) in Figure S3 of the Executive Summary to be confirmed against the figure image.
 \end{table}
 
-Two limitations of this anchor are declared. First, the annual country LCOE is a weighted average over the projects commissioned in that year, so it varies with the project mix; Brazilian solar PV falls from 48 to about 36 USD/MWh in 2024 USD between the two editions, which is partly a sampling effect. The inter-edition spread is therefore reported next to the point value. Second, Portugal uses the European row as a Tier~2 proxy. The European 95th percentile (103 USD/MWh for PV, 75 for wind) is wide and is not adopted as the upper limit for Portugal without a separate decision. % open: upper limit of the Portugal range
+Two limitations of this anchor are declared. First, the annual country LCOE is a weighted average over the projects commissioned in that year, so it varies with the project mix; Brazilian solar PV falls from 48 to about 36 USD/MWh in 2024 USD between the two editions, which is partly a sampling effect. The inter-edition spread is therefore reported next to the point value. Second, Portugal uses the European row as a Tier~2 proxy. The European 95th percentile (103 USD/MWh for PV, 75 for wind) is wide and is the upper limit of the registered range for Portugal, without a cap (DEC-085c).
 
 \paragraph{Calibration against the model.} The IRENA values embed the cost of capital of the IRENA data, which differs from the model's value for some countries. A quick check with the Indian wind benchmark, assuming 35 USD/kW per year for operation and maintenance, installed cost of 1,172 USD/kW and a 31\% capacity factor, gives about 40 USD/MWh at a 3.8\% cost of capital and about 46 USD/MWh at 5.9\%, against 43 USD/MWh published. % verify: author calculation with an assumed O\&M
-Before the first production run, the model's own LCOE function is therefore evaluated at the IRENA installed cost and capacity factor with the model's cost of capital, and the difference from the published LCOE is reported per country and technology. If the difference exceeds the half-width of the $\tau$ range, the choice between the published $\tau$ and a $\tau$ expressed on the model's cost basis is referred to the author before the tag. % open: decision rule
+The model's own LCOE function is therefore evaluated at the IRENA installed cost and capacity factor with the model's cost of capital, and the difference from the published LCOE is reported per country and technology (L-245). The primary $\tau$ is the model value for all six pairs (DEC-085a), so the choice between the published $\tau$ and a $\tau$ on the model's cost basis does not arise.
 
 \subsection{Minimum capacity factor}
 \label{sec:g4-cf}
-$\mathrm{CF}_{\min}$ is the lowest capacity factor at which a cell is treated as viable. It is evaluated on the capacity factor of the cell in the nominal scenario, and a cell below it is excluded from the ranking. It is a decision parameter, given as a range per country and technology. The permissive end is the lowest documented operating or normative value; the strict end is the 5th percentile of the capacity factor of newly commissioned IRENA projects for the country or region. The permissive end is the primary value, so that a screen based on an unverified high floor does not remove cells before the economic criterion acts. For PV all values are on a DC basis: $\mathrm{CF}_{\mathrm{DC}} = \mathrm{CF}_{\mathrm{AC}} / r_{\mathrm{DC/AC}}$, where $r_{\mathrm{DC/AC}}$ is the DC to AC ratio, consistent with the DC reference power of the model.
+$\mathrm{CF}_{\min}$ is the lowest capacity factor at which a cell is treated as viable. It is evaluated on the capacity factor of the cell in the nominal scenario, and a cell below it is excluded from the ranking. It is a decision parameter registered per country and technology. For PV it is 0.115, the global 5th percentile of the capacity factor of the solar projects commissioned in 2024 (IRENA, Table 3.2, p. 99, AC-DC basis; Tier~2; DEC-088a) \citep{irena2025costs24}, the same in the three countries. For wind it is 0, that is, no floor (Tier~3; DEC-088b): no sourced floor exists on the basis of the capacity factor of the cell, and the comparison of that capacity factor with the fleet is open (OQ-114). The IRENA PV capacity factor is the AC energy over the DC capacity (DEC-087a), the basis of the F6 kernel.
 
 \begin{table}[ht]
 \centering
-\caption{Permissive floor candidates for $\mathrm{CF}_{\min}$ and the typical level of new projects, for context. PV values on DC basis. Operator values are fleet averages and include operational curtailment.}
+\caption{Registered $\mathrm{CF}_{\min}$ (DEC-088) and, for context, the mean capacity factor of new projects reported by IRENA, which is not a floor. PV values are AC-DC.}
 \label{tab:g4-cf}
 \small
-\begin{tabular}{llp{3.6cm}p{3.1cm}p{2.9cm}}
+\begin{tabular}{llcp{4.6cm}p{3.0cm}}
 \toprule
-Country & Tech. & Permissive floor (\%) & Basis & Typical new project (IRENA, \%) \\
+Country & Tech. & Registered $\mathrm{CF}_{\min}$ (\%) & Source and tier & Mean of new projects (IRENA, \%) \\
 \midrule
-Brazil   & PV   & 15.7 & 21.5\% AC fleet, DC/AC 1.37\vfy{} & pending \\
-India    & PV   & 15.0 & 21\% AC regulatory floor, DC/AC 1.40\vfy{} & 17 to 19 (AC-DC) \\
-Portugal & PV   & 13.3 & 17.2\% AC fleet, DC/AC 1.29\vfy{} & 14 to 15 (EU, AC-DC) \\
-Brazil   & Wind & 37.0 & North and Northeast fleet\vfy{} & 56 (2024) \\
-India    & Wind & 22   & lowest regulatory value at 100 m\vfy{} & about 29\vfy{} \\
-Portugal & Wind & 27.4 & grid-connected fleet\vfy{} & 34 (Europe region) \\
+Brazil   & PV   & 11.5 & IRENA 2024, Table 3.2, p. 99, global 5th percentile (Tier~2) & 20 \\
+India    & PV   & 11.5 & the same (Tier~2) & 18 \\
+Portugal & PV   & 11.5 & the same (Tier~2) & 15 \\
+Brazil   & Wind & 0    & no floor (Tier~3, DEC-088b) & 53 \\
+India    & Wind & 0    & no floor (Tier~3, DEC-088b) & 29 \\
+Portugal & Wind & 0    & no floor (Tier~3, DEC-088b) & 34 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Three points qualify these values. (i) The fleet averages are net of curtailment, which was substantial in Brazil after 2023 \citep{ons2025cortes}, whereas the model does not represent curtailment, so its capacity factors are gross. A floor taken from net fleet values is therefore permissive by construction.
-(ii) For India wind, the fleet average of 17.8 to 21.5\% is dominated by older, low-hub-height turbines and is not used as a floor for new plants. (iii) A secondary source reports a PV capacity factor of 21.5\% for Brazilian new projects, identical to the operator fleet value in the same period; this is treated as possibly conflated and is left pending until the full IRENA 2025 report is read.
+On the eligible cells of the central scenario (reference member), the PV floor of 0.115 excludes none of the 3,415 cells of Portugal, none of the 190,521 cells of Brazil and 127 of the 93,701 cells of India (0.1355\%; DEC-089b).
 
 \subsection{National planning figures}
 \label{sec:g4-targets}
@@ -101,25 +100,25 @@ For each country and technology the figure with the latest horizon is used, with
 \caption{Official planning figures used as comparators (GW).}
 \label{tab:g4-targets}
 \small
-\begin{tabular}{llp{2.2cm}cp{4.0cm}}
+\begin{tabular}{llp{2.2cm}cp{3.6cm}c}
 \toprule
-Country & Tech. & Figure (GW) & Horizon & Document \\
+Country & Tech. & Figure (GW) & Horizon & Document & Registered \\
 \midrule
-Brazil   & Wind & 110 to 195 & 2050 & \citet{epe2020pne} \\
-Brazil   & Wind & 50 & 2035 & \citet{epe2026pde}\vfy{} \\
-Brazil   & PV (central) & 27 to 90 & 2050 & \citet{epe2020pne} \\
-Brazil   & PV (central) & 29 & 2035 & \citet{epe2026pde}\vfy{} \\
-India    & PV   & 364.6 & 2031--32 & \citet{cea2023nep}; may include rooftop\vfy{} \\
-India    & PV   & 447 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} \\
-India    & Wind & 121.9 & 2031--32 & \citet{cea2023nep} \\
-India    & Wind & 138 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} \\
-Portugal & PV (central) & 15.1 & 2030 & \citet{pnec2025} \\
-Portugal & Wind & 10.4 & 2030 & \citet{pnec2025} \\
+Brazil   & Wind & 110 to 195 & 2050 & \citet{epe2020pne} & no \\
+Brazil   & Wind & 50 & 2035 & \citet{epe2026pde}\vfy{} & no \\
+Brazil   & PV (central) & 27 to 90 & 2050 & \citet{epe2020pne} & yes \\
+Brazil   & PV (central) & 29 & 2035 & \citet{epe2026pde}\vfy{} & no \\
+India    & PV   & 364.6 & 2031--32 & \citet{cea2023nep}; may include rooftop\vfy{} & no \\
+India    & PV   & 447 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} & yes \\
+India    & Wind & 121.9 & 2031--32 & \citet{cea2023nep} & no \\
+India    & Wind & 138 & 2034--35 & planning study, \citet{moP2026annual}\vfy{} & yes \\
+Portugal & PV (central) & 15.1 & 2030 & \citet{pnec2025} & no \\
+Portugal & Wind & 10.4 & 2030 & \citet{pnec2025} & no \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The Brazilian and Indian figures are planning scenarios, not targets, and are labeled as such. The 2034--35 Indian values are a projection of required capacity from a planning study of the national grid authority, and are used only after confirmation in that document.
+The Brazilian and Indian figures are planning scenarios, not targets, and are labeled as such. A row marked no is context: the registered subset holds no value for it (no target is registered for Brazilian wind, Portuguese PV and Portuguese wind, DEC-084b). Targets evaluated after the framework is complete are post hoc and labeled exploratory (DEC-082c). The 2034--35 Indian values are a projection of required capacity from a planning study of the national grid authority, and are used only after confirmation in that document.
 
 \subsection{Regret reference and top-$k$ fraction}
 \label{sec:g4-q}
@@ -128,7 +127,7 @@ The regret of cell $i$ in future $s$ is relative to a reference LCOE $L^{*}_{s}$
 R(i,s) = \frac{C(i,s) - L^{*}_{s}}{L^{*}_{s}}, \qquad L^{*}_{s} = Q_{q}\!\big(C(\cdot,s)\big),
 \end{equation}
 where $C(i,s)$ is the LCOE. For $q = 0$ the reference is the minimum and the regret is non-negative by construction. The regret reference is the minimum LCOE ($q_{\mathrm{ref}} = 0$), as in the F7 specification.
-A reference at 5\% is not used: it would give zero regret to the best cells, which are those to be discriminated, and it would coincide with the smallest top-$k$ fraction.
+A reference at 5\% is not used: it would give zero regret to the best cells, which are those to be discriminated, and it would coincide with the smallest top-$k$ fraction. The top-$k$ fraction is 10 percent of the eligible cells, with 5 and 20 percent as sensitivities (Tier~3, author judgment; DEC-085d).
 
 \subsection{Currency and price base}
 \label{sec:g4-currency}
@@ -140,7 +139,7 @@ Auction prices, where used, enter only as a sensitivity and are converted with a
 \begin{itemize}
 \item The width of the cost-of-capital range ($\pm 1$ percentage point) is Tier~3.
 \item The Portugal $\tau$ and capacity-factor benchmarks are Tier~2 transfers from a European aggregate.
-\item Fleet capacity factors are net of curtailment and include legacy plants, while model capacity factors are gross; the CF range is a permissive screen, not a forecast.
+\item The wind $\mathrm{CF}_{\min}$ is 0 (no floor, Tier~3) and the top-$k$ fraction is author judgment (Tier~3); the model capacity factors are gross of curtailment, and their comparison with the fleet is open (OQ-114).
 \item Planning figures have horizons that end before the analysis window.
 \item Several 2025 values come from secondary compilations and are marked for verification.
 \end{itemize}
