@@ -1960,3 +1960,19 @@ Substitui: DEC-079 and DEC-086 a) to c) (the old entries are not edited).
 Consequência no código ou na configuração (ainda não aplicada): nenhuma nos valores. The texts that said AC-to-AC for the solar values are corrected in COMMAND 161P (irena_reference.yaml, the calibration script, METHODOLOGY M-F6-12 and M-F7-12, L-241); no cf_min value is registered until OQ-113 is decided.
 
 ---
+
+## [2026-11-16] DEC-088 - cf_min registration rule (closes OQ-113) and wording correction of DEC-085 a)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-16. Decided by the author.
+a) cf_min is registered only where a sourced floor exists on the basis of the cell CF. The IRENA 2024 global p5 of the solar CF, 11.5% (Table 3.2, p. 99; AC-DC, the same energy-over-DC-capacity basis as the cell CF), is the solar cf_min for the three countries. The IRENA country averages (BRA 20, IND 18, PRT 15) are averages of new projects, not floors. The fleet floors of tab:g4-cf have no confirmed source for BRA and IND, and no source for any DC/AC ratio (COMMAND 161Q). On the eligible cells (central scenario, reference member) this solar value excludes 0% of the cells in the three countries, so the solar result is decided by tau.
+b) Wind cf_min is registered as 0 (no floor) for the three countries. No sourced wind floor exists on the basis of the cell CF: the IRENA regional p5 covers Europe and Other Asia but not Brazil, the Brazilian fleet value (38% national average, ABEEolica 2025) is an average, and the model cell CF is far below the fleet (median 11.5% in BRA, 14.2% in IND, 25.6% in PRT) with no validation against fleet data (L-028, L-032). Tau is the only economic filter of the primary. A wind cf_min is an exploratory sensitivity, labeled post hoc, considered after the wind CF of the cells is validated (OQ-114).
+c) OQ-113 closed. OQ-111 and OQ-112 stay merged into it.
+d) Wording of DEC-085 a): the IRENA TIC is per kW DC and the solar CF is AC-DC (DEC-087 a), not "AC basis". The tau values do not change, because the calibration takes TIC and CF together. The cell energy comes before the inverter, so the cell LCOE is slightly lower than the IRENA basis implies (L-033).
+Justificativa (se METHODOLOGY_REVISION): a sourced floor on the basis of the cell CF exists only for solar (IRENA 2024, Table 3.2); for wind no such floor exists and the cell CF has not been validated against the fleet, so the primary uses tau alone and a wind floor waits for that validation.
+Referência (literatura/discussão, se aplicável): DEC-073; DEC-085; DEC-087; M-F7-17; M-F7-20; L-028; L-032; L-033; OQ-008; OQ-113; OQ-114; IRENA (2025), Renewable Power Generation Costs in 2024, Table 3.2, p. 99; ABEEolica (2025), Boletim Anual 2025, p. 8.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; DEC-085 a) is corrected in wording by item d) (the old entry is not edited).
+Consequência no código ou na configuração (ainda não aplicada): cf_min of the six pairs in `config/parameters.json` (fraction: solar 0.115, wind 0) is written by COMMAND 162; no value of any phase changes in this entry.
+
+---
