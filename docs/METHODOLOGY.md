@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 19.4.13 |
+| Version | 19.4.14 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-11-18 |
 | Owner | Douglas |
@@ -357,6 +357,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
 - **M-F7-18.** Degradation offset of `tau` (DEC-085 b, L-247). `tau` is calibrated with degradation 0 (M-F7-12) while F6 applies degradation to the energy of the cells (M-F6-09), which raises their LCOE: +0.5 to +0.9 USD/MWh for wind and +2.2 to +5.2 USD/MWh for PRT solar. Solar degradation depends on the thermal zone (0.0040 to 0.0094 per year), so no single `tau` with degradation exists per pair. The offset is stated and not corrected, and it makes the satisficing test of M-F7-04 stricter than `tau` alone suggests.
 - **M-F7-19.** Top-k fraction (DEC-085 d). The primary `top_k_percent` is 10, with 5 and 20 as sensitivities (the constants of DEC-081 d). The values are author judgment, Tier 3, declared before any result.
 - **M-F7-20.** Registration of `cf_min` (DEC-088, DEC-087). The solar `cf_min` is the IRENA 2024 global 5th percentile of the solar capacity factor, 11.5% (Table 3.2, p. 99; AC-DC, the same energy-over-DC-capacity basis as the cell CF), in the three countries. The wind `cf_min` is 0, which is no floor, in the three countries: no sourced wind floor exists on the basis of the cell CF, and `tau` is the only economic filter of the primary. Any wind floor is a sensitivity, labelled post hoc, considered after the wind cell CF is validated against the fleet (OQ-114). The IRENA country averages are averages of new projects and are not floors. Source: INTERNATIONAL RENEWABLE ENERGY AGENCY. **Renewable Power Generation Costs in 2024**. Abu Dhabi: IRENA, 2025. ISBN 978-92-9260-669-5.
+- **M-F7-21.** Sensitivity axes of `tau`, `cf_min`, `q_ref` and `top_k` in v1.0 (DEC-094, closes OQ-094). (a) `tau`: the sensitivity is the two ends of the registered range (`tau_min`, `tau_max`), evaluated in H5 as implemented (DEC-090 a); satisficing robustness SR uses the primary `tau`. (b) `top_k`: 5 and 20 percent beside the primary 10 (DEC-085 d), in H1 to H4 as M-F7-07 states. (c) `cf_min`: no sensitivity in the primary analysis; the solar floor of 0.115 excludes 0 cells in PRT and BRA and 127 of 93,701 in IND (DEC-089 b), and a wind floor is post hoc, after OQ-114 (DEC-088 b). (d) `q_ref`: no sensitivity; `q_ref` = 0 (DEC-074); OQ-020 is an optional exploratory analysis outside v1.0. (e) No configuration key is created and the digest of the pre-registration does not change.
 
 ### F7b external_validation
 
@@ -589,6 +590,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 19.4.14 | 2026-11-18 | PATCH (COMMAND 175; no code changes that affect a result): new rule M-F7-21 with the sensitivity axes of `tau`, `cf_min`, `q_ref` and `top_k` in v1.0 (DEC-094; OQ-094 and OQ-008 closed): no configuration key is created and the digest of the pre-registration does not change. Items altered: M-F7-21 (new). |
 | 19.4.13 | 2026-11-18 | PATCH (COMMAND 174; no code changes that affect a result): M-F4-05 defines `rx5day_mm` as the Rx5day index of the ETCCDI (annual maximum of the precipitation accumulated in 5 consecutive days, mm, averaged over the years of the window; Zhang et al., 2011); M-F7-07 (H5b) states that the channel set of v1.0 is empty, because no channel has an exposure threshold with a source, so H5b and T-R10 are not available in v1.0 (DEC-093; OQ-051 and OQ-115 closed). Items altered: M-F4-05, M-F7-07. |
 | 19.4.12 | 2026-11-17 | PATCH (COMMAND 162R5; no code changes that affect a result): M-F7-17 states that the published IRENA 2024 national LCOE lies inside the registered `tau` range, which is the `tau` sensitivity of H5, instead of calling it a registered sensitivity (DEC-090 a). Items altered: M-F7-17. |
 | 19.4.11 | 2026-11-17 | PATCH (COMMAND 162R4; no code changes that affect a result): M-F7-17 states the IRENA basis for wind (AC-to-AC), as in the tau notes (DEC-087 a). Items altered: M-F7-17. |

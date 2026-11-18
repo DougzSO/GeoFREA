@@ -2061,3 +2061,22 @@ Substitui: nenhuma decisão; the "set fixed when OQ-051 closes" of M-F7-07 is ap
 Consequência no código ou na configuração (ainda não aplicada): `hazard_thresholds` keeps `null` in every channel and gets the note; the digest of the pre-registration does not move (the key is not in the subset); no phase with a manifest becomes stale by this entry (`hazard_thresholds` is only in the scope of `robustness_analysis`, which has no manifest). The key `rx5day_mm` of `hazard_indicators` and the model of `HazardIndicators` come in COMMAND 177 and make `hazard_context` stale in the three countries (recomputed in COMMAND 178).
 
 ---
+
+## [2026-11-18] DEC-094 - Sensitivity axes of tau, cf_min, q_ref and top_k in v1.0 (closes OQ-094) (COMMAND 175)
+Tipo: METHODOLOGY_REVISION
+Descrição: DEC-094: Sensitivity axes of tau, cf_min, q_ref and top_k in v1.0 (closes OQ-094)
+Date: 2026-11-18. Decided by the author.
+a) tau: the sensitivity is the two ends of the registered range (tau_min, tau_max), evaluated in H5 as implemented (DEC-090 a). Satisficing robustness SR uses the primary tau.
+b) top_k: 5 and 20 percent beside the primary 10 (DEC-085 d), in H1 to H4 as M-F7-07 states.
+c) cf_min: no sensitivity in the primary analysis. The solar floor of 0.115 excludes 0 cells in PRT and BRA and 127 of 93,701 in IND (DEC-089 b), so a sweep would not change the candidate set materially. A wind floor is post hoc, after OQ-114 (DEC-088 b).
+d) q_ref: no sensitivity; q_ref = 0 (DEC-074). OQ-020 stays an optional exploratory analysis outside v1.0.
+e) No configuration key is created; the pre-registered digest does not change.
+Conferência no código (COMMAND 169, item 7, e COMMAND 175): H5 evaluates tau at `tau_min` and `tau_max` (`robustness_analysis/h5_climate_pressure.py`); `p_k` in {5, 10, 20} percent is a variant of H1 to H4 (`sensitivity_variants` of `h1_` to `h4_`); SR and the potential below tau use the primary tau (`decision.tau`), so item a) is as the code does.
+Justificativa (se METHODOLOGY_REVISION): the sensitivities that the code already computes are the ones the pre-registration can keep without a new key; a new axis in `experiments.yaml` or `parameters.json` that falls in the pre-registered subset would change the digest and would need a new tag (a declared deviation), and a cf_min or q_ref sweep would not change the candidate set materially.
+Referência (literatura/discussão, se aplicável): DEC-061; DEC-074; DEC-083; DEC-084; DEC-085 d; DEC-088 b; DEC-089 b; DEC-090 a; M-F7-04; M-F7-07; M-F7-21; OQ-008; OQ-020; OQ-094; OQ-114.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; completes DEC-061 (the sweep it announced is the one above).
+Consequência no código ou na configuração (ainda não aplicada): none; no key, code or parameter changes, so no fingerprint and no digest moves.
+
+---
