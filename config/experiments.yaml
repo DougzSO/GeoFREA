@@ -462,15 +462,16 @@ national_targets:
       status: "values of DEC-070 not checked against the 2034-35 documents, which could not be opened (HTTP 403); scope of DEC-083"
       alternatives: []
 
-# Hazard exposure thresholds (T-R10, H5; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
-# Source and tier are the author's; the wording is "exposed". The author sets each threshold (OQ-051). The indicators are those of hazard_context.
-# H5b uses the channels that have a threshold; a channel left null is excluded and declared in the output, and the set is fixed when OQ-051 closes.
+# Hazard exposure thresholds (T-R10, H5b; OQ-051): the value of the absolute indicator above which a cell counts as exposed.
+# Every entry is null: no exposure threshold with a source exists (DEC-093), so no channel enters H5b and T-R10 is not available. The
+# indicators are those of hazard_context. H5b uses the channels that have a threshold; a channel left null is excluded and declared in
+# the output. A threshold added later is an exploratory analysis and is labelled as such.
 hazard_thresholds:
-  tx35_days: {threshold: null, unit: days, source: null, tier: null}
-  tx40_days: {threshold: null, unit: days, source: null, tier: null}
-  rx5day_mm: {threshold: null, unit: mm, source: null, tier: null}
-  wet_p95_exceed_freq: {threshold: null, unit: fraction, source: null, tier: null}
-  gust_mean_annual_max_ms: {threshold: null, unit: m/s, source: null, tier: null}
+  tx35_days: {threshold: null, unit: days, source: "excluded from H5b by DEC-093", tier: null}
+  tx40_days: {threshold: null, unit: days, source: "excluded from H5b by DEC-093", tier: null}
+  rx5day_mm: {threshold: null, unit: mm, source: "excluded from H5b by DEC-093", tier: null}
+  wet_p95_exceed_freq: {threshold: null, unit: fraction, source: "excluded from H5b by DEC-093", tier: null}
+  gust_mean_annual_max_ms: {threshold: null, unit: m/s, source: "excluded from H5b by DEC-093", tier: null}
 
 # Definitions of the hazard indicators of hazard_context (M-F4-05), named as the columns of hazard_context.parquet: the heat-day thresholds, the
 # wet-day threshold and the percentile of the wet-day indicator. They are definitions of the indicator, not exposure thresholds (those are

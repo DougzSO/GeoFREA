@@ -2038,3 +2038,26 @@ Substitui: nenhuma decisão; DEC-091 is completed, not edited (its "IND not avai
 Consequência no código ou na configuração (ainda não aplicada): none; no fingerprint and no digest moves.
 
 ---
+
+## [2026-11-18] DEC-093 - No sourced exposure threshold: the H5b channel set of v1.0 is empty (closes OQ-051 and OQ-115) (COMMAND 174)
+Tipo: METHODOLOGY_REVISION
+Descrição: Date: 2026-11-18. Decided by the author (decisoes_v1_0_GeoFREA.md V174b).
+a) No hazard channel has an exposure threshold with a source in `docs/thesis/methods/grupo5.tex`: the text defines the indicators (days per year at or above 35 and 40 C, Rx5day, share of wet days above the cell's own 95th percentile, annual mean of the maximum gust) but gives no value above which a cell counts as exposed. Every entry of `hazard_thresholds` in `config/experiments.yaml` stays `null` and carries the note "excluded from H5b by DEC-093":
+| Channel | Threshold | Status |
+| tx35_days | null | excluded from H5b by DEC-093 |
+| tx40_days | null | excluded from H5b by DEC-093 |
+| rx5day_mm | null | excluded from H5b by DEC-093 |
+| wet_p95_exceed_freq | null | excluded from H5b by DEC-093 |
+| gust_mean_annual_max_ms | null | excluded from H5b by DEC-093 (context only, DEC-065) |
+b) The hazard channel set of H5b is fixed after the pre-registration tag and before any F6 or F7 result. The tag `prereg-v1` is on the commit ccf764f. H5b and T-R10 are "not available" in v1.0, as the result of the procedure (M-F7-07: a channel without a threshold is excluded and declared; H5b is not available when no channel has a threshold). OQ-051 is closed. A threshold added after v1.0 is an exploratory analysis and is labelled as such.
+c) OQ-115: the tier column of tab:g5-ind of `grupo5.tex` shows the tier of the definition of the indicator (tx35_days 1, tx40_days 1, rx5day_mm 1, wet_p95_exceed_freq 2). `rx5day_mm` is defined as the Rx5day index of the ETCCDI, annual: the annual maximum of the precipitation accumulated in 5 consecutive days, in mm, averaged over the years of the window (ZHANG, X. et al. Indices for monitoring changes in extremes based on daily temperature and precipitation data. WIREs Climate Change, v. 2, n. 6, p. 851-870, 2011). The definition is in M-F4-05, in `grupo5.tex` and in the .bib; the key `rx5day_mm` in `hazard_indicators` of `config/experiments.yaml` is added with its model in `HazardIndicators` in COMMAND 177 (a code change, so not in this entry).
+d) The comparison V-83 of the reference heat days against the ERA5 was not made: the daily ERA5 acquisition is incomplete (4 of 60 country-years, stopped at the queue limit of the CDS in 2026-10-15). The comparison of the ISIMIP3b reference counts with the W5E5 v2.0 over the candidate cells of the central scenario (COMMAND 173) is kept only as a base for an exploratory analysis after v1.0; it is not a verification against an independent source, because the W5E5 is the target of the bias adjustment of the ISIMIP3b.
+e) The reports cited by DEC-091 and DEC-092 are now in the repository: `docs/_audit/oq114_170.md`, `docs/_audit/oq051_173.md` and `docs/_audit/prontidao_169.md` (copies of the files of `_notas_geofrea/`, unchanged).
+Justificativa (se METHODOLOGY_REVISION): the pre-registration asks for the channel set before any result (M-F7-03, M-F7-07); no channel has a threshold with a source, and a threshold chosen from its effect would not be a threshold from the source. The set is therefore empty and H5b is reported as not available, which the rule already provides for.
+Referência (literatura/discussão, se aplicável): DEC-065; DEC-081; M-F4-05; M-F7-07; OQ-051; OQ-115; L-250; ZHANG, X. et al. (2011), WIREs Climate Change, v. 2, n. 6, p. 851-870; `docs/_audit/oq051_173.md`; COMMANDS 173 and 174.
+Fase: F4, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; the "set fixed when OQ-051 closes" of M-F7-07 is applied here.
+Consequência no código ou na configuração (ainda não aplicada): `hazard_thresholds` keeps `null` in every channel and gets the note; the digest of the pre-registration does not move (the key is not in the subset); no phase with a manifest becomes stale by this entry (`hazard_thresholds` is only in the scope of `robustness_analysis`, which has no manifest). The key `rx5day_mm` of `hazard_indicators` and the model of `HazardIndicators` come in COMMAND 177 and make `hazard_context` stale in the three countries (recomputed in COMMAND 178).
+
+---
