@@ -13,6 +13,11 @@ An entry is restamped only when ALL of this holds, and the script fails closed (
    value of that copy, column by column and row by row, the Arrow type ignored (`string` and `large_string` are the same value; floats compare equal when both are
    NaN or bitwise equal as numbers);
 4. the new hash is `content_hash(file, "parquet2")` of the file on disk.
+
+With `--proof-manifest DIR` (COMMAND 178, authorised by the author) the reference copy of item 3 is replaced by the manifest of the same country saved before the
+round, `DIR/manifest_<ISO>.json`: the entry must exist there with the same key and the SAME recorded `parquet:` content hash as today. That hash includes the Arrow
+type and the value of every column, so the file on disk is the one that manifest described (same type, same value); the proof records `compared: "hash"` and the
+SHA-256 of that manifest as the reference. Items 1, 2 and 4 stand as above. `--all-parquet` selects every entry still hashed with `parquet:` (default: `--keys`).
 """
 
 from __future__ import annotations
@@ -120,6 +125,53 @@ def check_entry(iso: str, key: str, entry: dict, snapshot: Path, root: Path) -> 
     }
 
 
+def check_entry_by_hash(iso: str, key: str, entry: dict, before: dict | None, before_path: Path, root: Path) -> dict:
+    """Like `check_entry`, with the manifest saved before the round as the reference: the same entry with the same `parquet:` content hash (type and value)."""
+    out: dict = {"iso": iso, "key": key}
+    recorded = entry.get("content_sha256") or ""
+    if recorded.startswith("parquet2:"):
+        return {**out, "skip": "already parquet2:"}
+    if not recorded.startswith("parquet:"):
+        return {**out, "problem": f"the recorded content hash is {recorded[:12]!r}, not of kind parquet:"}
+    rel = entry["path"]["rel"]
+    path = root / rel
+    if not path.is_file():
+        return {**out, "problem": f"{rel} is absent"}
+    file_sha = _sha256(path)
+    if file_sha != entry["sha256"]:
+        return {**out, "problem": "the bytes of the file are not the registered ones (sha256 differs from the manifest)"}
+    if content_hash(path, "parquet") != recorded:
+        return {**out, "problem": "the parquet: content hash of the file is not the recorded one"}
+    previous = None if before is None else before["artifacts"].get(key)
+    if previous is None:
+        return {**out, "problem": f"no entry {key!r} in the manifest saved before the round ({before_path})"}
+    if previous.get("content_sha256") != recorded:
+        return {**out, "problem": "the parquet: content hash differs from the one in the manifest saved before the round"}
+    meta = pq.ParquetFile(path).metadata
+    return {
+        **out,
+        "ok": True,
+        "rel": rel,
+        "previous": recorded,
+        "new": content_hash(path, "parquet2"),
+        "file_sha256": file_sha,
+        "reference_copy": f"manifest:{before_path.name}",
+        "reference_copy_sha256": _sha256(before_path),
+        "compared": "hash",
+        "n_rows": meta.num_rows,
+        "n_columns": meta.num_columns,
+    }
+
+
+def schema_after_restamp(current: str | None) -> str:
+    """The schema a manifest has after a restamp: 2.12 at least (the first with `hash_restamps`), never lower than the one it already has."""
+
+    def key(version: str) -> tuple[int, ...]:
+        return tuple(int(part) for part in version.split("."))
+
+    return max(current or SCHEMA, SCHEMA, key=key)
+
+
 def proof(found: dict, when: str) -> dict:
     body = {
         "artifact_key": found["key"],
@@ -129,7 +181,7 @@ def proof(found: dict, when: str) -> dict:
         "file_sha256": found["file_sha256"],
         "reference_copy": found["reference_copy"],
         "reference_copy_sha256": found["reference_copy_sha256"],
-        "compared": "value",
+        "compared": found.get("compared", "value"),
         "n_rows": found["n_rows"],
         "n_columns": found["n_columns"],
     }
@@ -142,6 +194,8 @@ def main() -> int:
     parser.add_argument("countries", nargs="*", default=["PRT", "IND", "BRA"])
     parser.add_argument("--keys", default=",".join(DEFAULT_KEYS))
     parser.add_argument("--snapshot", default=None, help="folder of the reference copy (default: <data root>/work/ref133_snapshot)")
+    parser.add_argument("--proof-manifest", default=None, help="folder with manifest_<ISO>.json saved before the round: the reference is the same `parquet:` hash there, not a copy of the file")
+    parser.add_argument("--all-parquet", action="store_true", help="every entry of the country still hashed with `parquet:` (default: --keys)")
     parser.add_argument("--apply", action="store_true", help="write the manifests (default: dry run)")
     args = parser.parse_args()
     outputs = core_paths.outputs_dir()
@@ -154,9 +208,17 @@ def main() -> int:
         path = outputs / iso / manifest_file_name()
         data = json.loads(path.read_text(encoding="utf-8"))
         manifests[iso] = (path, data)
-        for key in keys:
+        before_path = Path(args.proof_manifest) / f"manifest_{iso}.json" if args.proof_manifest else None
+        before = json.loads(before_path.read_text(encoding="utf-8")) if before_path is not None and before_path.is_file() else None
+        country_keys = [k for k, a in data["artifacts"].items() if (a.get("content_sha256") or "").startswith("parquet:")] if args.all_parquet else keys
+        for key in country_keys:
             entry = data["artifacts"].get(key)
-            findings.append({"iso": iso, "key": key, "problem": "no such artifact in the manifest"} if entry is None else check_entry(iso, key, entry, snapshot, root))
+            if entry is None:
+                findings.append({"iso": iso, "key": key, "problem": "no such artifact in the manifest"})
+            elif before_path is not None:
+                findings.append(check_entry_by_hash(iso, key, entry, before, before_path, root))
+            else:
+                findings.append(check_entry(iso, key, entry, snapshot, root))
     for f in findings:
         state = "OK" if f.get("ok") else ("SKIP" if f.get("skip") else "PROBLEM")
         extra = f"{f['previous'][:20]} -> {f['new'][:21]}, rows {f['n_rows']}, columns {f['n_columns']}" if f.get("ok") else f.get("skip") or f.get("problem")
@@ -178,7 +240,7 @@ def main() -> int:
         for f in mine:
             data["artifacts"][f["key"]]["content_sha256"] = f["new"]
             data.setdefault("hash_restamps", []).append(proof(f, when))
-        data["schema_version"] = SCHEMA
+        data["schema_version"] = schema_after_restamp(data.get("schema_version"))
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
         tmp.replace(path)

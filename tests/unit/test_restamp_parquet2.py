@@ -53,3 +53,38 @@ def test_an_entry_without_a_reference_copy_or_with_other_bytes_is_a_problem(rest
     assert found["ok"] and found["new"].startswith("parquet2:") and found["previous"].startswith("parquet:")
     assert "bytes of the file" in restamp.check_entry("ZZZ", "t", {**entry, "sha256": "0" * 64}, snapshot, root)["problem"]
     assert restamp.check_entry("ZZZ", "t", {**entry, "content_sha256": found["new"]}, snapshot, root)["skip"]
+
+
+@pytest.mark.unit
+def test_the_hash_of_the_manifest_saved_before_the_round_can_stand_for_the_reference_copy(restamp, tmp_path):
+    """COMMAND 178: without a copy of the file, the same `parquet:` hash (Arrow type and value) in the earlier manifest is the proof; any difference is a problem."""
+    root = tmp_path / "data"
+    rel = "outputs/ZZZ/t.parquet"
+    f = _write(root / rel, ["x", "y"], [1.0, 2.0])
+    recorded = restamp.content_hash(f, "parquet")
+    entry = {"path": {"rel": rel}, "sha256": restamp._sha256(f), "content_sha256": recorded}
+    before_path = tmp_path / "before" / "manifest_ZZZ.json"
+    before_path.parent.mkdir()
+    before_path.write_text("{}", encoding="utf-8")
+
+    found = restamp.check_entry_by_hash("ZZZ", "t", entry, {"artifacts": {"t": {"content_sha256": recorded}}}, before_path, root)
+    assert found["ok"] and found["new"].startswith("parquet2:") and found["compared"] == "hash"
+    assert found["n_rows"] == 2 and found["n_columns"] == 2 and found["reference_copy"] == "manifest:manifest_ZZZ.json"
+    assert restamp.proof(found, "now")["compared"] == "hash"
+
+    other = {"artifacts": {"t": {"content_sha256": "parquet:" + "0" * 64}}}
+    assert "differs from the one in the manifest" in restamp.check_entry_by_hash("ZZZ", "t", entry, other, before_path, root)["problem"]
+    assert "no entry" in restamp.check_entry_by_hash("ZZZ", "t", entry, {"artifacts": {}}, before_path, root)["problem"]
+    assert "no entry" in restamp.check_entry_by_hash("ZZZ", "t", entry, None, before_path, root)["problem"]
+    assert "bytes of the file" in restamp.check_entry_by_hash("ZZZ", "t", {**entry, "sha256": "0" * 64}, {"artifacts": {"t": {"content_sha256": recorded}}}, before_path, root)["problem"]
+    assert restamp.check_entry_by_hash("ZZZ", "t", {**entry, "content_sha256": found["new"]}, None, before_path, root)["skip"]
+
+
+@pytest.mark.unit
+def test_a_restamp_never_lowers_the_schema_of_the_manifest(restamp):
+    """COMMAND 178: the first run of the script wrote 2.12 over manifests of 2.13, which the model refuses."""
+    assert restamp.schema_after_restamp("2.13") == "2.13"
+    assert restamp.schema_after_restamp("2.12") == "2.12"
+    assert restamp.schema_after_restamp("2.11") == "2.12"
+    assert restamp.schema_after_restamp("2.9") == "2.12"
+    assert restamp.schema_after_restamp(None) == "2.12"
