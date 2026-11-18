@@ -103,7 +103,7 @@ geospatial:
 # Memory budget of the batch phases (METHODOLOGY A-10, D-F6-005). F6 sizes its blocks of cells so that the live
 # cell-by-sample arrays (four of them at the peak) stay below this many GB; F7 does the same.
 memory:
-  max_batch_gb: 1
+  max_batch_gb: 0.5
 
 # Which diagnostic figures a phase draws (METHODOLOGY A-08): all | summary | none. Rasters and tables are artifacts and are
 # always written; only PNG maps follow this setting. Honoured by climate_maps, overview (with its per-layer maps) and
