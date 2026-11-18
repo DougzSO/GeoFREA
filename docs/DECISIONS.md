@@ -2022,3 +2022,19 @@ Substitui: nenhuma decisão; the "no validation against fleet data" of DEC-088 b
 Consequência no código ou na configuração (ainda não aplicada): none; no code, configuration or parameter changes, so no fingerprint and no digest moves.
 
 ---
+
+## [2026-11-18] DEC-092 - Fleet wind CF of India derived from published statistics (complements DEC-091)
+Tipo: VERIFICATION_UPDATE
+Descrição: Date: 2026-11-18. Decided by the author (request to look for a sourced fleet CF for India; the value is derived, not copied).
+a) Source: Ministry of New and Renewable Energy, Renewable Energy Statistics 2024-25 (`mnre2026stats`; file `GeoFREA_data/external/solar_basis/mnre_re_statistics_2024_25.pdf`, SHA-256 02180d30c8f4a6e78731af06319a78b04007b5dfbab29cdb80ce19062233a96d, accessed 2026-11-16). Table 2.1, p. 14: cumulative installed wind capacity at the end of the financial year, 45.89 GW (2023-24) and 50.04 GW (2024-25), with 42.63 GW at the end of 2022-23. Table 4.1, p. 24 (source CEA, Ministry of Power): wind generation 83.39 BU (2023-24) and 83.35 BU (2024-25). The statistics cover utilities only (Scope and Coverage, p. 1).
+b) Derivation: fleet CF = generation / (mean of the capacity at the start and at the end of the financial year x 8760 h). 2024-25: 83.35 / (47.965 x 8.76) = 19.8%. 2023-24: 83.39 / (44.26 x 8.76) = 21.5%. With the capacity at the end of the year instead of the mean: 19.0% and 20.7%. The primary value is the latest financial year, 2024-25, 19.8% (fixed here before comparing with the F5); the other is a range. The mean capacity and the 8760 h (366 days in 2023-24) are simplifications of the derivation and not figures of the source. The statistics report no curtailment: the basis is generation of utilities over capacity, as in the fleet values of BRA (ABEEolica 2025) and PRT (REN).
+c) p of India (F5 at the plant cells over the fleet CF): 24.5% / 19.8% = 1.23 for 2024-25 (1.14 for 2023-24). It is above 1 as in BRA (1.12) and PRT (1.14); an older fleet with lower hubs and curtailment, which F5 does not model (L-033), points the same way. This does not change the branch of DEC-091 (B), which rests on g.
+d) The fleet CF of India replaces "no sourced fleet CF" in DEC-091 and L-249. No parameter, configuration or code changes.
+Justificativa (se METHODOLOGY_REVISION): n/a, verification record: a value derived from published statistics of the Ministry (Table 2.1 p. 14, Table 4.1 p. 24).
+Referência (literatura/discussão, se aplicável): DEC-091; DEC-088 b; L-033; L-249; MNRE (2026), Renewable Energy Statistics 2024-25 (`mnre2026stats`), Tables 2.1 and 4.1.
+Fase: F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; DEC-091 is completed, not edited (its "IND not available" is read as 19.8% and p = 1.23).
+Consequência no código ou na configuração (ainda não aplicada): none; no fingerprint and no digest moves.
+
+---
