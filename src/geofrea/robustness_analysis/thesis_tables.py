@@ -9,11 +9,14 @@ energy of the fixed economic domain in each member is the `fixed_domain` series 
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+
+LOGGER = logging.getLogger(__name__)
 
 REFERENCE_COLUMNS = {
     "tx35_days": "tx35_days_ref",
@@ -33,8 +36,11 @@ def merge_nominal_lcoe(
 ) -> pd.DataFrame:
     """The F5 rows with the F6 nominal LCOE of the same cell and member.
 
+    A cell that has no F6 row in any member is left out and counted in a warning: F6 leaves out a cell whose PV zone or distance is missing
+    (`n_excluded_cell_members`, L-253), and F5 keeps it. A cell that has an F6 row in some members and not in others is not that case.
+
     Raises:
-        ThesisTableError: an F5 row has no F6 nominal LCOE.
+        ThesisTableError: an F5 row has no F6 nominal LCOE although its cell has one in another member.
     """
     table = potential.assign(member=potential["member"].astype(str)).merge(
         lcoe_nominal.assign(member=lcoe_nominal["member"].astype(str)),
@@ -42,8 +48,19 @@ def merge_nominal_lcoe(
         how="left",
         validate="one_to_one",
     )
-    if table["lcoe_nominal"].isna().any():
-        raise ThesisTableError(f"{scenario}: F5 rows without an F6 nominal LCOE")
+    missing = table["lcoe_nominal"].isna()
+    if missing.any():
+        with_lcoe = set(lcoe_nominal["cell_id"].tolist())
+        partial = table.loc[missing, "cell_id"].isin(with_lcoe)
+        if partial.any():
+            raise ThesisTableError(f"{scenario}: F5 rows without an F6 nominal LCOE")
+        LOGGER.warning(
+            "%s: %d F5 cells (%d cell-member rows) have no F6 LCOE in any member and are left out (PV zone or distance missing in F6, L-253)",
+            scenario,
+            table.loc[missing, "cell_id"].nunique(),
+            int(missing.sum()),
+        )
+        table = table[~missing]
     return table
 
 

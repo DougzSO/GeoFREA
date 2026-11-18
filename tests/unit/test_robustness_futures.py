@@ -21,6 +21,7 @@ from geofrea.robustness_analysis.thesis_tables import (
     ThesisTableError,
     exposed_flags,
     exposure_rows,
+    merge_nominal_lcoe,
     potential_below_tau_nominal,
 )
 
@@ -170,11 +171,24 @@ def test_potential_below_tau_counts_feasible_cheap_cells_by_hand():
 
 
 @pytest.mark.unit
-def test_potential_below_tau_refuses_f5_rows_without_an_f6_nominal_lcoe():
-    potential = _potential([(1, "m0", 100.0, 0.4, 350400.0)])
-    lcoe = pd.DataFrame({"cell_id": [2], "member": ["m0"], "lcoe_nominal": [40.0]})
+def test_potential_below_tau_refuses_f5_rows_without_an_f6_nominal_lcoe_in_a_member_of_a_cell_that_has_one_elsewhere():
+    potential = _potential([(1, "m0", 100.0, 0.4, 350400.0), (1, "mA", 100.0, 0.4, 350400.0)])
+    lcoe = pd.DataFrame({"cell_id": [1], "member": ["m0"], "lcoe_nominal": [40.0]})
     with pytest.raises(ThesisTableError):
-        potential_below_tau_nominal(potential, lcoe, [], "m0", 0.3, 50.0, None, "central")
+        potential_below_tau_nominal(potential, lcoe, ["mA"], "m0", 0.3, 50.0, None, "central")
+
+
+@pytest.mark.unit
+def test_a_cell_without_an_f6_lcoe_in_any_member_is_left_out_and_counted_in_a_warning(caplog):
+    """F6 leaves out a cell whose PV zone or distance is missing and F5 keeps it (L-253): F7 leaves it out and says so."""
+    potential = _potential([(1, "m0", 100.0, 0.4, 350400.0), (2, "m0", 900.0, 0.4, 350400.0)])
+    lcoe = pd.DataFrame({"cell_id": [2], "member": ["m0"], "lcoe_nominal": [40.0]})
+    with caplog.at_level("WARNING"):
+        got = merge_nominal_lcoe(potential, lcoe, "central")
+    assert got["cell_id"].tolist() == [2]
+    assert "1 F5 cells (1 cell-member rows)" in caplog.text and "L-253" in caplog.text
+    rows = potential_below_tau_nominal(potential, lcoe, [], "m0", 0.3, 50.0, None, "central")
+    assert {r["series"] for r in rows} >= {"all_present"}
 
 
 @pytest.mark.unit
