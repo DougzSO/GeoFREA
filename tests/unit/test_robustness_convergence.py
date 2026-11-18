@@ -294,10 +294,10 @@ def test_real_countries_do_not_run_the_protocol_until_their_parameters_have_rang
 
 
 @pytest.mark.unit
-def test_the_real_experiments_file_has_no_ceiling_and_the_top_k_lives_in_the_country_parameters():
-    """The ceiling is the author's; `top_k_percent` moved from `thresholds` to each country and technology (D-F7-027)."""
+def test_the_real_experiments_file_has_the_authors_ceiling_and_the_top_k_lives_in_the_country_parameters():
+    """The ceiling is the author's (4000, Tier 3, V182b); `top_k_percent` moved from `thresholds` to each country and technology (D-F7-027)."""
     experiments = load_experiments(EXPERIMENTS)
-    assert experiments.sampler.max_size_for_convergence is None
+    assert experiments.sampler.max_size_for_convergence == 4000
     assert experiments.sampler.convergence_tolerance == 0.01  # U-04
     assert "top_k_percent" not in experiments.thresholds
     assert pd.notna(experiments.sampler.initial_size)

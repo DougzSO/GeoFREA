@@ -54,7 +54,7 @@ def experiments_text(
     text = (REPO / "config" / "experiments.yaml").read_text(encoding="utf-8")
     for old, new in (
         ("initial_size: 500", f"initial_size: {initial_size}"),
-        ("max_size_for_convergence: null", f"max_size_for_convergence: {ceiling}"),
+        ("max_size_for_convergence: 4000", f"max_size_for_convergence: {ceiling}"),
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
         ("tx40_days: {threshold: null,", "tx40_days: {threshold: 1.0,"),
         ("rx5day_mm: {threshold: null,", "rx5day_mm: {threshold: 1.0,"),

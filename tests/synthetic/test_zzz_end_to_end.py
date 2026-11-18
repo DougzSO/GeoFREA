@@ -105,7 +105,7 @@ def zzz(tmp_path_factory):
     experiments_text = (REPO / "config" / "experiments.yaml").read_text(encoding="utf-8")
     for old, new in (
         ("initial_size: 500", f"initial_size: {INITIAL_SIZE}"),
-        ("max_size_for_convergence: null", f"max_size_for_convergence: {CEILING}"),
+        ("max_size_for_convergence: 4000", f"max_size_for_convergence: {CEILING}"),
         # test values for the pre-registered settings, in this copy only (OQ-050, OQ-051, OQ-056)
         ("tx35_days: {threshold: null,", "tx35_days: {threshold: 1.0,"),
         ("tx40_days: {threshold: null,", "tx40_days: {threshold: 1.0,"),

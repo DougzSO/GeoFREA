@@ -118,7 +118,8 @@ sampler:
   initial_size: 500
   # Ceiling of the doubling (D-F6-004): the phase sample_size_convergence stops at the last size not above it and reports no convergence
   # if the criterion was not met. The value is the author's; null makes the phase refuse to run.
-  max_size_for_convergence: null
+  # 4000: the doubling sequence is 500, 1000, 2000, 4000. Source: author judgment, Tier 3 (V182b, COMMAND 177); recorded as L-251.
+  max_size_for_convergence: 4000
   # U-04: the sample size is adopted when 1 - Jaccard of the top-k sets of two consecutive sizes is below this value
   convergence_tolerance: 0.01
 
@@ -480,6 +481,7 @@ hazard_thresholds:
 hazard_indicators:
   tx35_days: {threshold_c: 35.0, unit: days, source: "CRAEI config/params.yaml heat_tx35_threshold_c (IPCC AR6 Atlas)", tier: 1}
   tx40_days: {threshold_c: 40.0, unit: days, source: "CRAEI config/params.yaml heat_tx40_threshold_c (IPCC AR6 Atlas)", tier: 1}
+  rx5day_mm: {window_days: 5, unit: mm, source: "ETCCDI Rx5day: annual maximum of the precipitation accumulated in 5 consecutive days, averaged over the years of the window (Zhang et al., 2011; DEC-093)", tier: 1}
   wet_p95_exceed_freq: {wet_day_mm: 1.0, percentile: 95.0, unit: fraction, source: "CRAEI hazards/precip.py WET_DAY_THRESHOLD_MM and wet_day_p95", tier: 2}
 
 # PRIM scenario discovery (M-F7-08; docs/thesis/methods/synthesis_and_scenario_discovery.tex). The unit is the future of the core window; a

@@ -433,7 +433,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/phases/F5/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
+            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/_audit/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
             "synthetic": false,
             "proxy": false,
             "scenario_values": {
@@ -1199,7 +1199,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/phases/F5/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
+            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/_audit/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
             "synthetic": false,
             "proxy": false,
             "scenario_values": {
@@ -1965,7 +1965,7 @@
             "verified_by": null,
             "verified_date": null,
             "verification_method": "unverified",
-            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/phases/F5/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
+            "note": "Recomputed with the turbine data: 3.333 / 4.999 / 7.141 MW/km2 with D = 129.82 m, 3.324 / 4.985 / 7.122 with D = 130 m; both within 1 percent of the .tex values, which are kept (docs/_audit/groups1-2_implementation_report.md). Scenario-coupled, not sampled.",
             "synthetic": false,
             "proxy": false,
             "scenario_values": {

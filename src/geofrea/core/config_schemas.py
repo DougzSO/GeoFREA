@@ -11,7 +11,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, PositiveInt, model_validator
 
 from geofrea.config_models.land_availability import LandAvailability
 
@@ -270,13 +270,25 @@ class WetDayIndicator(BaseModel):
     tier: int = Field(ge=1, le=3)
 
 
+class Rx5dayIndicator(BaseModel):
+    """Definition of the Rx5day index of the ETCCDI (M-F4-05, DEC-093): the annual maximum of the precipitation accumulated in `window_days` consecutive days, averaged over the years of the window (Zhang et al., 2011)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    window_days: PositiveInt
+    unit: str
+    source: str
+    tier: int = Field(ge=1, le=3)
+
+
 class HazardIndicators(BaseModel):
-    """The definitions of the indicators of `hazard_context`, keyed by the column names `tx35_days`, `tx40_days` and `wet_p95_exceed_freq`."""
+    """The definitions of the indicators of `hazard_context`, keyed by the column names `tx35_days`, `tx40_days`, `rx5day_mm` and `wet_p95_exceed_freq`."""
 
     model_config = ConfigDict(extra="forbid")
 
     tx35_days: HeatIndicator
     tx40_days: HeatIndicator
+    rx5day_mm: Rx5dayIndicator
     wet_p95_exceed_freq: WetDayIndicator
 
 
