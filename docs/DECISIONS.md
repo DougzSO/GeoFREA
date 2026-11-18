@@ -2004,3 +2004,21 @@ Substitui: nenhuma decisão; the wording of DEC-085 a) is read as in item a) (th
 Consequência no código ou na configuração (ainda não aplicada): the six tau notes in `config/parameters.json` and M-F7-17 are written by COMMAND 162R5; no value changes.
 
 ---
+
+## [2026-11-17] DEC-091 - Verdict on the wind cell CF, branch B (closes OQ-114) (COMMANDS 170, 171)
+Tipo: VERIFICATION_UPDATE
+Descrição: DEC-091: Verdict on the wind cell CF (closes OQ-114 unless branch A). Date: 2026-11-17. Decided by the author through the rule of decisoes_v1_0_GeoFREA.md V171. Branch applied: B. Median g (F5 over GWA times eta_loss, same IEC class) BRA 0.993, IND 0.988, PRT 1.004; p (F5 at plant cells over the fleet CF) BRA 1.12, PRT 1.14, IND not available (no sourced fleet CF). No parameter is fitted to the fleet or to the GWA (V-06).
+Numbers of COMMAND 170 behind the branch (cell CF of the central scenario, reference member m0; report `_notas_geofrea/oq114_170.md`):
+a) g = CF_F5 / (CF_GWA x eta_loss), with CF_GWA of the class IEC3 (the F5 applies one class III reference turbine, IEA 3.4-130, to every cell and keeps the class only as a flag; no class is attributed per cell) and eta_loss = 0.866. The documentation of the Global Wind Atlas that was read does not say that its CF already discounts losses, so eta_loss is applied. The medians above are over the 15 cells sampled per country (5 with a plant, 5 in the top decile, 5 at the median). Over the cells with a plant the median g is BRA 0.999, IND 0.982, PRT 1.002; over all candidate cells BRA 0.973, IND 0.976, PRT 0.996. All are inside [0.85, 1.15]. The per-pixel F5 CF and the GWA IEC3 CF correlate at 0.997 (PRT), 0.999 (IND) and 0.999 (BRA), and the recomputation of the F5 cell CF from the pixels reproduces the stored value to 5e-9. No step of the chain has an identifiable defect, so branch A does not apply.
+b) p = CF_F5 at the cells with a plant (capacity weighted) / fleet CF: BRA 42.5% / 38% (ABEEolica 2025, Boletim Anual, p. 8, year 2024, at the connection point) = 1.12; PRT 31.2% / 27.4% (REN, 2023, fleet connected) = 1.14; IND has no sourced fleet CF (the 22% of tab:g4-cf is the CERC regulatory floor), so p is not available. The capacity-weighted mean CF of all eligible cells (BRA 15.6%, IND 17.7%, PRT 26.1%) is the mean over all eligible land and not over the sited plants; at the plant cells the F5 CF is above the fleet CF, which is the expected sign if the fleet is net of curtailment (not modeled, L-033).
+c) The gap between the cell CF and the fleet CF is attributed to site selection, to a larger turbine and hub in the real fleet than in the reference turbine of the class, to the location of the plant inside the cell and to the curtailment basis. OQ-114 is closed as a limitation (L-249). The absolute wind values (GW and TWh) go into the thesis with an explicit reservation and the main reading of the wind is the ranking.
+d) Not resolved and recorded in L-249: the loss basis of the GWA CF (if it were net, g would be 0.84 to 0.87 and, over all candidate cells, 0.843 in BRA and 0.845 in IND, slightly under 0.85), and the page of the PRT fleet value (27.4%), taken from the record of COMMAND 161Q and not found again in the text of the REN pdf.
+e) No parameter is adjusted to the fleet or to the GWA: eta_loss, the power curve and every other parameter stay as registered (V-06). The GWA is an independent check and not a target.
+Justificativa (se METHODOLOGY_REVISION): n/a, verification record: the rule of V171 applied to the numbers of COMMAND 170.
+Referência (literatura/discussão, se aplicável): DEC-088 b; L-028; L-032; L-033; OQ-114; M-F5-03; D-F5-038; ABEEolica (2025), Boletim Anual 2025, p. 8; DTU and World Bank, Global Wind Atlas 3 (capacity factor layers IEC1 to IEC3, 100 m, 250 m, CC BY 4.0); COMMANDS 170 and 171.
+Fase: F5, F7
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão; the "no validation against fleet data" of DEC-088 b is completed by this entry (the old entry is not edited).
+Consequência no código ou na configuração (ainda não aplicada): none; no code, configuration or parameter changes, so no fingerprint and no digest moves.
+
+---
