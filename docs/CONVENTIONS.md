@@ -36,7 +36,7 @@ Used in `docs/PROGRESS.json` only (phase records carry no status line):
 - `conformant`: audited, all conformance rows pass
 - `rework_required`: code exists and conflicts with the methodology
 
-Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`, and, while a check of the content is open, `awaiting_content_check_post_77` (the phase ran, but its artifacts have not been compared with the state before the performance work of COMMANDS 75 to 79; `pending_verifications` of `docs/PROGRESS.json` says what is missing and where it is done, and the status returns to `ran_clean` when the check settles). They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
+Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. The status `awaiting_content_check_post_77` is retired: the content check after COMMAND 77 is closed (PV-77, DEC-068). They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
 
 ## Where status lives
 
