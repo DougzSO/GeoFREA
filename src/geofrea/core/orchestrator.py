@@ -760,6 +760,22 @@ def _transitive_closure(start: set[str], edges: Mapping[str, set[str]]) -> set[s
     return seen
 
 
+@dataclass(frozen=True)
+class PlanEntry:
+    """One line of the plan of a run (`Orchestrator.plan`): what the run does with a phase, and why.
+
+    Args:
+        phase: Phase name.
+        action: `execute`, `resume`, `refused` (the recorded entry no longer fits the spec) or `may_become_stale` (a downstream phase that
+            `stale_upstream` marks if the content of an executing phase changes).
+        reason: The motive, in one line.
+    """
+
+    phase: str
+    action: str
+    reason: str
+
+
 @dataclass
 class Orchestrator:
     """Executes a DAG of PhaseSpecs for one country, with manifest resumability.
@@ -1103,6 +1119,108 @@ class Orchestrator:
                 f"matches its recorded sha256 ({entry.sha256} -> {actual_sha256}). "
                 "Not recomputing."
             )
+
+    def plan(self, phase_specs: Sequence[PhaseSpec]) -> list[PlanEntry]:
+        """What `run` would do with `phase_specs`, in execution order: each needed phase executes or resumes, and why.
+
+        The plan reads the manifest, the configuration fingerprints and the code fingerprints of the specs, with the same decisions as `run`
+        (forced by `rerun_phases`, no entry, a status other than `success`, a changed configuration or a changed code). It executes nothing,
+        writes no manifest (the run id and the dirty flag are set in memory only, as in `__post_init__`), drops no entry and declares nothing valid
+        again. It does not hash the artifacts that `run` verifies before it resumes a phase, so a recorded file that was changed or deleted is
+        only found by the run. A phase that executes in the plan may leave its downstream phases `stale_upstream` when its content changes:
+        those phases are listed last as `may_become_stale` (from the lineage in the manifest).
+
+        Args:
+            phase_specs: Every registered phase (order does not matter).
+
+        Returns:
+            One `PlanEntry` per needed phase, in execution order, then the `may_become_stale` ones; the action of an entry is `execute`, `resume`
+            or `refused` (the recorded entry no longer fits the spec; `run` raises `StaleManifestEntryError`).
+
+        Raises:
+            MissingProducerError: a target or a rerun phase is not registered or not needed, as in `run`.
+        """
+        ordered = _validate_and_order(phase_specs)
+        by_name = {spec.name: spec for spec in ordered}
+        producer_of: dict[str, str] = {}
+        for spec in ordered:
+            for key in spec.produces:
+                producer_of[key] = spec.name
+        deps: dict[str, set[str]] = {
+            spec.name: {producer_of[key] for key in spec.requires} for spec in ordered
+        }
+        unknown_targets = [name for name in self.target_phases if name not in by_name]
+        if unknown_targets:
+            raise MissingProducerError(f"run.target_phases names phases not registered: {unknown_targets}")
+        needed = _transitive_closure(set(self.target_phases), deps)
+        rerun_set = set(self.rerun_phases)
+        unknown_reruns = sorted(rerun_set - needed)
+        if unknown_reruns:
+            raise MissingProducerError(
+                f"run.rerun_phases names phases outside the needed closure of run.target_phases: {unknown_reruns}."
+            )
+
+        entries: list[PlanEntry] = []
+        executing: set[str] = set()
+        for spec in (s for s in ordered if s.name in needed):
+            existing = self.manifest.phases.get(spec.name)
+            success = existing is not None and existing.status == "success"
+            config_changed = (
+                success
+                and existing.config_fingerprint is not None
+                and spec.config_fingerprint is not None
+                and existing.config_fingerprint != spec.config_fingerprint
+            )
+            code_changed = (
+                success
+                and existing.code_fingerprint is not None
+                and spec.code_fingerprint is not None
+                and existing.code_fingerprint != spec.code_fingerprint
+            )
+            if spec.name in rerun_set:
+                reason = "named in rerun_phases (forced)"
+            elif config_changed:
+                reason = (
+                    f"the configuration it reads changed since it ran (fingerprint {existing.config_fingerprint[:12]} -> {spec.config_fingerprint[:12]})"
+                )
+            elif code_changed:
+                reason = f"the code it runs changed since it ran (fingerprint {existing.code_fingerprint[:12]} -> {spec.code_fingerprint[:12]})"
+            elif existing is None:
+                reason = "no manifest entry yet"
+            elif existing.status != "success":
+                reason = f"manifest status {existing.status!r}, does not resume"
+                if existing.status == "stale_upstream" and existing.invalidated_by:
+                    reason += f" (invalidated by {existing.invalidated_by})"
+            else:
+                try:
+                    self._check_resume_is_not_stale(spec)
+                except StaleManifestEntryError as exc:
+                    entries.append(PlanEntry(spec.name, "refused", str(exc)))
+                    continue
+                entries.append(
+                    PlanEntry(spec.name, "resume", f"manifest status 'success' (finished {existing.finished_at}); fingerprints unchanged")
+                )
+                continue
+            executing.add(spec.name)
+            entries.append(PlanEntry(spec.name, "execute", reason))
+
+        # downstream phases of an executing phase, from the lineage recorded in the manifest (the same source as `_mark_manifest_consumers_stale`)
+        produced_by = {key: art.phase for key, art in self.manifest.artifacts.items()}
+        frontier = set(executing)
+        marked: dict[str, str] = {}
+        while frontier:
+            new: dict[str, str] = {}
+            for name, entry in self.manifest.phases.items():
+                if name in executing or name in marked or entry.status != "success":
+                    continue
+                source = next((produced_by.get(k) for k in entry.consumed_run_ids if produced_by.get(k) in frontier), None)
+                if source is not None:
+                    new[name] = source
+            marked.update(new)
+            frontier = set(new)
+        for name, source in sorted(marked.items()):
+            entries.append(PlanEntry(name, "may_become_stale", f"consumes an artifact of '{source}', which executes: stale_upstream if its content changes"))
+        return entries
 
     def run(self, phase_specs: Sequence[PhaseSpec]) -> dict[str, PhaseResult[Any]]:
         """Run the phases needed to satisfy target_phases, resuming where possible.

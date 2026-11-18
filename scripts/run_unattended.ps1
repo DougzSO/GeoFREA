@@ -66,6 +66,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 
+# The phases of F6 onwards run on a real country only with --real-run (main.py refuses them otherwise, L-244): the option is passed when the round asks for one of them.
+$RealRunPhases = @('lcoe_modeling', 'sample_size_convergence', 'robustness_analysis', 'cross_country_h4', 'external_validation', 'lcoe_maps', 'robustness_maps', 'results_synthesis')
+
 function Write-Log([string]$Message) {
     $line = '{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
     Write-Host $line
@@ -237,7 +240,9 @@ try {
         }
         if (-not $aborted) {
             Write-Log "${iso}: running $Phases"
-            $run = Invoke-Monitored @('main.py', $iso, '--phases', $Phases, '--rerun', $Phases) (Join-Path $runDir 'run.log.txt') $mem
+            $mainArgs = @('main.py', $iso, '--phases', $Phases, '--rerun', $Phases)
+            if (@($Phases -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $RealRunPhases -contains $_ }).Count -gt 0) { $mainArgs += '--real-run' }
+            $run = Invoke-Monitored $mainArgs (Join-Path $runDir 'run.log.txt') $mem
             if ($run.Aborted) { $aborted = $run.Aborted }
             elseif ($run.ExitCode -eq 75) { $aborted = 'main.py did not start: less than 2 GB available for a cold phase (exit 75)' }
             elseif ($run.ExitCode -ne 0) { Write-Log "${iso}: main.py ended with exit code $($run.ExitCode) (see $runDir\run.log.txt)" }

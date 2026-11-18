@@ -286,8 +286,12 @@ python main.py PRT --phases overview --rerun overview            # rerun exactly
 python main.py PRT --revalidate land_eligibility                 # a stale_upstream entry is still valid
 python main.py PRT --production                                  # refuse proxies and uncertain parameters without a range
 python main.py PRT --scale 0p1deg                                # the V-07 scale check (files under <phase>__0p1deg)
+python main.py PRT --phases lcoe_modeling --real-run             # F6 onwards on a real country needs --real-run (else refused, nothing runs)
+python main.py PRT --phases lcoe_modeling --plan                 # what the invocation would execute, resume or find stale; runs nothing, writes no manifest
 ```
 
+* **F6 onwards and `--real-run`.** The phases `lcoe_modeling`, `sample_size_convergence`, `robustness_analysis`, `cross_country_h4`, `external_validation`, `lcoe_maps`, `robustness_maps` and `results_synthesis` run on a real country only when the invocation carries `--real-run` (a refusal lists the phases and starts nothing; `scripts/run_unattended.ps1` passes the option when its `-Phases` names one of them). A synthetic country does not need it. The check of the pre-registration (the tag `prereg-v1`, L-244) is separate and still applies with the option.
+* **`--plan`.** Per country, the phases the invocation would execute, resume or find stale, with the reason, from the manifest and the fingerprints (`Orchestrator.plan`); it executes nothing, writes no manifest and does not open the log of the run. It does not hash the recorded artifacts, which a run verifies before it resumes a phase.
 * **Figures.** `figures: all | summary | none` in `config/settings.yaml` (there is no flag). `summary` is the development setting; `all` only for the thesis build. Changing it reruns the figure phases and no other.
 * **Autonomous round** (several countries, nothing else open; it needs about 4 GB free for IND and BRA):
   `powershell -ExecutionPolicy Bypass -File scripts\run_unattended.ps1 [-Countries IND,BRA] [-DryRun]`. It adopts the aligned layers, runs every phase with `--rerun`, compares every artifact with the saved manifest and writes `outputs/<ISO>/unattended_check.json` and `logs/unattended_rounds/unattended_round_<stamp>.json`. Exit code 0 only when every country is IDENTICO.

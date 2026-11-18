@@ -20,11 +20,14 @@ F1 data acquisition, F1b data quality audit, F2a grid alignment, F2b siting laye
 ```
 python main.py PRT IND BRA                                                  # F1 to F4, F3 and the figures of the default list
 python main.py PRT IND BRA --phases technical_potential,potential_maps     # F5 (the two parameter-dependent phases) and its maps
-python main.py PRT IND BRA --phases lcoe_modeling,lcoe_maps                # F6
-python main.py PRT IND BRA --phases robustness_analysis,sample_size_convergence,robustness_maps   # F7
-python main.py PRT IND BRA --phases external_validation                    # F7b (needs the plant inventory, OQ-057)
-python main.py PRT IND BRA --phases results_synthesis                      # F8 (reads the results of every country)
+python main.py PRT IND BRA --phases lcoe_modeling,lcoe_maps --real-run     # F6 (--real-run: see below)
+python main.py PRT IND BRA --phases robustness_analysis,sample_size_convergence,robustness_maps --real-run   # F7
+python main.py PRT IND BRA --phases external_validation --real-run         # F7b (needs the plant inventory, OQ-057)
+python main.py PRT IND BRA --phases results_synthesis --real-run           # F8 (reads the results of every country)
+python main.py PRT --phases lcoe_modeling --plan                           # what the invocation would do; nothing runs, no manifest is written
 ```
+
+`--real-run` is required to run the phases of F6 onwards (`lcoe_modeling`, `sample_size_convergence`, `robustness_analysis`, `cross_country_h4`, `external_validation`, `lcoe_maps`, `robustness_maps`, `results_synthesis`) on a real country: without it `main.py` refuses the invocation, lists the phases and runs nothing. A synthetic country does not need it, and the pre-registration guard (the tag `prereg-v1`) still applies with it. `--plan` prints, per country, the phases the invocation would execute, the ones it would resume from the manifest and the ones that would be stale, with the reason; it executes nothing and writes no manifest.
 
 The reference store (`GeoFREA_data/references/`, what `config/deferred_checks.yaml` compares a run with) is never written by a run of the pipeline. After a round that you accept, publish it explicitly: `python main.py PRT IND BRA --publish-reference`, or `python scripts/publish_reference.py PRT IND BRA --note "..."` (`--first` for a country with no reference, `--allow-without-reference <phase>` for a new phase). Both compare every phase of the round with the current reference and refuse, writing nothing, if one is different or has no comparison (OQ-080, `docs/phases/core.md` D-core-054).
 

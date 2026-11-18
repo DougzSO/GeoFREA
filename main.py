@@ -55,6 +55,8 @@ Usage:
     python main.py PRT BRA IND      # several, one after the other
     python main.py BRA --phases grid_alignment --rerun grid_alignment
     python main.py                  # run.countries from settings.yaml, else every thesis country
+    python main.py BRA --phases lcoe_modeling --real-run   # F6 onwards on a real country needs --real-run
+    python main.py BRA --phases lcoe_modeling --plan       # what the invocation would do; runs nothing, writes no manifest
 """
 
 from __future__ import annotations
@@ -1408,6 +1410,101 @@ def _resolved_config_json(
     )
 
 
+def _country_phase_specs(
+    country_code: str,
+    country_params,
+    resolutions: ResolutionsConfig,
+    distance_cap_km: float,
+    audit_config: AuditConfig,
+    technologies: tuple[str, ...],
+    production: bool,
+    figures: str,
+    max_batch_gb: float | None,
+    wind_cf_integral: str,
+) -> list[PhaseSpec]:
+    """The phase specifications of a run of `country_code` (what the run and the plan of the run both start from)."""
+    return _build_phase_specs(
+        resolutions,
+        distance_cap_km,
+        audit_config,
+        technologies,
+        production,
+        figures,
+        max_batch_gb,
+        country_code,
+        wind_cf_integral,
+        _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS
+        if country_params is not None
+        and country_params.connection is not None
+        and country_params.connection.poi_sensitivity_threshold_kv is not None
+        else (),
+    )
+
+
+# The phases of F6 onwards: they run on a real country only when the invocation asks for it with `--real-run` (the accident of COMMAND 162B).
+# `cross_country_h4` is not a phase of the orchestrator: `_main` runs it after F7, so naming it is refused as well.
+REAL_RUN_PHASES: tuple[str, ...] = (
+    "lcoe_modeling",
+    "sample_size_convergence",
+    "robustness_analysis",
+    "cross_country_h4",
+    "external_validation",
+    "lcoe_maps",
+    "robustness_maps",
+    "results_synthesis",
+)
+
+
+def real_run_refusal(
+    countries: list[str],
+    target_phases: list[str],
+    rerun_phases: list[str],
+    synthetic_countries: set[str],
+    real_run: bool,
+) -> str | None:
+    """The message that refuses the invocation, or None when it may start.
+
+    An invocation that asks for a phase of `REAL_RUN_PHASES` (in the target phases or in the rerun phases) on a country that is not a synthetic
+    fixture needs `--real-run`. The pre-registration guard of the orchestrator is a separate check and still runs with the option (L-244).
+
+    Args:
+        countries: The ISO3 codes of the run.
+        target_phases: The target phases of the run.
+        rerun_phases: The phases to execute again.
+        synthetic_countries: The countries of `countries.yaml` that are test fixtures (`synthetic_fixture_root`).
+        real_run: Whether the invocation carries `--real-run`.
+    """
+    if real_run:
+        return None
+    refused = [p for p in REAL_RUN_PHASES if p in set(target_phases) | set(rerun_phases)]
+    real = [c for c in countries if c not in synthetic_countries]
+    if not refused or not real:
+        return None
+    return (
+        f"run refused: the phases {', '.join(refused)} (F6 onwards) were requested for the real countries {', '.join(real)} without --real-run. "
+        "Add --real-run to run them on real data (the pre-registration guard still applies), or use --plan to see what the invocation would do."
+    )
+
+
+def print_plan(
+    country_code: str,
+    entries: list,
+    target_phases: list[str],
+    rerun_phases: list[str],
+    scale: str,
+    refusal: str | None,
+) -> None:
+    """Print the plan of one country: phase, action and reason, as `Orchestrator.plan` gave it."""
+    print(f"PLAN {country_code} (scale {scale}): target phases {target_phases}, rerun {rerun_phases}; nothing is executed and no manifest is written")
+    width = max((len(e.phase) for e in entries), default=5)
+    for e in entries:
+        print(f"  {e.phase:<{width}}  {e.action:<16}  {e.reason}")
+    if not entries:
+        print("  (no phase is needed)")
+    if refusal:
+        print(f"  NOTE: {refusal}")
+
+
 def run_geofrea(
     country_code: str,
     target_phases: list[str],
@@ -1533,7 +1630,9 @@ def _run_geofrea(
 
     orchestrator.record_seed("sampler", load_experiments(EXPERIMENTS_YAML).sampler.seed)
     results = orchestrator.run(
-        _build_phase_specs(
+        _country_phase_specs(
+            country_code,
+            country_params,
             resolutions,
             distance_cap_km,
             audit_config,
@@ -1541,13 +1640,7 @@ def _run_geofrea(
             production,
             figures,
             max_batch_gb,
-            country_code,
             wind_cf_integral,
-            _OPTIONAL_ALIGNED_RASTER_LAYER_KEYS
-            if country_params is not None
-            and country_params.connection is not None
-            and country_params.connection.poi_sensitivity_threshold_kv is not None
-            else (),
         )
     )
     ok = all(results[name].status == "success" for name in target_phases)
@@ -1612,6 +1705,19 @@ def _parse_args(argv: list[str]):
     parser.add_argument(
         "--rerun",
         help="comma-separated phases to execute again even if the manifest records success (default: run.rerun_phases)",
+    )
+    parser.add_argument(
+        "--real-run",
+        action="store_true",
+        help="required to run the phases of F6 onwards (lcoe_modeling, sample_size_convergence, robustness_analysis, cross_country_h4, external_validation, "
+        "lcoe_maps, robustness_maps, results_synthesis) on a real country; without it the invocation is refused and nothing runs. The pre-registration "
+        "guard still applies with the option. A synthetic country does not need it",
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="print, per country, the phases the invocation would execute, the ones it would resume from the manifest and the ones that are stale, "
+        "with the reason; it executes nothing, writes no manifest and ends with exit code 0",
     )
     return parser.parse_args(argv)
 
@@ -1718,6 +1824,13 @@ def _main(argv: list[str] | None = None) -> int:
         [p.strip() for p in args.revalidate.split(",") if p.strip()] if args.revalidate else []
     )
 
+    # F6 onwards on a real country runs only on request (`--real-run`, L-244): refused here, before any phase; `--plan` only reports it
+    synthetic_countries = {c for c in countries if countries_config.get(c, {}).get("synthetic_fixture_root")}
+    refusal = real_run_refusal(countries, target_phases, rerun_phases, synthetic_countries, args.real_run)
+    if refusal and not args.plan:
+        logger.error("%s", refusal)
+        return 1
+
     parameter_audit = audit_parameters(
         parameters, technologies, countries, settings.run.technologies
     )
@@ -1739,6 +1852,42 @@ def _main(argv: list[str] | None = None) -> int:
     run_id = compute_run_id(
         _resolved_config_json(settings, parameters, args.scale), methodology_version, git_commit
     )
+
+    if args.plan:
+        # what the invocation would do, per country, without running a phase or writing a manifest (the log file is not opened either)
+        for country_code in countries:
+            try:
+                with use_scale(args.scale):
+                    orchestrator = Orchestrator(
+                        outputs_dir=outputs_dir(),
+                        country_code=country_code,
+                        country_params=parameters.countries.get(country_code),
+                        target_phases=target_phases,
+                        rerun_phases=rerun_phases,
+                        run_id=run_id,
+                        methodology_version=methodology_version,
+                        dirty=dirty,
+                        revalidate_phases=revalidate_phases,
+                    )
+                    entries = orchestrator.plan(
+                        _country_phase_specs(
+                            country_code,
+                            parameters.countries.get(country_code),
+                            settings.geospatial.resolutions,
+                            settings.geospatial.distance_cap_km,
+                            audit_config,
+                            tuple(settings.run.technologies),
+                            args.production,
+                            settings.figures,
+                            settings.memory.max_batch_gb,
+                            settings.wind_cf_integral,
+                        )
+                    )
+            except Exception as exc:  # noqa: BLE001 - the plan reports why it cannot be made and ends
+                logger.error("plan of %s not made: %s", country_code, exc)
+                return 1
+            print_plan(country_code, entries, target_phases, rerun_phases, args.scale, refusal)
+        return 0
 
     for country_code in countries:
         shortfall = cold_start_shortfall(country_code, target_phases, interim)
