@@ -34,7 +34,7 @@ THRESHOLDS = {  # heat reaches the threshold from the cell index 10 (7 in the me
 
 def _experiments(target=None, thresholds=None, rule=True, alternatives=()) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
-    raw["sampler"]["initial_size"] = 24
+    raw["sampler"].update({"initial_size": 24, "adopted_size": 24})
     if target is not None:
         raw["national_targets"]["ZZZ"] = {
             "wind": {**target, "alternatives": list(alternatives)},

@@ -244,7 +244,7 @@ def t_m3(ctx: BuildContext) -> None:
             T_M3,
             "uncertain_parameters",
             pd.DataFrame(rows),
-            f"Futures design for {technology}: uncertain parameters, sampled by {sampler.method} (N = {sampler.initial_size}, seed {sampler.seed}); draws are independent (U-03).",
+            f"Futures design for {technology}: uncertain parameters, sampled by {sampler.method} (N = {sampler.adopted_size}, seed {sampler.seed}); draws are independent (U-03).",
             technology=technology,
             extra={"sampler": sampler.model_dump(mode="json")},
         )

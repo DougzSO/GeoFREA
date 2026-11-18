@@ -780,7 +780,7 @@ def _build_phase_specs(
             context.require_country_params("technologies"),
             technologies,
             sampler_seed=sampler.seed,
-            sampler_size=sampler.initial_size,
+            sampler_size=sampler.adopted_size,
             max_batch_gb=max_batch_gb,
             production=production,
             elevation_sensitivity=elevation_sensitivities(technologies),

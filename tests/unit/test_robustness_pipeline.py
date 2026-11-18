@@ -48,7 +48,7 @@ IDS = np.arange(500, 500 + N_CELLS)
 
 def _experiments(**sampler) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
-    raw["sampler"].update({"initial_size": 24, **sampler})
+    raw["sampler"].update({"initial_size": 24, "adopted_size": 24, **sampler})
     # the real configuration limits wind altitude per scenario (2000/3000/none, Group 6); these tests exercise the altitude-window machinery,
     # which a technology with a reporting sensitivity still has, so wind has no scenario limit and reports 3000 m as a sensitivity here
     raw["land_availability"]["technologies"]["wind"]["elevation_max_m"].update(
@@ -645,7 +645,7 @@ def test_robustness_dir_is_under_the_phase_outputs(tmp_path, monkeypatch):
 
 def _with_rules(**rules) -> ExperimentsFile:
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
-    raw["sampler"]["initial_size"] = 24
+    raw["sampler"].update({"initial_size": 24, "adopted_size": 24})
     raw["prim"]["bootstrap_replicates"] = 6
     raw["hypothesis_rules"] = {f"H{i}": rules.get(f"H{i}") for i in range(1, 6)} | {
         name: rule for name, rule in rules.items() if not re.fullmatch(r"H\d", name)
@@ -731,7 +731,7 @@ def test_exposure_is_written_empty_and_flagged_when_no_member_carries_the_hazard
 def _with_prim(**prim) -> ExperimentsFile:
     """The shipped configuration with a bigger sample and the replicates of the bootstrap reduced (the pre-registered value is tested apart)."""
     raw = yaml.safe_load((REPO / "config" / "experiments.yaml").read_text(encoding="utf-8"))
-    raw["sampler"]["initial_size"] = 60
+    raw["sampler"].update({"initial_size": 60, "adopted_size": 60})
     raw["prim"].update({"bootstrap_replicates": 6, **prim})
     return ExperimentsFile.model_validate(raw)
 

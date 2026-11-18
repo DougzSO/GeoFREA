@@ -116,6 +116,9 @@ sampler:
   # Once converged, record the adopted size here (along with the convergence analysis
   # in the F6 phase record)
   initial_size: 500
+  # Sample size of F6 and F7 (U-04, V182; D-F6-032). Adopted from the convergence runs of COMMANDS 179 to 181: BRA and IND solar and wind and PRT wind
+  # converge at 1000; PRT solar does not converge up to the ceiling, so the largest tested size is adopted (L-252). `initial_size` only starts the doubling.
+  adopted_size: 4000
   # Ceiling of the doubling (D-F6-004): the phase sample_size_convergence stops at the last size not above it and reports no convergence
   # if the criterion was not met. The value is the author's; null makes the phase refuse to run.
   # 4000: the doubling sequence is 500, 1000, 2000, 4000. Source: author judgment, Tier 3 (V182b, COMMAND 177); recorded as L-251.

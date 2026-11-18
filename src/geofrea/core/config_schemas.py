@@ -80,6 +80,8 @@ class SamplerConfig(BaseModel):
     method: Literal["latin_hypercube"]
     seed: int
     initial_size: int = Field(gt=0)
+    # the size F6 and F7 run at: the one the convergence protocol adopted (U-04, V182, D-F6-032); `initial_size` only starts the doubling
+    adopted_size: int = Field(gt=0)
     # ceiling of the doubling of the sample size (U-04, D-F6-004); null until the author sets it
     max_size_for_convergence: int | None
     # the Jaccard distance between the top-k sets of consecutive sizes below which the size is adopted (U-04)

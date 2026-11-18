@@ -85,7 +85,7 @@ def t_m1(ctx: BuildContext) -> None:
         n_members = len(members)
     except MissingArtifactError:
         pass
-    sample = ctx.experiments.sampler.initial_size
+    sample = ctx.experiments.sampler.adopted_size
     where = positions(graph)
     member_text = f"{n_members} members" if n_members is not None else "members"
     text = (
