@@ -63,9 +63,14 @@ def test_a_phase_with_no_measurement_has_the_cap_of_the_file():
     assert cap.hard_mb == pytest.approx(1536 * 1.25)
 
 
-def test_the_phases_of_f6_to_f8_have_no_cap_of_their_own():
-    for phase in ("robustness_analysis", "external_validation", "results_synthesis"):
+def test_external_validation_and_results_synthesis_have_no_cap_of_their_own():
+    for phase in ("external_validation", "results_synthesis"):
         assert phase_cap(phase).source == "default", phase
+
+
+def test_robustness_analysis_has_the_cap_of_the_bra_peak_of_command_185():
+    cap = phase_cap("robustness_analysis")
+    assert (cap.measured_mb, cap.cap_mb) == (3174, 3968)
 
 
 # -- the rule -------------------------------------------------------------------------------------------------------------------------
