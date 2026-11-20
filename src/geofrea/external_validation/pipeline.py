@@ -1,6 +1,7 @@
 """F7b external_validation end to end for one country: existing plants against the exclusion set, the LCOE deciles and published estimates (M-F7b-01 to M-F7b-04).
 
-Reads the plant inventory (validation-only, V-06), the aligned layers through F3's `prepare_shared_layers`, F3's candidate tables (central
+Reads the plant inventory (validation-only, V-06), the aligned layers through the row sources of F3 (`prepare_stripe_inputs`; the engine runs by windows of rows
+only where a plant is, `external_validation/pixels.py`, COMMAND 187), F3's candidate tables (central
 scenario), F6's nominal LCOE at `m0` and F5's potential, and writes under `outputs/<ISO3>/external_validation/artifacts/`:
 
   - `exclusion_shares.parquet`: per technology, set of units and constraint, the capacity-weighted excluded share at the plant pixels (M-F7b-01);
@@ -17,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import shutil
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -40,6 +42,7 @@ from geofrea.external_validation.inventory import (
     pixel_of_units,
     row_sets,
 )
+from geofrea.external_validation.pixels import evaluate_at_pixels
 from geofrea.external_validation.published import comparison_rows, load_published
 from geofrea.external_validation.table_schemas import (
     VALIDATION_TABLE_SCHEMA_VERSION,
@@ -51,9 +54,9 @@ from geofrea.external_validation.table_schemas import (
 from geofrea.grid_alignment.schemas import GridAlignmentResult
 from geofrea.land_eligibility.cells import cell_id as make_cell_id
 from geofrea.land_eligibility.cells import cell_row_col
-from geofrea.land_eligibility.eligibility import eligible_fraction, valid_pixels
-from geofrea.land_eligibility.pipeline import prepare_shared_layers, technology_layers
+from geofrea.land_eligibility.pipeline import _required_resources, prepare_stripe_inputs
 from geofrea.land_eligibility.scenarios import LAND_SCENARIOS, scenario_set
+from geofrea.land_eligibility.windows import RasterRows, StripeInputs
 from geofrea.siting_layers.physical_layers import SitingLayersResult
 
 logger = logging.getLogger("geofrea.external_validation.pipeline")
@@ -198,16 +201,54 @@ def build_external_validation(
     interim = core_paths.interim(iso, "land_eligibility")
     interim.mkdir(parents=True, exist_ok=True)
     central_sets = {tech: scenario_set(la, tech, iso, "central") for tech in run_technologies}
-    shared = prepare_shared_layers(
-        la,
-        list(central_sets.values()),
-        grid_result,
-        country_gdf,
-        protected_path,
-        lakes_path,
-        rivers_path,
-        interim,
-    )
+    scratch = interim / "stripes_tmp_f7b"
+    shutil.rmtree(scratch, ignore_errors=True)
+    try:
+        inputs = prepare_stripe_inputs(
+            la,
+            list(central_sets.values()),
+            grid_result,
+            country_gdf,
+            protected_path,
+            lakes_path,
+            rivers_path,
+            interim,
+            scratch,
+        )
+        return _validate(
+            iso,
+            run_technologies,
+            siting_result,
+            production,
+            published_path,
+            config,
+            inventory,
+            inputs,
+            central_sets,
+            candidates_dir,
+            lcoe_dir,
+            potential_dir,
+            out_dir,
+        )
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _validate(
+    iso: str,
+    run_technologies: Sequence[str],
+    siting_result: SitingLayersResult,
+    production: bool,
+    published_path: Path | None,
+    config,
+    inventory,
+    inputs: StripeInputs,
+    central_sets: dict,
+    candidates_dir: Path,
+    lcoe_dir: Path,
+    potential_dir: Path,
+    out_dir: Path,
+) -> ValidationSummary:
     sets = row_sets(
         inventory.frame, config.vintage_min_start_year, config.excluded_location_accuracy
     )
@@ -215,10 +256,20 @@ def build_external_validation(
     exclusion, enrichment, unit_rows = [], [], []
     per_tech: dict[str, TechValidation] = {}
     for tech in run_technologies:
-        layers, _ = technology_layers(shared, tech, siting_result)
-        eligible, excl = eligible_fraction(layers, central_sets[tech])
-        excluded = {**excl, "combined": (1.0 - eligible).astype("float32")}
-        valid = valid_pixels(layers)
+        resources = {
+            name: RasterRows(path, name, "float32")
+            for name, path in _required_resources(tech, siting_result.layers).items()
+        }
+        unit_frames = {
+            name: _units_frame(frame, tech, inputs.transform, inputs.country_mask)
+            for name, frame in sets.items()
+        }
+        on_grid = [u[u["in_grid"]] for u in unit_frames.values()]
+        pixel_rows = np.concatenate([u["row"].to_numpy(dtype="int64") for u in on_grid])
+        pixel_cols = np.concatenate([u["col"].to_numpy(dtype="int64") for u in on_grid])
+        excluded, valid = evaluate_at_pixels(
+            inputs, resources, central_sets[tech], pixel_rows, pixel_cols
+        )
         candidates = pd.read_parquet(
             candidates_dir / f"candidates_{tech}__central.parquet",
             columns=["cell_id", "eligible_area_km2"],
@@ -240,8 +291,7 @@ def build_external_validation(
             ranked["eligible_area_km2"].to_numpy(),
             ranked["cell_id"].to_numpy(),
         )
-        for name, frame in sets.items():
-            units = _units_frame(frame, tech, shared.transform, shared.country_mask)
+        for name, units in unit_frames.items():
             if units.empty:
                 logger.warning("%s %s [%s]: no operating units in the inventory", iso, tech, name)
             exclusion += exclusion_rows(tech, name, units, excluded, valid)
