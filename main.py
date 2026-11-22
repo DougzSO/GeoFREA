@@ -249,6 +249,17 @@ def _read_methodology_version(path: Path) -> str:
     return match.group(1)
 
 
+def _summary_artifacts_dir(context: PhaseContext) -> Path:
+    """Where the phase summaries (`<key>.json`) of a country go: `artifacts` at the default scale, `artifacts__<scale id>` at another.
+
+    Every phase writes one, including the ones that do not depend on the cell size, so a run at another scale never overwrites the
+    file a manifest of the default scale hashes (A-08, D-core of COMMAND 190A).
+    """
+    scale = active_scale()
+    name = "artifacts" if scale.is_default else f"artifacts__{scale.scale_id}"
+    return context.outputs_dir / context.country_code / name
+
+
 def _register_json_artifact(
     context: PhaseContext, key: str, output: BaseModel, schema_version: str = "1.0"
 ) -> None:
@@ -261,7 +272,7 @@ def _register_json_artifact(
     registry (METHODOLOGY A-02) — it does not replace or duplicate the
     underlying raster/vector writers.
     """
-    artifact_dir = context.outputs_dir / context.country_code / "artifacts"
+    artifact_dir = _summary_artifacts_dir(context)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / f"{key}.json"
     write_text_atomic(
@@ -550,7 +561,7 @@ def _register_aligned_rasters(context: PhaseContext, result: GridAlignmentResult
     ):  # absent only in a stub; the phase's `produces` makes a missing key fail loud
         grid_definition = write_reference_grid_artifact(
             result.grid,
-            context.outputs_dir / context.country_code / "artifacts" / "reference_grid.json",
+            _summary_artifacts_dir(context) / "reference_grid.json",
         )
         context.register_artifact("reference_grid", grid_definition, "1.0")
 

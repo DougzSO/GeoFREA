@@ -725,6 +725,30 @@ def test_the_scale_check_runs_every_phase_and_leaves_the_default_scale_untouched
 
 
 @pytest.mark.synthetic
+def test_a_run_at_another_scale_changes_no_sha256_recorded_by_the_default_scale_manifest(zzz, zzz_fine):
+    """COMMAND 190A: the phase summaries of the 0.1 degree run go to `artifacts__0p1deg`; the 0.05 degree manifest still matches the disk."""
+    import hashlib
+
+    data = zzz_fine[0]
+    country = data / "outputs" / "ZZZ"
+    default = json.loads((country / "manifest.json").read_text(encoding="utf-8"))
+    fine = json.loads((country / "manifest__0p1deg.json").read_text(encoding="utf-8"))
+    for key, entry in default["artifacts"].items():
+        path = data / entry["path"]["rel"]
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["sha256"], key
+    summaries = [
+        (key, data / entry["path"]["rel"])
+        for key, entry in fine["artifacts"].items()
+        if (data / entry["path"]["rel"]).suffix == ".json"
+        and (data / entry["path"]["rel"]).parent.name.startswith("artifacts")
+    ]
+    assert summaries
+    assert all(path.parent == country / "artifacts__0p1deg" for _key, path in summaries), [
+        key for key, path in summaries if path.parent != country / "artifacts__0p1deg"
+    ]
+
+
+@pytest.mark.synthetic
 @pytest.mark.parametrize("tech", ["solar", "wind"])
 @pytest.mark.parametrize("scenario", SCENARIOS)
 def test_the_coarse_cells_hold_the_same_land_and_eligible_area_as_the_fine_cells(
