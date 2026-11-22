@@ -68,6 +68,12 @@
     "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "ran_clean", "F7": "ran_clean", "F7b": "not_run"},
     "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_with_issues", "F6": "ran_clean", "F7": "ran_with_issues", "F7b": "ran_with_issues"}
   },
+  "sensitivity_runs": {
+    "command": "COMMAND 189",
+    "date": "2026-11-22",
+    "window_2071_2100": "done inside robustness_analysis (role sensitivity) in PRT, IND and BRA at both scales; tables h1 to h4 present",
+    "scale_0p1deg": "done, F3 to F7 in PRT, IND and BRA with --real-run; manifest__0p1deg.json written; H1 to H3 verdicts of the primary variant equal to those of 0.05 degree in all 12 country, technology and window rows; config and code fingerprints equal in F6 and F7; peak RSS BRA 1532 MB (robustness_analysis)"
+  },
   "pending_verifications": [
     {
       "id": "PV-77",
