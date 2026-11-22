@@ -72,7 +72,10 @@
     "command": "COMMAND 189",
     "date": "2026-11-22",
     "window_2071_2100": "done inside robustness_analysis (role sensitivity) in PRT, IND and BRA at both scales; tables h1 to h4 present",
-    "scale_0p1deg": "done, F3 to F7 in PRT, IND and BRA with --real-run; manifest__0p1deg.json written; H1 to H3 verdicts of the primary variant equal to those of 0.05 degree in all 12 country, technology and window rows; config and code fingerprints equal in F6 and F7; peak RSS BRA 1532 MB (robustness_analysis)"
+    "scale_0p1deg": "done, F3 to F7 in PRT, IND and BRA with --real-run; manifest__0p1deg.json written; H1 to H3 verdicts of the primary variant equal to those of 0.05 degree in all 12 country, technology and window rows; config and code fingerprints equal in F6 and F7; peak RSS BRA 1532 MB (robustness_analysis)",
+    "v03_check": "COMMAND 189A: V-03 holds in the robustness_analysis tables of both scales, 3 countries x 2 technologies x 2 windows (24 table sets, 0 violations): MR, MR_clim, MR_tech >= 0; SR in [0,1]; ranked + climate_fragile = F7 set (h1 n_cells); fragile cells have no finite MR or rank; ranked cells have finite MR and unique rank; L* of every future finite and positive; MR of h3_sites equals robustness MR. The per-cell r of each future is not persisted, so r >= 0 and the zero-regret cell per future rest on the evaluator check (evaluator.py, negative regret raises) and on L* of futures_<tech>",
+    "preregistration": "digest_live equals digest_tag in manifest.json and manifest__0p1deg.json of PRT, IND and BRA (the manifest holds one record, compared before each of lcoe_modeling and robustness_analysis; the guard refuses the phase when they differ)",
+    "production_flag": "main.py --production only audits and refuses (core.production.audit_parameters and enforce_production: proxy, null value, missing range; assert_curve_usable and load_inventory refuse synthetic inputs); it changes no computed value. The 0.1 degree runs were made without it (the audit had no errors in the three runs) and their provenance records production=false, the 0.05 degree ones production=true; fingerprints equal, so nothing was rerun"
   },
   "pending_verifications": [
     {
