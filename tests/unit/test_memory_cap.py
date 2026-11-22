@@ -32,7 +32,16 @@ def _cap(cap_mb: float = 1000.0, reserve_mb: float = 300.0) -> PhaseCap:
 
 @pytest.mark.parametrize(
     ("peak", "cap"),
-    [(1579, 1984), (1676, 2112), (1018, 1280), (1207, 1536), (338, 448), (657, 832), (64, 128), (512, 640)],
+    [
+        (1579, 1984),
+        (1676, 2112),
+        (1018, 1280),
+        (1207, 1536),
+        (338, 448),
+        (657, 832),
+        (64, 128),
+        (512, 640),
+    ],
 )
 def test_the_cap_is_125_percent_of_the_peak_rounded_up_to_64_mb(peak, cap):
     assert cap_from_peak(peak) == cap
@@ -63,9 +72,21 @@ def test_a_phase_with_no_measurement_has_the_cap_of_the_file():
     assert cap.hard_mb == pytest.approx(1536 * 1.25)
 
 
-def test_external_validation_and_results_synthesis_have_no_cap_of_their_own():
-    for phase in ("external_validation", "results_synthesis"):
-        assert phase_cap(phase).source == "default", phase
+def test_results_synthesis_has_no_cap_of_its_own():
+    assert phase_cap("results_synthesis").source == "default"
+
+
+def test_the_phases_of_f6_to_f7b_have_the_cap_of_their_bra_peak_of_commands_179_to_188a():
+    expected = {
+        "lcoe_modeling": (1566, 1984),
+        "sample_size_convergence": (1455, 1856),
+        "external_validation": (3093, 3904),
+        "lcoe_maps": (2387, 3008),
+        "robustness_maps": (2569, 3264),
+    }
+    for phase, (peak, cap_mb) in expected.items():
+        cap = phase_cap(phase)
+        assert (cap.measured_mb, cap.cap_mb) == (peak, cap_mb), phase
 
 
 def test_robustness_analysis_has_the_cap_of_the_bra_peak_of_command_185():
@@ -91,7 +112,11 @@ def test_a_phase_above_the_hard_limit_stops_whatever_the_free_memory():
 
 
 def test_the_excess_over_the_cap_is_none_when_within_and_the_difference_when_above():
-    assert over_cap(_cap(), 1000) is None and over_cap(None, 5000) is None and over_cap(_cap(), None) is None
+    assert (
+        over_cap(_cap(), 1000) is None
+        and over_cap(None, 5000) is None
+        and over_cap(_cap(), None) is None
+    )
     assert over_cap(_cap(), 1234.56) == 234.6
 
 
@@ -101,7 +126,11 @@ def test_the_excess_over_the_cap_is_none_when_within_and_the_difference_when_abo
 def _hold(sampler_mb: float, monkeypatch) -> None:
     from geofrea.core import peak_memory
 
-    monkeypatch.setattr(peak_memory, "_current_and_peak_bytes", lambda _p: (int(sampler_mb * MB), int(sampler_mb * MB)))
+    monkeypatch.setattr(
+        peak_memory,
+        "_current_and_peak_bytes",
+        lambda _p: (int(sampler_mb * MB), int(sampler_mb * MB)),
+    )
 
 
 def test_a_phase_over_the_hard_limit_is_stopped_with_the_reason(monkeypatch):
@@ -110,10 +139,16 @@ def test_a_phase_over_the_hard_limit_is_stopped_with_the_reason(monkeypatch):
     with pytest.raises(MemoryCapExceeded, match="hard limit of 1250 MB"), peak:
         for _ in range(400):
             time.sleep(0.01)
-    assert peak.stopped_by_cap and peak.peak_rss_mb == pytest.approx(1300) and peak.peak_over_cap_mb == 300
+    assert (
+        peak.stopped_by_cap
+        and peak.peak_rss_mb == pytest.approx(1300)
+        and peak.peak_over_cap_mb == 300
+    )
 
 
-def test_a_phase_between_the_cap_and_the_hard_limit_stops_only_when_the_free_memory_is_short(monkeypatch):
+def test_a_phase_between_the_cap_and_the_hard_limit_stops_only_when_the_free_memory_is_short(
+    monkeypatch,
+):
     _hold(1100, monkeypatch)
     with PhasePeak(interval_s=0.005, cap=_cap(), available_mb=lambda: 5000) as roomy:
         time.sleep(0.1)
@@ -128,7 +163,11 @@ def test_a_phase_within_its_cap_is_not_touched_and_has_no_excess(monkeypatch):
     _hold(900, monkeypatch)
     with PhasePeak(interval_s=0.005, cap=_cap(), available_mb=lambda: 0) as peak:
         time.sleep(0.05)
-    assert peak.stopped_by_cap is None and peak.peak_over_cap_mb is None and peak.peak_rss_mb == pytest.approx(900)
+    assert (
+        peak.stopped_by_cap is None
+        and peak.peak_over_cap_mb is None
+        and peak.peak_rss_mb == pytest.approx(900)
+    )
 
 
 def test_without_a_cap_nothing_is_enforced_and_nothing_is_recorded(monkeypatch):
@@ -153,7 +192,9 @@ def test_a_stop_that_arrives_after_the_block_ended_is_not_raised(monkeypatch):
 
 
 def _phase_cap_of(cap_mb: float):
-    return lambda name: PhaseCap(name, cap_mb, cap_mb * 1.25, 300.0, 100.0, "2026-01-01", "measured")
+    return lambda name: PhaseCap(
+        name, cap_mb, cap_mb * 1.25, 300.0, 100.0, "2026-01-01", "measured"
+    )
 
 
 def _run_one(tmp_path, monkeypatch, *, caps: bool, cap_mb: float, hold_mb: float):
@@ -164,14 +205,20 @@ def _run_one(tmp_path, monkeypatch, *, caps: bool, cap_mb: float, hold_mb: float
     inner = spec.run
 
     def slow(context):
-        for _ in range(60):  # long enough for the sampler to look at the process several times, and for a stop to be delivered
+        for _ in range(
+            60
+        ):  # long enough for the sampler to look at the process several times, and for a stop to be delivered
             time.sleep(0.005)
         return inner(context)
 
     object.__setattr__(spec, "run", slow)
     monkeypatch.setattr(orchestrator, "phase_cap", _phase_cap_of(cap_mb))
-    monkeypatch.setattr(peak_memory, "_current_and_peak_bytes", lambda _p: (int(hold_mb * MB), int(hold_mb * MB)))
-    monkeypatch.setattr(peak_memory.PhasePeak, "__init__", _fast_init(peak_memory.PhasePeak.__init__))
+    monkeypatch.setattr(
+        peak_memory, "_current_and_peak_bytes", lambda _p: (int(hold_mb * MB), int(hold_mb * MB))
+    )
+    monkeypatch.setattr(
+        peak_memory.PhasePeak, "__init__", _fast_init(peak_memory.PhasePeak.__init__)
+    )
     o = _orchestrator(tmp_path, ["alpha"])
     o.memory_caps = caps
     o.run([spec])
@@ -185,7 +232,9 @@ def _fast_init(original):
     return init
 
 
-def test_the_manifest_records_the_cap_and_the_excess_of_a_phase_above_its_cap(tmp_path, monkeypatch):
+def test_the_manifest_records_the_cap_and_the_excess_of_a_phase_above_its_cap(
+    tmp_path, monkeypatch
+):
     entry = _run_one(tmp_path, monkeypatch, caps=True, cap_mb=1000, hold_mb=1100)
     assert entry.status == "success" and entry.memory_cap_mb == 1000 and entry.peak_over_cap == 100
 
