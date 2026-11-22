@@ -59,6 +59,8 @@ from geofrea.land_eligibility.scenarios import LAND_SCENARIOS, scenario_set
 from geofrea.land_eligibility.windows import RasterRows, StripeInputs
 from geofrea.siting_layers.physical_layers import SitingLayersResult
 
+NO_LCOE_REASON = "pv_zone_or_distance_missing_in_f6"
+
 logger = logging.getLogger("geofrea.external_validation.pipeline")
 
 PROVENANCE_KEY = "geofrea_validation_provenance"
@@ -104,6 +106,7 @@ class TechValidation(BaseModel):
     mean_combined_excluded_share: float | None
     enrichment_ratio_lowest: dict[int, float | None]
     capacity_share_non_candidate: float | None
+    n_cells_no_lcoe: int = 0  # candidate cells left out of the deciles (L-253)
 
 
 class ValidationSummary(BaseModel):
@@ -147,6 +150,47 @@ def _units_frame(
     return units
 
 
+def merge_candidate_lcoe(
+    candidates: pd.DataFrame, lcoe_all: pd.DataFrame, technology: str
+) -> tuple[pd.DataFrame, dict | None]:
+    """The candidate cells with their nominal LCOE at `m0`, without the cells F6 left out (L-253, D-F7b-009).
+
+    F6 leaves out a cell whose PV zone or distance is missing, so such a cell has no F6 row in any member while F5 keeps it as a candidate.
+    That cell is left out of the deciles (numerator and denominator of M-F7b-02) and counted. A cell that has an F6 row in another member
+    but not at `m0` is another cause and stays an error.
+
+    Args:
+        candidates: `cell_id` and `eligible_area_km2` of the F3 candidates.
+        lcoe_all: `cell_id`, `member`, `lcoe_nominal` of every F6 member.
+
+    Returns:
+        The candidates with `lcoe_nominal`, and the count of the cells left out (None when none).
+
+    Raises:
+        ValidationInputError: a candidate has no F6 row at `m0` but has one in another member.
+    """
+    at_reference = lcoe_all[lcoe_all["member"].astype(str) == REFERENCE_MEMBER_ID]
+    merged = candidates.merge(
+        at_reference[["cell_id", "lcoe_nominal"]], on="cell_id", how="left", validate="one_to_one"
+    )
+    missing = merged["lcoe_nominal"].isna()
+    if not missing.any():
+        return merged, None
+    partial = merged.loc[missing, "cell_id"].isin(set(lcoe_all["cell_id"].tolist()))
+    if partial.any():
+        raise ValidationInputError(
+            f"{technology}: {int(partial.sum())} candidates have no nominal LCOE at {REFERENCE_MEMBER_ID} "
+            "although F6 has the cell in another member"
+        )
+    left_out = merged[missing]
+    summary = {
+        "reason": NO_LCOE_REASON,
+        "n_cells": len(left_out),
+        "eligible_area_km2": float(left_out["eligible_area_km2"].sum()),
+    }
+    return merged[~missing], summary
+
+
 def build_external_validation(
     iso: str,
     technologies: TechnologiesFile,
@@ -173,7 +217,8 @@ def build_external_validation(
     Raises:
         InventoryError: the plant inventory is incomplete or synthetic in a production run.
         ValidationMissingInputError: the inventory, or an F3, F5 or F6 input, is absent; every missing item is listed.
-        ValidationInputError: a candidate has no nominal LCOE row at `m0`.
+        ValidationInputError: a candidate has no nominal LCOE row at `m0` although F6 has its cell in another member. A cell with
+            no F6 row in any member is left out of the deciles and counted (L-253).
     """
     unknown = sorted(set(run_technologies) - set(technologies.technologies))
     if unknown:
@@ -254,6 +299,7 @@ def _validate(
     )
 
     exclusion, enrichment, unit_rows = [], [], []
+    excluded_no_lcoe: dict[str, dict] = {}
     per_tech: dict[str, TechValidation] = {}
     for tech in run_technologies:
         resources = {
@@ -274,16 +320,21 @@ def _validate(
             candidates_dir / f"candidates_{tech}__central.parquet",
             columns=["cell_id", "eligible_area_km2"],
         )
-        lcoe = pd.read_parquet(
+        lcoe_all = pd.read_parquet(
             lcoe_dir / f"lcoe_summary_{tech}.parquet", columns=["cell_id", "member", "lcoe_nominal"]
         )
-        lcoe = lcoe[lcoe["member"].astype(str) == REFERENCE_MEMBER_ID]
-        candidates = candidates.merge(
-            lcoe[["cell_id", "lcoe_nominal"]], on="cell_id", how="left", validate="one_to_one"
-        )
-        if candidates["lcoe_nominal"].isna().any():
-            raise ValidationInputError(
-                f"{tech}: {int(candidates['lcoe_nominal'].isna().sum())} candidates have no nominal LCOE at {REFERENCE_MEMBER_ID}"
+        all_candidates = candidates  # M-F7b-01 and M-F7b-03 keep every candidate cell
+        candidates, left_out = merge_candidate_lcoe(candidates, lcoe_all, tech)
+        if left_out is not None:
+            excluded_no_lcoe[tech] = left_out
+            logger.warning(
+                "%s %s: %d candidate cells (%.1f km2 eligible) have no F6 LCOE in any member and are left out of the "
+                "enrichment deciles (%s, L-253)",
+                iso,
+                tech,
+                left_out["n_cells"],
+                left_out["eligible_area_km2"],
+                NO_LCOE_REASON,
             )
         ranked = candidates[np.isfinite(candidates["lcoe_nominal"])].reset_index(drop=True)
         ranked["decile"] = weighted_deciles(
@@ -300,9 +351,10 @@ def _validate(
             )
             if name == OPERATING_SET:
                 unit_rows.append(
-                    _unit_table(tech, units, excluded, valid, ranked, candidates["cell_id"])
+                    _unit_table(tech, units, excluded, valid, ranked, all_candidates["cell_id"])
                 )
                 per_tech[tech] = _tech_summary(tech, exclusion, enrichment, units, config)
+                per_tech[tech].n_cells_no_lcoe = excluded_no_lcoe.get(tech, {}).get("n_cells", 0)
 
     potentials = {
         tech: {
@@ -335,6 +387,7 @@ def _validate(
             "excluded_location_accuracy": config.excluded_location_accuracy,
             "enrichment_lowest_deciles": config.enrichment_lowest_deciles,
             "reference_member": REFERENCE_MEMBER_ID,
+            "candidates_without_lcoe": excluded_no_lcoe,
             "interpretation": INTERPRETATION,
             "production": production,
         },

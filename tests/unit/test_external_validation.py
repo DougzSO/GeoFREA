@@ -391,3 +391,67 @@ def test_the_real_countries_fail_loud_listing_every_missing_input_and_write_noth
         assert any(f"lcoe_summary_{tech}" in item for item in listed)
         assert sum(f"potential_{tech}__" in item for item in listed) == 3
     assert not (tmp_path / "outputs").exists()
+
+
+def _lcoe(rows):
+    return pd.DataFrame(rows, columns=["cell_id", "member", "lcoe_nominal"])
+
+
+def test_a_candidate_cell_with_no_f6_row_in_any_member_is_left_out_and_counted():
+    """L-253, D-F7b-009: F6 leaves out a cell whose PV zone or distance is missing."""
+    from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+    from geofrea.external_validation.pipeline import NO_LCOE_REASON, merge_candidate_lcoe
+
+    candidates = pd.DataFrame({"cell_id": [1, 2, 3], "eligible_area_km2": [10.0, 5.0, 2.0]})
+    lcoe = _lcoe([(1, REFERENCE_MEMBER_ID, 40.0), (3, REFERENCE_MEMBER_ID, 50.0), (3, "m1", 51.0)])
+    kept, left_out = merge_candidate_lcoe(candidates, lcoe, "solar")
+    assert kept["cell_id"].tolist() == [1, 3]
+    assert left_out == {"reason": NO_LCOE_REASON, "n_cells": 1, "eligible_area_km2": 5.0}
+    assert not kept["lcoe_nominal"].isna().any()
+
+
+def test_with_an_lcoe_for_every_candidate_nothing_is_left_out():
+    from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+    from geofrea.external_validation.pipeline import merge_candidate_lcoe
+
+    candidates = pd.DataFrame({"cell_id": [1, 2], "eligible_area_km2": [1.0, 2.0]})
+    lcoe = _lcoe([(1, REFERENCE_MEMBER_ID, 40.0), (2, REFERENCE_MEMBER_ID, 41.0)])
+    kept, left_out = merge_candidate_lcoe(candidates, lcoe, "wind")
+    assert len(kept) == 2 and left_out is None
+
+
+def test_a_cell_with_an_f6_row_in_another_member_but_not_at_the_reference_member_stays_an_error():
+    from geofrea.climate_forcing.members import REFERENCE_MEMBER_ID
+    from geofrea.external_validation.pipeline import ValidationInputError, merge_candidate_lcoe
+
+    candidates = pd.DataFrame({"cell_id": [1, 2], "eligible_area_km2": [1.0, 2.0]})
+    lcoe = _lcoe([(1, REFERENCE_MEMBER_ID, 40.0), (2, "m1", 41.0)])
+    with pytest.raises(ValidationInputError, match="another member"):
+        merge_candidate_lcoe(candidates, lcoe, "solar")
+
+
+def test_the_exclusion_leaves_m_f7b_01_as_it_is_and_keeps_the_unit_of_a_left_out_cell_a_candidate():
+    from geofrea.external_validation.pipeline import _unit_table
+
+    units = pd.DataFrame(
+        {
+            "gem_unit_id": ["a", "b"],
+            "capacity_mw": [10.0, 20.0],
+            "start_year": [2015.0, 2016.0],
+            "location_accuracy": ["exact", "exact"],
+            "lat": [0.0, 0.0],
+            "lon": [0.0, 0.0],
+            "in_grid": [True, True],
+            "row": [0, 1],
+            "col": [0, 0],
+            "cell_id": pd.array([1, 2], dtype="Int64"),
+        }
+    )
+    keys = ("E1", "E2", "E3", "E4", "E5", "E6", "combined")
+    excluded = {k: np.zeros((2, 1), dtype=bool) for k in keys}
+    valid = np.ones((2, 1), dtype=bool)
+    ranked = pd.DataFrame({"cell_id": [1], "decile": [3]})  # cell 2 was left out of the deciles
+    table = _unit_table("solar", units, excluded, valid, ranked, pd.Series([1, 2]))
+    assert table["candidate"].tolist() == [True, True]
+    assert table["decile"].iloc[0] == 3 and pd.isna(table["decile"].iloc[1])
+    assert table["excluded_combined"].tolist() == [0.0, 0.0]
