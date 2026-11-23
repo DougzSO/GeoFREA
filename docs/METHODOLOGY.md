@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 19.4.14 |
+| Version | 19.4.15 |
 | Adopted | 2026-09-15 |
-| Updated | 2026-11-18 |
+| Updated | 2026-11-23 |
 | Owner | Douglas |
 | Status | Adopted for implementation. Static document. |
 
@@ -368,7 +368,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
 
 ### F8 results_synthesis
 
-- **M-F8-01.** F8 reads persisted artifacts and never recomputes a scientific quantity.
+- **M-F8-01.** F8 reads persisted artifacts and never recomputes a scientific quantity. The one derived number is the H1 reference value `p_k^2 = (k / n)^2` (M-F7-07), computed from the `k` and `n_cells` that F7 persists and checked against the `reference` column F7 stored (DEC-096): arithmetic of two stored counts, not a recomputed quantity.
 - **M-F8-02.** F8 produces every output of Section 10 into `outputs/thesis/`, with a fixed style and one script per output.
 - **M-F8-03. Cross-country synthesis (T-R8).** Text in `docs/thesis/methods/synthesis_and_scenario_discovery.tex`. The synthesis reports what was observed and issues no aggregate verdict and no score (decision D6 of the F8 design report, closed): with three countries and two technologies a majority rule would present a few cases as a general conclusion and the threshold would weigh more than the evidence. It produces, from the persisted results (M-F8-01): (i) the profile of each country and technology (`hypothesis_profiles`, a structured JSON with a `schema_version`, one record per country and technology, the unit from which the thesis, the articles and a per-country platform page are built): the verdict of each hypothesis and its numbers (H1 `C_k`, `V_k` and `p_k^2`; H2 `O`, `O_ref` and `Delta_z`; H3 `D`, `D_ref`, `Pi` and `B`; H4 `D_clim`, `D_tec`, `rho` and the profile, with the verdict of the technology; H5 `E_0`, `G`, `H_0`, `R_loss` and `R_exp`), the size of the candidate set, `k`, and for every number its range across the sensitivity variants of its hypothesis (including the 2071-2100 window and the other cell scale where they exist) and the count of variants whose verdict differs from the primary one; (ii) the summary by hypothesis and technology: the number of countries in each verdict class (supported, partially supported, not supported, not testable and the special statuses of H5) and the label `consistent` (every testable case has the same verdict), `context-dependent` (the testable cases differ) or `not assessable` (fewer than two cases are testable). The partial classes of H1 and of H5 are kept distinct; a case without a verdict (no target, target not met at reference, no exposure) is not testable and is never a disagreement; H4 is shown as the verdict per technology with the three country profiles. A context-dependent pattern is a result: the conclusion does not transfer between national contexts without evidence from the context. The labels and the minimum number of testable cases are `synthesis` in `experiments.yaml` (pre-registered in OQ-050, T-R8, 2026-10-14). F8 also writes a readable summary per country (Markdown and LaTeX) with the numbers of H1 to H5 and their ranges.
 
@@ -430,6 +430,7 @@ Definitions for one country and technology. `C` = candidate cells of the central
   - `raw/<source>/<ISO3|_global>/`: raw data, fetched (GADM, HydroSHEDS, GEM trackers, WDPA, GWA) or placed from the local database (`elevation/<ISO3>`, `population/<ISO3>`, `infrastructure_grid/<ISO3>`, `infrastructure_roads/_global`, `land_cover/<ISO3>`, `solar_potential/_global`); the pipeline reads and writes nothing outside GEOFREA_DATA_DIR
   - `interim/<ISO3>/<layer>/`: intermediate processing caches
   - `outputs/<ISO3>/manifest.json`: run manifest per country
+  - `outputs/<ISO3>/artifacts/<key>.json` (`artifacts__<scale>/<key>.json` at a scale other than 0.05 degree): the summary of each phase, the artifact the manifest hashes (D-core-055)
   - `outputs/<ISO3>/<phase>/<kind>/`: phase outputs (artifacts, figures, reports); a run at a scale other than 0.05 degree (M-F3-06) writes the phases that depend on the cell size (F3 onward, `overview`) under `<phase>__<scale>` (for example `land_eligibility__0p1deg`) and its manifest as `manifest__<scale>.json`
   - `outputs/thesis/`: F8 only
   - `logs/<ISO3>/`: per-country run logs
@@ -590,6 +591,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 19.4.15 | 2026-11-23 | PATCH (COMMAND 191A; no code change that affects a result): M-F8-01 names the one number F8 derives, the H1 reference value `p_k^2 = (k / n)^2` from the counts F7 persists (DEC-096); A-08 states where the phase summaries go, `artifacts/` at the default scale and `artifacts__<scale>/` at another (D-core-055). Items altered: M-F8-01, A-08. |
 | 19.4.14 | 2026-11-18 | PATCH (COMMAND 175; no code changes that affect a result): new rule M-F7-21 with the sensitivity axes of `tau`, `cf_min`, `q_ref` and `top_k` in v1.0 (DEC-094; OQ-094 and OQ-008 closed): no configuration key is created and the digest of the pre-registration does not change. Items altered: M-F7-21 (new). |
 | 19.4.13 | 2026-11-18 | PATCH (COMMAND 174; no code changes that affect a result): M-F4-05 defines `rx5day_mm` as the Rx5day index of the ETCCDI (annual maximum of the precipitation accumulated in 5 consecutive days, mm, averaged over the years of the window; Zhang et al., 2011); M-F7-07 (H5b) states that the channel set of v1.0 is empty, because no channel has an exposure threshold with a source, so H5b and T-R10 are not available in v1.0 (DEC-093; OQ-051 and OQ-115 closed). Items altered: M-F4-05, M-F7-07. |
 | 19.4.12 | 2026-11-17 | PATCH (COMMAND 162R5; no code changes that affect a result): M-F7-17 states that the published IRENA 2024 national LCOE lies inside the registered `tau` range, which is the `tau` sensitivity of H5, instead of calling it a registered sensitivity (DEC-090 a). Items altered: M-F7-17. |

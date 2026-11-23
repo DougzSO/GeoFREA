@@ -23,6 +23,7 @@ from geofrea.results_synthesis.output import (
     write_figure,
     write_table,
 )
+from geofrea.results_synthesis.synthesis import _check_h1_reference, h1_reference
 from geofrea.robustness_analysis.table_schemas import ROBUSTNESS_TABLE_SCHEMA_VERSION
 
 T_O1 = "T-O1"
@@ -137,9 +138,9 @@ def _verdict_row(hypothesis: str, row: pd.Series) -> dict:
         return common | {
             "statistic": "h1a_core_share",
             "value": row["c_k"],
-            "reference": row["reference"],
+            "reference": h1_reference(row["k"], row["n_cells"]),
             "threshold": row["alpha"],
-            "rule": "supported if C_k >= alpha and V_k >= beta; partially supported if exactly one holds",
+            "rule": "supported if C_k >= alpha and V_k >= beta; partially supported if exactly one holds; the reference value is p_k^2 = (k / n)^2, derived in F8 from the k and n of F7",
             "statistic_2": "h1b_vulnerable_share",
             "value_2": row["v_k"],
             "threshold_2": row["beta"],
@@ -205,6 +206,8 @@ def t_r6(ctx: BuildContext) -> None:
                         continue
                     summary = reader.table(key, _VERSIONS)
                     if len(summary):
+                        if name == "h1":  # p_k^2 beside C_k (DEC-096, M-F8-01)
+                            summary = summary.assign(p_k2=_check_h1_reference(summary).to_numpy())
                         summaries[name].append(summary.assign(scale=reader.scale_id, role=role))
                     else:
                         ctx.skip(

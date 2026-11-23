@@ -247,3 +247,67 @@ def test_a_rerun_of_the_f7_of_one_country_makes_the_h4_verdict_stale_until_it_ru
     del manifest["inputs"]  # a manifest written before the inputs were recorded
     manifest_file().write_text(json.dumps(manifest), encoding="utf-8")
     assert "records no inputs" in stale_cross_country_inputs(manifest_file(), scale)[0]
+
+
+@pytest.mark.unit
+def test_a_country_without_a_manifest_or_an_h4_country_table_makes_cross_country_h4_refuse(
+    tmp_path, monkeypatch
+):
+    """COMMAND 191A: `main.require_h4_inputs` refuses before the phase writes anything; an empty table that F7 wrote is not an absent one."""
+    import main
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    _all_roles(tmp_path, "AAA", (0.12, 0.38))
+    _all_roles(tmp_path, "EEE", None, empty_reason="top_k_percent is null")
+    main.require_h4_inputs(["AAA", "EEE"], ("solar",))  # an empty table is unavailable, not absent
+    with pytest.raises(ThesisInputError, match="NOP: the country has no manifest"):
+        main.require_h4_inputs(["AAA", "NOP"], ("solar",))
+    _country(tmp_path, "BBB", "solar", "core", (0.42, 0.08))  # BBB lacks the sensitivity window
+    with pytest.raises(
+        ThesisInputError, match="BBB: the manifest registers no h4_country_solar__sensitivity"
+    ):
+        main.require_h4_inputs(["AAA", "BBB"], ("solar",))
+    assert not manifest_file().exists()
+
+
+@pytest.mark.unit
+def test_a_verdict_that_read_fewer_countries_than_the_manifests_register_is_left_out_by_f8(
+    tmp_path, monkeypatch
+):
+    """COMMAND 191A: the verdict of an invocation with one country matches its own table; F8 refuses it while the others register tables."""
+    from geofrea.results_synthesis.output import _countries_left_out
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    for iso, d in (("PRT", (0.12, 0.38)), ("IND", (0.42, 0.08)), ("BRA", (0.25, 0.25))):
+        _all_roles(tmp_path, iso, d)
+    scale = active_scale().scale_id
+    build_h4_verdict(["BRA"], ("solar",))
+    assert stale_cross_country_inputs(manifest_file(), scale) == []  # the hash check cannot see it
+    left_out = _countries_left_out(manifest_file(), scale)
+    assert {text.split(":")[0] for text in left_out} == {"IND", "PRT"}
+    assert "read only BRA" in left_out[0]
+    build_h4_verdict(["PRT", "IND", "BRA"], ("solar",))
+    assert _countries_left_out(manifest_file(), scale) == []
+
+
+@pytest.mark.unit
+def test_an_invocation_with_only_bra_reads_the_h4_country_tables_of_the_three_countries(
+    tmp_path, monkeypatch
+):
+    """COMMAND 191A: PRT and IND are done; `main.py BRA` still compares the three countries (`main.h4_countries`)."""
+    import main
+
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(tmp_path))
+    for iso, d in (("PRT", (0.12, 0.38)), ("IND", (0.42, 0.08)), ("BRA", (0.25, 0.25))):
+        _all_roles(tmp_path, iso, d)
+    config = {"PRT": {}, "IND": {}, "BRA": {}, "ZZZ": {"synthetic_fixture_root": "x"}}
+    chosen = main.h4_countries(["BRA"], ["PRT", "IND", "BRA"], config)
+    assert chosen == ["PRT", "IND", "BRA"]
+    main.require_h4_inputs(chosen, ("solar",))
+    summary = build_h4_verdict(chosen, ("solar",))
+    assert [(v.n_countries, v.n_available, v.verdict) for v in summary.verdicts] == [
+        (3, 3, "supported"),
+        (3, 3, "supported"),
+    ]
+    # the fixture country is compared only with the countries of the invocation
+    assert main.h4_countries(["ZZZ"], ["PRT", "IND", "BRA"], config) == ["ZZZ"]

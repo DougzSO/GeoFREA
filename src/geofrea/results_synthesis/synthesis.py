@@ -159,6 +159,24 @@ def verdict_class(hypothesis: str, row: pd.Series, separate: Sequence[str]) -> s
     return verdict
 
 
+def h1_reference(k: float, n: float) -> float:
+    """The H1 reference value `p_k^2` with `p_k = k / n` (M-F7-07): the expected `C_k` if the three rankings were independent.
+
+    F8 derives it from the two counts that F7 persists (`k` and `n_cells` of `h1_summary`); it is arithmetic of two stored numbers and not a
+    recomputed scientific quantity (M-F8-01, DEC-096).
+    """
+    return (float(k) / float(n)) ** 2
+
+
+def _check_h1_reference(rows: pd.DataFrame) -> pd.Series:
+    """`p_k^2` of every row of an H1 summary, which must equal the `reference` column that F7 stored (a disagreement is refused)."""
+    derived = (pd.to_numeric(rows["k"]) / pd.to_numeric(rows["n_cells"])) ** 2
+    stored = pd.to_numeric(rows["reference"])
+    if not ((derived - stored).abs() <= 1e-9).all():
+        raise ValueError("H1: (k / n)^2 of the F7 counts differs from the stored reference value")
+    return derived
+
+
 def _statistic(rows: pd.DataFrame, primary: pd.Series, column: str, reference, threshold) -> dict:
     values = pd.to_numeric(rows[column], errors="coerce").dropna()
     return {
@@ -225,16 +243,25 @@ def _hypothesis_record(
         and c in TESTABLE_VERDICTS
         and c != primary_class
     ]
+    statistics = {
+        name: _statistic(rows, primary, column, reference, threshold)
+        for name, (column, reference, threshold) in spec["statistics"].items()
+    }
+    if hypothesis == "H1":
+        derived = _check_h1_reference(rows)
+        statistics["p_k2"] = {
+            "value": float(h1_reference(primary["k"], primary["n_cells"])),
+            "reference": None,
+            "threshold": None,
+            "range": {"min": float(derived.min()), "max": float(derived.max())},
+        }
     record = {
         "available": True,
         "class": primary_class,
         "verdict": primary_class if primary_class in TESTABLE_VERDICTS else None,
         "status": _clean(primary["status"]) if "status" in rows.columns else None,
         "reason": _clean(primary["verdict_reason"]) if "verdict_reason" in rows.columns else None,
-        "statistics": {
-            name: _statistic(rows, primary, column, reference, threshold)
-            for name, (column, reference, threshold) in spec["statistics"].items()
-        },
+        "statistics": statistics,
         "details": {c: _clean(primary[c]) for c in spec["descriptive"] if c in rows.columns},
         "n_variants": int(len(rows) - 1),
         "n_variants_changing_verdict": len(changing),

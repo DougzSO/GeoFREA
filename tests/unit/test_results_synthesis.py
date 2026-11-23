@@ -300,6 +300,8 @@ def test_the_t_r6_verdict_row_takes_the_primary_statistic_reference_threshold_an
         | {
             "c_k": 0.7,
             "v_k": 0.1,
+            "k": 10,
+            "n_cells": 100,
             "reference": 0.01,
             "alpha": 0.6,
             "beta": 0.2,
@@ -313,12 +315,8 @@ def test_the_t_r6_verdict_row_takes_the_primary_statistic_reference_threshold_an
     rows = [_verdict_row(name, row) for name, row in (("H1", h1), ("H2", h2), ("H3", h3))]
     assert all(set(row) == set(VERDICT_COLUMNS) for row in rows)
     first, second, third = rows
-    assert (first["statistic"], first["value"], first["reference"], first["threshold"]) == (
-        "h1a_core_share",
-        0.7,
-        0.01,
-        0.6,
-    )
+    assert (first["statistic"], first["value"], first["threshold"]) == ("h1a_core_share", 0.7, 0.6)
+    assert first["reference"] == pytest.approx(0.01, rel=1e-12)  # p_k^2 = (10 / 100)^2, derived in F8
     assert (first["statistic_2"], first["value_2"], first["threshold_2"]) == (
         "h1b_vulnerable_share",
         0.1,
@@ -374,3 +372,15 @@ def test_the_t_r6_verdict_row_of_h5_has_the_two_ratios_and_a_status_when_there_i
     ):
         row = _verdict_row("H5", pd.Series(base | {"status": status, "verdict": verdict}))
         assert row["verdict"] == shown
+
+
+@pytest.mark.unit
+def test_the_h1_reference_is_k_over_n_squared_and_must_equal_the_value_f7_stored():
+    """COMMAND 191A, D-core-056: p_k^2 is derived in F8 from the two counts of F7 and checked against the stored reference."""
+    from geofrea.results_synthesis.synthesis import _check_h1_reference, h1_reference
+
+    assert h1_reference(342, 3414) == pytest.approx(0.010035180271867213, rel=1e-12)
+    rows = pd.DataFrame({"k": [342, 171], "n_cells": [3414, 3414], "reference": [(342 / 3414) ** 2, (171 / 3414) ** 2]})
+    assert list(_check_h1_reference(rows)) == pytest.approx(list(rows["reference"]))
+    with pytest.raises(ValueError, match="differs from the stored reference"):
+        _check_h1_reference(rows.assign(reference=[0.5, 0.5]))

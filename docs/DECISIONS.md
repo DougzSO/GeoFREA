@@ -2080,3 +2080,33 @@ Substitui: nenhuma decisão; completes DEC-061 (the sweep it announced is the on
 Consequência no código ou na configuração (ainda não aplicada): none; no key, code or parameter changes, so no fingerprint and no digest moves.
 
 ---
+
+## [2026-11-23] DEC-095 - The F7 correction of L-253 (commit 3fcdfbe) is a post-result correction by the date test (COMMAND 191A)
+Tipo: PROCESS_RECORD
+Descrição: DEC-095: Label of the F7 correction of L-253 (`3fcdfbe`, `thesis_tables.py`) and of the F7b correction `c7af733`.
+Date: 2026-11-23. Decided by the author (COMMAND 191A, item 5).
+a) What changed: F7 leaves out of the like-for-like and economic-domain cells the F5 cells that F6 excludes for a missing PV zone (`merge_nominal_lcoe`, T-R12 and H5), instead of requiring one F6 row per F5 row. Reason: L-253 (PRT solar cell 7426615, `pvcz_zone` 0 with valid distances).
+b) Label by the rule of the date test of COMMAND 191A: the commit `3fcdfbe` (2026-11-18 20:46 -03, 23:46 UTC) is later than the `finished_at` of the first `robustness_analysis` with `success` in any real manifest (PRT, 2026-11-18T23:20:10 UTC), so it is a **post-result correction** (rule 8 of the file of commands).
+c) Facts the label does not show: the first F7 run of PRT failed (`ThesisTableError: central: F5 rows without an F6 nominal LCOE`, `_notas_geofrea/producao_PRT_183.md`), so no F7 result existed before the change; the first `success` of PRT was produced by the corrected code and the other two countries ran F7 after it. The fingerprint of `robustness_analysis` recorded in the three manifests is the one of the current code. No phase was run again for this correction: there was no earlier result to replace. The pre-registered subset did not change (digest equal to the tag).
+d) `c7af733` (F7b skips the cells without LCOE, as L-253): see D-F7b-009, pre-result (the first F7b run of COMMAND 188 is the one it completes).
+Fase: F7, F7b
+Implementa: L-253; D-F7b-009.
+Substitui: nenhuma decisão.
+Consequência no código ou na configuração: none beyond the records.
+
+---
+
+## [2026-11-23] DEC-096 - The H1 reference value p_k^2 is derived in F8 from the counts F7 persists (COMMAND 191A)
+Tipo: METHODOLOGY_REVISION
+Descrição: DEC-096: The H1 reference value p_k^2 (M-F7-07) is derived in F8 from k and n persisted by F7; it is arithmetic of two stored counts and not a recomputed scientific quantity (M-F8-01).
+Date: 2026-11-23. Decided by the author (COMMAND 191A, item 4).
+a) F8 computes `p_k^2 = (k / n)^2` with `k` and `n_cells` of `h1_summary` (`results_synthesis/synthesis.py::h1_reference`) and shows it beside `C_k`: as `statistics.p_k2` of each H1 record of `hypothesis_profiles` (with the range over the variants) and as the `reference` of the H1 row of the T-R6 verdict table and the column `p_k2` of the T-R6 H1 summary table.
+b) Consistency check: the derived value must equal, to 1e-9, the `reference` column that F7 stored; a disagreement stops the output. It equalled it in the 32 H1 tables of the three countries, the two windows and the two scales (checked before the change).
+c) METHODOLOGY 19.4.15: note in M-F8-01.
+Justificativa (se METHODOLOGY_REVISION): the audit of COMMAND 191 did not find `p_k^2` as a column; it was stored as `reference`. F8 states it by name from two persisted counts, which M-F8-01 allows (no scientific quantity is recomputed).
+Fase: F8
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão.
+Consequência no código ou na configuração: F8 code only (`results_synthesis`); the fingerprint of `results_synthesis` changes and F8 is built again; no other phase and no digest moves.
+
+---

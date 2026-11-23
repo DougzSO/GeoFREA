@@ -67,7 +67,7 @@ import os
 import re
 import sys
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime
@@ -95,6 +95,7 @@ from geofrea.config_models.land_availability import (
     load_land_availability,
 )
 from geofrea.core.artifact_json import dump_artifact
+from geofrea.core.artifact_reader import ArtifactReader, ThesisInputError
 from geofrea.core.atomic_io import write_text_atomic
 from geofrea.core.code_fingerprint import cached_code_fingerprint
 from geofrea.core.config_fingerprint import DiskConfigSource, config_fingerprint
@@ -247,6 +248,48 @@ def _read_methodology_version(path: Path) -> str:
     if match is None:
         raise RuntimeError(f"Could not find a Version row in {path}.")
     return match.group(1)
+
+
+def h4_countries(
+    countries: Sequence[str], default_countries: Sequence[str], countries_config: Mapping[str, Mapping]
+) -> list[str]:
+    """The countries the verdict of H4 compares: every configured country, whichever of them this invocation runs (COMMAND 191A).
+
+    The verdict needs the profiles of all the countries, so an invocation with one country (the others already done) still reads the
+    `h4_country` table of each of them; `cross_country_h4` refuses a country that has none. A fixture country (ZZZ) is the exception:
+    it is compared only with the countries named in the invocation, as the comparison figures are.
+    """
+    if any(countries_config.get(c, {}).get("synthetic_fixture_root") for c in countries):
+        return list(countries)
+    return list(default_countries)
+
+
+def require_h4_inputs(countries: Sequence[str], technologies: Sequence[str]) -> None:
+    """Refuse the support phase `cross_country_h4` when a country has no manifest or registers no `h4_country` table (COMMAND 191A).
+
+    A verdict that silently leaves a country out is not a verdict of the countries (the cause of the verdict of one country that the audit of
+    COMMAND 191 found). The check is here and not in `cross_country.py`, which is in the closure of the fingerprint of `robustness_analysis`:
+    editing it would run F7 again in the three countries without changing a result. A table that F7 wrote empty (a null decision parameter) is
+    not an absent table and stays `unavailable` in the verdict.
+
+    Raises:
+        ThesisInputError: one or more countries lack the table; the message names each one.
+    """
+    absent = []
+    for country in (c.upper() for c in countries):
+        reader = ArtifactReader(country)
+        for technology in technologies:
+            for role in ("core", "sensitivity"):
+                key = f"h4_country_{technology}__{role}"
+                if not reader.available:
+                    absent.append(f"{country}: the country has no manifest")
+                elif not reader.has(key):
+                    absent.append(f"{country}: the manifest registers no {key}")
+    if absent:
+        raise ThesisInputError(
+            "cross_country_h4 refused: a country has no h4_country table (run its robustness_analysis first): "
+            + "; ".join(dict.fromkeys(absent))
+        )
 
 
 def _summary_artifacts_dir(context: PhaseContext) -> Path:
@@ -1995,7 +2038,9 @@ def _main(argv: list[str] | None = None) -> int:
     if f7_done:
         try:
             with use_scale(args.scale):
-                build_h4_verdict(countries, tuple(settings.run.technologies), run_id=run_id)
+                compared_h4 = h4_countries(countries, default_countries, countries_config)
+                require_h4_inputs(compared_h4, tuple(settings.run.technologies))
+                build_h4_verdict(compared_h4, tuple(settings.run.technologies), run_id=run_id)
                 for country_code in thesis_done:
                     build_thesis(
                         country_code,

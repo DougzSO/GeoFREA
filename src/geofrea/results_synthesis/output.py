@@ -19,6 +19,7 @@ import pandas as pd
 
 from geofrea.core.artifact_reader import stale_cross_country_inputs
 from geofrea.core.config_schemas import ExperimentsFile, TechnologiesFile
+from geofrea.core.scale import get_scale
 from geofrea.core.schemas import CountryParams
 from geofrea.results_synthesis import names
 from geofrea.results_synthesis.inputs import ArtifactReader, sha256_of
@@ -102,6 +103,28 @@ class BuildContext:
         return (TEST_VALUES_STAMP if self.test_values else "") + text
 
 
+def _countries_left_out(manifest_file: Path, scale_id: str) -> list[str]:
+    """The countries that register `h4_country` tables at `scale_id` and that the verdict did not read (COMMAND 191A).
+
+    A verdict written by an invocation with one country holds that country only: its inputs match its own table, so the hash check cannot
+    see the countries that are missing. One text per country left out; empty when the verdict read every country that registers a table.
+    """
+    document = json.loads(Path(manifest_file).read_text(encoding="utf-8"))
+    read = set(document.get("countries", []))
+    name = "manifest.json" if get_scale(scale_id).is_default else f"manifest__{scale_id}.json"
+    left_out = []
+    for other in sorted(Path(manifest_file).parent.parent.glob(f"*/{name}")):
+        country = other.parent.name
+        if country in read or country == Path(manifest_file).parent.name:
+            continue
+        registered = json.loads(other.read_text(encoding="utf-8")).get("artifacts", {})
+        if any(key.startswith("h4_country_") for key in registered):
+            left_out.append(
+                f"{country}: registers h4_country tables and the verdict read only {','.join(sorted(read)) or 'no country'}"
+            )
+    return left_out
+
+
 def require_current_cross_country(ctx: BuildContext) -> None:
     """Refuse to build an output that reads the support phase `cross_country_h4` while one of its inputs is stale (B-5).
 
@@ -111,7 +134,10 @@ def require_current_cross_country(ctx: BuildContext) -> None:
     stale = [
         text
         for reader in ctx.cross_country
-        for text in stale_cross_country_inputs(reader.manifest_file, reader.scale_id)
+        for text in (
+            *stale_cross_country_inputs(reader.manifest_file, reader.scale_id),
+            *_countries_left_out(reader.manifest_file, reader.scale_id),
+        )
     ]
     if stale:
         raise StaleCrossCountry(
