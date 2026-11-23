@@ -63,6 +63,32 @@ TECHNICAL_POTENTIAL_FIGURE_MODULES = (
     "state_figures",
 )
 
+# the modules of `robustness_analysis` that the F7 runs: the whole package except `convergence`, which only `sample_size_convergence` runs (no module of
+# the package imports it). Listed one by one so that an edit of the convergence does not make the F7 stale (COMMAND 208A; the fingerprint that changed
+# with this list is adopted under proof by `core.code_rebaseline`). `tests/unit/test_code_rebaseline.py` fails if a module is added to the package
+# and left out of this list.
+ROBUSTNESS_ANALYSIS_MODULES = (
+    "assemble",
+    "cell_set",
+    "cross_country",
+    "decision",
+    "evaluator",
+    "futures",
+    "h1_rank_robustness",
+    "h2_aggregation",
+    "h3_robust_vs_nominal",
+    "h4_axis_dominance",
+    "h5_climate_pressure",
+    "hypotheses",
+    "maps",
+    "pipeline",
+    "prim",
+    "rankings",
+    "scenario_discovery",
+    "table_schemas",
+    "thesis_tables",
+)
+
 # phase -> packages (all their files) or modules (one file) that start its closure, as dotted names under `geofrea`
 PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "data_acquisition": ("data_acquisition",),
@@ -79,7 +105,7 @@ PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "technical_potential": tuple(f"technical_potential.{m}" for m in TECHNICAL_POTENTIAL_NUMERIC_MODULES),
     "lcoe_modeling": ("lcoe_modeling",),
     "sample_size_convergence": ("robustness_analysis.convergence",),
-    "robustness_analysis": ("robustness_analysis",),
+    "robustness_analysis": tuple(f"robustness_analysis.{m}" for m in ROBUSTNESS_ANALYSIS_MODULES),
     "external_validation": ("external_validation",),
     "lcoe_maps": ("lcoe_modeling.maps",),
     "robustness_maps": ("robustness_analysis.maps",),

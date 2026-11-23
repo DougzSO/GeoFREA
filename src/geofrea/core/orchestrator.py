@@ -54,7 +54,11 @@ PhaseStatus = Literal["success", "failed", "skipped_upstream_failed", "stale_ups
 
 _HASH_CHUNK_SIZE = 8 * 1024 * 1024
 _LARGE_FILE_LOG_THRESHOLD_BYTES = 500 * 1024 * 1024
-_MANIFEST_SCHEMA_VERSION = "2.13"
+_MANIFEST_SCHEMA_VERSION = "2.14"
+# 2.14 (COMMAND 208A, A-02): every PhaseManifestEntry also carries `code_rebaselines`, the proofs under which its `code_fingerprint` was rewritten without
+# running the phase again (`core.code_rebaseline`): the change only took modules out of the hashed set, none of them is reachable by the import graph from
+# the entry point of the phase, and every module the phase does reach has the same normalised-AST hash in the commit in force on the date of the run as in
+# the new tree. Only `scripts/rebaseline_code_fingerprint.py` writes it; the orchestrator never does. Entries written before 2.14 have an empty list.
 # 2.13 (COMMAND 155B, DEC-081 item g): the manifest also carries `preregistration`, written when F6 or F7 runs on real data: `digest_live`, the digest of the
 # pre-registered subset of the configuration for the country, and `digest_tag`, the digest of the same subset in the message of the annotated tag
 # `prereg-v1` (`core.preregistration`). The phase is refused, and nothing is recorded, when the tag is absent or the two differ. Manifests written
@@ -100,7 +104,7 @@ _MANIFEST_SCHEMA_VERSION = "2.13"
 # (RunManifest's schema_version is a Literal of _MANIFEST_SCHEMA_VERSION)
 # rather than running a migration step. Versions before 2.1 still raise LegacyManifestError.
 _READABLE_MANIFEST_SCHEMA_VERSIONS = frozenset(
-    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", _MANIFEST_SCHEMA_VERSION}
+    {"2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "2.8", "2.9", "2.10", "2.11", "2.12", "2.13", _MANIFEST_SCHEMA_VERSION}
 )
 
 
@@ -359,6 +363,28 @@ class ConfigRebaseline(BaseModel):
     proof_sha256: str  # SHA-256 of the canonical JSON of every field above
 
 
+class CodeRebaseline(BaseModel):
+    """The proof under which a `code_fingerprint` was rewritten without running the phase again (`core.code_rebaseline`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rebaselined_at: str
+    entry_point: str  # "module:function" the import graph was followed from
+    executions: list[ConfigRebaselineExecution]  # the execution dates of the entry and the commit in force on each
+    new_commit: str  # HEAD of the tree the new fingerprint was computed on
+    new_tree_dirty: bool  # that tree had uncommitted changes under src/ or config/
+    previous_fingerprint: str
+    new_fingerprint: str
+    previous_roots: list[str]
+    new_roots: list[str]
+    removed_modules: list[str]  # in the hashed set before, not after: none of them reachable from the entry point
+    reachable_modules: int
+    reachable_sha256: str  # SHA-256 of the lines `module:ast digest` of the reachable set (equal before and after)
+    cold_updated: bool  # `cold_code_fingerprint` was equal to the previous fingerprint and followed it
+    manifest_dirty: bool
+    proof_sha256: str  # SHA-256 of the canonical JSON of every field above
+
+
 class PhaseManifestEntry(BaseModel):
     """The on-disk (manifest.json) record of one phase's outcome.
 
@@ -420,6 +446,7 @@ class PhaseManifestEntry(BaseModel):
     cold_started_at: str | None = None
     cold_code_fingerprint: str | None = None
     config_rebaselines: list[ConfigRebaseline] = []
+    code_rebaselines: list[CodeRebaseline] = []
     environment: dict[str, str] = {}
 
 
@@ -549,7 +576,7 @@ class RunManifest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["2.13"] = _MANIFEST_SCHEMA_VERSION
+    schema_version: Literal["2.14"] = _MANIFEST_SCHEMA_VERSION
     run_id: str
     dirty: bool
     country_code: str
