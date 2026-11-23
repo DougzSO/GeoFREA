@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 19.4.17 |
+| Version | 19.4.18 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-11-23 |
 | Owner | Douglas |
@@ -376,6 +376,16 @@ Definitions for one country and technology. `C` = candidate cells of the central
 
 - **M-E1-01.** Static, precomputed explorer by country, technology, window, SSP, GCM, and land-availability scenario, with per-cell query. Eligibility thresholds are adjustable only across the precomputed scenarios. Technology stack in OQ-013.
 
+### X Exploratory analyses (post v1.0)
+
+Rules declared by DEC-098 before any of these quantities was computed. They are exploratory: the pre-registered results of v1.0 (prereg-v1) remain the primary results, these rules do not replace M-F7-07 or any other rule of F7, and no verdict changes with them. They add no configuration key and do not touch the digest of the pre-registered subset. Phase `exploratory_analysis` (COMMAND 210).
+
+- **M-X-01. Cost-to-target, H5c.** Per country, technology and window; domain: the F7 set of the central land scenario. For a member m, cells are ordered by LCOE_i,(m,s0) ascending (ties by cell_id) and their annual energy E_i,m is accumulated. For an energy level G (TWh/year): the marginal cost MC_m(G) is the LCOE of the cell at which the cumulative energy first reaches G (a fractional last cell), and the average cost AC_m(G) is the energy-weighted mean LCOE of the cells taken. Levels: G_target, the registered national target converted as in M-F7-07 (H5), where one exists; and G_p = p x E_total,m0 for p in {0.05, 0.10, 0.25}, for every pair, where E_total,m0 is the energy of the F7 set at the reference member. Statistics per level: Delta_MC = max over the core members of (MC_m - MC_m0) / MC_m0, with the member and the SSP that attain it, the median over members and the value per SSP (max over its GCMs); the same for AC. Parameter sensitivity: the same curves built from the per-cell P90 over draws of each member (an upper envelope, not a joint draw). A level that the cumulative energy of a member does not reach is flagged level_unreachable for that member. Descriptive labels, fixed now: "material climate pressure on the cost of the target" when Delta_MC >= 0.05 at G_target; the value at 0.10 is also reported. No threshold tau is used.
+- **M-X-02. Own vulnerability, VUL.** Over the ranked set of M-F7-05. VUL_clim_i = max over core members m of LCOE_i,(m,s0) / LCOE_i,f0 - 1 (climate only); VUL_tec_i = P90 over draws s >= 1 of LCOE_i,(m0,s) / LCOE_i,f0 - 1 (parameters only); VUL_i = max over core members m of P90 over draws of LCOE_i,(m,s) / LCOE_i,f0 - 1. Climate-fragile cells are reported apart. Reported: the distribution of each index; Spearman with LCOE_i,f0 and with MR_i; the share of the nominal top-k in the upper quartile of VUL_clim; the capacity in each quadrant of (LCOE_i,f0 above or below its median) x (VUL_clim above or below its median); maps. VUL_tec is mostly common to the country (COMMAND 202), so it is expected to vary little between cells; this is stated with the result.
+- **M-X-03. PRIM diagnostic.** PRIM diagnostic: per pair, the distribution of V_f over the futures (max, p99, p95, median) against the threshold 0.20 of M-F7-08. Descriptive.
+- **M-X-04. tau on the cell basis.** the tau of each pair recalculated with the lifetime and the O&M that F6 applies to the cells (instead of those of the IRENA reference plant), and the capacity with LCOE_i,f0 at or below it. Reported only; satisficing robustness is not re-evaluated.
+- **M-X-05. Status of the outputs.** Outputs are labelled exploratory in every table, figure and provenance, written by a separate support phase, and never feed the pre-registered tables T-R1 to T-R12.
+
 ---
 
 ## 6. Uncertainty and futures design
@@ -591,6 +601,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 19.4.18 | 2026-11-23 | PATCH (COMMAND 209; records only: no result changes, no change of code, configuration or fingerprint, and the digest of the pre-registered subset is unchanged): new section X, Exploratory analyses (post v1.0), with the rules M-X-01 to M-X-05 declared before the quantities are computed (DEC-098): cost-to-target H5c, own vulnerability VUL, the PRIM diagnostic of V_f, tau on the cell basis, and the status of the outputs; they do not replace M-F7-07 and never feed T-R1 to T-R12. Correction of the row 19.4.16 below, which is not edited: it says the registry holds "Portuguese and English names"; phase names are English only (COMMAND 200B). Items altered: M-X-01, M-X-05, M-X-02, M-X-03, M-X-04 (all new). |
 | 19.4.17 | 2026-11-23 | PATCH (COMMAND 208A; no result changes, no change of a phase module): A-02: manifest schema 2.14 adds `code_rebaselines`, the proofs under which a code fingerprint is adopted without running the phase again (D-core-057); the code fingerprint of `robustness_analysis` stops hashing `convergence.py` (and `lcoe_modeling.table_schemas`, which only it imports), which F7 does not run, and the F7 fingerprints of the six manifests are adopted under proof. Items altered: A-02. |
 | 19.4.16 | 2026-11-23 | PATCH (COMMAND 200; no result changes, no fingerprint changes, no change of a phase module): the phase table of 4.2 gains a Name column, the English name of each phase from `config/phases.yaml`, the registry of the names (id, code, Portuguese and English names, group) that the plan, the log and the generated tables of the README and of the pipeline guide read; the ids of the code are unchanged. Items altered: none (4.2 is a table of the phases, not an item). |
 | 19.4.15 | 2026-11-23 | PATCH (COMMAND 191A; no code change that affects a result): M-F8-01 names the one number F8 derives, the H1 reference value `p_k^2 = (k / n)^2` from the counts F7 persists (DEC-096); A-08 states where the phase summaries go, `artifacts/` at the default scale and `artifacts__<scale>/` at another (D-core-055). Items altered: M-F8-01, A-08. |

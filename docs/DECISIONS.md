@@ -2123,3 +2123,57 @@ Substitui: o rótulo da DEC-095 (post-result correction, item b); o resto da DEC
 Consequência no código ou na configuração: none beyond the records.
 
 ---
+
+---
+
+## [2026-11-23] DEC-098 - Exploratory analyses after v1.0: cost-to-target (H5c) and own vulnerability (VUL) (COMMAND 209)
+Tipo: METHODOLOGY_REVISION
+Descrição: DEC-098: Exploratory analyses after v1.0: cost-to-target (H5c) and own vulnerability (VUL)
+Date: 2026-11-23. Decided by the author. Declared before any of these quantities was computed.
+Status: exploratory. The pre-registered results of v1.0 (prereg-v1) are unchanged and remain the primary results. These analyses do not replace any verdict.
+a) Cost-to-target, H5c. Per country, technology and window; domain: the F7 set of the central land scenario. For a member m, cells are ordered by LCOE_i,(m,s0) ascending (ties by cell_id) and their annual energy E_i,m is accumulated. For an energy level G (TWh/year): the marginal cost MC_m(G) is the LCOE of the cell at which the cumulative energy first reaches G (a fractional last cell), and the average cost AC_m(G) is the energy-weighted mean LCOE of the cells taken. Levels: G_target, the registered national target converted as in M-F7-07 (H5), where one exists; and G_p = p x E_total,m0 for p in {0.05, 0.10, 0.25}, for every pair, where E_total,m0 is the energy of the F7 set at the reference member. Statistics per level: Delta_MC = max over the core members of (MC_m - MC_m0) / MC_m0, with the member and the SSP that attain it, the median over members and the value per SSP (max over its GCMs); the same for AC. Parameter sensitivity: the same curves built from the per-cell P90 over draws of each member (an upper envelope, not a joint draw). A level that the cumulative energy of a member does not reach is flagged level_unreachable for that member. Descriptive labels, fixed now: "material climate pressure on the cost of the target" when Delta_MC >= 0.05 at G_target; the value at 0.10 is also reported. No threshold tau is used.
+b) Own vulnerability, VUL. Over the ranked set of M-F7-05. VUL_clim_i = max over core members m of LCOE_i,(m,s0) / LCOE_i,f0 - 1 (climate only); VUL_tec_i = P90 over draws s >= 1 of LCOE_i,(m0,s) / LCOE_i,f0 - 1 (parameters only); VUL_i = max over core members m of P90 over draws of LCOE_i,(m,s) / LCOE_i,f0 - 1. Climate-fragile cells are reported apart. Reported: the distribution of each index; Spearman with LCOE_i,f0 and with MR_i; the share of the nominal top-k in the upper quartile of VUL_clim; the capacity in each quadrant of (LCOE_i,f0 above or below its median) x (VUL_clim above or below its median); maps. VUL_tec is mostly common to the country (COMMAND 202), so it is expected to vary little between cells; this is stated with the result.
+c) PRIM diagnostic: per pair, the distribution of V_f over the futures (max, p99, p95, median) against the threshold 0.20 of M-F7-08. Descriptive.
+d) tau on the cell basis: the tau of each pair recalculated with the lifetime and the O&M that F6 applies to the cells (instead of those of the IRENA reference plant), and the capacity with LCOE_i,f0 at or below it. Reported only; satisficing robustness is not re-evaluated.
+e) Outputs are labelled exploratory in every table, figure and provenance, written by a separate support phase, and never feed the pre-registered tables T-R1 to T-R12.
+Justificativa (se METHODOLOGY_REVISION): the diagnostics of v1.0 (D0 to D5, `docs/_audit/diagnostico_v1_0/`) found that the economic domain of tau is almost empty in BRA and that the design barely moves the ranking (DEC-099, N1 to N6). The author keeps the primary results and adds, before computing anything, a cost-to-target version of H5 that needs no tau and a vulnerability of each cell; the PRIM diagnostic and the tau on the cell basis complete the reading. The definitions are fixed here, in this text and in M-X-01 to M-X-05, before the phase that computes them exists (COMMAND 210), so that no choice depends on a result.
+Fase: exploratory_analysis (new support phase, COMMAND 210); F8 (T-X1 to T-X4)
+Implementa: nenhum D-* ainda.
+Substitui: nenhuma decisão.
+Consequência no código ou na configuração: none now (records only; no new numeric parameter). The levels p in {0.05, 0.10, 0.25} and the label threshold 0.05 are definitions of the analysis, not configuration keys; the digest of the pre-registered subset is unchanged. METHODOLOGY 19.4.18 (M-X-01 to M-X-05).
+
+---
+
+## [2026-11-23] DEC-099 - Verdicts on the v1.0 diagnostics (D0) (COMMAND 209)
+Tipo: PROCESS_RECORD
+Descrição: DEC-099: Verdicts on the v1.0 diagnostics (D0). Date: 2026-11-23. Decided by the author on delivering `comandos_v1_2_fechamento.md`. Principle: nothing that was pre-registered changes. A code defect is corrected. A property of the design or an effect of the input data is declared (LIMITATIONS). A choice to be reviewed goes to v2, with a new pre-registration (`prereg-v2`), or enters now as an exploratory analysis declared before it is computed (DEC-098). Class as in D0 (`docs/_audit/diagnostico_v1_0/D0_sintese.md`): A code defect, B property of the design, C choice of calibration or threshold, D effect of the input data. One line per finding:
+- N1 (C): tau and the economic domain, almost empty in BRA: the primary stays as it is; a new L on the basis difference (L-255); H5 gets the cost-to-target version without tau (H5c, exploratory, M-X-01); the tau recalculated on the cell basis is only reported (M-X-04), satisficing robustness is not re-evaluated.
+- N2 (C): lifetime (25 against 30 years) and O&M differ between tau and the cells: same decision as N1 (L-255; M-X-04).
+- N3 (C): SR is zero in most BRA wind and IND wind cells (derived from N1): same decision as N1 (L-255; H5c).
+- N4 (B): H5 at the edge (IND solar at 0.13% of tau*): declare (L-256).
+- N5 (B): the design barely moves the ranking: declare (L-257); own vulnerability (VUL, M-X-02) as an exploratory axis; costs with spatial variation go to v2.
+- N6 (B): MR follows the nominal LCOE: declare (L-257); VUL as an exploratory axis; costs with spatial variation go to v2.
+- N7 (B): two measures of displacement (worst rank and V_k per SSP): declare (L-257).
+- N8 (C): top-k and m: the exploratory variants of D2 are cited in the thesis; no change now; v2.
+- N9 (B): H2 concentrated in one to three regions: declare, with the profile of gamma already stored (L-258).
+- N10 (C): O close to gamma and the Admin1 partition: declare with the profile of gamma already stored (L-258); partition and gamma go to v2.
+- N11 (D): the 2020 land cover marks a plant as built: declare (L-259); it affects only F7b.
+- N12 (C): E5 of the central scenario stricter than practice: declare (L-260); the revision of eligibility goes to v2 (it changes the whole result, even with the same digest).
+- N13 (D): approximate GEM coordinate: F7b gets the variant with exact location only (COMMAND 212, L-261); the primary stays as in v1.0.
+- N14 (C): E4 of the central scenario stricter than practice: declare (L-260); the revision of eligibility goes to v2.
+- N15 (C): E6 of the central scenario stricter than practice: declare (L-260); the revision of eligibility goes to v2.
+- N16 (C): E1 of the central scenario stricter than practice: declare (L-260); the revision of eligibility goes to v2.
+- N17 (D): WDPA without STATUS_YR: declare (L-262); the download of the full WDPA goes to v2.
+- N18 (B): scale of the pixel (0.01 degree): declare (L-263).
+- N19 (A): the convergence did not leave out the incomplete_ensemble cells: corrected (COMMAND 208A, D-F6-034, D-core-057).
+- N20 (B): L-252 (PRT solar convergence): declare, with the numbers of D5 (L-263).
+- N21 (B): BRA wind cells with LCOE above 200: declare (L-263).
+- N22 (B): top-k by cell count and not by capacity: declare (L-263); the shortlist by capacity goes to v2.
+- N23 (D): capacity factor of 0.64 to 0.69 in the best BRA wind cells: informative, no action.
+- PRIM (B): `no_cases` (not diagnosed in D0): the new phase records the distribution of V_f, to show the distance to the threshold of 0.20 (M-X-03).
+- Changelog (n/a): the changelog row 19.4.16 says "Portuguese and English names": corrected by a new row, PATCH 19.4.18 (the old row is not edited).
+Referência (literatura/discussão, se aplicável): `docs/_audit/diagnostico_v1_0/D0_sintese.md` (table of 23 findings, 1 A, 9 B, 9 C, 4 D) and D1 to D5; DEC-098; L-255 to L-263; OQ-116.
+Fase: F6, F7, F7b, F8 (records)
+Implementa: D-F6-034 (N19); D-core-057.
+Substitui: nenhuma decisão.
+Consequência no código ou na configuração: none from this entry (records only). The pre-registered subset is unchanged (digest equal to the tag).
