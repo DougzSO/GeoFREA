@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
   "methodology_version": "19.4.15",
-  "last_updated": "2026-11-22",
+  "last_updated": "2026-11-23",
   "current_milestone": "MS-6",
   "milestones": [
     {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
@@ -13,9 +13,9 @@
     {"id": "MS-6", "title": "Parameter research (OQ-001 to OQ-023)", "status": "in_progress"},
     {"id": "MS-7", "title": "F4 climate_forcing", "status": "in_progress"},
     {"id": "MS-8", "title": "F5 technical_potential", "status": "in_progress"},
-    {"id": "MS-9", "title": "F6 lcoe_modeling", "status": "in_progress"},
-    {"id": "MS-10", "title": "F7 robustness_analysis and F7b external_validation", "status": "in_progress"},
-    {"id": "MS-11", "title": "F8 results_synthesis and E1 explorer", "status": "in_progress"}
+    {"id": "MS-9", "title": "F6 lcoe_modeling", "status": "done"},
+    {"id": "MS-10", "title": "F7 robustness_analysis and F7b external_validation", "status": "done"},
+    {"id": "MS-11", "title": "F8 results_synthesis (E1 explorer outside v1.0, OQ-013)", "status": "done"}
   ],
   "phases": [
     {

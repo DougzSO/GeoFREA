@@ -31,7 +31,43 @@ python main.py PRT --phases lcoe_modeling --plan                           # wha
 
 The reference store (`GeoFREA_data/references/`, what `config/deferred_checks.yaml` compares a run with) is never written by a run of the pipeline. After a round that you accept, publish it explicitly: `python main.py PRT IND BRA --publish-reference`, or `python scripts/publish_reference.py PRT IND BRA --note "..."` (`--first` for a country with no reference, `--allow-without-reference <phase>` for a new phase). Both compare every phase of the round with the current reference and refuse, writing nothing, if one is different or has no comparison (OQ-080, `docs/phases/core.md` D-core-054).
 
-Why they are outside `target_phases` (`config/settings.yaml`): F5 and the phases after it fail loudly, by name, when a parameter they consume has no value, and F6 onward need F5 tables and the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019); a plain `python main.py PRT` therefore runs what has values and is safe to repeat, and the later phases are asked for by name. `--production` refuses to start when a consumed parameter is a proxy. F5 and `potential_maps` have run on PRT, IND and BRA; F6 and the phases after it have not run on a real country (`docs/PROGRESS.json`). The phase caps of `config/memory_budget.json` were measured with one country per process (as in the clean round of COMMAND 133), so for BRA run `python main.py BRA ...` on its own; the caps bind the run (`GEOFREA_MEMORY_CAPS=0 switches them off).
+Why they are outside `target_phases` (`config/settings.yaml`): F5 and the phases after it fail loudly, by name, when a parameter they consume has no value, and F6 onward need F5 tables and the F6 parameters and ranges (OQ-001, OQ-016 to OQ-019); a plain `python main.py PRT` therefore runs what has values and is safe to repeat, and the later phases are asked for by name. `--production` refuses to start when a consumed parameter is a proxy. F1 to F8 have run on PRT, IND and BRA (v1.0, `docs/PROGRESS.json`; the exact sequence is in "Reproduce v1.0" below). The phase caps of `config/memory_budget.json` were measured with one country per process (as in the clean round of COMMAND 133), so for BRA run `python main.py BRA ...` on its own; the caps bind the run (`GEOFREA_MEMORY_CAPS=0 switches them off).
+
+## Reproduce v1.0
+
+The results of the thesis (tag `v1.0`) come from the sequence below, run with `GEOFREA_DATA_DIR` set, one country per process (the memory caps of `config/memory_budget.json` were measured that way, COMMAND 133, V179c), in the order of the commands of the closing sequence (COMMANDS 179 to 190). Before each real run use `--plan` with the same arguments: it must show only the phases you expect to execute. `GEOFREA_MEMORY_CAPS=0` was used only where a phase's cap is recorded as exceeded in `docs/_audit/` (BRA `robustness_analysis`, BRA `results_synthesis`).
+
+```
+# F1 to F5 and the maps (COMMANDS 130 to 178): python main.py PRT IND BRA ; python main.py PRT IND BRA --phases technical_potential,potential_maps
+# 179 to 182 (F6 and the sample size of U-04), one country per process, PRT, then IND, then BRA
+python main.py <ISO> --phases lcoe_modeling,sample_size_convergence --real-run --production
+# 183 to 186 (F7, window 2041-2070 core and 2071-2100 sensitivity, and the H4 verdict across countries)
+python main.py <ISO> --phases lcoe_modeling,robustness_analysis --real-run --production
+# 187 to 188A (F7b by windows of rows, then the maps)
+python main.py <ISO> --phases external_validation,lcoe_maps,robustness_maps --real-run
+# 189 (scale check of V-07, files under <phase>__0p1deg, manifest__0p1deg.json)
+python main.py <ISO> --scale 0p1deg --phases lcoe_modeling,sample_size_convergence,robustness_analysis --real-run
+# 190 to 191A (F8; the H4 verdict reads all three countries, so PRT and IND must have their h4_country tables first)
+python main.py <ISO> --phases results_synthesis --real-run
+# last step, only after the gate passes
+python main.py PRT IND BRA --publish-reference
+```
+
+`cross_country_h4` runs once per invocation after F7 and compares every configured country (D-core-056); it refuses when a country has no `h4_country` table. The pre-registration guard applies to every one of these runs: the aggregate digest of the pre-registered subset is `1bce505f3315fa34948cf842612a2eee4c7ec1ff9c15e919f08cc631d8f08235` and the tag is `prereg-v1`.
+
+Measured wall time of the phases that matter (from `started_at` and `finished_at` of the manifests of the accepted runs; the pixel-level phases F1 to F5 add about 23 minutes for IND and 31 for BRA (PRT less) and are not repeated unless their code changes):
+
+| Phase | PRT | IND | BRA |
+|---|---|---|---|
+| `lcoe_modeling` (4000 samples) | 1.5 min | 22.8 min | 52.2 min |
+| `sample_size_convergence` | 1.0 min | 8.5 min | 17.3 min |
+| `robustness_analysis` (F7, 2 windows) | 7.6 min | 154.5 min (2 h 35) | 510.4 min (8 h 30) |
+| `external_validation` (F7b) | 3 s | 29 s | 74 s |
+| `lcoe_maps` and `robustness_maps` | 30 s | 71 s | 62 s |
+| `results_synthesis` (F8) | 25 s | 40 s | 76 s |
+| 0.1 degree scale check (F6, convergence, F7) | 3 min | 44 min | 120 min |
+
+The peaks of memory per phase are in `config/memory_budget.json`; the machine of the runs has about 6 GB of RAM (V179c), and BRA `robustness_analysis` is the longest single step. `GEOFREA_DATA_DIR/references/` holds the reference published with the tag; the tag message lists the manifest hashes. E1 (the explorer) is not part of v1.0 (OQ-013).
 
 ## The synthetic country ZZZ
 
