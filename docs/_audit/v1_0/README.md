@@ -8,7 +8,7 @@ Copies, taken on 2026-11-23 (COMMAND 199), of the files that lived outside the r
 |---|---|---|
 | `comandos_v1_0_GeoFREA.md` | the numbered command file for COMMANDS 166 to 198 (rules, order, execution log in section 4) | author and assistant, 2026-11-17 onward |
 | `decisoes_v1_0_GeoFREA.md` | the author's decisions that count as verdicts (rule 14 of the command file) | approved 2026-11-17 |
-| `comandos_v1_1_diagnostico.md` | the command file for COMMANDS 199 to 207 (phase names and hypothesis diagnostics) | 2026-11-23, copy as of the start of COMMAND 199 |
+| `comandos_v1_1_diagnostico.md` | the command file for COMMANDS 199 to 207 (phase names and hypothesis diagnostics) | 2026-11-23, copy refreshed in COMMAND 200B (with the [DONE] marks of 199 to 203) |
 
 ## Reports to the author (`_notas_geofrea`)
 

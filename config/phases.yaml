@@ -1,7 +1,7 @@
 # Registry of the human-readable phase names (COMMAND 200).
 #
 # The `id` is the name the code uses (`PhaseSpec.name`, manifests, artifact folders); it never changes. The registry adds the short code
-# (`code`, the F-number of METHODOLOGY 4.2, null for the support phases), the name in Portuguese and in English, and a group. It is read by
+# (`code`, the F-number of METHODOLOGY 4.2, null for the support phases), the name in English, and a group (Data, Territory, Climate, Potential, Economics, Robustness, Validation, Synthesis, Platform). It is read by
 # `geofrea.core.phase_registry` for the log, the plan, the docs tables and the future platform. It is NOT part of any phase's configuration
 # fingerprint (`PHASE_CONFIG_SCOPE` lists file keys and this file is not one of them) and not part of the pre-registration digest.
 #
@@ -10,24 +10,24 @@
 #
 # The list is in execution order.
 phases:
-  - {id: data_acquisition, code: F1, name_pt: Aquisição de dados, name_en: Data acquisition, group: Dados}
-  - {id: data_quality_audit, code: F1b, name_pt: Auditoria dos dados, name_en: Data audit, group: Dados}
-  - {id: external_inputs, code: null, name_pt: Registro das entradas climáticas, name_en: Climate inputs registry, group: Clima}
-  - {id: grid_alignment, code: F2a, name_pt: Alinhamento à grade, name_en: Grid alignment, group: Território}
-  - {id: siting_layers, code: F2b, name_pt: Camadas de restrição e custo, name_en: Siting layers, group: Território}
-  - {id: land_eligibility, code: F3, name_pt: Elegibilidade do solo, name_en: Land eligibility, group: Território}
-  - {id: climate_forcing, code: F4, name_pt: Sinal climático, name_en: Climate signal, group: Clima}
-  - {id: hazard_context, code: null, name_pt: Contexto de perigos, name_en: Hazard context, group: Clima}
-  - {id: climate_maps, code: null, name_pt: Mapas do clima, name_en: Climate maps, group: Clima}
-  - {id: overview, code: null, name_pt: Visão geral do país, name_en: Country overview, group: Território}
-  - {id: technical_potential, code: F5, name_pt: Potencial técnico, name_en: Technical potential, group: Potencial}
-  - {id: potential_maps, code: null, name_pt: Mapas de potencial, name_en: Potential maps, group: Potencial}
-  - {id: lcoe_modeling, code: F6, name_pt: Custo nivelado (LCOE), name_en: Levelized cost, group: Economia}
-  - {id: sample_size_convergence, code: null, name_pt: Convergência da amostra, name_en: Sample-size convergence, group: Economia}
-  - {id: lcoe_maps, code: null, name_pt: Mapas de custo, name_en: Cost maps, group: Economia}
-  - {id: robustness_analysis, code: F7, name_pt: Robustez e hipóteses, name_en: Robustness and hypotheses, group: Robustez}
-  - {id: robustness_maps, code: null, name_pt: Mapas de robustez, name_en: Robustness maps, group: Robustez}
-  - {id: cross_country_h4, code: null, name_pt: Comparação entre países, name_en: Cross-country comparison, group: Robustez, orchestrated: false}
-  - {id: external_validation, code: F7b, name_pt: Validação externa, name_en: External validation, group: Validação}
-  - {id: results_synthesis, code: F8, name_pt: Síntese de resultados, name_en: Results synthesis, group: Síntese}
-  - {id: explorer, code: E1, name_pt: Explorador, name_en: Explorer, group: Plataforma, orchestrated: false}
+  - {id: data_acquisition, code: F1, name_en: Data acquisition, group: Data}
+  - {id: data_quality_audit, code: F1b, name_en: Data audit, group: Data}
+  - {id: external_inputs, code: null, name_en: Climate inputs registry, group: Climate}
+  - {id: grid_alignment, code: F2a, name_en: Grid alignment, group: Territory}
+  - {id: siting_layers, code: F2b, name_en: Siting layers, group: Territory}
+  - {id: land_eligibility, code: F3, name_en: Land eligibility, group: Territory}
+  - {id: climate_forcing, code: F4, name_en: Climate signal, group: Climate}
+  - {id: hazard_context, code: null, name_en: Hazard context, group: Climate}
+  - {id: climate_maps, code: null, name_en: Climate maps, group: Climate}
+  - {id: overview, code: null, name_en: Country overview, group: Territory}
+  - {id: technical_potential, code: F5, name_en: Technical potential, group: Potential}
+  - {id: potential_maps, code: null, name_en: Potential maps, group: Potential}
+  - {id: lcoe_modeling, code: F6, name_en: Levelized cost, group: Economics}
+  - {id: sample_size_convergence, code: null, name_en: Sample-size convergence, group: Economics}
+  - {id: lcoe_maps, code: null, name_en: Cost maps, group: Economics}
+  - {id: robustness_analysis, code: F7, name_en: Robustness and hypotheses, group: Robustness}
+  - {id: robustness_maps, code: null, name_en: Robustness maps, group: Robustness}
+  - {id: cross_country_h4, code: null, name_en: Cross-country comparison, group: Robustness, orchestrated: false}
+  - {id: external_validation, code: F7b, name_en: External validation, group: Validation}
+  - {id: results_synthesis, code: F8, name_en: Results synthesis, group: Synthesis}
+  - {id: explorer, code: E1, name_en: Explorer, group: Platform, orchestrated: false}

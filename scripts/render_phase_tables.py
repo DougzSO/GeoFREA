@@ -25,9 +25,9 @@ END = "<!-- phases:end -->"
 
 def render_table() -> str:
     """The table of the registry, in execution order."""
-    rows = ["| Code | Phase id | Nome (pt) | Name (en) | Group | Orchestrated |", "|---|---|---|---|---|---|"]
+    rows = ["| Code | Phase id | Name | Group | Orchestrated |", "|---|---|---|---|---|"]
     for e in load_registry():
-        rows.append(f"| {e.code or '-'} | `{e.id}` | {e.name_pt} | {e.name_en} | {e.group} | {'yes' if e.orchestrated else 'no'} |")
+        rows.append(f"| {e.code or '-'} | `{e.id}` | {e.name_en} | {e.group} | {'yes' if e.orchestrated else 'no'} |")
     return "\n".join(rows)
 
 

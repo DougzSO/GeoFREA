@@ -60,7 +60,7 @@ def test_every_entry_is_complete_and_ids_and_codes_are_unique():
     codes = [e.code for e in entries if e.code]
     assert len(set(codes)) == len(codes)
     for e in entries:
-        assert e.name_pt.strip() and e.name_en.strip() and e.group.strip()
+        assert e.name_en.strip() and e.group.strip()
 
 
 @pytest.mark.unit
@@ -85,16 +85,16 @@ def test_phases_yaml_is_in_no_fingerprint_scope():
 def test_a_phase_the_registry_does_not_list_keeps_its_id_as_label():
     assert phase_info("not_a_phase") is None
     assert phase_label("not_a_phase") == "not_a_phase"
-    assert phase_label("lcoe_modeling") == "Custo nivelado (LCOE)"
+    assert phase_label("lcoe_modeling") == "Levelized cost"
 
 
 @pytest.mark.unit
 def test_a_repeated_id_or_a_missing_field_is_refused(tmp_path):
     bad = tmp_path / "phases.yaml"
-    bad.write_text("phases:\n  - {id: a, name_pt: A, name_en: A, group: G}\n  - {id: a, name_pt: B, name_en: B, group: G}\n", encoding="utf-8")
+    bad.write_text("phases:\n  - {id: a, name_en: A, group: G}\n  - {id: a, name_en: B, group: G}\n", encoding="utf-8")
     with pytest.raises(ValueError, match="repeated"):
         phase_registry.load_registry.__wrapped__(bad)
-    bad.write_text("phases:\n  - {id: a, name_pt: A, group: G}\n", encoding="utf-8")
+    bad.write_text("phases:\n  - {id: a, group: G}\n", encoding="utf-8")
     with pytest.raises(ValueError, match=r"lacks \['name_en'\]"):
         phase_registry.load_registry.__wrapped__(bad)
 
@@ -112,7 +112,7 @@ def test_the_plan_prints_the_portuguese_name(capsys):
         None,
     )
     out = capsys.readouterr().out
-    assert "lcoe_modeling" in out and "Custo nivelado (LCOE)" in out and "execute" in out
+    assert "lcoe_modeling" in out and "Levelized cost" in out and "execute" in out
 
 
 @pytest.mark.unit
@@ -143,4 +143,12 @@ def test_the_name_column_of_methodology_4_2_matches_the_registry():
 @pytest.mark.unit
 def test_phase_info_is_a_frozen_record():
     info = phase_info("overview")
-    assert isinstance(info, PhaseInfo) and info.orchestrated and info.group == "Território"
+    assert isinstance(info, PhaseInfo) and info.orchestrated and info.group == "Territory"
+
+
+@pytest.mark.unit
+def test_the_registry_file_is_english_only():
+    text = (REPO / "config" / "phases.yaml").read_text(encoding="utf-8")
+    assert text.isascii()  # no Portuguese name or accented word (COMMAND 200B)
+    assert "name_pt" not in text
+    assert {e.group for e in load_registry()} <= {"Data", "Territory", "Climate", "Potential", "Economics", "Robustness", "Validation", "Synthesis", "Platform"}

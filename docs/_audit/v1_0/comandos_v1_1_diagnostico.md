@@ -20,7 +20,7 @@ Consequência para a tese: qualquer mudança de τ, top-k, m, desenho do LHS ou 
 
 ## 2. Comandos
 
-### COMANDO 199: Versionar o histórico fora do repositório
+### COMANDO 199: Versionar o histórico fora do repositório [DONE] (commit 1fb5db5)
 
 ```
 Objetivo: Pôr no git o histórico que explica as decisões da v1.0, sem dados.
@@ -35,7 +35,7 @@ Critério de conclusão: git show --stat HEAD só em docs/_audit/v1_0/; lint 0; 
 Modo Code: Compact
 ```
 
-### COMANDO 200: Nomes das fases
+### COMANDO 200: Nomes das fases [DONE] (commit 2c94752)
 
 ```
 Objetivo: Dar a cada fase um nome legível e um grupo, num registro único que docs, logs, catálogo de saídas e a futura plataforma leem, mantendo os IDs do código. Nomes aprovados ao enviar.
@@ -72,7 +72,20 @@ Critério de conclusão: teste de correspondência registro e PhaseSpec passa; p
 Modo Code: Automático
 ```
 
-### COMANDO 201: Diagnóstico D1, τ e domínio econômico (somente leitura)
+### COMANDO 200B: Nomes das fases em inglês e pendências do 200 [DONE]
+
+```
+Objetivo: Deixar o registro, o plano e os logs só em inglês, e fechar duas pendências do 200. Aprovado ao enviar.
+Ações:
+1. config/phases.yaml: remover o campo do nome em português e usar o name_en no --plan e nos logs. Grupos também em inglês: Data, Territory, Climate, Potential, Economics, Robustness, Validation, Synthesis, Platform. Atualizar phase_registry.py, os testes e as tabelas geradas (render_phase_tables.py --check).
+2. sample_size_convergence aparece como execute em 0,05° por causa do 86fabd8: rodar de novo só essa fase nos três países (--real-run, --phases sample_size_convergence) e conferir que o tamanho adotado e o 1 - Jaccard por par saem iguais aos do D-F6-032. Diferença: PARAR. Depois disso, a prova P em 0,05° tem de dar 0 execute.
+3. docs/_audit/v1_0/: atualizar a cópia de comandos_v1_1_diagnostico.md para a versão atual, com os [DONE].
+4. Suíte, lint, digest, prova P nas duas escalas. Commit "chore: English phase names; rerun sample_size_convergence; refresh audit copy", push e três workflows.
+Critério de conclusão: nenhum texto em português em phases.yaml, no --plan e nos logs; prova P 0 execute nas duas escalas; três workflows success. Marcar 200B [DONE].
+Modo Code: Compact
+```
+
+### COMANDO 201: Diagnóstico D1, τ e domínio econômico (somente leitura) [DONE]
 
 ```
 Objetivo: Medir quanto do H5 e do SR é decidido pela calibração do τ, e se o τ e o LCOE das células estão na mesma base.
@@ -88,7 +101,7 @@ Critério de conclusão: itens 1 a 5 nos seis pares; todo número com origem; gi
 Modo Code: Automático
 ```
 
-### COMANDO 202: Diagnóstico D2, o que move (ou não) o ranking (somente leitura)
+### COMANDO 202: Diagnóstico D2, o que move (ou não) o ranking (somente leitura) [DONE]
 
 ```
 Objetivo: Testar se o desenho da incerteza consegue deslocar o ranking, separando o efeito de célula, de clima e de parâmetros.
@@ -106,7 +119,7 @@ Critério de conclusão: itens 1 a 7 nos seis pares; git status limpo; manifesto
 Modo Code: Automático
 ```
 
-### COMANDO 203: Diagnóstico D3, H2 e a sensibilidade a γ (somente leitura)
+### COMANDO 203: Diagnóstico D3, H2 e a sensibilidade a γ (somente leitura) [DONE]
 
 ```
 Objetivo: Entender o que produz o O do H2 e por que o veredito muda com γ.
@@ -174,3 +187,16 @@ Ações:
 Critério de conclusão: três workflows success.
 Modo Code: Compact
 ```
+
+---
+
+## 3. Registro de execução
+
+| Comando | Estado | Commit | Data | Nota |
+|---|---|---|---|---|
+| 199 | DONE | 1fb5db5 | 2026-11-23 | 16 arquivos + README em docs/_audit/v1_0; sem segredos; unit 2613 passed; digest idêntico; 3 workflows success. |
+| 200 | DONE | 2c94752 | 2026-11-23 | config/phases.yaml, phase_registry, plano e log com nome pt; METHODOLOGY 19.4.16; unit+synthetic+regression 2760 passed; digest idêntico. |
+| 201 | DONE | sem commit | 2026-11-23 | D1_tau.md em _notas_geofrea/diagnostico_v1_0; kernel reproduz o F6 (diferença 0); manifestos 8 de 8 iguais; git limpo. |
+| 202 | DONE | sem commit | 2026-11-23 | D2_ranking.md; sorteios e F7 (V_k, D, k) reproduzidos; amostra 20.000 (semente 202); manifestos 8 de 8 iguais; git limpo. |
+| 203 | DONE | sem commit | 2026-11-23 | D3_h2.md; O, D_TV, Δz e T recalculados batem com o F7; manifestos 8 de 8 iguais; git limpo. |
+| 200B | DONE | ver commit abaixo | 2026-11-23 | Registro só em inglês; sample_size_convergence refeita nos 3 países, tabelas idênticas às do D-F6-032; prova P 0 execute em 0,05° e em 0,1° (4 fases). |

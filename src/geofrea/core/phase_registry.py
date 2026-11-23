@@ -1,7 +1,7 @@
 """Registry of the human-readable phase names (COMMAND 200; `config/phases.yaml`).
 
 The id of a phase is the name the code uses (`PhaseSpec.name`, the manifests, the artifact folders) and never changes. The registry adds a
-short code, a name in Portuguese and in English, and a group, for the plan, the log, the docs tables and the future platform. The file is not
+short code, an English name and a group, for the plan, the log, the docs tables and the future platform. The file is not
 in any phase's configuration fingerprint, so editing a name never makes a phase run again.
 """
 
@@ -22,7 +22,6 @@ class PhaseInfo:
 
     id: str
     code: str | None
-    name_pt: str
     name_en: str
     group: str
     orchestrated: bool = True
@@ -39,7 +38,7 @@ def load_registry(path: Path = REGISTRY_FILE) -> tuple[PhaseInfo, ...]:
     entries: list[PhaseInfo] = []
     seen: set[str] = set()
     for row in raw["phases"]:
-        missing = {"id", "name_pt", "name_en", "group"} - set(row)
+        missing = {"id", "name_en", "group"} - set(row)
         if missing:
             raise ValueError(f"{path.name}: entry {row.get('id', row)!r} lacks {sorted(missing)}")
         if row["id"] in seen:
@@ -49,7 +48,6 @@ def load_registry(path: Path = REGISTRY_FILE) -> tuple[PhaseInfo, ...]:
             PhaseInfo(
                 id=row["id"],
                 code=row.get("code"),
-                name_pt=row["name_pt"],
                 name_en=row["name_en"],
                 group=row["group"],
                 orchestrated=row.get("orchestrated", True),
@@ -64,9 +62,9 @@ def phase_info(phase_id: str) -> PhaseInfo | None:
 
 
 def phase_label(phase_id: str) -> str:
-    """The Portuguese name of the phase for a message, or the id itself when the registry does not list it."""
+    """The English name of the phase for a message, or the id itself when the registry does not list it."""
     info = phase_info(phase_id)
-    return info.name_pt if info else phase_id
+    return info.name_en if info else phase_id
 
 
 def validate_against(spec_names: set[str] | frozenset[str] | list[str]) -> None:
