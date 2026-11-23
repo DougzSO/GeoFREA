@@ -2110,3 +2110,16 @@ Substitui: nenhuma decisão.
 Consequência no código ou na configuração: F8 code only (`results_synthesis`); the fingerprint of `results_synthesis` changes and F8 is built again; no other phase and no digest moves.
 
 ---
+
+## [2026-11-23] DEC-097 - Reclassification of DEC-095 (COMMAND 191B)
+Tipo: PROCESS_RECORD
+Descrição: DEC-097: Reclassification of DEC-095: the 3fcdfbe correction is pre-result.
+Date: 2026-11-23. Decided by the author (COMMAND 191B).
+a) The 3fcdfbe correction is pre-result: no robustness_analysis result was produced by the code before it; the first success (23:20 UTC) already ran the corrected code, committed at 23:46 UTC. The date test of COMMAND 191A was a proxy for this criterion.
+b) Effect: the label "post-result correction" of DEC-095 b) no longer stands; the facts of DEC-095 c) and d) are unchanged. No phase is run again, and no code, parameter, fingerprint or digest moves.
+Fase: F7
+Implementa: L-253.
+Substitui: o rótulo da DEC-095 (post-result correction, item b); o resto da DEC-095 vale. A entrada antiga não é editada.
+Consequência no código ou na configuração: none beyond the records.
+
+---
