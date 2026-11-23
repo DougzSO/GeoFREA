@@ -122,6 +122,7 @@ def run_protocol(
     seed: int,
     tolerance: float,
     max_batch_gb: float,
+    incomplete_ids: np.ndarray | None = None,
 ) -> tuple[list[ConvergenceRow], int | None, int, np.ndarray, np.ndarray]:
     """Double the sample size from `initial_size` to at most `max_size` until the top-k sets agree within `tolerance`.
 
@@ -133,6 +134,8 @@ def run_protocol(
         core_members: The members of the core window.
         candidate_ids: Cell identifiers of the candidates of the central scenario.
         decision: `cf_min` and `top_k_percent` (and `tau`, which only breaks ties of `MR`) of the technology.
+        incomplete_ids: The candidates F5 flagged `incomplete_ensemble`; they leave the F7 set exactly as in F7 (M-F7-01, D-F7-064), so that the cells and `k`
+            of the protocol are those of F7 (COMMAND 208A). None: no cell is left out.
 
     Returns:
         The rows, the adopted size (None if the ceiling came first), the number of cells of the F7 set, their identifiers and the identifiers
@@ -145,7 +148,7 @@ def run_protocol(
         raise LcoeInputError(f"member {REFERENCE_MEMBER_ID} has no F5 rows")
     assert decision.cf_min is not None and decision.top_k_percent is not None
     cell_set = build_cell_set(
-        candidate_ids, members, REFERENCE_MEMBER_ID, list(core_members), decision.cf_min
+        candidate_ids, members, REFERENCE_MEMBER_ID, list(core_members), decision.cf_min, incomplete_ids
     )
     if cell_set.n_f7 == 0:
         raise LcoeInputError(
@@ -263,6 +266,7 @@ def build_convergence(
     for tech in resolved:
         needed.append(Path(potential_dir) / f"potential_{tech}__central.parquet")
         needed.append(Path(candidates_dir) / f"candidates_{tech}__central.parquet")
+        needed.append(Path(potential_dir) / f"ensemble_{tech}__central.parquet")
     absent = [str(p) for p in needed if not p.is_file()]
     if absent:
         raise FileNotFoundError(
@@ -296,6 +300,10 @@ def build_convergence(
         candidate_ids = pd.read_parquet(
             Path(candidates_dir) / f"candidates_{tech}__central.parquet", columns=["cell_id"]
         )["cell_id"].to_numpy()
+        ensemble = pd.read_parquet(
+            Path(potential_dir) / f"ensemble_{tech}__central.parquet", columns=["cell_id", "incomplete_ensemble"]
+        )  # the rule of F7 (`pipeline.read_incomplete_cells`)
+        incomplete_ids = np.sort(ensemble.loc[ensemble["incomplete_ensemble"], "cell_id"].to_numpy(dtype="int64"))
         rows, adopted, n_cells, _ids, _top = run_protocol(
             res,
             members,
@@ -307,6 +315,7 @@ def build_convergence(
             seed=sampler.seed,
             tolerance=sampler.convergence_tolerance,
             max_batch_gb=max_batch_gb,
+            incomplete_ids=incomplete_ids,
         )
         if adopted is None:
             logger.warning(

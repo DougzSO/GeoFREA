@@ -215,10 +215,44 @@ def test_the_top_k_of_the_protocol_is_the_robust_top_k_that_f7_writes_at_the_sam
     assert set(top.tolist()) == f7_top and len(f7_top) > 0
 
 
+@pytest.mark.unit
+def test_the_protocol_leaves_the_incomplete_ensemble_cells_out_like_f7(tmp_path):
+    """COMMAND 208A (finding A of the diagnostics): the convergence and F7 have the same cells and the same k when a cell lacks a member."""
+    experiments = _robustness_experiments()
+    entry, _, dirs = _run_robustness(tmp_path / "f7", experiments=experiments, absent=[(2, SENSITIVITY[0])])
+    core = entry.windows["core"]
+    assert core.class_counts["incomplete_ensemble"] == 1 and core.n_f7_set == 19
+    sampler = experiments.sampler.model_copy(update={"initial_size": 24, "max_size_for_convergence": 24})
+    result = build_convergence(
+        "ZZZ", load_technologies(TECHNOLOGIES), _robustness_country(), ["wind"],
+        sampler=sampler, thresholds=THRESHOLDS, core_window="2041-2070", max_batch_gb=1.0,
+        out_dir=tmp_path / "conv", **{k: v for k, v in dirs.items() if k != "lcoe_dir"},
+    )  # fmt: skip
+    conv = result.technologies["wind"]
+    assert conv.n_cells == core.n_f7_set
+    assert pq.read_table(conv.table).to_pandas()["k"].iloc[-1] == core.k
+    # without the list, the protocol would count the cell F7 leaves out
+    resolved, members, candidates, decision, _ = _inputs(tmp_path / "bare", n_cells=20)
+    _, _, n_all, _, _ = run_protocol(
+        resolved, members, MEMBERS[1:], candidates, decision,
+        initial_size=8, max_size=8, seed=1, tolerance=0.01, max_batch_gb=1.0,
+    )  # fmt: skip
+    _, _, n_less, _, _ = run_protocol(
+        resolved, members, MEMBERS[1:], candidates, decision,
+        initial_size=8, max_size=8, seed=1, tolerance=0.01, max_batch_gb=1.0,
+        incomplete_ids=candidates[:1],
+    )  # fmt: skip
+    assert n_less == n_all - 1
+
+
 # -- the phase function ------------------------------------------------------------------------------------------------
 
 
-def _with_windows(dirs):
+def _with_windows(dirs, tech="wind"):
+    candidates = pd.read_parquet(dirs["candidates_dir"] / f"candidates_{tech}__central.parquet", columns=["cell_id"])["cell_id"]
+    ensemble = dirs["potential_dir"] / f"ensemble_{tech}__central.parquet"
+    if not ensemble.exists():  # F5 writes it; this stage has every cell complete
+        pd.DataFrame({"cell_id": candidates.astype("int64"), "incomplete_ensemble": False}).to_parquet(ensemble)
     (dirs["climate_dir"] / "members.yaml").write_text(
         yaml.safe_dump(
             {
