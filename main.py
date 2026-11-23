@@ -130,6 +130,7 @@ from geofrea.core.orchestrator import (
     phase_graph,
 )
 from geofrea.core.paths import data_root, interim, log_path, outputs_dir, phase_dir
+from geofrea.core.phase_registry import phase_label, validate_against
 from geofrea.core.power import keep_awake
 from geofrea.core.preregistration import verify as verify_preregistration
 from geofrea.core.production import (
@@ -1436,6 +1437,7 @@ def _build_phase_specs(
             )
             for spec in specs
         ]
+    validate_against({spec.name for spec in specs})  # config/phases.yaml names every PhaseSpec and only them (COMMAND 200)
     graph.update(phase_graph(specs))
     return specs
 
@@ -1551,8 +1553,9 @@ def print_plan(
     """Print the plan of one country: phase, action and reason, as `Orchestrator.plan` gave it."""
     print(f"PLAN {country_code} (scale {scale}): target phases {target_phases}, rerun {rerun_phases}; nothing is executed and no manifest is written")
     width = max((len(e.phase) for e in entries), default=5)
+    name_width = max((len(phase_label(e.phase)) for e in entries), default=5)
     for e in entries:
-        print(f"  {e.phase:<{width}}  {e.action:<16}  {e.reason}")
+        print(f"  {e.phase:<{width}}  {phase_label(e.phase):<{name_width}}  {e.action:<16}  {e.reason}")
     if not entries:
         print("  (no phase is needed)")
     if refusal:

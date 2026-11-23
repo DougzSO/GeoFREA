@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Document | `docs/METHODOLOGY.md` |
-| Version | 19.4.15 |
+| Version | 19.4.16 |
 | Adopted | 2026-09-15 |
 | Updated | 2026-11-23 |
 | Owner | Douglas |
@@ -143,28 +143,28 @@ Critical transitions:
 
 ### 4.2 Phase table
 
-| Phase | Module (`src/geofrea/<module>/`) | Purpose | Main outputs | Serves |
-|---|---|---|---|---|
-| F1 | `data_acquisition` | Resolve raw layers with provenance | Layer registry | RO1-RO3 infrastructure |
-| F1b | `data_quality_audit` | Audit raw layers, report anomalies | Audit report (required by F2b, F3 and F4) | V-04 |
-| F2a | `grid_alignment` | Align all layers to the 0.01 degree grid | Aligned rasters | RQ1 |
-| F2b | `siting_layers` | Build exclusion, cost-driver and resource layers per technology | Pixel layers | RO2, RQ2 |
-| F3 | `land_eligibility` | Combine exclusions, aggregate to cells, export candidate table | Candidate table, eligibility rasters | RO1, RO2, RQ1, RQ2 |
-| external_inputs | `climate_forcing` | Verify and register the CMIP6, ISIMIP3b and ERA5 files F4 consumes | External-inputs report | RO3 |
-| F4 | `climate_forcing` | Compute per-cell climate change factors per member | Forcing table, masked-cell table, member list | RO3, RQ3 |
-| hazard_context | `climate_forcing` | Compute hazard context indicators per cell and member | Hazard table | RO3, RQ3 |
-| climate_maps | `climate_forcing` | Diagnostic maps of the change factors | Climate maps | Section 11 |
-| potential_maps | `technical_potential` | COG and diagnostic maps of potential density and capacity factor at the reference climate, central land scenario; maps of the capacity and energy density per cell and per state, with circles for the state totals (M-F5-07) | Potential rasters, potential maps | T-R1 (F8 draws the thesis figure), Section 11 |
-| lcoe_maps | `lcoe_modeling` | COG and diagnostic maps of the LCOE at the reference member (nominal, p10, p50, p90), the nominal LCOE of the core window by SSP, and the nominal supply curve | LCOE rasters, LCOE maps | T-R11 (F8 draws the thesis figure), Section 11 |
-| robustness_maps | `robustness_analysis` | COG and diagnostic maps of the max regret, satisficing, top-k flags, classes and the sub-family regrets, per window | Robustness rasters, robustness maps | T-R4 (F8 draws the thesis figure), Section 11 |
-| overview | `overview` | Country overview maps and table over F2a to F4 outputs | Overview figures | Section 11 |
-| F5 | `technical_potential` | Capacity, CF, and energy per cell and member | Potential table | RO1, RO3, RQ1, RQ3 |
-| F6 | `lcoe_modeling` | LCOE kernel, parameter sampling, per-member LCOE summaries | LCOE summaries, design matrix | RO2, RQ2 |
-| F7 | `robustness_analysis` | Regret, satisficing, decomposition, scenario discovery, hypothesis tests | Robustness tables | RO4, RQ0, RQ4, H1-H5 |
-| F7b | `external_validation` | Plausibility checks against existing plants and published estimates | Validation tables | RO5 |
-| cross_country_h4 | `robustness_analysis` | Verdict of H4 per technology from the profiles of all the countries | `h4_verdict` tables, manifest of its own | RQ4, RQ5, H4 |
-| F8 | `results_synthesis` | Aggregate only; produce thesis outputs | Thesis figures and tables | RO5, RQ5 |
-| E1 | `explorer` | Precomputed static explorer | Static site bundle | RO5 |
+| Phase | Name | Module (`src/geofrea/<module>/`) | Purpose | Main outputs | Serves |
+|---|---|---|---|---|---|
+| F1 | Data acquisition | `data_acquisition` | Resolve raw layers with provenance | Layer registry | RO1-RO3 infrastructure |
+| F1b | Data audit | `data_quality_audit` | Audit raw layers, report anomalies | Audit report (required by F2b, F3 and F4) | V-04 |
+| F2a | Grid alignment | `grid_alignment` | Align all layers to the 0.01 degree grid | Aligned rasters | RQ1 |
+| F2b | Siting layers | `siting_layers` | Build exclusion, cost-driver and resource layers per technology | Pixel layers | RO2, RQ2 |
+| F3 | Land eligibility | `land_eligibility` | Combine exclusions, aggregate to cells, export candidate table | Candidate table, eligibility rasters | RO1, RO2, RQ1, RQ2 |
+| external_inputs | Climate inputs registry | `climate_forcing` | Verify and register the CMIP6, ISIMIP3b and ERA5 files F4 consumes | External-inputs report | RO3 |
+| F4 | Climate signal | `climate_forcing` | Compute per-cell climate change factors per member | Forcing table, masked-cell table, member list | RO3, RQ3 |
+| hazard_context | Hazard context | `climate_forcing` | Compute hazard context indicators per cell and member | Hazard table | RO3, RQ3 |
+| climate_maps | Climate maps | `climate_forcing` | Diagnostic maps of the change factors | Climate maps | Section 11 |
+| potential_maps | Potential maps | `technical_potential` | COG and diagnostic maps of potential density and capacity factor at the reference climate, central land scenario; maps of the capacity and energy density per cell and per state, with circles for the state totals (M-F5-07) | Potential rasters, potential maps | T-R1 (F8 draws the thesis figure), Section 11 |
+| lcoe_maps | Cost maps | `lcoe_modeling` | COG and diagnostic maps of the LCOE at the reference member (nominal, p10, p50, p90), the nominal LCOE of the core window by SSP, and the nominal supply curve | LCOE rasters, LCOE maps | T-R11 (F8 draws the thesis figure), Section 11 |
+| robustness_maps | Robustness maps | `robustness_analysis` | COG and diagnostic maps of the max regret, satisficing, top-k flags, classes and the sub-family regrets, per window | Robustness rasters, robustness maps | T-R4 (F8 draws the thesis figure), Section 11 |
+| overview | Country overview | `overview` | Country overview maps and table over F2a to F4 outputs | Overview figures | Section 11 |
+| F5 | Technical potential | `technical_potential` | Capacity, CF, and energy per cell and member | Potential table | RO1, RO3, RQ1, RQ3 |
+| F6 | Levelized cost | `lcoe_modeling` | LCOE kernel, parameter sampling, per-member LCOE summaries | LCOE summaries, design matrix | RO2, RQ2 |
+| F7 | Robustness and hypotheses | `robustness_analysis` | Regret, satisficing, decomposition, scenario discovery, hypothesis tests | Robustness tables | RO4, RQ0, RQ4, H1-H5 |
+| F7b | External validation | `external_validation` | Plausibility checks against existing plants and published estimates | Validation tables | RO5 |
+| cross_country_h4 | Cross-country comparison | `robustness_analysis` | Verdict of H4 per technology from the profiles of all the countries | `h4_verdict` tables, manifest of its own | RQ4, RQ5, H4 |
+| F8 | Results synthesis | `results_synthesis` | Aggregate only; produce thesis outputs | Thesis figures and tables | RO5, RQ5 |
+| E1 | Explorer | `explorer` | Precomputed static explorer | Static site bundle | RO5 |
 
 ---
 
@@ -591,6 +591,7 @@ Full bibliographic details must be confirmed during the literature review before
 
 | Version | Date | Change |
 |---|---|---|
+| 19.4.16 | 2026-11-23 | PATCH (COMMAND 200; no result changes, no fingerprint changes, no change of a phase module): the phase table of 4.2 gains a Name column, the English name of each phase from `config/phases.yaml`, the registry of the names (id, code, Portuguese and English names, group) that the plan, the log and the generated tables of the README and of the pipeline guide read; the ids of the code are unchanged. Items altered: none (4.2 is a table of the phases, not an item). |
 | 19.4.15 | 2026-11-23 | PATCH (COMMAND 191A; no code change that affects a result): M-F8-01 names the one number F8 derives, the H1 reference value `p_k^2 = (k / n)^2` from the counts F7 persists (DEC-096); A-08 states where the phase summaries go, `artifacts/` at the default scale and `artifacts__<scale>/` at another (D-core-055). Items altered: M-F8-01, A-08. |
 | 19.4.14 | 2026-11-18 | PATCH (COMMAND 175; no code changes that affect a result): new rule M-F7-21 with the sensitivity axes of `tau`, `cf_min`, `q_ref` and `top_k` in v1.0 (DEC-094; OQ-094 and OQ-008 closed): no configuration key is created and the digest of the pre-registration does not change. Items altered: M-F7-21 (new). |
 | 19.4.13 | 2026-11-18 | PATCH (COMMAND 174; no code changes that affect a result): M-F4-05 defines `rx5day_mm` as the Rx5day index of the ETCCDI (annual maximum of the precipitation accumulated in 5 consecutive days, mm, averaged over the years of the window; Zhang et al., 2011); M-F7-07 (H5b) states that the channel set of v1.0 is empty, because no channel has an exposure threshold with a source, so H5b and T-R10 are not available in v1.0 (DEC-093; OQ-051 and OQ-115 closed). Items altered: M-F4-05, M-F7-07. |

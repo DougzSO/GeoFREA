@@ -42,6 +42,7 @@ from geofrea.core.content_hash import content_hash, content_hash_like
 from geofrea.core.memory_cap import phase_cap
 from geofrea.core.paths import StoredPath, to_stored_path
 from geofrea.core.peak_memory import PhasePeak
+from geofrea.core.phase_registry import phase_label
 from geofrea.core.scale import manifest_file_name
 from geofrea.core.schemas import CountryParams
 
@@ -1401,11 +1402,12 @@ class Orchestrator:
                 logger.info(
                     "Phase '%s' [%s]: resuming — manifest status 'success' from a prior "
                     "run (started_at=%s, finished_at=%s), rerun_phases does not name it. "
-                    "Skipping re-execution.",
+                    "Skipping re-execution. (%s)",
                     spec.name,
                     self.country_code,
                     existing.started_at,
                     existing.finished_at,
+                    phase_label(spec.name),
                 )
                 continue
 
@@ -1421,7 +1423,7 @@ class Orchestrator:
                 else "no manifest entry yet"
             )
             logger.info(
-                "Phase '%s' [%s]: executing — %s.", spec.name, self.country_code, start_reason
+                "Phase '%s' [%s]: executing — %s. (%s)", spec.name, self.country_code, start_reason, phase_label(spec.name)
             )
 
             context = PhaseContext(
@@ -1571,9 +1573,10 @@ class Orchestrator:
                     (_transitive_closure({spec.name}, consumers) - {spec.name}) & to_attempt
                 )
                 logger.exception(
-                    "Phase '%s' [%s] FAILED\n  at: %s\n  dependents not run: %s",
+                    "Phase '%s' [%s] FAILED — %s\n  at: %s\n  dependents not run: %s",
                     spec.name,
                     self.country_code,
+                    phase_label(spec.name),
                     location,
                     dependents if dependents else "(none)",
                 )
@@ -1664,12 +1667,13 @@ class Orchestrator:
             if spec.summarize is not None:
                 summary_line = f"\n  summary: {spec.summarize(output)}"
             logger.info(
-                "Phase '%s' [%s] completed in %.1fs (CPU %.1fs, peak RSS %.0f MB)\n  artifacts:\n%s%s",
+                "Phase '%s' [%s] completed in %.1fs (CPU %.1fs, peak RSS %.0f MB) — %s\n  artifacts:\n%s%s",
                 spec.name,
                 self.country_code,
                 elapsed_s,
                 cpu_s,
                 peak.peak_rss_mb or 0.0,
+                phase_label(spec.name),
                 artifact_lines if artifact_lines else "    (none)",
                 summary_line,
             )

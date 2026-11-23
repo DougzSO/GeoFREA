@@ -6,6 +6,34 @@ GeoFREA is a spatially explicit, open-data framework that estimates the technica
 
 F1 data acquisition, F1b data quality audit, F2a grid alignment, F2b siting layers, F3 land eligibility, F4 climate forcing, F5 technical potential, F6 LCOE modeling, F7 robustness analysis, F7b external validation, F8 results synthesis. Each phase is a package under `src/geofrea/` and writes its artifacts to the per-country manifest.
 
+The names of the phases (the id is what the code, the manifests and the output folders use; the Portuguese name is what the plan and the log print) are kept in `config/phases.yaml`; this table is generated from it by `scripts/render_phase_tables.py`.
+
+<!-- phases:begin (generated from config/phases.yaml by scripts/render_phase_tables.py; do not edit by hand) -->
+| Code | Phase id | Nome (pt) | Name (en) | Group | Orchestrated |
+|---|---|---|---|---|---|
+| F1 | `data_acquisition` | Aquisição de dados | Data acquisition | Dados | yes |
+| F1b | `data_quality_audit` | Auditoria dos dados | Data audit | Dados | yes |
+| - | `external_inputs` | Registro das entradas climáticas | Climate inputs registry | Clima | yes |
+| F2a | `grid_alignment` | Alinhamento à grade | Grid alignment | Território | yes |
+| F2b | `siting_layers` | Camadas de restrição e custo | Siting layers | Território | yes |
+| F3 | `land_eligibility` | Elegibilidade do solo | Land eligibility | Território | yes |
+| F4 | `climate_forcing` | Sinal climático | Climate signal | Clima | yes |
+| - | `hazard_context` | Contexto de perigos | Hazard context | Clima | yes |
+| - | `climate_maps` | Mapas do clima | Climate maps | Clima | yes |
+| - | `overview` | Visão geral do país | Country overview | Território | yes |
+| F5 | `technical_potential` | Potencial técnico | Technical potential | Potencial | yes |
+| - | `potential_maps` | Mapas de potencial | Potential maps | Potencial | yes |
+| F6 | `lcoe_modeling` | Custo nivelado (LCOE) | Levelized cost | Economia | yes |
+| - | `sample_size_convergence` | Convergência da amostra | Sample-size convergence | Economia | yes |
+| - | `lcoe_maps` | Mapas de custo | Cost maps | Economia | yes |
+| F7 | `robustness_analysis` | Robustez e hipóteses | Robustness and hypotheses | Robustez | yes |
+| - | `robustness_maps` | Mapas de robustez | Robustness maps | Robustez | yes |
+| - | `cross_country_h4` | Comparação entre países | Cross-country comparison | Robustez | no |
+| F7b | `external_validation` | Validação externa | External validation | Validação | yes |
+| F8 | `results_synthesis` | Síntese de resultados | Results synthesis | Síntese | yes |
+| E1 | `explorer` | Explorador | Explorer | Plataforma | no |
+<!-- phases:end -->
+
 ## Run
 
 1. Copy `.env.example` to `.env` and set the data directories (`GEOFREA_DATA_DIR` at least).
