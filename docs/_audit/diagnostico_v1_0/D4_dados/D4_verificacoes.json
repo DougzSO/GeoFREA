@@ -1,0 +1,197 @@
+{
+ "PRT": {
+  "bg_lc": {
+   "lc_arvores": 0.29634813409262933,
+   "lc_arbustos": 0.08568999684123323,
+   "lc_pastagem": 0.4932115598943899,
+   "lc_lavoura": 0.05605528437840834,
+   "lc_construido": 0.027237693474464655,
+   "lc_solo_exposto": 0.0261473073003272,
+   "lc_neve_gelo": 0.0,
+   "lc_agua": 0.012974545107785469,
+   "lc_areas_umidas": 0.0023354789107618585,
+   "lc_mangue": 0.0,
+   "lc_musgo": 0.0,
+   "n_pixels": 93215
+  },
+  "n_units": 529,
+  "px_deg": 0.01
+ },
+ "PRT solar": {
+  "n_units": 168,
+  "capacity_mw": 3523.2999999999997,
+  "E5_erro_max": 4.344516324472636e-08,
+  "E4_erro_max_arquivo_F3": 0.4422282870769184,
+  "E4_erro_max_fabdem": 6.294957066721452e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 3.0,
+   "central": 5.0,
+   "permissive": 10.0
+  },
+  "classes_excluidas": [
+   10,
+   40,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 164,
+  "mw_exact": 3443.9000000000005,
+  "n_sem_ano": 10
+ },
+ "PRT wind": {
+  "n_units": 361,
+  "capacity_mw": 5729.6,
+  "E5_erro_max": 4.344516324472636e-08,
+  "E4_erro_max_arquivo_F3": 0.07955194087732581,
+  "E4_erro_max_fabdem": 5.018686621838242e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 10.0,
+   "central": 20.0,
+   "permissive": 30.0
+  },
+  "classes_excluidas": [
+   10,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 359,
+  "mw_exact": 5699.6,
+  "n_sem_ano": 0
+ },
+ "IND": {
+  "bg_lc": {
+   "lc_arvores": 0.2398070214095497,
+   "lc_arbustos": 0.044192952925087764,
+   "lc_pastagem": 0.08391360844083401,
+   "lc_lavoura": 0.4936853995179469,
+   "lc_construido": 0.019234531586945332,
+   "lc_solo_exposto": 0.08615915393632702,
+   "lc_neve_gelo": 0.00673267552049715,
+   "lc_agua": 0.01784835192792846,
+   "lc_areas_umidas": 0.002470245219746274,
+   "lc_mangue": 0.0010556635839448045,
+   "lc_musgo": 0.0049003959311925225,
+   "n_pixels": 2779362
+  },
+  "n_units": 4403,
+  "px_deg": 0.009999999999999998
+ },
+ "IND solar": {
+  "n_units": 3724,
+  "capacity_mw": 99269.29999999999,
+  "E5_erro_max": 4.4504801399725125e-08,
+  "E4_erro_max_arquivo_F3": 0.5991299124721389,
+  "E4_erro_max_fabdem": 7.431348902908752e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 3.0,
+   "central": 5.0,
+   "permissive": 10.0
+  },
+  "classes_excluidas": [
+   10,
+   40,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 3287,
+  "mw_exact": 52805.9,
+  "n_sem_ano": 164
+ },
+ "IND wind": {
+  "n_units": 679,
+  "capacity_mw": 38937.0,
+  "E5_erro_max": 4.4504801399725125e-08,
+  "E4_erro_max_arquivo_F3": 0.06820377577336754,
+  "E4_erro_max_fabdem": 4.297513334083902e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 10.0,
+   "central": 20.0,
+   "permissive": 30.0
+  },
+  "classes_excluidas": [
+   10,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 58,
+  "mw_exact": 3652.7,
+  "n_sem_ano": 276
+ },
+ "BRA": {
+  "bg_lc": {
+   "lc_arvores": 0.5523119325069449,
+   "lc_arbustos": 0.10331256988207295,
+   "lc_pastagem": 0.21825049248415815,
+   "lc_lavoura": 0.08425353935896997,
+   "lc_construido": 0.003833153925791224,
+   "lc_solo_exposto": 0.00763684619869221,
+   "lc_neve_gelo": 0.0,
+   "lc_agua": 0.018100275945187604,
+   "lc_areas_umidas": 0.010877134200385873,
+   "lc_mangue": 0.0014240554977971204,
+   "lc_musgo": 0.0,
+   "n_pixels": 7100454
+  },
+  "n_units": 5081,
+  "px_deg": 0.01
+ },
+ "BRA solar": {
+  "n_units": 3946,
+  "capacity_mw": 24894.300000000003,
+  "E5_erro_max": 4.4504801399725125e-08,
+  "E4_erro_max_arquivo_F3": 0.5183421232536065,
+  "E4_erro_max_fabdem": 7.364981335911125e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 3.0,
+   "central": 5.0,
+   "permissive": 10.0
+  },
+  "classes_excluidas": [
+   10,
+   40,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 601,
+  "mw_exact": 19775.1,
+  "n_sem_ano": 47
+ },
+ "BRA wind": {
+  "n_units": 1135,
+  "capacity_mw": 35945.6,
+  "E5_erro_max": 4.397498232222574e-08,
+  "E4_erro_max_arquivo_F3": 0.06277084327908702,
+  "E4_erro_max_fabdem": 4.7571403261059686e-08,
+  "limiares_declividade_pct": {
+   "restrictive": 10.0,
+   "central": 20.0,
+   "permissive": 30.0
+  },
+  "classes_excluidas": [
+   10,
+   50,
+   70,
+   80,
+   90,
+   95
+  ],
+  "n_exact": 1129,
+  "mw_exact": 35604.4,
+  "n_sem_ano": 21
+ }
+}

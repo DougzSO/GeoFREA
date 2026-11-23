@@ -1,0 +1,345 @@
+{
+ "item1": {
+  "conferencia_lcoe_recon_vs_gravado_max_abs": 0.0,
+  "limiar": 200.0,
+  "tau": 31.95,
+  "n_celulas_f6": 178289,
+  "capacidade_f6_mw": 1990673.8797351033,
+  "acima": {
+   "n": 62437,
+   "capacidade_mw": 494171.5025220804,
+   "cf_f5": {
+    "p5": 0.016190227262676608,
+    "p50": 0.05504320194782398,
+    "p95": 0.08241137645140326
+   },
+   "cf_eff": {
+    "p5": 0.016190227262676604,
+    "p50": 0.055043201947823965,
+    "p95": 0.08241137645140324
+   },
+   "dist_sub_km": {
+    "p5": 9.32581770386319,
+    "p50": 45.492615553241336,
+    "p95": 165.3134337346562
+   },
+   "dist_road_km": {
+    "p5": 1.1973450578936287,
+    "p50": 9.017426069425975,
+    "p95": 53.49118485072726
+   },
+   "lcoe": {
+    "p5": 207.639629681729,
+    "p50": 311.5512446223436,
+    "p95": 1155.779274889397,
+    "p99": 1956.8842437584353
+   },
+   "weibull_a": {
+    "p5": 2.7488283720119497,
+    "p50": 3.833685024189999,
+    "p95": 4.488364816196051
+   },
+   "area_elegivel_km2": {
+    "p5": 0.31754134903434983,
+    "p50": 9.68742702515135,
+    "p95": 23.937375507749728
+   },
+   "elevacao_m": {
+    "p5": 27.035271856224668,
+    "p50": 221.26466369628906,
+    "p95": 675.7037988740717
+   }
+  },
+  "abaixo": {
+   "n": 115852,
+   "capacidade_mw": 1496502.377213023,
+   "cf_f5": {
+    "p5": 0.09137735600083027,
+    "p50": 0.15989769377237323,
+    "p95": 0.3479674291016081
+   },
+   "cf_eff": {
+    "p5": 0.09137735600083026,
+    "p50": 0.1598976937723732,
+    "p95": 0.34796742910160805
+   },
+   "dist_sub_km": {
+    "p5": 5.635729889880102,
+    "p50": 27.782325216458982,
+    "p95": 92.88981291745806
+   },
+   "dist_road_km": {
+    "p5": 1.156874000609313,
+    "p50": 5.094817372334917,
+    "p95": 23.96262702994848
+   },
+   "lcoe": {
+    "p5": 48.65297254488679,
+    "p50": 106.20607669409878,
+    "p95": 187.27426313225405,
+    "p99": 197.272658530448
+   },
+   "weibull_a": {
+    "p5": 4.479493484617349,
+    "p50": 5.652287055543543,
+    "p95": 7.76304888924621
+   },
+   "area_elegivel_km2": {
+    "p5": 1.8055864112877185,
+    "p50": 18.676862436868397,
+    "p95": 29.319612458537026
+   },
+   "elevacao_m": {
+    "p5": 46.907541536286416,
+    "p50": 434.9140878954181,
+    "p95": 946.2448022337123
+   }
+  },
+  "n_acima": 62437,
+  "frac_n_acima": 0.35020107802500433,
+  "frac_cap_acima": 0.248243324812118,
+  "lcoe_maximo": 8076.974256260121,
+  "acima_de_500": 13335,
+  "acima_de_1000": 4251,
+  "acima_de_2000": 568,
+  "classes_f7_das_acima": {
+   "ranked": 56742,
+   "incomplete_ensemble": 5691,
+   "climate_data_invalid": 4
+  },
+  "classes_f7_das_abaixo": {
+   "ranked": 114439,
+   "incomplete_ensemble": 1413
+  },
+  "causa": {
+   "acima_com_lcoe_sem_conexao_ainda_acima": 59149,
+   "acima_com_lcoe_so_cf_ainda_acima": 57785,
+   "parcela_conexao_mediana_nas_acima": 0.040234817385939585,
+   "parcela_conexao_mediana_nas_abaixo": 0.02625449909650606,
+   "cf_min_das_acima": 0.0023155484180771213,
+   "cf_max_das_acima": 0.10456449475869438,
+   "cf_necessario_p_200_sem_conexao_mediana": null,
+   "cf_para_lcoe_200_so_capex_opex": 0.08096044450849497,
+   "cf_para_lcoe_tau_so_capex_opex": 0.5067946448106102
+  },
+  "onde": {
+   "n_admin1": 27,
+   "n_admin1_com_acima": 24,
+   "top5_admin1_por_n_acima": [
+    {
+     "admin1_id": "BRA.12_1",
+     "n": 23190,
+     "n_acima": 14477,
+     "frac": 0.6242777059077188
+    },
+    {
+     "admin1_id": "BRA.14_1",
+     "n": 14990,
+     "n_acima": 13092,
+     "frac": 0.8733822548365577
+    },
+    {
+     "admin1_id": "BRA.4_1",
+     "n": 5919,
+     "n_acima": 5911,
+     "frac": 0.9986484203412739
+    },
+    {
+     "admin1_id": "BRA.13_1",
+     "n": 19117,
+     "n_acima": 4646,
+     "frac": 0.24302976408432286
+    },
+    {
+     "admin1_id": "BRA.10_1",
+     "n": 8434,
+     "n_acima": 4374,
+     "frac": 0.5186151292387954
+    }
+   ],
+   "top3_admin1_participacao_nas_acima": 0.5362205102743566,
+   "admin1_com_mais_de_90pct_acima": 2,
+   "admin1_com_menos_de_10pct_acima": 12,
+   "dominante_exclusao_acima": {
+    "E5": 57346,
+    "E4": 3118,
+    "E1": 1253,
+    "E6": 555,
+    "E3": 157,
+    "E2": 8
+   },
+   "dominante_exclusao_abaixo": {
+    "E5": 79901,
+    "E4": 18613,
+    "E3": 6256,
+    "E6": 5853,
+    "E1": 5081,
+    "E2": 123
+   },
+   "lat_mediana_acima": -9.625,
+   "lat_mediana_abaixo": -16.22500000000001,
+   "lon_mediana_acima": -52.07499999999999,
+   "lon_mediana_abaixo": -47.724999999999994
+  },
+  "efeito": {
+   "n_f7": 178289,
+   "n_ranked": 171181,
+   "n_acima_no_f7": 62437,
+   "n_acima_ranked": 56742,
+   "cap_acima_ranked_mw": 471522.0072479989,
+   "lstar_min_entre_futuros": 13.826077916907614,
+   "lstar_max_entre_futuros": 35.18109855575971,
+   "lstar_mediana": 22.82816860714658,
+   "limite_inferior_aprox_das_acima_minimo": 44.214217724638814,
+   "limite_inferior_aprox_das_acima_p1": 56.85593675354822,
+   "razao_min_sorteios_sobre_nominal_min_das_acima": 0.6052390410253184,
+   "razao_min_membro_min_das_acima": 0.26636770588489384,
+   "n_acima_com_limite_inferior_menor_que_lstar_max": 0,
+   "mr_acima": {
+    "p0": 6.92937585851148,
+    "p5": 7.889939703230241,
+    "p50": 12.107687481555244,
+    "p95": 52.20367021948872
+   },
+   "mr_abaixo": {
+    "p0": 0.0,
+    "p5": 1.0841148203823479,
+    "p50": 3.550610071666464,
+    "p95": 7.082102018417378
+   },
+   "sr_acima_max": 0.0,
+   "sr_acima_media": 0.0,
+   "sr_abaixo_media": 0.009846527116338542,
+   "acima_no_topk_robusto": 0,
+   "acima_no_topk_nominal": 0,
+   "mr_min_acima_vs_mr_do_corte": 4.031242568603998,
+   "k_robusto_no_f7": 17119,
+   "k_se_excluisse_as_acima": 11586,
+   "mr_max_no_topk": 1.7189181103808129,
+   "spearman_lcoe_mr_todas": 0.9987239880630414,
+   "spearman_lcoe_mr_sem_acima": 0.9972931123624645,
+   "jaccard_top10_nom_rob_todas": 0.9557865874557294,
+   "jaccard_top10_nom_rob_sem_acima": 0.9579127459366981,
+   "k_ranked": 17119,
+   "k_ranked_sem_acima": 11444,
+   "n_abaixo_tau_nominal_f7": 137,
+   "capacidade_abaixo_tau_nominal_mw": 2009.6811187925764
+  }
+ },
+ "item3_pares": {
+  "PRT solar": {
+   "n_celulas": 3414,
+   "tau": 54.53,
+   "lcoe_min": 43.52337889047998,
+   "lcoe_p1": 44.9698998050804,
+   "lcoe_mediana": 50.38387346576895,
+   "cf_mediana": 0.18042904274902719,
+   "cf_p99": 0.1953164375456372,
+   "cf_p999": 0.19942050419520208,
+   "cf_max": 0.2006218060643252,
+   "dist_sub_p1": 1.5562769134406707,
+   "dist_sub_p5": 2.793610776070016,
+   "dist_sub_mediana": 12.722826860698069,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 10,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 849
+  },
+  "PRT wind": {
+   "n_celulas": 3332,
+   "tau": 49.64,
+   "lcoe_min": 32.21254975723073,
+   "lcoe_p1": 38.52306707131056,
+   "lcoe_mediana": 63.64849288971154,
+   "cf_mediana": 0.2562170955712598,
+   "cf_p99": 0.42280381734406186,
+   "cf_p999": 0.4773588671717879,
+   "cf_max": 0.5362767045900123,
+   "dist_sub_p1": 1.736377287748416,
+   "dist_sub_p5": 3.1458796144693726,
+   "dist_sub_mediana": 13.062781840559694,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 5,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 1122
+  },
+  "IND solar": {
+   "n_celulas": 93617,
+   "tau": 28.26,
+   "lcoe_min": 21.36722920616252,
+   "lcoe_p1": 25.257408901201316,
+   "lcoe_mediana": 29.030438553577806,
+   "cf_mediana": 0.18081344668073007,
+   "cf_p99": 0.21248905465292792,
+   "cf_p999": 0.2325535356124674,
+   "cf_max": 0.2455710963859907,
+   "dist_sub_p1": 2.543205443117242,
+   "dist_sub_p5": 4.808516427993959,
+   "dist_sub_mediana": 20.366250538421586,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 20,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 17291
+  },
+  "IND wind": {
+   "n_celulas": 75535,
+   "tau": 36.43,
+   "lcoe_min": 17.52033198324636,
+   "lcoe_p1": 31.5485051611253,
+   "lcoe_mediana": 71.79247227457041,
+   "cf_mediana": 0.14234009316157467,
+   "cf_p99": 0.3233762118910322,
+   "cf_p999": 0.4022900308254959,
+   "cf_max": 0.576873417148569,
+   "dist_sub_p1": 2.642024147911519,
+   "dist_sub_p5": 4.737870672484146,
+   "dist_sub_mediana": 18.63314244538325,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 17,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 26813
+  },
+  "BRA solar": {
+   "n_celulas": 190001,
+   "tau": 43.97,
+   "lcoe_min": 42.5588073765331,
+   "lcoe_p1": 45.57922591190058,
+   "lcoe_mediana": 52.30265284644386,
+   "cf_mediana": 0.1815624846744137,
+   "cf_p99": 0.20239068176322797,
+   "cf_p999": 0.2061677430548786,
+   "cf_max": 0.21062790219862418,
+   "dist_sub_p1": 2.9427944452230475,
+   "dist_sub_p5": 6.39875499133894,
+   "dist_sub_mediana": 34.28685518407021,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 40,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 27262
+  },
+  "BRA wind": {
+   "n_celulas": 178289,
+   "tau": 31.95,
+   "lcoe_min": 23.963786423175257,
+   "lcoe_p1": 39.99990303855323,
+   "lcoe_mediana": 148.79321305992235,
+   "cf_mediana": 0.11464165581575912,
+   "cf_p99": 0.422241220398272,
+   "cf_p999": 0.5156207213956762,
+   "cf_max": 0.6910686618861659,
+   "dist_sub_p1": 3.1010354700122122,
+   "dist_sub_p5": 6.370834786105311,
+   "dist_sub_mediana": 32.90776275859607,
+   "n_dist_sub_zero": 0,
+   "n_dist_sub_menor_1km": 28,
+   "n_dist_road_zero": 0,
+   "n_vizinhas_mediana": 8.0,
+   "n_celulas_com_menos_de_8_vizinhas": 30224
+  }
+ }
+}
