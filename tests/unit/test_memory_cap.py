@@ -72,17 +72,14 @@ def test_a_phase_with_no_measurement_has_the_cap_of_the_file():
     assert cap.hard_mb == pytest.approx(1536 * 1.25)
 
 
-def test_results_synthesis_has_no_cap_of_its_own():
-    assert phase_cap("results_synthesis").source == "default"
-
-
-def test_the_phases_of_f6_to_f7b_have_the_cap_of_their_bra_peak_of_commands_179_to_188a():
+def test_the_phases_of_f6_to_f8_have_the_cap_of_their_bra_peak_of_commands_179_to_190c():
     expected = {
         "lcoe_modeling": (1566, 1984),
         "sample_size_convergence": (1455, 1856),
         "external_validation": (3093, 3904),
         "lcoe_maps": (2387, 3008),
         "robustness_maps": (2569, 3264),
+        "results_synthesis": (2814, 3520),
     }
     for phase, (peak, cap_mb) in expected.items():
         cap = phase_cap(phase)

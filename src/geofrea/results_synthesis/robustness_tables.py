@@ -249,7 +249,7 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_statistics",
                 frame,
-                f"H1 to H5 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails.",
+                f"H1 to H5 statistics for {technology}: core window, 2071-2100 window and the other cell scale. A value with p10 and p90 is the central value at the nominal parameters and the range over the draws; a null verdict means no rule is pre-registered or the hypothesis is not testable, not that it fails. The 0.1 degree runs were executed without --production; COMMAND 189A showed that the option only audits inputs and changes no computed value.",
                 technology=technology,
             )
         else:
@@ -288,7 +288,7 @@ def t_r6(ctx: BuildContext) -> None:
                 T_R6,
                 "hypothesis_verdicts",
                 frame,
-                f"Verdict of H1 to H5 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2) and so has H5 (the resource ratio R_loss and the exposure ratio R_exp, both compared with lambda; a status such as not_testable, target_not_met_at_reference or exposure_not_available stands for a verdict that does not exist). H4 is a statement about the countries together: its row counts the pairs of a Climate-Dominated and a Techno-Economic-Dominated country (threshold 1) and the countries with a profile (at least 2), and is read from the support phase cross_country_h4. A sensitivity never revises a verdict.",
+                f"Verdict of H1 to H5 for {technology}, one row per hypothesis, window and scale: the primary statistic, its reference value (the value expected by chance), the pre-registered threshold and the verdict, read from the F7 summary tables. H1 has two primary statistics (H1a and H1b, the second in the columns ending in 2) and so has H5 (the resource ratio R_loss and the exposure ratio R_exp, both compared with lambda; a status such as not_testable, target_not_met_at_reference or exposure_not_available stands for a verdict that does not exist). H4 is a statement about the countries together: its row counts the pairs of a Climate-Dominated and a Techno-Economic-Dominated country (threshold 1) and the countries with a profile (at least 2), and is read from the support phase cross_country_h4. A sensitivity never revises a verdict. The 0.1 degree runs were executed without --production; COMMAND 189A showed that the option only audits inputs and changes no computed value.",
                 technology=technology,
             )
         captions = {
