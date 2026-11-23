@@ -2,7 +2,7 @@
 
 Escrito para: o autor, para levar ao chat de planejamento antes do 170.
 
-Regras 1 a 4: nenhuma violada. Nenhuma fase, main ou orquestrador rodou em dado real. Instantâneo dos manifestos em `GeoFREA_data/_snapshots/20261117_pre169/`. Nenhum arquivo rastreado alterado (scripts auxiliares ficaram no scratchpad).
+Regras 1 a 4: nenhuma violada. Nenhuma fase, main ou orquestrador rodou em dado real. Instantâneo dos manifestos em `GeoFREA_data/archive/pre_v1_0/_snapshots/20261117_pre169/`. Nenhum arquivo rastreado alterado (scripts auxiliares ficaram no scratchpad).
 
 ## Resumo: o que muda os comandos seguintes
 

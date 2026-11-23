@@ -21,7 +21,7 @@ Power-Troubleshooter 1); where two numbers are given, the second is CPU. CPU can
 
 ## 2. Before and after, by country and phase
 
-"Before" is the last execution recorded in the reference manifest of each country (`outputs/<ISO>/unattended/20261029_135838/manifest_before.json`, the
+"Before" is the last execution recorded in the reference manifest of each country (`archive/pre_v1_0/outputs/<ISO>/unattended/20261029_135838/manifest_before.json`, the
 state of the pipeline at the start of the unattended round; CPU seconds). "After" is the unattended round of 2026-10-29 (awake seconds, CPU seconds, peak resident memory of
 the process). Two caveats govern how to read it.
 

@@ -91,7 +91,7 @@
         "IND",
         "BRA"
       ],
-      "where": "The pipeline itself: config/deferred_checks.yaml and core/deferred_check.py (D-core-050). The first execution of each phase of IND and BRA on main compares the content hash of its artifacts with outputs/<ISO>/unattended/20261029_135838/manifest_before.json and writes outputs/<ISO>/deferred_check.json.",
+      "where": "The pipeline itself: config/deferred_checks.yaml and core/deferred_check.py (D-core-050). The first execution of each phase of IND and BRA on main compares the content hash of its artifacts with archive/pre_v1_0/outputs/<ISO>/unattended/20261029_135838/manifest_before.json and writes outputs/<ISO>/deferred_check.json.",
       "to_do": [
         "adopt the aligned layers once per country: python scripts/adopt_aligned_cache_keys.py <ISO> --revision adopt-base-75 --proof docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json",
         "run the phases of F1 to F5 for the country (the next real round) and read outputs/<ISO>/deferred_check.json: IDENTICO or EXPLICADO for every phase",

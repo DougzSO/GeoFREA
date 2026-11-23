@@ -52,11 +52,11 @@ Steady state, measured apart (the phase run in-process on a scratch data directo
 
 ## Integrity and manifests
 
-`check_manifests --bytes`: PRT 105, IND 107, BRA 105 artifacts, all VALID. `verify_cache_integrity` without `--dry-run` (report `logs/integrity/integrity_20261112_143148.md`): PRT {ok: 114}, IND {ok: 140}, BRA {ok: 115}; no key invalidated. The manifests have schema 2.11, run_id 6ec04875 (the three countries), 12 phases `success`, none `stale_upstream`.
+`check_manifests --bytes`: PRT 105, IND 107, BRA 105 artifacts, all VALID. `verify_cache_integrity` without `--dry-run` (report `archive/pre_v1_0/logs/integrity/integrity_20261112_143148.md`): PRT {ok: 114}, IND {ok: 140}, BRA {ok: 115}; no key invalidated. The manifests have schema 2.11, run_id 6ec04875 (the three countries), 12 phases `success`, none `stale_upstream`.
 
 ## Deferred content checks (`awaiting_content_check_post_77`), verdicts
 
-Against the manifest of the state before COMMAND 77 (`unattended/20261029_135838/manifest_before.json`, content hashes only), and the reference 1d34ab23:
+Against the manifest of the state before COMMAND 77 (`archive/pre_v1_0/outputs/<ISO>/unattended/20261029_135838/manifest_before.json`, content hashes only), and the reference 1d34ab23:
 
 - **F4 of IND and of BRA: settled.** `forcing`, `hazard_context` and `climate_maps` IDENTICO to the state before 77. `forcing_masked`: the hash differs, but the reference 1d34ab23 has the hash of the state before 77 and the file now equals the reference in value (pandas 3 writes `string` where `large_string` was written; 0 rows in IND, 42,947 in BRA): EQUIVALENTE. (COMMAND 133.)
 - **F1b of IND**: `ran_clean` already.

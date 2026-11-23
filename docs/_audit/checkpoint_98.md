@@ -8,7 +8,7 @@ Goal of the command: any interruption (power loss, killed process, memory guard,
 
 ## 1. Evidence and its limits
 
-- Durations come from the round `20261029_135838` (`logs/unattended_rounds/unattended_round_20261029_135838.log`, awake seconds) and the BRA manifest. In that round F2a ran with the aligned layers adopted from the earlier revision, so its 5.6 s is a cache hit, not the cost of the work.
+- Durations come from the round `20261029_135838` (`archive/pre_v1_0/logs/unattended_rounds/unattended_round_20261029_135838.log`, awake seconds) and the BRA manifest. In that round F2a ran with the aligned layers adopted from the earlier revision, so its 5.6 s is a cache hit, not the cost of the work.
 - Cold F2a: `scripts/run_unattended.ps1` states about 42,000 s for BRA. For IND, the ledger (`interim/IND/grid_alignment/layers.json`) records 4,157 s of wall time for the elevation layer of the last completed cold run (it also produces `slope` and `slope_counts`, ledger status `cached`); the run interrupted on 2026-11-05 had done 1,450 of 2,750 strips in 2,893 s (`child.log`). Wall time includes any sleep of the computer.
 - F6, F7 and F8 have never run on real data. The BRA manifest ends at `potential_maps`. Their durations are not measured; the sizes below come from the code and the configuration, and the column says "not measured".
 - "Verified" means the code was read for this audit. "To verify" means the unit is inferred from names and progress logs and is read in step 1 before any change.
