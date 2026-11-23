@@ -26,6 +26,10 @@ The reference moves only by an explicit act (OQ-080, COMMAND 137): `core.deferre
 `main.py --publish-reference`, runs the gate over every phase of the round and keeps it (`publish_state`) only if no phase is DIFERENTE and every phase has a
 comparison. The pipeline does not publish by itself any more: a run that passes its own gate is not thereby the reference.
 A file is copied only if its SHA-256 is the one the manifest recorded for it: a reference never holds a file that is not the one of the run.
+
+`prune` (COMMAND 196, V196) is the only deletion the store does: it keeps `latest.json` and the round each country points to there (the reference published
+by the last `--publish-reference`) and removes every other round (older rounds, `seed_*`, `*.superseded_*`) and the objects no kept round lists. It plans
+first (`dry_run=True`, the default): nothing is touched until it is called with `dry_run=False`.
 """
 
 from __future__ import annotations
@@ -79,6 +83,19 @@ def _write_json(path: Path, data: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
     replace_durable(tmp, path)
+
+
+@dataclass(frozen=True)
+class PrunePlan:
+    """What `ReferenceStore.prune` keeps and removes, and the space the removal frees."""
+
+    keep_rounds: tuple[tuple[str, str], ...]  # (ISO, run_id) of the rounds `latest.json` points to
+    remove_rounds: tuple[Path, ...]  # the round directories that go
+    remove_objects: tuple[Path, ...]  # the objects no kept round lists
+    freed_bytes: int  # the bytes the disk gets back: the removed objects, and files of removed rounds that are not links to an object
+    kept_bytes: int  # the objects the kept rounds list
+    unknown: tuple[Path, ...]  # entries of the store root that are neither a round, `objects`, nor `latest.json`: never touched
+    executed: bool = False
 
 
 @dataclass
@@ -290,3 +307,72 @@ class ReferenceStore:
                 raise
             logger.error("reference store: the round %s of %s could not be kept: %s", manifest.run_id, manifest.country_code, exc)
             return None
+
+    # --- pruning -------------------------------------------------------------------------------------------------------------------------
+
+    def prune(self, *, dry_run: bool = True) -> PrunePlan:
+        """Keep `latest.json` and the rounds it points to; remove the other rounds and the objects nobody lists (COMMAND 196, V196).
+
+        The plan is computed from the files on disk; with `dry_run` (the default) nothing is written or deleted. A kept round must have its `index.json`
+        and every object that index lists, or `ValueError` is raised before anything is removed: a prune never leaves the reference incomplete.
+        """
+        latest_path = self.root / LATEST_NAME
+        if not latest_path.is_file():
+            raise ValueError(f"{latest_path} does not exist: there is no reference to keep, nothing is pruned")
+        latest: dict[str, str] = json.loads(latest_path.read_text(encoding="utf-8"))
+        if not latest:
+            raise ValueError("latest.json is empty: nothing is pruned")
+        keep = {(iso.upper(), run_id) for iso, run_id in latest.items()}
+        listed: set[str] = set()
+        for iso, run_id in sorted(keep):
+            if not (self.round_dir(iso, run_id) / INDEX_NAME).is_file():
+                raise ValueError(f"the round {run_id} of {iso} that latest.json points to has no {INDEX_NAME}: nothing is pruned")
+            listed |= {entry["sha256"] for entry in self.index(iso, run_id)["files"].values()}
+        missing = sorted(sha for sha in listed if not self._object(sha).is_file())
+        if missing:
+            raise ValueError(f"{len(missing)} objects of the kept rounds are missing from the store (first: {missing[0][:12]}): nothing is pruned")
+
+        remove_rounds: list[Path] = []
+        unknown: list[Path] = []
+        for entry in sorted(self.root.iterdir()):
+            if entry.name in (LATEST_NAME, "objects"):
+                continue
+            if not entry.is_dir():
+                unknown.append(entry)
+                continue
+            for sub in sorted(entry.iterdir()):
+                if sub.is_dir() and (sub.name.upper(), entry.name) not in keep:
+                    remove_rounds.append(sub)
+                elif not sub.is_dir():
+                    unknown.append(sub)
+        remove_objects: list[Path] = []
+        freed = kept = 0
+        objects_dir = self.root / "objects"
+        if objects_dir.is_dir():
+            for obj in sorted(objects_dir.rglob("*")):
+                if not obj.is_file():
+                    continue
+                if obj.name in listed:
+                    kept += obj.stat().st_size
+                else:
+                    remove_objects.append(obj)
+                    freed += obj.stat().st_size
+        for round_dir in remove_rounds:  # a file of a removed round that is not a link to an object is a copy: its bytes come back too
+            for file in round_dir.rglob("*"):
+                if file.is_file() and file.stat().st_nlink == 1:
+                    freed += file.stat().st_size
+        plan = PrunePlan(
+            tuple(sorted(keep)), tuple(remove_rounds), tuple(remove_objects), freed, kept, tuple(unknown), executed=not dry_run
+        )
+        if dry_run:
+            return plan
+        for round_dir in remove_rounds:
+            shutil.rmtree(round_dir)
+            if not any(round_dir.parent.iterdir()):
+                round_dir.parent.rmdir()
+        for obj in remove_objects:
+            obj.unlink()
+            if not any(obj.parent.iterdir()):
+                obj.parent.rmdir()
+        logger.info("reference store: pruned %d rounds and %d objects, %d bytes freed", len(remove_rounds), len(remove_objects), freed)
+        return plan

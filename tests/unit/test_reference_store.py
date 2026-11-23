@@ -252,3 +252,76 @@ def test_two_countries_of_one_run_id_are_two_rounds_and_a_round_kept_again_is_se
     assert store.json_summary("AAA", "latest", "f.json") == {"v": 2} and store.json_summary("BBB", "latest", "f.json") == {"v": 1}
     superseded = [d for d in (store.root / "same-run").iterdir() if ".superseded_" in d.name]
     assert len(superseded) == 1 and json.loads(next((superseded[0] / "files").rglob("f.json")).read_text(encoding="utf-8")) == {"v": 1}
+
+
+# --- the prune (COMMAND 196, V196) -----------------------------------------------------------------------------------------------------
+
+
+def _store_with_three_rounds(tmp_path):
+    """Two older rounds of ZZZ and YYY, a seed, a superseded one, and a last round that shares one file with the previous one."""
+    store = ReferenceStore(tmp_path / "references")
+    shared = tmp_path / "shared.json"
+    shared.write_text(json.dumps({"same": True}), encoding="utf-8")
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    new = tmp_path / "new.json"
+    new.write_text(json.dumps({"v": 2}), encoding="utf-8")
+    store.publish_files("ZZZ", "run1", {"outputs/ZZZ/shared.json": (shared, None, {}), "outputs/ZZZ/s.json": (old, None, {})})
+    store.publish_files("YYY", "run1", {"outputs/YYY/s.json": (old, None, {})})
+    store.publish_files("ZZZ", "seed_1", {"outputs/ZZZ/s.json": (old, None, {})}, make_latest=False)
+    store.publish_files("ZZZ", "run2", {"outputs/ZZZ/shared.json": (shared, None, {}), "outputs/ZZZ/s.json": (new, None, {})})
+    store.publish_files("ZZZ", "run2", {"outputs/ZZZ/shared.json": (shared, None, {}), "outputs/ZZZ/s.json": (new, None, {})})  # leaves a .superseded_
+    return store
+
+
+def test_the_prune_plan_touches_nothing_and_lists_what_goes(tmp_path):
+    store = _store_with_three_rounds(tmp_path)
+    before = sorted(p.relative_to(store.root) for p in store.root.rglob("*"))
+    plan = store.prune()
+    assert sorted(p.relative_to(store.root) for p in store.root.rglob("*")) == before and not plan.executed
+    assert set(plan.keep_rounds) == {("ZZZ", "run2"), ("YYY", "run1")}
+    names = {str(p.relative_to(store.root)).replace("\\", "/").split(".superseded_")[0] for p in plan.remove_rounds}
+    assert names == {"run1/ZZZ", "seed_1/ZZZ", "run2/ZZZ"}  # run2/ZZZ here is the superseded copy
+
+
+def test_the_prune_keeps_latest_and_its_rounds_and_removes_the_rest_and_the_orphan_objects(tmp_path):
+    store = _store_with_three_rounds(tmp_path)
+    store.prune(dry_run=False)
+    assert store.latest("ZZZ") == "run2" and store.latest("YYY") == "run1"
+    assert store.json_summary("ZZZ", "latest", "s.json") == {"v": 2} and store.json_summary("YYY", "latest", "s.json") == {"v": 1}
+    assert store.json_summary("ZZZ", "latest", "shared.json") == {"same": True}  # shared with the removed run1: the object stayed
+    assert not store.round_dir("ZZZ", "run1").exists() and not (store.root / "seed_1").exists()
+    assert not list(store.root.glob("run2/*superseded*"))
+    objects = [p for p in (store.root / "objects").rglob("*") if p.is_file()]
+    listed = {e["sha256"] for iso, run in (("ZZZ", "run2"), ("YYY", "run1")) for e in store.index(iso, run)["files"].values()}
+    assert {p.name for p in objects} == listed  # {"v": 1} is still listed by YYY; nothing else is left over
+    assert store.find("ZZZ", "latest", "s.json").read_bytes() == json.dumps({"v": 2}).encode()
+
+
+def test_the_prune_reports_the_space_and_a_second_prune_has_nothing_to_do(tmp_path):
+    store = _store_with_three_rounds(tmp_path)
+    plan = store.prune()
+    assert plan.freed_bytes > 0 and plan.kept_bytes > 0
+    store.prune(dry_run=False)
+    again = store.prune()
+    assert again.remove_rounds == () and again.remove_objects == () and again.freed_bytes == 0
+
+
+def test_the_prune_refuses_without_latest_or_when_a_kept_object_is_missing_and_removes_nothing(tmp_path):
+    empty = ReferenceStore(tmp_path / "empty")
+    empty.root.mkdir()
+    with pytest.raises(ValueError, match="no reference to keep"):
+        empty.prune(dry_run=False)
+    store = _store_with_three_rounds(tmp_path)
+    sha = next(iter(store.index("ZZZ", "run2")["files"].values()))["sha256"]
+    store._object(sha).unlink()
+    with pytest.raises(ValueError, match="missing from the store"):
+        store.prune(dry_run=False)
+    assert store.round_dir("ZZZ", "run1").exists() and (store.root / "seed_1").exists()
+
+
+def test_the_prune_leaves_alone_what_is_not_a_round(tmp_path):
+    store = _store_with_three_rounds(tmp_path)
+    (store.root / "NOTES.txt").write_text("keep", encoding="utf-8")
+    plan = store.prune(dry_run=False)
+    assert (store.root / "NOTES.txt").read_text(encoding="utf-8") == "keep" and [p.name for p in plan.unknown] == ["NOTES.txt"]
