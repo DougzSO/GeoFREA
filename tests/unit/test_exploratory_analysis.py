@@ -239,7 +239,7 @@ def _tree(tmp_path):
         [{"cell_id": c, "member": m, "lcoe_p90": 1.5 * v if np.isfinite(v) else np.nan} for m, vals in nominal_by_member.items() for c, v in zip(ids[:3], vals, strict=True)]
     )
     futures = pd.DataFrame({"displaced_capacity_share": [0.0, 0.1, 0.25, 0.3, np.nan]})
-    h5 = pd.DataFrame({"primary": [True, False], "g_twh": [3.0, 5.0]})
+    h5 = pd.DataFrame({"primary": [True, False], "g_twh": [9.0, 5.0], "target_value": [0.3, 0.3], "target_unit": ["GW", "GW"]})  # g_twh: the old conversion, not used
     for role in ("core", "sensitivity"):
         _write(robustness / f"h5_members_wind__{role}.parquet", members)
         _write(robustness / f"nominal_lcoe_by_member_wind__{role}.parquet", nom)
@@ -305,6 +305,44 @@ def test_h5c_on_the_hand_made_tree(tmp_path):
     assert envelope["mc_m0"] == pytest.approx(30) and envelope["delta_mc_max"] == pytest.approx(0.3) and pd.isna(envelope["label"])
 
 
+def test_the_target_conversion_does_not_depend_on_tau_and_the_old_one_is_kept_for_comparison(tmp_path):
+    summary, _ = _run(tmp_path)
+    row = pd.read_parquet(summary.technologies["wind"].tables["h5c_summary__core"]).set_index(["basis", "level"]).loc[("nominal", "target")]
+    assert row["g_twh"] == 3.0 and row["g_target_h5_twh"] == 9.0 and not row["target_above_set_capacity"]
+    # tau (25 in the provenance of F7) leaves the target alone: with tau 5, where Omega_econ is empty, or 1000, where it is the whole set, G is the same
+    for tau, name in ((5.0, "low"), (1000.0, "high")):
+        dirs = _tree(tmp_path / name)
+        for role in ("core", "sensitivity"):
+            path = dirs["robustness_dir"] / f"robustness_wind__{role}.parquet"
+            table = pq.read_table(path)
+            meta = json.loads(table.schema.metadata[b"geofrea_robustness_provenance"])
+            meta["decision"]["tau_lcoe_usd_per_mwh"] = tau
+            pq.write_table(table.replace_schema_metadata({"geofrea_robustness_provenance": json.dumps(meta)}), path)
+        again = build_exploratory("ZZZ", ["wind"], {"core": "w", "sensitivity": "s"}, outcome_threshold=0.2, **dirs)
+        other = pd.read_parquet(again.technologies["wind"].tables["h5c_summary__core"]).set_index(["basis", "level"]).loc[("nominal", "target")]
+        assert other["g_twh"] == row["g_twh"] and other["mc_m0"] == row["mc_m0"]
+
+
+def test_a_target_above_the_capacity_of_the_set_takes_the_whole_set_and_raises_the_flag(tmp_path):
+    dirs = _tree(tmp_path)
+    for role in ("core", "sensitivity"):
+        _write(dirs["robustness_dir"] / f"h5_summary_wind__{role}.parquet", pd.DataFrame({"primary": [True], "g_twh": [99.0], "target_value": [5.0], "target_unit": ["GW"]}))
+    summary = build_exploratory("ZZZ", ["wind"], {"core": "w", "sensitivity": "s"}, outcome_threshold=0.2, **dirs)
+    row = pd.read_parquet(summary.technologies["wind"].tables["h5c_summary__core"]).set_index(["basis", "level"]).loc[("nominal", "target")]
+    assert row["g_twh"] == 6.0 and row["target_above_set_capacity"] and row["g_target_h5_twh"] == 99.0 and row["g_share_of_total_m0"] == pytest.approx(1.0)
+
+
+def test_target_energy_by_hand():
+    ids, lcoe, e, p = np.array([3, 1, 2, 4]), np.array([20.0, 10.0, 10.0, np.nan]), np.array([4.0, 1.0, 2.0, 9.0]), np.array([200.0, 100.0, 100.0, 300.0])
+    # order: 1 (10, 100 MW, 1 TWh), 2 (10, 100 MW, 2 TWh: the tie goes by cell_id), 3 (20, 200 MW, 4 TWh); cell 4 has no LCOE
+    assert h5c.target_energy(ids, lcoe, e, p, 0.15) == (pytest.approx(1.0 + 0.5 * 2.0), False)
+    assert h5c.target_energy(ids, lcoe, e, p, 0.2) == (pytest.approx(3.0), False)
+    assert h5c.target_energy(ids, lcoe, e, p, 0.3) == (pytest.approx(1.0 + 2.0 + 0.5 * 4.0), False)
+    assert h5c.target_energy(ids, lcoe, e, p, 0.4) == (pytest.approx(7.0), False)
+    assert h5c.target_energy(ids, lcoe, e, p, 0.41) == (pytest.approx(7.0), True)
+    assert h5c.target_energy(np.array([], dtype="int64"), np.array([]), np.array([]), np.array([]), 1.0) == (0.0, True)
+
+
 def test_the_curves_table_holds_the_reference_member_and_the_unreachable_flag(tmp_path):
     summary, _ = _run(tmp_path)
     curves = pd.read_parquet(summary.technologies["wind"].tables["h5c_curves__core"])
@@ -316,7 +354,7 @@ def test_the_curves_table_holds_the_reference_member_and_the_unreachable_flag(tm
 def test_without_a_target_there_is_no_target_level(tmp_path):
     dirs = _tree(tmp_path)
     for role in ("core", "sensitivity"):
-        _write(dirs["robustness_dir"] / f"h5_summary_wind__{role}.parquet", pd.DataFrame({"primary": [True], "g_twh": [np.nan]}))
+        _write(dirs["robustness_dir"] / f"h5_summary_wind__{role}.parquet", pd.DataFrame({"primary": [True], "g_twh": [np.nan], "target_value": [np.nan], "target_unit": ["TWh"]}))
     summary = build_exploratory("ZZZ", ["wind"], {"core": "w", "sensitivity": "s"}, outcome_threshold=0.2, **dirs)
     table = pd.read_parquet(summary.technologies["wind"].tables["h5c_summary__core"])
     assert "target" not in set(table["level"]) and len(summary.technologies["wind"].skipped) == 2

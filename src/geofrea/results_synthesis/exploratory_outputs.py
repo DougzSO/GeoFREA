@@ -36,7 +36,7 @@ def t_x1(ctx: BuildContext) -> None:
             ctx.skip(T_X1, technology, str(exc))
             continue
         columns = [
-            "basis", "level", "g_twh", "g_share_of_total_m0", "mc_m0", "ac_m0", "n_unreachable_members",
+            "basis", "level", "g_twh", "g_share_of_total_m0", "g_target_h5_twh", "target_above_set_capacity", "mc_m0", "ac_m0", "n_unreachable_members",
             "delta_mc_max", "delta_mc_member", "delta_mc_ssp", "delta_mc_median", "delta_mc_by_ssp",
             "delta_ac_max", "delta_ac_member", "delta_ac_ssp", "delta_ac_median", "label",
         ]  # fmt: skip
@@ -46,7 +46,7 @@ def t_x1(ctx: BuildContext) -> None:
             "h5c_cost_to_target",
             table[columns],
             LABEL
-            + f"H5c, cost-to-target of {technology} in the core window. MC and AC (USD/MWh) at the reference member for the target and for 5, 10 and 25 per cent of the energy of the F7 set; "
+            + f"H5c, cost-to-target of {technology} in the core window. MC and AC (USD/MWh) at the reference member for the target and for 5, 10 and 25 per cent of the energy of the F7 set. The energy of the target is that of the cheapest cells of the F7 set at the reference member up to the target capacity (DEC-100); g_target_h5_twh is the conversion of H5, for comparison, and target_above_set_capacity marks a target above the capacity of the set. "
             "Delta_MC and Delta_AC are the largest relative increase over the core members, with the member and the SSP that attain it, the median over members and the value per SSP. "
             "Basis nominal: LCOE at the nominal parameters; basis p90_envelope: the per-cell P90 over the draws of each member (an upper envelope, not a joint draw). No tau is used.",
             technology=technology,

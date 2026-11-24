@@ -2459,7 +2459,7 @@ def test_the_exploratory_phase_writes_its_tables_and_keeps_its_invariants(zzz, t
     # VUL_clim is a largest relative increase: not below zero beyond the numerical noise, and the fragile cells have none
     vul = pd.read_parquet(base / f"vulnerability_{tech}__core.parquet")
     assert (vul["vul_clim"].dropna() >= -1e-9).all() and vul.loc[vul["cell_class"] != "ranked", "vul_clim"].isna().all()
-    # MC at the reference member for the target is the LCOE of the marginal cell of the conversion of H5 (cheapest cells first until the capacity is reached)
+    # MC at the reference member for the target is the LCOE of the marginal cell of the cheapest cells of the F7 set up to the target capacity (no tau: DEC-100)
     summary = pd.read_parquet(base / f"h5c_summary_{tech}__core.parquet")
     h5 = pd.read_parquet(rob / f"h5_summary_{tech}__core.parquet")
     primary = h5[h5["primary"].astype(bool)].iloc[0]
@@ -2468,11 +2468,14 @@ def test_the_exploratory_phase_writes_its_tables_and_keeps_its_invariants(zzz, t
         assert target.empty
     else:
         cells = pd.read_parquet(rob / f"robustness_{tech}__core.parquet", columns=["cell_id", "cell_class", "p_mw", "lcoe_nominal"])
-        cells = cells[cells["cell_class"].isin(["ranked", "climate_fragile"]) & (cells["lcoe_nominal"] <= primary["tau_usd_per_mwh"])]
+        cells = cells[cells["cell_class"].isin(["ranked", "climate_fragile"]) & cells["lcoe_nominal"].notna()]
         cells = cells.sort_values(["lcoe_nominal", "cell_id"])
         taken = cells[cells["p_mw"].cumsum() >= primary["target_value"] * 1000.0 * (1 - 1e-12)]
         expected = float(taken["lcoe_nominal"].iloc[0]) if len(taken) else float(cells["lcoe_nominal"].iloc[-1])
         assert float(target["mc_m0"].iloc[0]) == pytest.approx(expected)
+        row = target.iloc[0]
+        assert row["g_target_h5_twh"] == pytest.approx(primary["g_twh"]) and row["g_twh"] <= row["g_twh"] / row["g_share_of_total_m0"] * (1 + 1e-9)
+        assert bool(row["target_above_set_capacity"]) == bool(cells["p_mw"].sum() < primary["target_value"] * 1000.0)
 
 
 @pytest.mark.synthetic

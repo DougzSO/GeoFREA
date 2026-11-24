@@ -157,7 +157,7 @@ class _Window:
         self.total_m0_twh = float(np.nansum(self.energy_twh[:, 0]))
 
 
-def _h5c_tables(win: _Window, g_target: float | None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _h5c_tables(win: _Window, g_target: float | None, g_target_h5: float | None = None, above_capacity: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     inventory = h5c.levels(g_target, win.total_m0_twh)
     curve_rows: list[pd.DataFrame] = []
     summary_rows: list[dict] = []
@@ -189,6 +189,8 @@ def _h5c_tables(win: _Window, g_target: float | None) -> tuple[pd.DataFrame, pd.
                     "level": level,
                     "g_twh": g,
                     "g_share_of_total_m0": _none(g / win.total_m0_twh) if win.total_m0_twh > 0 else None,
+                    "g_target_h5_twh": g_target_h5 if level == h5c.LEVEL_TARGET else None,
+                    "target_above_set_capacity": bool(above_capacity) if level == h5c.LEVEL_TARGET else False,
                     "mc_m0": _none(reference["mc"]),
                     "ac_m0": _none(reference["ac"]),
                     "reference_unreachable": bool(unreachable_reference),
@@ -277,13 +279,17 @@ def _vulnerability_tables(win: _Window) -> tuple[pd.DataFrame, pd.DataFrame]:
     return table, pd.DataFrame(rows, columns=list(StatisticRow.model_fields))
 
 
-def _target_energy(robustness_dir: Path, tech: str, role: str) -> float | None:
-    """`G` of the primary H5 variant as F7 converted it (M-F7-07); None when the entry has no target or no energy."""
-    table = _read(robustness_dir / f"h5_summary_{tech}__{role}.parquet", ["primary", "g_twh"])
+def _target_energy(robustness_dir: Path, tech: str, role: str, win: _Window) -> tuple[float | None, float | None, bool]:
+    """`(G_target, G_target_h5, target_above_set_capacity)`; `G_target` has no cost threshold (DEC-100), `G_target_h5` is the conversion of H5 (M-F7-07), for comparison.
+
+    Both are None when the primary H5 variant has no target in GW (a target in another unit has no registered conversion to capacity).
+    """
+    table = _read(robustness_dir / f"h5_summary_{tech}__{role}.parquet", ["primary", "g_twh", "target_value", "target_unit"])
     primary = table[table["primary"].astype(bool)]
-    if primary.empty or pd.isna(primary["g_twh"].iloc[0]):
-        return None
-    return float(primary["g_twh"].iloc[0])
+    if primary.empty or pd.isna(primary["g_twh"].iloc[0]) or str(primary["target_unit"].iloc[0]) != "GW" or pd.isna(primary["target_value"].iloc[0]):
+        return None, None, False
+    g, above = h5c.target_energy(win.cell_id, win.nominal[:, 0], win.energy_twh[:, 0], win.omega["p_mw"].to_numpy("float64"), float(primary["target_value"].iloc[0]))
+    return g, float(primary["g_twh"].iloc[0]), above
 
 
 def _prim_table(robustness_dir: Path, tech: str, theta: float) -> pd.DataFrame:
@@ -381,16 +387,18 @@ def build_exploratory(
             win = _Window(tech, role, robustness_dir, lcoe_dir, potential_dir)
             if role == "core":
                 core_window = win
-            g_target = _target_energy(robustness_dir, tech, role)
+            g_target, g_target_h5, above = _target_energy(robustness_dir, tech, role, win)
             extra = {
                 "cf_min": win.cf_min,
                 "n_cells_f7_set": len(win.cell_id),
                 "energy_total_m0_twh": win.total_m0_twh,
                 "g_target_twh": g_target,
+                "g_target_h5_twh": g_target_h5,
+                "target_above_set_capacity": above,
                 "p_levels": list(h5c.P_LEVELS),
                 "domain": "F7 set of the central land scenario (ranked and climate-fragile cells)",
             }
-            curves, summary = _h5c_tables(win, g_target)
+            curves, summary = _h5c_tables(win, g_target, g_target_h5, above)
             vul, vul_summary = _vulnerability_tables(win)
             for kind, frame, model in (
                 ("h5c_curves", curves, H5cCurveRow),
@@ -405,7 +413,7 @@ def build_exploratory(
                 )  # fmt: skip
                 tables[f"{kind}__{role}"] = path
             if g_target is None:
-                skipped.append(SkippedOutput(output=f"h5c level target [{role}]", reason="no target converts to an energy in the primary H5 variant of F7"))
+                skipped.append(SkippedOutput(output=f"h5c level target [{role}]", reason="the primary H5 variant of F7 has no national target in GW"))
         if outcome_threshold is None:
             skipped.append(SkippedOutput(output="prim_vf", reason="prim.outcome_threshold is null"))
         else:

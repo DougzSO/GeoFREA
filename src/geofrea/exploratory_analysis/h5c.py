@@ -1,6 +1,8 @@
 """Cost-to-target, H5c: the marginal and the average cost of reaching an energy level, per member (M-X-01; DEC-098).
 
-EXPLORATORY. The pre-registered H5 (M-F7-07) is unchanged and remains the primary result; no cost threshold tau is used here.
+EXPLORATORY. The pre-registered H5 (M-F7-07) is unchanged and remains the primary result; no cost threshold tau is used here, and that includes the
+conversion of the national target in GW to an energy: `target_energy` takes the cheapest cells of the F7 set at the reference member until their capacity
+reaches the target (DEC-100 corrects the conversion of M-F7-07 that DEC-098 had named, which depends on tau through the economic domain).
 
 For a member `m` the cells of the F7 set are ordered by `LCOE_i,(m,s0)` ascending, ties by `cell_id`, and their annual energy `E_i,m` is accumulated. For an
 energy level `G` (TWh/year) the marginal cost `MC_m(G)` is the LCOE of the cell at which the cumulative energy first reaches `G` (the last cell is
@@ -78,6 +80,29 @@ def average_cost(curve: CostCurve, level_twh: float) -> float:
     before_cost = float(curve.cumulative_cost[index - 1]) if index > 0 else 0.0
     taken = min(level_twh - before_energy, float(curve.energy_twh[index]))
     return (before_cost + float(curve.lcoe[index]) * taken) / (before_energy + taken)
+
+
+def target_energy(cell_id: np.ndarray, lcoe_f0: np.ndarray, energy_m0_twh: np.ndarray, p_mw: np.ndarray, target_gw: float) -> tuple[float, bool]:
+    """`G_target` (TWh/year) and `target_above_set_capacity`, with no cost threshold.
+
+    The cells of the F7 set with a finite LCOE at the reference member, a positive energy and a positive capacity are ordered by `LCOE_i,f0` ascending (ties by
+    `cell_id`) and taken until their accumulated capacity reaches `target_gw`; the last cell is fractional (its energy in proportion to the capacity that is
+    needed). A target above the capacity of all those cells gives the energy of all of them and the flag True.
+    """
+    cell_id = np.asarray(cell_id, dtype="int64")
+    lcoe, energy, power = (np.asarray(x, dtype="float64") for x in (lcoe_f0, energy_m0_twh, p_mw))
+    keep = np.isfinite(lcoe) & np.isfinite(energy) & (energy > 0) & np.isfinite(power) & (power > 0)
+    cell_id, lcoe, energy, power = cell_id[keep], lcoe[keep], energy[keep], power[keep]
+    order = np.lexsort((cell_id, lcoe))
+    energy, power = energy[order], power[order]
+    need = float(target_gw) * 1000.0  # MW
+    cumulative = np.cumsum(power)
+    if not len(power) or cumulative[-1] < need * (1.0 - _REACH_TOLERANCE):
+        return float(energy.sum()), True
+    index = min(int(np.searchsorted(cumulative, need * (1.0 - _REACH_TOLERANCE), side="left")), len(power) - 1)
+    before = float(cumulative[index - 1]) if index > 0 else 0.0
+    share = min(max((need - before) / float(power[index]), 0.0), 1.0)
+    return float(energy[:index].sum() + share * float(energy[index])), False
 
 
 def levels(g_target_twh: float | None, total_m0_twh: float, p_levels: Sequence[float] = P_LEVELS) -> list[tuple[str, float]]:

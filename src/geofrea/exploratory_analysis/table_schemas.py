@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-EXPLORATORY_TABLE_SCHEMA_VERSION = "1.0"
+EXPLORATORY_TABLE_SCHEMA_VERSION = "1.1"
 PROVENANCE_KEY = "geofrea_exploratory_provenance"
 
 
@@ -35,6 +35,8 @@ class H5cSummaryRow(BaseModel):
     level: str
     g_twh: float
     g_share_of_total_m0: float | None
+    g_target_h5_twh: float | None  # the conversion of H5 (M-F7-07), at the target level only and for comparison; it is not used (DEC-100)
+    target_above_set_capacity: bool  # the target exceeds the capacity of the F7 set: G is the energy of the whole set (target level only)
     mc_m0: float | None
     ac_m0: float | None
     reference_unreachable: bool
