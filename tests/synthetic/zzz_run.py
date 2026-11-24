@@ -25,6 +25,7 @@ PHASES = [
     "external_validation",
     "lcoe_maps",
     "robustness_maps",
+    "exploratory_analysis",
     "results_synthesis",
 ]
 F5_TO_F8 = PHASES[1:]

@@ -47,6 +47,7 @@ PHASES = [
     "external_validation",
     "lcoe_maps",
     "robustness_maps",
+    "exploratory_analysis",
     "results_synthesis",
 ]
 INITIAL_SIZE, CEILING = 16, 64
@@ -249,6 +250,7 @@ def test_every_phase_from_f1_to_f6_runs_and_succeeds(zzz):
             "external_validation",
             "lcoe_maps",
             "robustness_maps",
+            "exploratory_analysis",
             "results_synthesis",
         )
     }
@@ -2428,3 +2430,86 @@ def test_every_key_a_phase_reads_is_in_its_scope(zzz):
     missing = uncovered(CONFIG_TRACE, "ZZZ")
     report = [f"  {phase}: {key}" for phase, keys in missing.items() for key in keys]
     assert not missing, "keys read by a phase that its PHASE_CONFIG_SCOPE does not name: " + "; ".join(report)
+
+
+# -- the exploratory phase and its outputs (COMMAND 210, DEC-098) ---------------------------------------------------------------------
+
+
+def _exploratory_dir(zzz):
+    return zzz[0] / "outputs" / "ZZZ" / "exploratory_analysis" / "artifacts"
+
+
+@pytest.mark.synthetic
+@pytest.mark.parametrize("tech", ["solar", "wind"])
+def test_the_exploratory_phase_writes_its_tables_and_keeps_its_invariants(zzz, tech):
+    import json
+
+    import pyarrow.parquet as pq
+
+    data, results = zzz
+    assert results["exploratory_analysis"].status == "success"
+    base, rob = _exploratory_dir(zzz), data / "outputs" / "ZZZ" / "robustness_analysis" / "artifacts"
+    for role in ("core", "sensitivity"):
+        for kind in ("h5c_curves", "h5c_summary", "vulnerability", "vulnerability_summary"):
+            path = base / f"{kind}_{tech}__{role}.parquet"
+            assert path.stat().st_size > 0, path
+            provenance = json.loads(pq.read_schema(path).metadata[b"geofrea_exploratory_provenance"])
+            assert provenance["exploratory"] is True and provenance["decision"] == "DEC-098"
+    assert (base / f"prim_vf_{tech}.parquet").is_file()
+    # VUL_clim is a largest relative increase: not below zero beyond the numerical noise, and the fragile cells have none
+    vul = pd.read_parquet(base / f"vulnerability_{tech}__core.parquet")
+    assert (vul["vul_clim"].dropna() >= -1e-9).all() and vul.loc[vul["cell_class"] != "ranked", "vul_clim"].isna().all()
+    # MC at the reference member for the target is the LCOE of the marginal cell of the conversion of H5 (cheapest cells first until the capacity is reached)
+    summary = pd.read_parquet(base / f"h5c_summary_{tech}__core.parquet")
+    h5 = pd.read_parquet(rob / f"h5_summary_{tech}__core.parquet")
+    primary = h5[h5["primary"].astype(bool)].iloc[0]
+    target = summary[(summary["basis"] == "nominal") & (summary["level"] == "target")]
+    if pd.isna(primary["g_twh"]) or primary["target_unit"] != "GW":
+        assert target.empty
+    else:
+        cells = pd.read_parquet(rob / f"robustness_{tech}__core.parquet", columns=["cell_id", "cell_class", "p_mw", "lcoe_nominal"])
+        cells = cells[cells["cell_class"].isin(["ranked", "climate_fragile"]) & (cells["lcoe_nominal"] <= primary["tau_usd_per_mwh"])]
+        cells = cells.sort_values(["lcoe_nominal", "cell_id"])
+        taken = cells[cells["p_mw"].cumsum() >= primary["target_value"] * 1000.0 * (1 - 1e-12)]
+        expected = float(taken["lcoe_nominal"].iloc[0]) if len(taken) else float(cells["lcoe_nominal"].iloc[-1])
+        assert float(target["mc_m0"].iloc[0]) == pytest.approx(expected)
+
+
+@pytest.mark.synthetic
+def test_the_exploratory_outputs_are_labelled_and_the_pre_registered_ones_do_not_depend_on_them(zzz, tmp_path, monkeypatch):
+    import json
+
+    from geofrea.results_synthesis.output import methodology_version  # noqa: F401
+    thesis = _thesis(zzz)
+    for tech in ("solar", "wind"):
+        for stem in (f"T-X1_h5c_cost_to_target_ZZZ_{tech}", f"T-X4_vul_summary_ZZZ_{tech}"):
+            for suffix in (".csv", ".tex", ".provenance.json"):
+                assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+        for stem in (f"T-X2_lcoe_vs_vul_clim_ZZZ_{tech}", f"T-X3_vul_clim_map_ZZZ_{tech}"):
+            for suffix in (".png", ".pdf", ".provenance.json"):
+                assert (thesis / f"{stem}{suffix}").stat().st_size > 0, stem + suffix
+        provenance = json.loads((thesis / f"T-X1_h5c_cost_to_target_ZZZ_{tech}.provenance.json").read_text(encoding="utf-8"))
+        assert provenance["exploratory"] is True and "Exploratory (DEC-098" in provenance["caption"]
+    # a build of T-R1 to T-R12 alone gives the same tables as the full build that also reads the exploratory artifacts
+    only = [f"T-R{i}" for i in range(1, 13)]
+    alone = tmp_path / "alone"
+    import shutil
+
+    copied = tmp_path / "copy"  # the data directory of the run, as the other tests that build the thesis again read it
+    shutil.copytree(zzz[0] / "outputs" / "ZZZ", copied / "outputs" / "ZZZ")
+    shutil.copytree(zzz[0] / "outputs" / "cross_country", copied / "outputs" / "cross_country")
+    (copied / "outputs" / "ZZZ" / "manifest__0p1deg.json").unlink(missing_ok=True)
+    monkeypatch.setenv("GEOFREA_DATA_DIR", str(copied))
+    import main
+    from geofrea.results_synthesis.runner import build_thesis
+
+    build_thesis(
+        "ZZZ", ("solar", "wind"), technologies_yaml=main.TECHNOLOGIES_YAML, experiments_yaml=main.EXPERIMENTS_YAML,
+        parameters_json=main.PARAMETERS_JSON, methodology_md=main.METHODOLOGY_MD, only=only, out_dir=alone,
+        phase_graph=_graph_of_the_orchestrator(("solar", "wind")),
+    )  # fmt: skip
+    compared = 0
+    for path in sorted(alone.glob("T-R*.csv")):
+        assert (thesis / path.name).read_bytes() == path.read_bytes(), path.name
+        compared += 1
+    assert compared > 10

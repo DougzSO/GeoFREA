@@ -26,6 +26,7 @@ LAYERS = (
     "technical_potential",
     "lcoe_modeling",
     "robustness_analysis",
+    "exploratory_analysis",
     "external_validation",
     "overview",
     "results_synthesis",

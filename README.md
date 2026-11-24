@@ -28,6 +28,7 @@ The names of the phases (the id is what the code, the manifests and the output f
 | - | `lcoe_maps` | Cost maps | Economics | yes |
 | F7 | `robustness_analysis` | Robustness and hypotheses | Robustness | yes |
 | - | `robustness_maps` | Robustness maps | Robustness | yes |
+| - | `exploratory_analysis` | Exploratory analyses | Robustness | yes |
 | - | `cross_country_h4` | Cross-country comparison | Robustness | no |
 | F7b | `external_validation` | External validation | Validation | yes |
 | F8 | `results_synthesis` | Results synthesis | Synthesis | yes |

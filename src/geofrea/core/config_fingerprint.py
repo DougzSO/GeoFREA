@@ -42,6 +42,7 @@ CONFIG_FILES = {
     "settings": "settings.yaml",
     "countries": "countries.yaml",
     "published_potential": "published_potential.yaml",
+    "irena_reference": "irena_reference.yaml",
 }
 TURBINES = "turbines"  # directory of the reference power curves; every file in it is part of the fingerprint
 
@@ -131,6 +132,12 @@ PHASE_CONFIG_SCOPE: dict[str, dict[str, list[str]]] = {
         settings=["figures", "run.technologies"],
     ),
     "robustness_maps": _scope(experiments=["windows"], settings=["figures", "run.technologies"]),
+    # reads the persisted tables and the IRENA reference plant of the pair for tau on the cell basis (COMMAND 210, DEC-098)
+    "exploratory_analysis": _scope(
+        experiments=["windows", "prim.outcome_threshold"],
+        irena_reference=["editions.irena_rpgc_2024.life_years", f"editions.irena_rpgc_2024.pairs.{_ISO}"],
+        settings=["run.technologies"],
+    ),
     "potential_maps": _scope(
         technologies=[WHOLE],  # the maps recompute the capacity factor and the potential per technology (OQ-085)
         parameters=[f"countries.{_ISO}.technologies"],

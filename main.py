@@ -151,6 +151,8 @@ from geofrea.data_acquisition.phase import DataAcquisitionLayerFailedError, run_
 from geofrea.data_acquisition.schemas import AcquisitionResult, resolved_path
 from geofrea.data_quality_audit.audit import run_audit_phase
 from geofrea.data_quality_audit.schemas import AuditResult
+from geofrea.exploratory_analysis.pipeline import ExploratorySummary, build_exploratory
+from geofrea.exploratory_analysis.table_schemas import EXPLORATORY_TABLE_SCHEMA_VERSION
 from geofrea.external_validation.pipeline import (
     TABLES as VALIDATION_TABLES,
 )
@@ -237,6 +239,7 @@ AUDIT_YAML = REPO_ROOT / "config" / "audit.yaml"
 EXPERIMENTS_YAML = REPO_ROOT / "config" / "experiments.yaml"
 TECHNOLOGIES_YAML = REPO_ROOT / "config" / "technologies.yaml"
 PUBLISHED_POTENTIAL_YAML = REPO_ROOT / "config" / "published_potential.yaml"
+IRENA_REFERENCE_YAML = REPO_ROOT / "config" / "irena_reference.yaml"
 POWER_CURVES_DIR = REPO_ROOT / "config" / "turbines"  # reference turbine curves (M-F5-03)
 METHODOLOGY_MD = REPO_ROOT / "docs" / "METHODOLOGY.md"
 
@@ -401,6 +404,7 @@ def _config_source() -> DiskConfigSource:
             "settings": SETTINGS_YAML,
             "countries": COUNTRIES_YAML,
             "published_potential": PUBLISHED_POTENTIAL_YAML,
+            "irena_reference": IRENA_REFERENCE_YAML,
         },
         POWER_CURVES_DIR,
     )
@@ -967,6 +971,29 @@ def _build_phase_specs(
         _register_json_artifact(context, "robustness_maps", result)
         return result
 
+    def exploratory_analysis_run(context: PhaseContext) -> ExploratorySummary:
+        """Exploratory (DEC-098): H5c, own vulnerability, the V_f diagnostic and tau on the cell basis, from the persisted artifacts of F5, F6 and F7."""
+        experiments = load_experiments(EXPERIMENTS_YAML)
+        windows = {
+            role: f"{w['start_year']}-{w['end_year']}"
+            for role, w in experiments.windows.items()
+            if role in ("core", "sensitivity")
+        }
+        result = build_exploratory(
+            context.country_code,
+            technologies,
+            windows,
+            irena_reference_yaml=IRENA_REFERENCE_YAML,
+            outcome_threshold=experiments.prim.outcome_threshold,
+        )
+        for entry in result.technologies.values():
+            for key, path in entry.tables.items():
+                kind, _, role = key.partition("__")
+                name = f"{kind}_{entry.technology}" + (f"__{role}" if role else "")
+                context.register_artifact(name, path, EXPLORATORY_TABLE_SCHEMA_VERSION)
+        _register_json_artifact(context, "exploratory_analysis", result)
+        return result
+
     def potential_maps_run(context: PhaseContext) -> PotentialMapsSummary:
         """F5 (D-F5-015): COG of potential density and capacity factor at m0 (central scenario) and the T-R1 figure."""
         units = None
@@ -1328,6 +1355,35 @@ def _build_phase_specs(
             summarize=lambda out: f"{len(out.rasters)} rasters and {len(out.figures)} figures",
         ),
         PhaseSpec(
+            name="exploratory_analysis",
+            output_model=ExploratorySummary,
+            run=exploratory_analysis_run,
+            requires=frozenset({"robustness_analysis"})
+            | {f"potential_{tech}__central" for tech in technologies}
+            | {f"{kind}_{tech}" for tech in technologies for kind in ("lcoe_summary", "design_matrix")}
+            | {
+                f"{kind}_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+                for kind in ("robustness", "nominal_lcoe_by_member", "h5_members", "h5_summary")
+            }
+            | {f"futures_{tech}__core" for tech in technologies},
+            produces=frozenset({"exploratory_analysis"})
+            | {
+                f"{kind}_{tech}__{role}"
+                for tech in technologies
+                for role in ("core", "sensitivity")
+                for kind in ("h5c_curves", "h5c_summary", "vulnerability", "vulnerability_summary")
+            },
+            optional_produces=frozenset(  # a pair with no IRENA reference plant has no tau on the cell basis, and a null `prim.outcome_threshold` no V_f table
+                f"{kind}_{tech}" for tech in technologies for kind in ("prim_vf", "tau_cell_basis")
+            ),
+            summarize=lambda out: "; ".join(
+                f"{t}: {len(e.tables)} tables" + (f" ({len(e.skipped)} skipped)" if e.skipped else "")
+                for t, e in out.technologies.items()
+            ),
+        ),
+        PhaseSpec(
             name="potential_maps",
             output_model=PotentialMapsSummary,
             run=potential_maps_run,
@@ -1426,6 +1482,7 @@ def _build_phase_specs(
                 "settings": SETTINGS_YAML,
                 "countries": COUNTRIES_YAML,
                 "published_potential": PUBLISHED_POTENTIAL_YAML,
+                "irena_reference": IRENA_REFERENCE_YAML,
             },
             POWER_CURVES_DIR,
         )
@@ -1507,6 +1564,7 @@ REAL_RUN_PHASES: tuple[str, ...] = (
     "external_validation",
     "lcoe_maps",
     "robustness_maps",
+    "exploratory_analysis",
     "results_synthesis",
 )
 

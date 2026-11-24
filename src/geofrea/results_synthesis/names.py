@@ -15,6 +15,7 @@ THESIS_IDS = (
     "T-O1", "T-O2", "T-O3",
 )  # fmt: skip
 OPTIONAL = frozenset({"T-O1", "T-O2"})  # METHODOLOGY Section 10: every other output is Essential
+EXPLORATORY = ("T-X1", "T-X2", "T-X3", "T-X4")  # DEC-098, M-X-01 to M-X-05: outside Section 10, built only after the support phase `exploratory_analysis`
 _WHAT = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 
 
@@ -28,8 +29,8 @@ def stem(t_id: str, what: str, iso: str | None = None, technology: str | None = 
     Raises:
         OutputNameError: `t_id` is not one of Section 10, or `what` is not lower-case words joined by underscores.
     """
-    if t_id not in THESIS_IDS:
-        raise OutputNameError(f"{t_id!r} is not a thesis output of METHODOLOGY Section 10")
+    if t_id not in THESIS_IDS and t_id not in EXPLORATORY:
+        raise OutputNameError(f"{t_id!r} is not a thesis output of METHODOLOGY Section 10 or an exploratory output (DEC-098)")
     if not _WHAT.match(what):
         raise OutputNameError(f"{what!r}: use lower-case words joined by underscores")
     parts = [t_id, what]

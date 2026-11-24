@@ -104,6 +104,7 @@ def test_build_phase_specs_returns_all_phases_in_order():
         "external_validation",
         "lcoe_maps",
         "robustness_maps",
+        "exploratory_analysis",
         "potential_maps",
         "results_synthesis",
         "hazard_context",

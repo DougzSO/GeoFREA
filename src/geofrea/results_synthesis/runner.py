@@ -22,6 +22,7 @@ from geofrea.core.schemas import CountryParams, VerifiedValue
 from geofrea.results_synthesis import names
 from geofrea.results_synthesis.climate_change import t_r3
 from geofrea.results_synthesis.dag import t_m1
+from geofrea.results_synthesis.exploratory_outputs import t_x1, t_x2, t_x3, t_x4
 from geofrea.results_synthesis.inputs import ArtifactReader
 from geofrea.results_synthesis.method_tables import ThesisValueError, t_m2, t_m3
 from geofrea.results_synthesis.output import (
@@ -63,6 +64,10 @@ SCRIPTS: dict[str, Callable[[BuildContext], None]] = {
     "T-O1": t_o1,
     "T-O2": t_o2,
     "T-O3": t_o3,
+    "T-X1": t_x1,
+    "T-X2": t_x2,
+    "T-X3": t_x3,
+    "T-X4": t_x4,
 }
 
 
@@ -220,7 +225,7 @@ def build_thesis(
     ctx.out_dir.mkdir(parents=True, exist_ok=True)
     _update_manifest(ctx.out_dir, summary)
     empty = [
-        t for t in chosen if t not in names.OPTIONAL and t not in ctx.written and t not in deferred
+        t for t in chosen if t not in names.OPTIONAL and t not in names.EXPLORATORY and t not in ctx.written and t not in deferred
     ]
     if empty:
         reasons = "; ".join(f"{t}: {i}: {r}" for t, i, r in ctx.not_built if t in empty)

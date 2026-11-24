@@ -109,6 +109,7 @@ PHASE_CODE_ROOTS: dict[str, tuple[str, ...]] = {
     "external_validation": ("external_validation",),
     "lcoe_maps": ("lcoe_modeling.maps",),
     "robustness_maps": ("robustness_analysis.maps",),
+    "exploratory_analysis": ("exploratory_analysis",),
     "potential_maps": tuple(f"technical_potential.{m}" for m in TECHNICAL_POTENTIAL_FIGURE_MODULES),
     "results_synthesis": ("results_synthesis",),
     "overview": ("overview",),

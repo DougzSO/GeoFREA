@@ -27,6 +27,7 @@ phases:
   - {id: lcoe_maps, code: null, name_en: Cost maps, group: Economics}
   - {id: robustness_analysis, code: F7, name_en: Robustness and hypotheses, group: Robustness}
   - {id: robustness_maps, code: null, name_en: Robustness maps, group: Robustness}
+  - {id: exploratory_analysis, code: null, name_en: Exploratory analyses, group: Robustness}
   - {id: cross_country_h4, code: null, name_en: Cross-country comparison, group: Robustness, orchestrated: false}
   - {id: external_validation, code: F7b, name_en: External validation, group: Validation}
   - {id: results_synthesis, code: F8, name_en: Results synthesis, group: Synthesis}

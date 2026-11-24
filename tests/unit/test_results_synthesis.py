@@ -43,6 +43,7 @@ ALLOWED_IMPORTS = (
     "geofrea.lcoe_modeling.table_schemas",
     "geofrea.technical_potential.table_schemas",
     "geofrea.robustness_analysis.table_schemas",
+    "geofrea.exploratory_analysis.table_schemas",  # the contract of the exploratory tables read by T-X1 to T-X4 (DEC-098)
 )
 FORBIDDEN_MODULES = (
     "geofrea.lcoe_modeling.kernel",
