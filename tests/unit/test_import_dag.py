@@ -18,6 +18,7 @@ LAYERS = (
     "core",
     "viz",
     "data_acquisition",
+    "climate_acquisition",
     "data_quality_audit",
     "grid_alignment",
     "siting_layers",

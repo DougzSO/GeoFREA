@@ -1,0 +1,55 @@
+# ISIMIP3b acquisition for the v2 climate channel (M-F1-04, S-04, S-05, A-11).
+# Read only by `geofrea.climate_acquisition`; no phase reads this file, so it is outside every phase fingerprint.
+
+simulation_round: ISIMIP3b
+data_api: https://data.isimip.org/api/v1
+files_api: https://files.isimip.org/api/v2
+files_base: https://files.isimip.org
+
+# Climate ensemble (S-04): five bias-adjusted GCMs and three SSPs, plus the historical experiment of the reference window.
+gcms: [gfdl-esm4, ipsl-cm6a-lr, mpi-esm1-2-hr, mri-esm2-0, ukesm1-0-ll]
+scenarios: [ssp126, ssp370, ssp585]
+historical_scenario: historical
+
+# Windows (S-05). The files are decade blocks; every block that overlaps a window is acquired.
+reference_window: {start: 1995, end: 2014}
+future_window: {start: 2041, end: 2070}
+
+# west, east, south, north (degrees), the boxes cut on the ISIMIP server.
+bboxes:
+  BRA: [-74.5, -34.0, -34.5, 6.0]
+  IND: [68.0, 98.0, 6.0, 37.5]
+  PRT: [-31.5, -6.0, 32.5, 42.5]
+
+# Daily atmospheric variables (product InputData, time step daily).
+atmosphere:
+  variables: [tas, rsds, sfcwind]
+  time_step: daily
+
+# Monthly discharge and total runoff of the global hydrological models (product OutputData, sector water_global).
+# One file per (model, GCM, scenario, variable) covers the whole period of its experiment, so no window filter applies.
+# historical: the human-forcing scenario `histsoc`; ssp*: the single 2015soc variant the server publishes for the pair.
+water:
+  ghms: [cwatm, h08, miroc-integ-land, watergap2-2e]
+  variables: [dis, qtot]
+  time_step: monthly
+  sector: water_global
+  historical_soc: histsoc
+  future_soc_prefix: 2015soc
+
+# The country whose cut the CRAEI holds locally; it also calibrates the size estimate of the other countries.
+local_source_country: BRA
+
+# Layout below GEOFREA_DATA_DIR/raw/isimip3b/. The v1 hazard channel files (pr, tasmax, tasmin) stay where they are.
+layout:
+  atmosphere: "atmosphere/{country}/{gcm}/{scenario}/{variable}"
+  water: "water/{country}/{ghm}/{gcm}/{scenario}/{variable}"
+manifest_file: isimip3b_v2_manifest.json
+plan_file: isimip3b_v2_plan.json
+
+# Download behaviour.
+download:
+  poll_interval_s: 10
+  job_timeout_s: 14400
+  retries: 4
+  free_space_margin_gb: 50
