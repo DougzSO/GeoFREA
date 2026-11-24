@@ -77,7 +77,7 @@ jobs:
           for world in "zzz:zzz_data0" "zzz2:zzz2_data0"; do
             name="${world%%:*}"; dir="${world##*:}"
             for tech in wind solar; do
-              python docs/_audit/2026-10_pre_research_audit_scripts/validate_zzz_by_hand.py \
+              python scripts/synthetic/validate_zzz_by_hand.py \
                 "$RUNNER_TEMP/runs/$dir" "$tech" "$name" > "$RUNNER_TEMP/validation/${name}_${tech}.md" || status=1
               tail -n 3 "$RUNNER_TEMP/validation/${name}_${tech}.md"
             done

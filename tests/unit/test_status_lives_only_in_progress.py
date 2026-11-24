@@ -23,7 +23,7 @@ def state_terms(text: str) -> list[str]:
 
 
 def roadmap_section(methodology: str) -> str:
-    start = methodology.index("## 12. Implementation roadmap")
+    start = methodology.index("## 12. Milestones")
     return methodology[start : methodology.index("## 13.", start)]
 
 
@@ -46,7 +46,7 @@ def test_the_detector_flags_an_inserted_state_phrase():
     assert state_terms(yaml_comments("key: 1  # not started")) == ["not started"]
     assert state_terms(yaml_comments("# State as of 2026-10-08")) == ["state as of"]
     assert state_terms(
-        roadmap_section("## 12. Implementation roadmap\n| MS-0 | x | in progress |\n## 13. x")
+        roadmap_section("## 12. Milestones\n| MS-0 | x | in progress |\n## 13. x")
     ) == ["in progress"]
 
 

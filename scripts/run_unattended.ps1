@@ -56,7 +56,7 @@ param(
     [int]$MinStartMb = 1800,
     [int]$PollSeconds = 15,
     [string]$AdoptRevision = 'adopt-base-75',
-    [string]$AdoptProof = 'docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json',
+    [string]$AdoptProof = 'docs/evidence/infrastructure/proofs_75_77/cumulative_equivalence_77_PRT.json',
     [string]$BaselineStamp = '20261029_135838',
     [switch]$SkipAdopt,
     [switch]$NewRound,

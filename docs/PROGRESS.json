@@ -1,22 +1,39 @@
 {
   "schema_version": "2.0",
-  "methodology_version": "19.4.19",
+  "methodology_version": "2.0.0",
   "last_updated": "2026-11-24",
-  "current_milestone": "MS-6",
+  "current_milestone": "V2-0",
   "milestones": [
-    {"id": "MS-0", "title": "Planning adopted, records migrated, repository restructured", "status": "done"},
-    {"id": "MS-1", "title": "Core DAG orchestration and configuration schemas", "status": "done"},
-    {"id": "MS-2", "title": "F1 and F1b conformance, India wiring", "status": "done"},
-    {"id": "MS-3", "title": "F2a conformance", "status": "done"},
-    {"id": "MS-4", "title": "F2b rebuild as siting_layers", "status": "done"},
-    {"id": "MS-5", "title": "F3 land_eligibility", "status": "done"},
-    {"id": "MS-6", "title": "Parameter research (OQ-001 to OQ-023)", "status": "in_progress"},
-    {"id": "MS-7", "title": "F4 climate_forcing", "status": "in_progress"},
-    {"id": "MS-8", "title": "F5 technical_potential", "status": "in_progress"},
-    {"id": "MS-9", "title": "F6 lcoe_modeling", "status": "done"},
-    {"id": "MS-10", "title": "F7 robustness_analysis and F7b external_validation", "status": "done"},
-    {"id": "MS-11", "title": "F8 results_synthesis (E1 explorer outside v1.0, OQ-013)", "status": "done"},
-    {"id": "MS-12", "title": "v1.1: exploratory analyses (DEC-098, DEC-100) and the F7b variant (D-F7b-010), tag v1.1", "status": "done"}
+    {
+      "id": "V2-0",
+      "title": "Audit, cleanup and retirement of v1 records (COMMANDS 301 to 304)",
+      "status": "in_progress"
+    },
+    {
+      "id": "V2-1",
+      "title": "ISIMIP3b acquisition integrated (305); v1-only code removed (306)",
+      "status": "not_started"
+    },
+    {
+      "id": "V2-2",
+      "title": "Design commands and code of M1, M2 and M3",
+      "status": "not_started"
+    },
+    {
+      "id": "V2-3",
+      "title": "Publication layer and map standard (commands 216 to 223, adapted)",
+      "status": "not_started"
+    },
+    {
+      "id": "V2-4",
+      "title": "prereg-v2",
+      "status": "not_started"
+    },
+    {
+      "id": "V2-5",
+      "title": "Single run in the three countries and comparison with v1.1",
+      "status": "not_started"
+    }
   ],
   "phases": [
     {
@@ -24,100 +41,165 @@
       "module": "core",
       "status": "built_pending_conformance",
       "record": "docs/phases/core.md",
-      "summary": "A-01/A-02/A-03/A-05/A-08/A-09/A-11/U-05 (schema)/U-07 (field) implemented; A-04, A-06, A-10, A-11, A-12, U-01 to U-06, V-02 to V-08 and Section 9 pass (loaders for technologies.yaml and experiments.yaml; seeds recorded in the manifest; ZZZ runs F1 to F8 in CI; batching under memory.max_batch_gb); A-07 implemented (every raster is COG; the 0.01 degree display layers of COMMAND 70 are written by the same writer since COMMAND 73; Parquet tables carry schema_version); A-13 partial (143 Implements lines). A-02 records the METHODOLOGY version, the times, the fingerprints and, since manifest 2.7 (D-core-048), the peak memory per phase and the files of F2b and F3 one by one. OQ-032 closed (D-core-018). CountryParams requirement is per-phase (D-core-013); default country-run expansion still parameters.json-only, unowned. Manifest schema 2.9 (COMMAND 127) records config_rebaselines and 2.10 (COMMAND 128) the run environment; 6 manifest entries had their config_fingerprint rebaselined by proof on 2026-11-10 (scripts/rebaseline_config_fingerprint.py, dirty:true recorded by the author's decision; docs/_audit/config_scope_127.md) and the other 6 that the scope changes touch ran again in COMMAND 129. Schema 2.11 (COMMAND 131) records memory_cap_mb and peak_over_cap per phase (core/memory_cap.py); the canonical content hash of a parquet file has the kinds parquet2: (logical type) and parquet: (OQ-084)."
+      "summary": "Orchestration, manifest, fingerprints, configuration and shared utilities; kept from v1. The v1-only modules leave at COMMAND 306."
     },
     {
       "id": "F1",
       "module": "data_acquisition",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1_data_acquisition.md",
-      "summary": "M-F1-03/M-F1-07 closed; M-F1-04 resource channel acquired (F-3). M-F1-05 code+tests done, OQ-038 resolved (retry/timeout policy, D-F1-019), M-F1-05 ERA5 gust acquired, registered and F1b-audited for BRA/PRT/IND (D-F1-022/023, 2026-10-06; OQ-029/OQ-037 closed). M-F1-02 passes. OQ-012/024/027/028 closed. F5-1 done: GEM trackers pinned (snapshot 2026-08-09) and clipped per country, validation-only (V-06 tests); GEM replaces GPPD for F7b (D-F1-026)."
+      "summary": "Kept. The ISIMIP3b acquisition adapted from CRAEI enters at COMMAND 305; the CMIP6 fetcher leaves at COMMAND 306."
     },
     {
       "id": "F1b",
       "module": "data_quality_audit",
       "status": "built_pending_conformance",
       "record": "docs/phases/F1b_data_quality_audit.md",
-      "summary": "GWA products moved to real inspection. Weibull-A/k CRS gap fixed. IND parameters.json filled, F1b runs clean (0 alerts). CMIP6 resource channel (GFDL-ESM4/MIROC6) moved out of not_audited, 0 alerts, BRA/PRT/IND clean. ERA5 audited 2026-10-06 (0.25 deg, 0 alerts, BRA/PRT/IND); GEM still not_audited."
+      "summary": "Kept; sanity ranges of the ISIMIP3b variables enter at COMMAND 305."
     },
     {
       "id": "F2a",
       "module": "grid_alignment",
       "status": "conformant",
       "record": "docs/phases/F2a_grid_alignment.md",
-      "summary": "Slope and bins from FABDEM, elevation stays GLO-30 (COMMAND 101, D-F2a-028, METHODOLOGY 18.0.0); PRT, IND, BRA run 2026-11-06, no GLO-30 fallback. Settlements layer (D-F2a-027) as before."
+      "summary": "Kept as in v1.1."
     },
     {
       "id": "F2b",
       "module": "siting_layers",
-      "status": "ran_clean",
+      "status": "built_pending_conformance",
       "record": "docs/phases/F2b_siting_layers.md",
-      "summary": "H-5 and H-6 done (D-F2b-006): one map per exclusion and cost layer; statistics of the 12 layers for PRT, BRA and IND against sanity ranges (PVOUT from audit.yaml; air density from ISO 2533 and the 30 m DEM with a 5% quality-control tolerance (D-F1b-015); distances from the country bounding box); 0 pixels outside in PRT, BRA and IND. MS-4 closed on 2026-10-27 (COMMAND 72): its gate (exclusion parity E1-E3; sanity ranges pass for three countries) is met by the statistics above and the exclusion parity of D-F2b-005, and OQ-053, the only item that held it open, was closed on 2026-10-16. H-4 done and wired: phase siting_layers writes 12 physical-unit layers (no normalization). Exclusions E1-E6 (H-3) blocked on Stage R; legacy suitability_criteria still registered but not in the default run (D-F2b-005)."
+      "summary": "Kept as in v1.1."
     },
-    {"id": "F3", "module": "land_eligibility", "status": "built_pending_conformance", "record": "docs/phases/F3_land_eligibility.md", "summary": "Group 6 (METHODOLOGY 17.0.0) on the FABDEM slope (18.0.0): river width corridors, GHS-SMOD setback, % slopes, wind altitude, cluster min area. ZZZ, ZZZ2 green; PRT, IND, BRA run 2026-11-06."},
-    {"id": "F4", "module": "climate_forcing", "status": "built_pending_conformance", "record": "docs/phases/F4_climate_forcing.md", "summary": "F4 runs on the synthetic country from miniature CMIP6 files (D-F4-029, D13b). J-1 to J-5 done: ensemble decided (option C, 36 members), forcing.parquet with masked cell-members (OQ-042 option C), members.yaml, hazard_context.parquet for the core window, one map per member; all wired in main.py. Re-run for BRA, PRT, IND under the MIROC6 wind exclusion (D-F4-024, 2026-10-14). Open: ISIMIP3b 2071-2100 hazard data not acquired, loss functions (OQ-007). Figures (COMMAND 68, docs/figures/migration_68.md): every figure of this phase is drawn through MapFigure and redrawn for BRA, PRT and IND; the old files are in archive/figures_20261026."},
-    {"id": "F5", "module": "technical_potential", "status": "conformant", "record": "docs/phases/F5_technical_potential.md", "summary": "F5 is built and conformant on the synthetic country (pure functions, CF models, class flag, aggregates, pipeline, PhaseSpec technical_potential). Group 1 values and the IEA 3.4-130 curve are recorded (METHODOLOGY 15.0.1, D-F5-023, D-F5-025, D-F5-026). First complete real round, 2026-10-17 (D-F5-027): F3 run again in the three countries, then F5 in PRT, IND and BRA in one round, with the 150 m wind sensitivity and, for IND, the sensitivity with the cells above 3000 m. Every sanity check passed in the three countries and the F5 log has no warning, so F5 is ran_clean in PRT, IND and BRA. Plausibility is reported in the run report and nothing was adjusted. OQ-060 (cells with no DEM elevation) was closed on 2026-10-18 (METHODOLOGY 15.0.2, D-F3-018, D-F5-028): such a cell is not a candidate for either technology; F3 and F5 ran again in the three countries, every check passed again and the F5 log has no warning, so F5 stays ran_clean in PRT, IND and BRA. Report: docs/_audit/run_report_real.md; hashes: the content hashes of the manifest (D-core-042; the file of byte hashes run_real_hashes.json was removed on 2026-10-27). potential_maps writes the COG rasters and the T-R1 figure under settings.yaml figures, and (2026-10-19, D-F5-029, METHODOLOGY 15.1.0) the maps of capacity and energy per cell and per state with classes from the data, 48 maps for PRT, IND and BRA, with the sum checks against the F5 totals (docs/_audit/potential_maps_absolute.md). F1 to F5 ran again on 2026-10-19 with the contiguous mask and the GLO-30 elevation (COMMAND 55, METHODOLOGY 15.2.0, `docs/_audit/geometry_dem_55.md`): rc 0 and no warning in PRT, IND and BRA, every sanity check of 49b passed, and the F5 totals changed as recorded in D-F5-031 (IND central solar 728.4 to 753.3 GW). F1 to F5 ran again on 2026-10-20 (COMMANDS 58, 59 and 60; `docs/_audit/resume_integrity_58.md`, `docs/_audit/potential_maps_v2.md`): the manifest records a code fingerprint per phase and a canonical content hash per artifact (D-core-042), the F3 shares of the protected areas and lakes no longer depend on the origin of the grid (D-F3-020) and their caches follow the code (D-F3-021), the GWA files are completed from the neighbours to the mask (D-F1-030); rc 0, no warning and every sanity check of 49b passed in PRT, IND and BRA, the F5 totals moved by 0.1% or less. potential_maps now draws the densities per cell and per state with circles for the totals in the common map style (D-F5-032, METHODOLOGY 15.2.2; 20 files per country, the earlier figures archived). F5 is not in run.target_phases. Final round of COMMAND 62 (2026-10-21/22; `docs/_audit/resume_integrity_58.md` section 10): F1 to F5 ran again in PRT and BRA with every internal cache rebuilt (keys with the code, D-core-043), rc 0, no warning, all 15 checks of 49b passed, totals within 0.1% of 2026-10-19; IND ran to F5 with the same result; its hazard_context and overview ran on 2026-10-25 after the ERA5 extension (D-F1-031: 20 years, no NaN of fg10 in the mask, coverage 99.94%). Figures (COMMAND 68, docs/figures/migration_68.md): every figure of this phase is drawn through MapFigure and redrawn for BRA, PRT and IND; the old files are in archive/figures_20261026. Figures of the questions of the thesis (COMMAND 69, docs/figures/questions_69.md): supply curves, land interval, change by SSP and window and the country comparison, drawn by potential_maps and by main.py (comparison), redrawn for BRA, PRT and IND. Wind CF per pixel (COMMAND 74, 2026-10-28, METHODOLOGY 15.3.0, D-F5-038, L-004; `docs/_audit/wind_cf_pixel_74.md`): the wind capacity factor is computed on every eligible 0.01 degree pixel and aggregated to the cell by the eligible area, solar unchanged; F3, F4 and F5 ran again in PRT, IND and BRA, 16 of 16 checks pass, the central wind energy moved by -0.0006%, +0.024% and +0.133%. Reruns of 2026-11-10 (COMMAND 129): technical_potential and potential_maps ran again in PRT, IND and BRA through the official orchestrator against a hash snapshot, after the memory work of COMMAND 126 (windowed pixel read, release between scenarios, table written in row-group blocks, member codes without astype(str)); no data value differs (every table, raster and json equal by content hash or by value), and only the 4 density PNGs of each country differ (renderer or library drift; the author decided on 2026-11-10 to judge the figures at the end of the framework, not now). Peaks and times: PRT 338 MB in 9 s and 657 MB in 9 s, IND 1,018 MB in 74 s and 1,207 MB in 27 s, BRA 1,579 MB in 218 s and 1,676 MB in 47 s (technical_potential and potential_maps); the peak of BRA technical_potential was 3,410 MB before. These peaks are the base of the per-phase memory caps of COMMAND 131 (config/memory_budget.json, phase_caps)."},
-    {"id": "F6", "module": "lcoe_modeling", "status": "conformant", "record": "docs/phases/F6_lcoe_modeling.md", "summary": "F6 kernel 2.0 with Group 3 (COMMAND 83): connection cost over P_ref in 2024 USD, PV zone and wind degradation, losses sensitivity. Real countries refused (OQ-001 costs null, OQ-066). ZZZ only. Production run on PRT, IND and BRA done (COMMANDS 179 to 181, 183 and 184; adopted sample size 4000, L-252; cells with no PV zone or distance left out, L-253); sample_size_convergence ran with the sizes of that round and is stale against adopted_size 4000 until it is run again."},
-    {"id": "F7", "module": "robustness_analysis", "status": "conformant", "record": "docs/phases/F7_robustness_analysis.md", "summary": "F7 built and tested on the synthetic country at 0.05 and 0.1 degree: energy floor in the kernel, two-pass evaluator and sample-major pass, classes, rankings, H1-H5 statistics with the pre-registered rules read from experiments.yaml (H1 to H5 registered; null: warning, no verdict), cross_country_h4 for the H4 verdict, H5 tables h5_summary and h5_members (fixed economic domain, target, exposure), PRIM scenario discovery with the pre-registered box choice and bootstrap (prim_box, prim_bootstrap), T-R10, T-R12, own PRIM checked against ema_workbench, MR against SR, robustness_maps. BRA/PRT/IND fail loud (F6 items plus cf_min). Production run on PRT, IND and BRA done (COMMANDS 183 to 185; memory cap of BRA 3,968 MB, D-F6-033); cross_country_h4 ran on the three countries (solar and wind: H4 not_supported; solar profiles PRT and BRA no_displacement, IND climate_dominated; wind no_displacement in all three). Wind has no national target (OQ-010)."},
-    {"id": "F7b", "module": "external_validation", "status": "conformant", "record": "docs/phases/F7b_external_validation.md", "summary": "F7b built and tested on the synthetic country (synthetic inventory with hand-computable units): excluded share at the plant pixels through F3's eligibility engine, enrichment in LCOE deciles, published-estimate table (empty, OQ-057), unit table, V-06 guards. BRA/PRT/IND fail loud listing the missing inputs (inventory, F3, F5, F6). Production run on PRT, IND and BRA done (COMMANDS 188 and 188A, 2026-11-22): candidate cells with no F6 LCOE are left out of the enrichment deciles as in L-253 (solar PRT 1, IND 84, BRA 520; D-F7b-009), the 9 pending published entries carry no value or ratio, memory cap of BRA 3,904 MB (peak 3,093 MB). lcoe_maps and robustness_maps ran in the same round (14 and 32 rasters per country, EPSG:4326)."},
-    {"id": "F8", "module": "results_synthesis", "status": "conformant", "record": "docs/phases/F8_results_synthesis.md", "summary": "Reader, names, style, provenance and runner built; real thesis build done 2026-11-22 (COMMANDS 190 to 190C) for PRT, IND and BRA: every essential T-* generated (T-R10 and the R_exp column of T-R6 not available, V174b), T-O1 not built (PRIM search ended as no_cases), 105 tables and 45 PDF figures compile, OQ-098 closed; record docs/_audit/2026-11_f8_thesis_build_190.md."},
-    {"id": "exploratory_analysis", "module": "exploratory_analysis", "status": "ran_clean", "record": "docs/phases/exploratory_analysis.md", "summary": "Support phase of DEC-098 (M-X-01 to M-X-05): H5c cost-to-target, own vulnerability VUL, the V_f diagnostic of PRIM and tau on the cell basis, from persisted artifacts only; exploratory, outside the pre-registered results (COMMANDS 210 and 210C). Run on PRT, IND and BRA 2026-11-23 (COMMAND 211): 21 artifacts per country, F1 to F7b and T-R1 to T-R12 unchanged, T-X1 to T-X4 generated; BRA peak 2,081 MB, cap 2,624 MB. COMMAND 213A (DEC-100): the target of H5c converts without tau; run again 2026-11-24, only h5c_* and T-X1 change."},
-    {"id": "E1", "module": "explorer", "status": "not_started", "record": "docs/phases/E1_explorer.md", "summary": ""}
-  ],
-  "countries": {
-    "BRA": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "ran_clean", "F7": "ran_clean", "F7b": "ran_clean", "F8": "ran_clean"},
-    "PRT": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "ran_clean", "F7": "ran_clean", "F7b": "ran_clean", "F8": "ran_clean"},
-    "IND": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_clean", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_clean", "F6": "ran_clean", "F7": "ran_clean", "F7b": "ran_clean", "F8": "ran_clean"},
-    "ZZZ": {"F1": "ran_clean", "F1b": "ran_clean", "F2a": "ran_with_issues", "F2b": "ran_clean", "F3": "ran_clean", "F4": "ran_clean", "F5": "ran_with_issues", "F6": "ran_clean", "F7": "ran_with_issues", "F7b": "ran_with_issues"}
-  },
-  "sensitivity_runs": {
-    "command": "COMMAND 189",
-    "date": "2026-11-22",
-    "window_2071_2100": "done inside robustness_analysis (role sensitivity) in PRT, IND and BRA at both scales; tables h1 to h4 present",
-    "scale_0p1deg": "done, F3 to F7 in PRT, IND and BRA with --real-run; manifest__0p1deg.json written; H1 to H3 verdicts of the primary variant equal to those of 0.05 degree in all 12 country, technology and window rows; config and code fingerprints equal in F6 and F7; peak RSS BRA 1532 MB (robustness_analysis)",
-    "v03_check": "COMMAND 189A: V-03 holds in the robustness_analysis tables of both scales, 3 countries x 2 technologies x 2 windows (24 table sets, 0 violations): MR, MR_clim, MR_tech >= 0; SR in [0,1]; ranked + climate_fragile = F7 set (h1 n_cells); fragile cells have no finite MR or rank; ranked cells have finite MR and unique rank; L* of every future finite and positive; MR of h3_sites equals robustness MR. The per-cell r of each future is not persisted, so r >= 0 and the zero-regret cell per future rest on the evaluator check (evaluator.py, negative regret raises) and on L* of futures_<tech>",
-    "preregistration": "digest_live equals digest_tag in manifest.json and manifest__0p1deg.json of PRT, IND and BRA (the manifest holds one record, compared before each of lcoe_modeling and robustness_analysis; the guard refuses the phase when they differ)",
-    "production_flag": "main.py --production only audits and refuses (core.production.audit_parameters and enforce_production: proxy, null value, missing range; assert_curve_usable and load_inventory refuse synthetic inputs); it changes no computed value. The 0.1 degree runs were made without it (the audit had no errors in the three runs) and their provenance records production=false, the 0.05 degree ones production=true; fingerprints equal, so nothing was rerun",
-    "f8_190": "COMMANDS 190 to 190C: results_synthesis success in PRT (374 MB), IND (1724 MB, 187.5 MB over the default cap) and BRA (2814 MB with the caps off); cap of results_synthesis fixed at 3520 MB (V179c, L-254); the T-R6 captions state that the 0.1 degree runs were executed without --production and that COMMAND 189A showed the option only audits inputs; F8 does not read the production field of the provenance",
-    "cross_country_191A": "COMMAND 191A (2026-11-23): the runs by country of COMMANDS 189 and 190 left outputs/cross_country and the h4_verdict tables with BRA only, and T-R6 and T-R7 read them (found by the audit of COMMAND 191). Fixed in main.h4_countries (every configured country), main.require_h4_inputs (refuses a country with no h4_country table) and results_synthesis.output._countries_left_out (F8 refuses a verdict that left a country out); cross_country.py and artifact_reader.py untouched because they are in the closure of robustness_analysis (D-core-056). cross_country_h4 rebuilt for PRT, IND and BRA at both scales in one invocation each (3 of 3 countries have a profile, verdict not_supported for solar and wind); F8 rebuilt for the three countries; T-R6, T-R7, T-R8, the cross_country tables and the profiles agree on H4. p_k^2 derived in F8 (DEC-096). DEC-095 labelled commit 3fcdfbe a post-result correction by the date test; DEC-097 (COMMAND 191B) reclassifies it as pre-result.",
-    "incident_190A": "COMMAND 190A (2026-11-22): the 0.1 degree runs of COMMAND 189 overwrote 16 phase summaries (artifacts/<phase>.json: PRT 6, IND 5, BRA 5) recorded by the 0.05 degree manifests; the F8 run of COMMAND 190 stopped on ArtifactIntegrityError. The statement of the report of COMMAND 189 that the 0.05 degree manifests were intact was wrong (only fingerprints had been compared). Fixed in main._summary_artifacts_dir (D-core-055, summaries under artifacts__<scale id>); the 16 files restored with the recorded sha256 (7 from references/objects, 9 from phases.<phase>.output), the 0.1 degree summaries moved to artifacts__0p1deg with the manifest path field updated; no phase was run again, no result changed; sha256 of every artifact of the six manifests equals the disk"
-  },
-  "pending_verifications": [
     {
-      "id": "PV-77",
-      "status": "closed",
-      "closed": "2026-11-13",
-      "closed_by": "DEC-068 in docs/DECISIONS.md (decision of the author: the content check of IND and BRA after COMMANDS 75 to 79 is concluded)",
-      "what": "Content of F1 to F5 of IND and BRA after the performance work of COMMANDS 75 to 79: the artifacts have not yet been compared by hash with the state before the work.",
-      "countries": [
-        "IND",
-        "BRA"
-      ],
-      "where": "The pipeline itself: config/deferred_checks.yaml and core/deferred_check.py (D-core-050). The first execution of each phase of IND and BRA on main compares the content hash of its artifacts with archive/pre_v1_0/outputs/<ISO>/unattended/20261029_135838/manifest_before.json and writes outputs/<ISO>/deferred_check.json.",
-      "to_do": [
-        "adopt the aligned layers once per country: python scripts/adopt_aligned_cache_keys.py <ISO> --revision adopt-base-75 --proof docs/_audit/proofs_75_77/cumulative_equivalence_77_PRT.json",
-        "run the phases of F1 to F5 for the country (the next real round) and read outputs/<ISO>/deferred_check.json: IDENTICO or EXPLICADO for every phase",
-        "BRA audit_report: if EXPLICADO_REVISAR, open outputs/BRA/artifacts/audit_report.json and confirm that only the counts of geometry_types changed",
-        "on DIFERENTE: do not use the numbers; the report names the artifact and the probable cause",
-        "when both countries are IDENTICO or EXPLICADO, set their F1 to F5 back to ran_clean and delete the countries from config/deferred_checks.yaml"
-      ],
-      "evidence_so_far": "COMMAND 133 (2026-11-12): official round of PRT, IND and BRA after the merge of window-132, compared with the reference 1d34ab23 artifact by artifact (314 artifacts): 254 bytes identical, 60 values identical (Arrow type or writer differ), 0 values different. BRA F1b (audit_report): explained (COMMAND 135): the F1b of BRA ran on 2026-11-06 11:30, after commit 9dd49df (2026-11-05, COMMAND 97, Group 6), which replaced `slope_max_deg` by `slope_max_pct` in `config/experiments.yaml` (solar 3 %, wind 10 % as the strictest values); `slope_threshold_check` changed exactly by that: solar 10.0 to 1.7183580016554572 deg = atan(0.03) and wind 10.2 to 5.710593137499643 deg = atan(0.10); the file before COMMAND 77 is no longer on disk, the oldest copy that is (round 27c9336b) differs from the current one in these two keys only; Earlier evidence: IND: data_acquisition, data_quality_audit, grid_alignment and external_inputs IDENTICO (31 of 31 artifacts, deferred check of the unattended round 20261029_205135; the round stopped for low memory in the next phase). BRA: data_acquisition and grid_alignment IDENTICO (the adoption run of 2026-10-29). Pending: IND siting_layers to potential_maps and BRA data_quality_audit to potential_maps. PRT 94 of 94 artifacts equal by content hash and 95 of 95 PNG by pixels; IND clips of protected, roads, rivers and lakes equal to those made before COMMAND 77; docs/_audit/performance_75.md and docs/_audit/optimizations_77.md"
+      "id": "F3",
+      "module": "land_eligibility",
+      "status": "built_pending_conformance",
+      "record": "docs/phases/F3_land_eligibility.md",
+      "summary": "Kept as in v1.1."
+    },
+    {
+      "id": "F4",
+      "module": "climate_forcing",
+      "status": "rework_required",
+      "record": "docs/phases/F4_climate_forcing.md",
+      "summary": "Rebuilt for v2: five ISIMIP3b models, relative runoff change of four hydrological models. The v1 code reads CMIP6."
+    },
+    {
+      "id": "F5",
+      "module": "technical_potential",
+      "status": "conformant",
+      "record": "docs/phases/F5_technical_potential.md",
+      "summary": "Kept; reads the members of the rebuilt F4."
+    },
+    {
+      "id": "F6",
+      "module": "lcoe_modeling",
+      "status": "rework_required",
+      "record": "docs/phases/F6_lcoe_modeling.md",
+      "summary": "Kernel and cost ranges kept; the draw machinery (Latin hypercube, 4000 draws) leaves at COMMAND 306."
+    },
+    {
+      "id": "F7",
+      "module": "robustness_analysis",
+      "status": "rework_required",
+      "record": "docs/phases/F7_robustness_analysis.md",
+      "summary": "Rebuilt for v2: 15 members with nominal parameters. The v1 code (regret, satisficing, PRIM) leaves at COMMAND 306."
+    },
+    {
+      "id": "F7b",
+      "module": "external_validation",
+      "status": "conformant",
+      "record": "docs/phases/F7b_external_validation.md",
+      "summary": "Kept; GEM validation, separate from the use of GEM as input of M1."
+    },
+    {
+      "id": "F8",
+      "module": "results_synthesis",
+      "status": "rework_required",
+      "record": "docs/phases/F8_results_synthesis.md",
+      "summary": "Synthesis kept; the tables and figures of v1 leave and the outputs of M1 to M3 and F7 enter."
+    },
+    {
+      "id": "M1",
+      "module": "fleet_risk",
+      "status": "not_started",
+      "record": "",
+      "summary": "Awaiting the design command: function from relative discharge change to hydro generation, and its source (OQ-119)."
+    },
+    {
+      "id": "M2",
+      "module": "supply_gap",
+      "status": "not_started",
+      "record": "",
+      "summary": "Awaiting the design command (OQ-121)."
+    },
+    {
+      "id": "M3",
+      "module": "adaptive_expansion",
+      "status": "not_started",
+      "record": "",
+      "summary": "Awaiting the design command (OQ-122)."
     }
   ],
-  "pending_figures": ["COMMAND 70: migrate the F8 thesis figures (results_synthesis) and the audit charts (scripts/audit_potential.py) to viz", "F6 and F7 figures: check on the first real run", "Supply curve against LCOE after F6", "Wind CF display layer of PRT refused by the 1% aggregation check (16 of 3500 cells, max 1.96%): decide the tolerance, see docs/figures/display_layers_70.md"],
+  "countries": {
+    "BRA": {
+      "F1": "ran_clean",
+      "F1b": "ran_clean",
+      "F2a": "ran_clean",
+      "F2b": "ran_clean",
+      "F3": "ran_clean",
+      "F4": "ran_clean",
+      "F5": "ran_clean",
+      "F6": "ran_clean",
+      "F7": "ran_clean",
+      "F7b": "ran_clean",
+      "F8": "ran_clean"
+    },
+    "PRT": {
+      "F1": "ran_clean",
+      "F1b": "ran_clean",
+      "F2a": "ran_clean",
+      "F2b": "ran_clean",
+      "F3": "ran_clean",
+      "F4": "ran_clean",
+      "F5": "ran_clean",
+      "F6": "ran_clean",
+      "F7": "ran_clean",
+      "F7b": "ran_clean",
+      "F8": "ran_clean"
+    },
+    "IND": {
+      "F1": "ran_clean",
+      "F1b": "ran_clean",
+      "F2a": "ran_clean",
+      "F2b": "ran_clean",
+      "F3": "ran_clean",
+      "F4": "ran_clean",
+      "F5": "ran_clean",
+      "F6": "ran_clean",
+      "F7": "ran_clean",
+      "F7b": "ran_clean",
+      "F8": "ran_clean"
+    },
+    "ZZZ": {
+      "F1": "ran_clean",
+      "F1b": "ran_clean",
+      "F2a": "ran_with_issues",
+      "F2b": "ran_clean",
+      "F3": "ran_clean",
+      "F4": "ran_clean",
+      "F5": "ran_with_issues",
+      "F6": "ran_clean",
+      "F7": "ran_with_issues",
+      "F7b": "ran_with_issues"
+    }
+  },
   "regression": {
     "workflow": ".github/workflows/regression.yml",
     "fixtures": "tests/fixtures/v01/zzz.npz",
-    "status": "V-01 refrozen for the elevation and slope of ZZZ on 2026-10-19 (COMMAND 55, D-F2a-021; every other layer identical); V-01 refrozen 2026-10-06 (G-4): F1, F2a and E1-E3 on the ZZZ country, in-repo fixtures, no external download. The legacy PRT/BRA baseline is no longer a test input; its 1.4 GB copy was removed from GeoFREA_data (the folder GeoFREA_data/reference no longer exists)."
+    "status": "V-01 fixtures on the ZZZ country, in the repository, no external download; refrozen only with the author authorization."
   },
   "open_questions": "docs/OPEN_QUESTIONS.md",
-  "limitations": "docs/LIMITATIONS.md",
-  "archived_records": "removed in D10; recoverable in commit 2726333",
-  "planning_audits": [
-    "docs/_audit/2026-09_F1-F2b.md",
-    "docs/_audit/2026-09_parameters.md",
-    "docs/_audit/2026-09_legacy_F3-F8.md",
-    "docs/_audit/2026-09_records.md",
-    "docs/_audit/2026-09_resource_products.md"
-  ]
+  "limitations": "docs/LIMITATIONS.md"
 }

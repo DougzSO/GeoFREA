@@ -63,5 +63,5 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# COMMAND 207: scripts/diagnostics holds the v1.0 diagnostic scripts exactly as they ran (audit evidence, frozen); they are not reformatted or linted.
-extend-exclude = ["scripts/diagnostics"]
+# docs/evidence/v1_diagnostics/scripts holds the v1.0 diagnostic scripts exactly as they ran (documentation, frozen); they are not reformatted or linted.
+extend-exclude = ["docs/evidence/v1_diagnostics/scripts"]

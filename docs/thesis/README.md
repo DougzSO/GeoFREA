@@ -1,11 +1,24 @@
 # docs/thesis
 
-LaTeX text of the thesis, generated from the method. `docs/METHODOLOGY.md` stays the single source of truth for the method; a text here
-states a result definition or a decision rule in the form the thesis uses and must agree with the METHODOLOGY version it cites.
+LaTeX text of the thesis. `docs/METHODOLOGY.md` stays the single source of truth for the method; a text here states a definition or a rule in the form the thesis uses and must agree with it. The scientific content of a `.tex` file changes only with the author's authorization.
 
-- `hypotheses/`: one file per hypothesis section (`H1_climate_rank_robustness.tex` to `H5_climate_threat_to_targets.tex`).
-- `methods/`: method sections that are not a hypothesis (`synthesis_and_scenario_discovery.tex`: the cross-country synthesis of T-R8 and the PRIM scenario discovery).
-- `notation.tex`: the notation common to H1 to H5, the synthesis and PRIM scenario discovery, as one table (symbol, meaning, where it is defined, name in METHODOLOGY and in the tables); it restates no definition and changes no hypothesis text (I-6 of the pre-research audit, 2026-10-14).
+```
+thesis/
+  README.md
+  references.bib          one bibliography; only keys that a .tex of this folder cites
+  intro/                  introduction and notation (rewritten after the METHODOLOGY v2 is closed)
+  theory/                 the three chapter 2 texts
+  methods/
+    land_eligibility.tex      F2b and F3: riparian buffers, settlements, terrain, elevation, minimum area
+    technical_potential.tex   F5: capacity, capacity factor
+    costs.tex                 F6: core costs, grid connection, degradation, the AC and DC basis of the IRENA values
+    climate.tex               hazard exposure indicators and the validity range of the wind factor
+    validation.tex            published potentials, spatial scale and external validation (F7b)
+  hypotheses/             empty until `prereg-v2`
+```
+
+Open items of the text:
+
+- `intro/notation.tex` still defines the notation of the hypotheses of v1 and refers to sections that no longer exist; `intro/cap1_introduction.tex` refers to the methodology chapter. Both are rewritten after the METHODOLOGY v2 is closed.
+- `references.bib` holds the keys of the cited works that were in the two bibliographies of v1; the intro and theory texts also cite works that are in the author's main bibliography and not here.
 - Thesis figures and tables are not stored here. F8 writes them to `GEOFREA_DATA_DIR/outputs/thesis/`, named by their T-ID.
-
-Scientific content of a `.tex` file changes only with the author's authorization.

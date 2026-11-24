@@ -4,7 +4,7 @@ Coding conventions for this repository. Scientific method and architecture requi
 
 ## Language
 
-US English for code, identifiers, comments, docstrings, `docs/METHODOLOGY.md`, `docs/CONVENTIONS.md`, `docs/LIMITATIONS.md`, `docs/OPEN_QUESTIONS.md`, the records of `docs/phases/`, and commit messages. Portuguese for `docs/DECISIONS.md` and for the reports of `docs/_audit/`.
+US English for code, identifiers, comments, docstrings, `docs/METHODOLOGY.md`, `docs/CONVENTIONS.md`, `docs/LIMITATIONS.md`, `docs/OPEN_QUESTIONS.md`, `docs/DECISIONS.md`, the records of `docs/phases/`, and commit messages. The reports of `docs/evidence/` keep the language they were written in.
 
 ## Phase and module names
 
@@ -21,10 +21,9 @@ US English for code, identifiers, comments, docstrings, `docs/METHODOLOGY.md`, `
 | F7 | `robustness_analysis` | `docs/phases/F7_robustness_analysis.md` |
 | F7b | `external_validation` | `docs/phases/F7b_external_validation.md` |
 | F8 | `results_synthesis` | `docs/phases/F8_results_synthesis.md` |
-| E1 | `explorer` | `docs/phases/E1_explorer.md` |
 | core | `core` | `docs/phases/core.md` |
 
-Never write an unqualified `F2` or `F7`.
+The modules M1, M2 and M3 of v2 get their package and record when they are built. Never write an unqualified `F2` or `F7`.
 
 ## Status vocabulary
 
@@ -36,39 +35,39 @@ Used in `docs/PROGRESS.json` only (phase records carry no status line):
 - `conformant`: audited, all conformance rows pass
 - `rework_required`: code exists and conflicts with the methodology
 
-Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. The status `awaiting_content_check_post_77` is retired: the content check after COMMAND 77 is closed (PV-77, DEC-068). They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
+Country run status per phase: `not_run`, `ran_with_issues`, `ran_clean`. They describe the execution only: `ran_with_issues` when the last run of the phase logged a warning, an error or an alert from that phase, `ran_clean` when it did not. The quality of the sources and open research questions are recorded in `docs/LIMITATIONS.md` and `docs/OPEN_QUESTIONS.md`, never in the run status.
 
 ## Where status lives
 
 The status of a phase, of a country run and of a milestone lives only in `docs/PROGRESS.json`.
 
-- METHODOLOGY Section 12 holds milestones, content and gates, with no state column and no sentence about the state. A milestone is described by what it contains and what closes it.
+- METHODOLOGY Section 12 holds the milestones and their content, with no state column and no sentence about the state.
 - Comments in `config/*.yaml` and docstrings in `src/` do not assert state: no "not built yet", "pending", "in progress" or a date of state. They say what a key or function does and which question (OQ) sets a value.
 - Phase records (`docs/phases/`) record implementation decisions (`D-*`), their reasons and their tests, not the current status of the phase. The place of each kind of record is in the table of the section Decision records.
 - `test_status_lives_only_in_progress` enforces this for METHODOLOGY Section 12 and the config files.
 
 ## Decision records
 
-Each kind of record has one place (DEC-069, decision of the author, 2026-11-13):
+Each kind of record has one place:
 
 | Type | Place | ID |
 |---|---|---|
-| Decision of the author | `docs/DECISIONS.md`, in Portuguese, append-only | `DEC-nnn`, the position of the heading in the file |
+| Decision of the author | `docs/DECISIONS.md`, append-only | `DEC-nnn`, the position of the heading in the file |
 | Rule of method | `docs/METHODOLOGY.md` | `M-<phase>-<nn>` and the other IDs of that document |
 | Implementation decision | `docs/phases/<phase>.md`, not copied to `docs/DECISIONS.md` | `D-<phase>-<number>` |
 | Open question | `docs/OPEN_QUESTIONS.md`; a resolved one leaves the table and a pointer stays | `OQ-nnn` |
 | Limitation | `docs/LIMITATIONS.md`, with its origin | `L-nnn` |
 | State | `docs/PROGRESS.json` | none |
-| Reports | `docs/_audit/` | none |
+| Reports | `docs/evidence/`, only the ones the documents cite | none |
 
-Rules that go with the table (DEC-069):
+Rules that go with the table:
 
 - A decision that supersedes another says so in a `Substitui:` field of the new entry; the superseded entry is not edited.
 - Active docs cite a symbol and a key, not a line number or a value.
 - New method logic enters with an `M-` item in the same change.
 - A new `L-` entry carries its origin (a phase, a rule or an OQ).
 - A resolved OQ leaves the table and a pointer stays.
-- An obsolete file is deleted when everything is green. The archive `docs/_archive` was removed in D10; its content is recoverable in commit 2726333.
+- An obsolete file is deleted when everything is green; git and the tags keep it.
 
 An implementation decision is recorded once, in the record of its phase (`docs/phases/<phase>.md`), as one bullet that starts `- **D-<phase>-<number> — Title (date, command).**`, or as a table row that starts `| D-<phase>-<number> |`. A later paragraph about the same decision is a continuation of that bullet or cites the ID without starting with it. IDs rise in the order of the file. `scripts/find_decision.py D-<phase>-<number>` prints the defining lines of an ID.
 
@@ -92,7 +91,7 @@ def weibull_capacity_factor(A: np.ndarray, k: np.ndarray, curve: PowerCurve) -> 
     """
 ```
 
-Implementation decisions are cited as `See docs/phases/F5_technical_potential.md D-F5-003.` A decision of the author is cited by its ID, as `See docs/DECISIONS.md DEC-069.`
+Implementation decisions are cited as `See docs/phases/F5_technical_potential.md D-F5-003.` A decision of the author is cited by its ID, as `See docs/DECISIONS.md DEC-001.`
 
 ## Parameters
 
@@ -143,9 +142,9 @@ A cold audit or a cold F2a of a large country peaks near 2 to 4 GB. `main.py` do
 
 ## Changes that must not change a result
 
-A change made for speed or memory is accepted only with the canonical content hash (`core/content_hash.py`, the hash of the manifest) of what it writes equal to that of the code before it, on the same input, or, where the hash differs, with every layer equivalent by `core/equivalence.py` (COMMAND 88): a float raster passes when `|new - ref| <= 1e-6 * |ref| + 1e-9` at every pixel and a missing value is missing in both, an integer, categorical or binary layer must be exactly equal, and the largest absolute and relative difference of each float layer is written to the proof (`scripts/proofs/check_aligned_equivalence.py`); a clip is compared with `equals_exact` at tolerance 0, a figure by pixels. The proof runs on a sample country and, for a transformation that depends on the data (a clip of a layer with lines that touch themselves), on the whole layer of the countries it touches. One change per commit, with tests; a change that cannot be proved equal is not applied and its evidence stays in `docs/_audit`. Where a country cannot be run in the proof (hours of compute), the proof is deferred to the pipeline itself: `config/deferred_checks.yaml` names a reference manifest and the first execution of each phase is compared with it (D-core-050). A new cache key or a changed fingerprint rebuilds the internal caches once; adopting the caches of an earlier revision is allowed only under D-core-044.
+A change made for speed or memory is accepted only with the canonical content hash (`core/content_hash.py`, the hash of the manifest) of what it writes equal to that of the code before it, on the same input, or, where the hash differs, with every layer equivalent by `core/equivalence.py`: a float raster passes when `|new - ref| <= 1e-6 * |ref| + 1e-9` at every pixel and a missing value is missing in both, an integer, categorical or binary layer must be exactly equal, and the largest absolute and relative difference of each float layer is written to the proof (`scripts/proofs/check_aligned_equivalence.py`); a clip is compared with `equals_exact` at tolerance 0, a figure by pixels. The proof runs on a sample country and, for a transformation that depends on the data (a clip of a layer with lines that touch themselves), on the whole layer of the countries it touches. One change per commit, with tests; a change that cannot be proved equal is not applied and its evidence stays in `docs/_audit`. Where a country cannot be run in the proof (hours of compute), the proof is deferred to the pipeline itself: `config/deferred_checks.yaml` names a reference manifest and the first execution of each phase is compared with it (D-core-050). A new cache key or a changed fingerprint rebuilds the internal caches once; adopting the caches of an earlier revision is allowed only under D-core-044.
 
-## Write mechanics outside the fingerprints (COMMAND 98)
+## Write mechanics outside the fingerprints
 
 How a file reaches the disk (atomic replace, flush to the disk, the conversion to a COG, checkpoints of a long unit of work, the integrity check) is separate from what it contains. The modules that do only that are listed in `code_fingerprint.FINGERPRINT_EXEMPT_MODULES` and no code fingerprint sees them: not the closure fingerprint of a phase or a cache, and not the function fingerprint of an aligned layer (`function_fingerprint.py` does not follow a reference into them). Editing one of them changes no key and rebuilds no cache.
 
@@ -154,7 +153,7 @@ How a file reaches the disk (atomic replace, flush to the disk, the conversion t
 - A writer of a result (`raster_io`, `tables`) calls these modules and stays in the fingerprints; the thin call is the only text of it that counts. Do not patch the writers at run time: the code that runs is the code that is fingerprinted.
 - Every file the pipeline needs whole is written with `atomic_io` or through `RasterStream`, `safe_raster_write`, `TableWriter` or `write_table`; a file written in place can be left cut by a power loss while its cache key still says current. After any interruption run `python scripts/verify_cache_integrity.py` (it reads every cached file to the end and removes the cache key of what fails, never the file).
 
-### What "equal" means in an equivalence proof (COMMAND 98)
+### What "equal" means in an equivalence proof
 
 `scripts/proofs/check_aligned_equivalence.py` decides whether an adoption (`scripts/adopt_aligned_cache_keys.py`, D-core-044) is allowed, so its notion of "equal" is part of the rules:
 
@@ -164,7 +163,7 @@ How a file reaches the disk (atomic replace, flush to the disk, the conversion t
 - `--new-revision` runs a git revision as the new tree instead of the working tree. It exists to isolate which commit changed a layer (for example `ea83fd2` for `roads`); no adoption accepts such a proof, because its new fingerprint is not that of the working tree.
 - Every module in `FINGERPRINT_EXEMPT_MODULES` is registered in `tests/unit/test_fingerprint_exempt_registry.py` with the test that its bytes are identical. A test fails if an exempt module has no registered test, so the entry criterion above is checked and not only written.
 
-## Run legibility (COMMAND ADJ-7)
+## Run legibility
 
 A manual run must show what it is doing while it is doing it — a failure or a wrong result is visible as it happens, not only after the fact in a manifest or a report file.
 
@@ -214,6 +213,6 @@ Every later adaptation follows this format: provenance comment above the `def`, 
 - `pytest` and `ruff check` clean before any commit proposal. `ruff check` is the gate; `ruff format` is not enforced.
 - Test names state the property tested (`test_a_zero_energy_draw_takes_the_worst_case_regret_of_its_sample`).
 - Tests that need external data (raw, legacy baseline, reference repositories) are marked and skipped when required env vars are unset; the synthetic country fixture covers CI.
-- Development loop (COMMAND 75): while developing, run only the tests the change can reach: `python scripts/affected_tests.py --run` selects the test files whose import closure (the one that fingerprints a phase's code) contains a changed module, plus the changed tests and the tests that name a changed non-Python file; `pytest --testmon` (pytest-testmon) is the alternative that learns the selection from coverage. Both can miss a test that reaches code through a string (a path, a registry).
+- Development loop: while developing, run only the tests the change can reach: `python scripts/affected_tests.py --run` selects the test files whose import closure (the one that fingerprints a phase's code) contains a changed module, plus the changed tests and the tests that name a changed non-Python file; `pytest --testmon` (pytest-testmon) is the alternative that learns the selection from coverage. Both can miss a test that reaches code through a string (a path, a registry).
 - The full suite is mandatory before every merge, and it is the only gate. CI runs it with pytest-xdist; the options are in `.github/workflows/unit.yml`.
 - The references of the active documents are checked by `python scripts/lint_docs.py` (cited IDs defined once, paths, tests, no `file.py:NNN`, DECISIONS, OPEN_QUESTIONS statuses, Conformance header); it has no baseline: run it before a commit, and exempt a line with the HTML comment `lint: skip`, only for the record of something that no longer exists (the lint prints how many lines are exempted, per file and in total). CI runs it in the Python 3.12 job.

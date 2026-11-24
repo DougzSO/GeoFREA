@@ -4,11 +4,13 @@
 
 Exit status 0 when every check passes, 1 otherwise; each failure is printed as `check file:line message`.
 
-Checks (the active documents are the text files of `docs/` except `docs/DECISIONS.md`, `docs/_audit/`,
-`docs/_archive/` and `docs/thesis/`):
+Checks (the active documents are the text files of `docs/` except `docs/DECISIONS.md`, `docs/evidence/`,
+`docs/v1/` and `docs/thesis/`):
 
 * ids: every `D-*` and `M-*` cited in `src`, `tests`, `scripts`, `config` and the active documents is defined
-  (`D-*` in `docs/phases/`, `M-*` in `docs/METHODOLOGY.md`), and none is defined twice;
+  (`D-*` in `docs/phases/`, `M-*` in `docs/METHODOLOGY.md`), and none is defined twice; until COMMAND 306 the
+  IDs of v1 listed in `scripts/lint_legacy_ids.txt` may still be cited by code, tests and configuration (never
+  by a document);
 * paths: a path with the prefix `config/`, `docs/`, `src/`, `tests/`, `scripts/` or `.github/` cited in an
   active document exists;
 * tests: a `test_*` name and a `file::name` cited in an active document exist;
@@ -18,7 +20,7 @@ Checks (the active documents are the text files of `docs/` except `docs/DECISION
 * open_questions: the status of each row of `docs/OPEN_QUESTIONS.md` is one of the three values;
 * conformance: the header of the Conformance table is the same in every phase record.
 
-Exemptions: `docs/DECISIONS.md` (except the `decisions` check), `docs/_audit/`, `docs/_archive/`, `docs/thesis/`,
+Exemptions: `docs/DECISIONS.md` (except the `decisions` check), `docs/evidence/`, `docs/v1/`, `docs/thesis/`,
 and the lines marked `<!-- lint: skip -->`: a marker on a line exempts that line; a marker alone on a line
 exempts the lines that follow it up to the next blank line. In a Python file the marker goes in a comment.
 At the end the lint prints the number of lines exempted by the marker, per file and in total.
@@ -36,11 +38,11 @@ REPO = Path(__file__).resolve().parents[1]
 SOURCE_DIRS = ("src", "tests", "scripts", "config", "docs", ".github")
 TEXT_SUFFIXES = {".md", ".py", ".yml", ".yaml", ".json", ".txt", ".toml"}
 SKIP_PARTS = {"__pycache__", ".git", ".venv", "node_modules", "outputs"}
-EXCLUDED_DOCS = ("docs/DECISIONS.md", "docs/_audit/", "docs/_archive/", "docs/thesis/")
+EXCLUDED_DOCS = ("docs/DECISIONS.md", "docs/evidence/", "docs/v1/", "docs/thesis/")
 PATH_PREFIXES = ("config/", "docs/", "src/", "tests/", "scripts/", ".github/")
 OQ_STATUSES = ("open", "research_in_progress", "awaiting_verdict")
 CONFORMANCE_HEADER = "| Item | Requirement | Implementation (module:function) | Test | Status |"
-FIRST_DEC_WITH_ID = 59
+FIRST_DEC_WITH_ID = 1
 
 SELF_FILES = ("scripts/lint_docs.py", "tests/unit/test_docs_lint.py")
 MARKER = re.compile(r"<!--\s*lint:\s*skip\s*-->")
@@ -83,7 +85,7 @@ def load(root: Path) -> dict[str, str]:
             ):
                 continue
             rel = p.relative_to(root).as_posix()
-            if rel.startswith("docs/_audit/2026-11_docs_audit/") or p.stat().st_size > 3_000_000:
+            if p.stat().st_size > 3_000_000:
                 continue
             corpus[rel] = p.read_text(encoding="utf-8", errors="replace")
     return corpus
@@ -118,6 +120,19 @@ def _lines(
                 yield rel, n, line
 
 
+LEGACY_IDS_FILE = "scripts/lint_legacy_ids.txt"
+
+
+def _legacy_ids(corpus: dict[str, str]) -> set[str]:
+    """IDs of v1 that code, tests and configuration still cite and that no document defines any more.
+
+    Transitional (COMMAND 304): the citations are rewritten and the file is deleted at COMMAND 306.
+    An active document never gets this allowance.
+    """
+    text = corpus.get(LEGACY_IDS_FILE, "")
+    return {ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")}
+
+
 def check_ids(corpus: dict[str, str]) -> list[Failure]:
     defs: dict[str, list[tuple[str, int]]] = {}
     sources = [r for r in corpus if r.startswith("docs/phases/") or r == "docs/METHODOLOGY.md"]
@@ -147,11 +162,12 @@ def check_ids(corpus: dict[str, str]) -> list[Failure]:
         for r in corpus
         if r.split("/")[0] in ("src", "tests", "scripts", "config") or is_active_doc(r)
     ]
+    legacy = _legacy_ids(corpus)
     for rel, n, line in _lines(corpus, cited_in):
         out.extend(
             ("ids", rel, n, f"{m.group(1)} is cited and defined nowhere")
             for m in ID_TOKEN.finditer(line)
-            if m.group(1) not in defs
+            if m.group(1) not in defs and not (m.group(1) in legacy and not is_active_doc(rel))
         )
     return out
 

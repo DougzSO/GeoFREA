@@ -97,7 +97,7 @@ def test_every_listed_source_has_a_bib_key_an_official_first_url_and_a_marked_co
     assert "cercind.gov.in" in cerc["urls"][0] and "jmkresearch.com" in cerc["urls"][-1]
 
 
-BIB = Path(__file__).resolve().parents[2] / "docs" / "thesis" / "methods" / "refs_grupos_4_5_7.bib"
+BIB = Path(__file__).resolve().parents[2] / "docs" / "thesis" / "references.bib"
 # the one source that has no entry in the .bib: it answers 404 and is not cited (COMMAND 161Q), so it keeps the placeholder key
 WITHOUT_BIB_ENTRY = {"cstep_onshore_wind_potential_2016": "not-in-bib-yet"}
 

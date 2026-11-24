@@ -15,9 +15,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWED = {
     "scripts/audit_potential.py",
     # COMMAND 207: audit charts of the v1.0 diagnostics (not maps of a country)
-    "scripts/diagnostics/d1_run.py",
-    "scripts/diagnostics/d2_run.py",
-    "scripts/diagnostics/d3_run.py",
+    "docs/evidence/v1_diagnostics/scripts/d1_run.py",
+    "docs/evidence/v1_diagnostics/scripts/d2_run.py",
+    "docs/evidence/v1_diagnostics/scripts/d3_run.py",
     "src/geofrea/results_synthesis/style.py",
 }
 ALLOWED_PREFIXES = ("src/geofrea/viz/",)

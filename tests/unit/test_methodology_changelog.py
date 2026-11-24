@@ -78,13 +78,19 @@ def _git(*args: str) -> str | None:
 def baseline_text(current: str) -> str | None:
     """The METHODOLOGY before the commit that introduced the current version; HEAD's when that bump is uncommitted."""
     version = _VERSION.search(current).group(1)
-    log = _git("log", "--format=%H", f"-S| Version | {version} |", "--", REL)
+    marker = f"| Version | {version} |"
+    head = _git("show", f"HEAD:{REL}")
+    if head is not None and marker not in head:
+        return head
+    log = _git("log", "--format=%H", f"-S{marker}", "--", REL)
     if log is None:
         return None
-    introducing = [c for c in log.split() if c]
-    if not introducing:
-        return _git("show", f"HEAD:{REL}")
-    return _git("show", f"{introducing[-1]}^:{REL}")
+    # newest first: the latest commit whose parent does not hold the version is the one that introduced it
+    for commit in (c for c in log.split() if c):
+        parent = _git("show", f"{commit}^:{REL}")
+        if parent is not None and marker not in parent:
+            return parent
+    return head
 
 
 # -- the checker itself ----------------------------------------------------------------------------

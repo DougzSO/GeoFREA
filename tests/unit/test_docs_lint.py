@@ -158,7 +158,7 @@ def test_a_marker_alone_exempts_the_lines_up_to_the_next_blank_line(tmp_path):
     assert [f[2] for f in failures] == [5]
 
 
-@pytest.mark.parametrize("folder", ["docs/_audit", "docs/_archive/2026-11", "docs/thesis"])
+@pytest.mark.parametrize("folder", ["docs/evidence", "docs/v1", "docs/thesis"])
 def test_the_exempt_folders_are_not_checked(tmp_path, folder):
     write(
         tmp_path,
@@ -170,12 +170,12 @@ def test_the_exempt_folders_are_not_checked(tmp_path, folder):
 def test_the_output_counts_the_lines_exempted_by_the_marker(tmp_path, capsys):
     marker = "<!-- lint: skip -->"
     text = f"{marker}\nSee `src/nope.py`.\nAnd `src/gone.py`.\n\nPlain line. {marker}\n"
-    write(tmp_path, GOOD | {"docs/note.md": text, "docs/_audit/x.md": f"{marker}\nx\n"})
+    write(tmp_path, GOOD | {"docs/note.md": text, "docs/evidence/x.md": f"{marker}\nx\n"})
     assert lint.main(tmp_path) == 0
     out = capsys.readouterr().out
     assert "skipped    4 line(s) in docs/note.md" in out
     assert "skipped    4 line(s) in 1 file(s), in total" in out
-    assert "_audit" not in out
+    assert "evidence" not in out
 
 
 def test_the_output_counts_zero_when_there_is_no_marker(tmp_path, capsys):

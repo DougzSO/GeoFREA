@@ -1,0 +1,55 @@
+%% requires: \providecommand{\vfy}{\textsuperscript{[v]}}  (marks a value still to be verified)
+% ============================================================
+% Potentials, spatial scale and external validation (F7b)
+% Place: Literature Review (section 1) and Methodology (section 2).
+% Dropped from the agent draft: the NPV(K,s) formula, the chapter 3 equations (1) to (5)
+% as written, and the Cabrera and Gianetti MAUP references (off topic).
+% ============================================================
+
+\section{Literature Review: Potentials and Spatial Scale}
+\label{sec:g7-lit}
+
+\subsection{Technical potential is a range that depends on premises}
+Potential estimates follow a hierarchy from theoretical to technical, economic and feasible potential, and published values differ by orders of magnitude because of resolution, reanalysis data and assumptions on power density and exclusions \citep{angliviel2023}. The values available for the three study countries illustrate this (Table~\ref{tab:g7-pot}). For Brazilian onshore wind, the first national atlas reports 143~GW at 50~m \citep{amarante2001}, state atlases compiled in the 2050 plan sum to about 315~GW at 100~m and 598~GW at 150~m for twelve states \citep{epe2020pne}, and a global estimate with 5~MW/km$^2$ over 31\% of the territory gives 14.58~TW \citep{eurek2017}. For Indian wind, the national assessments rise with hub height from 302~GW at 100~m to 695.5~GW at 120~m and about 1164~GW at 150~m \citep{niwe_atlas}. These values are not comparable without harmonizing hub height, power density, exclusion rules and the capacity-factor cutoff. A difference between a modeled potential and a published one is therefore expected and is explained by premises, not treated as an error.
+
+\begin{table}[ht]
+\centering
+\caption{Published technical potentials used as validation bands, with their premises.}
+\label{tab:g7-pot}
+\footnotesize
+\begin{tabular}{p{1.5cm}p{1.1cm}p{2.0cm}p{5.8cm}p{2.0cm}}
+\toprule
+Country & Tech. & Potential & Main premises & Source \\
+\midrule
+Brazil & Wind & 143~GW & 50~m, 1~km grid, mean wind above 7~m/s (2001) & \citet{amarante2001} \\
+Brazil & Wind & 315~GW; 598~GW & Twelve state atlases at 100~m; 150~m & \citet{epe2020pne}\vfy{} \\
+Brazil & Wind & 14.58~TW (22.22~PWh/yr) & 3.5~MW, 90~m, 5~MW/km$^2$, 0.95 availability, 31\% of area available & \citet{eurek2017} \\
+Brazil & PV & 307~GWp (506~TWh/yr) & Best irradiation band (6.0 to 6.2~kWh/m$^2$/day), anthropized areas only, 70~MWp/km$^2$, CF$_{\mathrm{DC}}$ 18.84\% & \citet{epe2018potencial,denholm2008} \\
+Brazil & PV & 28\,519~GWp (43\,857~TWh/yr) & Eight irradiation bands, 407\,437~km$^2$; an area-based ceiling, not a deployable level & \citet{epe2018potencial} \\
+India & PV & 748~GWp & 3\% of wasteland area (2014) & \citet{mnre2024pib748}\vfy{} \\
+India & PV & about 3\,343~GWp & Ground-mounted, updated assessment (2025) & \citet{nise2025ground}\vfy{} \\
+India & Wind & 302; 695.5; about 1\,164~GW & 100~m; 120~m; 150~m & \citet{niwe_atlas}\vfy{} \\
+Portugal & PV, wind & not available & Area of low-sensitivity sites mapped; no totals found & \citet{simoes2023lneg}\vfy{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Spatial aggregation}
+Gridded results depend on the size and shape of the spatial unit. This modifiable areal unit problem has a scale effect and a zoning effect \citep{openshaw1984}. Simulation shows that units that are too coarse lose efficiency and misclassify, while units that are too fine relative to the data-generating process add attenuation bias \citep{avelino2016}. In a downscaling application the scale effect was larger than the zoning effect, and spatially clustered variables were less affected \citep{dare2020}. A formal criterion for the information lost by aggregating between scales has been proposed using a multiscale expansion \citep{bradley_cage}. For a 0.05$^{\circ}$ grid (about 5.5~km) these results motivate a sensitivity test of the ranking to coarser aggregation, not a single fixed resolution.
+
+\section{Methodology: Validation}
+\label{sec:g7-method}
+
+\subsection{Validation against published potentials (F7b)}
+For each country and technology, the modeled technical potential is compared with the bands of Table~\ref{tab:g7-pot} after harmonizing hub height, power density, exclusions and the DC or AC basis. The result is reported as a ratio to each band with its premises, and it is not a pass or fail test. The pipeline hub height is 100~m for all three countries, so the 100~m values are the primary comparators, and the 150~m layer is run once per country as a sensitivity. Capacity in operation from the Global Energy Monitor is compared with the modeled cell capacity as a second check. % verify: confirm GEM version in F7b
+For Portugal no published area totals were found, so validation there rests on installed capacity, which is declared as a limitation.
+
+\subsection{Spatial aggregation test}
+The ranking is recomputed on a coarser aggregation of the 0.05$^{\circ}$ grid, and the overlap of the top-$k$ sets and the rank correlation between resolutions are reported. % verify: aggregation levels as defined in OQ-064
+
+\subsection{Limitations of the validation}
+\begin{itemize}
+\item Published potentials differ in hub height, density and exclusions, so ratios are indicative.
+\item No area-based potential was found for Portugal.
+\item The 143~GW value belongs to the 2001 atlas at 50~m and is not a value of the 2013 simulation edition, which publishes no national total in the sources read.
+\end{itemize}

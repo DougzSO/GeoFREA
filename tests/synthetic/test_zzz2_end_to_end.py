@@ -3,7 +3,7 @@
 ZZZ keeps the order of its cells in every future, so its end-to-end values of `V_k`, `D`, `D_clim`, `D_tec` and the PRIM outcome are zero and the checks on them would
 also pass for a function that returns zero. ZZZ2 (`scripts/zzz2_world.py`) is built so that they are not: the wind of the atlas and the change factors of each GCM vary in space,
 the line is on the west edge and the road on the east edge, and the test parameters make the distance as expensive as the climate is strong. The values below were not read from
-the pipeline: they come from the hand validation (`docs/_audit/2026-10_pre_research_audit_scripts/validate_zzz_by_hand.py`, which imports nothing from `geofrea`) run on this
+the pipeline: they come from the hand validation (`scripts/synthetic/validate_zzz_by_hand.py`, which imports nothing from `geofrea`) run on this
 world, and the same script is run here on the same run, so a pipeline that disagrees with the plain-numpy computation fails twice. The outcome of PRIM is the real one (no rule replaces
 it, unlike in `test_zzz_end_to_end.py`).
 
@@ -42,7 +42,7 @@ import zzz2_world as world
 import zzz_run
 
 VALIDATOR = (
-    REPO / "docs" / "_audit" / "2026-10_pre_research_audit_scripts" / "validate_zzz_by_hand.py"
+    REPO / "scripts" / "synthetic" / "validate_zzz_by_hand.py"
 )
 INITIAL_SIZE, CEILING = 16, 64
 TECHS = ("wind", "solar")
