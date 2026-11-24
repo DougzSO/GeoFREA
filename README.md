@@ -98,6 +98,21 @@ Measured wall time of the phases that matter (from `started_at` and `finished_at
 
 The peaks of memory per phase are in `config/memory_budget.json`; the machine of the runs has about 6 GB of RAM (V179c), and BRA `robustness_analysis` is the longest single step. `GEOFREA_DATA_DIR/references/` holds the reference published with the tag; the tag message lists the manifest hashes. E1 (the explorer) is not part of v1.0 (OQ-013).
 
+## Reproduce v1.1
+
+The tag `v1.1` adds to `v1.0` the exploratory analyses of DEC-098 (corrected by DEC-100) and the variant `exact_location_only` of F7b (D-F7b-010). **No pre-registered result changes**: the aggregate digest of the pre-registered subset is the one of `v1.0` (`1bce505f3315fa34948cf842612a2eee4c7ec1ff9c15e919f08cc631d8f08235`), and the content hashes of every artifact of F1 to F7b and of `cross_country_h4` are those of `v1.0` (the primary rows of F7b are equal; the variant is written beside them). Tables T-R1 to T-R12 are identical; T-R9 gains the `row_set` column, and T-X1 to T-X4 are new. Start from the data and the manifests of `v1.0`, then, one country per process (BRA with the memory caps off, as they were measured for the phases of `v1.0`):
+
+```
+# 208 to 208A: the F7 code fingerprints are adopted under proof (D-core-057); nothing is computed
+# 210 to 213A: the exploratory phase (H5c without tau, VUL, V_f, tau on the cell basis) and its outputs T-X1 to T-X4
+python main.py <ISO> --phases exploratory_analysis,results_synthesis --real-run
+# 212: the F7b variant, then F8 again
+python main.py <ISO> --phases external_validation,results_synthesis --real-run
+# BRA: GEOFREA_MEMORY_CAPS=0 python main.py BRA --phases exploratory_analysis,results_synthesis --real-run
+```
+
+`python main.py <ISO> --phases exploratory_analysis,results_synthesis --real-run --plan` lists what would run and finds nothing stale outside those two phases. Measured (COMMAND 213A): `exploratory_analysis` 4.5 s (PRT), 52.8 s (IND) and 190.1 s (BRA, peak 1,780 MB, cap 2,624 MB); `results_synthesis` 26.8 s, 52.3 s and 307.2 s. The exploratory outputs are labelled `exploratory: true` in every provenance and never feed T-R1 to T-R12; the choices that would change a result (eligibility, tau on the cell basis, H5c and VUL as primary) go to v2 with a new pre-registration (OQ-116, `docs/OPEN_QUESTIONS.md`).
+
 ## The synthetic country ZZZ
 
 ZZZ is a 30 x 20 pixel country built by hand so every result can be computed by hand (METHODOLOGY A-06). To build its inputs and run the pipeline on it from a clean clone:
