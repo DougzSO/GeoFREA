@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-VALIDATION_TABLE_SCHEMA_VERSION = "1.1"  # 1.1: published_comparison gains status, premises and hub_height_m, and published_value may be null
+VALIDATION_TABLE_SCHEMA_VERSION = "1.2"  # 1.2: validation_units gains exact_location_only (D-F7b-010), exclusion_shares and enrichment gain the row_set exact_location_only; 1.1: published_comparison gains status, premises and hub_height_m, and published_value may be null
 
 
 class ExclusionRow(BaseModel):
@@ -95,6 +95,7 @@ class ValidationUnitRow(BaseModel):
     capacity_mw: float
     start_year: float | None
     location_accuracy: str | None
+    exact_location_only: bool  # the unit belongs to the variant set of D-F7b-010
     lat: float
     lon: float
     in_grid: bool

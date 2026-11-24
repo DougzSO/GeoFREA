@@ -71,12 +71,27 @@ def test_the_unit_sets_are_the_operating_units_and_the_configured_sensitivity_fi
             "location_accuracy": ["exact", "approximate", None, "exact", "exact"],
         }
     )
-    assert list(row_sets(frame, None, None)) == ["operating"]
+    assert list(row_sets(frame, None, None)) == ["operating", "exact_location_only"]
     sets = row_sets(frame, 2015, ["approximate"])
-    assert set(sets) == {"operating", "vintage", "accuracy"}
+    assert set(sets) == {"operating", "exact_location_only", "vintage", "accuracy"}
     assert len(sets["operating"]) == 4
     assert list(sets["vintage"]["start_year"]) == [2020.0, 2021.0]  # no start year: not in the set
     assert len(sets["accuracy"]) == 3  # the unit with no accuracy stays
+
+
+@pytest.mark.unit
+def test_the_variant_keeps_only_units_with_an_exact_location_and_leaves_the_primary_with_every_unit():
+    frame = pd.DataFrame(
+        {
+            "status": ["operating", "operating", "operating", "retired"],
+            "start_year": [2010.0, 2011.0, 2012.0, 2005.0],
+            "location_accuracy": ["exact", "approximate", None, "exact"],
+        }
+    )
+    sets = row_sets(frame, None, None)
+    assert len(sets["operating"]) == 3  # the primary is every operating unit, as in v1.0
+    assert list(sets["exact_location_only"].index) == [0]  # an unknown accuracy is not exact
+    assert set(sets["exact_location_only"].index) <= set(sets["operating"].index)
 
 
 # -- exclusion shares -------------------------------------------------------------------------------------
@@ -455,3 +470,4 @@ def test_the_exclusion_leaves_m_f7b_01_as_it_is_and_keeps_the_unit_of_a_left_out
     assert table["candidate"].tolist() == [True, True]
     assert table["decile"].iloc[0] == 3 and pd.isna(table["decile"].iloc[1])
     assert table["excluded_combined"].tolist() == [0.0, 0.0]
+    assert table["exact_location_only"].tolist() == [True, True]

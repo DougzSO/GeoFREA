@@ -37,6 +37,7 @@ from geofrea.core.tables import write_table
 from geofrea.external_validation.enrichment import enrichment_rows, weighted_deciles
 from geofrea.external_validation.exclusion import exclusion_rows
 from geofrea.external_validation.inventory import (
+    EXACT_LOCATION,
     inventory_path,
     load_inventory,
     pixel_of_units,
@@ -449,6 +450,7 @@ def _unit_table(
             "capacity_mw": units["capacity_mw"].astype("float64"),
             "start_year": units["start_year"].astype("float64"),
             "location_accuracy": units["location_accuracy"],
+            "exact_location_only": units["location_accuracy"].astype("string").eq(EXACT_LOCATION).fillna(False).astype(bool),
             "lat": units["lat"].astype("float64"),
             "lon": units["lon"].astype("float64"),
             "in_grid": in_grid,

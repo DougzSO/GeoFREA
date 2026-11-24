@@ -28,6 +28,8 @@ INVENTORY_COLUMNS = (
 )
 SNAPSHOT_NAME = "gem_snapshot.json"
 OPERATING = "operating"
+EXACT_LOCATION = "exact"  # the value of GEM `location_accuracy` for a known coordinate
+EXACT_LOCATION_SET = "exact_location_only"
 
 
 class InventoryError(RuntimeError):
@@ -79,12 +81,14 @@ def load_inventory(iso: str, *, production: bool) -> Inventory:
 def row_sets(
     frame: pd.DataFrame, vintage_min_start_year: int | None, excluded_accuracy: list[str] | None
 ) -> dict[str, pd.DataFrame]:
-    """The unit sets of the report: every operating unit, and the sensitivity sets whose filter is configured (D-F7b-003).
+    """The unit sets of the report: every operating unit (the primary), the variant `exact_location_only` and the sensitivity sets whose filter is configured (D-F7b-003, D-F7b-010).
 
     A unit with no start year is dropped from the vintage set; a unit with no location accuracy stays in the accuracy set.
     """
     operating = frame[frame["status"].astype(str).str.lower() == OPERATING]
     sets = {"operating": operating}
+    # The variant of D-F7b-010 (COMMAND 212): the units whose GEM location is exact, always computed beside the primary (which keeps every unit).
+    sets[EXACT_LOCATION_SET] = operating[operating["location_accuracy"].astype("string") == EXACT_LOCATION]
     if vintage_min_start_year is not None:
         sets["vintage"] = operating[operating["start_year"] >= vintage_min_start_year]
     if excluded_accuracy:
