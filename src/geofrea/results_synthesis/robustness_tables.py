@@ -634,13 +634,17 @@ def t_r9(ctx: BuildContext) -> None:
     tables = {
         "exclusion_shares": (
             "exclusion_shares",
-            "Excluded share of the pixels under existing plants, by constraint (E1 to E6 and combined). Row set operating is the primary (every operating unit); "
-            "exact_location_only is the variant with the units whose GEM location is exact (D-F7b-010).",
+            (
+                "Excluded share of the pixels under existing plants, by constraint (E1 to E6 and combined). Row set operating is the primary (every operating unit); "
+                "exact_location_only is the variant with the units whose GEM location is exact (D-F7b-010)."
+            ),
         ),
         "enrichment": (
             "enrichment",
-            "Capacity of existing plants against the deciles of eligible area ordered by the nominal LCOE at the reference member. Row set operating is the primary; "
-            "exact_location_only is the variant with the units of exact GEM location (D-F7b-010).",
+            (
+                "Capacity of existing plants against the deciles of eligible area ordered by the nominal LCOE at the reference member. Row set operating is the primary; "
+                "exact_location_only is the variant with the units of exact GEM location (D-F7b-010)."
+            ),
         ),
         "published_comparison": (
             "published_comparison",
