@@ -410,6 +410,21 @@ def test_when_every_source_fails_nothing_enters_the_manifest(tmp_path, cfg):
     assert man.entries == {} and not (root / r.rel_path(c["layout"])).exists()
 
 
+def test_parallel_downloads_do_not_corrupt_the_job_file_or_the_manifest(tmp_path, cfg):
+    from concurrent.futures import ThreadPoolExecutor
+
+    c = small_cfg(cfg)
+    net = FakeNet(c)
+    reqs, _ = build_requirements(c, Catalogue(c, net, sleep=no_sleep), ["IND"])
+    todo = [r for r in reqs if r.variable == "tas"][:24]
+    dl, man, root = _dl(tmp_path, c, net)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        assert list(pool.map(dl.fetch, todo)) == ["downloaded"] * len(todo)
+    assert len(json.loads((tmp_path / "logs" / "jobs.json").read_text(encoding="utf-8"))) == len({(r.global_path) for r in todo})
+    assert len(Manifest(root / "m.json", root).entries) == len(todo)
+    assert man.verify() == {"missing": [], "size": [], "sha256": []}
+
+
 def test_crop_netcdf_cuts_the_box(tmp_path):
     import numpy as np
     import xarray as xr

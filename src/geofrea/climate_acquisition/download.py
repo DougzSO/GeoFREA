@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 import zipfile
 from datetime import UTC, datetime
@@ -38,15 +39,17 @@ class Downloader:
         self.jobs_path, self.staging, self.sleep = Path(jobs_path), Path(staging), sleep
         self.allowed, self.log = allowed_hosts or set(), log
         self.dl = cfg["download"]
+        self._jobs_lock = threading.Lock()
 
     # ---- job state, so a crashed run resumes the same server job -------------------------------------------
     def _jobs(self) -> dict:
         return json.loads(self.jobs_path.read_text(encoding="utf-8")) if self.jobs_path.exists() else {}
 
     def _save_job(self, key: str, url: str) -> None:
-        jobs = self._jobs()
-        jobs[key] = url
-        atomic_write_text(self.jobs_path, json.dumps(jobs, indent=1, sort_keys=True))
+        with self._jobs_lock:
+            jobs = self._jobs()
+            jobs[key] = url
+            atomic_write_text(self.jobs_path, json.dumps(jobs, indent=1, sort_keys=True))
 
     # ---- server cut-out ------------------------------------------------------------------------------------
     def _submit(self, req: Requirement, path: str) -> str:
