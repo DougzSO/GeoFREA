@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from pathlib import Path
 
 SCHEMA_VERSION = 1
@@ -32,7 +33,14 @@ def atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)
+    for attempt in range(8):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:  # a reader holds the target for a moment (Windows)
+            if attempt == 7:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 class Manifest:

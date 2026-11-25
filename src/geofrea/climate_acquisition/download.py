@@ -39,11 +39,12 @@ class Downloader:
         self.jobs_path, self.staging, self.sleep = Path(jobs_path), Path(staging), sleep
         self.allowed, self.log = allowed_hosts or set(), log
         self.dl = cfg["download"]
-        self._jobs_lock = threading.Lock()
+        self._jobs_lock = threading.RLock()
 
     # ---- job state, so a crashed run resumes the same server job -------------------------------------------
     def _jobs(self) -> dict:
-        return json.loads(self.jobs_path.read_text(encoding="utf-8")) if self.jobs_path.exists() else {}
+        with self._jobs_lock:  # Windows refuses os.replace on a file that another thread is reading
+            return json.loads(self.jobs_path.read_text(encoding="utf-8")) if self.jobs_path.exists() else {}
 
     def _save_job(self, key: str, url: str) -> None:
         with self._jobs_lock:
